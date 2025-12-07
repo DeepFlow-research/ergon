@@ -1,0 +1,43 @@
+[project]
+name = "h-arcane"
+version = "0.1.0"
+description = "H-ARCANE: Hypothesis-Based Modeling for Uncertainty-Aware Alignment"
+requires-python = ">=3.10"
+dependencies = [
+    "inngest>=0.3.0",
+    "sqlmodel>=0.0.14",
+    "openai>=1.12.0",
+    "openai-agents>=0.1.0",
+    "e2b-code-interpreter>=0.1.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "pandas>=2.1.0",
+    "pdfplumber>=0.10.0",
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "pytesseract>=0.3.10",
+    "pillow>=10.0.0",
+    "psycopg2-binary>=2.9.9",
+    "python-multipart>=0.0.6",
+    "structlog>=23.2.0",
+    "pyarrow>=22.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["h_arcane*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+

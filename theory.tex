@@ -1,0 +1,162 @@
+\documentclass[letterpaper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+% --- Packages ---
+\usepackage{times,helvet,courier}
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+% --- Macros for Notation ---
+\newcommand{\ThetaSet}{\Theta}
+\newcommand{\Rubric}{R}
+\newcommand{\Question}{q}
+\newcommand{\Answer}{a}
+\newcommand{\AnswerObs}{a_{\text{obs}}}
+\newcommand{\AnswerSim}{\hat{a}}
+\newcommand{\History}{h}
+\newcommand{\Utility}{U}
+\newcommand{\CostClarify}{C_{\text{clarify}}}
+
+\title{\textbf{H-ARCANE: Hypothesis-Based Modeling for \\ Uncertainty-Aware Alignment}}
+\author{Methodology Extension Draft}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document outlines \textbf{H-ARCANE} (Hypothesis-Based ARCANE), an extension to the ARCANE framework. It transitions the Manager agent from a fixed policy to an active inference agent capable of modeling uncertainty over stakeholder preferences. By treating the alignment process as a Bayesian game with dynamic type sets, the Manager uses Value of Information (VoI) calculations to optimally trade off the cost of clarification against the risk of misalignment.
+\end{abstract}
+
+\section{Overview: Hypothesis-Based Acting (HBA)}
+
+Standard Bayesian games assume a fixed, known set of agent types. In the context of alignment, the space of possible stakeholder preferences (and thus, possible rubrics) is open-ended and intractable. 
+
+To address this, H-ARCANE employs a **Hypothesis-Based Acting** approach. The Manager maintains a tractable, dynamic set of "likely stakeholder types" (hypotheses), denoted as $\ThetaSet_t$. Each hypothesis corresponds to a candidate rubric $\Rubric$. The Manager maintains a belief distribution $P(\Rubric \mid \History_t)$ over these hypotheses and updates it via interaction.
+
+\section{Hypothesis Generation: Dynamic Type Sets}
+
+We utilize a \textbf{Particle Filter} strategy where each "particle" is a candidate rubric.
+
+\subsection{Initialization ($t=0$)}
+Given the task description $x$, the Manager prompts an LLM to generate $K$ distinct rubric drafts (e.g., $K=5$). 
+\begin{itemize}
+    \item \textbf{Diversity Constraint:} The generation prompt enforces semantic diversity (e.g., \textit{"Generate one rubric focused on strict correctness, one on user-friendliness, and one on conciseness"}) to ensure the hypothesis set covers the uncertainty space.
+    \item \textbf{Prior:} We initialize $\ThetaSet_0 = \{\Rubric_1, \dots, \Rubric_K\}$ with uniform priors $P(\Rubric_k) = 1/K$.
+\end{itemize}
+
+\subsection{Resampling ($t > 0$)}
+As interaction progresses, hypotheses inconsistent with stakeholder feedback are pruned. To prevent belief collapse:
+\begin{itemize}
+    \item \textbf{Pruning:} Remove hypotheses where $P(\Rubric_k \mid \History_t) < \epsilon$.
+    \item \textbf{Regeneration:} Generate new hypotheses by "mutating" surviving high-probability rubrics or prompting for nuances that explain recent feedback, maintaining a constant set size $|\ThetaSet|$.
+\end{itemize}
+
+\section{Bayesian Updates via Simulation}
+
+The core of the belief update is the likelihood function $P(\AnswerObs \mid \Question, \Rubric_k)$: the probability of observing answer $\AnswerObs$ to question $\Question$, assuming the stakeholder's true type is $\Rubric_k$.
+
+Since we cannot compute this analytically, we use the LLM as a \textbf{Simulated Stakeholder}:
+
+\begin{enumerate}
+    \item \textbf{Simulation:} For every hypothesis $\Rubric_k \in \ThetaSet$, the Manager simulates the expected answer:
+    \begin{equation}
+        \AnswerSim_k = \text{LLM}_{\text{Sim}}(\text{context}=x, \text{goal}=\Rubric_k, \text{question}=\Question)
+    \end{equation}
+    \item \textbf{Scoring:} We compute the similarity between the simulated answer $\AnswerSim_k$ and the actual observed answer $\AnswerObs$ (e.g., via embedding cosine similarity).
+    \item \textbf{Posterior Update:}
+    \begin{equation}
+        P(\Rubric_k \mid \History_{t+1}) \propto \text{sim}(\AnswerSim_k, \AnswerObs) \cdot P(\Rubric_k \mid \History_t)
+    \end{equation}
+\end{enumerate}
+
+\section{Decision Making: Value of Information}
+
+The Manager must decide between action $A_{\text{commit}}$ (finalize rubric and execute) and $A_{\text{ask } \Question}$ (ask a clarification question). To ensure rationality, this decision is based on \textbf{Expected Utility}.
+
+\subsection{The Decision Rule}
+The agent chooses the action $a^*$ that maximizes expected utility:
+\begin{equation}
+    a^* = \arg\max \left( \text{Value}(A_{\text{commit}}), \quad \max_{\Question \in Q_{\text{cand}}} \text{Value}(A_{\text{ask }} \Question) \right)
+\end{equation}
+A question $\Question$ is only asked if:
+\begin{equation}
+    \text{Value}(A_{\text{ask }} \Question) > \text{Value}(A_{\text{commit}})
+\end{equation}
+This inequality inherently accounts for the cost of clarification.
+
+\subsection{Value of Commitment}
+$\text{Value}(A_{\text{commit}})$ represents the expected utility of acting \textit{now} based on current beliefs. The agent selects the optimal rubric $\Rubric^*$ (or ensemble) given the uncertainty:
+\begin{equation}
+    \text{Value}(A_{\text{commit}}) = \max_{\Rubric} \sum_{\Rubric' \in \ThetaSet} P(\Rubric' \mid \History_t) \cdot \mathbb{E}_{y \sim \pi_W(\cdot|\Rubric)}[\Utility_{\Rubric'}(y)]
+\end{equation}
+where $\Utility_{\Rubric'}(y)$ is the utility of output $y$ according to hypothesis $\Rubric'$.
+
+\subsection{Value of Asking (Expected Value of Information)}
+$\text{Value}(A_{\text{ask }} \Question)$ is the expected utility of the future state after receiving an answer, minus the cost of the interaction:
+\begin{equation}
+    \text{Value}(A_{\text{ask }} \Question) = \left[ \sum_{\AnswerSim} P(\AnswerSim \mid \Question, \History_t) \cdot \text{Value}(A_{\text{commit}} \mid \History_t, \Question, \AnswerSim) \right] - \CostClarify
+\end{equation}
+Here, $P(\AnswerSim \mid \Question, \History_t)$ is the marginal probability of receiving answer $\AnswerSim$, computed by marginalizing over the hypotheses.
+
+\subsection{Approximation via Rubric Distance}
+Calculating $\mathbb{E}_{y}[\Utility]$ inside the reasoning loop requires running the Worker policy, which is computationally expensive. We approximate the utility loss using a distance metric between rubrics (e.g., embedding distance or weight vector differences):
+\begin{equation}
+    \text{Value}(A_{\text{commit}}) \approx - \min_{\Rubric} \sum_{\Rubric' \in \ThetaSet} P(\Rubric') \cdot \text{Distance}(\Rubric, \Rubric')
+\end{equation}
+
+\section{Formal Definitions: Entropy}
+
+While the decision rule is utility-based, analyzing \textbf{Conditional Entropy} provides insight into the information dynamics. It quantifies the residual uncertainty after a hypothetical answer.
+
+The conditional entropy of the hypothesis space $\ThetaSet$, posterior to observing answer $\AnswerSim_k$ to question $\Question$, is defined as:
+\begin{equation}
+    H(\ThetaSet \mid \Question, \AnswerSim_k) = - \sum_{\Rubric_i \in \ThetaSet} P(\Rubric_i \mid \Question, \AnswerSim_k) \log_2 P(\Rubric_i \mid \Question, \AnswerSim_k)
+\end{equation}
+where the posterior $P(\Rubric_i \mid \Question, \AnswerSim_k)$ is calculated via Bayes' Rule:
+\begin{equation}
+    P(\Rubric_i \mid \Question, \AnswerSim_k) = \frac{P(\AnswerSim_k \mid \Question, \Rubric_i) \cdot P(\Rubric_i)}{\sum_{\Rubric_j \in \ThetaSet} P(\AnswerSim_k \mid \Question, \Rubric_j) \cdot P(\Rubric_j)}
+\end{equation}
+
+\begin{algorithm}[h]
+\caption{H-ARCANE Decision Loop}
+\begin{algorithmic}[1]
+\Require Task $x$, Initial Hypotheses $\ThetaSet_0$, Cost $\CostClarify$
+\State $t \gets 0$
+\Loop
+    \State Calculate $V_{\text{current}} \gets \text{Value}(A_{\text{commit}} \mid \History_t)$
+    \State Generate candidate questions $Q_{\text{cand}}$ discriminating top hypotheses
+    \State $V_{\text{best\_ask}} \gets -\infty$
+    \State $\Question^* \gets \text{null}$
+    
+    \For{$\Question \in Q_{\text{cand}}$}
+        \State $V_{\Question} \gets \text{EVOI}(\Question) - \CostClarify$
+        \If{$V_{\Question} > V_{\text{best\_ask}}$}
+            \State $V_{\text{best\_ask}} \gets V_{\Question}$
+            \State $\Question^* \gets \Question$
+        \EndIf
+    \EndFor
+    
+    \If{$V_{\text{best\_ask}} > V_{\text{current}}$}
+        \State \textbf{Execute} $A_{\text{ask }} \Question^*$
+        \State Observe $\AnswerObs$ from Stakeholder
+        \State Update beliefs $P(\Rubric \mid \History_{t+1})$
+        \State Resample $\ThetaSet_{t+1}$
+        \State $t \gets t+1$
+    \Else
+        \State \textbf{Return} $A_{\text{commit}}$
+    \EndIf
+\EndLoop
+\end{algorithmic}
+\end{algorithm}
+
+\end{document}

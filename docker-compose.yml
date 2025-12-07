@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: h_arcane
+      POSTGRES_PASSWORD: h_arcane_dev
+      POSTGRES_DB: h_arcane
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U h_arcane"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"
+    environment:
+      - DATABASE_URL=postgresql://h_arcane:h_arcane_dev@postgres:5432/h_arcane
+      - INNGEST_DEV=1
+      - INNGEST_EVENT_KEY=dev
+      - INNGEST_API_BASE_URL=http://inngest-dev:8288
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - E2B_API_KEY=${E2B_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./paper_code_structure_plans/data:/app/paper_code_structure_plans/data
+      - ./data:/app/data
+  
+  inngest-dev:
+    image: inngest/inngest:latest
+    command: inngest dev --no-discovery -u http://api:9000/api/inngest
+    ports:
+      - "8289:8288"
+    environment:
+      - INNGEST_DEV=1
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+
