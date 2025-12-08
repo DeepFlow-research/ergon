@@ -189,17 +189,32 @@ class EvaluationsQueries(BaseQueries[Evaluation]):
         run_id: UUID,
         eval_result: Evaluation,
     ) -> Evaluation:
-        """Create Evaluation from evaluation model."""
-        # eval_result already has run_id set, so we can use it directly
-        return self.create(
-            run_id=eval_result.run_id,
-            total_score=eval_result.total_score,
-            max_score=eval_result.max_score,
-            normalized_score=eval_result.normalized_score,
-            stages_evaluated=eval_result.stages_evaluated,
-            stages_passed=eval_result.stages_passed,
-            failed_gate=eval_result.failed_gate,
-        )
+        """Create or update Evaluation from evaluation model (idempotent)."""
+        # Check if evaluation already exists for this run_id
+        existing = self.get_by_run(run_id)
+
+        if existing:
+            # Update existing evaluation
+            return self.update(
+                id=existing.id,
+                total_score=eval_result.total_score,
+                max_score=eval_result.max_score,
+                normalized_score=eval_result.normalized_score,
+                stages_evaluated=eval_result.stages_evaluated,
+                stages_passed=eval_result.stages_passed,
+                failed_gate=eval_result.failed_gate,
+            )
+        else:
+            # Create new evaluation
+            return self.create(
+                run_id=eval_result.run_id,
+                total_score=eval_result.total_score,
+                max_score=eval_result.max_score,
+                normalized_score=eval_result.normalized_score,
+                stages_evaluated=eval_result.stages_evaluated,
+                stages_passed=eval_result.stages_passed,
+                failed_gate=eval_result.failed_gate,
+            )
 
 
 class CriterionResultsQueries(BaseQueries[CriterionResult]):

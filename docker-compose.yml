@@ -34,8 +34,13 @@ services:
       postgres:
         condition: service_healthy
     volumes:
+      # Mount source code for hot-reload during development
+      - ./h_arcane:/app/h_arcane
+      - ./scripts:/app/scripts
       - ./paper_code_structure_plans/data:/app/paper_code_structure_plans/data
       - ./data:/app/data
+      # Mount pyproject.toml to reinstall dependencies if changed
+      - ./pyproject.toml:/app/pyproject.toml
   
   inngest-dev:
     image: inngest/inngest:latest

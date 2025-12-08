@@ -1,13 +1,26 @@
 """ReAct worker agent with ask_stakeholder and GDPEval tools."""
 
+from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
+import json
 
-from agents import Agent, Runner, function_tool
+from agents import Agent, AgentHooks, Runner, RunContextWrapper, Tool, function_tool
+from litellm.cost_calculator import cost_per_token
+
 
 from h_arcane.agents.toolkit import WorkerToolkit
 from h_arcane.db.models import Resource
 from h_arcane.db.queries import queries
+from h_arcane.tools.responses import ToolResult, ToolResponse
+
+
+class WorkerContext(BaseModel):
+    """Context passed to worker agent tools during execution."""
+
+    run_id: UUID
+    num_executed_tools: int = Field(default=0, description="Number of tools executed so far")
+    model_name: str = Field(default="gpt-4o", description="Name of the model used")
 
 
 class WorkerExecutionOutput(BaseModel):
@@ -18,6 +31,181 @@ class WorkerExecutionOutput(BaseModel):
     output_resource_ids: list[str] = Field(
         default_factory=list, description="UUIDs of resources created during execution"
     )
+
+
+def _extract_tool_input(context: RunContextWrapper[WorkerContext], tool_name: str) -> str:
+    """Extract tool call arguments from database messages.
+
+    Queries the database for the most recent message containing a tool call
+    matching the given tool name, then extracts and formats its arguments.
+    """
+    run_id = context.context.run_id
+    
+    # Get all messages for this run, ordered by sequence number (most recent last)
+    messages = queries.messages.get_all(run_id, order_by="sequence_num")
+    
+    # Search messages in reverse (most recent first)
+    for msg in reversed(messages):
+        if not msg.content:
+            continue
+        
+        # Try parsing as JSON first (for structured messages)
+        content = None
+        try:
+            content = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
+        except json.JSONDecodeError:
+            # Not JSON, might be plain text - skip for now
+            continue
+        
+        if not isinstance(content, dict):
+            continue
+        
+        # Check if this message has tool calls
+        tool_calls = content.get("tool_calls")
+        if not tool_calls or not isinstance(tool_calls, list):
+            continue
+
+        # Find matching tool call
+        for tool_call in tool_calls:
+            if not isinstance(tool_call, dict):
+                continue
+
+            func_info = tool_call.get("function", {})
+            if not isinstance(func_info, dict):
+                continue
+                
+            if func_info.get("name") != tool_name:
+                continue
+
+            # Parse arguments (may be string or dict)
+            args = func_info.get("arguments", {})
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    args = {}
+            elif not isinstance(args, dict):
+                args = {}
+
+            return json.dumps(args, indent=2, default=str)
+
+    # No matching tool call found
+    return json.dumps({}, indent=2)
+
+
+class ActionLoggingHooks(AgentHooks):
+    """AgentHooks that logs all tool calls to the database."""
+
+    def __init__(self):
+        """Initialize hooks with a cache for tool call arguments and start times."""
+        self._tool_call_args: dict[str, str] = {}  # Maps (run_id, tool_name, action_num) -> args JSON
+        self._tool_start_times: dict[str, datetime] = {}  # Maps (run_id, tool_name, action_num) -> start time
+
+    async def on_tool_start(
+        self,
+        context: RunContextWrapper[WorkerContext],
+        agent: Agent[WorkerContext],
+        tool: Tool,
+    ) -> None:
+        """Capture tool call arguments and start time when tool starts."""
+        worker_context = context.context
+        run_id = worker_context.run_id
+        tool_name = tool.name if hasattr(tool, "name") else str(tool)
+        action_num = worker_context.num_executed_tools
+        
+        # Try to extract arguments from database messages
+        tool_input = _extract_tool_input(context, tool_name)
+        
+        # Cache the arguments and start time for this tool call
+        cache_key = f"{run_id}:{tool_name}:{action_num}"
+        self._tool_call_args[cache_key] = tool_input
+        self._tool_start_times[cache_key] = datetime.utcnow()
+
+    async def on_tool_end(
+        self,
+        context: RunContextWrapper[WorkerContext],
+        agent: Agent[WorkerContext],
+        tool: Tool,
+        result: ToolResult,
+    ) -> None:
+        """Log tool call completion to database."""
+        # Get run_id and action_num from context
+        worker_context = context.context
+        run_id = worker_context.run_id
+        action_num = worker_context.num_executed_tools
+        worker_context.num_executed_tools += 1
+
+        # Get tool name
+        tool_name = tool.name if hasattr(tool, "name") else str(tool)
+
+        # Try to get cached arguments from on_tool_start first
+        cache_key = f"{run_id}:{tool_name}:{action_num}"
+        tool_input = self._tool_call_args.get(cache_key)
+        
+        # Fallback to database lookup if not cached
+        if tool_input is None:
+            tool_input = _extract_tool_input(context, tool_name)
+        
+        # Clean up cache entry
+        self._tool_call_args.pop(cache_key, None)
+
+        # Format output (truncate if too long for database)
+        # ToolResult is a union type, so we can use isinstance checks
+        if isinstance(result, str):
+            output_str = result
+        elif isinstance(result, ToolResponse):
+            # All ToolResponse subclasses have model_dump()
+            output_str = json.dumps(result.model_dump(), indent=2, default=str)
+        else:
+            # Fallback for any other type (shouldn't happen with proper typing)
+            output_str = json.dumps(result, indent=2, default=str)
+
+        # Get start time and calculate duration
+        cache_key = f"{run_id}:{tool_name}:{action_num}"
+        started_at = self._tool_start_times.pop(cache_key, None)
+        completed_at = datetime.utcnow()
+        
+        # Calculate duration if we have start time
+        duration_ms = None
+        if started_at:
+            duration_delta = completed_at - started_at
+            duration_ms = int(duration_delta.total_seconds() * 1000)
+        
+        # Use completed_at as started_at if we don't have start time (fallback)
+        if started_at is None:
+            started_at = completed_at
+
+        # Extract token usage and calculate cost if available
+        # Note: Tool executions don't directly consume tokens, but the LLM call
+        # that invoked the tool might have usage info in the context
+        usage = context.usage
+
+        input_tokens = usage.input_tokens
+        output_tokens = usage.output_tokens
+        cache_read_input_tokens = usage.input_tokens_details.cached_tokens
+        cache_creation_input_tokens = usage.input_tokens - cache_read_input_tokens
+
+        prompt_cost, completion_cost = cost_per_token(
+            model=worker_context.model_name,
+            prompt_tokens=input_tokens,
+            completion_tokens=output_tokens,
+            cache_read_input_tokens=cache_read_input_tokens,
+            cache_creation_input_tokens=cache_creation_input_tokens - cache_read_input_tokens,
+        )
+        cost_usd = prompt_cost + completion_cost
+
+        queries.actions.create(
+            run_id=run_id,
+            action_num=action_num,
+            action_type=tool_name,
+            input=tool_input or json.dumps({}, indent=2),
+            output=output_str,
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_ms=duration_ms,
+            tokens=input_tokens + output_tokens,
+            cost_usd=cost_usd,
+        )
 
 
 REACT_WORKER_PROMPT = """
@@ -89,20 +277,27 @@ class ReActWorker:
             *toolkit.get_gdpeval_tools(),
         ]
 
-        # Create agent
-        agent = Agent(
+        # Create context with run_id and tool execution tracking
+        worker_context = WorkerContext(run_id=run_id, num_executed_tools=0)
+
+        # Create hooks to log all tool calls
+        hooks = ActionLoggingHooks()
+
+        # Create agent with context type
+        agent = Agent[WorkerContext](
             name="TaskWorker",
             model=self.model,
             instructions=REACT_WORKER_PROMPT,
             tools=tools,
             output_type=WorkerExecutionOutput,
+            hooks=hooks,
         )
 
         # Format task prompt
         task_prompt = self._format_task(task_description, input_resources)
 
-        # Run agent (Runner.run takes agent and input string or list of messages)
-        result = await Runner.run(agent, task_prompt)
+        # Run agent with context (Runner.run takes agent, input, and optional context)
+        result = await Runner.run(agent, task_prompt, context=worker_context)
 
         # Extract structured output
         execution_output: WorkerExecutionOutput = result.final_output

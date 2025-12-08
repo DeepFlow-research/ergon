@@ -3,27 +3,33 @@
 import json
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from h_arcane.agents.sandbox import SandboxManager
 
-# Global sandbox manager for current run
-_current_sandbox_manager: SandboxManager | None = None
+# Global run_id for current execution context
+_current_run_id: UUID | None = None
 
 
-def set_sandbox_manager(sandbox_manager: SandboxManager) -> None:
-    """Set the global sandbox manager for the current run."""
-    global _current_sandbox_manager
-    _current_sandbox_manager = sandbox_manager
+def set_sandbox_manager(sandbox_manager: SandboxManager, run_id: UUID) -> None:
+    """Set the global run_id for the current execution context."""
+    global _current_run_id
+    _current_run_id = run_id
 
 
 def get_sandbox_manager() -> SandboxManager:
-    """Get the current sandbox manager."""
-    if _current_sandbox_manager is None:
-        raise RuntimeError("No sandbox manager set. Call set_sandbox_manager() first.")
-    return _current_sandbox_manager
+    """Get the singleton SandboxManager instance."""
+    return SandboxManager()
 
 
-def _resolve_paths_in_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+def get_current_run_id() -> UUID:
+    """Get the current run_id for sandbox operations."""
+    if _current_run_id is None:
+        raise RuntimeError("No run_id set. Call set_sandbox_manager() first.")
+    return _current_run_id
+
+
+def _resolve_paths_in_kwargs(kwargs: dict[str, Any], run_id: UUID) -> dict[str, Any]:
     """Resolve local file paths to sandbox paths in kwargs."""
     sandbox_manager = get_sandbox_manager()
     resolved = {}
@@ -31,7 +37,7 @@ def _resolve_paths_in_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     for key, value in kwargs.items():
         # If value is a string path and exists in registry, replace with sandbox path
         if isinstance(value, str) and "path" in key.lower():
-            sandbox_path = sandbox_manager.get_sandbox_path(value)
+            sandbox_path = sandbox_manager.get_sandbox_path(run_id, value)
             if sandbox_path:
                 resolved[key] = sandbox_path
             else:
@@ -54,13 +60,17 @@ async def execute_in_sandbox(tool_name: str, **kwargs) -> dict[str, Any]:
     Returns:
         Result dict from tool execution
     """
+    run_id = get_current_run_id()
     sandbox_manager = get_sandbox_manager()
+    sandbox = sandbox_manager.get_sandbox(run_id)
 
-    if not sandbox_manager.sandbox:
-        raise RuntimeError("Sandbox not created. Call sandbox_manager.create() first.")
+    if not sandbox:
+        raise RuntimeError(
+            f"Sandbox not created for run_id={run_id}. Call sandbox_manager.create(run_id) first."
+        )
 
     # Resolve file paths in kwargs to sandbox paths
-    resolved_kwargs = _resolve_paths_in_kwargs(kwargs)
+    resolved_kwargs = _resolve_paths_in_kwargs(kwargs, run_id)
 
     # Generate Python code to import and execute tool module
     # Tools are uploaded to /tools/ directory in sandbox
@@ -91,15 +101,18 @@ print(json.dumps(result_dict))
 """
 
     # Execute code in sandbox
-    execution = await sandbox_manager.sandbox.run_code(code, language="python")
+    execution = await sandbox.run_code(code, language="python")
 
     # Parse JSON result from stdout
     if execution.error:
+        error_msg = (
+            str(execution.error.value)
+            if hasattr(execution.error, "value")
+            else str(execution.error)
+        )
         return {
             "success": False,
-            "error": str(execution.error.value)
-            if hasattr(execution.error, "value")
-            else str(execution.error),
+            "error": error_msg,
         }
 
     # Collect stdout
@@ -123,38 +136,56 @@ print(json.dumps(result_dict))
 
         if json_line:
             result = json.loads(json_line)
-            return result
         else:
-            return {
+            result = {
                 "success": False,
                 "error": f"No JSON output found. Stdout: {stdout_text[:200]}",
             }
     except json.JSONDecodeError as e:
-        return {
+        result = {
             "success": False,
             "error": f"Failed to parse JSON result: {e}. Stdout: {stdout_text[:200]}",
         }
 
+    return result
 
-async def upload_tools_to_sandbox(sandbox_manager: SandboxManager) -> None:
+
+async def upload_tools_to_sandbox(sandbox_manager: SandboxManager, run_id: UUID) -> None:
     """Upload all tool modules from h_arcane/tools/ to /tools/ in sandbox."""
-    if not sandbox_manager.sandbox:
-        raise RuntimeError("Sandbox not created. Call create() first.")
+    sandbox = sandbox_manager.get_sandbox(run_id)
+    if not sandbox:
+        raise RuntimeError(f"Sandbox not created for run_id={run_id}. Call create(run_id) first.")
 
     tools_dir = Path(__file__).parent.parent / "tools"
     if not tools_dir.exists():
         # Tools directory doesn't exist yet (will be created in Phase 2.2)
         return
 
-    # Create /tools directory in sandbox
-    await sandbox_manager.sandbox.commands.run("mkdir -p /tools")
+    # /tools directory should already be created in sandbox_manager.create()
+    # But verify it exists and is writable, create if needed
+    try:
+        # Try to write a test file to verify /tools exists and is writable
+        await sandbox.files.write("/tools/.test_write", b"test")
+        await sandbox.commands.run("rm -f /tools/.test_write")
+    except Exception:
+        # If /tools doesn't exist or isn't writable, create it using Python
+        create_tools_code = """
+import os
+import stat
+os.makedirs('/tools', exist_ok=True)
+try:
+    os.chmod('/tools', stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+except Exception:
+    pass
+"""
+        tools_result = await sandbox.run_code(create_tools_code, language="python")
+        if tools_result.error:
+            raise RuntimeError(f"Failed to create /tools directory: {tools_result.error}")
 
     # Upload responses.py first (needed by tool modules)
     responses_file = tools_dir / "responses.py"
     if responses_file.exists():
-        await sandbox_manager.sandbox.files.write(
-            "/tools/responses.py", responses_file.read_bytes()
-        )
+        await sandbox.files.write("/tools/responses.py", responses_file.read_bytes())
 
     # Upload each tool module
     for tool_file in tools_dir.glob("*.py"):
@@ -163,4 +194,4 @@ async def upload_tools_to_sandbox(sandbox_manager: SandboxManager) -> None:
 
         sandbox_path = f"/tools/{tool_file.name}"
         content = tool_file.read_bytes()
-        await sandbox_manager.sandbox.files.write(sandbox_path, content)
+        await sandbox.files.write(sandbox_path, content)

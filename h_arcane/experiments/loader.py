@@ -51,7 +51,7 @@ def extract_task_description(task_id: str) -> str:
     task_row = tasks_df[tasks_df["task_id"] == task_id]
     if task_row.empty:
         raise ValueError(f"Task {task_id} not found in gdpeval.parquet")
-    
+
     # The parquet file uses 'prompt' column
     row = task_row.iloc[0]
     if "prompt" not in row:
@@ -60,14 +60,29 @@ def extract_task_description(task_id: str) -> str:
 
 
 def find_reference_files(task_id: str, reference_dir: Path) -> list[Path]:
-    """Find reference files for a task."""
+    """Find reference files for a task.
+
+    Checks multiple locations:
+    1. Subdirectory named exactly {task_id}/
+    2. Files with {task_id}* prefix in root (legacy format)
+    """
     if not reference_dir.exists():
         return []
 
     task_files = []
+
+    # Strategy 1: Check for subdirectory named exactly {task_id}
+    task_subdir = reference_dir / task_id
+    if task_subdir.exists() and task_subdir.is_dir():
+        for file_path in task_subdir.iterdir():
+            if file_path.is_file():
+                task_files.append(file_path)
+
+    # Strategy 2: Check for files with {task_id}* prefix in root (legacy format)
     for file_path in reference_dir.glob(f"{task_id}*"):
         if file_path.is_file():
             task_files.append(file_path)
+
     return sorted(task_files)
 
 
@@ -130,7 +145,7 @@ def load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
     from h_arcane.db.connection import get_engine
     from h_arcane.db.models import Experiment, Resource
     from sqlmodel import Session, select
-    
+
     experiment_ids = []
     total = len(tasks)
 
@@ -139,52 +154,103 @@ def load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
     # Create session directly (not using generator pattern with 'with')
     engine = get_engine()
     session = Session(engine)
-    
+
     try:
         for idx, task in enumerate(tasks, 1):
             # Show progress
-            print(f"   Processing task {idx}/{total}: {task.task_id[:8]}...", file=sys.stderr, flush=True)
-            
+            print(
+                f"   Processing task {idx}/{total}: {task.task_id[:8]}...",
+                file=sys.stderr,
+                flush=True,
+            )
+
             # Check if experiment already exists
             existing_experiment = session.exec(
                 select(Experiment).where(Experiment.gdpeval_task_id == task.task_id)
             ).first()
-            
+
             if existing_experiment:
-                print(f"      ⚠️  Experiment already exists, skipping (ID: {existing_experiment.id})", file=sys.stderr, flush=True)
+                print(
+                    f"      ⚠️  Experiment already exists (ID: {existing_experiment.id})",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 experiment_ids.append(existing_experiment.id)
-                continue
-            
-            print("      Serializing rubric...", file=sys.stderr, flush=True)
-            
-            # Create experiment record
-            rubric_dict = task.rubric.model_dump()
-            print(f"      Rubric serialized ({len(str(rubric_dict))} chars)", file=sys.stderr, flush=True)
-            
-            print("      Creating Experiment object...", file=sys.stderr, flush=True)
-            experiment = Experiment(
-                gdpeval_task_id=task.task_id,
-                task_description=task.task_description,
-                ground_truth_rubric=rubric_dict,
-                category=task.category,
-            )
-            print("      Adding experiment to session...", file=sys.stderr, flush=True)
-            session.add(experiment)
-            print("      Flushing to get ID...", file=sys.stderr, flush=True)
-            session.flush()  # Flush to get the ID without committing
-            print(f"      Got experiment ID: {experiment.id}", file=sys.stderr, flush=True)
-            experiment_ids.append(experiment.id)
+
+                # Check if resources exist for this experiment
+                existing_resources = session.exec(
+                    select(Resource).where(Resource.experiment_id == existing_experiment.id)
+                ).all()
+
+                if existing_resources:
+                    print(
+                        f"      ✅ Experiment already has {len(existing_resources)} resources, skipping",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    continue
+                else:
+                    # Backfill: create resources for existing experiment
+                    print(
+                        f"      🔄 No resources found, creating {len(task.reference_files)} resources...",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    experiment = existing_experiment
+            else:
+                # Create new experiment
+                print("      Serializing rubric...", file=sys.stderr, flush=True)
+                rubric_dict = task.rubric.model_dump()
+                print(
+                    f"      Rubric serialized ({len(str(rubric_dict))} chars)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+                print("      Creating Experiment object...", file=sys.stderr, flush=True)
+                experiment = Experiment(
+                    gdpeval_task_id=task.task_id,
+                    task_description=task.task_description,
+                    ground_truth_rubric=rubric_dict,
+                    category=task.category,
+                )
+                print("      Adding experiment to session...", file=sys.stderr, flush=True)
+                session.add(experiment)
+                print("      Flushing to get ID...", file=sys.stderr, flush=True)
+                session.flush()  # Flush to get the ID without committing
+                print(f"      Got experiment ID: {experiment.id}", file=sys.stderr, flush=True)
+                experiment_ids.append(experiment.id)
 
             # Create Resource records for input files (not JSON)
-            print(f"      Processing {len(task.reference_files)} reference files...", file=sys.stderr, flush=True)
+            print(
+                f"      Processing {len(task.reference_files)} reference files...",
+                file=sys.stderr,
+                flush=True,
+            )
             for ref_idx, ref_file in enumerate(task.reference_files, 1):
-                print(f"         File {ref_idx}/{len(task.reference_files)}: {ref_file.name}", file=sys.stderr, flush=True)
+                print(
+                    f"         File {ref_idx}/{len(task.reference_files)}: {ref_file.name}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+                # Store path relative to DATA_DIR for portability between local and Docker
+                # ref_file is already relative to reference_dir, which is DATA_DIR / "raw" / "reference_files"
+                # So we need to get the path relative to DATA_DIR
+                try:
+                    # Try to make path relative to DATA_DIR
+                    file_path_relative = ref_file.relative_to(DATA_DIR)
+                    file_path_str = str(file_path_relative)
+                except ValueError:
+                    # If ref_file is not relative to DATA_DIR, store as absolute (fallback)
+                    file_path_str = str(ref_file.absolute())
+
                 resource = Resource(
                     experiment_id=experiment.id,
                     run_id=None,  # Input files don't belong to a run
                     name=ref_file.name,
                     mime_type=get_mime_type(ref_file),
-                    file_path=str(ref_file.absolute()),
+                    file_path=file_path_str,
                     size_bytes=ref_file.stat().st_size,
                 )
                 session.add(resource)
@@ -198,6 +264,7 @@ def load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
         print(f"   ❌ Error: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
         session.rollback()
         import traceback
+
         traceback.print_exc(file=sys.stderr)
         raise
     finally:

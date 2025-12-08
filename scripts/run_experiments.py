@@ -61,12 +61,12 @@ def get_service_status(service_name: str) -> str | None:
         )
         if not result.stdout.strip():
             return None
-        
+
         # Parse JSON output (one line per container)
         lines = [line for line in result.stdout.strip().split("\n") if line]
         if not lines:
             return None
-        
+
         # Get the first container's state
         container_info = json.loads(lines[0])
         return container_info.get("State", "").lower()
@@ -80,13 +80,58 @@ def is_service_running(service_name: str) -> bool:
     return status in ("running", "up")
 
 
+def get_service_ports(service_name: str) -> dict[str, str]:
+    """Get port mappings for a docker-compose service."""
+    project_root = get_project_root()
+    docker_cmd = get_docker_compose_cmd()
+    try:
+        result = subprocess.run(
+            docker_cmd + ["ps", "--format", "json", service_name],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=project_root,
+        )
+        if not result.stdout.strip():
+            return {}
+
+        lines = [line for line in result.stdout.strip().split("\n") if line]
+        if not lines:
+            return {}
+
+        container_info = json.loads(lines[0])
+        ports = container_info.get("Ports", "")
+
+        # Parse port mappings (format: "0.0.0.0:5433->5432/tcp")
+        port_mappings = {}
+        if ports:
+            for port_str in ports.split(", "):
+                if "->" in port_str:
+                    # Extract host:port -> container:port
+                    parts = port_str.split("->")
+                    if len(parts) == 2:
+                        host_part = parts[0].strip()
+                        # Extract port from "0.0.0.0:5433" or "5433"
+                        if ":" in host_part:
+                            host_port = host_part.split(":")[-1]
+                        else:
+                            host_port = host_part
+                        # Remove /tcp suffix if present
+                        host_port = host_port.split("/")[0]
+                        port_mappings[service_name] = host_port
+
+        return port_mappings
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError, KeyError):
+        return {}
+
+
 def start_services(services: list[str], wait_for_healthy: bool = True) -> bool:
     """Start docker-compose services."""
     project_root = get_project_root()
     docker_cmd = get_docker_compose_cmd()
-    
+
     print(f"\n🚀 Starting services: {', '.join(services)}...")
-    
+
     try:
         # Start services
         subprocess.run(
@@ -94,7 +139,7 @@ def start_services(services: list[str], wait_for_healthy: bool = True) -> bool:
             check=True,
             cwd=project_root,
         )
-        
+
         if wait_for_healthy:
             print("⏳ Waiting for services to be ready...")
             # Wait for postgres healthcheck if it's in the list
@@ -107,7 +152,8 @@ def start_services(services: list[str], wait_for_healthy: bool = True) -> bool:
                         # Check if postgres is actually ready
                         try:
                             result = subprocess.run(
-                                docker_cmd + ["exec", "-T", "postgres", "pg_isready", "-U", "h_arcane"],
+                                docker_cmd
+                                + ["exec", "-T", "postgres", "pg_isready", "-U", "h_arcane"],
                                 capture_output=True,
                                 check=True,
                                 cwd=project_root,
@@ -117,15 +163,15 @@ def start_services(services: list[str], wait_for_healthy: bool = True) -> bool:
                                 break
                         except subprocess.CalledProcessError:
                             pass
-                    
+
                     time.sleep(1)
                     waited += 1
                     if waited % 5 == 0:
                         print(f"   Still waiting... ({waited}s)")
-                
+
                 if waited >= max_wait:
                     print("⚠️  PostgreSQL took longer than expected to start")
-            
+
             # Wait for other services to be running
             for service in services:
                 if service == "postgres":
@@ -138,10 +184,21 @@ def start_services(services: list[str], wait_for_healthy: bool = True) -> bool:
                         break
                     time.sleep(1)
                     waited += 1
-        
-        print("✅ All services started\n")
+
+        # Print port information
+        print("\n📡 Service Ports:")
+        service_ports = {
+            "postgres": "5433",
+            "api": "9000",
+            "inngest-dev": "8289",
+        }
+        for service in services:
+            if service in service_ports:
+                print(f"   {service}: http://localhost:{service_ports[service]}")
+
+        print("\n✅ All services started\n")
         return True
-        
+
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to start services: {e}")
         return False
@@ -151,21 +208,21 @@ def ensure_services_running(required_services: list[str] | None = None) -> bool:
     """Ensure required docker-compose services are running, start them if not."""
     if required_services is None:
         required_services = ["postgres", "inngest-dev", "api"]
-    
+
     if not check_docker_compose_available():
         print("❌ docker-compose is not available. Please install Docker Compose.")
         return False
-    
+
     # Check which services need to be started
     services_to_start = []
     for service in required_services:
         if not is_service_running(service):
             services_to_start.append(service)
-    
+
     if not services_to_start:
         print("✅ All required services are running")
         return True
-    
+
     return start_services(services_to_start)
 
 

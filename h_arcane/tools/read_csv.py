@@ -3,7 +3,7 @@
 import csv
 from pathlib import Path
 
-from h_arcane.tools.responses import ReadCsvResponse
+from responses import ReadCsvResponse
 
 
 async def read_csv(file_path: str, max_rows: int | None = None) -> ReadCsvResponse:

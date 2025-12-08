@@ -120,7 +120,9 @@ async def read_excel(file_path: str, sheet_name: str | None = None) -> str:
 
 
 @function_tool
-async def create_excel(data: list[list], output_path: str, sheet_name: str = "Sheet1") -> str:
+async def create_excel(
+    data: list[list[str | int | float | None]], output_path: str, sheet_name: str = "Sheet1"
+) -> str:
     """
     Create an Excel file from 2D array data.
 
@@ -175,7 +177,7 @@ async def read_csv(file_path: str, max_rows: int | None = None) -> str:
 
 
 @function_tool
-async def create_csv(data: list[list], output_path: str) -> str:
+async def create_csv(data: list[list[str | int | float | None]], output_path: str) -> str:
     """
     Create CSV file from 2D array data.
 
@@ -221,13 +223,16 @@ async def execute_python_code(code: str, timeout_seconds: int = 30) -> str:
     """
     # Note: execute_python_code uses the run's sandbox directly
     # We'll handle this specially in sandbox_executor
+    from h_arcane.agents.sandbox_executor import get_current_run_id
+
+    run_id = get_current_run_id()
     sandbox_manager = get_sandbox_manager()
-    if not sandbox_manager.sandbox:
+    sandbox = sandbox_manager.get_sandbox(run_id)
+
+    if not sandbox:
         return "Error: Sandbox not available"
 
-    execution = await sandbox_manager.sandbox.run_code(
-        code, language="python", timeout=timeout_seconds
-    )
+    execution = await sandbox.run_code(code, language="python", timeout=timeout_seconds)
 
     stdout_parts = []
     stderr_parts = []

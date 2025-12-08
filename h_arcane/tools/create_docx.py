@@ -5,7 +5,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 from pathlib import Path
 
-from h_arcane.tools.responses import CreateDocxResponse
+from responses import CreateDocxResponse
 
 
 async def create_docx(

@@ -57,10 +57,12 @@ class ExperimentRunner:
 
         # Start runs (fire-and-forget)
         import asyncio
-        
+
         logger.info("Starting runs", count=len(run_ids))
         for idx, run_id in enumerate(run_ids, 1):
-            logger.debug("Sending run/start event", run_id=str(run_id), progress=f"{idx}/{len(run_ids)}")
+            logger.debug(
+                "Sending run/start event", run_id=str(run_id), progress=f"{idx}/{len(run_ids)}"
+            )
             try:
                 # Add timeout to prevent hanging
                 await asyncio.wait_for(
@@ -74,7 +76,11 @@ class ExperimentRunner:
                 )
                 logger.debug("Event sent successfully", run_id=str(run_id))
             except asyncio.TimeoutError:
-                logger.warning("Event send timed out", run_id=str(run_id), message="Continuing anyway (fire-and-forget)")
+                logger.warning(
+                    "Event send timed out",
+                    run_id=str(run_id),
+                    message="Continuing anyway (fire-and-forget)",
+                )
             except Exception as e:
                 logger.error("Failed to send event", run_id=str(run_id), error=str(e))
                 # Don't raise - continue with other events (fire-and-forget)

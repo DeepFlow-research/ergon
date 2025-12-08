@@ -46,6 +46,9 @@ class ReadExcelResponse(ToolResponse):
     """Response from read_excel tool."""
 
     sheet_name: str | None = Field(default=None, description="Name of the sheet that was read")
+    available_sheets: list[str] | None = Field(
+        default=None, description="List of all available sheet names in the workbook"
+    )
     num_rows: int | None = Field(default=None, description="Total number of rows")
     num_cols: int | None = Field(default=None, description="Total number of columns")
     data: list[list] | None = Field(
@@ -131,3 +134,17 @@ class OcrImageResponse(ToolResponse):
                 "error": None,
             }
         }
+
+
+# Union type for all possible tool results
+ToolResult = (
+    ToolResponse
+    | ReadPDFResponse
+    | CreateDocxResponse
+    | ReadExcelResponse
+    | CreateExcelResponse
+    | ReadCsvResponse
+    | CreateCsvResponse
+    | OcrImageResponse
+    | str  # For ask_stakeholder which returns a string
+)

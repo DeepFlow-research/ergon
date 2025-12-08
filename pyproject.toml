@@ -23,6 +23,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "structlog>=23.2.0",
     "pyarrow>=22.0.0",
+    "litellm>=1.80.8",
 ]
 
 [build-system]

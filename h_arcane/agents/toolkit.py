@@ -94,15 +94,8 @@ class WorkerToolkit:
         )
         self._message_num += 1
 
-        # Log as action
-        queries.actions.create(
-            run_id=self.run_id,
-            action_num=self._action_num,
-            action_type="ask_stakeholder",
-            input=question,
-            output=answer,
-        )
-        self._action_num += 1
+        # Note: Action logging is now handled by ActionLoggingHooks in worker.py
+        # No need to manually log ask_stakeholder actions here
 
         self._questions_asked += 1
         return answer
@@ -126,7 +119,7 @@ class WorkerToolkit:
             ```
         """
         # Set sandbox manager for execute_in_sandbox()
-        set_sandbox_manager(self.sandbox_manager)
+        set_sandbox_manager(self.sandbox_manager, self.run_id)
 
         # Return tool functions (they're @function_tool decorated and call execute_in_sandbox internally)
         return [

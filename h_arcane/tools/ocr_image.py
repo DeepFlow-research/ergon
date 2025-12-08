@@ -4,7 +4,7 @@ import pytesseract
 from PIL import Image
 from pathlib import Path
 
-from h_arcane.tools.responses import OcrImageResponse
+from responses import OcrImageResponse
 
 
 async def ocr_image(file_path: str, language: str = "eng") -> OcrImageResponse:

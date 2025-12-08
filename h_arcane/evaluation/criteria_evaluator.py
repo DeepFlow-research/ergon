@@ -327,22 +327,30 @@ async def _evaluate_code_rule(
     max_score: float,
 ) -> CriterionResult:
     """Execute code rule in sandbox."""
+    sandbox_manager = SandboxManager()
+
     if sandbox_manager is None:
         # Create temporary sandbox for evaluation
-        sandbox_manager = SandboxManager(run_id=run_id)
-        await sandbox_manager.create()
+        await sandbox_manager.create(run_id)
         should_terminate = True
     else:
-        should_terminate = False
+        # Use existing sandbox - ensure it exists
+        sandbox = sandbox_manager.get_sandbox(run_id)
+        if not sandbox:
+            await sandbox_manager.create(run_id)
+            should_terminate = True  # We created it, so we should terminate it
+        else:
+            should_terminate = False  # Using existing sandbox, don't terminate
 
     try:
         # Upload output files to sandbox
-        if sandbox_manager.sandbox is None:
+        sandbox = sandbox_manager.get_sandbox(run_id)
+        if not sandbox:
             raise RuntimeError("Sandbox not created")
         for resource in agent_outputs:
             sandbox_path = f"/evaluation/{resource.name}"
             content = resource.load_content()
-            await sandbox_manager.sandbox.files.write(sandbox_path, content)
+            await sandbox.files.write(sandbox_path, content)
 
         # Prepare evaluation context
         # Code rules expect: evaluate(task_input: str, agent_reasoning: str, output_files: dict[str, bytes]) -> float | tuple[float, str]
@@ -354,9 +362,10 @@ async def _evaluate_code_rule(
             max_score=max_score,
         )
 
-        if sandbox_manager.sandbox is None:
+        sandbox = sandbox_manager.get_sandbox(run_id)
+        if not sandbox:
             raise RuntimeError("Sandbox not created")
-        execution = await sandbox_manager.sandbox.run_code(code, language="python", timeout=30)
+        execution = await sandbox.run_code(code, language="python", timeout=30)
 
         # Parse result
         score, feedback, evaluated_resource_ids = _parse_code_rule_result(
@@ -380,7 +389,7 @@ async def _evaluate_code_rule(
 
     finally:
         if should_terminate:
-            await sandbox_manager.terminate()
+            await sandbox_manager.terminate(run_id)
 
 
 async def _evaluate_llm_judge(

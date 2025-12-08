@@ -3,7 +3,7 @@
 import pdfplumber
 from pathlib import Path
 
-from h_arcane.tools.responses import ReadPDFResponse
+from responses import ReadPDFResponse
 
 
 async def read_pdf(file_path: str) -> ReadPDFResponse:

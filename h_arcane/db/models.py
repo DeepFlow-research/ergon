@@ -165,12 +165,86 @@ class Resource(SQLModel, table=True):
     )
 
     def load_content(self) -> bytes:
-        """Load file content from disk."""
-        return Path(self.file_path).read_bytes()
+        """Load file content from disk.
+
+        Resolves paths relative to DATA_DIR if the stored path doesn't exist.
+        This handles both local development and Docker container environments.
+        """
+        file_path = Path(self.file_path)
+
+        # If path doesn't exist, try resolving relative to DATA_DIR
+        if not file_path.exists():
+            # Import here to avoid circular dependency
+            from h_arcane.experiments.loader import DATA_DIR
+
+            # If stored path is absolute, try to extract relative part
+            if file_path.is_absolute():
+                # Check if path contains "data/" and extract everything after it
+                path_str = str(file_path)
+                if "/data/" in path_str:
+                    # Extract relative part after "data/"
+                    relative_part = path_str.split("/data/", 1)[1]
+                    resolved_path = DATA_DIR / relative_part
+                else:
+                    # Try treating the whole path as relative to DATA_DIR
+                    resolved_path = DATA_DIR / self.file_path
+            else:
+                # Path is already relative, resolve against DATA_DIR
+                resolved_path = DATA_DIR / self.file_path
+
+            if resolved_path.exists():
+                file_path = resolved_path
+            else:
+                # Provide helpful error message
+                raise FileNotFoundError(
+                    f"Resource file not found. Tried:\n"
+                    f"  1. {file_path}\n"
+                    f"  2. {resolved_path}\n"
+                    f"  (DATA_DIR={DATA_DIR})"
+                )
+
+        return file_path.read_bytes()
 
     def load_text(self) -> str:
-        """Load file content as text."""
-        return Path(self.file_path).read_text()
+        """Load file content as text.
+
+        Resolves paths relative to DATA_DIR if the stored path doesn't exist.
+        This handles both local development and Docker container environments.
+        """
+        file_path = Path(self.file_path)
+
+        # If path doesn't exist, try resolving relative to DATA_DIR
+        if not file_path.exists():
+            # Import here to avoid circular dependency
+            from h_arcane.experiments.loader import DATA_DIR
+
+            # If stored path is absolute, try to extract relative part
+            if file_path.is_absolute():
+                # Check if path contains "data/" and extract everything after it
+                path_str = str(file_path)
+                if "/data/" in path_str:
+                    # Extract relative part after "data/"
+                    relative_part = path_str.split("/data/", 1)[1]
+                    resolved_path = DATA_DIR / relative_part
+                else:
+                    # Try treating the whole path as relative to DATA_DIR
+                    resolved_path = DATA_DIR / self.file_path
+            else:
+                # Path is already relative, resolve against DATA_DIR
+                resolved_path = DATA_DIR / self.file_path
+
+            if resolved_path.exists():
+                file_path = resolved_path
+            else:
+                # Provide helpful error message
+                raise FileNotFoundError(
+                    f"Resource file not found. Tried:\n"
+                    f"  1. {file_path}\n"
+                    f"  2. {resolved_path}\n"
+                    f"  (DATA_DIR={DATA_DIR})"
+                )
+
+        return file_path.read_text()
 
 
 class Evaluation(SQLModel, table=True):

@@ -26,7 +26,13 @@ dist/
 *.sqlite
 
 # Data
-data/
+data/*
+!data/generated/
+data/generated/*
+!data/generated/staged_v2/
+data/generated/staged_v2/*
+!data/generated/staged_v2/*.jsonl
+!data/generated/staged_v2/*.json
 paper_code_structure_plans/data/
 *.parquet
 

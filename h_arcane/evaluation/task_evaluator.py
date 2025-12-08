@@ -2,66 +2,120 @@
 
 from uuid import UUID
 
+import inngest
+
 from h_arcane.db.models import CriterionResult, Evaluation, Resource
 from h_arcane.evaluation.criteria_evaluator import evaluate_criterion
 from h_arcane.evaluation.models import TaskEvaluationResult
 from h_arcane.evaluation.rubric_flattener import flatten_rubric
+from h_arcane.inngest.client import inngest_client
 from h_arcane.schemas.staged_rubric_schema import StagedRubric
 
 
+@inngest_client.create_function(  # type: ignore[misc]
+    fn_id="evaluate-task-run",
+    trigger=inngest.TriggerEvent(event="task/evaluate"),
+    retries=2,
+    concurrency=[inngest.Concurrency(limit=10, scope="fn")],
+    output_type=TaskEvaluationResult,
+)
 async def evaluate_task_run(
-    run_id: UUID,
-    task_input: str,
-    agent_reasoning: str,
-    agent_outputs: list[Resource],
-    rubric: StagedRubric,
-    sandbox_manager=None,
+    ctx: inngest.Context,
 ) -> TaskEvaluationResult:
     """
     Evaluate a task run against ground truth rubric.
 
-    Args:
-        run_id: The run ID
-        task_input: Original task description
-        agent_reasoning: Worker's reasoning/output text
-        agent_outputs: Output files/resources
-        rubric: Ground truth StagedRubric
-        sandbox_manager: Optional sandbox manager for code rule execution
-
-    Returns:
-        TaskEvaluationResult with aggregate scores and evaluation summary
-
-    Example:
-        ```python
-        result = await evaluate_task_run(
-            run_id=run_id,
-            task_input="Create a report",
-            agent_reasoning="I created a PDF...",
-            agent_outputs=[resource1, resource2],
-            rubric=staged_rubric,
-            sandbox_manager=sandbox_manager
-        )
-        print(f"Score: {result.normalized_score:.2%}")
-        ```
+    This is an Inngest function that evaluates all criteria in parallel.
     """
-    # Flatten rubric into criteria list
-    criteria = flatten_rubric(rubric)
+    # Extract event data (import here to avoid circular dependency)
+    from h_arcane.inngest.functions import TaskEvaluationEvent
 
-    # Evaluate all criteria (can be parallelized via Inngest step.invoke)
-    criterion_results = []
-    for stage, rule, stage_idx, rule_idx in criteria:
-        result = await evaluate_criterion(
-            run_id=run_id,
-            agent_reasoning=agent_reasoning,
-            agent_outputs=agent_outputs,
-            stage=stage,
-            rule=rule,
-            stage_idx=stage_idx,
-            rule_idx=rule_idx,
-            task_input=task_input,
-            sandbox_manager=sandbox_manager,
+    event_data = TaskEvaluationEvent.model_validate(ctx.event.data)
+    run_id = UUID(event_data.run_id)
+    task_input = event_data.task_input
+    agent_reasoning = event_data.agent_reasoning
+
+    # Deserialize resources and rubric
+    agent_outputs = [Resource(**r_dict) for r_dict in event_data.agent_outputs]
+    rubric = StagedRubric(**event_data.rubric)
+
+    # Flatten rubric into criteria list (as a step)
+    async def flatten_rubric_step():
+        criteria_tuples = flatten_rubric(rubric)
+        # Convert to JSON-serializable format
+        # Store stage and rule as dicts, keep indices as ints
+        return [
+            {
+                "stage": stage.model_dump(mode="json"),
+                "rule": rule.model_dump(mode="json"),
+                "stage_idx": stage_idx,
+                "rule_idx": rule_idx,
+            }
+            for stage, rule, stage_idx, rule_idx in criteria_tuples
+        ]
+
+    criteria_dicts = await ctx.step.run("flatten-rubric", flatten_rubric_step)
+
+    # Reconstruct Pydantic objects from serialized data
+    from h_arcane.schemas.staged_rubric_schema import EvaluationStage, CodeRule, LLMJudgeRule
+
+    criteria = []
+    for crit_dict in criteria_dicts:
+        stage = EvaluationStage(**crit_dict["stage"])
+        rule_dict = crit_dict["rule"]
+        # Determine rule type based on the "type" field
+        if rule_dict.get("type") == "code":
+            rule = CodeRule(**rule_dict)
+        else:
+            rule = LLMJudgeRule(**rule_dict)
+        criteria.append((stage, rule, crit_dict["stage_idx"], crit_dict["rule_idx"]))
+
+    # Evaluate all criteria in parallel
+    # Create step functions for all criteria - use helper to capture loop variables
+    def make_parallel_step(s, r, si, ri, c=ctx):
+        """Create a step runner function with captured variables.
+
+        Args:
+            s: Stage object
+            r: Rule object
+            si: Stage index
+            ri: Rule index
+            c: Inngest context (captured as default arg)
+        """
+
+        async def evaluate_criterion_step():
+            return await evaluate_criterion(
+                run_id=run_id,
+                agent_reasoning=agent_reasoning,
+                agent_outputs=agent_outputs,
+                stage=s,
+                rule=r,
+                stage_idx=si,
+                rule_idx=ri,
+                task_input=task_input,
+                sandbox_manager=None,  # Create temporary sandbox for code rules if needed
+            )
+
+        # Return lambda that calls ctx.step.run with the step function
+        # Capture context and step_id in lambda defaults
+        step_id = f"evaluate-criterion-{si}-{ri}"
+        step_fn = evaluate_criterion_step
+        return lambda ctx_ref=c, sid=step_id, fn=step_fn: ctx_ref.step.run(
+            sid,
+            fn,
+            output_type=CriterionResult,
         )
-        criterion_results.append(result)
+
+    # Create parallel step runners - build list with proper closures
+    parallel_steps_list = [
+        make_parallel_step(stage, rule, stage_idx, rule_idx)
+        for stage, rule, stage_idx, rule_idx in criteria
+    ]
+
+    # Run all criterion evaluations in parallel
+    criterion_results_tuple = await ctx.group.parallel(tuple(parallel_steps_list))
+    # Convert tuple to list for consistency
+    criterion_results = list(criterion_results_tuple)
 
     # Rebuild into stage structure
     stage_results = _rebuild_stage_results(criterion_results, rubric)
