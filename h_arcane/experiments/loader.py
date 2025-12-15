@@ -3,12 +3,16 @@
 import json
 import mimetypes
 import sys
+import traceback
 from pathlib import Path
 from uuid import UUID
 from pydantic import BaseModel
 import pandas as pd
 
+from sqlmodel import Session, select
 
+from h_arcane.db.connection import get_engine
+from h_arcane.db.models import Experiment, Resource
 from h_arcane.schemas.staged_rubric_schema import (
     StagedRubric,
     GDPEvalStagedRubric,
@@ -142,10 +146,6 @@ def load_gdpeval_tasks(
 
 def load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
     """Load tasks into experiments table and create input Resource records."""
-    from h_arcane.db.connection import get_engine
-    from h_arcane.db.models import Experiment, Resource
-    from sqlmodel import Session, select
-
     experiment_ids = []
     total = len(tasks)
 
@@ -263,8 +263,6 @@ def load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
     except Exception as e:
         print(f"   ❌ Error: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
         session.rollback()
-        import traceback
-
         traceback.print_exc(file=sys.stderr)
         raise
     finally:

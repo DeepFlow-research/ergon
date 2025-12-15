@@ -115,6 +115,7 @@ class Action(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
+    agent_id: UUID | None = Field(foreign_key="agent_configs.id", index=True, default=None)
 
     # Ordering
     action_num: int  # 0, 1, 2, ...
@@ -129,13 +130,14 @@ class Action(SQLModel, table=True):
     completed_at: datetime | None = None
     duration_ms: int | None = None
 
-    # Cost
-    tokens: int | None = None
-    cost_usd: float | None = None
+    # Cost (run-level totals at time of action, not per-action)
+    agent_total_tokens: int | None = None
+    agent_total_cost_usd: float | None = None
 
     __table_args__ = (
         Index("ix_actions_run_num", "run_id", "action_num"),
         Index("ix_actions_run_type", "run_id", "action_type"),
+        Index("ix_actions_agent", "agent_id"),
     )
 
 
@@ -164,45 +166,59 @@ class Resource(SQLModel, table=True):
         Index("ix_resources_run", "run_id"),
     )
 
+    def _resolve_file_path(self) -> Path:
+        """Resolve file path, trying DATA_DIR if stored path doesn't exist.
+
+        This handles both local development and Docker container environments.
+
+        Returns:
+            Resolved Path object
+
+        Raises:
+            FileNotFoundError: If file cannot be found in any location
+        """
+        file_path = Path(self.file_path)
+
+        # If path exists, return it directly
+        if file_path.exists():
+            return file_path
+
+        # Import here to avoid circular dependency
+        from h_arcane.experiments.loader import DATA_DIR
+
+        # If stored path is absolute, try to extract relative part
+        if file_path.is_absolute():
+            # Check if path contains "data/" and extract everything after it
+            path_str = str(file_path)
+            if "/data/" in path_str:
+                # Extract relative part after "data/"
+                relative_part = path_str.split("/data/", 1)[1]
+                resolved_path = DATA_DIR / relative_part
+            else:
+                # Try treating the whole path as relative to DATA_DIR
+                resolved_path = DATA_DIR / self.file_path
+        else:
+            # Path is already relative, resolve against DATA_DIR
+            resolved_path = DATA_DIR / self.file_path
+
+        if resolved_path.exists():
+            return resolved_path
+        else:
+            # Provide helpful error message
+            raise FileNotFoundError(
+                f"Resource file not found. Tried:\n"
+                f"  1. {file_path}\n"
+                f"  2. {resolved_path}\n"
+                f"  (DATA_DIR={DATA_DIR})"
+            )
+
     def load_content(self) -> bytes:
         """Load file content from disk.
 
         Resolves paths relative to DATA_DIR if the stored path doesn't exist.
         This handles both local development and Docker container environments.
         """
-        file_path = Path(self.file_path)
-
-        # If path doesn't exist, try resolving relative to DATA_DIR
-        if not file_path.exists():
-            # Import here to avoid circular dependency
-            from h_arcane.experiments.loader import DATA_DIR
-
-            # If stored path is absolute, try to extract relative part
-            if file_path.is_absolute():
-                # Check if path contains "data/" and extract everything after it
-                path_str = str(file_path)
-                if "/data/" in path_str:
-                    # Extract relative part after "data/"
-                    relative_part = path_str.split("/data/", 1)[1]
-                    resolved_path = DATA_DIR / relative_part
-                else:
-                    # Try treating the whole path as relative to DATA_DIR
-                    resolved_path = DATA_DIR / self.file_path
-            else:
-                # Path is already relative, resolve against DATA_DIR
-                resolved_path = DATA_DIR / self.file_path
-
-            if resolved_path.exists():
-                file_path = resolved_path
-            else:
-                # Provide helpful error message
-                raise FileNotFoundError(
-                    f"Resource file not found. Tried:\n"
-                    f"  1. {file_path}\n"
-                    f"  2. {resolved_path}\n"
-                    f"  (DATA_DIR={DATA_DIR})"
-                )
-
+        file_path = self._resolve_file_path()
         return file_path.read_bytes()
 
     def load_text(self) -> str:
@@ -211,40 +227,30 @@ class Resource(SQLModel, table=True):
         Resolves paths relative to DATA_DIR if the stored path doesn't exist.
         This handles both local development and Docker container environments.
         """
-        file_path = Path(self.file_path)
-
-        # If path doesn't exist, try resolving relative to DATA_DIR
-        if not file_path.exists():
-            # Import here to avoid circular dependency
-            from h_arcane.experiments.loader import DATA_DIR
-
-            # If stored path is absolute, try to extract relative part
-            if file_path.is_absolute():
-                # Check if path contains "data/" and extract everything after it
-                path_str = str(file_path)
-                if "/data/" in path_str:
-                    # Extract relative part after "data/"
-                    relative_part = path_str.split("/data/", 1)[1]
-                    resolved_path = DATA_DIR / relative_part
-                else:
-                    # Try treating the whole path as relative to DATA_DIR
-                    resolved_path = DATA_DIR / self.file_path
-            else:
-                # Path is already relative, resolve against DATA_DIR
-                resolved_path = DATA_DIR / self.file_path
-
-            if resolved_path.exists():
-                file_path = resolved_path
-            else:
-                # Provide helpful error message
-                raise FileNotFoundError(
-                    f"Resource file not found. Tried:\n"
-                    f"  1. {file_path}\n"
-                    f"  2. {resolved_path}\n"
-                    f"  (DATA_DIR={DATA_DIR})"
-                )
-
+        file_path = self._resolve_file_path()
         return file_path.read_text()
+
+
+class AgentConfig(SQLModel, table=True):
+    """Agent configuration snapshot for a run."""
+
+    __tablename__ = "agent_configs"  # type: ignore[assignment]
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    run_id: UUID = Field(foreign_key="runs.id", index=True)
+
+    # Agent identity
+    name: str  # e.g., "TaskWorker"
+    agent_type: str  # e.g., "react_worker"
+
+    # Configuration snapshot
+    model: str  # e.g., "gpt-4o"
+    system_prompt: str
+    tools: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    __table_args__ = (Index("ix_agent_configs_run", "run_id"),)
 
 
 class Evaluation(SQLModel, table=True):
@@ -291,6 +297,11 @@ class CriterionResult(SQLModel, table=True):
 
     # Evaluator reasoning (mandatory)
     feedback: str
+
+    # Full evaluation input (code or prompt)
+    evaluation_input: str = Field(
+        description="Full execution code (code_rule) or formatted prompt (llm_judge)",
+    )
 
     # What was evaluated — references
     evaluated_action_ids: list[str] = Field(

@@ -4,7 +4,11 @@ import json
 
 from agents import function_tool
 
-from h_arcane.agents.sandbox_executor import execute_in_sandbox, get_sandbox_manager
+from h_arcane.agents.sandbox_executor import (
+    execute_in_sandbox,
+    get_current_run_id,
+    get_sandbox_manager,
+)
 
 
 @function_tool
@@ -223,8 +227,6 @@ async def execute_python_code(code: str, timeout_seconds: int = 30) -> str:
     """
     # Note: execute_python_code uses the run's sandbox directly
     # We'll handle this specially in sandbox_executor
-    from h_arcane.agents.sandbox_executor import get_current_run_id
-
     run_id = get_current_run_id()
     sandbox_manager = get_sandbox_manager()
     sandbox = sandbox_manager.get_sandbox(run_id)

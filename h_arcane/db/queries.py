@@ -6,6 +6,7 @@ from sqlmodel import SQLModel, select
 
 from h_arcane.db.connection import get_session
 from h_arcane.db.models import (
+    AgentConfig,
     Experiment,
     Run,
     RunStatus,
@@ -32,26 +33,35 @@ class BaseQueries(Generic[T]):
         with next(get_session()) as session:
             return session.get(self.model, id)
 
-    def create(self, **kwargs) -> T:
-        """Create a new entity."""
-        entity = self.model(**kwargs)
+    def create(self, entity: T) -> T:
+        """Create a new entity from a typed object."""
+        # Validate and create new instance without id (will be auto-generated)
+        entity_data = entity.model_dump(exclude={"id"}, exclude_none=False)
+        new_entity = self.model.model_validate(entity_data)
         with next(get_session()) as session:
-            session.add(entity)
+            session.add(new_entity)
             session.commit()
-            session.refresh(entity)
-            return entity
+            session.refresh(new_entity)
+            return new_entity
 
-    def update(self, id: UUID, **kwargs) -> T:
-        """Update entity fields."""
+    def update(self, entity: T) -> T:
+        """Update entity fields from a typed object."""
+        # Check if entity has id attribute (all SQLModel tables should have it)
+        entity_id = getattr(entity, "id", None)
+        if entity_id is None:
+            raise ValueError(f"{self.model.__name__} id must be set for update")
         with next(get_session()) as session:
-            entity = session.get(self.model, id)
-            if entity is None:
-                raise ValueError(f"{self.model.__name__} {id} not found")
-            for key, value in kwargs.items():
-                setattr(entity, key, value)
+            existing = session.get(self.model, entity_id)
+            if existing is None:
+                raise ValueError(f"{self.model.__name__} {entity_id} not found")
+            # Merge updates: preserve unset fields, update set fields
+            update_data = entity.model_dump(exclude_none=True)
+            # Copy updated fields back to existing entity for SQLAlchemy tracking
+            for key, value in update_data.items():
+                setattr(existing, key, value)
             session.commit()
-            session.refresh(entity)
-            return entity
+            session.refresh(existing)
+            return existing
 
 
 class RunsQueries(BaseQueries[Run]):
@@ -84,13 +94,18 @@ class RunsQueries(BaseQueries[Run]):
 
     def reset_for_retry(self, run_id: UUID) -> Run:
         """Reset run for retry."""
-        return self.update(
-            run_id,
-            status=RunStatus.PENDING,
-            error_message=None,
-            started_at=None,
-            completed_at=None,
+        existing = self.get(run_id)
+        if existing is None:
+            raise ValueError(f"Run {run_id} not found")
+        updated = existing.model_copy(
+            update={
+                "status": RunStatus.PENDING,
+                "error_message": None,
+                "started_at": None,
+                "completed_at": None,
+            }
         )
+        return self.update(updated)
 
 
 class ExperimentsQueries(BaseQueries[Experiment]):
@@ -194,27 +209,17 @@ class EvaluationsQueries(BaseQueries[Evaluation]):
         existing = self.get_by_run(run_id)
 
         if existing:
-            # Update existing evaluation
-            return self.update(
-                id=existing.id,
-                total_score=eval_result.total_score,
-                max_score=eval_result.max_score,
-                normalized_score=eval_result.normalized_score,
-                stages_evaluated=eval_result.stages_evaluated,
-                stages_passed=eval_result.stages_passed,
-                failed_gate=eval_result.failed_gate,
-            )
+            # Update existing evaluation - merge updates excluding id and run_id
+            update_data = eval_result.model_dump(exclude={"id", "run_id"}, exclude_none=True)
+            updated = existing.model_copy(update=update_data)
+            updated.id = existing.id  # Preserve existing id
+            updated.run_id = existing.run_id  # Preserve existing run_id
+            return self.update(updated)
         else:
-            # Create new evaluation
-            return self.create(
-                run_id=eval_result.run_id,
-                total_score=eval_result.total_score,
-                max_score=eval_result.max_score,
-                normalized_score=eval_result.normalized_score,
-                stages_evaluated=eval_result.stages_evaluated,
-                stages_passed=eval_result.stages_passed,
-                failed_gate=eval_result.failed_gate,
-            )
+            # Create new evaluation - validate and exclude id
+            entity_data = eval_result.model_dump(exclude={"id"}, exclude_none=False)
+            new_eval = self.model.model_validate(entity_data)
+            return self.create(new_eval)
 
 
 class CriterionResultsQueries(BaseQueries[CriterionResult]):
@@ -244,20 +249,10 @@ class CriterionResultsQueries(BaseQueries[CriterionResult]):
         eval_result: CriterionResult,
     ) -> CriterionResult:
         """Create CriterionResult from evaluation model."""
-        # eval_result already has run_id set, so we can use it directly
-        return self.create(
-            run_id=eval_result.run_id,
-            stage_num=eval_result.stage_num,
-            stage_name=eval_result.stage_name,
-            criterion_num=eval_result.criterion_num,
-            criterion_type=eval_result.criterion_type,
-            criterion_description=eval_result.criterion_description,
-            score=eval_result.score,
-            max_score=eval_result.max_score,
-            feedback=eval_result.feedback,
-            evaluated_action_ids=eval_result.evaluated_action_ids,
-            evaluated_resource_ids=eval_result.evaluated_resource_ids,
-        )
+        # Validate and exclude id - eval_result already has run_id set
+        entity_data = eval_result.model_dump(exclude={"id"}, exclude_none=False)
+        new_criterion = self.model.model_validate(entity_data)
+        return self.create(new_criterion)
 
 
 class TaskEvaluationResultsQueries(BaseQueries[TaskEvaluationResult]):
@@ -274,6 +269,20 @@ class TaskEvaluationResultsQueries(BaseQueries[TaskEvaluationResult]):
             return session.exec(statement).first()  # type: ignore[attr-defined]
 
 
+class AgentConfigsQueries(BaseQueries[AgentConfig]):
+    """Query methods for AgentConfig model."""
+
+    def __init__(self):
+        super().__init__(AgentConfig)
+
+    @staticmethod
+    def get_by_run(run_id: UUID) -> list[AgentConfig]:
+        """Get all agent configs for a run."""
+        with next(get_session()) as session:
+            statement = select(AgentConfig).where(AgentConfig.run_id == run_id)
+            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+
+
 # Create query objects
 class Queries:
     """Namespace for all query methods."""
@@ -286,6 +295,7 @@ class Queries:
     evaluations: EvaluationsQueries
     criterion_results: CriterionResultsQueries
     task_evaluation_results: TaskEvaluationResultsQueries
+    agent_configs: AgentConfigsQueries
 
     def __init__(self):
         self.runs = RunsQueries()
@@ -296,6 +306,7 @@ class Queries:
         self.evaluations = EvaluationsQueries()
         self.criterion_results = CriterionResultsQueries()
         self.task_evaluation_results = TaskEvaluationResultsQueries()
+        self.agent_configs = AgentConfigsQueries()
 
 
 # Global queries instance

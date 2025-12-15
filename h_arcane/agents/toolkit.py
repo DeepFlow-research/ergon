@@ -16,7 +16,7 @@ from h_arcane.agents.tools import (
     execute_python_code,
     ocr_image,
 )
-from h_arcane.db.models import MessageRole
+from h_arcane.db.models import Message, MessageRole
 from h_arcane.db.queries import queries
 
 
@@ -75,10 +75,12 @@ class WorkerToolkit:
 
         # Log worker question
         queries.messages.create(
-            run_id=self.run_id,
-            sender=MessageRole.WORKER,
-            content=question,
-            sequence_num=self._message_num,
+            Message(
+                run_id=self.run_id,
+                sender=MessageRole.WORKER,
+                content=question,
+                sequence_num=self._message_num,
+            )
         )
         self._message_num += 1
 
@@ -87,10 +89,12 @@ class WorkerToolkit:
 
         # Log stakeholder answer
         queries.messages.create(
-            run_id=self.run_id,
-            sender=MessageRole.STAKEHOLDER,
-            content=answer,
-            sequence_num=self._message_num,
+            Message(
+                run_id=self.run_id,
+                sender=MessageRole.STAKEHOLDER,
+                content=answer,
+                sequence_num=self._message_num,
+            )
         )
         self._message_num += 1
 

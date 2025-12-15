@@ -4,54 +4,35 @@ import mimetypes
 from datetime import datetime
 from pathlib import Path
 from typing import TypeVar
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import inngest
-from pydantic import BaseModel
 
 from h_arcane.agents.sandbox import SandboxManager
 from h_arcane.agents.sandbox_executor import set_sandbox_manager, upload_tools_to_sandbox
 from h_arcane.agents.stakeholder import RubricStakeholder
 from h_arcane.agents.toolkit import WorkerToolkit
 from h_arcane.agents.worker import ReActWorker, WorkerExecutionOutput
-from h_arcane.db.models import CriterionResult, Evaluation, Experiment, Resource, Run, RunStatus
+from h_arcane.db.models import (
+    AgentConfig,
+    CriterionResult,
+    Evaluation,
+    Experiment,
+    Resource,
+    Run,
+    RunStatus,
+    TaskEvaluationResult,
+)
 from h_arcane.db.queries import queries
-from h_arcane.evaluation.models import TaskEvaluationResult
 from h_arcane.evaluation.task_evaluator import evaluate_task_run
 from h_arcane.inngest.client import inngest_client
+from h_arcane.inngest.events import (
+    ExecutionDoneEvent,
+    RunCleanupEvent,
+    RunEvaluateResult,
+    TaskEvaluationEvent,
+)
 from h_arcane.schemas.staged_rubric_schema import StagedRubric
-
-
-class ExecutionDoneEvent(BaseModel):
-    """Event data for execution/done event."""
-
-    run_id: str
-
-
-class RunCleanupEvent(BaseModel):
-    """Event data for run/cleanup event."""
-
-    run_id: str
-    status: str  # "completed" or "failed"
-    error_message: str | None = None
-
-
-class TaskEvaluationEvent(BaseModel):
-    """Event data for task/evaluate event."""
-
-    run_id: str
-    task_input: str
-    agent_reasoning: str
-    agent_outputs: list[dict]  # Serialized Resource objects
-    rubric: dict  # Serialized StagedRubric
-
-
-class RunEvaluateResult(BaseModel):
-    """Result from run_evaluate function."""
-
-    run_id: str
-    normalized_score: float
-    questions_asked: int
 
 
 def get_mime_type(file_path: Path | str) -> str:
@@ -84,30 +65,47 @@ async def worker_execute(
 
     Messages and actions are logged by WorkerToolkit during execution.
     All GDPEval tools execute inside E2B sandbox.
+
+    Event data must contain:
+    - `experiment_id`: UUID of experiment
+    - `worker_model`: Optional, defaults to "gpt-4o"
+    - `max_questions`: Optional, defaults to 10
     """
-    run_id_str = str(ctx.event.data["run_id"])
-    run_id = UUID(run_id_str)
+    event_data = ctx.event.data
 
-    # Load state
-    async def load_run():
-        resp = _require_not_none(queries.runs.get(run_id), f"Run {run_id} not found")
-        # Convert to dict for serialization (PydanticSerializer handles dict -> Run conversion)
-        return resp.model_dump(mode="json")
+    if "experiment_id" not in event_data:
+        raise ValueError("Event data must contain 'experiment_id'")
 
-    run_dict = await ctx.step.run(
-        "load-run",
-        load_run,
-    )
-    # Convert back to Run object
+    experiment_id = UUID(str(event_data["experiment_id"]))
+
+    # Create run record
+    async def create_run():
+        # Extract and validate event data with proper types
+        worker_model = event_data.get("worker_model", "gpt-4o")
+        if not isinstance(worker_model, str):
+            worker_model = "gpt-4o"
+
+        max_questions = event_data.get("max_questions", 10)
+        if not isinstance(max_questions, int):
+            max_questions = 10
+
+        run = queries.runs.create(
+            Run(
+                id=uuid4(),  # Use generated UUID
+                experiment_id=experiment_id,
+                worker_model=worker_model,
+                max_questions=max_questions,
+            )
+        )
+        return run.model_dump(mode="json")
+
+    run_dict = await ctx.step.run("create-run", create_run)
     run = Run(**run_dict)
-
-    if not run.experiment_id:
-        raise ValueError(f"Run {run_id} has no experiment_id")
 
     async def load_experiment():
         resp = _require_not_none(
-            queries.experiments.get(run.experiment_id),
-            f"Experiment {run.experiment_id} not found",
+            queries.experiments.get(experiment_id),
+            f"Experiment {experiment_id} not found",
         )
         return resp.model_dump(mode="json")
 
@@ -120,13 +118,13 @@ async def worker_execute(
     # Load input resources (stored with experiment_id, not run_id)
     # Use experiment_dict["id"] instead of experiment.id to avoid serialization issues
     async def load_input_resources():
-        experiment_id = UUID(experiment_dict["id"])  # Get ID from serialized dict
-        resources = queries.resources.get_by_experiment(experiment_id)
+        exp_id = UUID(experiment_dict["id"])  # Get ID from serialized dict
+        resources = queries.resources.get_by_experiment(exp_id)
         resource_dicts = [r.model_dump(mode="json") for r in resources]
         return {
             "resources": resource_dicts,
             "count": len(resource_dicts),
-            "experiment_id": str(experiment_id),
+            "experiment_id": str(exp_id),
         }
 
     input_resources_result = await ctx.step.run(
@@ -139,12 +137,20 @@ async def worker_execute(
 
     # Mark executing
     async def mark_executing():
-        queries.runs.update(run_id, status=RunStatus.EXECUTING, started_at=datetime.utcnow())
+        existing = queries.runs.get(run.id)
+        if existing:
+            updated = existing.model_copy(
+                update={
+                    "status": RunStatus.EXECUTING,
+                    "started_at": datetime.utcnow(),
+                }
+            )
+            queries.runs.update(updated)
         # Return updated run status for visibility
-        updated_run = queries.runs.get(run_id)
+        updated_run = queries.runs.get(run.id)
         if updated_run:
             return updated_run.model_dump(mode="json")
-        return {"status": "executing", "run_id": str(run_id)}
+        return {"status": "executing", "run_id": str(run.id)}
 
     await ctx.step.run(
         "mark-executing",
@@ -155,11 +161,11 @@ async def worker_execute(
         # Create sandbox - idempotent: checks registry, creates only if needed
         # SandboxManager() is a singleton, so we can call it directly
         async def create_sandbox():
-            await SandboxManager().create(run_id)
-            sandbox = SandboxManager().get_sandbox(run_id)
+            await SandboxManager().create(run.id)
+            sandbox = SandboxManager().get_sandbox(run.id)
             return {
                 "success": True,
-                "run_id": str(run_id),
+                "run_id": str(run.id),
                 "sandbox_created": sandbox is not None,
             }
 
@@ -167,10 +173,10 @@ async def worker_execute(
 
         # Upload inputs to sandbox
         async def upload_inputs():
-            await SandboxManager().upload_inputs(run_id, input_resources)
+            await SandboxManager().upload_inputs(run.id, input_resources)
             return {
                 "success": True,
-                "run_id": str(run_id),
+                "run_id": str(run.id),
                 "files_uploaded": [r.name for r in input_resources],
                 "count": len(input_resources),
             }
@@ -179,7 +185,7 @@ async def worker_execute(
 
         # Upload tools to sandbox
         async def upload_tools():
-            await upload_tools_to_sandbox(SandboxManager(), run_id)
+            await upload_tools_to_sandbox(SandboxManager(), run.id)
             # Get list of uploaded tools (same path logic as sandbox_executor)
             # functions.py is at h_arcane/inngest/functions.py, so parent.parent = h_arcane/
             tools_dir = Path(__file__).parent.parent / "tools"
@@ -192,7 +198,7 @@ async def worker_execute(
                 ]
             return {
                 "success": True,
-                "run_id": str(run_id),
+                "run_id": str(run.id),
                 "tools_uploaded": tool_files,
                 "count": len(tool_files),
             }
@@ -201,10 +207,10 @@ async def worker_execute(
 
         # Set sandbox manager globally for execute_in_sandbox()
         async def set_sandbox_manager_fn():
-            set_sandbox_manager(SandboxManager(), run_id)
+            set_sandbox_manager(SandboxManager(), run.id)
             return {
                 "success": True,
-                "run_id": str(run_id),
+                "run_id": str(run.id),
                 "sandbox_manager_set": True,
             }
 
@@ -218,10 +224,29 @@ async def worker_execute(
             task_description=experiment.task_description,
         )
 
+        async def create_stakeholder_agent_config():
+            return queries.agent_configs.create(
+                AgentConfig(
+                    run_id=run.id,
+                    name="Rubric Stakeholder",
+                    agent_type="stakeholder",
+                    model=stakeholder.model,
+                    system_prompt=RubricStakeholder.ANSWER_PROMPT,
+                    tools=[],  # Stakeholder doesn't use tools, just answers questions
+                )
+            )
+
+        # Create agent config record for stakeholder
+        await ctx.step.run(
+            "create-stakeholder-agent-config",
+            create_stakeholder_agent_config,
+            output_type=AgentConfig,
+        )
+
         # Create toolkit (handles message/action logging, uses sandbox)
         # Pass singleton SandboxManager instance
         toolkit = WorkerToolkit(
-            run_id=run_id,
+            run_id=run.id,
             stakeholder=stakeholder,
             sandbox_manager=SandboxManager(),
             max_questions=run.max_questions,
@@ -232,7 +257,7 @@ async def worker_execute(
 
         async def execute_task():
             return await worker.execute(
-                run_id=run_id,
+                run_id=run.id,
                 task_description=experiment.task_description,
                 input_resources=input_resources,
                 toolkit=toolkit,
@@ -243,13 +268,13 @@ async def worker_execute(
         )
 
         # Download all outputs from sandbox
-        output_dir = Path(f"data/runs/{run_id}")
+        output_dir = Path(f"data/runs/{run.id}")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         async def download_outputs():
             # Check if sandbox exists - if not, check if files were already downloaded
             sandbox_manager = SandboxManager()
-            sandbox = sandbox_manager.get_sandbox(run_id)
+            sandbox = sandbox_manager.get_sandbox(run.id)
 
             if not sandbox:
                 # Sandbox doesn't exist (might have been terminated on retry)
@@ -270,12 +295,12 @@ async def worker_execute(
                 else:
                     # No sandbox and no files - this is an error
                     raise RuntimeError(
-                        f"Sandbox not available for run_id={run_id} and no previously downloaded files found. "
+                        f"Sandbox not available for run_id={run.id} and no previously downloaded files found. "
                         f"This may indicate the sandbox was terminated before outputs could be downloaded."
                     )
 
             # Sandbox exists, download files
-            return await sandbox_manager.download_all_outputs(run_id, output_dir)
+            return await sandbox_manager.download_all_outputs(run.id, output_dir)
 
         downloaded_files: list[dict[str, str | int]] = await ctx.step.run(
             "download-outputs",
@@ -290,11 +315,13 @@ async def worker_execute(
 
             async def register_resource(lp=local_path, sb=size_bytes):
                 return queries.resources.create(
-                    run_id=run_id,
-                    name=Path(lp).name,
-                    mime_type=get_mime_type(lp),
-                    file_path=lp,
-                    size_bytes=sb,
+                    Resource(
+                        run_id=run.id,
+                        name=Path(lp).name,
+                        mime_type=get_mime_type(lp),
+                        file_path=lp,
+                        size_bytes=sb,
+                    )
                 )
 
             resource = await ctx.step.run(
@@ -305,18 +332,25 @@ async def worker_execute(
             output_resource_ids.append(str(resource.id))
 
         # Save output to run
-        async def save_output():
-            queries.runs.update(
-                run_id,
-                output_text=execution_output.output_text,
-                output_resource_ids=output_resource_ids,
-                questions_asked=toolkit.questions_asked,
-            )
+        async def save_output() -> Run | None:
+            existing = queries.runs.get(run.id)
+            if existing:
+                updated = existing.model_copy(
+                    update={
+                        "output_text": execution_output.output_text,
+                        "output_resource_ids": output_resource_ids,
+                        "questions_asked": toolkit.questions_asked,
+                    }
+                )
+                queries.runs.update(updated)
+                return updated
+
             return None
 
         await ctx.step.run(
             "save-output",
             save_output,
+            output_type=Run | None,
         )
 
         # Invoke evaluation function (separate Inngest function)
@@ -324,7 +358,7 @@ async def worker_execute(
         evaluation_result: RunEvaluateResult = await ctx.step.invoke(
             step_id="run-evaluate",
             function=run_evaluate,
-            data=ExecutionDoneEvent(run_id=str(run_id)).model_dump(),
+            data=ExecutionDoneEvent(run_id=str(run.id)).model_dump(),
         )
 
         # Emit cleanup event for successful completion
@@ -333,7 +367,7 @@ async def worker_execute(
                 inngest.Event(
                     name="run/cleanup",
                     data=RunCleanupEvent(
-                        run_id=str(run_id),
+                        run_id=str(run.id),
                         status="completed",
                     ).model_dump(),
                 )
@@ -347,11 +381,15 @@ async def worker_execute(
         error_msg = str(exc)
 
         async def mark_failed():
-            queries.runs.update(
-                run_id,
-                status=RunStatus.FAILED,
-                error_message=error_msg,
-            )
+            existing = queries.runs.get(run.id)
+            if existing:
+                updated = existing.model_copy(
+                    update={
+                        "status": RunStatus.FAILED,
+                        "error_message": error_msg,
+                    }
+                )
+                queries.runs.update(updated)
             return None
 
         await ctx.step.run(
@@ -365,7 +403,7 @@ async def worker_execute(
                 inngest.Event(
                     name="run/cleanup",
                     data=RunCleanupEvent(
-                        run_id=str(run_id),
+                        run_id=str(run.id),
                         status="failed",
                         error_message=error_msg,
                     ).model_dump(),
@@ -377,7 +415,7 @@ async def worker_execute(
         raise  # Best effort cleanup
 
     return {
-        "run_id": str(run_id),
+        "run_id": str(run.id),
         "questions_asked": toolkit.questions_asked,
         "evaluation": evaluation_result.model_dump(),
     }
@@ -403,7 +441,10 @@ async def run_evaluate(
 
     # Mark evaluating
     async def mark_evaluating():
-        queries.runs.update(run_id, status=RunStatus.EVALUATING)
+        existing = queries.runs.get(run_id)
+        if existing:
+            updated = existing.model_copy(update={"status": RunStatus.EVALUATING})
+            queries.runs.update(updated)
         return None
 
     await ctx.step.run("mark-evaluating", mark_evaluating)
@@ -512,27 +553,31 @@ async def run_evaluate(
 
         if existing:
             # Update existing record
-            return queries.task_evaluation_results.update(
-                id=existing.id,
-                criterion_results=evaluation_result.criterion_results,
-                total_score=evaluation_result.total_score,
-                max_score=evaluation_result.max_score,
-                normalized_score=evaluation_result.normalized_score,
-                stages_evaluated=evaluation_result.stages_evaluated,
-                stages_passed=evaluation_result.stages_passed,
-                failed_gate=evaluation_result.failed_gate,
+            updated = existing.model_copy(
+                update={
+                    "criterion_results": evaluation_result.criterion_results,
+                    "total_score": evaluation_result.total_score,
+                    "max_score": evaluation_result.max_score,
+                    "normalized_score": evaluation_result.normalized_score,
+                    "stages_evaluated": evaluation_result.stages_evaluated,
+                    "stages_passed": evaluation_result.stages_passed,
+                    "failed_gate": evaluation_result.failed_gate,
+                }
             )
+            return queries.task_evaluation_results.update(updated)
         else:
             # Create new record
             return queries.task_evaluation_results.create(
-                run_id=run_id,
-                criterion_results=evaluation_result.criterion_results,
-                total_score=evaluation_result.total_score,
-                max_score=evaluation_result.max_score,
-                normalized_score=evaluation_result.normalized_score,
-                stages_evaluated=evaluation_result.stages_evaluated,
-                stages_passed=evaluation_result.stages_passed,
-                failed_gate=evaluation_result.failed_gate,
+                TaskEvaluationResult(
+                    run_id=run_id,
+                    criterion_results=evaluation_result.criterion_results,
+                    total_score=evaluation_result.total_score,
+                    max_score=evaluation_result.max_score,
+                    normalized_score=evaluation_result.normalized_score,
+                    stages_evaluated=evaluation_result.stages_evaluated,
+                    stages_passed=evaluation_result.stages_passed,
+                    failed_gate=evaluation_result.failed_gate,
+                )
             )
 
     await ctx.step.run(
@@ -543,13 +588,18 @@ async def run_evaluate(
 
     # Mark complete
     async def complete_run():
-        queries.runs.update(
-            run_id,
-            status=RunStatus.COMPLETED,
-            completed_at=datetime.utcnow(),
-            final_score=evaluation_result.total_score,
-            normalized_score=evaluation_result.normalized_score,
-        )
+        existing = queries.runs.get(run_id)
+        if existing:
+            updated = existing.model_copy(
+                update={
+                    "status": RunStatus.COMPLETED,
+                    "completed_at": datetime.utcnow(),
+                    "final_score": evaluation_result.total_score,
+                    "normalized_score": evaluation_result.normalized_score,
+                    "questions_asked": run.questions_asked or 0,
+                }
+            )
+            queries.runs.update(updated)
         return None
 
     await ctx.step.run(
@@ -633,11 +683,13 @@ async def run_cleanup(
         expected_status = RunStatus.COMPLETED if status == "completed" else RunStatus.FAILED
         if run.status != expected_status:
             # Update status if it doesn't match (shouldn't happen, but be safe)
-            queries.runs.update(
-                run_id,
-                status=expected_status,
-                error_message=error_message if status == "failed" else None,
+            updated = run.model_copy(
+                update={
+                    "status": expected_status,
+                    "error_message": error_message if status == "failed" else None,
+                }
             )
+            queries.runs.update(updated)
             return {
                 "status_updated": True,
                 "old_status": run.status.value,

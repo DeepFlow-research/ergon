@@ -9,8 +9,11 @@ import sys
 import time
 from pathlib import Path
 
+from h_arcane.db.connection import init_db
 from h_arcane.experiments.config import BaselineType, ExperimentConfig
 from h_arcane.experiments.runner import ExperimentRunner
+from h_arcane.settings import settings
+from sqlalchemy import create_engine, text
 
 
 def get_project_root() -> Path:
@@ -235,6 +238,9 @@ Examples:
   # Run 10 examples with ReAct baseline
   python scripts/run_experiments.py --num-examples 10 --baseline react
   
+  # Run with clean database (drop all existing tables first)
+  python scripts/run_experiments.py --num-examples 1 --baseline react --drop-old-results
+  
   # Check progress
   python scripts/run_experiments.py --progress
   
@@ -273,6 +279,11 @@ Examples:
         action="store_true",
         help="Show current experiment progress",
     )
+    parser.add_argument(
+        "--drop-old-results",
+        action="store_true",
+        help="Drop all existing database tables before running (clean slate)",
+    )
 
     args = parser.parse_args()
 
@@ -286,6 +297,48 @@ Examples:
         if not ensure_services_running():
             print("❌ Required services are not running. Exiting.")
             sys.exit(1)
+
+        # Drop and recreate database if requested
+        if args.drop_old_results:
+            print("🗑️  Dropping entire database...")
+            # Parse database URL to get connection details
+            # Format: postgresql://user:password@host:port/database
+            db_url = settings.database_url
+            # Extract database name (last part after /)
+            db_name = db_url.split("/")[-1].split("?")[0]  # Remove query params if any
+
+            # Connect to postgres database (not the target database) to drop/recreate
+            # Replace the database name with 'postgres'
+            admin_url = "/".join(db_url.rsplit("/", 1)[:-1]) + "/postgres"
+
+            admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+
+            with admin_engine.connect() as conn:
+                # Terminate existing connections to the database
+                # Use parameterized query for safety
+                conn.execute(
+                    text("""
+                    SELECT pg_terminate_backend(pg_stat_activity.pid)
+                    FROM pg_stat_activity
+                    WHERE pg_stat_activity.datname = :db_name
+                    AND pid <> pg_backend_pid();
+                """).bindparams(db_name=db_name)
+                )
+
+                # Drop database (database names can't be parameterized, but db_name comes from settings)
+                conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}";'))
+                print(f"   Dropped database: {db_name}")
+
+                # Create database
+                conn.execute(text(f'CREATE DATABASE "{db_name}";'))
+                print(f"   Created database: {db_name}")
+
+            admin_engine.dispose()
+            print("✅ Database recreated successfully\n")
+
+        # Initialize database tables (idempotent - won't recreate if they exist)
+        print("🔧 Ensuring database tables exist...")
+        init_db()
 
     # Create config
     config = ExperimentConfig(

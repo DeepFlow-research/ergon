@@ -4,15 +4,21 @@ from uuid import UUID
 
 import inngest
 
-from h_arcane.db.models import CriterionResult, Evaluation, Resource
-from h_arcane.evaluation.criteria_evaluator import evaluate_criterion
-from h_arcane.evaluation.models import TaskEvaluationResult
+from h_arcane.db.models import CriterionResult, Evaluation, Resource, TaskEvaluationResult
+from h_arcane.evaluation.criteria_evaluator import evaluate_criterion_fn
+from h_arcane.evaluation.models import FlattenedCriterion
 from h_arcane.evaluation.rubric_flattener import flatten_rubric
 from h_arcane.inngest.client import inngest_client
-from h_arcane.schemas.staged_rubric_schema import StagedRubric
+from h_arcane.inngest.events import CriterionEvaluationEvent, TaskEvaluationEvent
+from h_arcane.schemas.staged_rubric_schema import (
+    CodeRule,
+    LLMJudgeRule,
+    StagedRubric,
+    EvaluationStage,
+)
 
 
-@inngest_client.create_function(  # type: ignore[misc]
+@inngest_client.create_function(
     fn_id="evaluate-task-run",
     trigger=inngest.TriggerEvent(event="task/evaluate"),
     retries=2,
@@ -27,9 +33,6 @@ async def evaluate_task_run(
 
     This is an Inngest function that evaluates all criteria in parallel.
     """
-    # Extract event data (import here to avoid circular dependency)
-    from h_arcane.inngest.functions import TaskEvaluationEvent
-
     event_data = TaskEvaluationEvent.model_validate(ctx.event.data)
     run_id = UUID(event_data.run_id)
     task_input = event_data.task_input
@@ -42,38 +45,31 @@ async def evaluate_task_run(
     # Flatten rubric into criteria list (as a step)
     async def flatten_rubric_step():
         criteria_tuples = flatten_rubric(rubric)
-        # Convert to JSON-serializable format
-        # Store stage and rule as dicts, keep indices as ints
+        # Return Pydantic models directly - Inngest will serialize them
         return [
-            {
-                "stage": stage.model_dump(mode="json"),
-                "rule": rule.model_dump(mode="json"),
-                "stage_idx": stage_idx,
-                "rule_idx": rule_idx,
-            }
+            FlattenedCriterion(
+                stage=stage,
+                rule=rule,
+                stage_idx=stage_idx,
+                rule_idx=rule_idx,
+            )
             for stage, rule, stage_idx, rule_idx in criteria_tuples
         ]
 
-    criteria_dicts = await ctx.step.run("flatten-rubric", flatten_rubric_step)
+    # Note: No output_type for list since Inngest doesn't handle lists well
+    criteria_models = await ctx.step.run(
+        "flatten-rubric", flatten_rubric_step, output_type=list[FlattenedCriterion]
+    )
 
-    # Reconstruct Pydantic objects from serialized data
-    from h_arcane.schemas.staged_rubric_schema import EvaluationStage, CodeRule, LLMJudgeRule
-
-    criteria = []
-    for crit_dict in criteria_dicts:
-        stage = EvaluationStage(**crit_dict["stage"])
-        rule_dict = crit_dict["rule"]
-        # Determine rule type based on the "type" field
-        if rule_dict.get("type") == "code":
-            rule = CodeRule(**rule_dict)
-        else:
-            rule = LLMJudgeRule(**rule_dict)
-        criteria.append((stage, rule, crit_dict["stage_idx"], crit_dict["rule_idx"]))
+    # Extract tuples from Pydantic models
+    criteria = [(c.stage, c.rule, c.stage_idx, c.rule_idx) for c in criteria_models]
 
     # Evaluate all criteria in parallel
     # Create step functions for all criteria - use helper to capture loop variables
-    def make_parallel_step(s, r, si, ri, c=ctx):
-        """Create a step runner function with captured variables.
+    def make_parallel_step(
+        s: EvaluationStage, r: CodeRule | LLMJudgeRule, si: int, ri: int, c: inngest.Context = ctx
+    ):
+        """Create a step invoker function with captured variables.
 
         Args:
             s: Stage object
@@ -83,27 +79,29 @@ async def evaluate_task_run(
             c: Inngest context (captured as default arg)
         """
 
-        async def evaluate_criterion_step():
-            return await evaluate_criterion(
-                run_id=run_id,
-                agent_reasoning=agent_reasoning,
-                agent_outputs=agent_outputs,
-                stage=s,
-                rule=r,
-                stage_idx=si,
-                rule_idx=ri,
-                task_input=task_input,
-                sandbox_manager=None,  # Create temporary sandbox for code rules if needed
-            )
+        # Determine rule type for step naming
+        rule_type = "code_rule" if isinstance(r, CodeRule) else "llm_judge"
+        step_id = f"evaluate-criterion-{si}-{ri}-{rule_type}"
 
-        # Return lambda that calls ctx.step.run with the step function
-        # Capture context and step_id in lambda defaults
-        step_id = f"evaluate-criterion-{si}-{ri}"
-        step_fn = evaluate_criterion_step
-        return lambda ctx_ref=c, sid=step_id, fn=step_fn: ctx_ref.step.run(
-            sid,
-            fn,
-            output_type=CriterionResult,
+        # Create event data for criterion evaluation
+        criterion_event = CriterionEvaluationEvent(
+            run_id=str(run_id),
+            task_input=task_input,
+            agent_reasoning=agent_reasoning,
+            agent_outputs=agent_outputs,
+            stage=s,
+            rule=r,
+            stage_idx=si,
+            rule_idx=ri,
+        )
+        # Serialize event data once (Pydantic will handle nested models)
+        event_data_dict = criterion_event.model_dump(mode="json")
+
+        # Return lambda that calls ctx.step.invoke with the function
+        return lambda ctx_ref=c, sid=step_id, event_data=event_data_dict: ctx_ref.step.invoke(
+            step_id=sid,
+            function=evaluate_criterion_fn,
+            data=event_data,
         )
 
     # Create parallel step runners - build list with proper closures

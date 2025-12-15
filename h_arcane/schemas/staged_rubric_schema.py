@@ -7,8 +7,10 @@ Extends MA-Gym rubrics with:
 - Conditional evaluation (skip stages if gates fail)
 """
 
-from pydantic import BaseModel, Field, model_validator
+import logging
 from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class CodeRule(BaseModel):
@@ -121,8 +123,6 @@ class EvaluationStage(BaseModel):
         if self.min_score_to_pass > self.max_points:
             original = self.min_score_to_pass
             self.min_score_to_pass = self.max_points * 0.25
-            import logging
-
             logger = logging.getLogger(__name__)
             logger.warning(
                 f"Auto-corrected min_score_to_pass: {original:.1f} > max_points ({self.max_points:.1f}). "

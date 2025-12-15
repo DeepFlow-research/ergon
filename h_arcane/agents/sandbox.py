@@ -7,6 +7,10 @@ from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
 from h_arcane.db.models import Resource
 from h_arcane.settings import settings
 
+from logging import getLogger
+
+logger = getLogger(__name__)
+
 
 class SandboxManager:
     """Singleton container managing E2B sandboxes for multiple runs."""
@@ -110,12 +114,51 @@ if created:
         # Install missing tool dependencies
         # E2B default has: numpy, pandas, matplotlib, sklearn, scipy, openpyxl, docx, seaborn, plotly
         # Need: pdfplumber, PyPDF2, reportlab, pytesseract
+        logger.info(f"Installing required packages for code rule evaluation (run_id={run_id})...")
         pip_result = await sandbox.commands.run(
             "pip install -q pdfplumber PyPDF2 reportlab pytesseract"
         )
         if pip_result.exit_code != 0:
-            # Log but don't fail - some packages might already be installed
-            pass
+            # Log installation failure - this is critical for code rules
+            error_msg = (
+                f"Failed to install required packages (pdfplumber, PyPDF2, reportlab, pytesseract) "
+                f"for run_id={run_id}. Exit code: {pip_result.exit_code}. "
+                f"Stderr: {pip_result.stderr if pip_result.stderr else 'N/A'}"
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        # Verify packages are actually importable
+        logger.info(f"Verifying package installation (run_id={run_id})...")
+        verify_code = """
+import sys
+packages = ['pdfplumber', 'PyPDF2', 'reportlab']
+missing = []
+for pkg in packages:
+    try:
+        __import__(pkg)
+    except ImportError:
+        missing.append(pkg)
+if missing:
+    print(f"MISSING: {', '.join(missing)}", file=sys.stderr)
+    sys.exit(1)
+print("All packages verified successfully")
+"""
+        verify_result = await sandbox.run_code(verify_code, language="python", timeout=10)
+        # Check for errors using the error attribute (Execution object has error: Optional[ExecutionError])
+        if verify_result.error is not None:
+            stderr_text = "N/A"
+            if verify_result.logs and verify_result.logs.stderr:
+                stderr_parts = list(verify_result.logs.stderr)
+                stderr_text = "\n".join(stderr_parts) if stderr_parts else "N/A"
+            error_msg = (
+                f"Package verification failed for run_id={run_id}. "
+                f"Error: {verify_result.error}, Stderr: {stderr_text}"
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+        logger.info(f"Successfully installed and verified all required packages (run_id={run_id})")
 
     async def upload_inputs(self, run_id: UUID, resources: list[Resource]) -> None:
         """Upload input resources to /inputs/ for a run."""
@@ -197,10 +240,17 @@ if created:
 
     async def terminate(self, run_id: UUID) -> None:
         """Terminate sandbox for a run (idempotent). Always clears registry even if kill() fails."""
-        if run_id not in self._sandboxes:
-            return  # Already terminated or never created
+        # Use pop() to safely remove - returns None if not present
+        sandbox = self._sandboxes.pop(run_id, None)
+        if sandbox is None:
+            logger.warning(
+                f"Sandbox not found for run_id={run_id}. Already terminated or never created."
+            )
+            # Already terminated or never created - just clean up registries
+            self._file_registries.pop(run_id, None)
+            self._created_files_registry.pop(run_id, None)
+            return
 
-        sandbox = self._sandboxes[run_id]
         try:
             await sandbox.kill()
         except Exception as e:
@@ -208,6 +258,5 @@ if created:
             print(f"Warning: Error killing sandbox for run_id={run_id}: {e}")
         finally:
             # Always clear registries to prevent reuse
-            del self._sandboxes[run_id]
             self._file_registries.pop(run_id, None)
             self._created_files_registry.pop(run_id, None)

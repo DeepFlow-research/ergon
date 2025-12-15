@@ -1,9 +1,18 @@
-"""Evaluation result models.
+"""Evaluation result models."""
 
-Note: All models are now imported directly from h_arcane.db.models.
-This file is kept for backwards compatibility but can be removed.
-"""
+from pydantic import BaseModel
 
-from h_arcane.db.models import CriterionResult, Evaluation, TaskEvaluationResult
+from h_arcane.schemas.staged_rubric_schema import (
+    CodeRule,
+    EvaluationStage,
+    LLMJudgeRule,
+)
 
-__all__ = ["CriterionResult", "Evaluation", "TaskEvaluationResult"]
+
+class FlattenedCriterion(BaseModel):
+    """A flattened criterion with stage, rule, and indices for step serialization."""
+
+    stage: EvaluationStage
+    rule: CodeRule | LLMJudgeRule
+    stage_idx: int
+    rule_idx: int

@@ -24,6 +24,9 @@ dependencies = [
     "structlog>=23.2.0",
     "pyarrow>=22.0.0",
     "litellm>=1.80.8",
+    "ipykernel>=7.1.0",
+    "datasets>=4.4.1",
+    "matplotlib>=3.10.8",
 ]
 
 [build-system]

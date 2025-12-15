@@ -70,6 +70,9 @@ The `run_experiments.py` script provides a CLI for managing experiment runs.
 # Run 10 examples with ReAct baseline
 python scripts/run_experiments.py --num-examples 10 --baseline react
 
+# Run with clean database (drops all existing tables first)
+python scripts/run_experiments.py --num-examples 1 --baseline react --drop-old-results
+
 # Run all available examples
 python scripts/run_experiments.py --baseline react
 
@@ -98,12 +101,16 @@ python scripts/run_experiments.py --retry-failed
 | `--dry-run` | Don't start runs, just show what would run | False |
 | `--retry-failed` | Retry all failed runs | False |
 | `--progress` | Show current experiment progress | False |
+| `--drop-old-results` | Drop all existing database tables before running (clean slate) | False |
 
 #### Examples
 
 ```bash
 # Test with a small batch
 python scripts/run_experiments.py --num-examples 3 --baseline react
+
+# Start fresh with clean database
+python scripts/run_experiments.py --num-examples 1 --baseline react --drop-old-results
 
 # Check if everything is working before running full suite
 python scripts/run_experiments.py --num-examples 10 --dry-run
@@ -142,6 +149,42 @@ python scripts/analyze_results.py
 ```
 
 *(Analysis scripts to be implemented)*
+
+## LLM Utilities
+
+Utilities designed to help LLM assistants (like Copilot) understand and work with the codebase.
+
+### Database Dump Script
+
+**Purpose**: Export all database tables to a formatted log file that LLMs can easily read and analyze.
+
+**Usage**:
+```bash
+python scripts/dump_database.py
+```
+
+**Output**: Creates a timestamped log file in `data/database_dump_YYYYMMDD_HHMMSS.log`
+
+**What it includes**:
+- Summary statistics (row counts per table)
+- All data from all 9 tables:
+  - `experiments`: GDPEval tasks with ground truth rubrics
+  - `runs`: Experiment execution runs with status and results
+  - `messages`: Worker-stakeholder conversation history
+  - `actions`: Tool execution traces with timing and costs
+  - `resources`: Input/output file metadata
+  - `agent_configs`: Agent configuration snapshots
+  - `evaluations`: Aggregate evaluation results
+  - `criterion_results`: Per-criterion evaluation scores
+  - `task_evaluation_results`: Complete evaluation snapshots
+
+**Use cases**:
+- Share run results with LLM assistants for debugging
+- Analyze experiment outcomes without database access
+- Create snapshots for analysis or reporting
+- Help Copilot understand what happened in a run
+
+**Format**: Human-readable with UUIDs as strings, ISO datetimes, pretty-printed JSON, and clear NULL markers.
 
 ## Project Structure
 
