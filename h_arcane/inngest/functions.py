@@ -163,65 +163,6 @@ async def worker_execute(
     )
 
     try:
-        # Create sandbox - idempotent: checks registry, creates only if needed
-        # SandboxManager() is a singleton, so we can call it directly
-        # Set timeout to 30 minutes to handle long-running agent executions
-        async def create_sandbox():
-            await SandboxManager().create(run.id, timeout_minutes=30)
-            sandbox = SandboxManager().get_sandbox(run.id)
-            return {
-                "success": True,
-                "run_id": str(run.id),
-                "sandbox_created": sandbox is not None,
-            }
-
-        await ctx.step.run("create-sandbox", create_sandbox)
-
-        # Upload inputs to sandbox
-        async def upload_inputs():
-            await SandboxManager().upload_inputs(run.id, input_resources)
-            return {
-                "success": True,
-                "run_id": str(run.id),
-                "files_uploaded": [r.name for r in input_resources],
-                "count": len(input_resources),
-            }
-
-        await ctx.step.run("upload-inputs", upload_inputs)
-
-        # Upload tools to sandbox
-        async def upload_tools():
-            await upload_tools_to_sandbox(SandboxManager(), run.id)
-            # Get list of uploaded tools (same path logic as sandbox_executor)
-            # functions.py is at h_arcane/inngest/functions.py, so parent.parent = h_arcane/
-            tools_dir = Path(__file__).parent.parent / "tools"
-            tool_files = []
-            if tools_dir.exists():
-                tool_files = [
-                    f.name
-                    for f in tools_dir.glob("*.py")
-                    if f.name not in ("__init__.py", "responses.py")
-                ]
-            return {
-                "success": True,
-                "run_id": str(run.id),
-                "tools_uploaded": tool_files,
-                "count": len(tool_files),
-            }
-
-        await ctx.step.run("upload-tools", upload_tools)
-
-        # Set sandbox manager globally for execute_in_sandbox()
-        async def set_sandbox_manager_fn():
-            set_sandbox_manager(SandboxManager(), run.id)
-            return {
-                "success": True,
-                "run_id": str(run.id),
-                "sandbox_manager_set": True,
-            }
-
-        await ctx.step.run("set-sandbox-manager", set_sandbox_manager_fn)
-
         # Create benchmark-specific stakeholder and toolkit
         # NOTE: benchmark_name may come through as a raw string depending on serialization paths
         # (e.g. Inngest/SQLModel). Normalize to our enum for comparisons.
@@ -292,57 +233,40 @@ async def worker_execute(
         worker_config = get_worker_config(experiment.benchmark_name)
         worker = ReActWorker(model=run.worker_model, config=worker_config)
 
-        async def execute_task():
-            return await worker.execute(
+        # We'll keep all sandbox-dependent operations inside ONE step to avoid
+        # losing the in-memory SandboxManager registry between steps.
+        output_dir = Path(f"data/runs/{run.id}")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        async def execute_and_download():
+            sandbox_manager = SandboxManager()
+
+            # (Re)create sandbox in THIS step process (idempotent per SandboxManager instance).
+            # This avoids issues where other steps ran on different workers/processes.
+            await sandbox_manager.create(run.id, timeout_minutes=30)
+            await sandbox_manager.upload_inputs(run.id, input_resources)
+            await upload_tools_to_sandbox(sandbox_manager, run.id)
+            set_sandbox_manager(sandbox_manager, run.id)
+
+            # Execute the worker
+            exec_out = await worker.execute(
                 run_id=run.id,
                 task_description=experiment.task_description,
                 input_resources=input_resources,
                 toolkit=toolkit,
             )
 
-        execution_output = await ctx.step.run(
-            "execute-task", execute_task, output_type=WorkerExecutionOutput
-        )
+            # Download outputs from sandbox
+            downloaded = await sandbox_manager.download_all_outputs(run.id, output_dir)
 
-        # Download all outputs from sandbox
-        output_dir = Path(f"data/runs/{run.id}")
-        output_dir.mkdir(parents=True, exist_ok=True)
+            return {
+                "execution_output": exec_out.model_dump(mode="json"),
+                "downloaded_files": downloaded,
+            }
 
-        async def download_outputs():
-            # Check if sandbox exists - if not, check if files were already downloaded
-            sandbox_manager = SandboxManager()
-            sandbox = sandbox_manager.get_sandbox(run.id)
-
-            if not sandbox:
-                # Sandbox doesn't exist (might have been terminated on retry)
-                # Check if outputs were already downloaded
-                if output_dir.exists() and any(output_dir.iterdir()):
-                    # Files already exist, return them
-                    downloaded = []
-                    for file_path in output_dir.iterdir():
-                        if file_path.is_file():
-                            downloaded.append(
-                                {
-                                    "sandbox_path": f"/workspace/{file_path.name}",
-                                    "local_path": str(file_path),
-                                    "size_bytes": file_path.stat().st_size,
-                                }
-                            )
-                    return downloaded
-                else:
-                    # No sandbox and no files - this is an error
-                    raise RuntimeError(
-                        f"Sandbox not available for run_id={run.id} and no previously downloaded files found. "
-                        f"This may indicate the sandbox was terminated before outputs could be downloaded."
-                    )
-
-            # Sandbox exists, download files
-            return await sandbox_manager.download_all_outputs(run.id, output_dir)
-
-        downloaded_files: list[dict[str, str | int]] = await ctx.step.run(
-            "download-outputs",
-            download_outputs,
-        )
+        execute_result = await ctx.step.run("execute-and-download", execute_and_download)
+        execution_output = WorkerExecutionOutput.model_validate(execute_result["execution_output"])
+        downloaded_files: list[dict[str, str | int]] = execute_result["downloaded_files"]
 
         # Register downloaded files as Resources
         output_resource_ids = []

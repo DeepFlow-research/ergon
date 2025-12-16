@@ -44,57 +44,44 @@ def download_minif2f(data_dir: Path | None = None) -> Path:
     return minif2f_dir
 
 
-def extract_problem_from_lean(content: str, problem_id: str, split: str) -> MiniF2FProblem:
-    """Extract problem statement and ground truth proof from Lean file.
+def extract_problem_from_lean(theorem_content: str, problem_id: str, split: str) -> MiniF2FProblem:
+    """Extract problem statement and ground truth proof from a single theorem block.
 
     Args:
-        content: Full content of the Lean file
-        problem_id: Problem identifier (filename without .lean)
+        theorem_content: Content of a single theorem (from theorem ... end)
+        problem_id: Problem identifier (theorem name)
         split: Dataset split ("valid" or "test")
 
     Returns:
         MiniF2FProblem with parsed statement and proof
     """
-    # MiniF2F files typically have:
-    # - Import statements at top
-    # - Theorem statement
-    # - Proof (by ...)
-    lines = content.split("\n")
-
-    # Find theorem statement (usually starts with "theorem" or "example")
-    theorem_start = None
-    for i, line in enumerate(lines):
-        if line.strip().startswith(("theorem ", "example ")):
-            theorem_start = i
+    # Extract theorem statement (everything up to :=)
+    lines = theorem_content.split("\n")
+    statement_lines = []
+    for line in lines:
+        statement_lines.append(line)
+        if ":=" in line:
             break
 
-    if theorem_start is None:
-        # Fallback: use entire content
-        problem_statement = content
-        ground_truth_proof = content
-    else:
-        # Extract theorem statement (up to :=)
-        theorem_lines = []
-        for i in range(theorem_start, len(lines)):
-            line = lines[i]
-            theorem_lines.append(line)
-            if ":=" in line:
-                break
+    problem_statement = "\n".join(statement_lines).strip()
 
-        problem_statement = "\n".join(theorem_lines)
-        ground_truth_proof = content
+    # The full theorem content is the ground truth proof (may contain 'sorry' for unsolved)
+    ground_truth_proof = theorem_content.strip()
 
     return MiniF2FProblem(
         problem_id=problem_id,
-        problem_statement=problem_statement.strip(),
-        ground_truth_proof=ground_truth_proof.strip(),
+        problem_statement=problem_statement,
+        ground_truth_proof=ground_truth_proof,
         split=split,
         lean_file_path=None,
     )
 
 
 def parse_lean_problems(minif2f_dir: Path, limit: int | None = None) -> list[MiniF2FProblem]:
-    """Parse Lean files from lean/valid/ and lean/test/ directories.
+    """Parse Lean files from lean/src/valid.lean and lean/src/test.lean.
+
+    MiniF2F repo structure: single files containing multiple theorems.
+    Each theorem starts with 'theorem <name>' and ends with 'end'.
 
     Args:
         minif2f_dir: Path to MiniF2F repository root
@@ -103,32 +90,67 @@ def parse_lean_problems(minif2f_dir: Path, limit: int | None = None) -> list[Min
     Returns:
         List of MiniF2FProblem objects
     """
+    import re
+
     problems = []
 
     for split in ["valid", "test"]:
-        lean_dir = minif2f_dir / "lean" / split
-        if not lean_dir.exists():
-            print(f"   ⚠️  Directory not found: {lean_dir}", file=sys.stderr)
+        lean_file = minif2f_dir / "lean" / "src" / f"{split}.lean"
+        if not lean_file.exists():
+            print(f"   ⚠️  File not found: {lean_file}", file=sys.stderr)
             continue
 
-        lean_files = list(lean_dir.glob("*.lean"))
-        print(f"   📂 Found {len(lean_files)} Lean files in {split}/", file=sys.stderr)
+        try:
+            content = lean_file.read_text(encoding="utf-8")
 
-        for lean_file in lean_files:
-            if limit and len(problems) >= limit:
-                break
+            # Extract individual theorems using regex
+            # Pattern: theorem <name> ... end
+            # We need to match nested 'begin'/'end' blocks correctly
+            theorem_pattern = r"theorem\s+(\w+)\s+.*?(?=\n\s*theorem|\Z)"
+            matches = re.finditer(theorem_pattern, content, re.DOTALL)
 
-            try:
-                content = lean_file.read_text(encoding="utf-8")
-                problem = extract_problem_from_lean(content, lean_file.stem, split)
-                problem.lean_file_path = lean_file
-                problems.append(problem)
-            except Exception as e:
-                print(
-                    f"   ⚠️  Failed to parse {lean_file.name}: {e}",
-                    file=sys.stderr,
-                )
-                continue
+            for match in matches:
+                if limit and len(problems) >= limit:
+                    break
+
+                theorem_name = match.group(1)
+                theorem_content = match.group(0).strip()
+
+                # Extract just the theorem block (from 'theorem' to matching 'end')
+                # Find the matching 'end' for this theorem
+                lines = theorem_content.split("\n")
+                depth = 0
+                end_idx = len(lines)
+                for i, line in enumerate(lines):
+                    if "begin" in line:
+                        depth += 1
+                    elif "end" in line:
+                        depth -= 1
+                        if depth == 0:
+                            end_idx = i + 1
+                            break
+
+                theorem_block = "\n".join(lines[:end_idx])
+
+                try:
+                    problem = extract_problem_from_lean(theorem_block, theorem_name, split)
+                    problem.lean_file_path = lean_file
+                    problems.append(problem)
+                except Exception as e:
+                    print(
+                        f"   ⚠️  Failed to parse theorem {theorem_name}: {e}",
+                        file=sys.stderr,
+                    )
+                    continue
+
+            print(
+                f"   📂 Found {len([m for m in re.finditer(theorem_pattern, content, re.DOTALL)])} theorems in {split}.lean",
+                file=sys.stderr,
+            )
+
+        except Exception as e:
+            print(f"   ⚠️  Failed to read {lean_file}: {e}", file=sys.stderr)
+            continue
 
         if limit and len(problems) >= limit:
             break

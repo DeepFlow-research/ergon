@@ -236,11 +236,11 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run 10 examples with ReAct baseline
-  python scripts/run_experiments.py --num-examples 10 --baseline react
+  # Run 10 GDPEval examples with ReAct baseline
+  python scripts/run_experiments.py --benchmark gdpeval --num-examples 10 --baseline react
   
-  # Run with clean database (drop all existing tables first)
-  python scripts/run_experiments.py --num-examples 1 --baseline react --drop-old-results
+  # Run 1 MiniF2F example with clean database
+  python scripts/run_experiments.py --benchmark minif2f --num-examples 1 --baseline react --drop-old-results
   
   # Check progress
   python scripts/run_experiments.py --progress
@@ -249,7 +249,7 @@ Examples:
   python scripts/run_experiments.py --retry-failed
   
   # Dry run (don't start runs)
-  python scripts/run_experiments.py --num-examples 5 --dry-run
+  python scripts/run_experiments.py --benchmark gdpeval --num-examples 5 --dry-run
         """,
     )
 
@@ -374,6 +374,7 @@ Examples:
         return
 
     result = await runner.run_full_suite(
+        benchmark_name=benchmark_name,
         task_limit=args.num_examples,
         dry_run=args.dry_run,
     )

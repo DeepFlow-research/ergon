@@ -9,7 +9,8 @@ import inngest
 from h_arcane.db.queries import queries
 from h_arcane.db.models import RunStatus
 from h_arcane.experiments.config import DEFAULT_CONFIG, ExperimentConfig
-from h_arcane.experiments.loader import load_gdpeval_tasks, load_to_database
+from h_arcane.benchmarks.registry import get_benchmark_loader
+from h_arcane.schemas.base import BenchmarkName
 from h_arcane.inngest.client import inngest_client
 
 logger = structlog.get_logger()
@@ -23,26 +24,32 @@ class ExperimentRunner:
 
     async def run_full_suite(
         self,
+        benchmark_name: BenchmarkName,
         task_limit: int | None = None,
         dry_run: bool = False,
     ) -> dict:
         """
-        Run all GDPEval experiments.
+        Run experiments for a benchmark.
 
         Args:
+            benchmark_name: Benchmark to run (GDPEVAL, MINIF2F, etc.)
             task_limit: Limit number of tasks (for testing)
             dry_run: If True, don't actually start runs
 
         Returns:
             Summary of started runs
         """
-        # Load tasks
-        logger.info("Loading GDPEval tasks", limit=task_limit)
-        tasks = load_gdpeval_tasks(limit=task_limit)
+        # Get benchmark-specific loader from registry
+        loader = get_benchmark_loader(benchmark_name)
+        logger.info("Loading benchmark tasks", benchmark=benchmark_name.value, limit=task_limit)
 
-        # Load to database
-        logger.info("Loading tasks to database", count=len(tasks))
-        experiment_ids = load_to_database(tasks)
+        # Load to database (loader handles task loading internally)
+        experiment_ids = loader(limit=task_limit)
+        logger.info(
+            "Loaded experiments to database",
+            benchmark=benchmark_name.value,
+            count=len(experiment_ids),
+        )
 
         logger.info("Starting runs", count=len(experiment_ids))
 
