@@ -268,7 +268,7 @@ Examples:
     parser.add_argument(
         "--benchmark",
         type=str,
-        choices=["gdpeval"],
+        choices=["gdpeval", "minif2f"],
         default="gdpeval",
         help="Benchmark to run (default: gdpeval)",
     )

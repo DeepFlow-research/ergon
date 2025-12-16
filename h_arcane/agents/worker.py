@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field
 
 from agents import Agent, Runner, function_tool
 
-from h_arcane.agents.toolkit import WorkerToolkit
 from h_arcane.agents.tracing import log_actions_from_result
+from h_arcane.benchmarks.base import BaseToolkit
 from h_arcane.db.models import AgentConfig, Resource
 from h_arcane.db.queries import queries
 from h_arcane.schemas.base import WorkerConfig
@@ -49,7 +49,7 @@ class ReActWorker:
         run_id: UUID,
         task_description: str,
         input_resources: list[Resource],
-        toolkit: WorkerToolkit,
+        toolkit: BaseToolkit,
     ) -> WorkerExecutionOutput:
         """
         Execute task, return structured output with reasoning and resources.
@@ -74,7 +74,7 @@ class ReActWorker:
         # Build tools list
         tools = [
             self._make_ask_tool(toolkit),
-            *toolkit.get_gdpeval_tools(),
+            *toolkit.get_tools(),
         ]
 
         # Create agent config record before running
@@ -126,7 +126,7 @@ class ReActWorker:
 
         return execution_output
 
-    def _make_ask_tool(self, toolkit: WorkerToolkit):
+    def _make_ask_tool(self, toolkit: BaseToolkit):
         """Create ask_stakeholder tool function."""
 
         @function_tool

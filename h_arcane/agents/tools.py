@@ -284,3 +284,88 @@ async def ocr_image(file_path: str, language: str = "eng") -> str:
     else:
         error = result.get("error", "Failed to perform OCR")
         return f"Error: {error}"
+
+
+@function_tool
+async def write_lean_file(filename: str, content: str) -> str:
+    """
+    Write or update a Lean proof file. Use this to build proofs incrementally.
+
+    Use `sorry` as a placeholder to mark incomplete parts:
+
+    theorem example : 1 + 1 = 2 := by
+      sorry  -- Placeholder, check_lean_file will show the goal
+
+    Parameters:
+        filename (str): Name of the Lean file (e.g., "proof.lean")
+        content (str): Complete Lean file content
+
+    Returns:
+        str: Success message with filename and bytes written, or error message
+
+    Example:
+        ```python
+        result = await write_lean_file(
+            filename="proof.lean",
+            content="theorem example : 1 + 1 = 2 := by sorry"
+        )
+        # Returns: "✅ Wrote 45 bytes to /workspace/proof.lean"
+        ```
+    """
+    result = await execute_in_sandbox("write_lean_file", filename=filename, content=content)
+    if result.get("success") and result.get("filename"):
+        bytes_written = result.get("bytes_written", 0)
+        return f"✅ Wrote {bytes_written} bytes to {result['filename']}"
+    else:
+        error = result.get("error", "Failed to write Lean file")
+        return f"Error: {error}"
+
+
+@function_tool
+async def check_lean_file(filename: str) -> str:
+    """
+    Check a Lean file for errors and remaining goals.
+
+    This is useful for iterative proof development:
+    - Shows compilation errors if syntax/type errors exist
+    - Shows remaining goals from `sorry` placeholders
+    - Allows partial proofs to type-check
+
+    Parameters:
+        filename (str): Name of the Lean file to check
+
+    Returns:
+        str: JSON string with compiled status, errors, and goals_remaining
+
+    Example:
+        ```python
+        result_json = await check_lean_file("proof.lean")
+        # Returns JSON: {"success": true, "compiled": true, "goals_remaining": ["⊢ 1 + 1 = 2"], ...}
+        ```
+    """
+    result = await execute_in_sandbox("check_lean_file", filename=filename)
+    return json.dumps(result, indent=2)
+
+
+@function_tool
+async def verify_lean_proof(proof_code: str) -> str:
+    """
+    Verify a complete Lean proof (no `sorry` allowed).
+
+    Use this for final verification after developing the proof.
+    For iterative development, use write_lean_file + check_lean_file instead.
+
+    Parameters:
+        proof_code (str): Complete Lean code including theorem statement and proof
+
+    Returns:
+        str: JSON string with verified status and any errors
+
+    Example:
+        ```python
+        result_json = await verify_lean_proof("theorem example : 1 + 1 = 2 := by simp")
+        # Returns JSON: {"success": true, "verified": true, ...}
+        ```
+    """
+    result = await execute_in_sandbox("verify_lean_proof", proof_code=proof_code)
+    return json.dumps(result, indent=2)

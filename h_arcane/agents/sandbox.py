@@ -41,14 +41,24 @@ class SandboxManager:
         if run_id not in self._created_files_registry:
             self._created_files_registry[run_id] = set()
 
-    async def create(self, run_id: UUID) -> None:
-        """Create and initialize sandbox for a run (idempotent)."""
+    async def create(self, run_id: UUID, timeout_minutes: int = 30) -> None:
+        """Create and initialize sandbox for a run (idempotent).
+
+        Args:
+            run_id: UUID of the run
+            timeout_minutes: Sandbox timeout in minutes (default: 30).
+                            The sandbox will be terminated after this duration.
+        """
         # If sandbox already exists for this run_id, skip creation
         if run_id in self._sandboxes:
             return
 
         try:
-            sandbox = await AsyncSandbox.create(api_key=settings.e2b_api_key)
+            # Convert minutes to seconds for E2B API
+            timeout_seconds = timeout_minutes * 60
+            sandbox = await AsyncSandbox.create(
+                api_key=settings.e2b_api_key, timeout=timeout_seconds
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to create sandbox for run_id={run_id}: {e}") from e
 
@@ -184,44 +194,87 @@ print("All packages verified successfully")
         """Download a file from sandbox for a run."""
         sandbox = self._get_sandbox(run_id)
 
-        content = await sandbox.files.read(sandbox_path)
-        # Ensure we return bytes
-        if isinstance(content, str):
-            return content.encode("utf-8")
-        return content
+        try:
+            content = await sandbox.files.read(sandbox_path)
+            # Ensure we return bytes
+            if isinstance(content, str):
+                return content.encode("utf-8")
+            return content
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "timeout" in error_msg or "sandbox was not found" in error_msg:
+                logger.warning(
+                    f"Sandbox timeout/not found when downloading file {sandbox_path} for run_id={run_id}: {e}. "
+                    f"Sandbox may have timed out during execution."
+                )
+                raise RuntimeError(
+                    f"Sandbox timed out or was not found when downloading {sandbox_path}. "
+                    f"Original error: {e}"
+                ) from e
+            raise
 
     async def list_files(self, run_id: UUID, sandbox_dir: str = "/workspace") -> list[str]:
         """List files in sandbox directory recursively for a run."""
         sandbox = self._get_sandbox(run_id)
 
-        # Use find command to list files recursively
-        result = await sandbox.commands.run(f"find {sandbox_dir} -type f 2>/dev/null || true")
-        if result.exit_code != 0:
-            return []
-        # Parse output - each line is a file path
-        files = [line.strip() for line in result.stdout.split("\n") if line.strip()]
-        return files
+        try:
+            # Use find command to list files recursively
+            result = await sandbox.commands.run(f"find {sandbox_dir} -type f 2>/dev/null || true")
+            if result.exit_code != 0:
+                return []
+            # Parse output - each line is a file path
+            files = [line.strip() for line in result.stdout.split("\n") if line.strip()]
+            return files
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "timeout" in error_msg or "sandbox was not found" in error_msg:
+                logger.warning(
+                    f"Sandbox timeout/not found when listing files for run_id={run_id}: {e}. "
+                    f"Sandbox may have timed out during execution."
+                )
+                return []
+            raise
 
     async def download_all_outputs(
         self, run_id: UUID, output_dir: Path
     ) -> list[dict[str, str | int]]:
-        """Download all files from /workspace to output_dir for a run."""
-        files = await self.list_files(run_id, "/workspace")
-        downloaded = []
+        """Download all files from /workspace to output_dir for a run.
 
-        for file_path in files:
-            content = await self.download_file(run_id, file_path)
-            local_path = output_dir / Path(file_path).name
-            local_path.write_bytes(content)
-            downloaded.append(
-                {
-                    "sandbox_path": file_path,
-                    "local_path": str(local_path),
-                    "size_bytes": len(content),
-                }
-            )
+        Handles sandbox timeout gracefully - if sandbox timed out, returns empty list
+        and logs a warning.
+        """
+        try:
+            files = await self.list_files(run_id, "/workspace")
+            downloaded = []
 
-        return downloaded
+            for file_path in files:
+                try:
+                    content = await self.download_file(run_id, file_path)
+                    local_path = output_dir / Path(file_path).name
+                    local_path.write_bytes(content)
+                    downloaded.append(
+                        {
+                            "sandbox_path": file_path,
+                            "local_path": str(local_path),
+                            "size_bytes": len(content),
+                        }
+                    )
+                except RuntimeError as e:
+                    # Re-raise RuntimeError from download_file (timeout case)
+                    # but continue trying other files
+                    logger.warning(f"Failed to download {file_path}: {e}")
+                    continue
+
+            return downloaded
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "timeout" in error_msg or "sandbox was not found" in error_msg:
+                logger.error(
+                    f"Sandbox timeout/not found when downloading outputs for run_id={run_id}: {e}. "
+                    f"Sandbox may have timed out during execution. No outputs downloaded."
+                )
+                return []
+            raise
 
     def register_created_file(self, run_id: UUID, sandbox_path: str) -> None:
         """Register a file created by a tool for a run."""

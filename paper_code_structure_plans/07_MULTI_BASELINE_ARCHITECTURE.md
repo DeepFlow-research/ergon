@@ -451,7 +451,7 @@ class EvaluationData(BaseModel):
     stage_name: str
     rule_idx: int
     max_score: float
-
+    
 class EvaluationRunner:
     """Infrastructure runner with Inngest step tracing."""
     
@@ -890,34 +890,34 @@ class ProofVerificationRule(BaseRule):
             proof_code = lean_file.load_text()
         else:
             proof_code = _extract_lean_code(data.agent_reasoning)
-        
-        # Combine with problem statement
-        full_code = f"""
+    
+    # Combine with problem statement
+    full_code = f"""
 {self.problem_statement}
 
 -- Agent's proof:
 {proof_code}
 """
-        
+    
         # Step 2: Ensure Lean is installed
         async def ensure_lean():
-            from h_arcane.tools.formal_math.lean import ensure_lean_installed
+    from h_arcane.tools.formal_math.lean import ensure_lean_installed
             sandbox = runner.sandbox_manager.get_sandbox(data.run_id)
-            if not await ensure_lean_installed(sandbox):
+    if not await ensure_lean_installed(sandbox):
                 raise RuntimeError("Failed to install Lean compiler")
             return {"lean_installed": True}
         
         await runner.step("ensure-lean", ensure_lean)
-        
+    
         # Step 3: Write proof file and verify
         async def verify_proof():
             sandbox = runner.sandbox_manager.get_sandbox(data.run_id)
-            await sandbox.write_file("/workspace/LeanProject.lean", full_code)
-            
-            result = await sandbox.execute(
-                "export PATH=$HOME/.elan/bin:$PATH && cd /workspace && lean --check LeanProject.lean",
-                timeout=30,
-            )
+    await sandbox.write_file("/workspace/LeanProject.lean", full_code)
+    
+    result = await sandbox.execute(
+        "export PATH=$HOME/.elan/bin:$PATH && cd /workspace && lean --check LeanProject.lean",
+        timeout=30,
+    )
             return {
                 "exit_code": result.exit_code,
                 "stdout": result.stdout,
@@ -933,20 +933,20 @@ class ProofVerificationRule(BaseRule):
             return {"score": 0.0, "feedback": f"Verification failed:\n{result['stderr']}"}
         
         score_result = await runner.step("compute-score", compute_score)
-        
-        return CriterionResult(
+    
+    return CriterionResult(
             run_id=data.run_id,
             stage_num=data.stage_idx,
             stage_name=data.stage_name,
             criterion_num=data.rule_idx,
-            criterion_type="proof_verification",
-            criterion_description=self.description,
+        criterion_type="proof_verification",
+        criterion_description=self.description,
             score=score_result["score"],
             max_score=data.max_score,
             feedback=score_result["feedback"],
-            evaluation_input=full_code,
+        evaluation_input=full_code,
             evaluated_resource_ids=[str(r.id) for r in data.agent_outputs if r.name.endswith('.lean')],
-        )
+    )
 ```
 
 #### Step 5: Lean Compiler Command Details

@@ -17,7 +17,13 @@ from h_arcane.evaluation.rubric import (
     StagedRubric,
 )
 from h_arcane.evaluation.rubric_flattener import flatten_rubric
-from h_arcane.evaluation.rules import AnyRule, BaseRule, CodeRule, LLMJudgeRule
+from h_arcane.evaluation.rules import (
+    AnyRule,
+    BaseRule,
+    CodeRule,
+    LLMJudgeRule,
+    ProofVerificationRule,
+)
 from h_arcane.evaluation.schemas import LLMJudgeResponse, SandboxResult
 from h_arcane.evaluation.task_evaluator import evaluate_task_run
 
@@ -26,6 +32,7 @@ __all__ = [
     "BaseRule",
     "CodeRule",
     "LLMJudgeRule",
+    "ProofVerificationRule",
     "AnyRule",
     # Rubric
     "StagedRubric",

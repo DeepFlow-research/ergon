@@ -24,6 +24,9 @@ class LLMStakeholderConfig(BaseModel):
     model: str = Field(description="LLM model to use for stakeholder responses")
     temperature: float = Field(ge=0.0, le=2.0, description="Temperature for stakeholder responses")
     max_tokens: int = Field(ge=1, description="Maximum tokens for stakeholder response")
+    seed: int | None = Field(
+        default=None, description="Random seed for stakeholder responses (None = random)"
+    )
 
 
 class EvaluationConfig(BaseModel):

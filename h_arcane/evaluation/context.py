@@ -85,7 +85,8 @@ class EvaluationRunner:
         """Ensure sandbox exists for this run. Returns status dict."""
         sandbox = self.sandbox_manager.get_sandbox(self.data.run_id)
         if not sandbox:
-            await self.sandbox_manager.create(self.data.run_id)
+            # Use 30 minute timeout for evaluation sandboxes as well
+            await self.sandbox_manager.create(self.data.run_id, timeout_minutes=30)
             self._owns_sandbox = True
             return {"created": True, "run_id": str(self.data.run_id)}
         return {"created": False, "run_id": str(self.data.run_id)}

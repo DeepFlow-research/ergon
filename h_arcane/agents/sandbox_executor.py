@@ -74,15 +74,26 @@ async def execute_in_sandbox(tool_name: str, **kwargs) -> dict[str, Any]:
 
     # Generate Python code to import and execute tool module
     # Tools are uploaded to /tools/ directory in sandbox
+    # Formal math tools are in /tools/formal_math/
     # Build code to execute tool
     kwargs_json = json.dumps(resolved_kwargs, default=str)
+
+    # Check if this is a formal_math tool (lean_write, lean_check, lean_verify)
+    formal_math_tools = {"write_lean_file", "check_lean_file", "verify_lean_proof"}
+    if tool_name in formal_math_tools:
+        # Import from formal_math subdirectory
+        import_path = f"formal_math.{tool_name}"
+    else:
+        # Import from root tools directory
+        import_path = tool_name
+
     code = f"""
 import json
 import sys
 sys.path.insert(0, '/tools')
 
 # Import tool module
-from {tool_name} import {tool_name}
+from {import_path} import {tool_name}
 
 # Execute tool with kwargs
 kwargs = json.loads({json.dumps(kwargs_json)})
@@ -186,6 +197,45 @@ except Exception:
     responses_file = tools_dir / "responses.py"
     if responses_file.exists():
         await sandbox.files.write("/tools/responses.py", responses_file.read_bytes())
+
+    # Upload formal_math tools if they exist
+    formal_math_dir = tools_dir / "formal_math"
+    if formal_math_dir.exists():
+        # Ensure /tools/formal_math directory exists in sandbox
+        create_formal_math_code = """
+import os
+import stat
+os.makedirs('/tools/formal_math', exist_ok=True)
+try:
+    os.chmod('/tools/formal_math', stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+except Exception:
+    pass
+"""
+        formal_math_result = await sandbox.run_code(create_formal_math_code, language="python")
+        if formal_math_result.error:
+            raise RuntimeError(
+                f"Failed to create /tools/formal_math directory: {formal_math_result.error}"
+            )
+
+        # Upload formal_math/responses.py (needed by tool modules)
+        formal_responses = formal_math_dir / "responses.py"
+        if formal_responses.exists():
+            await sandbox.files.write(
+                "/tools/formal_math/responses.py", formal_responses.read_bytes()
+            )
+
+        # Upload formal_math/utils.py (needed by some tools)
+        formal_utils = formal_math_dir / "utils.py"
+        if formal_utils.exists():
+            await sandbox.files.write("/tools/formal_math/utils.py", formal_utils.read_bytes())
+
+        # Upload formal_math tool modules
+        for tool_file in formal_math_dir.glob("*.py"):
+            if tool_file.name in ("__init__.py", "responses.py", "utils.py"):
+                continue
+            sandbox_path = f"/tools/formal_math/{tool_file.name}"
+            content = tool_file.read_bytes()
+            await sandbox.files.write(sandbox_path, content)
 
     # Upload each tool module
     for tool_file in tools_dir.glob("*.py"):

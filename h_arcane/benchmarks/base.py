@@ -34,6 +34,12 @@ class BaseToolkit(ABC):
         """Ask the stakeholder a question."""
         ...
 
+    @property
+    @abstractmethod
+    def questions_asked(self) -> int:
+        """Number of stakeholder questions asked so far."""
+        ...
+
     @abstractmethod
     def get_tools(self) -> list:
         """Get list of tools available to the worker."""

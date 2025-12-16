@@ -10,9 +10,13 @@ import inngest
 
 from h_arcane.agents.sandbox import SandboxManager
 from h_arcane.agents.sandbox_executor import set_sandbox_manager, upload_tools_to_sandbox
-from h_arcane.agents.stakeholder import RubricStakeholder
-from h_arcane.agents.toolkit import WorkerToolkit
 from h_arcane.agents.worker import ReActWorker, WorkerExecutionOutput
+from h_arcane.benchmarks.base import BaseStakeholder, BaseToolkit
+from h_arcane.benchmarks.gdpeval.stakeholder import RubricStakeholder
+from h_arcane.benchmarks.gdpeval.toolkit import GDPEvalToolkit
+from h_arcane.benchmarks.minif2f.stakeholder import MiniF2FStakeholder
+from h_arcane.benchmarks.minif2f.toolkit import MiniF2FToolkit
+from h_arcane.schemas.base import BenchmarkName
 from h_arcane.db.models import (
     AgentConfig,
     CriterionResult,
@@ -161,8 +165,9 @@ async def worker_execute(
     try:
         # Create sandbox - idempotent: checks registry, creates only if needed
         # SandboxManager() is a singleton, so we can call it directly
+        # Set timeout to 30 minutes to handle long-running agent executions
         async def create_sandbox():
-            await SandboxManager().create(run.id)
+            await SandboxManager().create(run.id, timeout_minutes=30)
             sandbox = SandboxManager().get_sandbox(run.id)
             return {
                 "success": True,
@@ -217,22 +222,61 @@ async def worker_execute(
 
         await ctx.step.run("set-sandbox-manager", set_sandbox_manager_fn)
 
-        # Create stakeholder
-        ground_truth = StagedRubric(**experiment.ground_truth_rubric)
-
-        stakeholder = RubricStakeholder(
-            ground_truth_rubric=ground_truth,
-            task_description=experiment.task_description,
+        # Create benchmark-specific stakeholder and toolkit
+        # NOTE: benchmark_name may come through as a raw string depending on serialization paths
+        # (e.g. Inngest/SQLModel). Normalize to our enum for comparisons.
+        benchmark_name = (
+            BenchmarkName(experiment.benchmark_name)
+            if isinstance(experiment.benchmark_name, str)
+            else experiment.benchmark_name
         )
+        stakeholder: BaseStakeholder
+        toolkit: BaseToolkit
+
+        if benchmark_name == BenchmarkName.GDPEVAL:
+            # GDPEval uses StagedRubric
+            ground_truth = StagedRubric(**experiment.ground_truth_rubric)
+            stakeholder = RubricStakeholder(
+                ground_truth_rubric=ground_truth,
+                task_description=experiment.task_description,
+            )
+            toolkit = GDPEvalToolkit(
+                run_id=run.id,
+                stakeholder=stakeholder,
+                sandbox_manager=SandboxManager(),
+                max_questions=run.max_questions,
+            )
+            stakeholder_prompt = RubricStakeholder.ANSWER_PROMPT
+        elif benchmark_name == BenchmarkName.MINIF2F:
+            # MiniF2F uses ground truth proof for hints
+            ground_truth_proof = experiment.benchmark_specific_data.get("ground_truth_proof", "")
+            stakeholder = MiniF2FStakeholder(
+                ground_truth_proof=ground_truth_proof,
+                problem_statement=experiment.task_description,
+            )
+            toolkit = MiniF2FToolkit(
+                run_id=run.id,
+                stakeholder=stakeholder,
+                sandbox_manager=SandboxManager(),
+                max_questions=run.max_questions,
+            )
+            stakeholder_prompt = MiniF2FStakeholder.HINT_PROMPT
+        else:
+            raise ValueError(f"Unsupported benchmark: {benchmark_name}")
 
         async def create_stakeholder_agent_config():
+            stakeholder_display_name = (
+                benchmark_name.value.title()
+                if isinstance(benchmark_name, BenchmarkName)
+                else str(benchmark_name).title()
+            )
             return queries.agent_configs.create(
                 AgentConfig(
                     run_id=run.id,
-                    name="Rubric Stakeholder",
+                    name=f"{stakeholder_display_name} Stakeholder",
                     agent_type="stakeholder",
                     model=stakeholder.model,
-                    system_prompt=RubricStakeholder.ANSWER_PROMPT,
+                    system_prompt=stakeholder_prompt,
                     tools=[],  # Stakeholder doesn't use tools, just answers questions
                 )
             )
@@ -242,15 +286,6 @@ async def worker_execute(
             "create-stakeholder-agent-config",
             create_stakeholder_agent_config,
             output_type=AgentConfig,
-        )
-
-        # Create toolkit (handles message/action logging, uses sandbox)
-        # Pass singleton SandboxManager instance
-        toolkit = WorkerToolkit(
-            run_id=run.id,
-            stakeholder=stakeholder,
-            sandbox_manager=SandboxManager(),
-            max_questions=run.max_questions,
         )
 
         # Execute (tools execute in sandbox)
