@@ -10,12 +10,8 @@ from h_arcane.evaluation.models import FlattenedCriterion
 from h_arcane.evaluation.rubric_flattener import flatten_rubric
 from h_arcane.inngest.client import inngest_client
 from h_arcane.inngest.events import CriterionEvaluationEvent, TaskEvaluationEvent
-from h_arcane.schemas.staged_rubric_schema import (
-    CodeRule,
-    LLMJudgeRule,
-    StagedRubric,
-    EvaluationStage,
-)
+from h_arcane.evaluation.rubric import EvaluationStage, StagedRubric
+from h_arcane.evaluation.rules import CodeRule, LLMJudgeRule
 
 
 @inngest_client.create_function(

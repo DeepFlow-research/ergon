@@ -39,6 +39,7 @@ services:
       - ./scripts:/app/scripts
       - ./paper_code_structure_plans/data:/app/paper_code_structure_plans/data
       - ./data:/app/data
+      - ./config:/app/config
       # Mount pyproject.toml to reinstall dependencies if changed
       - ./pyproject.toml:/app/pyproject.toml
   

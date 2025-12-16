@@ -17,6 +17,7 @@ from h_arcane.db.models import (
     CriterionResult,
     TaskEvaluationResult,
 )
+from h_arcane.schemas.base import BenchmarkName
 
 
 T = TypeVar("T", bound=SQLModel)
@@ -115,11 +116,16 @@ class ExperimentsQueries(BaseQueries[Experiment]):
         super().__init__(Experiment)
 
     @staticmethod
-    def get_by_task_id(task_id: str) -> Experiment | None:
-        """Get experiment by GDPEval task ID."""
+    def get_by_task_id(task_id: str, benchmark_name: BenchmarkName) -> Experiment:
+        """Get experiment by task ID and benchmark."""
         with next(get_session()) as session:
-            statement = select(Experiment).where(Experiment.gdpeval_task_id == task_id)
-            return session.exec(statement).first()  # type: ignore[attr-defined]
+            statement = select(Experiment).where(
+                Experiment.benchmark_name == benchmark_name, Experiment.task_id == task_id
+            )
+            result = session.exec(statement).first()  # type: ignore[attr-defined]
+            if result is None:
+                raise ValueError(f"Experiment not found: {benchmark_name.value}/{task_id}")
+            return result
 
 
 class ResourcesQueries(BaseQueries[Resource]):

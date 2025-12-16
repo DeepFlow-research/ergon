@@ -13,6 +13,7 @@ from h_arcane.db.connection import init_db
 from h_arcane.experiments.config import BaselineType, ExperimentConfig
 from h_arcane.experiments.runner import ExperimentRunner
 from h_arcane.settings import settings
+from h_arcane.schemas.base import BenchmarkName
 from sqlalchemy import create_engine, text
 
 
@@ -265,6 +266,13 @@ Examples:
         help="Baseline to run (default: react)",
     )
     parser.add_argument(
+        "--benchmark",
+        type=str,
+        choices=["gdpeval"],
+        default="gdpeval",
+        help="Benchmark to run (default: gdpeval)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Don't actually start runs, just show what would run",
@@ -286,6 +294,8 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    benchmark_name = BenchmarkName(args.benchmark)
 
     # Ensure services are running (except for progress check which only needs DB)
     if args.progress:

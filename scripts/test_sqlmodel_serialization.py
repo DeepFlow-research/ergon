@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from h_arcane.db.models import Run, RunStatus, Experiment, Resource
 from sqlmodel import SQLModel
+from h_arcane.schemas.base import BenchmarkName
+from h_arcane.config.evaluation_config import evaluation_config
 
 
 def test_run_serialization():
@@ -18,7 +20,7 @@ def test_run_serialization():
     run = Run(
         id=uuid4(),
         experiment_id=uuid4(),
-        worker_model="gpt-4o",
+        worker_model=evaluation_config.llm_stakeholder.model,
         max_questions=10,
         status=RunStatus.EXECUTING,
         created_at=datetime.utcnow(),
@@ -72,11 +74,14 @@ def test_experiment_serialization():
     print("=" * 60)
 
     # Create a test Experiment object
+
     experiment = Experiment(
         id=uuid4(),
-        gdpeval_task_id="test-task-123",
+        benchmark_name=BenchmarkName.GDPEVAL,
+        task_id="test-task-123",
         task_description="Test task description",
         ground_truth_rubric={"stages": [{"criteria": []}]},
+        benchmark_specific_data={},
         category="test",
         created_at=datetime.utcnow(),
     )

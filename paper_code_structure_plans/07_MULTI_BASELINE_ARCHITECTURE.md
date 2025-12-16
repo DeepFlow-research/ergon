@@ -12,7 +12,7 @@ This document outlines the plan to abstract the H-ARCANE codebase to support thr
 ### Key Decisions Made ✅
 - **MiniF2F**: Start with Lean only (244 problems, 100% coverage)
 - **ResearchRubrics**: Use ScaleAI ResearchRubrics dataset with weighted criteria by axis type
-- **Database**: Polymorphic approach with `benchmark_type` enum + JSON fields
+- **Database**: Polymorphic approach with `benchmark_name` enum + JSON fields
 - **Worker**: Unified `BaseWorker` with benchmark-specific configs
 - **Evaluation**: End-of-generation for all benchmarks (async via Inngest)
 - **Sandbox**: Single sandbox type with Lean installation
@@ -61,8 +61,8 @@ This document outlines the plan to abstract the H-ARCANE codebase to support thr
 - Responds "I don't have a preference on that" for out-of-scope questions
 
 ### 3. Database Schema Extension ✅
-**Decision**: **Polymorphic approach** with `benchmark_type` enum
-- Add `benchmark_type: BenchmarkType` field to Experiment/Run
+**Decision**: **Polymorphic approach** with `benchmark_name` enum
+- Add `benchmark_name: BenchmarkType` field to Experiment/Run
 - Use `benchmark_specific_data` JSON field for flexible storage
 - Single unified schema for all benchmarks
 
@@ -152,7 +152,7 @@ arcane_extension/
 │   │       ├── exa_qa.py             # Exa question answering
 │   │       └── exa_get_content.py    # Exa link content extraction
 │   ├── db/
-│   │   ├── models.py                  # EXTENDED: Add benchmark_type enum
+│   │   ├── models.py                  # EXTENDED: Add benchmark_name enum
 │   │   └── ...
 │   └── evaluation/
 │       ├── task_evaluator.py        # UNIFIED: Orchestrates all evaluations
@@ -183,7 +183,7 @@ class BenchmarkType(str, Enum):
 
 class BenchmarkConfig(BaseModel):
     """Configuration for running a benchmark."""
-    benchmark_type: BenchmarkType
+    benchmark_name: BenchmarkType
     system_prompt: str
     tools: list[str]
     max_questions: int = 10
@@ -352,17 +352,24 @@ All benchmarks use the same evaluation pattern:
 - **ResearchRubrics**: Uses `LLMJudgeRule` with weighted criteria from dataset
 
 **Self-Evaluating Rules Architecture:**
+
+> **⚠️ UPDATED:** The evaluation system has been refactored. See `08_EVALUATION_REFACTOR.md` for
+> the actual implementation. Key changes:
+> - `EvaluationContext` split into `EvaluationData` (pure data) + `EvaluationRunner` (infrastructure)
+> - `rule.evaluate(context)` → `rule.evaluate(runner)` 
+> - Runner provides Inngest step-level tracing via `runner.step(step_id, fn)`
+> - Rules now live in `h_arcane/evaluation/rules/` not `schemas/`
+
 ```python
-# schemas/staged_rubric_schema.py
+# evaluation/rules/base.py
 from abc import ABC, abstractmethod
-from typing import Annotated, Literal, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from h_arcane.evaluation.context import EvaluationContext
+    from h_arcane.evaluation.context import EvaluationRunner
     from h_arcane.db.models import CriterionResult
 
-# Base rule class with common fields
 class BaseRule(BaseModel, ABC):
     """Base class for all evaluation rules."""
     name: str
@@ -370,41 +377,53 @@ class BaseRule(BaseModel, ABC):
     weight: float = 1.0
     
     @abstractmethod
-    async def evaluate(self, context: "EvaluationContext") -> "CriterionResult":
-        """Each rule knows how to evaluate itself."""
+    async def evaluate(self, runner: "EvaluationRunner") -> "CriterionResult":
+        """Each rule evaluates itself using the provided runner."""
         ...
 
+# evaluation/rules/code_rule.py
 class CodeRule(BaseRule):
     """Evaluates via Python code execution in sandbox."""
     type: Literal["code"] = "code"
     code: str
     
-    async def evaluate(self, context: "EvaluationContext") -> "CriterionResult":
-        # Execute Python code in sandbox
-        return await execute_code_in_sandbox(self.code, context)
+    async def evaluate(self, runner: "EvaluationRunner") -> "CriterionResult":
+        data = runner.data
+        # Step 1: Ensure sandbox
+        await runner.step("ensure-sandbox", runner.ensure_sandbox)
+        # Step 2: Upload files
+        await runner.step("upload-files", lambda: runner.upload_files(data.agent_outputs))
+        # Step 3: Execute code
+        result = await runner.step("execute-code", lambda: runner.execute_code(code))
+        # Step 4: Parse result
+        ...
 
+# evaluation/rules/llm_judge.py
 class LLMJudgeRule(BaseRule):
-    """Evaluates via LLM judge call."""
+    """Evaluates via LLM judge with structured output."""
     type: Literal["llm_judge"] = "llm_judge"
     judge_prompt: str
     expectation: str | None = None
-    # Extended fields for structured output (ResearchRubrics)
-    response_format: Literal["score", "checklist", "pointwise"] = "score"
-    response_schema: dict | None = None
     
-    async def evaluate(self, context: "EvaluationContext") -> "CriterionResult":
-        # Call LLM judge with appropriate parsing
-        return await call_llm_judge(self, context)
+    async def evaluate(self, runner: "EvaluationRunner") -> "CriterionResult":
+        data = runner.data
+        messages = self._build_messages(...)
+        # Step 1: Call LLM
+        result = await runner.step("call-llm-api", 
+            lambda: runner.call_llm_judge(messages, LLMJudgeResponse))
+        # Step 2: Compute score
+        ...
 
+# Future: evaluation/rules/proof_verification.py
 class ProofVerificationRule(BaseRule):
     """Evaluates via formal proof verification (Lean)."""
     type: Literal["proof_verification"] = "proof_verification"
     problem_statement: str
     formal_system: Literal["lean"] = "lean"
     
-    async def evaluate(self, context: "EvaluationContext") -> "CriterionResult":
-        # Verify proof in Lean
-        return await verify_lean_proof(self, context)
+    async def evaluate(self, runner: "EvaluationRunner") -> "CriterionResult":
+        # See Step 4 below for full implementation
+        ...
 
 # Discriminated union - Pydantic routes based on "type" field
 AnyRule = Annotated[
@@ -418,38 +437,52 @@ MiniF2FRule = ProofVerificationRule
 ResearchRubricsRule = LLMJudgeRule
 ```
 
-**Evaluation Context:**
+**Evaluation Context (Split Design):**
 ```python
 # evaluation/context.py
-from uuid import UUID
-from pydantic import BaseModel, Field
-from h_arcane.db.models import Resource
-from h_arcane.agents.sandbox import SandboxManager
 
-class EvaluationContext(BaseModel):
-    """All context needed by any rule to evaluate."""
+class EvaluationData(BaseModel):
+    """Pure data for evaluation - no infrastructure methods."""
     run_id: UUID
     task_input: str
     agent_reasoning: str
     agent_outputs: list[Resource]
-    sandbox_manager: SandboxManager | None = None
     stage_idx: int
+    stage_name: str
     rule_idx: int
     max_score: float
+
+class EvaluationRunner:
+    """Infrastructure runner with Inngest step tracing."""
     
-    class Config:
-        arbitrary_types_allowed = True  # For SandboxManager
+    def __init__(self, data: EvaluationData, sandbox_manager: SandboxManager, inngest_ctx: inngest.Context):
+        self.data = data
+        self.sandbox_manager = sandbox_manager
+        self.inngest_ctx = inngest_ctx
+    
+    async def step(self, step_id: str, fn: Callable) -> R:
+        """Wrap function in Inngest step for observability."""
+        return await self.inngest_ctx.step.run(step_id, fn)
+    
+    async def ensure_sandbox(self) -> dict: ...
+    async def upload_files(self, files: list[Resource]) -> dict: ...
+    async def execute_code(self, code: str) -> SandboxResult: ...
+    async def call_llm_judge(self, messages: list, response_type: type[T]) -> T: ...
 ```
 
-**Criteria Evaluator:**
+**Criteria Evaluator (Inngest Function):**
 ```python
 # evaluation/criteria_evaluator.py
-async def evaluate_criterion(
-    rule: AnyRule,
-    context: EvaluationContext,
-) -> CriterionResult:
-    """Evaluate any rule - each rule implements its own evaluation logic."""
-    return await rule.evaluate(context)
+@inngest_client.create_function(fn_id="evaluate-criterion", ...)
+async def evaluate_criterion_fn(ctx: inngest.Context) -> CriterionResult:
+    event_data = CriterionEvaluationEvent.model_validate(ctx.event.data)
+    
+    data = EvaluationData(...)
+    runner = EvaluationRunner(data, SandboxManager(), inngest_ctx=ctx)
+    
+    result = await event_data.rule.evaluate(runner)
+    await ctx.step.run("cleanup", runner.cleanup)
+    return result
 ```
 
 ### Evaluation Flow (Unified)
@@ -830,6 +863,13 @@ Agent: Base case is trivial, inductive case needs arithmetic...
 #### Step 4: Evaluation (Proof Verification)
 
 **In `ProofVerificationRule.evaluate()`:**
+
+> **Note:** Following the evaluation refactor (see `08_EVALUATION_REFACTOR.md`), rules now receive
+> an `EvaluationRunner` instead of `EvaluationContext`. The runner provides:
+> - `runner.data` - Pure data (task_input, agent_outputs, etc.)
+> - `runner.step(step_id, fn)` - Inngest step wrapper for observability
+> - `runner.ensure_sandbox()`, `runner.execute_code()` - Infrastructure methods
+
 ```python
 class ProofVerificationRule(BaseRule):
     """Rule for verifying formal proofs in Lean."""
@@ -837,69 +877,76 @@ class ProofVerificationRule(BaseRule):
     problem_statement: str
     formal_system: Literal["lean"] = "lean"
     
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
-        """Verify Lean proof."""
-        problem_statement = self.problem_statement
+    async def evaluate(self, runner: EvaluationRunner) -> CriterionResult:
+        """Verify Lean proof with granular Inngest steps."""
+        data = runner.data
         
-        # Extract Lean code from agent output (via context)
-        # Option 1: Agent writes proof to a .lean file
-        lean_file = next((r for r in context.agent_outputs if r.name.endswith('.lean')), None)
+        # Step 1: Ensure sandbox exists
+        await runner.step("ensure-sandbox", runner.ensure_sandbox)
+        
+        # Extract Lean code from agent output
+        lean_file = next((r for r in data.agent_outputs if r.name.endswith('.lean')), None)
         if lean_file:
             proof_code = lean_file.load_text()
         else:
-            # Option 2: Extract from agent_reasoning (if agent outputs code directly)
-            proof_code = _extract_lean_code(context.agent_reasoning)
-    
-    # Combine with problem statement
-    full_code = f"""
-{problem_statement}
+            proof_code = _extract_lean_code(data.agent_reasoning)
+        
+        # Combine with problem statement
+        full_code = f"""
+{self.problem_statement}
 
 -- Agent's proof:
 {proof_code}
 """
-    
-        # Verify in sandbox (access via context)
-        sandbox = context.sandbox_manager.get_sandbox(context.run_id)
         
-        # Ensure Lean is installed (on-demand)
-    from h_arcane.tools.formal_math.lean import ensure_lean_installed
-    if not await ensure_lean_installed(sandbox):
+        # Step 2: Ensure Lean is installed
+        async def ensure_lean():
+            from h_arcane.tools.formal_math.lean import ensure_lean_installed
+            sandbox = runner.sandbox_manager.get_sandbox(data.run_id)
+            if not await ensure_lean_installed(sandbox):
+                raise RuntimeError("Failed to install Lean compiler")
+            return {"lean_installed": True}
+        
+        await runner.step("ensure-lean", ensure_lean)
+        
+        # Step 3: Write proof file and verify
+        async def verify_proof():
+            sandbox = runner.sandbox_manager.get_sandbox(data.run_id)
+            await sandbox.write_file("/workspace/LeanProject.lean", full_code)
+            
+            result = await sandbox.execute(
+                "export PATH=$HOME/.elan/bin:$PATH && cd /workspace && lean --check LeanProject.lean",
+                timeout=30,
+            )
+            return {
+                "exit_code": result.exit_code,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            }
+        
+        result = await runner.step("verify-proof", verify_proof)
+        
+        # Step 4: Compute score
+        async def compute_score():
+            if result["exit_code"] == 0:
+                return {"score": data.max_score, "feedback": "Proof verified by Lean."}
+            return {"score": 0.0, "feedback": f"Verification failed:\n{result['stderr']}"}
+        
+        score_result = await runner.step("compute-score", compute_score)
+        
         return CriterionResult(
-            # ... error: Lean installation failed
-            score=0.0,
-            feedback="Failed to install Lean compiler in sandbox.",
+            run_id=data.run_id,
+            stage_num=data.stage_idx,
+            stage_name=data.stage_name,
+            criterion_num=data.rule_idx,
+            criterion_type="proof_verification",
+            criterion_description=self.description,
+            score=score_result["score"],
+            max_score=data.max_score,
+            feedback=score_result["feedback"],
+            evaluation_input=full_code,
+            evaluated_resource_ids=[str(r.id) for r in data.agent_outputs if r.name.endswith('.lean')],
         )
-    
-    # Write to sandbox
-    await sandbox.write_file("/workspace/LeanProject.lean", full_code)
-    
-    # Run Lean compiler (with PATH set)
-    result = await sandbox.execute(
-        "export PATH=$HOME/.elan/bin:$PATH && cd /workspace && lean --check LeanProject.lean",
-        timeout=30,
-    )
-    
-    # Parse result
-    if result.exit_code == 0:
-        score = max_score  # Proof verified!
-        feedback = "Proof successfully verified by Lean compiler."
-    else:
-        score = 0.0
-        feedback = f"Proof verification failed:\n{result.stderr}"
-    
-    return CriterionResult(
-        run_id=run_id,
-        stage_num=0,  # Single stage for MiniF2F
-        stage_name="proof_verification",
-        criterion_num=0,
-        criterion_type="proof_verification",
-        criterion_description=self.description,
-        score=score,
-        max_score=context.max_score,
-        feedback=feedback,
-        evaluation_input=full_code,
-        evaluated_resource_ids=[str(r.id) for r in context.agent_outputs if r.name.endswith('.lean')],
-    )
 ```
 
 #### Step 5: Lean Compiler Command Details
@@ -1031,7 +1078,7 @@ class BenchmarkStakeholder(ABC):
 
 class BenchmarkConfig(BaseModel):
     """Configuration for a benchmark."""
-    benchmark_type: BenchmarkType
+    benchmark_name: BenchmarkType
     system_prompt: str
     tools: list[str]  # Tool names
     max_questions: int
@@ -1097,7 +1144,7 @@ class BenchmarkType(str, Enum):
 
 class Experiment(SQLModel, table=True):
     # ... existing fields ...
-    benchmark_type: BenchmarkType = Field(index=True)
+    benchmark_name: BenchmarkType = Field(index=True)
     benchmark_specific_data: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON)
@@ -1105,7 +1152,7 @@ class Experiment(SQLModel, table=True):
 
 class Run(SQLModel, table=True):
     # ... existing fields ...
-    benchmark_type: BenchmarkType = Field(index=True)
+    benchmark_name: BenchmarkType = Field(index=True)
     benchmark_specific_results: dict = Field(
         default_factory=dict,
         sa_column=Column(JSON)
@@ -1114,40 +1161,48 @@ class Run(SQLModel, table=True):
 
 ## Implementation Plan
 
-### Phase 1: Foundation & Schema Extensions (Week 1)
+> **✅ Phase 1 COMPLETED** - See `08_EVALUATION_REFACTOR.md` for details.
+> The evaluation system has been refactored with:
+> - `EvaluationData` + `EvaluationRunner` (split from `EvaluationContext`)
+> - `rule.evaluate(runner)` with Inngest step-level tracing
+> - Rules in `h_arcane/evaluation/rules/` (CodeRule, LLMJudgeRule)
+> - Rubric classes in `h_arcane/evaluation/rubric.py`
 
-1. **Schema extensions** (`staged_rubric_schema.py`)
-   - [ ] Refactor rules to inherit from `BaseRule` (ABC with abstract `evaluate()` method)
-   - [ ] Each rule class implements its own `evaluate(context: EvaluationContext) -> CriterionResult`
-   - [ ] Create discriminated union `AnyRule = Annotated[Union[CodeRule, LLMJudgeRule, ProofVerificationRule], Field(discriminator="type")]`
-   - [ ] Create benchmark-specific type aliases (`GDPEvalRule`, `MiniF2FRule`, `ResearchRubricsRule`)
+### Phase 1: Foundation & Schema Extensions (Week 1) ✅ DONE
 
-2. **Evaluation context** (`evaluation/context.py`)
-   - [ ] Create `EvaluationContext` Pydantic BaseModel
-   - [ ] Includes: run_id, task_input, agent_reasoning, agent_outputs, sandbox_manager, stage_idx, rule_idx, max_score
-   - [ ] Set `arbitrary_types_allowed = True` in Config for SandboxManager
+1. **Schema extensions** (`evaluation/rules/`)
+   - [x] Refactor rules to inherit from `BaseRule` (ABC with abstract `evaluate()` method)
+   - [x] Each rule class implements its own `evaluate(runner: EvaluationRunner) -> CriterionResult`
+   - [x] Create discriminated union `AnyRule = Annotated[Union[CodeRule, LLMJudgeRule, ...], Field(discriminator="type")]`
+   - [x] Create `GDPEvalRule` type alias (MiniF2FRule, ResearchRubricsRule pending with those benchmarks)
 
-3. **Evaluator simplification** (`criteria_evaluator.py`)
-   - [ ] Replace if-else routing with polymorphic `rule.evaluate(context)`
-   - [ ] Move `_evaluate_code_rule()` logic into `CodeRule.evaluate()`
-   - [ ] Move `_evaluate_llm_judge()` logic into `LLMJudgeRule.evaluate()`
+2. **Evaluation context** (`evaluation/context.py`) ✅
+   - [x] Create `EvaluationData` Pydantic BaseModel (pure data)
+   - [x] Create `EvaluationRunner` class (infrastructure with Inngest steps)
+   - [x] Split data from infrastructure for clean separation
 
-4. **Create benchmark abstraction layer**
-   - [ ] Create `h_arcane/benchmarks/base.py` with base classes
-   - [ ] Move GDPEval-specific code to `h_arcane/benchmarks/gdpeval/`
-   - [ ] Create `BenchmarkConfig` Pydantic model
-   - [ ] Update database models with `benchmark_type` enum
+3. **Evaluator simplification** (`criteria_evaluator.py`) ✅
+   - [x] Replace if-else routing with polymorphic `rule.evaluate(runner)`
+   - [x] Move `_evaluate_code_rule()` logic into `CodeRule.evaluate()` with Inngest steps
+   - [x] Move `_evaluate_llm_judge()` logic into `LLMJudgeRule.evaluate()` with Inngest steps
+   - [x] Delete dead code and `rule_evaluators.py`
+
+4. **Create benchmark abstraction layer** ✅
+   - [x] Create `h_arcane/benchmarks/base.py` with `BaseStakeholder`
+   - [x] Move GDPEval-specific code to `h_arcane/benchmarks/gdpeval/`
+   - [x] Create `WorkerConfig` (renamed from BenchmarkConfig)
+   - [x] Update database models with `benchmark_name` enum (`BenchmarkName`)
 
 5. **Refactor worker and toolkit**
-   - [ ] Create `BaseWorker` class
-   - [ ] Refactor `ReActWorker` to extend `BaseWorker`
-   - [ ] Create `BaseToolkit` interface
-   - [ ] Refactor `WorkerToolkit` to implement `BaseToolkit`
+   - [ ] Create `BaseWorker` class (PENDING)
+   - [x] `ReActWorker` accepts `WorkerConfig` 
+   - [ ] Create `BaseToolkit` interface (PENDING)
+   - [x] `WorkerToolkit` works with any benchmark
 
-6. **Update experiment loading**
-   - [ ] Move GDPEval loader to `benchmarks/gdpeval/loader.py`
-   - [ ] Create benchmark registry/factory pattern
-   - [ ] Update `run_experiments.py` to support benchmark selection
+6. **Update experiment loading** ✅
+   - [x] Move GDPEval loader to `benchmarks/gdpeval/loader.py`
+   - [x] Create benchmark registry (`benchmarks/registry.py`)
+   - [x] Update `run_experiments.py` to support benchmark selection
 
 ### Phase 2: MiniF2F Integration (Week 2)
 
@@ -1155,7 +1210,7 @@ class Run(SQLModel, table=True):
    - [ ] Create `benchmarks/minif2f/loader.py`
    - [ ] Implement loading from MiniF2F repository (Lean files)
    - [ ] Parse problem statements and ground truth proofs
-   - [ ] Store in database with `benchmark_type=BenchmarkType.MINIF2F`
+   - [ ] Store in database with `benchmark_name=BenchmarkType.MINIF2F`
 
 2. **Formal math tools**
    - [ ] Create `tools/formal_math/responses.py`:
@@ -1195,7 +1250,7 @@ class Run(SQLModel, table=True):
    - [ ] Load from HuggingFace: `ScaleAI/researchrubrics`
    - [ ] Load ablated prompts (created separately, manual with QA)
    - [ ] Parse rubrics: extract criterion, weight, axis for each task
-   - [ ] Store in database with `benchmark_type=BenchmarkType.RESEARCHRUBRICS`
+   - [ ] Store in database with `benchmark_name=BenchmarkType.RESEARCHRUBRICS`
    - [ ] Store original (unablated) prompts for stakeholder reference
 
 2. **Web research tools**
@@ -1267,7 +1322,7 @@ class Run(SQLModel, table=True):
 
 ```python
 GDPEVAL_CONFIG = BenchmarkConfig(
-    benchmark_type=BenchmarkType.GDPEVAL,
+    benchmark_name=BenchmarkType.GDPEVAL,
     system_prompt=REACT_WORKER_PROMPT,  # Existing prompt
     tools=[
         "ask_stakeholder",
@@ -1289,7 +1344,7 @@ GDPEVAL_CONFIG = BenchmarkConfig(
 
 ```python
 MINIF2F_CONFIG = BenchmarkConfig(
-    benchmark_type=BenchmarkType.MINIF2F,
+    benchmark_name=BenchmarkType.MINIF2F,
     system_prompt="""
 You are a formal mathematics assistant solving olympiad-level problems in Lean.
 
@@ -1325,7 +1380,7 @@ Think step by step. Build proofs incrementally to see intermediate goals.
 
 ```python
 RESEARCHRUBRICS_CONFIG = BenchmarkConfig(
-    benchmark_type=BenchmarkType.RESEARCHRUBRICS,
+    benchmark_name=BenchmarkType.RESEARCHRUBRICS,
     system_prompt="""
 You are a deep research assistant producing comprehensive research reports.
 
@@ -1402,7 +1457,7 @@ Produce well-cited, comprehensive reports that address the stakeholder's needs.
 1. **Backward compatibility**: Keep existing GDPEval code working during refactoring
 2. **Gradual migration**: Move GDPEval code to new structure incrementally
 3. **Feature flags**: Use feature flags to enable new benchmarks
-4. **Database migration**: Add `benchmark_type` column with default "gdpeval"
+4. **Database migration**: Add `benchmark_name` column with default "gdpeval"
 
 ## Exa API Integration Proposal
 
@@ -1628,14 +1683,14 @@ class Experiment(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     
     # Benchmark identification
-    benchmark_type: BenchmarkType = Field(index=True)
-    task_id: str = Field(index=True)  # Unique per benchmark_type
+    benchmark_name: BenchmarkType = Field(index=True)
+    task_id: str = Field(index=True)  # Unique per benchmark_name
     
     # Task definition
     task_description: str
     
     # Ground truth evaluation data (rubrics, problem statements, etc.)
-    # Structure varies by benchmark_type
+    # Structure varies by benchmark_name
     ground_truth_rubric: dict = Field(sa_column=Column(JSON))
     
     # Benchmark-specific metadata (flexible JSON)
@@ -1649,7 +1704,7 @@ class Experiment(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     __table_args__ = (
-        Index("ix_experiments_benchmark_task", "benchmark_type", "task_id", unique=True),
+        Index("ix_experiments_benchmark_task", "benchmark_name", "task_id", unique=True),
     )
 
 
@@ -1711,7 +1766,7 @@ python -c "from h_arcane.db.connection import get_engine; from h_arcane.db.model
 | Source Field | DB Field | Notes |
 |-------------|----------|-------|
 | `task_id` | `task_id` | From JSONL |
-| `"gdpeval"` | `benchmark_type` | Hardcoded |
+| `"gdpeval"` | `benchmark_name` | Hardcoded |
 | `parquet.prompt` | `task_description` | Joined from parquet |
 | `rubric` | `ground_truth_rubric` | Full StagedRubric JSON |
 | `rubric.category_name` | `category` | First part before " – " |
@@ -1752,7 +1807,7 @@ def load_gdpeval_to_database(
             # Check if exists
             existing = session.exec(
                 select(Experiment).where(
-                    Experiment.benchmark_type == BenchmarkType.GDPEVAL,
+                    Experiment.benchmark_name == BenchmarkType.GDPEVAL,
                     Experiment.task_id == task.task_id,
                 )
             ).first()
@@ -1763,7 +1818,7 @@ def load_gdpeval_to_database(
             
             # Create experiment
             experiment = Experiment(
-                benchmark_type=BenchmarkType.GDPEVAL,
+                benchmark_name=BenchmarkType.GDPEVAL,
                 task_id=task.task_id,
                 task_description=task.task_description,
                 ground_truth_rubric=task.rubric.model_dump(),
@@ -1823,7 +1878,7 @@ theorem aime_1983_p1
 | Source Field | DB Field | Notes |
 |-------------|----------|-------|
 | theorem name (e.g., `aime_1983_p1`) | `task_id` | Extracted from Lean |
-| `"minif2f"` | `benchmark_type` | Hardcoded |
+| `"minif2f"` | `benchmark_name` | Hardcoded |
 | Generated instruction | `task_description` | "Prove the following theorem in Lean: {statement}" |
 | `{"problem_statement": ..., "formal_system": "lean"}` | `ground_truth_rubric` | Single ProofVerificationRule |
 | Split name | `category` | "valid" or "test" |
@@ -1948,7 +2003,7 @@ def load_minif2f_to_database(
             # Check if exists
             existing = session.exec(
                 select(Experiment).where(
-                    Experiment.benchmark_type == BenchmarkType.MINIF2F,
+                    Experiment.benchmark_name == BenchmarkType.MINIF2F,
                     Experiment.task_id == problem.theorem_name,
                 )
             ).first()
@@ -1973,7 +2028,7 @@ def load_minif2f_to_database(
             
             # Create experiment
             experiment = Experiment(
-                benchmark_type=BenchmarkType.MINIF2F,
+                benchmark_name=BenchmarkType.MINIF2F,
                 task_id=problem.theorem_name,
                 task_description=f"Prove the following theorem in Lean:\n\n```lean\n{problem.full_statement}\n```",
                 ground_truth_rubric={
@@ -2057,7 +2112,7 @@ class Settings(BaseSettings):
 | Source Field | DB Field | Notes |
 |-------------|----------|-------|
 | `sample_id` | `task_id` | From dataset |
-| `"researchrubrics"` | `benchmark_type` | Hardcoded |
+| `"researchrubrics"` | `benchmark_name` | Hardcoded |
 | Ablated prompt | `task_description` | From local ablated file |
 | `rubrics` array | `ground_truth_rubric` | Converted to LLMJudgeRule list |
 | `domain` | `category` | From dataset |
@@ -2291,7 +2346,7 @@ def load_researchrubrics_to_database(
             # Check if exists
             existing = session.exec(
                 select(Experiment).where(
-                    Experiment.benchmark_type == BenchmarkType.RESEARCHRUBRICS,
+                    Experiment.benchmark_name == BenchmarkType.RESEARCHRUBRICS,
                     Experiment.task_id == task.sample_id,
                 )
             ).first()
@@ -2305,7 +2360,7 @@ def load_researchrubrics_to_database(
             
             # Create experiment
             experiment = Experiment(
-                benchmark_type=BenchmarkType.RESEARCHRUBRICS,
+                benchmark_name=BenchmarkType.RESEARCHRUBRICS,
                 task_id=task.sample_id,
                 task_description=task_description,
                 ground_truth_rubric={
@@ -2495,15 +2550,15 @@ After seeding, verify data with these queries:
 
 ```sql
 -- Count experiments by benchmark
-SELECT benchmark_type, COUNT(*) as count 
+SELECT benchmark_name, COUNT(*) as count 
 FROM experiments 
-GROUP BY benchmark_type;
+GROUP BY benchmark_name;
 
 -- Check GDPEval has resources
 SELECT e.task_id, COUNT(r.id) as resource_count
 FROM experiments e
 LEFT JOIN resources r ON r.experiment_id = e.id
-WHERE e.benchmark_type = 'gdpeval'
+WHERE e.benchmark_name = 'gdpeval'
 GROUP BY e.task_id
 LIMIT 10;
 
@@ -2513,7 +2568,7 @@ SELECT
     benchmark_specific_data->>'domain' as domain,
     benchmark_specific_data->'rubric_summary'->>'total_criteria' as criteria_count
 FROM experiments
-WHERE benchmark_type = 'researchrubrics'
+WHERE benchmark_name = 'researchrubrics'
 LIMIT 10;
 
 -- Check MiniF2F problem metadata
@@ -2522,7 +2577,7 @@ SELECT
     benchmark_specific_data->>'split' as split,
     benchmark_specific_data->>'competition' as competition
 FROM experiments
-WHERE benchmark_type = 'minif2f'
+WHERE benchmark_name = 'minif2f'
 LIMIT 10;
 ```
 

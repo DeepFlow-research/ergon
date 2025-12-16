@@ -6,7 +6,6 @@ import sys
 import traceback
 from pathlib import Path
 from uuid import UUID
-from pydantic import BaseModel
 import pandas as pd
 
 from sqlmodel import Session, select
@@ -14,23 +13,14 @@ from sqlmodel import Session, select
 from h_arcane.db.connection import get_engine
 from h_arcane.db.models import Experiment, Resource
 from h_arcane.schemas.base import BenchmarkName
-from h_arcane.evaluation.rubric import GDPEvalStagedRubric, StagedRubric
+from h_arcane.evaluation.rubric import GDPEvalStagedRubric
+from h_arcane.benchmarks.gdpeval.schemas import GDPEvalTask
 
 # Default paths relative to project root
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
 
 # Cache for parquet data to avoid reloading
 _parquet_cache: pd.DataFrame | None = None
-
-
-class GDPEvalTask(BaseModel):
-    """A GDPEval task with its rubric."""
-
-    task_id: str
-    task_description: str
-    reference_files: list[Path]
-    rubric: StagedRubric
-    category: str
 
 
 def _load_parquet_cache() -> pd.DataFrame:
@@ -142,7 +132,17 @@ def load_gdpeval_tasks(
     return tasks
 
 
-def load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
+def load_gdpeval_to_database(
+    rubric_file: Path | None = None,
+    reference_dir: Path | None = None,
+    limit: int | None = None,
+) -> list[UUID]:
+    """Load GDPEval tasks into database."""
+    tasks = load_gdpeval_tasks(rubric_file=rubric_file, reference_dir=reference_dir, limit=limit)
+    return _load_to_database(tasks)
+
+
+def _load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
     """Load tasks into experiments table and create input Resource records."""
     experiment_ids = []
     total = len(tasks)
@@ -214,6 +214,7 @@ def load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
                     task_id=task.task_id,
                     task_description=task.task_description,
                     ground_truth_rubric=rubric_dict,
+                    benchmark_specific_data={},  # GDPEval doesn't need extra data
                     category=task.category,
                 )
                 print("      Adding experiment to session...", file=sys.stderr, flush=True)

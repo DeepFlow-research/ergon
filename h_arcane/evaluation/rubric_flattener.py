@@ -1,11 +1,7 @@
 """Flatten StagedRubric into list of criteria for parallel evaluation."""
 
-from h_arcane.schemas.staged_rubric_schema import (
-    StagedRubric,
-    EvaluationStage,
-    CodeRule,
-    LLMJudgeRule,
-)
+from h_arcane.evaluation.rubric import EvaluationStage, StagedRubric
+from h_arcane.evaluation.rules import CodeRule, LLMJudgeRule
 
 
 def flatten_rubric(

@@ -6,11 +6,15 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e .
+# Install uv
+RUN pip install uv
+
+# Copy requirements and lock file
+COPY pyproject.toml uv.lock ./
+RUN uv pip install --system -e .
 
 # Copy application code
 COPY . .

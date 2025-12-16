@@ -1,4 +1,4 @@
-"""Stakeholder agent that answers questions based on ground truth rubric."""
+"""GDPEval stakeholder that answers questions based on ground truth rubric."""
 
 from openai import AsyncOpenAI
 from openai.types.chat import (
@@ -6,12 +6,13 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
 )
 
+from h_arcane.benchmarks.base import BaseStakeholder
 from h_arcane.config.evaluation_config import evaluation_config
 from h_arcane.evaluation.rubric import StagedRubric
 from h_arcane.settings import settings
 
 
-class RubricStakeholder:
+class RubricStakeholder(BaseStakeholder):
     """Stakeholder that answers questions based on ground truth rubric."""
 
     ANSWER_PROMPT = """

@@ -32,7 +32,8 @@ from h_arcane.inngest.events import (
     RunEvaluateResult,
     TaskEvaluationEvent,
 )
-from h_arcane.schemas.staged_rubric_schema import StagedRubric
+from h_arcane.evaluation.rubric import StagedRubric
+from h_arcane.benchmarks.registry import get_worker_config
 
 
 def get_mime_type(file_path: Path | str) -> str:
@@ -253,7 +254,8 @@ async def worker_execute(
         )
 
         # Execute (tools execute in sandbox)
-        worker = ReActWorker(model=run.worker_model)
+        worker_config = get_worker_config(experiment.benchmark_name)
+        worker = ReActWorker(model=run.worker_model, config=worker_config)
 
         async def execute_task():
             return await worker.execute(

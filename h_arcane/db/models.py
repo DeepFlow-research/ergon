@@ -7,6 +7,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+from h_arcane.schemas.base import BenchmarkName
+
 
 class RunStatus(str, Enum):
     """Run execution status."""
@@ -26,22 +28,33 @@ class MessageRole(str, Enum):
 
 
 class Experiment(SQLModel, table=True):
-    """A GDPEval task with ground truth rubric."""
+    """A task from any supported benchmark."""
 
     __tablename__ = "experiments"  # type: ignore[assignment]
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    gdpeval_task_id: str = Field(index=True, unique=True)
+
+    # Benchmark identification
+    benchmark_name: BenchmarkName = Field(index=True)
+    task_id: str = Field(index=True)  # Unique per benchmark_name
 
     # Task definition
     task_description: str
 
-    # Ground truth rubric (stored as JSON, loaded as StagedRubric)
+    # Ground truth evaluation data (rubrics, problem statements, etc.)
+    # Structure varies by benchmark_name
     ground_truth_rubric: dict = Field(sa_column=Column(JSON))
 
-    # Metadata
+    # Benchmark-specific metadata (flexible JSON)
+    benchmark_specific_data: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+    # Generic metadata
     category: str = Field(index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_experiments_benchmark_task", "benchmark_name", "task_id", unique=True),
+    )
 
 
 class Run(SQLModel, table=True):
@@ -78,6 +91,9 @@ class Run(SQLModel, table=True):
 
     # Cost tracking (denormalized)
     total_cost_usd: float | None = None
+
+    # Benchmark-specific results (flexible JSON)
+    benchmark_specific_results: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
     __table_args__ = (
         Index("ix_runs_experiment", "experiment_id"),
@@ -183,8 +199,9 @@ class Resource(SQLModel, table=True):
         if file_path.exists():
             return file_path
 
-        # Import here to avoid circular dependency
-        from h_arcane.experiments.loader import DATA_DIR
+        # Import here to avoid circular dependency (loader imports models)
+        # Type checker sees this via TYPE_CHECKING import above
+        from h_arcane.experiments.loader import DATA_DIR  # noqa: PLC0415
 
         # If stored path is absolute, try to extract relative part
         if file_path.is_absolute():

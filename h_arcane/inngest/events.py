@@ -3,11 +3,8 @@
 from pydantic import BaseModel
 
 from h_arcane.db.models import Resource
-from h_arcane.schemas.staged_rubric_schema import (
-    CodeRule,
-    EvaluationStage,
-    LLMJudgeRule,
-)
+from h_arcane.evaluation.rubric import EvaluationStage
+from h_arcane.evaluation.rules import CodeRule, LLMJudgeRule
 
 
 class ExecutionDoneEvent(BaseModel):
