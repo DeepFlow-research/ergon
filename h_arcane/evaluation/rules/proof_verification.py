@@ -34,7 +34,7 @@ class ProofVerificationRule(BaseRule):
 
         # Step 2: Install Lean (cached per sandbox)
         async def install_lean():
-            from h_arcane.tools.formal_math.utils import ensure_lean_installed
+            from h_arcane.skills.minif2f._utils import ensure_lean_installed
 
             sandbox = runner.sandbox_manager.get_sandbox(data.run_id)
             if not sandbox:

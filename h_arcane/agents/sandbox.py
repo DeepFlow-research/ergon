@@ -1,8 +1,12 @@
-"""E2B sandbox lifecycle management for runs."""
+"""E2B sandbox lifecycle management for runs with skills support."""
 
+import json
 from uuid import UUID
 from pathlib import Path
+from typing import TypeVar
+
 from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
+from pydantic import BaseModel
 
 from h_arcane.db.models import Resource
 from h_arcane.settings import settings
@@ -10,6 +14,9 @@ from h_arcane.settings import settings
 from logging import getLogger
 
 logger = getLogger(__name__)
+
+# Generic type for skill responses (all inherit from BaseModel)
+T = TypeVar("T", bound=BaseModel)
 
 
 class SandboxManager:
@@ -19,6 +26,7 @@ class SandboxManager:
     _sandboxes: dict[UUID, AsyncSandbox] = {}  # run_id -> sandbox
     _file_registries: dict[UUID, dict[str, str]] = {}  # run_id -> {local_path: sandbox_path}
     _created_files_registry: dict[UUID, set[str]] = {}  # run_id -> {sandbox_paths}
+    _skills_packages: dict[UUID, str] = {}  # run_id -> package name in VM
 
     def __new__(cls):
         """Singleton pattern - always return the same instance."""
@@ -41,11 +49,46 @@ class SandboxManager:
         if run_id not in self._created_files_registry:
             self._created_files_registry[run_id] = set()
 
-    async def create(self, run_id: UUID, timeout_minutes: int = 30) -> None:
+    async def _upload_directory(
+        self, sandbox: AsyncSandbox, local_dir: Path, remote_dir: str
+    ) -> None:
+        """
+        Upload a directory to the sandbox, preserving structure.
+        
+        IMPORTANT: Must include __init__.py files for Python package imports to work!
+        
+        Args:
+            sandbox: E2B sandbox instance
+            local_dir: Local directory to upload
+            remote_dir: Remote path in sandbox (e.g., "/skills/gdpeval")
+        """
+        # Create remote directory
+        await sandbox.commands.run(f"mkdir -p {remote_dir}")
+
+        # Upload all .py files (including __init__.py!)
+        for py_file in local_dir.rglob("*.py"):
+            relative_path = py_file.relative_to(local_dir)
+            remote_path = f"{remote_dir}/{relative_path}"
+
+            # Ensure parent directories exist
+            remote_parent = str(Path(remote_path).parent)
+            await sandbox.commands.run(f"mkdir -p {remote_parent}")
+
+            # Upload file
+            content = py_file.read_bytes()
+            await sandbox.files.write(remote_path, content)
+
+    async def create(
+        self, 
+        run_id: UUID, 
+        skills_dir: Path | None = None,
+        timeout_minutes: int = 30,
+    ) -> None:
         """Create and initialize sandbox for a run (idempotent).
 
         Args:
             run_id: UUID of the run
+            skills_dir: Path to skills folder to copy (e.g., Path("h_arcane/skills/gdpeval"))
             timeout_minutes: Sandbox timeout in minutes (default: 30).
                             The sandbox will be terminated after this duration.
         """
@@ -75,7 +118,7 @@ class SandboxManager:
 import os
 import stat
 
-dirs = ['/inputs', '/workspace', '/tools']
+dirs = ['/inputs', '/workspace', '/skills']
 created = []
 failed = []
 
@@ -169,6 +212,106 @@ print("All packages verified successfully")
             raise RuntimeError(error_msg)
 
         logger.info(f"Successfully installed and verified all required packages (run_id={run_id})")
+
+        # Upload skills directory if provided
+        if skills_dir is not None:
+            package_name = skills_dir.name  # e.g., "gdpeval" or "minif2f"
+            await self._upload_directory(sandbox, skills_dir, f"/skills/{package_name}")
+            self._skills_packages[run_id] = package_name
+            logger.info(f"Uploaded skills from {skills_dir} to /skills/{package_name} (run_id={run_id})")
+
+    async def run_skill(
+        self,
+        run_id: UUID,
+        skill_name: str,
+        return_type: type[T],
+        **kwargs,
+    ) -> T:
+        """
+        Run a skill in the sandbox with typed response.
+        
+        Args:
+            run_id: Which sandbox
+            skill_name: Name of skill (matches filename without .py)
+            return_type: Pydantic model type to parse the result into
+            **kwargs: Arguments to skill's main()
+        
+        Returns:
+            Parsed result of type T
+        
+        Example:
+            result = await manager.run_skill(
+                run_id,
+                "read_pdf",
+                ReadPDFResponse,
+                file_path="/inputs/doc.pdf"
+            )
+            # result is ReadPDFResponse, not dict
+            if result.success:
+                print(result.text)
+        """
+        sandbox = self._get_sandbox(run_id)
+        
+        if run_id not in self._skills_packages:
+            raise RuntimeError(
+                f"No skills package registered for run_id={run_id}. "
+                f"Make sure to call create() with skills_dir parameter."
+            )
+        
+        package = self._skills_packages[run_id]
+
+        # Write kwargs to a temp file to avoid escaping issues
+        kwargs_path = f"/tmp/kwargs_{skill_name}.json"
+        await sandbox.files.write(kwargs_path, json.dumps(kwargs, default=str).encode())
+
+        # Runner script:
+        # - Reads kwargs from file
+        # - Calls skill (returns Pydantic model)
+        # - Serializes result via .model_dump()
+        # - Writes to result file
+        result_path = "/tmp/skill_result.json"
+        code = f'''
+import asyncio
+import json
+import sys
+sys.path.insert(0, '/skills')
+
+from {package}.{skill_name} import main
+
+with open("{kwargs_path}") as f:
+    kwargs = json.load(f)
+
+# Run the async main function
+result = asyncio.get_event_loop().run_until_complete(main(**kwargs))
+
+# Skill returns a Pydantic model - use .model_dump() for serialization
+with open("{result_path}", "w") as f:
+    json.dump(result.model_dump(), f, default=str)
+
+print("SKILL_SUCCESS")
+'''
+
+        execution = await sandbox.run_code(code, language="python")
+
+        if execution.error:
+            # Return error as the typed response
+            error_str = str(execution.error)
+            return return_type(success=False, error=error_str)  # type: ignore[call-arg]
+
+        # Read result from file and validate into typed response
+        try:
+            result_bytes = await sandbox.files.read(result_path)
+            raw_result = json.loads(result_bytes.decode())
+            # Pydantic validation
+            return return_type.model_validate(raw_result)
+        except Exception as e:
+            stdout = ""
+            if execution.logs and execution.logs.stdout:
+                stdout = "".join(execution.logs.stdout)
+            return return_type(  # type: ignore[call-arg]
+                success=False, 
+                error=f"Failed to read skill result: {e}. Stdout: {stdout[:200]}"
+            )
 
     async def upload_inputs(self, run_id: UUID, resources: list[Resource]) -> None:
         """Upload input resources to /inputs/ for a run."""
@@ -302,6 +445,7 @@ print("All packages verified successfully")
             # Already terminated or never created - just clean up registries
             self._file_registries.pop(run_id, None)
             self._created_files_registry.pop(run_id, None)
+            self._skills_packages.pop(run_id, None)
             return
 
         try:
@@ -313,3 +457,4 @@ print("All packages verified successfully")
             # Always clear registries to prevent reuse
             self._file_registries.pop(run_id, None)
             self._created_files_registry.pop(run_id, None)
+            self._skills_packages.pop(run_id, None)

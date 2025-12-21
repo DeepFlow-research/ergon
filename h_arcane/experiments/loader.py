@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 from h_arcane.db.connection import get_engine
 from h_arcane.db.models import Experiment, Resource
 from h_arcane.schemas.base import BenchmarkName
-from h_arcane.evaluation.rubric import GDPEvalStagedRubric, StagedRubric
+from h_arcane.evaluation.schemas import GDPEvalStagedRubric, StagedRubric
 
 # Default paths relative to project root
 DATA_DIR = Path(__file__).parent.parent.parent / "data"

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from pydantic import BaseModel
-from h_arcane.evaluation.rubric import StagedRubric
+from h_arcane.evaluation.schemas import StagedRubric
 
 
 class GDPEvalTask(BaseModel):

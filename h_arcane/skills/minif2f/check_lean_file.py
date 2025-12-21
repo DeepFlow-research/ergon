@@ -1,21 +1,13 @@
-"""Check Lean file tool - works in sandbox."""
+"""Check Lean file skill - checks for errors and remaining goals."""
 
 import asyncio
-import sys
 from pathlib import Path
 
-# Import based on execution context
-if "/tools" in sys.path or any("/tools" in p for p in sys.path):
-    # Running in sandbox - /tools is in sys.path
-    from formal_math.responses import LeanCheckResponse  # type: ignore[import-untyped]
-    from formal_math.utils import parse_lean_output  # type: ignore[import-untyped]
-else:
-    # Running locally - use full import path
-    from h_arcane.tools.formal_math.responses import LeanCheckResponse
-    from h_arcane.tools.formal_math.utils import parse_lean_output
+from .responses import LeanCheckResponse
+from ._utils import parse_lean_output
 
 
-async def check_lean_file(filename: str) -> LeanCheckResponse:
+async def main(filename: str) -> LeanCheckResponse:
     """
     Check a Lean file for errors and remaining goals.
 
@@ -29,13 +21,6 @@ async def check_lean_file(filename: str) -> LeanCheckResponse:
 
     Returns:
         LeanCheckResponse with compiled status, errors, and goals_remaining
-
-    Example:
-        ```python
-        result = await check_lean_file("proof.lean")
-        if result.compiled:
-            print(f"Goals remaining: {result.goals_remaining}")
-        ```
     """
     try:
         filepath = Path("/workspace") / filename
@@ -44,8 +29,6 @@ async def check_lean_file(filename: str) -> LeanCheckResponse:
                 success=False,
                 compiled=False,
                 errors=[f"File not found: {filepath}"],
-                goals_remaining=None,
-                warnings=None,
             )
 
         # Run Lean compiler using subprocess (we're inside sandbox)
@@ -71,21 +54,19 @@ async def check_lean_file(filename: str) -> LeanCheckResponse:
             compiled=compiled,
             errors=errors if errors else None,
             goals_remaining=goals if goals else None,
-            warnings=None,
         )
+
     except asyncio.TimeoutError:
         return LeanCheckResponse(
             success=False,
             compiled=False,
             errors=["Lean compilation timed out (>60s)"],
-            goals_remaining=None,
-            warnings=None,
         )
+
     except Exception as e:
         return LeanCheckResponse(
             success=False,
             compiled=False,
             errors=[f"Error checking Lean file: {str(e)}"],
-            goals_remaining=None,
-            warnings=None,
         )
+

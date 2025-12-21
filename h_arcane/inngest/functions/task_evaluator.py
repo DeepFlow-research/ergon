@@ -5,13 +5,16 @@ from uuid import UUID
 import inngest
 
 from h_arcane.db.models import CriterionResult, Evaluation, Resource, TaskEvaluationResult
-from h_arcane.evaluation.criteria_evaluator import evaluate_criterion_fn
-from h_arcane.evaluation.models import FlattenedCriterion
+from h_arcane.inngest.functions.criteria_evaluator import evaluate_criterion_fn
 from h_arcane.evaluation.rubric_flattener import flatten_rubric
+from h_arcane.evaluation.rules import CodeRule, LLMJudgeRule, ProofVerificationRule
+from h_arcane.evaluation.schemas import (
+    EvaluationStage,
+    FlattenedCriterion,
+    StagedRubric,
+)
 from h_arcane.inngest.client import inngest_client
 from h_arcane.inngest.events import CriterionEvaluationEvent, TaskEvaluationEvent
-from h_arcane.evaluation.rubric import EvaluationStage, StagedRubric
-from h_arcane.evaluation.rules import CodeRule, LLMJudgeRule
 
 
 @inngest_client.create_function(
@@ -63,7 +66,7 @@ async def evaluate_task_run(
     # Evaluate all criteria in parallel
     # Create step functions for all criteria - use helper to capture loop variables
     def make_parallel_step(
-        s: EvaluationStage, r: CodeRule | LLMJudgeRule, si: int, ri: int, c: inngest.Context = ctx
+        s: EvaluationStage, r: CodeRule | LLMJudgeRule | ProofVerificationRule, si: int, ri: int, c: inngest.Context = ctx
     ):
         """Create a step invoker function with captured variables.
 

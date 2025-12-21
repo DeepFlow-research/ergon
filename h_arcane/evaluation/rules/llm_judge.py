@@ -14,7 +14,6 @@ from openai.types.chat import (
 )
 
 from h_arcane.evaluation.rules.base import BaseRule
-from h_arcane.evaluation.schemas import LLMJudgeResponse
 from h_arcane.db.models import CriterionResult, Resource
 
 if TYPE_CHECKING:
@@ -57,6 +56,9 @@ class LLMJudgeRule(BaseRule):
 
         # Step 1: Call LLM API with structured output
         async def call_llm_api():
+            # Import here to avoid circular dependency
+            from h_arcane.evaluation.schemas import LLMJudgeResponse
+
             response = await runner.call_llm_judge(messages, LLMJudgeResponse)
             # Return serializable dict for Inngest step
             return {

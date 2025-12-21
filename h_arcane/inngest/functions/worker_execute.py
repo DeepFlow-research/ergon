@@ -1,4 +1,4 @@
-"""Inngest function handlers for H-ARCANE experiments."""
+"""Worker execution Inngest function."""
 
 import mimetypes
 from datetime import datetime
@@ -9,7 +9,6 @@ from uuid import UUID, uuid4
 import inngest
 
 from h_arcane.agents.sandbox import SandboxManager
-from h_arcane.agents.sandbox_executor import set_sandbox_manager, upload_tools_to_sandbox
 from h_arcane.agents.worker import ReActWorker, WorkerExecutionOutput
 from h_arcane.benchmarks.base import BaseStakeholder, BaseToolkit
 from h_arcane.benchmarks.gdpeval.stakeholder import RubricStakeholder
@@ -19,25 +18,19 @@ from h_arcane.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from h_arcane.schemas.base import BenchmarkName
 from h_arcane.db.models import (
     AgentConfig,
-    CriterionResult,
-    Evaluation,
     Experiment,
     Resource,
     Run,
     RunStatus,
-    TaskEvaluationResult,
 )
 from h_arcane.db.queries import queries
-from h_arcane.evaluation.task_evaluator import evaluate_task_run
 from h_arcane.inngest.client import inngest_client
 from h_arcane.inngest.events import (
     ExecutionDoneEvent,
     RunCleanupEvent,
     RunEvaluateResult,
-    TaskEvaluationEvent,
 )
-from h_arcane.evaluation.rubric import StagedRubric
-from h_arcane.benchmarks.registry import get_worker_config
+from h_arcane.evaluation.schemas import StagedRubric
 
 
 def get_mime_type(file_path: Path | str) -> str:
@@ -69,13 +62,16 @@ async def worker_execute(
     Execute task with ReAct worker.
 
     Messages and actions are logged by WorkerToolkit during execution.
-    All GDPEval tools execute inside E2B sandbox.
+    All tools execute inside E2B sandbox via skills architecture.
 
     Event data must contain:
     - `experiment_id`: UUID of experiment
     - `worker_model`: Optional, defaults to "gpt-4o"
     - `max_questions`: Optional, defaults to 10
     """
+    # Import here to avoid circular dependency
+    from h_arcane.inngest.functions.run_evaluate import run_evaluate
+
     event_data = ctx.event.data
 
     if "experiment_id" not in event_data:
@@ -163,14 +159,20 @@ async def worker_execute(
     )
 
     try:
-        # Create benchmark-specific stakeholder and toolkit
-        # NOTE: benchmark_name may come through as a raw string depending on serialization paths
-        # (e.g. Inngest/SQLModel). Normalize to our enum for comparisons.
+        # Import here to avoid circular dependency
+        from h_arcane.benchmarks.registry import get_worker_config, get_skills_dir
+
+        # Normalize benchmark_name to enum for comparisons
         benchmark_name = (
             BenchmarkName(experiment.benchmark_name)
             if isinstance(experiment.benchmark_name, str)
             else experiment.benchmark_name
         )
+
+        # Get skills directory for this benchmark
+        skills_dir = get_skills_dir(benchmark_name)
+
+        # Create benchmark-specific stakeholder and toolkit
         stakeholder: BaseStakeholder
         toolkit: BaseToolkit
 
@@ -229,8 +231,8 @@ async def worker_execute(
             output_type=AgentConfig,
         )
 
-        # Execute (tools execute in sandbox)
-        worker_config = get_worker_config(experiment.benchmark_name)
+        # Execute (tools execute in sandbox via skills)
+        worker_config = get_worker_config(benchmark_name)
         worker = ReActWorker(model=run.worker_model, config=worker_config)
 
         # We'll keep all sandbox-dependent operations inside ONE step to avoid
@@ -241,12 +243,10 @@ async def worker_execute(
         async def execute_and_download():
             sandbox_manager = SandboxManager()
 
-            # (Re)create sandbox in THIS step process (idempotent per SandboxManager instance).
-            # This avoids issues where other steps ran on different workers/processes.
-            await sandbox_manager.create(run.id, timeout_minutes=30)
+            # Create sandbox with skills directory
+            # This uploads the benchmark-specific skills to /skills/{package}
+            await sandbox_manager.create(run.id, skills_dir=skills_dir, timeout_minutes=30)
             await sandbox_manager.upload_inputs(run.id, input_resources)
-            await upload_tools_to_sandbox(sandbox_manager, run.id)
-            set_sandbox_manager(sandbox_manager, run.id)
 
             # Execute the worker
             exec_out = await worker.execute(
@@ -379,293 +379,4 @@ async def worker_execute(
         "run_id": str(run.id),
         "questions_asked": toolkit.questions_asked,
         "evaluation": evaluation_result.model_dump(),
-    }
-
-
-@inngest_client.create_function(  # type: ignore[misc]
-    fn_id="run-evaluate",
-    trigger=inngest.TriggerEvent(event="execution/done"),
-    retries=1,
-    output_type=RunEvaluateResult,
-    concurrency=[inngest.Concurrency(limit=25, scope="fn")],
-)
-async def run_evaluate(
-    ctx: inngest.Context,
-) -> RunEvaluateResult:
-    """
-    Evaluate execution against ground truth rubric.
-
-    Delegates to evaluate_task_run which orchestrates criterion evaluation.
-    """
-    run_id_str = str(ctx.event.data["run_id"])
-    run_id = UUID(run_id_str)
-
-    # Mark evaluating
-    async def mark_evaluating():
-        existing = queries.runs.get(run_id)
-        if existing:
-            updated = existing.model_copy(update={"status": RunStatus.EVALUATING})
-            queries.runs.update(updated)
-        return None
-
-    await ctx.step.run("mark-evaluating", mark_evaluating)
-
-    # Load state
-    async def load_run_eval():
-        resp = _require_not_none(queries.runs.get(run_id), f"Run {run_id} not found")
-        # Convert to dict for serialization (PydanticSerializer handles dict -> Run conversion)
-        return resp.model_dump(mode="json")
-
-    run_dict = await ctx.step.run(
-        "load-run",
-        load_run_eval,
-    )
-    # Convert back to Run object
-    run = Run(**run_dict)
-
-    if not run.experiment_id:
-        raise ValueError(f"Run {run_id} has no experiment_id")
-
-    async def load_experiment_eval():
-        resp = _require_not_none(
-            queries.experiments.get(run.experiment_id),
-            f"Experiment {run.experiment_id} not found",
-        )
-        return resp.model_dump(mode="json")
-
-    experiment_dict = await ctx.step.run(
-        "load-experiment",
-        load_experiment_eval,
-    )
-    experiment = Experiment(**experiment_dict)
-
-    # Load output resources
-    async def load_resources():
-        resources = queries.resources.get_all(run_id=run_id)
-        return [r.model_dump(mode="json") for r in resources]
-
-    all_resources_dicts = await ctx.step.run(
-        "load-resources",
-        load_resources,
-    )
-    all_resources = [Resource(**r_dict) for r_dict in all_resources_dicts]
-    agent_outputs = [r for r in all_resources if str(r.id) in (run.output_resource_ids or [])]
-
-    # Load rubric
-    ground_truth = StagedRubric(**experiment.ground_truth_rubric)
-
-    # Invoke evaluation function (runs criteria evaluations in parallel)
-    evaluation_result: TaskEvaluationResult = await ctx.step.invoke(
-        step_id="evaluate-task-run",
-        function=evaluate_task_run,
-        data=TaskEvaluationEvent(
-            run_id=str(run_id),
-            task_input=experiment.task_description,
-            agent_reasoning=run.output_text or "",
-            agent_outputs=[r.model_dump(mode="json") for r in agent_outputs],
-            rubric=ground_truth.model_dump(mode="json"),
-        ).model_dump(mode="json"),
-    )
-
-    # Save criterion results to DB
-    # criterion_results are now dicts, convert back to CriterionResult objects
-    for cr_dict in evaluation_result.criterion_results:
-        # Remove id and run_id from dict if present (we'll set run_id explicitly)
-        cr_dict_clean = {k: v for k, v in cr_dict.items() if k not in ("id", "run_id")}
-        cr_obj = CriterionResult(**cr_dict_clean, run_id=run_id)
-
-        async def store_criterion(criterion_result=cr_obj):
-            return queries.criterion_results.create_from_eval(
-                run_id=run_id, eval_result=criterion_result
-            )
-
-        await ctx.step.run(
-            f"store-criterion-{cr_obj.stage_num}-{cr_obj.criterion_num}",
-            store_criterion,
-            output_type=CriterionResult,
-        )
-
-    # Store aggregate evaluation
-    async def store_evaluation():
-        eval_instance = Evaluation(
-            run_id=run_id,
-            total_score=evaluation_result.total_score,
-            max_score=evaluation_result.max_score,
-            normalized_score=evaluation_result.normalized_score,
-            stages_evaluated=evaluation_result.stages_evaluated,
-            stages_passed=evaluation_result.stages_passed,
-            failed_gate=evaluation_result.failed_gate,
-        )
-        return queries.evaluations.create_from_eval(
-            run_id=run_id,
-            eval_result=eval_instance,
-        )
-
-    await ctx.step.run(
-        "store-evaluation",
-        store_evaluation,
-        output_type=Evaluation,
-    )
-
-    # Store complete task evaluation result snapshot (idempotent)
-    async def store_task_evaluation_result():
-        # Check if already exists
-        existing = queries.task_evaluation_results.get_by_run(run_id)
-
-        if existing:
-            # Update existing record
-            updated = existing.model_copy(
-                update={
-                    "criterion_results": evaluation_result.criterion_results,
-                    "total_score": evaluation_result.total_score,
-                    "max_score": evaluation_result.max_score,
-                    "normalized_score": evaluation_result.normalized_score,
-                    "stages_evaluated": evaluation_result.stages_evaluated,
-                    "stages_passed": evaluation_result.stages_passed,
-                    "failed_gate": evaluation_result.failed_gate,
-                }
-            )
-            return queries.task_evaluation_results.update(updated)
-        else:
-            # Create new record
-            return queries.task_evaluation_results.create(
-                TaskEvaluationResult(
-                    run_id=run_id,
-                    criterion_results=evaluation_result.criterion_results,
-                    total_score=evaluation_result.total_score,
-                    max_score=evaluation_result.max_score,
-                    normalized_score=evaluation_result.normalized_score,
-                    stages_evaluated=evaluation_result.stages_evaluated,
-                    stages_passed=evaluation_result.stages_passed,
-                    failed_gate=evaluation_result.failed_gate,
-                )
-            )
-
-    await ctx.step.run(
-        "store-task-evaluation-result",
-        store_task_evaluation_result,
-        output_type=TaskEvaluationResult,
-    )
-
-    # Mark complete
-    async def complete_run():
-        existing = queries.runs.get(run_id)
-        if existing:
-            updated = existing.model_copy(
-                update={
-                    "status": RunStatus.COMPLETED,
-                    "completed_at": datetime.utcnow(),
-                    "final_score": evaluation_result.total_score,
-                    "normalized_score": evaluation_result.normalized_score,
-                    "questions_asked": run.questions_asked or 0,
-                }
-            )
-            queries.runs.update(updated)
-        return None
-
-    await ctx.step.run(
-        "complete-run",
-        complete_run,
-    )
-
-    return RunEvaluateResult(
-        run_id=str(run_id),
-        normalized_score=evaluation_result.normalized_score,
-        questions_asked=run.questions_asked or 0,
-    )
-
-
-@inngest_client.create_function(  # type: ignore[misc]
-    fn_id="run-cleanup",
-    trigger=inngest.TriggerEvent(event="run/cleanup"),
-    retries=2,  # Retry cleanup if it fails
-    concurrency=[inngest.Concurrency(limit=50, scope="fn")],
-)
-async def run_cleanup(
-    ctx: inngest.Context,
-) -> dict:
-    """
-    Cleanup function for completed or failed runs.
-
-    Handles:
-    - Terminating sandbox for the run_id
-    - Ensuring run status is correctly set (idempotent)
-    - Logging cleanup results
-    """
-    # Parse event data
-    event_data_dict = ctx.event.data
-    run_id_str = str(event_data_dict.get("run_id", ""))
-    status_str = str(event_data_dict.get("status", "failed"))
-    error_message = (
-        str(event_data_dict.get("error_message", ""))
-        if event_data_dict.get("error_message")
-        else None
-    )
-
-    run_id = UUID(run_id_str)
-    status = status_str
-
-    # Terminate sandbox (idempotent - safe to call multiple times)
-    async def terminate_sandbox():
-        try:
-            await SandboxManager().terminate(run_id)
-            return {
-                "success": True,
-                "run_id": str(run_id),
-                "sandbox_terminated": True,
-            }
-        except Exception as e:
-            # Log but don't fail - sandbox might already be terminated
-            error_str = str(e)
-            if "not created" in error_str.lower() or "not found" in error_str.lower():
-                # Sandbox already terminated or never existed - this is fine
-                return {
-                    "success": True,
-                    "run_id": str(run_id),
-                    "sandbox_terminated": False,
-                    "message": "Sandbox already terminated or never existed",
-                }
-            # Other error - log but continue
-            print(f"Warning: Error terminating sandbox for run_id={run_id}: {e}")
-            return {
-                "success": False,
-                "run_id": str(run_id),
-                "error": error_str,
-            }
-
-    terminate_result = await ctx.step.run("terminate-sandbox", terminate_sandbox)
-
-    # Verify run status is set correctly (idempotent check)
-    async def verify_run_status():
-        run = queries.runs.get(run_id)
-        if not run:
-            return {"error": f"Run {run_id} not found"}
-
-        expected_status = RunStatus.COMPLETED if status == "completed" else RunStatus.FAILED
-        if run.status != expected_status:
-            # Update status if it doesn't match (shouldn't happen, but be safe)
-            updated = run.model_copy(
-                update={
-                    "status": expected_status,
-                    "error_message": error_message if status == "failed" else None,
-                }
-            )
-            queries.runs.update(updated)
-            return {
-                "status_updated": True,
-                "old_status": run.status.value,
-                "new_status": expected_status.value,
-            }
-        return {
-            "status_verified": True,
-            "status": run.status.value,
-        }
-
-    status_result = await ctx.step.run("verify-run-status", verify_run_status)
-
-    return {
-        "run_id": str(run_id),
-        "status": status,
-        "sandbox_cleanup": terminate_result,
-        "status_verification": status_result,
     }

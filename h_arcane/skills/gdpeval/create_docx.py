@@ -1,14 +1,14 @@
-"""Create DOCX tool - works in sandbox or locally."""
+"""Create DOCX skill - creates Word documents."""
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 from pathlib import Path
 
-from responses import CreateDocxResponse
+from .responses import CreateDocxResponse
 
 
-async def create_docx(
+async def main(
     content: str,
     output_path: str,
     title: str | None = None,
@@ -24,18 +24,7 @@ async def create_docx(
         template_style: Style template ("normal", "formal", "memo")
 
     Returns:
-        CreateDocxResponse with output_path and file_size or error message
-
-    Example:
-        ```python
-        result = await create_docx(
-            content="# Title\n\nBody text",
-            output_path="/workspace/report.docx",
-            title="Report"
-        )
-        if result.success:
-            print(f"Created: {result.output_path}, size: {result.file_size} bytes")
-        ```
+        CreateDocxResponse with output_path and file_size
     """
     try:
         output_path_obj = Path(output_path)
@@ -94,9 +83,8 @@ async def create_docx(
             success=True,
             output_path=str(output_path_obj.absolute()),
             file_size=output_path_obj.stat().st_size,
-            error=None,
         )
+
     except Exception as e:
-        return CreateDocxResponse(
-            success=False, error=f"Error creating DOCX: {str(e)}", output_path=None, file_size=None
-        )
+        return CreateDocxResponse(success=False, error=f"Error creating DOCX: {str(e)}")
+

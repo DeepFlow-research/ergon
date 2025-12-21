@@ -1,4 +1,4 @@
-"""Utility functions for Lean proof verification."""
+"""Utility functions for Lean proof verification in VM."""
 
 import re
 from typing import TYPE_CHECKING
@@ -113,3 +113,4 @@ def parse_lean_output(output: str) -> tuple[list[str], list[str]]:
         errors.append("\n".join(current_error))
 
     return errors, goals
+

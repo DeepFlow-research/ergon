@@ -219,6 +219,7 @@ def load_minif2f_to_database(data_dir: Path | None = None, limit: int | None = N
                 "stages": [
                     {
                         "name": "proof_verification",
+                        "description": "Verify that the Lean proof is correct and complete",
                         "max_points": 1.0,
                         "min_score_to_pass": 1.0,
                         "is_required": True,
@@ -228,7 +229,7 @@ def load_minif2f_to_database(data_dir: Path | None = None, limit: int | None = N
                             {
                                 "type": "proof_verification",
                                 "name": "proof_correctness",
-                                "description": "Verify that the proof is correct",
+                                "description": "Verify that the proof compiles and contains no sorry",
                                 "weight": 1.0,
                                 "problem_statement": problem.problem_statement,
                                 "ground_truth_proof": problem.ground_truth_proof,

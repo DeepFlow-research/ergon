@@ -27,12 +27,12 @@ class BaseStakeholder(ABC):
 
 
 class BaseToolkit(ABC):
-    """Base class for benchmark-specific toolkits."""
-
-    @abstractmethod
-    async def ask_stakeholder(self, question: str) -> str:
-        """Ask the stakeholder a question."""
-        ...
+    """Base class for benchmark-specific toolkits.
+    
+    Toolkits provide tools to the worker agent. The ask_stakeholder
+    functionality is provided as a tool via get_tools(), not as a 
+    direct method.
+    """
 
     @property
     @abstractmethod
@@ -42,5 +42,8 @@ class BaseToolkit(ABC):
 
     @abstractmethod
     def get_tools(self) -> list:
-        """Get list of tools available to the worker."""
+        """Get list of tools available to the worker.
+        
+        This should include the ask_stakeholder tool.
+        """
         ...

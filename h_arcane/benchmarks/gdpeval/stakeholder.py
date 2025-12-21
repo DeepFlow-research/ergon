@@ -8,7 +8,7 @@ from openai.types.chat import (
 
 from h_arcane.benchmarks.base import BaseStakeholder
 from h_arcane.config.evaluation_config import evaluation_config
-from h_arcane.evaluation.rubric import StagedRubric
+from h_arcane.evaluation.schemas import StagedRubric
 from h_arcane.settings import settings
 
 
