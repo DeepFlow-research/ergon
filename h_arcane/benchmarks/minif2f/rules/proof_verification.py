@@ -29,37 +29,10 @@ class ProofVerificationRule(BaseRule):
         """Verify Lean proof with granular Inngest steps."""
         data = runner.data
 
-        # Step 1: Ensure sandbox exists
+        # Step 1: Ensure sandbox exists (MiniF2FSandboxManager installs Lean during create())
         await runner.step("ensure-sandbox", runner.ensure_sandbox)
 
-        # Step 2: Install Lean (cached per sandbox)
-        async def install_lean():
-            from h_arcane.benchmarks.minif2f.skills._utils import ensure_lean_installed
-
-            sandbox = runner.sandbox_manager.get_sandbox(data.run_id)
-            if not sandbox:
-                raise RuntimeError("Sandbox not created")
-            success = await ensure_lean_installed(sandbox)
-            return {"installed": success}
-
-        lean_status = await runner.step("install-lean", install_lean)
-        if not lean_status["installed"]:
-            return CriterionResult(
-                run_id=data.run_id,
-                stage_num=data.stage_idx,
-                stage_name=data.stage_name,
-                criterion_num=data.rule_idx,
-                criterion_type="proof_verification",
-                criterion_description=self.description,
-                score=0.0,
-                max_score=data.max_score,
-                feedback="Lean installation failed. Cannot verify proof.",
-                evaluation_input="",
-                evaluated_action_ids=[],
-                evaluated_resource_ids=[],
-            )
-
-        # Step 3: Extract proof from agent output
+        # Step 2: Extract proof from agent output
         async def extract_proof():
             # Look for .lean files in agent outputs
             lean_files = [r for r in data.agent_outputs if r.name.endswith(".lean")]
@@ -89,7 +62,7 @@ class ProofVerificationRule(BaseRule):
 {proof_code}
 """
 
-        # Step 4: Verify proof
+        # Step 3: Verify proof
         async def verify_proof():
             sandbox = runner.sandbox_manager.get_sandbox(data.run_id)
             if not sandbox:
@@ -123,7 +96,7 @@ class ProofVerificationRule(BaseRule):
 
         verify_result = await runner.step("verify-proof", verify_proof)
 
-        # Step 5: Compute score
+        # Step 4: Compute score
         score = data.max_score if verify_result["verified"] else 0.0
         feedback = (
             "Proof successfully verified by Lean compiler."

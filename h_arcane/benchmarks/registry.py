@@ -5,6 +5,7 @@ from typing import Callable, TypedDict
 
 from h_arcane.core.models.enums import BenchmarkName
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
+from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 
 # Import benchmark implementations
 from h_arcane.benchmarks.gdpeval.config import GDPEVAL_CONFIG
@@ -13,6 +14,7 @@ from h_arcane.benchmarks.gdpeval.factories import (
     create_stakeholder as gdpeval_create_stakeholder,
     create_toolkit as gdpeval_create_toolkit,
 )
+from h_arcane.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 
 from h_arcane.benchmarks.minif2f.config import MINIF2F_CONFIG
 from h_arcane.benchmarks.minif2f.loader import load_minif2f_to_database
@@ -20,6 +22,7 @@ from h_arcane.benchmarks.minif2f.factories import (
     create_stakeholder as minif2f_create_stakeholder,
     create_toolkit as minif2f_create_toolkit,
 )
+from h_arcane.benchmarks.minif2f.sandbox import MiniF2FSandboxManager
 
 
 class BenchmarkConfig(TypedDict):
@@ -30,6 +33,7 @@ class BenchmarkConfig(TypedDict):
     loader: Callable
     stakeholder_factory: Callable  # (Experiment) -> BaseStakeholder
     toolkit_factory: Callable  # (run_id, stakeholder, sandbox, max_q) -> BaseToolkit
+    sandbox_manager_class: type[BaseSandboxManager]
     # NOTE: No rubric_evaluator - evaluation logic is on BaseRubric.compute_scores()
 
 
@@ -44,6 +48,7 @@ BENCHMARK_CONFIGS: dict[BenchmarkName, BenchmarkConfig] = {
         "loader": load_gdpeval_to_database,
         "stakeholder_factory": gdpeval_create_stakeholder,
         "toolkit_factory": gdpeval_create_toolkit,
+        "sandbox_manager_class": GDPEvalSandboxManager,
     },
     BenchmarkName.MINIF2F: {
         "config": MINIF2F_CONFIG,
@@ -51,6 +56,7 @@ BENCHMARK_CONFIGS: dict[BenchmarkName, BenchmarkConfig] = {
         "loader": load_minif2f_to_database,
         "stakeholder_factory": minif2f_create_stakeholder,
         "toolkit_factory": minif2f_create_toolkit,
+        "sandbox_manager_class": MiniF2FSandboxManager,
     },
 }
 
@@ -90,3 +96,18 @@ def get_stakeholder_factory(benchmark_name: BenchmarkName) -> Callable:
 def get_toolkit_factory(benchmark_name: BenchmarkName) -> Callable:
     """Get factory function: (run_id, stakeholder, sandbox, max_q) -> BaseToolkit."""
     return _get_config(benchmark_name)["toolkit_factory"]
+
+
+def get_sandbox_manager(benchmark_name: BenchmarkName) -> BaseSandboxManager:
+    """Get sandbox manager for benchmark (singleton per benchmark type).
+
+    Each benchmark has its own sandbox manager subclass that handles
+    benchmark-specific dependency installation.
+
+    Args:
+        benchmark_name: The benchmark to get manager for
+
+    Returns:
+        Singleton instance of the benchmark's sandbox manager
+    """
+    return _get_config(benchmark_name)["sandbox_manager_class"]()

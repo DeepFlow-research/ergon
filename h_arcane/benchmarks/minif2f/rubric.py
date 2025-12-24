@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, Literal
 import inngest
 from pydantic import BaseModel, Field
 
-from h_arcane.core.db.models import CriterionResult, TaskEvaluationResult
+from h_arcane.core.db.models import TaskEvaluationResult
 from h_arcane.core.evaluation.context import EvaluationData, EvaluationRunner
-from h_arcane.core.infrastructure.sandbox import SandboxManager
+from h_arcane.benchmarks.minif2f.sandbox import MiniF2FSandboxManager
 from h_arcane.benchmarks.minif2f.rules import ProofVerificationRule
 
 if TYPE_CHECKING:
@@ -58,19 +58,11 @@ class MiniF2FRubric(BaseModel):
             max_score=self.max_score,
         )
 
-        # Evaluate proof
-        async def verify_proof():
-            sandbox_manager = SandboxManager()
-            runner = EvaluationRunner(data, sandbox_manager, inngest_ctx=inngest_ctx)
-            result = await rule.evaluate(runner)
-            await runner.cleanup()
-            return result
-
-        criterion_result = await inngest_ctx.step.run(
-            "verify-proof",
-            verify_proof,
-            output_type=CriterionResult,
-        )
+        # Evaluate proof - use MiniF2F sandbox manager for Lean installation
+        sandbox_manager = MiniF2FSandboxManager()
+        runner = EvaluationRunner(data, sandbox_manager, inngest_ctx=inngest_ctx)
+        criterion_result = await rule.evaluate(runner)
+        await runner.cleanup()
 
         # Calculate final score
         if criterion_result.score >= self.max_score:

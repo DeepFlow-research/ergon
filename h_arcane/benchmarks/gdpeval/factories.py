@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from h_arcane.core.db.models import Experiment
-from h_arcane.core.infrastructure.sandbox import SandboxManager
+from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.benchmarks.gdpeval.stakeholder import RubricStakeholder
 from h_arcane.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 from h_arcane.benchmarks.gdpeval.rubric import StagedRubric
@@ -21,7 +21,7 @@ def create_stakeholder(experiment: Experiment) -> RubricStakeholder:
 def create_toolkit(
     run_id: UUID,
     stakeholder: RubricStakeholder,
-    sandbox_manager: SandboxManager,
+    sandbox_manager: BaseSandboxManager,
     max_questions: int,
 ) -> GDPEvalToolkit:
     """Create GDPEval toolkit."""

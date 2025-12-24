@@ -16,7 +16,7 @@ from uuid import UUID
 
 import inngest
 
-from h_arcane.core.infrastructure.sandbox import SandboxManager
+from h_arcane.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from h_arcane.core.db.models import CriterionResult
 from h_arcane.core.evaluation.context import EvaluationData, EvaluationRunner
 from h_arcane.core.infrastructure.inngest_client import inngest_client
@@ -56,7 +56,8 @@ async def evaluate_criterion_fn(
     )
 
     # Create sandbox manager and runner with Inngest context for step tracing
-    sandbox_manager = SandboxManager()
+    # criteria_evaluator is only used for GDPEval (staged rubrics with code/LLM rules)
+    sandbox_manager = GDPEvalSandboxManager()
     runner = EvaluationRunner(data, sandbox_manager, inngest_ctx=ctx)
 
     # Evaluate rule - granular steps are inside rule.evaluate()

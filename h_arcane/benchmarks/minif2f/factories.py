@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from h_arcane.core.db.models import Experiment
-from h_arcane.core.infrastructure.sandbox import SandboxManager
+from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.benchmarks.minif2f.stakeholder import MiniF2FStakeholder
 from h_arcane.benchmarks.minif2f.toolkit import MiniF2FToolkit
 
@@ -20,7 +20,7 @@ def create_stakeholder(experiment: Experiment) -> MiniF2FStakeholder:
 def create_toolkit(
     run_id: UUID,
     stakeholder: MiniF2FStakeholder,
-    sandbox_manager: SandboxManager,
+    sandbox_manager: BaseSandboxManager,
     max_questions: int,
 ) -> MiniF2FToolkit:
     """Create MiniF2F toolkit."""

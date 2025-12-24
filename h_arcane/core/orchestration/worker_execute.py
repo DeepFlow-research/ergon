@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 
 import inngest
 
-from h_arcane.core.infrastructure.sandbox import SandboxManager
 from h_arcane.core.agents.base import BaseStakeholder, BaseToolkit, WorkerExecutionOutput
 from h_arcane.benchmarks.common.workers import ReActWorker
 from h_arcane.benchmarks.registry import (
@@ -16,6 +15,7 @@ from h_arcane.benchmarks.registry import (
     get_toolkit_factory,
     get_worker_config,
     get_skills_dir,
+    get_sandbox_manager,
 )
 from h_arcane.core.models.enums import BenchmarkName
 from h_arcane.core.db.models import (
@@ -175,9 +175,11 @@ async def worker_execute(
         toolkit_factory = get_toolkit_factory(benchmark_name)
 
         # Create instances via factories - return types are base interfaces
+        # Get benchmark-specific sandbox manager (singleton per benchmark type)
+        sandbox_manager = get_sandbox_manager(benchmark_name)
         stakeholder: BaseStakeholder = stakeholder_factory(experiment)
         toolkit: BaseToolkit = toolkit_factory(
-            run.id, stakeholder, SandboxManager(), run.max_questions
+            run.id, stakeholder, sandbox_manager, run.max_questions
         )
 
         async def create_stakeholder_agent_config():
@@ -209,15 +211,14 @@ async def worker_execute(
         worker = ReActWorker(model=run.worker_model, config=worker_config)
 
         # We'll keep all sandbox-dependent operations inside ONE step to avoid
-        # losing the in-memory SandboxManager registry between steps.
+        # losing the in-memory sandbox manager registry between steps.
         output_dir = Path(f"data/runs/{run.id}")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         async def execute_and_download():
-            sandbox_manager = SandboxManager()
-
             # Create sandbox with skills directory
             # This uploads the benchmark-specific skills to /skills/{package}
+            # sandbox_manager is already created above with correct benchmark type
             await sandbox_manager.create(run.id, skills_dir=skills_dir, timeout_minutes=30)
             await sandbox_manager.upload_inputs(run.id, input_resources)
 
@@ -234,7 +235,7 @@ async def worker_execute(
 
             return {
                 "execution_output": exec_out.model_dump(mode="json"),
-                "downloaded_files": downloaded,
+                "downloaded_files": [df.model_dump() for df in downloaded],
             }
 
         execute_result = await ctx.step.run("execute-and-download", execute_and_download)

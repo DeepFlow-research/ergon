@@ -8,7 +8,7 @@ from openai import AsyncOpenAI
 from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 
-from h_arcane.core.infrastructure.sandbox import SandboxManager
+from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core.config.evaluation_config import evaluation_config
 from h_arcane.core.db.models import Resource
 from h_arcane.core.evaluation.schemas import SandboxResult
@@ -45,7 +45,7 @@ class EvaluationRunner:
     def __init__(
         self,
         data: EvaluationData,
-        sandbox_manager: SandboxManager,
+        sandbox_manager: BaseSandboxManager,
         inngest_ctx: inngest.Context,
     ):
         """

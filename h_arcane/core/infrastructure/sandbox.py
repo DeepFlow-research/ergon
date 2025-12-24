@@ -1,9 +1,11 @@
 """E2B sandbox lifecycle management for runs with skills support."""
 
 import json
-from uuid import UUID
+from abc import ABC, abstractmethod
+from logging import getLogger
 from pathlib import Path
 from typing import TypeVar
+from uuid import UUID
 
 from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
 from pydantic import BaseModel
@@ -11,25 +13,35 @@ from pydantic import BaseModel
 from h_arcane.core.db.models import Resource
 from h_arcane.settings import settings
 
-from logging import getLogger
-
 logger = getLogger(__name__)
 
 # Generic type for skill responses (all inherit from BaseModel)
 T = TypeVar("T", bound=BaseModel)
 
 
-class SandboxManager:
-    """Singleton container managing E2B sandboxes for multiple runs."""
+class DownloadedFile(BaseModel):
+    """Result of downloading a file from sandbox."""
 
-    _instance: "SandboxManager | None" = None
+    sandbox_path: str
+    local_path: str
+    size_bytes: int
+
+
+class BaseSandboxManager(ABC):
+    """Abstract base class for E2B sandbox management.
+
+    Each benchmark implements its own subclass with benchmark-specific
+    dependency installation and setup verification.
+    """
+
+    _instance: "BaseSandboxManager | None" = None
     _sandboxes: dict[UUID, AsyncSandbox] = {}  # run_id -> sandbox
     _file_registries: dict[UUID, dict[str, str]] = {}  # run_id -> {local_path: sandbox_path}
     _created_files_registry: dict[UUID, set[str]] = {}  # run_id -> {sandbox_paths}
     _skills_packages: dict[UUID, str] = {}  # run_id -> package name in VM
 
     def __new__(cls):
-        """Singleton pattern - always return the same instance."""
+        """Singleton pattern - always return the same instance per subclass."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -78,6 +90,78 @@ class SandboxManager:
             content = py_file.read_bytes()
             await sandbox.files.write(remote_path, content)
 
+    async def _create_directory_structure(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+        """Create standard directory structure in sandbox."""
+        create_dirs_code = """
+import os
+import stat
+
+dirs = ['/inputs', '/workspace', '/skills']
+created = []
+failed = []
+
+for dir_path in dirs:
+    try:
+        os.makedirs(dir_path, exist_ok=True)
+        # Try to set permissions to be writable by all
+        try:
+            os.chmod(dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 0o777
+        except Exception:
+            pass  # chmod might fail, but directory creation succeeded
+        created.append(dir_path)
+    except PermissionError as e:
+        failed.append(f"{dir_path}: {e}")
+
+if failed:
+    print(f"Failed to create: {', '.join(failed)}")
+if created:
+    print(f"Successfully created: {', '.join(created)}")
+"""
+        dir_result = await sandbox.run_code(create_dirs_code, language="python")
+
+        # Check if directory creation was successful
+        if dir_result.error:
+            await self.terminate(run_id)
+            raise RuntimeError(f"Failed to create directories using Python: {dir_result.error}")
+
+        # Verify directories are writable
+        try:
+            await sandbox.files.write("/inputs/.test_write", b"test")
+            await sandbox.files.write("/workspace/.test_write", b"test")
+            try:
+                await sandbox.commands.run("rm -f /inputs/.test_write /workspace/.test_write")
+            except Exception:
+                pass  # Cleanup failure is not critical
+        except Exception as e:
+            await self.terminate(run_id)
+            raise RuntimeError(
+                f"Directories created but not writable. Python output: "
+                f"{dir_result.logs.stdout if dir_result.logs else 'N/A'}, Error: {e}"
+            )
+
+    @abstractmethod
+    async def _install_dependencies(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+        """Install benchmark-specific dependencies.
+
+        Override in subclass to install required packages/tools.
+
+        Args:
+            sandbox: E2B sandbox instance
+            run_id: UUID of the run (for logging)
+        """
+        ...
+
+    async def _verify_setup(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+        """Verify setup is complete. Override in subclass if needed.
+
+        Default implementation does nothing.
+
+        Args:
+            sandbox: E2B sandbox instance
+            run_id: UUID of the run (for logging)
+        """
+        pass
+
     async def create(
         self,
         run_id: UUID,
@@ -112,106 +196,14 @@ class SandboxManager:
         self._sandboxes[run_id] = sandbox
         self._ensure_registries(run_id)
 
-        # Create directory structure using Python code execution
-        # This is more reliable than shell commands in E2B sandboxes
-        create_dirs_code = """
-import os
-import stat
+        # Create directory structure
+        await self._create_directory_structure(sandbox, run_id)
 
-dirs = ['/inputs', '/workspace', '/skills']
-created = []
-failed = []
+        # Install benchmark-specific dependencies
+        await self._install_dependencies(sandbox, run_id)
 
-for dir_path in dirs:
-    try:
-        os.makedirs(dir_path, exist_ok=True)
-        # Try to set permissions to be writable by all
-        try:
-            os.chmod(dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # 0o777
-        except Exception:
-            pass  # chmod might fail, but directory creation succeeded
-        created.append(dir_path)
-    except PermissionError as e:
-        failed.append(f"{dir_path}: {e}")
-
-if failed:
-    print(f"Failed to create: {', '.join(failed)}")
-if created:
-    print(f"Successfully created: {', '.join(created)}")
-"""
-        dir_result = await sandbox.run_code(create_dirs_code, language="python")
-
-        # Check if directory creation was successful by verifying we can write to them
-        if dir_result.error:
-            # Clean up sandbox before raising error
-            await self.terminate(run_id)
-            raise RuntimeError(f"Failed to create directories using Python: {dir_result.error}")
-
-        # Verify directories are writable by attempting to write test files
-        try:
-            await sandbox.files.write("/inputs/.test_write", b"test")
-            await sandbox.files.write("/workspace/.test_write", b"test")
-            # Clean up test files
-            try:
-                await sandbox.commands.run("rm -f /inputs/.test_write /workspace/.test_write")
-            except Exception:
-                pass  # Cleanup failure is not critical
-        except Exception as e:
-            # Clean up sandbox before raising error
-            await self.terminate(run_id)
-            raise RuntimeError(
-                f"Directories created but not writable. Python output: {dir_result.logs.stdout if dir_result.logs else 'N/A'}, "
-                f"Error: {e}"
-            )
-
-        # Install missing tool dependencies
-        # E2B default has: numpy, pandas, matplotlib, sklearn, scipy, openpyxl, docx, seaborn, plotly
-        # Need: pdfplumber, PyPDF2, reportlab, pytesseract
-        logger.info(f"Installing required packages for code rule evaluation (run_id={run_id})...")
-        pip_result = await sandbox.commands.run(
-            "pip install -q pdfplumber PyPDF2 reportlab pytesseract"
-        )
-        if pip_result.exit_code != 0:
-            # Log installation failure - this is critical for code rules
-            error_msg = (
-                f"Failed to install required packages (pdfplumber, PyPDF2, reportlab, pytesseract) "
-                f"for run_id={run_id}. Exit code: {pip_result.exit_code}. "
-                f"Stderr: {pip_result.stderr if pip_result.stderr else 'N/A'}"
-            )
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
-
-        # Verify packages are actually importable
-        logger.info(f"Verifying package installation (run_id={run_id})...")
-        verify_code = """
-import sys
-packages = ['pdfplumber', 'PyPDF2', 'reportlab']
-missing = []
-for pkg in packages:
-    try:
-        __import__(pkg)
-    except ImportError:
-        missing.append(pkg)
-if missing:
-    print(f"MISSING: {', '.join(missing)}", file=sys.stderr)
-    sys.exit(1)
-print("All packages verified successfully")
-"""
-        verify_result = await sandbox.run_code(verify_code, language="python", timeout=10)
-        # Check for errors using the error attribute (Execution object has error: Optional[ExecutionError])
-        if verify_result.error is not None:
-            stderr_text = "N/A"
-            if verify_result.logs and verify_result.logs.stderr:
-                stderr_parts = list(verify_result.logs.stderr)
-                stderr_text = "\n".join(stderr_parts) if stderr_parts else "N/A"
-            error_msg = (
-                f"Package verification failed for run_id={run_id}. "
-                f"Error: {verify_result.error}, Stderr: {stderr_text}"
-            )
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
-
-        logger.info(f"Successfully installed and verified all required packages (run_id={run_id})")
+        # Verify setup
+        await self._verify_setup(sandbox, run_id)
 
         # Upload skills directory if provided
         if skills_dir is not None:
@@ -384,9 +376,7 @@ print("SKILL_SUCCESS")
                 return []
             raise
 
-    async def download_all_outputs(
-        self, run_id: UUID, output_dir: Path
-    ) -> list[dict[str, str | int]]:
+    async def download_all_outputs(self, run_id: UUID, output_dir: Path) -> list[DownloadedFile]:
         """Download all files from /workspace to output_dir for a run.
 
         Handles sandbox timeout gracefully - if sandbox timed out, returns empty list
@@ -394,7 +384,7 @@ print("SKILL_SUCCESS")
         """
         try:
             files = await self.list_files(run_id, "/workspace")
-            downloaded = []
+            downloaded: list[DownloadedFile] = []
 
             for file_path in files:
                 try:
@@ -402,11 +392,11 @@ print("SKILL_SUCCESS")
                     local_path = output_dir / Path(file_path).name
                     local_path.write_bytes(content)
                     downloaded.append(
-                        {
-                            "sandbox_path": file_path,
-                            "local_path": str(local_path),
-                            "size_bytes": len(content),
-                        }
+                        DownloadedFile(
+                            sandbox_path=file_path,
+                            local_path=str(local_path),
+                            size_bytes=len(content),
+                        )
                     )
                 except RuntimeError as e:
                     # Re-raise RuntimeError from download_file (timeout case)

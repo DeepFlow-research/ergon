@@ -4,7 +4,9 @@ from uuid import UUID
 
 import inngest
 
-from h_arcane.core.infrastructure.sandbox import SandboxManager
+# Use GDPEvalSandboxManager for cleanup - all sandbox managers share the same
+# _sandboxes registry, so any subclass can terminate sandboxes from any benchmark.
+from h_arcane.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from h_arcane.core.db.models import RunStatus
 from h_arcane.core.db.queries import queries
 from h_arcane.core.infrastructure.inngest_client import inngest_client
@@ -43,7 +45,7 @@ async def run_cleanup(
     # Terminate sandbox (idempotent - safe to call multiple times)
     async def terminate_sandbox():
         try:
-            await SandboxManager().terminate(run_id)
+            await GDPEvalSandboxManager().terminate(run_id)
             return {
                 "success": True,
                 "run_id": str(run_id),

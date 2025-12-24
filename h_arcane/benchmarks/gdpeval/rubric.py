@@ -154,7 +154,6 @@ class StagedRubric(BaseModel):
                 for stage, rule, stage_idx, rule_idx in criteria_tuples
             ]
 
-
         criteria_models = await inngest_ctx.step.run(
             "flatten-rubric",
             flatten_rubric_step,

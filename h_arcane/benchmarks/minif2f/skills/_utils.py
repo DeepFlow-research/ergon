@@ -1,56 +1,6 @@
 """Utility functions for Lean proof verification in VM."""
 
 import re
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
-
-
-async def ensure_lean_installed(sandbox: "AsyncSandbox") -> bool:
-    """Install Lean on-demand. Returns True if installed successfully.
-
-    TODO: For performance, consider pre-baking Lean into sandbox Docker image.
-    Current approach installs fresh each sandbox (~2-5 min first run).
-
-    Args:
-        sandbox: E2B sandbox instance
-
-    Returns:
-        True if Lean is installed successfully, False otherwise
-    """
-    # Check if elan exists
-    check_result = await sandbox.commands.run("which elan", timeout=5)
-    if check_result.exit_code == 0:
-        # Verify Lean is actually available
-        lean_check = await sandbox.commands.run(
-            "export PATH=$HOME/.elan/bin:$PATH && lean --version", timeout=10
-        )
-        if lean_check.exit_code == 0:
-            return True
-
-    # Install elan (Lean version manager)
-    install_result = await sandbox.commands.run(
-        "curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y",
-        timeout=120,
-    )
-    if install_result.exit_code != 0:
-        return False
-
-    # Install stable Lean toolchain
-    toolchain_result = await sandbox.commands.run(
-        "export PATH=$HOME/.elan/bin:$PATH && elan toolchain install stable",
-        timeout=300,  # Can take a while
-    )
-
-    if toolchain_result.exit_code != 0:
-        return False
-
-    # Verify installation
-    verify_result = await sandbox.commands.run(
-        "export PATH=$HOME/.elan/bin:$PATH && lean --version", timeout=10
-    )
-    return verify_result.exit_code == 0
 
 
 def parse_lean_output(output: str) -> tuple[list[str], list[str]]:

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from agents import function_tool, Tool
 
-from h_arcane.core.infrastructure.sandbox import SandboxManager
+from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core.agents.base import BaseToolkit, BaseStakeholder
 from h_arcane.core.db.models import Message, MessageRole
 from h_arcane.core.db.queries import queries
@@ -29,7 +29,7 @@ class GDPEvalToolkit(BaseToolkit):
         self,
         run_id: UUID,
         stakeholder: BaseStakeholder,
-        sandbox_manager: SandboxManager,
+        sandbox_manager: BaseSandboxManager,
         max_questions: int = 10,
     ):
         """
@@ -38,7 +38,7 @@ class GDPEvalToolkit(BaseToolkit):
         Args:
             run_id: The run ID for logging messages and actions
             stakeholder: Stakeholder for answering questions
-            sandbox_manager: SandboxManager for skill execution
+            sandbox_manager: Sandbox manager for skill execution
             max_questions: Maximum number of questions allowed
         """
         self.run_id = run_id
