@@ -73,6 +73,20 @@ This lets us:
 2. Measure natural LLM clarification behavior
 3. Establish a baseline before adding VoI complexity
 
+## Implementation Status
+
+| Benchmark | Status | Description |
+|-----------|--------|-------------|
+| **GDPEval** | ✅ Complete | Document/spreadsheet/code tasks with staged rubric evaluation |
+| **MiniF2F** | ✅ Complete | Formal mathematics (Lean proofs) with binary verification |
+| **ResearchRubrics** | ❌ Pending | Deep research tasks with weighted criteria - see [12_RESEARCHRUBRICS_IMPLEMENTATION.md](./12_RESEARCHRUBRICS_IMPLEMENTATION.md) |
+
+### Common Infrastructure (Complete)
+- Generic Inngest orchestration via registry pattern
+- `BaseStakeholder`, `BaseToolkit`, `BaseRubric` protocols
+- Benchmark-specific factories and evaluators
+- Discriminated unions for type-safe Pydantic serialization
+
 ## Plan Documents
 
 | Document | Description |
@@ -83,6 +97,10 @@ This lets us:
 | [05_EVALUATION_ARCHITECTURE.md](./05_EVALUATION_ARCHITECTURE.md) | Evaluation system: functional approach with criterion-level evaluation |
 | [SANDBOX_ARCHITECTURE.md](./SANDBOX_ARCHITECTURE.md) | E2B sandbox integration: agent outside, tools inside sandbox |
 | [06_CODE_RULE_CONVERSION.md](./06_CODE_RULE_CONVERSION.md) | One-off script to convert GDPEval code rules from (workflow, context) → (task_input, agent_reasoning, output_files) |
+| [07_MULTI_BASELINE_ARCHITECTURE.md](./07_MULTI_BASELINE_ARCHITECTURE.md) | Multi-benchmark architecture: GDPEval, MiniF2F, ResearchRubrics |
+| [10_BENCHMARK_FIRST_ARCHITECTURE.md](./10_BENCHMARK_FIRST_ARCHITECTURE.md) | Benchmark-first refactoring: decoupling core from benchmark-specific code |
+| [11_GENERIC_ORCHESTRATION.md](./11_GENERIC_ORCHESTRATION.md) | Generic Inngest handlers via registry pattern |
+| [12_RESEARCHRUBRICS_IMPLEMENTATION.md](./12_RESEARCHRUBRICS_IMPLEMENTATION.md) | **ResearchRubrics implementation plan** (deep research baseline) |
 | [PRE_BUILD_CHECKLIST.md](./PRE_BUILD_CHECKLIST.md) | What's left before building - decisions, prerequisites, build order |
 
 ## Current Scope: ReAct Baseline

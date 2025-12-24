@@ -24,6 +24,14 @@ from h_arcane.benchmarks.minif2f.factories import (
 )
 from h_arcane.benchmarks.minif2f.sandbox import MiniF2FSandboxManager
 
+from h_arcane.benchmarks.researchrubrics.config import RESEARCHRUBRICS_CONFIG
+from h_arcane.benchmarks.researchrubrics.loader import load_researchrubrics_to_database
+from h_arcane.benchmarks.researchrubrics.factories import (
+    create_stakeholder as researchrubrics_create_stakeholder,
+    create_toolkit as researchrubrics_create_toolkit,
+)
+from h_arcane.benchmarks.researchrubrics.sandbox import ResearchRubricsSandboxManager
+
 
 class BenchmarkConfig(TypedDict):
     """Full configuration for a benchmark."""
@@ -57,6 +65,14 @@ BENCHMARK_CONFIGS: dict[BenchmarkName, BenchmarkConfig] = {
         "stakeholder_factory": minif2f_create_stakeholder,
         "toolkit_factory": minif2f_create_toolkit,
         "sandbox_manager_class": MiniF2FSandboxManager,
+    },
+    BenchmarkName.RESEARCHRUBRICS: {
+        "config": RESEARCHRUBRICS_CONFIG,
+        "skills_dir": _BENCHMARKS_DIR / "researchrubrics" / "skills",
+        "loader": load_researchrubrics_to_database,
+        "stakeholder_factory": researchrubrics_create_stakeholder,
+        "toolkit_factory": researchrubrics_create_toolkit,
+        "sandbox_manager_class": ResearchRubricsSandboxManager,
     },
 }
 

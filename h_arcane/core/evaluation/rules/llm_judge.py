@@ -133,9 +133,24 @@ This is a pass/fail decision. The criterion is either satisfied (True) or not sa
             )
         ]
 
-        # Add file content as images (for PDFs, Excel, images)
+        def _append_to_text_part(additional_text: str) -> None:
+            """Helper to append text to the first text part."""
+            if content_parts:
+                first_part = content_parts[0]
+                if isinstance(first_part, dict) and first_part.get("type") == "text":
+                    existing_text_value = first_part.get("text")
+                    existing_text = (
+                        existing_text_value if isinstance(existing_text_value, str) else ""
+                    )
+                    content_parts[0] = ChatCompletionContentPartTextParam(
+                        type="text",
+                        text=existing_text + additional_text,
+                    )
+
+        # Add file content based on MIME type
         for resource in agent_outputs:
             if resource.mime_type.startswith("image/"):
+                # Images: encode as base64 for vision models
                 content_bytes = resource.load_content()
                 base64_content = base64.b64encode(content_bytes).decode()
                 content_parts.append(
@@ -144,6 +159,15 @@ This is a pass/fail decision. The criterion is either satisfied (True) or not sa
                         image_url={"url": f"data:{resource.mime_type};base64,{base64_content}"},
                     )
                 )
+            elif resource.mime_type.startswith("text/"):
+                # Text files (markdown, plain text, etc.): include full content
+                try:
+                    file_content = resource.load_content().decode("utf-8")
+                    _append_to_text_part(
+                        f"\n\n--- File: {resource.name} ---\n{file_content}\n--- End File ---"
+                    )
+                except Exception:
+                    _append_to_text_part(f"\n\nFile: {resource.name} (failed to read)")
             elif resource.mime_type in [
                 "application/pdf",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -152,31 +176,18 @@ This is a pass/fail decision. The criterion is either satisfied (True) or not sa
                 # For PDFs and Office docs, include text preview in the prompt
                 try:
                     preview = resource.preview_text or resource.load_text()[:500]
-                    if content_parts:
-                        first_part = content_parts[0]
-                        # Access text field from TypedDict
-                        if isinstance(first_part, dict) and first_part.get("type") == "text":
-                            existing_text_value = first_part.get("text")
-                            existing_text = (
-                                existing_text_value if isinstance(existing_text_value, str) else ""
-                            )
-                            content_parts[0] = ChatCompletionContentPartTextParam(
-                                type="text",
-                                text=existing_text
-                                + f"\n\nFile: {resource.name}\nPreview: {preview}...",
-                            )
+                    _append_to_text_part(f"\n\nFile: {resource.name}\nPreview: {preview}...")
                 except Exception:
-                    if content_parts:
-                        first_part = content_parts[0]
-                        if isinstance(first_part, dict) and first_part.get("type") == "text":
-                            existing_text_value = first_part.get("text")
-                            existing_text = (
-                                existing_text_value if isinstance(existing_text_value, str) else ""
-                            )
-                            content_parts[0] = ChatCompletionContentPartTextParam(
-                                type="text",
-                                text=existing_text + f"\n\nFile: {resource.name} (binary file)",
-                            )
+                    _append_to_text_part(f"\n\nFile: {resource.name} (binary file)")
+            elif resource.mime_type == "application/octet-stream":
+                # Unknown type: try to read as text (might be markdown with wrong MIME type)
+                try:
+                    file_content = resource.load_content().decode("utf-8")
+                    _append_to_text_part(
+                        f"\n\n--- File: {resource.name} ---\n{file_content}\n--- End File ---"
+                    )
+                except Exception:
+                    _append_to_text_part(f"\n\nFile: {resource.name} (binary file)")
 
         return content_parts
 

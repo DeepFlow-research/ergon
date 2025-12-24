@@ -4,7 +4,7 @@ import json
 from abc import ABC, abstractmethod
 from logging import getLogger
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 from uuid import UUID
 
 from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
@@ -167,6 +167,7 @@ if created:
         run_id: UUID,
         skills_dir: Path | None = None,
         timeout_minutes: int = 30,
+        envs: dict[str, str] | None = None,
     ) -> None:
         """Create and initialize sandbox for a run (idempotent).
 
@@ -175,6 +176,8 @@ if created:
             skills_dir: Path to skills folder to copy (e.g., Path("h_arcane/skills/gdpeval"))
             timeout_minutes: Sandbox timeout in minutes (default: 30).
                             The sandbox will be terminated after this duration.
+            envs: Optional dictionary of environment variables to set in the sandbox.
+                  These will be available to all code executed in the sandbox.
         """
         # If sandbox already exists for this run_id, skip creation
         if run_id in self._sandboxes:
@@ -183,9 +186,13 @@ if created:
         try:
             # Convert minutes to seconds for E2B API
             timeout_seconds = timeout_minutes * 60
-            sandbox = await AsyncSandbox.create(
-                api_key=settings.e2b_api_key, timeout=timeout_seconds
-            )
+            create_kwargs: dict[str, Any] = {
+                "api_key": settings.e2b_api_key,
+                "timeout": timeout_seconds,
+            }
+            if envs:
+                create_kwargs["envs"] = envs
+            sandbox = await AsyncSandbox.create(**create_kwargs)
         except Exception as e:
             raise RuntimeError(f"Failed to create sandbox for run_id={run_id}: {e}") from e
 

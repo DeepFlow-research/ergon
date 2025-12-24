@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 
 import inngest
 
-from h_arcane.core.agents.base import BaseStakeholder, BaseToolkit, WorkerExecutionOutput
 from h_arcane.benchmarks.common.workers import ReActWorker
 from h_arcane.benchmarks.registry import (
     get_stakeholder_factory,
@@ -17,7 +16,7 @@ from h_arcane.benchmarks.registry import (
     get_skills_dir,
     get_sandbox_manager,
 )
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.core.agents.base import BaseStakeholder, BaseToolkit, WorkerExecutionOutput
 from h_arcane.core.db.models import (
     AgentConfig,
     Experiment,
@@ -27,11 +26,16 @@ from h_arcane.core.db.models import (
 )
 from h_arcane.core.db.queries import queries
 from h_arcane.core.infrastructure.inngest_client import inngest_client
+from h_arcane.core.models.enums import BenchmarkName
 from h_arcane.core.orchestration.events import (
     ExecutionDoneEvent,
     RunCleanupEvent,
     RunEvaluateResult,
 )
+from h_arcane.settings import settings
+
+# Register markdown MIME type so .md files get proper typing
+mimetypes.add_type("text/markdown", ".md")
 
 
 def get_mime_type(file_path: Path | str) -> str:
@@ -219,7 +223,13 @@ async def worker_execute(
             # Create sandbox with skills directory
             # This uploads the benchmark-specific skills to /skills/{package}
             # sandbox_manager is already created above with correct benchmark type
-            await sandbox_manager.create(run.id, skills_dir=skills_dir, timeout_minutes=30)
+            # Pass environment variables needed by skills (e.g., EXA_API_KEY for ResearchRubrics)
+            sandbox_envs = {
+                "EXA_API_KEY": settings.exa_api_key,
+            }
+            await sandbox_manager.create(
+                run.id, skills_dir=skills_dir, timeout_minutes=30, envs=sandbox_envs
+            )
             await sandbox_manager.upload_inputs(run.id, input_resources)
 
             # Execute the worker

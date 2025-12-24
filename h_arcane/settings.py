@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # E2B Sandbox
     e2b_api_key: str = ""
 
+    # Exa API (for ResearchRubrics web search)
+    exa_api_key: str = ""
+
     # Inngest
     inngest_event_key: str = "dev"
     inngest_dev: bool = True

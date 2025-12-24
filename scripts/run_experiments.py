@@ -269,7 +269,7 @@ Examples:
     parser.add_argument(
         "--benchmark",
         type=str,
-        choices=["gdpeval", "minif2f"],
+        choices=["gdpeval", "minif2f", "researchrubrics"],
         default="gdpeval",
         help="Benchmark to run (default: gdpeval)",
     )
