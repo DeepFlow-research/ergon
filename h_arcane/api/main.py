@@ -4,16 +4,14 @@ import inngest
 import inngest.fast_api
 from fastapi import FastAPI
 
-from h_arcane.inngest.client import inngest_client
+from h_arcane.core.infrastructure.inngest_client import inngest_client
 
 # Import functions to ensure they're registered with the client
-from h_arcane.inngest.functions import (  # noqa: F401
-    evaluate_criterion_fn,
-    evaluate_task_run,
-    run_cleanup,
-    run_evaluate,
-    worker_execute,
-)
+from h_arcane.core.orchestration.criteria_evaluator import evaluate_criterion_fn
+from h_arcane.core.orchestration.task_evaluator import evaluate_task_run
+from h_arcane.core.orchestration.run_cleanup import run_cleanup
+from h_arcane.core.orchestration.run_evaluate import run_evaluate
+from h_arcane.core.orchestration.worker_execute import worker_execute
 
 # Create FastAPI app
 app = FastAPI(

@@ -6,9 +6,9 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
 )
 
-from h_arcane.benchmarks.base import BaseStakeholder
-from h_arcane.config.evaluation_config import evaluation_config
-from h_arcane.evaluation.schemas import StagedRubric
+from h_arcane.core.agents.base import BaseStakeholder
+from h_arcane.core.config.evaluation_config import evaluation_config
+from h_arcane.benchmarks.gdpeval.rubric import StagedRubric
 from h_arcane.settings import settings
 
 
@@ -46,9 +46,19 @@ Be concise but complete.
         """
         self.ground_truth_rubric = ground_truth_rubric
         self.task_description = task_description
-        self.model = model or evaluation_config.llm_stakeholder.model
+        self._model = model or evaluation_config.llm_stakeholder.model
         self._rubric_summary = self._summarize_rubric(ground_truth_rubric)
         self._client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+    @property
+    def model(self) -> str:
+        """LLM model used by this stakeholder."""
+        return self._model
+
+    @property
+    def system_prompt(self) -> str:
+        """System prompt describing stakeholder behavior (for logging)."""
+        return self.ANSWER_PROMPT
 
     async def answer(self, question: str) -> str:
         """
@@ -79,7 +89,7 @@ Be concise but complete.
         ]
 
         response = await self._client.chat.completions.create(
-            model=self.model,
+            model=self._model,
             messages=messages,
             max_tokens=evaluation_config.llm_stakeholder.max_tokens,
             temperature=evaluation_config.llm_stakeholder.temperature,

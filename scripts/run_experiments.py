@@ -9,11 +9,12 @@ import sys
 import time
 from pathlib import Path
 
-from h_arcane.db.connection import init_db
-from h_arcane.experiments.config import BaselineType, ExperimentConfig
-from h_arcane.experiments.runner import ExperimentRunner
+from h_arcane.core.db.connection import init_db
+from h_arcane.core.config.experiment_config import ExperimentConfig
+from h_arcane.benchmarks.common.workers import BaselineType
+from h_arcane.core.orchestration.experiment_runner import ExperimentRunner
 from h_arcane.settings import settings
-from h_arcane.schemas.base import BenchmarkName
+from h_arcane.core.models.enums import BenchmarkName
 from sqlalchemy import create_engine, text
 
 

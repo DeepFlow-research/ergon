@@ -1,6 +1,7 @@
 """GDPEval benchmark configuration."""
 
-from h_arcane.schemas.base import WorkerConfig, BenchmarkName
+from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.common.workers.config import WorkerConfig
 
 REACT_WORKER_PROMPT = """
 You are a skilled worker completing a task for a stakeholder.

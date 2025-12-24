@@ -4,13 +4,13 @@ from uuid import UUID
 
 from agents import function_tool, Tool
 
-from h_arcane.agents.sandbox import SandboxManager
-from h_arcane.benchmarks.base import BaseToolkit, BaseStakeholder
-from h_arcane.db.models import Message, MessageRole
-from h_arcane.db.queries import queries
+from h_arcane.core.infrastructure.sandbox import SandboxManager
+from h_arcane.core.agents.base import BaseToolkit, BaseStakeholder
+from h_arcane.core.db.models import Message, MessageRole
+from h_arcane.core.db.queries import queries
 
 # Import response types from the skills package (same types used in VM!)
-from h_arcane.skills.minif2f.responses import (
+from h_arcane.benchmarks.minif2f.skills.responses import (
     WriteLeanResponse,
     LeanCheckResponse,
     LeanVerificationResponse,
@@ -56,6 +56,46 @@ class MiniF2FToolkit(BaseToolkit):
             self._verify_lean_proof(),
             self._ask_stakeholder(),
         ]
+
+    async def ask_stakeholder(self, question: str) -> str:
+        """Ask the stakeholder a question directly.
+
+        Args:
+            question: The question to ask
+
+        Returns:
+            The stakeholder's response
+        """
+        if self._questions_asked >= self.max_questions:
+            return f"[Maximum questions ({self.max_questions}) reached.]"
+
+        # Log worker question
+        queries.messages.create(
+            Message(
+                run_id=self.run_id,
+                sender=MessageRole.WORKER,
+                content=question,
+                sequence_num=self._message_num,
+            )
+        )
+        self._message_num += 1
+
+        # Get answer
+        answer = await self.stakeholder.answer(question)
+
+        # Log stakeholder answer
+        queries.messages.create(
+            Message(
+                run_id=self.run_id,
+                sender=MessageRole.STAKEHOLDER,
+                content=answer,
+                sequence_num=self._message_num,
+            )
+        )
+        self._message_num += 1
+
+        self._questions_asked += 1
+        return answer
 
     # ─────────────────────────────────────────────────────────────────
     # Lean-specific tool wrappers

@@ -10,11 +10,10 @@ import pandas as pd
 
 from sqlmodel import Session, select
 
-from h_arcane.db.connection import get_engine
-from h_arcane.db.models import Experiment, Resource
-from h_arcane.schemas.base import BenchmarkName
-from h_arcane.evaluation.schemas import GDPEvalStagedRubric
-from h_arcane.benchmarks.gdpeval.schemas import GDPEvalTask
+from h_arcane.core.db.connection import get_engine
+from h_arcane.core.db.models import Experiment, Resource
+from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.gdpeval.rubric import GDPEvalStagedRubric, GDPEvalTask
 
 # Default paths relative to project root
 DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"

@@ -7,8 +7,8 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
 )
 
-from h_arcane.benchmarks.base import BaseStakeholder
-from h_arcane.config.evaluation_config import evaluation_config
+from h_arcane.core.agents.base import BaseStakeholder
+from h_arcane.core.config.evaluation_config import evaluation_config
 from h_arcane.settings import settings
 
 
@@ -42,8 +42,18 @@ Be encouraging and helpful, but don't reveal the complete proof."""
         """
         self.ground_truth_proof = ground_truth_proof
         self.problem_statement = problem_statement
-        self.model = model or evaluation_config.llm_stakeholder.model
+        self._model = model or evaluation_config.llm_stakeholder.model
         self._client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+    @property
+    def model(self) -> str:
+        """LLM model used by this stakeholder."""
+        return self._model
+
+    @property
+    def system_prompt(self) -> str:
+        """System prompt describing stakeholder behavior (for logging)."""
+        return self.HINT_PROMPT
 
     async def answer(self, question: str) -> str:
         """
@@ -82,7 +92,7 @@ Provide a helpful hint without revealing the complete proof.""",
         ]
 
         response = await self._client.chat.completions.create(
-            model=self.model,
+            model=self._model,
             messages=messages,
             max_tokens=evaluation_config.llm_stakeholder.max_tokens,
             temperature=evaluation_config.llm_stakeholder.temperature,

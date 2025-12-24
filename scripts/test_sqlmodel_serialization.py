@@ -4,10 +4,10 @@ import json
 from datetime import datetime
 from uuid import uuid4
 
-from h_arcane.db.models import Run, RunStatus, Experiment, Resource
+from h_arcane.core.db.models import Run, RunStatus, Experiment, Resource
 from sqlmodel import SQLModel
-from h_arcane.schemas.base import BenchmarkName
-from h_arcane.config.evaluation_config import evaluation_config
+from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.core.config.evaluation_config import evaluation_config
 
 
 def test_run_serialization():

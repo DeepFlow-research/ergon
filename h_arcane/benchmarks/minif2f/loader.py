@@ -7,10 +7,11 @@ from uuid import UUID
 
 from sqlmodel import Session, select
 
-from h_arcane.db.connection import get_engine
-from h_arcane.db.models import Experiment
-from h_arcane.schemas.base import BenchmarkName
+from h_arcane.core.db.connection import get_engine
+from h_arcane.core.db.models import Experiment
+from h_arcane.core.models.enums import BenchmarkName
 from h_arcane.benchmarks.minif2f.schemas import MiniF2FProblem
+from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
 
 # Default paths relative to project root
 DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
@@ -213,34 +214,12 @@ def load_minif2f_to_database(data_dir: Path | None = None, limit: int | None = N
                 experiment_ids.append(existing_experiment.id)
                 continue
 
-            # Create experiment with ground truth proof as rubric
-            # For MiniF2F, we use a simple ProofVerificationRule
-            ground_truth_rubric = {
-                "stages": [
-                    {
-                        "name": "proof_verification",
-                        "description": "Verify that the Lean proof is correct and complete",
-                        "max_points": 1.0,
-                        "min_score_to_pass": 1.0,
-                        "is_required": True,
-                        "on_failure_action": "skip_remaining",
-                        "on_failure_score": 0.0,
-                        "rules": [
-                            {
-                                "type": "proof_verification",
-                                "name": "proof_correctness",
-                                "description": "Verify that the proof compiles and contains no sorry",
-                                "weight": 1.0,
-                                "problem_statement": problem.problem_statement,
-                                "ground_truth_proof": problem.ground_truth_proof,
-                                "formal_system": "lean",
-                            }
-                        ],
-                    }
-                ],
-                "max_total_score": 1.0,
-                "category_name": f"MiniF2F-{problem.split}",
-            }
+            rubric = MiniF2FRubric(
+                benchmark="minif2f",
+                max_score=1.0,
+                partial_credit_for_syntax=0.2,
+            )
+            ground_truth_rubric = rubric.model_dump()
 
             experiment = Experiment(
                 benchmark_name=BenchmarkName.MINIF2F,

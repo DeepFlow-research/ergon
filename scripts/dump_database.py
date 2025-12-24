@@ -47,8 +47,8 @@ from uuid import UUID
 
 from sqlmodel import Session, select
 
-from h_arcane.db.connection import get_session
-from h_arcane.db.models import (
+from h_arcane.core.db.connection import get_session
+from h_arcane.core.db.models import (
     Experiment,
     Run,
     Message,
@@ -59,7 +59,7 @@ from h_arcane.db.models import (
     CriterionResult,
     TaskEvaluationResult,
 )
-from h_arcane.experiments.loader import DATA_DIR
+from h_arcane.benchmarks.gdpeval.loader import DATA_DIR
 
 
 def format_value(value):

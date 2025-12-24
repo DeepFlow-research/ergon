@@ -1,6 +1,7 @@
 """MiniF2F-specific schemas."""
 
 from pathlib import Path
+
 from pydantic import BaseModel
 
 
