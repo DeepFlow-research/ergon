@@ -1,8 +1,9 @@
 """Evaluation configuration loaded from YAML."""
 
 from pathlib import Path
-from pydantic import BaseModel, Field
+
 import yaml
+from pydantic import BaseModel, Field
 
 
 class LLMEvaluationConfig(BaseModel):
@@ -53,8 +54,8 @@ class EvaluationConfig(BaseModel):
     @classmethod
     def load_default(cls) -> "EvaluationConfig":
         """Load configuration from default location."""
-        # Path: h_arcane/core/config/ -> h_arcane -> arcane_extension -> config/evaluation.yaml
-        config_path = Path(__file__).parent.parent.parent.parent / "config" / "evaluation.yaml"
+        # Path: h_arcane/config/ -> h_arcane -> arcane_extension -> config/evaluation.yaml
+        config_path = Path(__file__).parent.parent.parent / "config" / "evaluation.yaml"
         return cls.from_yaml(config_path)
 
 

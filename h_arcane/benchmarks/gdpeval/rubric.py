@@ -12,7 +12,7 @@ from h_arcane.benchmarks.gdpeval.rules import GDPEvalRule
 from h_arcane.core.db.models import CriterionResult, Evaluation, TaskEvaluationResult
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.task_context import TaskEvaluationContext
+    from h_arcane.core.evaluation.schemas import TaskEvaluationContext
 
 
 class EvaluationStage(BaseModel):

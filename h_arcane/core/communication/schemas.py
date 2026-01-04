@@ -16,8 +16,12 @@ class CreateMessageRequest(BaseModel):
 
     run_id: UUID
     experiment_id: UUID
-    from_agent_id: str = Field(description="ID of agent sending the message", examples=["{run_id}:worker"])
-    to_agent_id: str = Field(description="ID of agent receiving the message", examples=["{run_id}:stakeholder"])
+    from_agent_id: str = Field(
+        description="ID of agent sending the message", examples=["{run_id}:worker"]
+    )
+    to_agent_id: str = Field(
+        description="ID of agent receiving the message", examples=["{run_id}:stakeholder"]
+    )
     thread_topic: str
     content: str
 

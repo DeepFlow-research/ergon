@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.context import EvaluationRunner
+    from h_arcane.core.evaluation.runner import EvaluationRunner
     from h_arcane.core.db.models import CriterionResult
 
 

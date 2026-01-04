@@ -18,7 +18,8 @@ import inngest
 
 from h_arcane.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from h_arcane.core.db.models import CriterionResult
-from h_arcane.core.evaluation.context import EvaluationData, EvaluationRunner
+from h_arcane.core.evaluation.runner import EvaluationRunner
+from h_arcane.core.evaluation.schemas import EvaluationData
 from h_arcane.core.infrastructure.inngest_client import inngest_client
 from h_arcane.core.orchestration.events import CriterionEvaluationEvent
 

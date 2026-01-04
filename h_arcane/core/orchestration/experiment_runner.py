@@ -8,7 +8,7 @@ import inngest
 
 from h_arcane.core.db.queries import queries
 from h_arcane.core.db.models import RunStatus
-from h_arcane.core.config.experiment_config import DEFAULT_CONFIG, ExperimentConfig
+from h_arcane.config.experiment import DEFAULT_CONFIG, ExperimentConfig
 from h_arcane.benchmarks.registry import get_benchmark_loader
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.core.infrastructure.inngest_client import inngest_client

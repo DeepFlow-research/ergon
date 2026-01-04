@@ -10,7 +10,7 @@ from h_arcane.core.evaluation.rules import LLMJudgeRule
 from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.task_context import TaskEvaluationContext
+    from h_arcane.core.evaluation.schemas import TaskEvaluationContext
 
 
 class ResearchRubricsRubric(BaseModel):

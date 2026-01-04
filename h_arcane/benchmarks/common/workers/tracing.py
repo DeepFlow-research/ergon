@@ -320,4 +320,3 @@ def _calculate_cost(usage: Usage, model_name: str) -> float:
         cache_creation_input_tokens=cache_creation - cache_read,
     )
     return prompt_cost + completion_cost
-

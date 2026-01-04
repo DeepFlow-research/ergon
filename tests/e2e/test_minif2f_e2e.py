@@ -28,20 +28,19 @@ class TestMiniF2FE2E:
     async def test_minif2f_batch(self, all_dispatched_runs: AllDispatchedRuns, db_session: Session):
         """
         Wait for all MiniF2F runs to complete and assert.
-        
+
         Runs were already dispatched by session fixture.
         """
         dispatched = all_dispatched_runs.minif2f
-        
+
         if not dispatched:
             pytest.skip("No MiniF2F experiments dispatched")
-        
+
         print(f"\n⏳ Waiting for {len(dispatched)} MiniF2F runs...")
 
         # Wait for all completions in parallel
         wait_tasks = [
-            wait_for_run_completion(d.experiment.id, timeout_seconds=600)
-            for d in dispatched
+            wait_for_run_completion(d.experiment.id, timeout_seconds=600) for d in dispatched
         ]
         runs = await asyncio.gather(*wait_tasks, return_exceptions=True)
 
@@ -52,7 +51,14 @@ class TestMiniF2FE2E:
             exp = d.experiment
             if isinstance(run_result, BaseException):
                 print(f"  ❌ Task {i} ({exp.task_id}): {run_result}")
-                failures.append((exp, run_result if isinstance(run_result, Exception) else Exception(str(run_result))))
+                failures.append(
+                    (
+                        exp,
+                        run_result
+                        if isinstance(run_result, Exception)
+                        else Exception(str(run_result)),
+                    )
+                )
             else:
                 try:
                     assert_run_completed_and_print_failures(run_result, db_session)

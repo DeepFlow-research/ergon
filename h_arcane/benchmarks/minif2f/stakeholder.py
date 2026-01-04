@@ -10,7 +10,7 @@ from openai.types.chat import (
 from h_arcane.benchmarks.common import format_conversation_history
 from h_arcane.core.agents.base import BaseStakeholder
 from h_arcane.core.communication.schemas import MessageResponse
-from h_arcane.core.config.evaluation_config import evaluation_config
+from h_arcane.config.evaluation import evaluation_config
 from h_arcane.settings import settings
 
 

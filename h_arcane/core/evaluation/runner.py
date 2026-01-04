@@ -1,36 +1,20 @@
-"""Evaluation context - data and runner with Inngest step support."""
+"""Evaluation runner with Inngest step support."""
 
 import logging
 from typing import Awaitable, Callable, TypeVar, cast
 
 import inngest
 from openai import AsyncOpenAI
-from pydantic import BaseModel, ConfigDict
-from uuid import UUID
+from pydantic import BaseModel
 
-from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
-from h_arcane.core.config.evaluation_config import evaluation_config
+from h_arcane.config.evaluation import evaluation_config
 from h_arcane.core.db.models import Resource
-from h_arcane.core.evaluation.schemas import SandboxResult
+from h_arcane.core.evaluation.schemas import EvaluationData, SandboxResult
+from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.settings import settings
 
 T = TypeVar("T", bound=BaseModel)
 R = TypeVar("R")
-
-
-class EvaluationData(BaseModel):
-    """Pure data for evaluation - no infrastructure methods."""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    run_id: UUID
-    task_input: str
-    agent_reasoning: str
-    agent_outputs: list[Resource]
-    stage_idx: int
-    stage_name: str
-    rule_idx: int
-    max_score: float
 
 
 class EvaluationRunner:

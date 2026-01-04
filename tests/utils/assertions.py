@@ -88,9 +88,7 @@ def check_run(run: Run, session: Session) -> RunResult:
     failed_evals = [cr for cr in criterion_results if not cr.ran_successfully]
 
     # Check evaluation exists
-    evaluation = session.exec(
-        select(Evaluation).where(Evaluation.run_id == run.id)
-    ).first()
+    evaluation = session.exec(select(Evaluation).where(Evaluation.run_id == run.id)).first()
 
     has_evaluation = evaluation is not None
     has_scores = (
@@ -120,9 +118,7 @@ def assert_run_completed(run: Run, session: Session):
 
 def assert_evaluation_ran(run: Run, session: Session):
     """Assert evaluation was executed and produced scores."""
-    evaluation = session.exec(
-        select(Evaluation).where(Evaluation.run_id == run.id)
-    ).first()
+    evaluation = session.exec(select(Evaluation).where(Evaluation.run_id == run.id)).first()
 
     assert evaluation is not None, "No Evaluation record created"
     assert evaluation.total_score is not None, "Evaluation missing total_score"
@@ -150,4 +146,3 @@ def assert_run_completed_and_print_failures(run: Run, session: Session):
     assert result.completed, f"Run failed with status {result.run_status}"
     assert result.has_evaluation, "No Evaluation record created"
     assert result.has_scores, "Missing scores"
-

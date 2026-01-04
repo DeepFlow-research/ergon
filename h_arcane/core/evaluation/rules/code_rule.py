@@ -9,7 +9,7 @@ from h_arcane.core.evaluation.rules.base import BaseRule
 from h_arcane.core.db.models import CriterionResult, Resource
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.context import EvaluationRunner
+    from h_arcane.core.evaluation.runner import EvaluationRunner
 
 
 class CodeRule(BaseRule):

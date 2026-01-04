@@ -7,7 +7,7 @@ from uuid import uuid4
 from h_arcane.core.db.models import Run, RunStatus, Experiment, Resource
 from sqlmodel import SQLModel
 from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.core.config.evaluation_config import evaluation_config
+from h_arcane.config.evaluation import evaluation_config
 
 
 def test_run_serialization():

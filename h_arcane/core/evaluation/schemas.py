@@ -1,6 +1,11 @@
-"""Core schemas for evaluation - sandbox results and LLM responses."""
+"""Core schemas for evaluation - data containers and response types."""
 
-from pydantic import BaseModel, Field
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from h_arcane.core.db.models import Resource
+from h_arcane.benchmarks.types import AnyRubric
 
 
 class SandboxResult(BaseModel):
@@ -24,3 +29,33 @@ class LLMJudgeResponse(BaseModel):
         description="Binary classification: True if the criterion is met, False otherwise. "
         "This is a pass/fail decision based on whether the output satisfies the criterion."
     )
+
+
+class EvaluationData(BaseModel):
+    """Pure data for evaluation - no infrastructure methods."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    run_id: UUID
+    task_input: str
+    agent_reasoning: str
+    agent_outputs: list[Resource]
+    stage_idx: int
+    stage_name: str
+    rule_idx: int
+    max_score: float
+
+
+class TaskEvaluationContext(BaseModel):
+    """Context for evaluating an entire task (all criteria).
+
+    Bundles all data needed to evaluate task outputs against a rubric.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    run_id: UUID
+    task_input: str
+    agent_reasoning: str
+    agent_outputs: list[Resource]
+    rubric: AnyRubric  # Discriminated union - auto-selects StagedRubric or MiniF2FRubric

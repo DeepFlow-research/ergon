@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 from h_arcane.core.db.connection import init_db
-from h_arcane.core.config.experiment_config import ExperimentConfig
+from h_arcane.config.experiment import ExperimentConfig
 from h_arcane.benchmarks.common.workers import BaselineType
 from h_arcane.core.orchestration.experiment_runner import ExperimentRunner
 from h_arcane.settings import settings

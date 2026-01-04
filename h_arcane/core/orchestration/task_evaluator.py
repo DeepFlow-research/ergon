@@ -6,7 +6,7 @@ import inngest
 
 from h_arcane.core.db.models import TaskEvaluationResult
 from h_arcane.core.infrastructure.inngest_client import inngest_client
-from h_arcane.core.evaluation.task_context import TaskEvaluationContext
+from h_arcane.core.evaluation.schemas import TaskEvaluationContext
 from h_arcane.core.orchestration.events import TaskEvaluationEvent
 
 

@@ -6,7 +6,7 @@ import inngest
 
 if TYPE_CHECKING:
     from h_arcane.core.db.models import TaskEvaluationResult
-    from h_arcane.core.evaluation.task_context import TaskEvaluationContext
+    from h_arcane.core.evaluation.schemas import TaskEvaluationContext
 
 
 class BaseRubric(Protocol):

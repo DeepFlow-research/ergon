@@ -6,12 +6,13 @@ import inngest
 from pydantic import BaseModel, Field
 
 from h_arcane.core.db.models import TaskEvaluationResult
-from h_arcane.core.evaluation.context import EvaluationData, EvaluationRunner
+from h_arcane.core.evaluation.runner import EvaluationRunner
+from h_arcane.core.evaluation.schemas import EvaluationData
 from h_arcane.benchmarks.minif2f.sandbox import MiniF2FSandboxManager
 from h_arcane.benchmarks.minif2f.rules import ProofVerificationRule
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.task_context import TaskEvaluationContext
+    from h_arcane.core.evaluation.schemas import TaskEvaluationContext
 
 
 class MiniF2FRubric(BaseModel):
