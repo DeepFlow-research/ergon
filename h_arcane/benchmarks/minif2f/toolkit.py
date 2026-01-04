@@ -1,20 +1,76 @@
 """MiniF2F toolkit - explicit tool wrappers for Lean proof development."""
 
+import re
 from uuid import UUID
 
 from agents import function_tool, Tool
+from e2b.sandbox.commands.command_handle import CommandExitException
 
 from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core.agents.base import BaseToolkit, BaseStakeholder
-from h_arcane.core.db.models import Message, MessageRole
-from h_arcane.core.db.queries import queries
+from h_arcane.core.communication import communication_service, CreateMessageRequest
 
-# Import response types from the skills package (same types used in VM!)
+# Import response types from the skills package
 from h_arcane.benchmarks.minif2f.skills.responses import (
     WriteLeanResponse,
     LeanCheckResponse,
     LeanVerificationResponse,
 )
+
+# Lean command prefix - runs from Mathlib project directory for access to imports
+# NOTE: Mathlib is installed in /tools (not /workspace) to avoid downloading all library
+# files as outputs when the run completes.
+LEAN_CMD_PREFIX = "export PATH=$HOME/.elan/bin:$PATH && cd /tools/mathlib_project/src &&"
+
+
+def _parse_lean_output(output: str) -> tuple[list[str], list[str]]:
+    """Parse Lean compiler output to extract errors and goals.
+
+    Args:
+        output: Combined stdout and stderr from Lean compiler
+
+    Returns:
+        Tuple of (errors, goals_remaining)
+    """
+    errors: list[str] = []
+    goals: list[str] = []
+
+    lines = output.split("\n")
+    error_pattern = re.compile(r"^.*:\d+:\d+:\s*(error|warning):\s*(.+)$")
+    goal_pattern = re.compile(r"⊢\s*(.+)$")
+
+    current_error: list[str] = []
+    in_error = False
+
+    for line in lines:
+        line = line.strip()
+
+        error_match = error_pattern.match(line)
+        if error_match:
+            if current_error:
+                errors.append("\n".join(current_error))
+            current_error = [line]
+            in_error = True
+            continue
+
+        goal_match = goal_pattern.search(line)
+        if goal_match:
+            goal_text = goal_match.group(1).strip()
+            if goal_text:
+                goals.append(goal_text)
+
+        if in_error and line:
+            current_error.append(line)
+        elif in_error and not line:
+            if current_error:
+                errors.append("\n".join(current_error))
+            current_error = []
+            in_error = False
+
+    if current_error:
+        errors.append("\n".join(current_error))
+
+    return errors, goals
 
 
 class MiniF2FToolkit(BaseToolkit):
@@ -23,6 +79,7 @@ class MiniF2FToolkit(BaseToolkit):
     def __init__(
         self,
         run_id: UUID,
+        experiment_id: UUID,
         stakeholder: BaseStakeholder,
         sandbox_manager: BaseSandboxManager,
         max_questions: int = 10,
@@ -32,16 +89,17 @@ class MiniF2FToolkit(BaseToolkit):
 
         Args:
             run_id: The run ID for logging messages and actions
+            experiment_id: The experiment ID for traceability
             stakeholder: Stakeholder for providing proof hints
             sandbox_manager: BaseSandboxManager for skill execution
             max_questions: Maximum number of questions allowed
         """
         self.run_id = run_id
+        self.experiment_id = experiment_id
         self.stakeholder = stakeholder
         self.sandbox_manager = sandbox_manager
         self.max_questions = max_questions
         self._questions_asked = 0
-        self._message_num = 0
 
     @property
     def questions_asked(self) -> int:
@@ -54,6 +112,7 @@ class MiniF2FToolkit(BaseToolkit):
             self._write_lean_file(),
             self._check_lean_file(),
             self._verify_lean_proof(),
+            self._search_lemmas(),
             self._ask_stakeholder(),
         ]
 
@@ -69,30 +128,45 @@ class MiniF2FToolkit(BaseToolkit):
         if self._questions_asked >= self.max_questions:
             return f"[Maximum questions ({self.max_questions}) reached.]"
 
-        # Log worker question
-        queries.messages.create(
-            Message(
+        worker_id = f"{self.run_id}:worker"
+        stakeholder_id = f"{self.run_id}:stakeholder"
+        thread_topic = "task_clarification"
+
+        # Save worker question to thread
+        communication_service.save_message(
+            CreateMessageRequest(
                 run_id=self.run_id,
-                sender=MessageRole.WORKER,
+                experiment_id=self.experiment_id,
+                from_agent_id=worker_id,
+                to_agent_id=stakeholder_id,
+                thread_topic=thread_topic,
                 content=question,
-                sequence_num=self._message_num,
             )
         )
-        self._message_num += 1
 
-        # Get answer
-        answer = await self.stakeholder.answer(question)
+        # Get conversation history for stakeholder context
+        threads = communication_service.get_all_threads_between_agents(worker_id, stakeholder_id)
+        history = None
+        if threads.threads:
+            thread_data = communication_service.get_thread_messages(threads.threads[0].thread_id)
+            if thread_data:
+                # Exclude the question we just added (it's the last message)
+                history = thread_data.messages[:-1] if thread_data.messages else None
 
-        # Log stakeholder answer
-        queries.messages.create(
-            Message(
+        # Get answer with history context
+        answer = await self.stakeholder.answer(question, history=history)
+
+        # Save stakeholder answer to thread
+        communication_service.save_message(
+            CreateMessageRequest(
                 run_id=self.run_id,
-                sender=MessageRole.STAKEHOLDER,
+                experiment_id=self.experiment_id,
+                from_agent_id=stakeholder_id,
+                to_agent_id=worker_id,
+                thread_topic=thread_topic,
                 content=answer,
-                sequence_num=self._message_num,
             )
         )
-        self._message_num += 1
 
         self._questions_asked += 1
         return answer
@@ -110,8 +184,11 @@ class MiniF2FToolkit(BaseToolkit):
             Use `sorry` as a placeholder for incomplete proofs - check_lean_file
             will show you the proof goals.
 
+            IMPORTANT: Your final, complete proof MUST be written to `final_solution.lean`.
+            This is the only file that will be evaluated. Other filenames are for drafts.
+
             Args:
-                filename: Name of the file (e.g., "proof.lean")
+                filename: Name of the file. Use "final_solution.lean" for your submission.
                 content: Complete Lean file content
 
             Returns:
@@ -145,13 +222,45 @@ class MiniF2FToolkit(BaseToolkit):
             Returns:
                 Response model with errors, goals, and warnings.
             """
-            result = await self.sandbox_manager.run_skill(
-                self.run_id,
-                "check_lean_file",
-                LeanCheckResponse,
-                filename=filename,
-            )
-            return result
+            # Get sandbox and run Lean directly via shell command
+            # This uses the same shell environment where Lean was installed
+            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
+            if not sandbox:
+                return LeanCheckResponse(
+                    success=False,
+                    error="Sandbox not available",
+                )
+
+            try:
+                # Run Lean compiler via sandbox shell (same env where it was installed)
+                cmd = f"{LEAN_CMD_PREFIX} lean {filename} 2>&1"
+                try:
+                    result = await sandbox.commands.run(cmd, timeout=60)
+                    output = (result.stdout or "") + (result.stderr or "")
+                    exit_code = result.exit_code
+                except CommandExitException as cmd_err:
+                    # Non-zero exit is expected for Lean errors - extract output
+                    output = (cmd_err.stdout or "") + (cmd_err.stderr or "")
+                    exit_code = cmd_err.exit_code
+
+                # Parse output for errors and goals
+                errors, goals = _parse_lean_output(output)
+
+                # File compiled if exit code is 0 OR if it has sorry (partial proof)
+                compiled = exit_code == 0 or "sorry" in output
+
+                return LeanCheckResponse(
+                    success=True,
+                    compiled=compiled,
+                    errors=errors if errors else None,
+                    goals_remaining=goals if goals else None,
+                )
+
+            except Exception as e:
+                return LeanCheckResponse(
+                    success=False,
+                    error=f"Error checking Lean file: {e}",
+                )
 
         return check_lean_file
 
@@ -164,21 +273,148 @@ class MiniF2FToolkit(BaseToolkit):
             Call this when you believe your proof is complete.
             The proof must compile without errors and contain no `sorry`.
 
+            IMPORTANT: Before submitting, verify `final_solution.lean` - this is the
+            only file that will be evaluated for scoring.
+
             Args:
-                filename: Name of the Lean file to verify
+                filename: Name of the Lean file to verify (use "final_solution.lean" for final)
 
             Returns:
                 Response model with verification result and details.
             """
-            result = await self.sandbox_manager.run_skill(
-                self.run_id,
-                "verify_lean_proof",
-                LeanVerificationResponse,
-                filename=filename,
-            )
-            return result
+            # Get sandbox and run Lean directly via shell command
+            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
+            if not sandbox:
+                return LeanVerificationResponse(
+                    success=False,
+                    verified=False,
+                    error="Sandbox not available",
+                )
+
+            try:
+                # First read the file to check for sorry
+                file_content = await sandbox.files.read(f"/tools/mathlib_project/src/{filename}")
+                if isinstance(file_content, bytes):
+                    file_content = file_content.decode("utf-8")
+
+                if "sorry" in file_content:
+                    return LeanVerificationResponse(
+                        success=True,
+                        verified=False,
+                        message="Proof contains 'sorry' - incomplete proof not allowed for verification",
+                    )
+
+                # Run Lean compiler via sandbox shell
+                # Note: Lean 3 doesn't have a --check flag, just compile the file
+                cmd = f"{LEAN_CMD_PREFIX} lean {filename} 2>&1"
+                try:
+                    result = await sandbox.commands.run(cmd, timeout=60)
+                    output = (result.stdout or "") + (result.stderr or "")
+                    exit_code = result.exit_code
+                except CommandExitException as cmd_err:
+                    # Non-zero exit means verification failed - extract output
+                    output = (cmd_err.stdout or "") + (cmd_err.stderr or "")
+                    exit_code = cmd_err.exit_code
+
+                verified = exit_code == 0
+
+                if verified:
+                    return LeanVerificationResponse(
+                        success=True,
+                        verified=True,
+                        message="Proof verified successfully!",
+                        output=output,
+                    )
+                else:
+                    return LeanVerificationResponse(
+                        success=True,
+                        verified=False,
+                        message="Proof verification failed",
+                        error=output,
+                    )
+
+            except Exception as e:
+                return LeanVerificationResponse(
+                    success=False,
+                    verified=False,
+                    error=f"Error verifying Lean proof: {e}",
+                )
 
         return verify_lean_proof
+
+    def _search_lemmas(self) -> Tool:
+        @function_tool
+        async def search_lemmas(query: str) -> str:
+            """
+            Search for lemmas, definitions, or check types in Mathlib.
+
+            Use this to find available lemmas or check if a name exists.
+
+            Examples:
+                - search_lemmas("#check mul_comm") - Check type of mul_comm
+                - search_lemmas("#check @finset.sum") - Check finset.sum signature
+                - search_lemmas("#print mul_comm") - Print full definition
+                - search_lemmas("#check (∑ x in s, f x)") - Check type of expression
+
+            Args:
+                query: A Lean query like "#check lemma_name" or "#print lemma_name"
+
+            Returns:
+                The Lean output showing the type or definition.
+            """
+            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
+            if not sandbox:
+                return "Error: Sandbox not available"
+
+            try:
+                # Create a temporary Lean file with the query
+                # Include common imports so we can search Mathlib
+                lean_content = f"""import tactic
+import data.real.basic
+import data.complex.basic
+import data.nat.basic
+import data.int.basic
+import data.finset.basic
+import algebra.big_operators.basic
+
+{query}
+"""
+                # Write to a temp file
+                temp_file = "_search_query.lean"
+                await sandbox.files.write(
+                    f"/tools/mathlib_project/src/{temp_file}",
+                    lean_content.encode("utf-8"),
+                )
+
+                # Run Lean on it
+                cmd = f"{LEAN_CMD_PREFIX} lean {temp_file} 2>&1"
+                try:
+                    result = await sandbox.commands.run(cmd, timeout=30)
+                    output = (result.stdout or "") + (result.stderr or "")
+                except CommandExitException as cmd_err:
+                    output = (cmd_err.stdout or "") + (cmd_err.stderr or "")
+
+                # Clean up the output - remove file path prefixes
+                lines = output.strip().split("\n")
+                cleaned_lines = []
+                for line in lines:
+                    # Remove the file:line:col prefix for cleaner output
+                    if "_search_query.lean:" in line:
+                        # Extract just the message part
+                        parts = line.split(":", 3)
+                        if len(parts) >= 4:
+                            cleaned_lines.append(parts[3].strip())
+                        else:
+                            cleaned_lines.append(line)
+                    else:
+                        cleaned_lines.append(line)
+
+                return "\n".join(cleaned_lines).strip() or "No output from query"
+
+            except Exception as e:
+                return f"Error searching: {e}"
+
+        return search_lemmas
 
     def _ask_stakeholder(self) -> Tool:
         @function_tool
@@ -192,35 +428,6 @@ class MiniF2FToolkit(BaseToolkit):
             Returns:
                 A hint or guidance from the stakeholder.
             """
-            if self._questions_asked >= self.max_questions:
-                return f"[Maximum questions ({self.max_questions}) reached.]"
-
-            # Log worker question
-            queries.messages.create(
-                Message(
-                    run_id=self.run_id,
-                    sender=MessageRole.WORKER,
-                    content=question,
-                    sequence_num=self._message_num,
-                )
-            )
-            self._message_num += 1
-
-            # Get answer
-            answer = await self.stakeholder.answer(question)
-
-            # Log stakeholder answer
-            queries.messages.create(
-                Message(
-                    run_id=self.run_id,
-                    sender=MessageRole.STAKEHOLDER,
-                    content=answer,
-                    sequence_num=self._message_num,
-                )
-            )
-            self._message_num += 1
-
-            self._questions_asked += 1
-            return answer
+            return await self.ask_stakeholder(question)
 
         return ask_stakeholder

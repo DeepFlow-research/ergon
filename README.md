@@ -206,9 +206,78 @@ arcane_extension/
 
 ### Running Tests
 
+#### Unit Tests
+
 ```bash
-pytest tests/
+pytest tests/ -k "not e2e"
 ```
+
+#### E2E Tests
+
+The E2E tests run real tasks through the full system (agent → sandbox → evaluation → database) with no mocks. They verify that the entire pipeline works correctly for each benchmark environment.
+
+**Prerequisites:**
+
+1. **Docker Compose running** with all services:
+   ```bash
+   docker-compose up -d
+   ```
+   This starts PostgreSQL, Inngest dev server, and the API server (which includes the worker).
+
+2. **Environment variables set** (`.env` file with API keys):
+   - `OPENAI_API_KEY` - for agent and evaluation LLM calls
+   - `E2B_API_KEY` - for sandbox execution
+   - `EXA_API_KEY` - for ResearchRubrics web search (optional, that test will fail without it)
+
+**⚠️ Warning:** E2E tests **wipe the database** at the start of each test session to ensure a clean slate. Don't run these if you have important data in your local database.
+
+**Running E2E tests:**
+
+```bash
+# Run all E2E tests
+pytest tests/e2e/ -v
+
+# Run tests for a specific benchmark
+pytest tests/e2e/test_gdpeval_e2e.py -v
+pytest tests/e2e/test_minif2f_e2e.py -v
+pytest tests/e2e/test_researchrubrics_e2e.py -v
+
+# Run with more samples (default is 2 per benchmark)
+N_SAMPLES=5 pytest tests/e2e/ -v
+```
+
+**How E2E tests work:**
+
+1. **Clean slate**: Test database is wiped at the start of each test session
+2. **Load real tasks**: First N samples loaded from actual benchmark loaders
+3. **Trigger runs**: Each task is created as an `Experiment` and a run is triggered via Inngest
+4. **Wait for completion**: Tests poll the database until runs reach terminal state
+5. **Assert on DB state**: Verify run completed, evaluation ran, and print any failures for manual review
+
+**Database behavior:**
+
+By default, E2E tests use the **main database** (same as the worker). This is simpler since no special worker configuration is needed. The database is wiped at the start of each test session.
+
+To use a separate test database instead:
+```bash
+# 1. Create the test database (one-time)
+docker compose exec postgres psql -U h_arcane -d postgres -c "CREATE DATABASE h_arcane_test;"
+
+# 2. Start worker against test DB
+DATABASE_URL=postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test uv run python -m h_arcane.worker
+
+# 3. Run tests with test DB flag
+E2E_USE_TEST_DB=1 uv run pytest tests/e2e/ -v
+```
+
+**Interpreting results:**
+
+Tests print all failures (tool errors, evaluation errors) with full stack traces for manual review. A test passes if:
+- Run completed successfully (status = `COMPLETED`)
+- Evaluation record was created
+- Final scores were computed
+
+Failed tools don't automatically fail the test - they're printed for you to determine if they're agent mistakes (acceptable) or infrastructure issues (bugs to fix).
 
 ### Database Migrations
 

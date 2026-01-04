@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Callable, TypedDict
 
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
 from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 
@@ -40,7 +40,7 @@ class BenchmarkConfig(TypedDict):
     skills_dir: Path
     loader: Callable
     stakeholder_factory: Callable  # (Experiment) -> BaseStakeholder
-    toolkit_factory: Callable  # (run_id, stakeholder, sandbox, max_q) -> BaseToolkit
+    toolkit_factory: Callable  # (run_id, experiment_id, stakeholder, sandbox, max_q) -> BaseToolkit
     sandbox_manager_class: type[BaseSandboxManager]
     # NOTE: No rubric_evaluator - evaluation logic is on BaseRubric.compute_scores()
 
@@ -110,7 +110,7 @@ def get_stakeholder_factory(benchmark_name: BenchmarkName) -> Callable:
 
 
 def get_toolkit_factory(benchmark_name: BenchmarkName) -> Callable:
-    """Get factory function: (run_id, stakeholder, sandbox, max_q) -> BaseToolkit."""
+    """Get factory function: (run_id, experiment_id, stakeholder, sandbox, max_q) -> BaseToolkit."""
     return _get_config(benchmark_name)["toolkit_factory"]
 
 

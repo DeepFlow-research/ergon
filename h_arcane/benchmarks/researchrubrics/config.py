@@ -1,6 +1,6 @@
 """ResearchRubrics benchmark configuration."""
 
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
 
 REACT_WORKER_PROMPT = """You are a deep research assistant producing comprehensive research reports.

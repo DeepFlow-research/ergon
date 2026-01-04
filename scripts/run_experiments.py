@@ -14,7 +14,7 @@ from h_arcane.core.config.experiment_config import ExperimentConfig
 from h_arcane.benchmarks.common.workers import BaselineType
 from h_arcane.core.orchestration.experiment_runner import ExperimentRunner
 from h_arcane.settings import settings
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.enums import BenchmarkName
 from sqlalchemy import create_engine, text
 
 
@@ -351,9 +351,9 @@ Examples:
         print("🔧 Ensuring database tables exist...")
         init_db()
 
-    # Create config
+    # Create config (validate baseline via enum, then use string value)
     config = ExperimentConfig(
-        baseline=BaselineType(args.baseline),
+        baseline=BaselineType(args.baseline).value,
     )
 
     runner = ExperimentRunner(config=config)

@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane"
 
+    # Test Database (separate from production for E2E tests)
+    database_url_test: str = "postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test"
+
     # OpenAI
     openai_api_key: str = ""
 
@@ -32,3 +35,10 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
+
+for key, value in settings.model_dump().items():
+    if key in ["openai_api_key"]:
+        if value == "":
+            raise ValueError(
+                f"Environment variable {key} is not set. Please set it in your .env file or environment variables."
+            )

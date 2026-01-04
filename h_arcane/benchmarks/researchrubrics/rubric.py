@@ -1,6 +1,6 @@
 """ResearchRubrics rubric definition with compute_scores()."""
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import inngest
 from pydantic import BaseModel, Field
@@ -77,9 +77,9 @@ class ResearchRubricsRubric(BaseModel):
                 )
             return rules_data
 
-        criteria_with_rules = await inngest_ctx.step.run(
-            "convert-criteria-to-rules",
-            convert_criteria_step,
+        criteria_with_rules = cast(
+            list[dict],
+            await inngest_ctx.step.run("convert-criteria-to-rules", convert_criteria_step),
         )
 
         # Step 2: Create parallel invokers for each criterion
@@ -179,9 +179,9 @@ class ResearchRubricsRubric(BaseModel):
                 "normalized_score": normalized_score,
             }
 
-        aggregate = await inngest_ctx.step.run(
-            "aggregate-weighted-scores",
-            aggregate_scores_step,
+        aggregate = cast(
+            dict,
+            await inngest_ctx.step.run("aggregate-weighted-scores", aggregate_scores_step),
         )
 
         # Convert CriterionResult objects to dicts for JSON storage

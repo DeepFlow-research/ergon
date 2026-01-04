@@ -1,12 +1,13 @@
 """Worker execution Inngest function."""
 
 import mimetypes
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypeVar
 from uuid import UUID, uuid4
 
 import inngest
+from inngest_agents import set_step
 
 from h_arcane.benchmarks.common.workers import ReActWorker
 from h_arcane.benchmarks.registry import (
@@ -16,7 +17,8 @@ from h_arcane.benchmarks.registry import (
     get_skills_dir,
     get_sandbox_manager,
 )
-from h_arcane.core.agents.base import BaseStakeholder, BaseToolkit, WorkerExecutionOutput
+from h_arcane.core.infrastructure.sandbox import DownloadedFiles
+from h_arcane.core.agents.base import BaseStakeholder, BaseToolkit
 from h_arcane.core.db.models import (
     AgentConfig,
     Experiment,
@@ -26,7 +28,7 @@ from h_arcane.core.db.models import (
 )
 from h_arcane.core.db.queries import queries
 from h_arcane.core.infrastructure.inngest_client import inngest_client
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.core.orchestration.events import (
     ExecutionDoneEvent,
     RunCleanupEvent,
@@ -54,10 +56,10 @@ def _require_not_none(value: T | None, error_msg: str) -> T:
     return value
 
 
-@inngest_client.create_function(  # type: ignore[misc]
+@inngest_client.create_function(
     fn_id="worker-execute",
     trigger=inngest.TriggerEvent(event="run/start"),
-    retries=2,
+    retries=0,
     concurrency=[inngest.Concurrency(limit=15, scope="fn")],
 )
 async def worker_execute(
@@ -148,7 +150,7 @@ async def worker_execute(
             updated = existing.model_copy(
                 update={
                     "status": RunStatus.EXECUTING,
-                    "started_at": datetime.utcnow(),
+                    "started_at": datetime.now(timezone.utc),
                 }
             )
             queries.runs.update(updated)
@@ -162,6 +164,10 @@ async def worker_execute(
         "mark-executing",
         mark_executing,
     )
+
+    # Set step context for durable tools (before any tool execution)
+    # This enables each tool call to become an individual Inngest step
+    set_step(ctx.step)
 
     try:
         # Normalize benchmark_name to enum for comparisons
@@ -183,7 +189,7 @@ async def worker_execute(
         sandbox_manager = get_sandbox_manager(benchmark_name)
         stakeholder: BaseStakeholder = stakeholder_factory(experiment)
         toolkit: BaseToolkit = toolkit_factory(
-            run.id, stakeholder, sandbox_manager, run.max_questions
+            run.id, experiment.id, stakeholder, sandbox_manager, run.max_questions
         )
 
         async def create_stakeholder_agent_config():
@@ -214,49 +220,53 @@ async def worker_execute(
         worker_config = get_worker_config(benchmark_name)
         worker = ReActWorker(model=run.worker_model, config=worker_config)
 
-        # We'll keep all sandbox-dependent operations inside ONE step to avoid
-        # losing the in-memory sandbox manager registry between steps.
         output_dir = Path(f"data/runs/{run.id}")
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        async def execute_and_download():
-            # Create sandbox with skills directory
-            # This uploads the benchmark-specific skills to /skills/{package}
-            # sandbox_manager is already created above with correct benchmark type
-            # Pass environment variables needed by skills (e.g., EXA_API_KEY for ResearchRubrics)
-            sandbox_envs = {
-                "EXA_API_KEY": settings.exa_api_key,
-            }
-            await sandbox_manager.create(
-                run.id, skills_dir=skills_dir, timeout_minutes=30, envs=sandbox_envs
-            )
-            await sandbox_manager.upload_inputs(run.id, input_resources)
+        # Create sandbox outside step - idempotent (returns early if exists)
+        # Pass environment variables needed by skills (e.g., EXA_API_KEY for ResearchRubrics)
+        sandbox_envs = {
+            "EXA_API_KEY": settings.exa_api_key,
+        }
+        e2b_sandbox_id = await sandbox_manager.create(
+            run.id, skills_dir=skills_dir, timeout_minutes=30, envs=sandbox_envs
+        )
 
-            # Execute the worker
-            exec_out = await worker.execute(
-                run_id=run.id,
-                task_description=experiment.task_description,
-                input_resources=input_resources,
-                toolkit=toolkit,
-            )
+        # Save sandbox ID to run for cleanup across process boundaries
+        async def save_sandbox_id():
+            existing = queries.runs.get(run.id)
+            if existing and not existing.e2b_sandbox_id:
+                updated = existing.model_copy(update={"e2b_sandbox_id": e2b_sandbox_id})
+                queries.runs.update(updated)
+            return {"sandbox_id": e2b_sandbox_id}
 
-            # Download outputs from sandbox
-            downloaded = await sandbox_manager.download_all_outputs(run.id, output_dir)
+        await ctx.step.run("save-sandbox-id", save_sandbox_id)
 
-            return {
-                "execution_output": exec_out.model_dump(mode="json"),
-                "downloaded_files": [df.model_dump() for df in downloaded],
-            }
+        await sandbox_manager.upload_inputs(run.id, input_resources)
 
-        execute_result = await ctx.step.run("execute-and-download", execute_and_download)
-        execution_output = WorkerExecutionOutput.model_validate(execute_result["execution_output"])
-        downloaded_files: list[dict[str, str | int]] = execute_result["downloaded_files"]
+        # Execute worker - tool calls become individual steps via as_step()
+        exec_out = await worker.execute(
+            run_id=run.id,
+            task_description=experiment.task_description,
+            input_resources=input_resources,
+            toolkit=toolkit,
+        )
+
+        # Download outputs as step
+        async def download_outputs():
+            downloaded_files = await sandbox_manager.download_all_outputs(run.id, output_dir)
+            return downloaded_files
+
+        downloaded_files = await ctx.step.run(
+            "download-outputs", download_outputs, output_type=DownloadedFiles
+        )
+        execution_output = exec_out
 
         # Register downloaded files as Resources
         output_resource_ids = []
-        for file_info in downloaded_files:
-            local_path = str(file_info["local_path"])
-            size_bytes = int(file_info["size_bytes"])
+        for file_info in downloaded_files.files:
+            local_path = file_info.local_path
+            size_bytes = file_info.size_bytes
 
             async def register_resource(lp=local_path, sb=size_bytes):
                 return queries.resources.create(
@@ -325,7 +335,7 @@ async def worker_execute(
         # Mark as failed and emit cleanup event
         error_msg = str(exc)
 
-        async def mark_failed():
+        async def mark_failed() -> str:
             existing = queries.runs.get(run.id)
             if existing:
                 updated = existing.model_copy(
@@ -335,7 +345,7 @@ async def worker_execute(
                     }
                 )
                 queries.runs.update(updated)
-            return None
+            return f"Error message: {error_msg}"
 
         await ctx.step.run(
             "mark-failed",
@@ -357,7 +367,11 @@ async def worker_execute(
             return {"event_emitted": True}
 
         await ctx.step.run("emit-cleanup-failure", emit_cleanup_failure)
-        raise  # Best effort cleanup
+
+        # Don't re-raise - this prevents Inngest from retrying after an intentional failure.
+        # Re-raising would cause the function to retry, and since worker.execute() is
+        # non-deterministic (LLM makes different tool calls), we'd see tool runs AFTER mark-failed.
+        raise inngest.NonRetriableError(f"Worker execution failed: {error_msg}")
 
     return {
         "run_id": str(run.id),

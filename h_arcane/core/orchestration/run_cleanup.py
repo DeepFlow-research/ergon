@@ -4,18 +4,16 @@ from uuid import UUID
 
 import inngest
 
-# Use GDPEvalSandboxManager for cleanup - all sandbox managers share the same
-# _sandboxes registry, so any subclass can terminate sandboxes from any benchmark.
-from h_arcane.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from h_arcane.core.db.models import RunStatus
 from h_arcane.core.db.queries import queries
 from h_arcane.core.infrastructure.inngest_client import inngest_client
+from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 
 
-@inngest_client.create_function(  # type: ignore[misc]
+@inngest_client.create_function(
     fn_id="run-cleanup",
     trigger=inngest.TriggerEvent(event="run/cleanup"),
-    retries=2,  # Retry cleanup if it fails
+    retries=0,  # Retry cleanup if it fails
     concurrency=[inngest.Concurrency(limit=50, scope="fn")],
 )
 async def run_cleanup(
@@ -25,7 +23,7 @@ async def run_cleanup(
     Cleanup function for completed or failed runs.
 
     Handles:
-    - Terminating sandbox for the run_id
+    - Terminating sandbox using stored E2B sandbox_id (works across process boundaries)
     - Ensuring run status is correctly set (idempotent)
     - Logging cleanup results
     """
@@ -42,33 +40,40 @@ async def run_cleanup(
     run_id = UUID(run_id_str)
     status = status_str
 
-    # Terminate sandbox (idempotent - safe to call multiple times)
+    # Terminate sandbox using stored sandbox_id (works across process boundaries)
     async def terminate_sandbox():
-        try:
-            await GDPEvalSandboxManager().terminate(run_id)
-            return {
-                "success": True,
-                "run_id": str(run_id),
-                "sandbox_terminated": True,
-            }
-        except Exception as e:
-            # Log but don't fail - sandbox might already be terminated
-            error_str = str(e)
-            if "not created" in error_str.lower() or "not found" in error_str.lower():
-                # Sandbox already terminated or never existed - this is fine
-                return {
-                    "success": True,
-                    "run_id": str(run_id),
-                    "sandbox_terminated": False,
-                    "message": "Sandbox already terminated or never existed",
-                }
-            # Other error - log but continue
-            print(f"Warning: Error terminating sandbox for run_id={run_id}: {e}")
+        # Get the run to find the E2B sandbox_id
+        run = queries.runs.get(run_id)
+        if not run:
             return {
                 "success": False,
                 "run_id": str(run_id),
-                "error": error_str,
+                "error": "Run not found",
             }
+
+        if not run.e2b_sandbox_id:
+            # No sandbox ID stored - sandbox may never have been created
+            return {
+                "success": True,
+                "run_id": str(run_id),
+                "sandbox_terminated": False,
+                "message": "No sandbox ID stored - sandbox may not have been created",
+            }
+
+        # Use the static method to terminate by sandbox_id
+        # This works across process boundaries since we use the E2B API directly
+        terminated = await BaseSandboxManager.terminate_by_sandbox_id(run.e2b_sandbox_id)
+
+        # Clear the sandbox_id from the run to prevent duplicate cleanup attempts
+        updated_run = run.model_copy(update={"e2b_sandbox_id": None})
+        queries.runs.update(updated_run)
+
+        return {
+            "success": True,
+            "run_id": str(run_id),
+            "sandbox_terminated": terminated,
+            "sandbox_id": run.e2b_sandbox_id,
+        }
 
     terminate_result = await ctx.step.run("terminate-sandbox", terminate_sandbox)
 

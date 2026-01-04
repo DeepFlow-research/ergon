@@ -61,13 +61,13 @@ async def main(
             if para_text.strip():
                 if para_text.startswith("# "):
                     para = doc.add_paragraph(para_text[2:])
-                    para.style = "Heading 1"  # type: ignore[assignment]
+                    para.style = "Heading 1"
                 elif para_text.startswith("## "):
                     para = doc.add_paragraph(para_text[3:])
-                    para.style = "Heading 2"  # type: ignore[assignment]
+                    para.style = "Heading 2"
                 elif para_text.startswith("### "):
                     para = doc.add_paragraph(para_text[4:])
-                    para.style = "Heading 3"  # type: ignore[assignment]
+                    para.style = "Heading 3"
                 else:
                     para = doc.add_paragraph(para_text)
                     if template_style == "formal":

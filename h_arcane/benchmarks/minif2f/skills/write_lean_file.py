@@ -4,6 +4,11 @@ from pathlib import Path
 
 from .responses import WriteLeanResponse
 
+# Write files inside the Mathlib project so they have access to Mathlib imports
+# NOTE: Mathlib is installed in /tools (not /workspace) to avoid downloading all library
+# files as outputs when the run completes.
+LEAN_PROJECT_SRC = Path("/tools/mathlib_project/src")
+
 
 async def main(filename: str, content: str) -> WriteLeanResponse:
     """
@@ -22,7 +27,10 @@ async def main(filename: str, content: str) -> WriteLeanResponse:
         WriteLeanResponse with filename and bytes written
     """
     try:
-        filepath = Path("/workspace") / filename
+        # Ensure Mathlib project src directory exists
+        LEAN_PROJECT_SRC.mkdir(parents=True, exist_ok=True)
+
+        filepath = LEAN_PROJECT_SRC / filename
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
         content_bytes = content.encode("utf-8")

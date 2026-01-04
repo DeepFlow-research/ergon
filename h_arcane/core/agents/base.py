@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from h_arcane.core.db.models import Resource
+    from h_arcane.core.communication.schemas import MessageResponse
 
 
 class WorkerExecutionOutput(BaseModel):
@@ -75,8 +76,20 @@ class BaseStakeholder(ABC):
         ...
 
     @abstractmethod
-    async def answer(self, question: str) -> str:
-        """Answer a question based on benchmark context."""
+    async def answer(
+        self,
+        question: str,
+        history: list["MessageResponse"] | None = None,
+    ) -> str:
+        """Answer a question based on benchmark context.
+
+        Args:
+            question: The current question from the worker
+            history: Previous Q&A pairs in this thread (oldest first)
+
+        Returns:
+            The stakeholder's answer
+        """
         ...
 
 

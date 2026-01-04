@@ -1,12 +1,12 @@
 """Test SQLModel serialization with model_dump(mode='json')."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from h_arcane.core.db.models import Run, RunStatus, Experiment, Resource
 from sqlmodel import SQLModel
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.core.config.evaluation_config import evaluation_config
 
 
@@ -23,8 +23,8 @@ def test_run_serialization():
         worker_model=evaluation_config.llm_stakeholder.model,
         max_questions=10,
         status=RunStatus.EXECUTING,
-        created_at=datetime.utcnow(),
-        started_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        started_at=datetime.now(timezone.utc),
         output_resource_ids=["resource-1", "resource-2"],
         final_score=85.5,
         normalized_score=0.85,
@@ -83,7 +83,7 @@ def test_experiment_serialization():
         ground_truth_rubric={"stages": [{"criteria": []}]},
         benchmark_specific_data={},
         category="test",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
     )
 
     print(f"\nExperiment object: {experiment}")

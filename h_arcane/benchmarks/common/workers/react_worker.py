@@ -4,9 +4,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 from agents import Agent, Runner, function_tool
+from inngest_agents import as_step
 
 from h_arcane.core.agents.base import BaseToolkit, WorkerExecutionOutput
-from h_arcane.core.agents.tracing import log_actions_from_result
+from h_arcane.benchmarks.common.workers.tracing import log_actions_from_result
 from h_arcane.core.db.models import AgentConfig, Resource
 from h_arcane.core.db.queries import queries
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
@@ -61,11 +62,13 @@ class ReActWorker:
             print(output.output_text)
             ```
         """
-        # Build tools list
-        tools = [
+        # Build tools list with durability wrappers
+        # Each tool call becomes an individual Inngest step via as_step()
+        raw_tools = [
             self._make_ask_tool(toolkit),
             *toolkit.get_tools(),
         ]
+        tools = [as_step(t) for t in raw_tools]
 
         # Create agent config record before running
         agent_config = queries.agent_configs.create(

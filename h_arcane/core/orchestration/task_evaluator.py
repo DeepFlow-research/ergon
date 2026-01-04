@@ -13,7 +13,7 @@ from h_arcane.core.orchestration.events import TaskEvaluationEvent
 @inngest_client.create_function(
     fn_id="evaluate-task-run",
     trigger=inngest.TriggerEvent(event="task/evaluate"),
-    retries=2,
+    retries=0,
     concurrency=[inngest.Concurrency(limit=10, scope="fn")],
     output_type=TaskEvaluationResult,
 )

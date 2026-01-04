@@ -1,7 +1,7 @@
 """Evaluation context - data and runner with Inngest step support."""
 
 import logging
-from typing import Awaitable, Callable, TypeVar
+from typing import Awaitable, Callable, TypeVar, cast
 
 import inngest
 from openai import AsyncOpenAI
@@ -65,31 +65,39 @@ class EvaluationRunner:
         self,
         step_id: str,
         fn: Callable[[], Awaitable[R]],
-        output_type: type | None = None,
+        output_type: type[R] | None = None,
     ) -> R:
         """Run a function as an Inngest step.
 
         Args:
             step_id: Unique identifier for the step
             fn: Async function to execute
-            output_type: Optional Pydantic type for step output serialization
+            output_type: Optional Pydantic type for step output serialization.
+                         When provided, Inngest deserializes the result into this type.
 
         Returns:
-            Result from the function
+            Result from the function (deserialized as output_type if provided)
         """
         if output_type:
-            return await self.inngest_ctx.step.run(step_id, fn, output_type=output_type)
-        return await self.inngest_ctx.step.run(step_id, fn)
+            return cast(R, await self.inngest_ctx.step.run(step_id, fn, output_type=output_type))
+        return cast(R, await self.inngest_ctx.step.run(step_id, fn))
 
     async def ensure_sandbox(self) -> dict:
-        """Ensure sandbox exists for this run. Returns status dict."""
+        """Ensure sandbox exists for this run. Returns status dict.
+
+        If an existing sandbox is found, resets its timeout to 30 minutes
+        to prevent expiration during evaluation.
+        """
         sandbox = self.sandbox_manager.get_sandbox(self.data.run_id)
         if not sandbox:
             # Use 30 minute timeout for evaluation sandboxes as well
             await self.sandbox_manager.create(self.data.run_id, timeout_minutes=30)
             self._owns_sandbox = True
             return {"created": True, "run_id": str(self.data.run_id)}
-        return {"created": False, "run_id": str(self.data.run_id)}
+
+        # Existing sandbox found - reset timeout to avoid expiration during evaluation
+        await self.sandbox_manager.reset_timeout(self.data.run_id, timeout_minutes=30)
+        return {"created": False, "run_id": str(self.data.run_id), "timeout_reset": True}
 
     async def upload_files(self, files: list[Resource]) -> dict:
         """Upload files to sandbox /evaluation/ directory."""

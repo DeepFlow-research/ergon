@@ -2,12 +2,14 @@
 
 from openai import AsyncOpenAI
 from openai.types.chat import (
+    ChatCompletionAssistantMessageParam,
     ChatCompletionMessageParam,
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
 )
 
 from h_arcane.core.agents.base import BaseStakeholder
+from h_arcane.core.communication.schemas import MessageResponse
 from h_arcane.core.config.evaluation_config import evaluation_config
 from h_arcane.core.db.models import Experiment
 from h_arcane.settings import settings
@@ -101,12 +103,17 @@ Research request: {task_prompt}
 
         return "\n".join(lines)
 
-    async def answer(self, question: str) -> str:
+    async def answer(
+        self,
+        question: str,
+        history: list[MessageResponse] | None = None,
+    ) -> str:
         """
         Answer a question based on rubric criteria.
 
         Args:
             question: The worker's question about the research task
+            history: Previous Q&A pairs in this thread (oldest first)
 
         Returns:
             Answer string based on rubric preferences
@@ -123,11 +130,22 @@ Research request: {task_prompt}
                 role="system",
                 content=self.system_prompt,
             ),
-            ChatCompletionUserMessageParam(
-                role="user",
-                content=question,
-            ),
         ]
+
+        # Add history as actual chat turns
+        if history:
+            for msg in history:
+                if msg.from_agent_id.endswith(":worker"):
+                    messages.append(
+                        ChatCompletionUserMessageParam(role="user", content=msg.content)
+                    )
+                else:
+                    messages.append(
+                        ChatCompletionAssistantMessageParam(role="assistant", content=msg.content)
+                    )
+
+        # Add current question
+        messages.append(ChatCompletionUserMessageParam(role="user", content=question))
 
         response = await self._client.chat.completions.create(
             model=self._model,

@@ -23,10 +23,10 @@ from h_arcane.core.infrastructure.inngest_client import inngest_client
 from h_arcane.core.orchestration.events import CriterionEvaluationEvent
 
 
-@inngest_client.create_function(  # type: ignore[misc]
+@inngest_client.create_function(
     fn_id="evaluate-criterion",
     trigger=inngest.TriggerEvent(event="criterion/evaluate"),
-    retries=2,
+    retries=0,
     concurrency=[inngest.Concurrency(limit=20, scope="fn")],
     output_type=CriterionResult,
 )

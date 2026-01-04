@@ -1,6 +1,6 @@
 """Run evaluation Inngest function."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TypeVar, cast
 from uuid import UUID
 
@@ -32,10 +32,10 @@ def _require_not_none(value: T | None, error_msg: str) -> T:
     return value
 
 
-@inngest_client.create_function(  # type: ignore[misc]
+@inngest_client.create_function(
     fn_id="run-evaluate",
     trigger=inngest.TriggerEvent(event="execution/done"),
-    retries=1,
+    retries=0,
     output_type=RunEvaluateResult,
     concurrency=[inngest.Concurrency(limit=25, scope="fn")],
 )
@@ -198,7 +198,7 @@ async def run_evaluate(
             updated = existing.model_copy(
                 update={
                     "status": RunStatus.COMPLETED,
-                    "completed_at": datetime.utcnow(),
+                    "completed_at": datetime.now(timezone.utc),
                     "final_score": evaluation_result.total_score,
                     "normalized_score": evaluation_result.normalized_score,
                     "questions_asked": run.questions_asked or 0,

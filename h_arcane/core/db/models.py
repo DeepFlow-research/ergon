@@ -3,11 +3,71 @@
 from sqlmodel import SQLModel, Field, Column, Index
 from sqlalchemy import JSON
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
-from h_arcane.core.models.enums import BenchmarkName
+from pydantic import BaseModel
+
+from h_arcane.benchmarks.enums import BenchmarkName
+
+
+# =============================================================================
+# Error Tracking Models
+# =============================================================================
+
+
+class ExecutionError(BaseModel):
+    """
+    Error details for failed tool calls or evaluations.
+
+    Stored as JSON in the `error` column on Action and CriterionResult.
+    If error is None, the action/evaluation succeeded.
+
+    No automatic classification - just record what happened, review manually.
+    """
+
+    message: str
+    exception_type: str | None = None  # e.g., "ModuleNotFoundError"
+    stack_trace: str | None = None  # Full traceback for debugging
+    details: dict | None = None  # Optional: sandbox logs, extra context
+
+
+def create_execution_error(
+    exception: Exception | None = None,
+    message: str | None = None,
+    details: dict | None = None,
+) -> ExecutionError:
+    """
+    Create ExecutionError with full stack trace.
+
+    Usage:
+        try:
+            ...
+        except Exception as e:
+            error = create_execution_error(e)
+    """
+    import traceback
+
+    if exception:
+        return ExecutionError(
+            message=message or str(exception),
+            exception_type=type(exception).__name__,
+            stack_trace=traceback.format_exc(),
+            details=details,
+        )
+    else:
+        return ExecutionError(
+            message=message or "Unknown error",
+            exception_type=None,
+            stack_trace=None,
+            details=details,
+        )
+
+
+# =============================================================================
+# Core Models
+# =============================================================================
 
 
 class RunStatus(str, Enum):
@@ -30,7 +90,7 @@ class MessageRole(str, Enum):
 class Experiment(SQLModel, table=True):
     """A task from any supported benchmark."""
 
-    __tablename__ = "experiments"  # type: ignore[assignment]
+    __tablename__ = "experiments"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
 
@@ -50,7 +110,7 @@ class Experiment(SQLModel, table=True):
 
     # Generic metadata
     category: str = Field(index=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("ix_experiments_benchmark_task", "benchmark_name", "task_id", unique=True),
@@ -60,7 +120,7 @@ class Experiment(SQLModel, table=True):
 class Run(SQLModel, table=True):
     """A single run of an experiment."""
 
-    __tablename__ = "runs"  # type: ignore[assignment]
+    __tablename__ = "runs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
@@ -73,8 +133,11 @@ class Run(SQLModel, table=True):
     status: RunStatus = Field(default=RunStatus.PENDING)
     error_message: str | None = None
 
+    # E2B sandbox tracking (for cleanup)
+    e2b_sandbox_id: str | None = None
+
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
@@ -104,7 +167,7 @@ class Run(SQLModel, table=True):
 class Message(SQLModel, table=True):
     """A message in the run's conversation history."""
 
-    __tablename__ = "messages"  # type: ignore[assignment]
+    __tablename__ = "messages"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
@@ -115,7 +178,7 @@ class Message(SQLModel, table=True):
     sequence_num: int  # 0, 1, 2, ...
 
     # Timing
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Metadata
     tokens: int | None = None
@@ -127,7 +190,7 @@ class Message(SQLModel, table=True):
 class Action(SQLModel, table=True):
     """A single action in the worker's execution trace."""
 
-    __tablename__ = "actions"  # type: ignore[assignment]
+    __tablename__ = "actions"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
@@ -141,8 +204,11 @@ class Action(SQLModel, table=True):
     input: str  # Tool input (JSON or text)
     output: str | None = None  # Tool output
 
+    # Error tracking (None = success)
+    error: dict | None = Field(default=None, sa_column=Column(JSON))
+
     # Timing
-    started_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
     duration_ms: int | None = None
 
@@ -156,11 +222,22 @@ class Action(SQLModel, table=True):
         Index("ix_actions_agent", "agent_id"),
     )
 
+    @property
+    def success(self) -> bool:
+        """Convenience: success means no error."""
+        return self.error is None
+
+    def get_error(self) -> ExecutionError | None:
+        """Get error as ExecutionError object."""
+        if self.error is None:
+            return None
+        return ExecutionError(**self.error)
+
 
 class Resource(SQLModel, table=True):
     """A file resource (input or output)."""
 
-    __tablename__ = "resources"  # type: ignore[assignment]
+    __tablename__ = "resources"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
 
@@ -175,7 +252,7 @@ class Resource(SQLModel, table=True):
     size_bytes: int
 
     preview_text: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("ix_resources_experiment", "experiment_id"),
@@ -251,7 +328,7 @@ class Resource(SQLModel, table=True):
 class AgentConfig(SQLModel, table=True):
     """Agent configuration snapshot for a run."""
 
-    __tablename__ = "agent_configs"  # type: ignore[assignment]
+    __tablename__ = "agent_configs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
@@ -265,7 +342,7 @@ class AgentConfig(SQLModel, table=True):
     system_prompt: str
     tools: list[str] = Field(default_factory=list, sa_column=Column(JSON))
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (Index("ix_agent_configs_run", "run_id"),)
 
@@ -273,7 +350,7 @@ class AgentConfig(SQLModel, table=True):
 class Evaluation(SQLModel, table=True):
     """Aggregate evaluation result for a run."""
 
-    __tablename__ = "evaluations"  # type: ignore[assignment]
+    __tablename__ = "evaluations"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True, unique=True)
@@ -288,13 +365,13 @@ class Evaluation(SQLModel, table=True):
     stages_passed: int
     failed_gate: str | None = None  # First required stage that failed
 
-    evaluated_at: datetime = Field(default_factory=datetime.utcnow)
+    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class CriterionResult(SQLModel, table=True):
     """One row per (run, stage, criterion) — fully queryable."""
 
-    __tablename__ = "criterion_results"  # type: ignore[assignment]
+    __tablename__ = "criterion_results"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
@@ -320,6 +397,9 @@ class CriterionResult(SQLModel, table=True):
         description="Full execution code (code_rule) or formatted prompt (llm_judge)",
     )
 
+    # Error tracking (None = ran successfully)
+    error: dict | None = Field(default=None, sa_column=Column(JSON))
+
     # What was evaluated — references
     evaluated_action_ids: list[str] = Field(
         default_factory=list, sa_column=Column(JSON)
@@ -333,6 +413,17 @@ class CriterionResult(SQLModel, table=True):
         Index("ix_criterion_results_stage", "stage_name"),
     )
 
+    @property
+    def ran_successfully(self) -> bool:
+        """Convenience: ran successfully means no error."""
+        return self.error is None
+
+    def get_error(self) -> ExecutionError | None:
+        """Get error as ExecutionError object."""
+        if self.error is None:
+            return None
+        return ExecutionError(**self.error)
+
 
 class TaskEvaluationResult(SQLModel, table=True):
     """Complete task evaluation result snapshot.
@@ -341,7 +432,7 @@ class TaskEvaluationResult(SQLModel, table=True):
     This provides a denormalized view/snapshot of the evaluation state for a run.
     """
 
-    __tablename__ = "task_evaluation_results"  # type: ignore[assignment]
+    __tablename__ = "task_evaluation_results"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True, unique=True)
@@ -359,6 +450,77 @@ class TaskEvaluationResult(SQLModel, table=True):
     stages_passed: int
     failed_gate: str | None = None
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (Index("ix_task_evaluation_results_run", "run_id"),)
+
+
+# =============================================================================
+# Communication Service Models
+# =============================================================================
+
+
+class Thread(SQLModel, table=True):
+    """A conversation thread between two agents."""
+
+    __tablename__ = "threads"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+
+    # Context - which run/experiment this thread belongs to
+    # Note: indices defined in __table_args__ below, not here (to avoid duplicates)
+    run_id: UUID = Field(foreign_key="runs.id")
+    experiment_id: UUID = Field(foreign_key="experiments.id")
+
+    # Participants (stored in consistent order for deduplication)
+    # Note: composite index defined in __table_args__, individual indices for lookups
+    agent_a_id: str = Field(index=True)  # e.g. "{run_id}:worker"
+    agent_b_id: str = Field(index=True)  # e.g. "{run_id}:stakeholder"
+
+    # Topic - index defined in __table_args__
+    topic: str = Field()
+
+    # Timestamps
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )  # Updated on new message
+
+    __table_args__ = (
+        Index("ix_threads_participants", "agent_a_id", "agent_b_id"),
+        Index("ix_threads_topic", "topic"),
+        Index("ix_threads_run", "run_id"),
+        Index("ix_threads_experiment", "experiment_id"),
+    )
+
+
+class ThreadMessage(SQLModel, table=True):
+    """A message within a conversation thread."""
+
+    __tablename__ = "thread_messages"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    thread_id: UUID = Field(foreign_key="threads.id", index=True)
+
+    # Context - denormalized for query convenience
+    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
+
+    # Sender/Recipient (e.g. "{run_id}:worker", "{run_id}:stakeholder")
+    from_agent_id: str = Field(index=True)
+    to_agent_id: str = Field(index=True)
+
+    # Content
+    content: str
+
+    # Ordering and timing
+    sequence_num: int  # 0, 1, 2, ... within thread
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        Index("ix_thread_messages_thread_seq", "thread_id", "sequence_num"),
+        Index("ix_thread_messages_from", "from_agent_id"),
+        Index("ix_thread_messages_to", "to_agent_id"),
+        Index("ix_thread_messages_run", "run_id"),
+        Index("ix_thread_messages_experiment", "experiment_id"),
+    )

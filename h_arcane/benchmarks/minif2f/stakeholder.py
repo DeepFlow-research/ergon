@@ -7,7 +7,9 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
 )
 
+from h_arcane.benchmarks.common import format_conversation_history
 from h_arcane.core.agents.base import BaseStakeholder
+from h_arcane.core.communication.schemas import MessageResponse
 from h_arcane.core.config.evaluation_config import evaluation_config
 from h_arcane.settings import settings
 
@@ -15,12 +17,18 @@ from h_arcane.settings import settings
 class MiniF2FStakeholder(BaseStakeholder):
     """Provides proof hints from ground truth without revealing the full proof."""
 
-    HINT_PROMPT = """You have access to a ground truth proof for this theorem.
+    HINT_PROMPT = """You have access to a ground truth proof for this Lean 3 Mathlib theorem.
 When asked about proof strategy, provide helpful hints WITHOUT revealing the full proof.
 
+IMPORTANT: This is Lean 3 with Mathlib. Always use correct import paths:
+- Use `.basic` suffix: `import data.real.basic`, `import data.finset.basic`
+- `import tactic` gives most tactics
+- `import algebra.big_operators.basic` for ∑ and ∏ notation (with `open_locale big_operators`)
+
 Hints should guide toward:
+- Correct Lean 3 Mathlib imports (with .basic suffix)
 - Proof strategies (induction, cases, contradiction, etc.)
-- Useful tactics (simp, ring, linarith, etc.)
+- Useful tactics (simp, ring, linarith, norm_num, field_simp, norm_cast, etc.)
 - Key lemmas or facts that might help
 - General approach without giving away the solution
 
@@ -55,12 +63,17 @@ Be encouraging and helpful, but don't reveal the complete proof."""
         """System prompt describing stakeholder behavior (for logging)."""
         return self.HINT_PROMPT
 
-    async def answer(self, question: str) -> str:
+    async def answer(
+        self,
+        question: str,
+        history: list[MessageResponse] | None = None,
+    ) -> str:
         """
         Answer a question with a helpful hint based on ground truth proof.
 
         Args:
             question: The worker's question about proof strategy
+            history: Previous Q&A pairs in this thread (oldest first)
 
         Returns:
             Hint string that guides without revealing the full proof
@@ -72,6 +85,9 @@ Be encouraging and helpful, but don't reveal the complete proof."""
             # Returns: "Consider using induction on n..."
             ```
         """
+        history_text = format_conversation_history(history)
+        history_section = f"\n\nPrevious conversation:\n{history_text}" if history_text else ""
+
         messages: list[ChatCompletionMessageParam] = [
             ChatCompletionSystemMessageParam(
                 role="system",
@@ -84,6 +100,7 @@ Be encouraging and helpful, but don't reveal the complete proof."""
 
 Ground truth proof (for reference only - don't reveal this):
 {self.ground_truth_proof}
+{history_section}
 
 Question: {question}
 

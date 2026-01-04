@@ -6,7 +6,9 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
 )
 
+from h_arcane.benchmarks.common import format_conversation_history
 from h_arcane.core.agents.base import BaseStakeholder
+from h_arcane.core.communication.schemas import MessageResponse
 from h_arcane.core.config.evaluation_config import evaluation_config
 from h_arcane.benchmarks.gdpeval.rubric import StagedRubric
 from h_arcane.settings import settings
@@ -21,9 +23,11 @@ You are a stakeholder with specific preferences for how a task should be done.
 Your preferences (internal, don't reveal directly):
 {rubric_summary}
 
-A worker asks you: "{question}"
-
 Task context: {task_description}
+
+{history_section}
+
+A worker asks you: "{question}"
 
 Answer helpfully and specifically based on your preferences.
 Don't reveal your full rubric — just answer the specific question.
@@ -60,12 +64,17 @@ Be concise but complete.
         """System prompt describing stakeholder behavior (for logging)."""
         return self.ANSWER_PROMPT
 
-    async def answer(self, question: str) -> str:
+    async def answer(
+        self,
+        question: str,
+        history: list[MessageResponse] | None = None,
+    ) -> str:
         """
         Answer a question based on ground truth rubric.
 
         Args:
             question: The worker's question
+            history: Previous Q&A pairs in this thread (oldest first)
 
         Returns:
             Answer string based on rubric preferences
@@ -77,6 +86,9 @@ Be concise but complete.
             # Returns: "The output should be a PDF document with..."
             ```
         """
+        history_text = format_conversation_history(history)
+        history_section = history_text if history_text else "This is the first question."
+
         messages: list[ChatCompletionMessageParam] = [
             ChatCompletionUserMessageParam(
                 role="user",
@@ -84,6 +96,7 @@ Be concise but complete.
                     rubric_summary=self._rubric_summary,
                     question=question,
                     task_description=self.task_description,
+                    history_section=history_section,
                 ),
             )
         ]

@@ -34,6 +34,10 @@ def get_session() -> Generator[Session, None, None]:
 
 def init_db():
     """Initialize database - create all tables."""
+    # Import all models so they register with SQLModel.metadata
+    # This must happen BEFORE create_all() is called
+    from h_arcane.core.db import models  # noqa: F401
+
     engine = get_engine()
     SQLModel.metadata.create_all(engine)
     print("✅ Database tables created successfully")

@@ -2,14 +2,12 @@
 
 from pydantic import BaseModel, Field
 
-from h_arcane.benchmarks.common.workers.config import BaselineType
-
 
 class ExperimentConfig(BaseModel):
     """Configuration for experiment runs."""
 
-    # Baseline selection
-    baseline: BaselineType = Field(default=BaselineType.REACT)
+    # Baseline selection (e.g. "react")
+    baseline: str = Field(default="react")
 
     # Worker configuration
     worker_model: str = Field(default="gpt-4o")

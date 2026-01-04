@@ -2,7 +2,7 @@
 name = "h-arcane"
 version = "0.1.0"
 description = "H-ARCANE: Hypothesis-Based Modeling for Uncertainty-Aware Alignment"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 dependencies = [
     "inngest>=0.3.0",
     "sqlmodel>=0.0.14",
@@ -28,6 +28,18 @@ dependencies = [
     "datasets>=4.4.1",
     "matplotlib>=3.10.8",
     "exa-py>=1.0.0",
+    "inngest-backed-agents-sdk",
+    "e2b-sandbox-inspector",
+    "inngest-inspector",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "ty",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-timeout>=2.2.0",
 ]
 
 [build-system]
@@ -40,9 +52,29 @@ include = ["h_arcane*"]
 
 [tool.black]
 line-length = 100
-target-version = ['py310']
+target-version = ['py313']
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py313"
+exclude = ["h_arcane/notebooks"]
+
+[tool.ty.src]
+exclude = ["h_arcane/notebooks"]
+
+[tool.pyright]
+exclude = ["data/runs"]
+
+[tool.uv.sources]
+inngest-backed-agents-sdk = { git = "https://github.com/cm2435/inngest-agents" }
+e2b-sandbox-inspector = { git = "https://github.com/cm2435/e2b_sandbox_inspector.git" }
+inngest-inspector = { git = "https://github.com/cm2435/inngest_cli_python.git" }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "e2e: marks tests as end-to-end (deselect with '-m \"not e2e\"')",
+]
+timeout = 600  # Default timeout for all tests
 

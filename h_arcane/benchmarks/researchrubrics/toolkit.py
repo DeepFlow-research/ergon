@@ -6,8 +6,7 @@ from agents import function_tool, Tool
 
 from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core.agents.base import BaseToolkit, BaseStakeholder
-from h_arcane.core.db.models import Message, MessageRole
-from h_arcane.core.db.queries import queries
+from h_arcane.core.communication import communication_service, CreateMessageRequest
 
 # Import response types from skills
 from h_arcane.benchmarks.researchrubrics.skills.responses import (
@@ -30,6 +29,7 @@ class ResearchRubricsToolkit(BaseToolkit):
     def __init__(
         self,
         run_id: UUID,
+        experiment_id: UUID,
         stakeholder: BaseStakeholder,
         sandbox_manager: BaseSandboxManager,
         max_questions: int = 10,
@@ -39,16 +39,17 @@ class ResearchRubricsToolkit(BaseToolkit):
 
         Args:
             run_id: The run ID for logging messages and actions
+            experiment_id: The experiment ID for traceability
             stakeholder: Stakeholder for answering questions
             sandbox_manager: Sandbox manager for skill execution
             max_questions: Maximum number of questions allowed
         """
         self.run_id = run_id
+        self.experiment_id = experiment_id
         self.stakeholder = stakeholder
         self.sandbox_manager = sandbox_manager
         self.max_questions = max_questions
         self._questions_asked = 0
-        self._message_num = 0
 
     @property
     def questions_asked(self) -> int:
@@ -82,30 +83,45 @@ class ResearchRubricsToolkit(BaseToolkit):
         if self._questions_asked >= self.max_questions:
             return f"[Maximum questions ({self.max_questions}) reached.]"
 
-        # Log worker question
-        queries.messages.create(
-            Message(
+        worker_id = f"{self.run_id}:worker"
+        stakeholder_id = f"{self.run_id}:stakeholder"
+        thread_topic = "task_clarification"
+
+        # Save worker question to thread
+        communication_service.save_message(
+            CreateMessageRequest(
                 run_id=self.run_id,
-                sender=MessageRole.WORKER,
+                experiment_id=self.experiment_id,
+                from_agent_id=worker_id,
+                to_agent_id=stakeholder_id,
+                thread_topic=thread_topic,
                 content=question,
-                sequence_num=self._message_num,
             )
         )
-        self._message_num += 1
 
-        # Get answer
-        answer = await self.stakeholder.answer(question)
+        # Get conversation history for stakeholder context
+        threads = communication_service.get_all_threads_between_agents(worker_id, stakeholder_id)
+        history = None
+        if threads.threads:
+            thread_data = communication_service.get_thread_messages(threads.threads[0].thread_id)
+            if thread_data:
+                # Exclude the question we just added (it's the last message)
+                history = thread_data.messages[:-1] if thread_data.messages else None
 
-        # Log stakeholder answer
-        queries.messages.create(
-            Message(
+        # Get answer with history context
+        answer = await self.stakeholder.answer(question, history=history)
+
+        # Save stakeholder answer to thread
+        communication_service.save_message(
+            CreateMessageRequest(
                 run_id=self.run_id,
-                sender=MessageRole.STAKEHOLDER,
+                experiment_id=self.experiment_id,
+                from_agent_id=stakeholder_id,
+                to_agent_id=worker_id,
+                thread_topic=thread_topic,
                 content=answer,
-                sequence_num=self._message_num,
             )
         )
-        self._message_num += 1
 
         self._questions_asked += 1
         return answer

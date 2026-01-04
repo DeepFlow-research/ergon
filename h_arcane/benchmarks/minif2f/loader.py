@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from h_arcane.core.db.connection import get_engine
 from h_arcane.core.db.models import Experiment
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.minif2f.schemas import MiniF2FProblem
 from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
 

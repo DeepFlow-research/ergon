@@ -11,6 +11,8 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Init script creates h_arcane_test database alongside h_arcane
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U h_arcane"]
       interval: 5s
@@ -23,13 +25,13 @@ services:
       dockerfile: Dockerfile
     ports:
       - "9000:9000"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://h_arcane:h_arcane_dev@postgres:5432/h_arcane
       - INNGEST_DEV=1
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - E2B_API_KEY=${E2B_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

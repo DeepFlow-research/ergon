@@ -2,7 +2,8 @@
 
 from uuid import UUID
 from typing import TypeVar, Generic, Type
-from sqlmodel import SQLModel, select
+from sqlmodel import SQLModel, select, desc
+from datetime import datetime, timezone
 
 from h_arcane.core.db.connection import get_session
 from h_arcane.core.db.models import (
@@ -16,8 +17,10 @@ from h_arcane.core.db.models import (
     Evaluation,
     CriterionResult,
     TaskEvaluationResult,
+    Thread,
+    ThreadMessage,
 )
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.enums import BenchmarkName
 
 
 T = TypeVar("T", bound=SQLModel)
@@ -76,13 +79,13 @@ class RunsQueries(BaseQueries[Run]):
         """Get all runs with given status."""
         with next(get_session()) as session:
             statement = select(Run).where(Run.status == status)
-            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+            return list(session.exec(statement).all())
 
     @staticmethod
     def get_stats() -> dict:
         """Get run statistics."""
         with next(get_session()) as session:
-            total = session.exec(select(Run)).all()  # type: ignore[attr-defined]
+            total = session.exec(select(Run)).all()
             return {
                 "total": len(total),
                 "pending": sum(1 for r in total if r.status == RunStatus.PENDING),
@@ -122,7 +125,7 @@ class ExperimentsQueries(BaseQueries[Experiment]):
             statement = select(Experiment).where(
                 Experiment.benchmark_name == benchmark_name, Experiment.task_id == task_id
             )
-            result = session.exec(statement).first()  # type: ignore[attr-defined]
+            result = session.exec(statement).first()
             if result is None:
                 raise ValueError(f"Experiment not found: {benchmark_name.value}/{task_id}")
             return result
@@ -139,14 +142,14 @@ class ResourcesQueries(BaseQueries[Resource]):
         """Get all input resources for an experiment."""
         with next(get_session()) as session:
             statement = select(Resource).where(Resource.experiment_id == experiment_id)
-            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+            return list(session.exec(statement).all())
 
     @staticmethod
     def get_by_run(run_id: UUID) -> list[Resource]:
         """Get all output resources for a run."""
         with next(get_session()) as session:
             statement = select(Resource).where(Resource.run_id == run_id)
-            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+            return list(session.exec(statement).all())
 
     @staticmethod
     def get_all(run_id: UUID | None = None, experiment_id: UUID | None = None) -> list[Resource]:
@@ -157,7 +160,7 @@ class ResourcesQueries(BaseQueries[Resource]):
                 statement = statement.where(Resource.run_id == run_id)
             if experiment_id:
                 statement = statement.where(Resource.experiment_id == experiment_id)
-            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+            return list(session.exec(statement).all())
 
 
 class MessagesQueries(BaseQueries[Message]):
@@ -172,8 +175,8 @@ class MessagesQueries(BaseQueries[Message]):
         with next(get_session()) as session:
             statement = select(Message).where(Message.run_id == run_id)
             if order_by == "sequence_num":
-                statement = statement.order_by(Message.sequence_num)  # type: ignore[arg-type]
-            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+                statement = statement.order_by("sequence_num")
+            return list(session.exec(statement).all())
 
 
 class ActionsQueries(BaseQueries[Action]):
@@ -188,8 +191,8 @@ class ActionsQueries(BaseQueries[Action]):
         with next(get_session()) as session:
             statement = select(Action).where(Action.run_id == run_id)
             if order_by == "action_num":
-                statement = statement.order_by(Action.action_num)  # type: ignore[arg-type]
-            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+                statement = statement.order_by("action_num")
+            return list(session.exec(statement).all())
 
 
 class EvaluationsQueries(BaseQueries[Evaluation]):
@@ -203,7 +206,7 @@ class EvaluationsQueries(BaseQueries[Evaluation]):
         """Get evaluation for a run."""
         with next(get_session()) as session:
             statement = select(Evaluation).where(Evaluation.run_id == run_id)
-            return session.exec(statement).first()  # type: ignore[attr-defined]
+            return session.exec(statement).first()
 
     def create_from_eval(
         self,
@@ -246,8 +249,8 @@ class CriterionResultsQueries(BaseQueries[CriterionResult]):
                 for field in order_by:
                     field_attr = getattr(CriterionResult, field, None)
                     if field_attr is not None:
-                        statement = statement.order_by(field_attr)  # type: ignore[arg-type]
-            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+                        statement = statement.order_by(field_attr)
+            return list(session.exec(statement).all())
 
     def create_from_eval(
         self,
@@ -272,7 +275,7 @@ class TaskEvaluationResultsQueries(BaseQueries[TaskEvaluationResult]):
         """Get task evaluation result for a run."""
         with next(get_session()) as session:
             statement = select(TaskEvaluationResult).where(TaskEvaluationResult.run_id == run_id)
-            return session.exec(statement).first()  # type: ignore[attr-defined]
+            return session.exec(statement).first()
 
 
 class AgentConfigsQueries(BaseQueries[AgentConfig]):
@@ -286,7 +289,151 @@ class AgentConfigsQueries(BaseQueries[AgentConfig]):
         """Get all agent configs for a run."""
         with next(get_session()) as session:
             statement = select(AgentConfig).where(AgentConfig.run_id == run_id)
-            return list(session.exec(statement).all())  # type: ignore[attr-defined]
+            return list(session.exec(statement).all())
+
+
+# =============================================================================
+# Communication Service Queries
+# =============================================================================
+
+
+class ThreadsQueries(BaseQueries[Thread]):
+    """Query methods for Thread model."""
+
+    def __init__(self):
+        super().__init__(Thread)
+
+    @staticmethod
+    def _normalize_agent_ids(agent_a_id: str, agent_b_id: str) -> tuple[str, str]:
+        """Normalize agent IDs to consistent order (smaller, larger)."""
+        if agent_a_id < agent_b_id:
+            return agent_a_id, agent_b_id
+        return agent_b_id, agent_a_id
+
+    def get_or_create_thread(
+        self,
+        run_id: UUID,
+        experiment_id: UUID,
+        agent_a_id: str,
+        agent_b_id: str,
+        topic: str,
+    ) -> Thread:
+        """Get existing thread or create new one."""
+        normalized_a, normalized_b = self._normalize_agent_ids(agent_a_id, agent_b_id)
+
+        with next(get_session()) as session:
+            statement = select(Thread).where(
+                Thread.run_id == run_id,
+                Thread.agent_a_id == normalized_a,
+                Thread.agent_b_id == normalized_b,
+                Thread.topic == topic,
+            )
+            existing = session.exec(statement).first()
+
+            if existing:
+                return existing
+
+            # Create new thread
+            new_thread = Thread(
+                run_id=run_id,
+                experiment_id=experiment_id,
+                agent_a_id=normalized_a,
+                agent_b_id=normalized_b,
+                topic=topic,
+            )
+            session.add(new_thread)
+            session.commit()
+            session.refresh(new_thread)
+            return new_thread
+
+    def get_threads_between_agents(
+        self,
+        agent_a_id: str,
+        agent_b_id: str,
+    ) -> list[Thread]:
+        """Get all threads between two agents."""
+        normalized_a, normalized_b = self._normalize_agent_ids(agent_a_id, agent_b_id)
+
+        with next(get_session()) as session:
+            statement = (
+                select(Thread)
+                .where(
+                    Thread.agent_a_id == normalized_a,
+                    Thread.agent_b_id == normalized_b,
+                )
+                .order_by(desc(Thread.updated_at))
+            )
+            return list(session.exec(statement).all())
+
+    def update_timestamp(self, thread_id: UUID) -> Thread:
+        """Update the updated_at timestamp of a thread."""
+        with next(get_session()) as session:
+            thread = session.get(Thread, thread_id)
+            if thread is None:
+                raise ValueError(f"Thread {thread_id} not found")
+            thread.updated_at = datetime.now(timezone.utc)
+            session.commit()
+            session.refresh(thread)
+            return thread
+
+
+class ThreadMessagesQueries(BaseQueries[ThreadMessage]):
+    """Query methods for ThreadMessage model."""
+
+    def __init__(self):
+        super().__init__(ThreadMessage)
+
+    def get_by_thread(
+        self,
+        thread_id: UUID,
+        order_by: str = "sequence_num",
+    ) -> list[ThreadMessage]:
+        """Get all messages in a thread, ordered by sequence."""
+        with next(get_session()) as session:
+            statement = select(ThreadMessage).where(ThreadMessage.thread_id == thread_id)
+            if order_by == "sequence_num":
+                statement = statement.order_by("sequence_num")
+            return list(session.exec(statement).all())
+
+    def get_next_sequence_num(self, thread_id: UUID) -> int:
+        """Get the next sequence number for a thread."""
+        with next(get_session()) as session:
+            statement = (
+                select(ThreadMessage)
+                .where(ThreadMessage.thread_id == thread_id)
+                .order_by(desc(ThreadMessage.sequence_num))
+            )
+            last_message = session.exec(statement).first()
+            return (last_message.sequence_num + 1) if last_message else 0
+
+    def create_message(
+        self,
+        thread_id: UUID,
+        run_id: UUID,
+        experiment_id: UUID,
+        from_agent_id: str,
+        to_agent_id: str,
+        content: str,
+    ) -> ThreadMessage:
+        """Create a new message in a thread."""
+        sequence_num = self.get_next_sequence_num(thread_id)
+
+        new_message = ThreadMessage(
+            thread_id=thread_id,
+            run_id=run_id,
+            experiment_id=experiment_id,
+            from_agent_id=from_agent_id,
+            to_agent_id=to_agent_id,
+            content=content,
+            sequence_num=sequence_num,
+        )
+        return self.create(new_message)
+
+    def count_by_thread(self, thread_id: UUID) -> int:
+        """Count the number of messages in a thread."""
+        with next(get_session()) as session:
+            statement = select(ThreadMessage).where(ThreadMessage.thread_id == thread_id)
+            return len(session.exec(statement).all())
 
 
 # Create query objects
@@ -302,6 +449,8 @@ class Queries:
     criterion_results: CriterionResultsQueries
     task_evaluation_results: TaskEvaluationResultsQueries
     agent_configs: AgentConfigsQueries
+    threads: ThreadsQueries
+    thread_messages: ThreadMessagesQueries
 
     def __init__(self):
         self.runs = RunsQueries()
@@ -313,6 +462,8 @@ class Queries:
         self.criterion_results = CriterionResultsQueries()
         self.task_evaluation_results = TaskEvaluationResultsQueries()
         self.agent_configs = AgentConfigsQueries()
+        self.threads = ThreadsQueries()
+        self.thread_messages = ThreadMessagesQueries()
 
 
 # Global queries instance

@@ -1,7 +1,8 @@
 """Tracing utilities for agent execution."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -18,8 +19,45 @@ from agents.result import RunResult
 from agents.usage import Usage
 from openai.types.responses import ResponseFunctionToolCall, ResponseOutputText
 
-from h_arcane.core.db.models import Action
+from h_arcane.core.db.models import Action, ExecutionError
 from h_arcane.core.db.queries import queries
+
+
+def _extract_error_from_output(output: Any) -> dict | None:
+    """
+    Extract error information from tool output if present.
+
+    Tool outputs are typically Pydantic models or dicts with:
+    - success: bool
+    - error: str | None (error message)
+    - exception_type: str | None (optional)
+    - stack_trace: str | None (optional)
+
+    Returns:
+        ExecutionError as dict if error detected, None otherwise.
+    """
+    # Convert to dict if it's a Pydantic model
+    if isinstance(output, BaseModel):
+        output_dict = output.model_dump()
+    elif isinstance(output, dict):
+        output_dict = output
+    else:
+        return None
+
+    # Check for failure indicators
+    success = output_dict.get("success")
+    error_message = output_dict.get("error")
+
+    # If success is explicitly False or there's an error message
+    if success is False or (error_message and success is not True):
+        return ExecutionError(
+            message=error_message or "Unknown error",
+            exception_type=output_dict.get("exception_type"),
+            stack_trace=output_dict.get("stack_trace"),
+            details=None,
+        ).model_dump()
+
+    return None
 
 
 def log_actions_from_result(
@@ -86,7 +124,7 @@ def _process_item(
 ) -> Action | None:
     """Process a single RunItem and return Action object, or None to skip."""
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     match item:
         case MessageOutputItem():
@@ -172,6 +210,9 @@ def _extract_tool_call_output(
                 # Other types (dicts, lists, etc.)
                 output_str = json.dumps(output, indent=2, default=str)
 
+            # Extract error if present in output
+            error_dict = _extract_error_from_output(output)
+
             return Action(
                 run_id=run_id,
                 agent_id=agent_id,
@@ -183,6 +224,7 @@ def _extract_tool_call_output(
                 action_type=tool_raw.name,
                 input=tool_raw.arguments,  # Already JSON string from OpenAI
                 output=output_str,
+                error=error_dict,
             )
 
     # Orphan output - log anyway
@@ -278,3 +320,4 @@ def _calculate_cost(usage: Usage, model_name: str) -> float:
         cache_creation_input_tokens=cache_creation - cache_read,
     )
     return prompt_cost + completion_cost
+

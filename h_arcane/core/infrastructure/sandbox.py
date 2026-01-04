@@ -27,6 +27,12 @@ class DownloadedFile(BaseModel):
     size_bytes: int
 
 
+class DownloadedFiles(BaseModel):
+    """Result of downloading files from sandbox."""
+
+    files: list[DownloadedFile]
+
+
 class BaseSandboxManager(ABC):
     """Abstract base class for E2B sandbox management.
 
@@ -96,7 +102,7 @@ class BaseSandboxManager(ABC):
 import os
 import stat
 
-dirs = ['/inputs', '/workspace', '/skills']
+dirs = ['/inputs', '/workspace', '/skills', '/tools']
 created = []
 failed = []
 
@@ -168,7 +174,7 @@ if created:
         skills_dir: Path | None = None,
         timeout_minutes: int = 30,
         envs: dict[str, str] | None = None,
-    ) -> None:
+    ) -> str:
         """Create and initialize sandbox for a run (idempotent).
 
         Args:
@@ -178,10 +184,20 @@ if created:
                             The sandbox will be terminated after this duration.
             envs: Optional dictionary of environment variables to set in the sandbox.
                   These will be available to all code executed in the sandbox.
+
+        Returns:
+            The E2B sandbox_id (needed for cleanup across process boundaries)
         """
-        # If sandbox already exists for this run_id, skip creation
+        # If sandbox already exists for this run_id, return its ID
         if run_id in self._sandboxes:
-            return
+            return self._sandboxes[run_id].sandbox_id
+
+        # Validate E2B API key before attempting sandbox creation
+        if not settings.e2b_api_key:
+            raise ValueError(
+                "E2B_API_KEY is not set. All benchmarks require E2B API key for sandbox execution. "
+                "Please set E2B_API_KEY in your .env file or environment variables."
+            )
 
         try:
             # Convert minutes to seconds for E2B API
@@ -220,6 +236,8 @@ if created:
             logger.info(
                 f"Uploaded skills from {skills_dir} to /skills/{package_name} (run_id={run_id})"
             )
+
+        return sandbox.sandbox_id
 
     async def run_skill(
         self,
@@ -297,7 +315,7 @@ print("SKILL_SUCCESS")
         if execution.error:
             # Return error as the typed response
             error_str = str(execution.error)
-            return return_type(success=False, error=error_str)  # type: ignore[call-arg]
+            return return_type(success=False, error=error_str)
 
         # Read result from file and validate into typed response
         try:
@@ -314,7 +332,7 @@ print("SKILL_SUCCESS")
             stdout = ""
             if execution.logs and execution.logs.stdout:
                 stdout = "".join(execution.logs.stdout)
-            return return_type(  # type: ignore[call-arg]
+            return return_type(
                 success=False, error=f"Failed to read skill result: {e}. Stdout: {stdout[:200]}"
             )
 
@@ -383,11 +401,12 @@ print("SKILL_SUCCESS")
                 return []
             raise
 
-    async def download_all_outputs(self, run_id: UUID, output_dir: Path) -> list[DownloadedFile]:
+    async def download_all_outputs(self, run_id: UUID, output_dir: Path) -> DownloadedFiles:
         """Download all files from /workspace to output_dir for a run.
 
-        Handles sandbox timeout gracefully - if sandbox timed out, returns empty list
-        and logs a warning.
+        Handles sandbox errors gracefully - if sandbox timed out or has connection issues,
+        returns empty list and logs a warning. This prevents unnecessary retries at the
+        Inngest step level.
         """
         try:
             files = await self.list_files(run_id, "/workspace")
@@ -406,21 +425,21 @@ print("SKILL_SUCCESS")
                         )
                     )
                 except RuntimeError as e:
-                    # Re-raise RuntimeError from download_file (timeout case)
-                    # but continue trying other files
+                    # RuntimeError from download_file (timeout case)
+                    # Continue trying other files
                     logger.warning(f"Failed to download {file_path}: {e}")
                     continue
 
-            return downloaded
+            return DownloadedFiles(files=downloaded)
+
         except Exception as e:
-            error_msg = str(e).lower()
-            if "timeout" in error_msg or "sandbox was not found" in error_msg:
-                logger.error(
-                    f"Sandbox timeout/not found when downloading outputs for run_id={run_id}: {e}. "
-                    f"Sandbox may have timed out during execution. No outputs downloaded."
-                )
-                return []
-            raise
+            # Handle all exceptions gracefully - don't re-raise to avoid unnecessary
+            # Inngest step retries. Return empty files list instead.
+            logger.error(
+                f"Error downloading outputs for run_id={run_id}: {e}. "
+                f"No outputs downloaded. This may be due to sandbox timeout or connection issues."
+            )
+            return DownloadedFiles(files=[])
 
     def register_created_file(self, run_id: UUID, sandbox_path: str) -> None:
         """Register a file created by a tool for a run."""
@@ -437,6 +456,33 @@ print("SKILL_SUCCESS")
         """Get sandbox instance for a run (returns None if not created)."""
         return self._sandboxes.get(run_id)
 
+    async def reset_timeout(self, run_id: UUID, timeout_minutes: int = 30) -> bool:
+        """Reset sandbox timeout to prevent expiration during long-running operations.
+
+        This is useful before starting evaluation to ensure the sandbox doesn't
+        time out mid-evaluation. The timeout is reset from the current time.
+
+        Args:
+            run_id: UUID of the run
+            timeout_minutes: New timeout in minutes (default: 30)
+
+        Returns:
+            True if timeout was reset, False if sandbox not found
+        """
+        sandbox = self._sandboxes.get(run_id)
+        if sandbox is None:
+            logger.warning(f"Cannot reset timeout: sandbox not found for run_id={run_id}")
+            return False
+
+        try:
+            timeout_seconds: int = timeout_minutes * 60
+            await sandbox.set_timeout(timeout=timeout_seconds)  # type: ignore[call-overload]
+            logger.info(f"Reset sandbox timeout to {timeout_minutes} minutes for run_id={run_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to reset sandbox timeout for run_id={run_id}: {e}")
+            return False
+
     async def terminate(self, run_id: UUID) -> None:
         """Terminate sandbox for a run (idempotent). Always clears registry even if kill() fails."""
         # Use pop() to safely remove - returns None if not present
@@ -452,7 +498,7 @@ print("SKILL_SUCCESS")
             return
 
         try:
-            await sandbox.kill()
+            await sandbox.kill()  # type: ignore[call-overload]
         except Exception as e:
             # Log but continue - we want to clear the reference even if kill fails
             print(f"Warning: Error killing sandbox for run_id={run_id}: {e}")
@@ -461,3 +507,32 @@ print("SKILL_SUCCESS")
             self._file_registries.pop(run_id, None)
             self._created_files_registry.pop(run_id, None)
             self._skills_packages.pop(run_id, None)
+
+    @staticmethod
+    async def terminate_by_sandbox_id(sandbox_id: str) -> bool:
+        """Terminate a sandbox by its E2B sandbox_id.
+
+        This is used for cleanup across process boundaries where we don't have
+        the sandbox object in memory, but we have the sandbox_id stored in the database.
+
+        Args:
+            sandbox_id: The E2B sandbox ID (stored in Run.e2b_sandbox_id)
+
+        Returns:
+            True if sandbox was killed, False if it was already terminated or not found
+        """
+        try:
+            # Use the class method variant to kill by sandbox_id directly
+            # This avoids needing to connect first
+            await AsyncSandbox.kill(sandbox_id=sandbox_id, api_key=settings.e2b_api_key)
+            logger.info(f"Successfully terminated sandbox {sandbox_id}")
+            return True
+        except Exception as e:
+            error_str = str(e).lower()
+            # Sandbox already terminated or doesn't exist - this is fine
+            if "not found" in error_str or "404" in error_str:
+                logger.info(f"Sandbox {sandbox_id} already terminated or not found")
+                return False
+            # Log unexpected errors but don't fail
+            logger.warning(f"Error terminating sandbox {sandbox_id}: {e}")
+            return False

@@ -2,6 +2,7 @@
 
 from typing import Literal, TYPE_CHECKING
 
+from e2b.sandbox.commands.command_handle import CommandExitException
 from pydantic import Field
 
 from h_arcane.core.evaluation.rules.base import BaseRule
@@ -34,31 +35,49 @@ class ProofVerificationRule(BaseRule):
 
         # Step 2: Extract proof from agent output
         async def extract_proof():
-            # Look for .lean files in agent outputs
-            lean_files = [r for r in data.agent_outputs if r.name.endswith(".lean")]
+            # Look specifically for final_solution.lean - the required submission file
+            final_solution = next(
+                (r for r in data.agent_outputs if r.name == "final_solution.lean"),
+                None,
+            )
 
-            if not lean_files:
-                raise ValueError(
-                    "No .lean file found in agent outputs. "
-                    "The worker must write a .lean file as the final output for evaluation."
-                )
+            if not final_solution:
+                # Provide helpful error message listing what files were found
+                other_lean_files = [r.name for r in data.agent_outputs if r.name.endswith(".lean")]
+                if other_lean_files:
+                    files_list = ", ".join(other_lean_files)
+                    raise ValueError(
+                        f"No 'final_solution.lean' found. "
+                        f"Found other .lean files: [{files_list}]. "
+                        f"The worker must write their final proof to 'final_solution.lean' for evaluation."
+                    )
+                else:
+                    raise ValueError(
+                        "No 'final_solution.lean' found in agent outputs. "
+                        "The worker must write their final proof to 'final_solution.lean' for evaluation."
+                    )
 
-            # Use the first .lean file found
-            lean_file = lean_files[0]
-            proof_code = lean_file.load_text()
+            proof_code = final_solution.load_text()
             return {
                 "proof_code": proof_code,
-                "source": f"file:{lean_file.name}",
-                "evaluated_resource_ids": [str(lean_file.id)],
+                "source": "file:final_solution.lean",
+                "evaluated_resource_ids": [str(final_solution.id)],
             }
 
         proof_data = await runner.step("extract-proof", extract_proof)
         proof_code = proof_data["proof_code"]
 
-        # Combine with problem statement
-        full_code = f"""{self.problem_statement}
+        # Agent's file is already a complete valid Lean file with imports.
+        # We verify it directly - don't prepend the theorem statement as that
+        # would put imports after the theorem (invalid Lean syntax).
+        # The problem_statement is kept for logging/evaluation_input only.
+        full_code = proof_code
 
--- Agent's proof:
+        # For evaluation_input logging, show what was expected vs what agent wrote
+        evaluation_log = f"""-- Expected theorem:
+-- {self.problem_statement.replace(chr(10), chr(10) + "-- ")}
+
+-- Agent's proof file:
 {proof_code}
 """
 
@@ -76,17 +95,26 @@ class ProofVerificationRule(BaseRule):
                     "output": None,
                 }
 
-            # Write proof to temporary file in sandbox
-            await sandbox.files.write("/workspace/verify.lean", full_code.encode("utf-8"))
-
-            # Run Lean compiler with --check flag
-            result = await sandbox.commands.run(
-                "export PATH=$HOME/.elan/bin:$PATH && cd /workspace && lean --check verify.lean 2>&1",
-                timeout=60,
+            # Write proof to Mathlib project src directory so imports resolve
+            await sandbox.files.write(
+                "/tools/mathlib_project/src/verify.lean", full_code.encode("utf-8")
             )
 
-            output = (result.stdout or "") + (result.stderr or "")
-            verified = result.exit_code == 0
+            # Run Lean from within the Mathlib project so it can find Mathlib imports
+            try:
+                result = await sandbox.commands.run(
+                    "export PATH=$HOME/.elan/bin:$PATH && cd /tools/mathlib_project && lean src/verify.lean 2>&1",
+                    timeout=120,  # May need longer for compilation with Mathlib
+                )
+                output = (result.stdout or "") + (result.stderr or "")
+                verified = result.exit_code == 0
+
+            except CommandExitException as e:
+                # Command failed (non-zero exit code) - this is expected when proof is invalid
+                output = (e.stdout or "") + (e.stderr or "")
+                if not output:
+                    output = f"Lean verification failed with exit code {e.exit_code}"
+                verified = False
 
             return {
                 "verified": verified,
@@ -114,7 +142,7 @@ class ProofVerificationRule(BaseRule):
             score=score,
             max_score=data.max_score,
             feedback=feedback,
-            evaluation_input=full_code,
+            evaluation_input=evaluation_log,
             evaluated_action_ids=[],
             evaluated_resource_ids=proof_data["evaluated_resource_ids"],
         )

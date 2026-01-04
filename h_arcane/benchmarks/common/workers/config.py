@@ -4,7 +4,7 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from h_arcane.core.models.enums import BenchmarkName
+from h_arcane.benchmarks.enums import BenchmarkName
 
 
 class BaselineType(str, Enum):
