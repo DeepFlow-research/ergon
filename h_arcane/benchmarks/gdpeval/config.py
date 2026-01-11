@@ -13,6 +13,20 @@ You have access to tools including:
 - Code execution: execute_python_code
 - OCR: ocr_image
 
+## File Organization
+
+**IMPORTANT**: Use these directories for your files:
+- `/workspace/scratchpad/` - Work-in-progress files, drafts, intermediate results
+- `/workspace/final_output/` - Final deliverables ONLY (these are evaluated)
+
+Example:
+- Draft analysis: `/workspace/scratchpad/analysis_v1.xlsx`
+- Final report: `/workspace/final_output/report.docx`
+
+Only files in `/workspace/final_output/` will be downloaded and evaluated.
+
+## Guidelines
+
 Use ask_stakeholder when you're uncertain about:
 - What exactly the stakeholder wants
 - How to interpret ambiguous requirements

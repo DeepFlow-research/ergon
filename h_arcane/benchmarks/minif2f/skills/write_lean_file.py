@@ -4,13 +4,11 @@ from pathlib import Path
 
 from .responses import WriteLeanResponse
 
-# Write files inside the Mathlib project so they have access to Mathlib imports
-# NOTE: Mathlib is installed in /tools (not /workspace) to avoid downloading all library
-# files as outputs when the run completes.
+# Mathlib project directory for Lean files that need Mathlib imports
 LEAN_PROJECT_SRC = Path("/tools/mathlib_project/src")
 
 
-async def main(filename: str, content: str) -> WriteLeanResponse:
+async def main(file_path: str, content: str) -> WriteLeanResponse:
     """
     Write or update a Lean proof file. Use this to build proofs incrementally.
 
@@ -20,17 +18,16 @@ async def main(filename: str, content: str) -> WriteLeanResponse:
       sorry  -- Placeholder, check_lean_file will show the goal
 
     Args:
-        filename: Name of the Lean file (e.g., "proof.lean")
+        file_path: Full path to the Lean file
+          - /workspace/scratchpad/draft.lean for drafts
+          - /workspace/final_output/final_solution.lean for final submission
         content: Complete Lean file content
 
     Returns:
-        WriteLeanResponse with filename and bytes written
+        WriteLeanResponse with file path and bytes written
     """
     try:
-        # Ensure Mathlib project src directory exists
-        LEAN_PROJECT_SRC.mkdir(parents=True, exist_ok=True)
-
-        filepath = LEAN_PROJECT_SRC / filename
+        filepath = Path(file_path)
         filepath.parent.mkdir(parents=True, exist_ok=True)
 
         content_bytes = content.encode("utf-8")

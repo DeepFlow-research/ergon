@@ -175,23 +175,30 @@ class MiniF2FSandboxManager(BaseSandboxManager):
             raise RuntimeError(f"Setup verification failed (run_id={run_id}): {e}") from e
 
     async def download_all_outputs(self, run_id: UUID, output_dir: Path) -> DownloadedFiles:
-        """Download outputs including Lean proof files from Mathlib project src.
+        """Download outputs from /workspace/final_output and Lean proof files.
 
-        Overrides base implementation to grab the agent's final solution from
-        /tools/mathlib_project/src/. Only downloads final_solution.lean (the required
-        submission file) and any other non-internal .lean files the agent created.
+        For MiniF2F, agent's final proof should be in /workspace/final_output/final_solution.lean.
+        We also check /tools/mathlib_project/src/ for any Lean files the agent created there
+        (needed for Mathlib imports during development), but only non-internal files.
+
         This avoids downloading the thousands of Mathlib library files in _target/.
         """
-        # Get standard /workspace outputs first
+        # Get standard /workspace/final_output outputs first
         downloaded = await super().download_all_outputs(run_id, output_dir)
 
-        # Download .lean files from the Mathlib project src directory
-        # Priority: final_solution.lean (required), then other agent files (not internal _*)
+        # Also check /tools/mathlib_project/src/ for any agent-created .lean files
+        # (Agent may have written drafts there for Mathlib import access)
+        # Only grab non-internal files that aren't already downloaded
+        downloaded_names = {Path(f.local_path).name for f in downloaded.files}
+
         try:
             lean_src_files = await self.list_files(run_id, "/tools/mathlib_project/src")
             for file_path in lean_src_files:
                 filename = Path(file_path).name
-                # Download final_solution.lean and any non-internal agent files
+                # Skip if already downloaded from final_output
+                if filename in downloaded_names:
+                    continue
+                # Download non-internal agent files
                 # Skip internal files like _search_query.lean and verify.lean (evaluator's)
                 if (
                     filename.endswith(".lean")

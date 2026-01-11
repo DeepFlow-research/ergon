@@ -210,7 +210,10 @@ class GDPEvalToolkit(BaseToolkit):
 
             Args:
                 content: Markdown content (supports # headings, paragraphs)
-                output_path: Where to save (e.g., "/workspace/report.docx")
+                output_path: Where to save the document
+                  - Use `/workspace/scratchpad/` for drafts
+                  - Use `/workspace/final_output/` for final deliverables (evaluated)
+                  - Example: `/workspace/final_output/report.docx`
                 title: Optional document title
                 template_style: Style template ("normal", "formal", "memo")
 
@@ -242,7 +245,10 @@ class GDPEvalToolkit(BaseToolkit):
 
             Args:
                 data: 2D list of data (rows of cells)
-                output_path: Where to save (e.g., "/workspace/data.xlsx")
+                output_path: Where to save the spreadsheet
+                  - Use `/workspace/scratchpad/` for drafts
+                  - Use `/workspace/final_output/` for final deliverables (evaluated)
+                  - Example: `/workspace/final_output/data.xlsx`
                 sheet_name: Name of the sheet
 
             Returns:
@@ -268,7 +274,10 @@ class GDPEvalToolkit(BaseToolkit):
 
             Args:
                 data: 2D list of data (rows of cells)
-                output_path: Where to save (e.g., "/workspace/data.csv")
+                output_path: Where to save the CSV file
+                  - Use `/workspace/scratchpad/` for drafts
+                  - Use `/workspace/final_output/` for final deliverables (evaluated)
+                  - Example: `/workspace/final_output/data.csv`
 
             Returns:
                 Response model with file path and size, or error message.

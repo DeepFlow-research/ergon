@@ -177,19 +177,21 @@ class MiniF2FToolkit(BaseToolkit):
 
     def _write_lean_file(self) -> Tool:
         @function_tool
-        async def write_lean_file(filename: str, content: str) -> WriteLeanResponse:
+        async def write_lean_file(file_path: str, content: str) -> WriteLeanResponse:
             """
             Write or update a Lean proof file.
 
             Use `sorry` as a placeholder for incomplete proofs - check_lean_file
             will show you the proof goals.
 
-            IMPORTANT: Your final, complete proof MUST be written to `final_solution.lean`.
-            This is the only file that will be evaluated. Other filenames are for drafts.
-
             Args:
-                filename: Name of the file. Use "final_solution.lean" for your submission.
+                file_path: Full path to the file
+                  - Use `/workspace/scratchpad/draft.lean` for drafts/experimentation
+                  - Use `/workspace/final_output/final_solution.lean` for your final submission
                 content: Complete Lean file content
+
+            IMPORTANT: Your final proof MUST be written to `/workspace/final_output/final_solution.lean`.
+            This is the ONLY file that will be evaluated.
 
             Returns:
                 Response model with bytes written, or error message.
@@ -198,7 +200,7 @@ class MiniF2FToolkit(BaseToolkit):
                 self.run_id,
                 "write_lean_file",
                 WriteLeanResponse,
-                filename=filename,
+                file_path=file_path,
                 content=content,
             )
             return result
@@ -207,7 +209,7 @@ class MiniF2FToolkit(BaseToolkit):
 
     def _check_lean_file(self) -> Tool:
         @function_tool
-        async def check_lean_file(filename: str) -> LeanCheckResponse:
+        async def check_lean_file(file_path: str) -> LeanCheckResponse:
             """
             Check a Lean file for errors and get proof goals.
 
@@ -217,7 +219,9 @@ class MiniF2FToolkit(BaseToolkit):
             - Warnings
 
             Args:
-                filename: Name of the Lean file to check
+                file_path: Full path to the Lean file to check
+                  - `/workspace/scratchpad/draft.lean` for drafts
+                  - `/workspace/final_output/final_solution.lean` for final
 
             Returns:
                 Response model with errors, goals, and warnings.
@@ -233,7 +237,8 @@ class MiniF2FToolkit(BaseToolkit):
 
             try:
                 # Run Lean compiler via sandbox shell (same env where it was installed)
-                cmd = f"{LEAN_CMD_PREFIX} lean {filename} 2>&1"
+                # Use absolute path - Lean can compile files from any location
+                cmd = f"{LEAN_CMD_PREFIX} lean {file_path} 2>&1"
                 try:
                     result = await sandbox.commands.run(cmd, timeout=60)
                     output = (result.stdout or "") + (result.stderr or "")
@@ -266,18 +271,19 @@ class MiniF2FToolkit(BaseToolkit):
 
     def _verify_lean_proof(self) -> Tool:
         @function_tool
-        async def verify_lean_proof(filename: str) -> LeanVerificationResponse:
+        async def verify_lean_proof(file_path: str) -> LeanVerificationResponse:
             """
             Verify a complete Lean proof (no `sorry` allowed).
 
             Call this when you believe your proof is complete.
             The proof must compile without errors and contain no `sorry`.
 
-            IMPORTANT: Before submitting, verify `final_solution.lean` - this is the
-            only file that will be evaluated for scoring.
-
             Args:
-                filename: Name of the Lean file to verify (use "final_solution.lean" for final)
+                file_path: Full path to the Lean file to verify
+                  - Use `/workspace/final_output/final_solution.lean` for your final submission
+
+            IMPORTANT: Before submitting, verify `/workspace/final_output/final_solution.lean` -
+            this is the only file that will be evaluated for scoring.
 
             Returns:
                 Response model with verification result and details.
@@ -293,7 +299,7 @@ class MiniF2FToolkit(BaseToolkit):
 
             try:
                 # First read the file to check for sorry
-                file_content = await sandbox.files.read(f"/tools/mathlib_project/src/{filename}")
+                file_content = await sandbox.files.read(file_path)
                 if isinstance(file_content, bytes):
                     file_content = file_content.decode("utf-8")
 
@@ -306,7 +312,7 @@ class MiniF2FToolkit(BaseToolkit):
 
                 # Run Lean compiler via sandbox shell
                 # Note: Lean 3 doesn't have a --check flag, just compile the file
-                cmd = f"{LEAN_CMD_PREFIX} lean {filename} 2>&1"
+                cmd = f"{LEAN_CMD_PREFIX} lean {file_path} 2>&1"
                 try:
                     result = await sandbox.commands.run(cmd, timeout=60)
                     output = (result.stdout or "") + (result.stderr or "")

@@ -219,17 +219,20 @@ class ResearchRubricsToolkit(BaseToolkit):
         @function_tool
         async def write_report_draft_tool(
             content: str,
-            file_path: str = "/workspace/report_draft.md",
+            file_path: str = "/workspace/final_output/report.md",
         ) -> WriteReportDraftResponse:
             """
-            Write content to a markdown report draft file.
+            Write content to a markdown report file.
 
             Use this to create or overwrite the research report. The file will be
             downloaded after execution and evaluated against the rubric criteria.
 
             Args:
                 content: The markdown content to write (full report)
-                file_path: Path to write the file (default: /workspace/report_draft.md)
+                file_path: Path to write the file
+                  - Use `/workspace/scratchpad/` for drafts (not evaluated)
+                  - Use `/workspace/final_output/` for final report (default, evaluated)
+                  - Default: `/workspace/final_output/report.md`
 
             Returns:
                 Response with file path and bytes written.
@@ -250,10 +253,10 @@ class ResearchRubricsToolkit(BaseToolkit):
         async def edit_report_draft_tool(
             old_string: str,
             new_string: str,
-            file_path: str = "/workspace/report_draft.md",
+            file_path: str = "/workspace/final_output/report.md",
         ) -> EditReportDraftResponse:
             """
-            Edit the report draft using search and replace.
+            Edit the report using search and replace.
 
             Use this to make targeted edits to specific sections of the report.
             All occurrences of old_string will be replaced with new_string.
@@ -261,7 +264,7 @@ class ResearchRubricsToolkit(BaseToolkit):
             Args:
                 old_string: The text to find and replace
                 new_string: The text to replace with
-                file_path: Path to the file to edit (default: /workspace/report_draft.md)
+                file_path: Path to the file to edit (default: /workspace/final_output/report.md)
 
             Returns:
                 Response with file path and number of replacements made.
@@ -281,15 +284,15 @@ class ResearchRubricsToolkit(BaseToolkit):
     def _read_report_draft(self) -> Tool:
         @function_tool
         async def read_report_draft_tool(
-            file_path: str = "/workspace/report_draft.md",
+            file_path: str = "/workspace/final_output/report.md",
         ) -> ReadReportDraftResponse:
             """
-            Read content from the report draft file.
+            Read content from the report file.
 
             Use this to review the current state of the report before making edits.
 
             Args:
-                file_path: Path to the file to read (default: /workspace/report_draft.md)
+                file_path: Path to the file to read (default: /workspace/final_output/report.md)
 
             Returns:
                 Response with file content.

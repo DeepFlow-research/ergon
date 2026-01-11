@@ -97,12 +97,27 @@ class BaseSandboxManager(ABC):
             await sandbox.files.write(remote_path, content)
 
     async def _create_directory_structure(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
-        """Create standard directory structure in sandbox."""
+        """Create standard directory structure in sandbox.
+
+        Directory structure:
+        - /inputs: Input files uploaded for the task
+        - /workspace/scratchpad: Work-in-progress files (not evaluated)
+        - /workspace/final_output: Final deliverables (downloaded and evaluated)
+        - /skills: Benchmark-specific skill scripts
+        - /tools: External tools (e.g., Mathlib for MiniF2F)
+        """
         create_dirs_code = """
 import os
 import stat
 
-dirs = ['/inputs', '/workspace', '/skills', '/tools']
+dirs = [
+    '/inputs',
+    '/workspace',
+    '/workspace/scratchpad',
+    '/workspace/final_output',
+    '/skills',
+    '/tools'
+]
 created = []
 failed = []
 
@@ -133,9 +148,14 @@ if created:
         # Verify directories are writable
         try:
             await sandbox.files.write("/inputs/.test_write", b"test")
-            await sandbox.files.write("/workspace/.test_write", b"test")
+            await sandbox.files.write("/workspace/scratchpad/.test_write", b"test")
+            await sandbox.files.write("/workspace/final_output/.test_write", b"test")
             try:
-                await sandbox.commands.run("rm -f /inputs/.test_write /workspace/.test_write")
+                await sandbox.commands.run(
+                    "rm -f /inputs/.test_write "
+                    "/workspace/scratchpad/.test_write "
+                    "/workspace/final_output/.test_write"
+                )
             except Exception:
                 pass  # Cleanup failure is not critical
         except Exception as e:
@@ -402,14 +422,18 @@ print("SKILL_SUCCESS")
             raise
 
     async def download_all_outputs(self, run_id: UUID, output_dir: Path) -> DownloadedFiles:
-        """Download all files from /workspace to output_dir for a run.
+        """Download all files from /workspace/final_output to output_dir for a run.
+
+        Only downloads files from /workspace/final_output - this is where agents
+        should place their final deliverables. Files in /workspace/scratchpad are
+        work-in-progress and not downloaded.
 
         Handles sandbox errors gracefully - if sandbox timed out or has connection issues,
         returns empty list and logs a warning. This prevents unnecessary retries at the
         Inngest step level.
         """
         try:
-            files = await self.list_files(run_id, "/workspace")
+            files = await self.list_files(run_id, "/workspace/final_output")
             downloaded: list[DownloadedFile] = []
 
             for file_path in files:

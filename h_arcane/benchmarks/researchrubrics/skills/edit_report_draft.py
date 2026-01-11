@@ -8,17 +8,17 @@ from .responses import EditReportDraftResponse
 async def main(
     old_string: str,
     new_string: str,
-    file_path: str = "/workspace/report_draft.md",
+    file_path: str = "/workspace/final_output/report.md",
 ) -> EditReportDraftResponse:
     """
-    Edit content in a markdown report draft file using search and replace.
+    Edit content in a markdown report file using search and replace.
 
     Replaces all occurrences of old_string with new_string.
 
     Args:
         old_string: The text to find and replace
         new_string: The text to replace with
-        file_path: Path to the file to edit (default: /workspace/report_draft.md)
+        file_path: Path to the file to edit (default: /workspace/final_output/report.md)
 
     Returns:
         EditReportDraftResponse with file_path and replacements_made count

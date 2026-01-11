@@ -7,16 +7,19 @@ from .responses import WriteReportDraftResponse
 
 async def main(
     content: str,
-    file_path: str = "/workspace/report_draft.md",
+    file_path: str = "/workspace/final_output/report.md",
 ) -> WriteReportDraftResponse:
     """
-    Write content to a markdown report draft file.
+    Write content to a markdown report file.
 
     Creates or overwrites the file at the specified path.
 
     Args:
         content: The markdown content to write
-        file_path: Path to write the file (default: /workspace/report_draft.md)
+        file_path: Path to write the file
+          - Use /workspace/scratchpad/ for drafts
+          - Use /workspace/final_output/ for final report (default)
+          - Default: /workspace/final_output/report.md
 
     Returns:
         WriteReportDraftResponse with file_path and bytes_written

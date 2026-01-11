@@ -47,14 +47,14 @@ class ProofVerificationRule(BaseRule):
                 if other_lean_files:
                     files_list = ", ".join(other_lean_files)
                     raise ValueError(
-                        f"No 'final_solution.lean' found. "
+                        f"No 'final_solution.lean' found in /workspace/final_output/. "
                         f"Found other .lean files: [{files_list}]. "
-                        f"The worker must write their final proof to 'final_solution.lean' for evaluation."
+                        f"The worker must write their final proof to '/workspace/final_output/final_solution.lean' for evaluation."
                     )
                 else:
                     raise ValueError(
                         "No 'final_solution.lean' found in agent outputs. "
-                        "The worker must write their final proof to 'final_solution.lean' for evaluation."
+                        "The worker must write their final proof to '/workspace/final_output/final_solution.lean' for evaluation."
                     )
 
             proof_code = final_solution.load_text()

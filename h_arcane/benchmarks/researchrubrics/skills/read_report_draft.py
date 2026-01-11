@@ -6,13 +6,13 @@ from .responses import ReadReportDraftResponse
 
 
 async def main(
-    file_path: str = "/workspace/report_draft.md",
+    file_path: str = "/workspace/final_output/report.md",
 ) -> ReadReportDraftResponse:
     """
-    Read content from a markdown report draft file.
+    Read content from a markdown report file.
 
     Args:
-        file_path: Path to the file to read (default: /workspace/report_draft.md)
+        file_path: Path to the file to read (default: /workspace/final_output/report.md)
 
     Returns:
         ReadReportDraftResponse with file content

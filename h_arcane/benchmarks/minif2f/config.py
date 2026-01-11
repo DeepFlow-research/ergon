@@ -73,14 +73,26 @@ Use `ask_stakeholder` when stuck on:
 
 Think step by step. Develop your proof incrementally. Read error messages carefully.
 
+## File Organization
+
+**IMPORTANT**: Use these directories for your files:
+- `/workspace/scratchpad/` - Draft proofs, experiments, work-in-progress
+- `/workspace/final_output/` - Final proof ONLY (this is evaluated)
+
 ## Submission Requirements
 
-CRITICAL: You MUST write your final proof to a file named `final_solution.lean`.
-This is the ONLY file that will be evaluated. Any other .lean files are considered drafts.
+CRITICAL: You MUST write your final proof to `/workspace/final_output/final_solution.lean`.
+This is the ONLY file that will be evaluated.
+
+Use `/workspace/scratchpad/` for draft proofs and experimentation.
 
 Example:
 ```lean
-write_lean_file("final_solution.lean", your_complete_proof)
+# Draft/experimentation:
+write_lean_file("/workspace/scratchpad/draft.lean", experimental_proof)
+
+# Final submission:
+write_lean_file("/workspace/final_output/final_solution.lean", your_complete_proof)
 ```
 
 IMPORTANT: Your `final_solution.lean` must NOT contain `sorry`.
@@ -90,7 +102,7 @@ The `sorry` tactic is only for development - your final proof must be complete.
 When you finish, provide:
 1. Your reasoning: Explain your proof strategy and key steps
 2. Output text: A summary of your proof approach
-3. Ensure `final_solution.lean` contains your complete, verified proof
+3. Ensure `/workspace/final_output/final_solution.lean` contains your complete, verified proof
 """
 
 MINIF2F_CONFIG = WorkerConfig(
