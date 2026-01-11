@@ -14,9 +14,8 @@ app = FastAPI(
 )
 
 # Register all Inngest functions with FastAPI
-# Type is correctly annotated in inngest_registry.py
 inngest.fast_api.serve(
     app,
     inngest_client,
-    ALL_FUNCTIONS,  # type: ignore[arg-type]
+    ALL_FUNCTIONS,
 )

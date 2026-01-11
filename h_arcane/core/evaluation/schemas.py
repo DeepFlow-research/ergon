@@ -1,11 +1,11 @@
 """Core schemas for evaluation - data containers and response types."""
 
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from h_arcane.core.db.models import Resource
-from h_arcane.benchmarks.types import AnyRubric
 
 
 class SandboxResult(BaseModel):
@@ -58,4 +58,4 @@ class TaskEvaluationContext(BaseModel):
     task_input: str
     agent_reasoning: str
     agent_outputs: list[Resource]
-    rubric: AnyRubric  # Discriminated union - auto-selects StagedRubric or MiniF2FRubric
+    rubric: Any  # AnyRubric at runtime - discriminated union of rubric types
