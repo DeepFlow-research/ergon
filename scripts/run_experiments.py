@@ -12,7 +12,7 @@ from pathlib import Path
 from h_arcane.core.db.connection import init_db
 from h_arcane.config.experiment import ExperimentConfig
 from h_arcane.benchmarks.common.workers import BaselineType
-from h_arcane.core.orchestration.experiment_runner import ExperimentRunner
+from scripts.experiment_runner import ExperimentRunner
 from h_arcane.settings import settings
 from h_arcane.benchmarks.enums import BenchmarkName
 from sqlalchemy import create_engine, text

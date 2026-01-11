@@ -1,23 +1,12 @@
-"""Inngest event schemas for H-ARCANE experiments."""
+"""Inngest event schemas for evaluation domain.
+
+These are the contracts for evaluation-related Inngest events.
+"""
 
 from pydantic import BaseModel
 
-from h_arcane.core.db.models import Resource
 from h_arcane.benchmarks.types import AnyRubric, AnyRule
-
-
-class ExecutionDoneEvent(BaseModel):
-    """Event data for execution/done event."""
-
-    run_id: str
-
-
-class RunCleanupEvent(BaseModel):
-    """Event data for run/cleanup event."""
-
-    run_id: str
-    status: str  # "completed" or "failed"
-    error_message: str | None = None
+from h_arcane.core.db.models import Resource
 
 
 class TaskEvaluationEvent(BaseModel):

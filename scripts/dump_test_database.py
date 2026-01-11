@@ -140,8 +140,8 @@ def dump_summary(session: Session, benchmark: BenchmarkName | None) -> str:
     # Get failed evaluations
     if run_ids:
         criteria = list(
-            session.exec(select(CriterionResult).where(CriterionResult.run_id.in_(run_ids))).all()
-        )  # type: ignore
+            session.exec(select(CriterionResult).where(CriterionResult.run_id.in_(run_ids))).all()  # type: ignore
+        )
     else:
         criteria = []
     failed_criteria = [c for c in criteria if not c.ran_successfully]

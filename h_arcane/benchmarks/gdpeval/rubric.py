@@ -138,8 +138,8 @@ class StagedRubric(BaseModel):
             TaskEvaluationResult with criterion-level and aggregate scores
         """
         # Import here to avoid circular imports
-        from h_arcane.core.orchestration.criteria_evaluator import evaluate_criterion_fn
-        from h_arcane.core.orchestration.events import CriterionEvaluationEvent
+        from h_arcane.core.evaluation.inngest_functions import evaluate_criterion_fn
+        from h_arcane.core.evaluation.events import CriterionEvaluationEvent
 
         # Flatten rubric into criteria list
         async def flatten_rubric_step():

@@ -1,23 +1,35 @@
-"""Experiment runner for batch execution."""
+"""Experiment runner for batch execution.
+
+This is a utility class for running benchmark experiments in batches.
+It coordinates loading experiments and sending events to trigger the core pipeline.
+"""
 
 import asyncio
 
+import inngest
 import structlog
 
-import inngest
-
-from h_arcane.core.db.queries import queries
-from h_arcane.core.db.models import RunStatus
-from h_arcane.config.experiment import DEFAULT_CONFIG, ExperimentConfig
-from h_arcane.benchmarks.registry import get_benchmark_loader
 from h_arcane.benchmarks.enums import BenchmarkName
+from h_arcane.benchmarks.registry import get_benchmark_loader
+from h_arcane.config.experiment import DEFAULT_CONFIG, ExperimentConfig
+from h_arcane.core.db.models import RunStatus
+from h_arcane.core.db.queries import queries
 from h_arcane.core.infrastructure.inngest_client import inngest_client
 
 logger = structlog.get_logger()
 
 
 class ExperimentRunner:
-    """Runs experiments in batches."""
+    """Runs experiments in batches.
+
+    This is a convenience utility for:
+    - Loading benchmark tasks into the database
+    - Triggering runs via Inngest events
+    - Monitoring progress
+    - Retrying failed runs
+
+    The actual execution logic is in the core pipeline (worker_execute, run_evaluate, etc.)
+    """
 
     def __init__(self, config: ExperimentConfig | None = None):
         self.config = config or DEFAULT_CONFIG

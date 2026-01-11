@@ -1,4 +1,8 @@
-"""Worker execution Inngest function."""
+"""Inngest functions for the agents domain.
+
+These functions handle agent task execution:
+- worker_execute: Execute a task with the ReAct worker
+"""
 
 import mimetypes
 from datetime import datetime, timezone
@@ -10,15 +14,16 @@ import inngest
 from inngest_agents import set_step
 
 from h_arcane.benchmarks.common.workers import ReActWorker
+from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.registry import (
+    get_sandbox_manager,
+    get_skills_dir,
     get_stakeholder_factory,
     get_toolkit_factory,
     get_worker_config,
-    get_skills_dir,
-    get_sandbox_manager,
 )
-from h_arcane.core.infrastructure.sandbox import DownloadedFiles
 from h_arcane.core.agents.base import BaseStakeholder, BaseToolkit
+from h_arcane.core.agents.events import ExecutionDoneEvent
 from h_arcane.core.db.models import (
     AgentConfig,
     Experiment,
@@ -27,26 +32,22 @@ from h_arcane.core.db.models import (
     RunStatus,
 )
 from h_arcane.core.db.queries import queries
+from h_arcane.core.evaluation.events import RunEvaluateResult
+from h_arcane.core.infrastructure.events import RunCleanupEvent
 from h_arcane.core.infrastructure.inngest_client import inngest_client
-from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.core.orchestration.events import (
-    ExecutionDoneEvent,
-    RunCleanupEvent,
-    RunEvaluateResult,
-)
+from h_arcane.core.infrastructure.sandbox import DownloadedFiles
 from h_arcane.settings import settings
 
 # Register markdown MIME type so .md files get proper typing
 mimetypes.add_type("text/markdown", ".md")
+
+T = TypeVar("T")
 
 
 def get_mime_type(file_path: Path | str) -> str:
     """Get MIME type for a file."""
     mime_type, _ = mimetypes.guess_type(str(file_path))
     return mime_type or "application/octet-stream"
-
-
-T = TypeVar("T")
 
 
 def _require_not_none(value: T | None, error_msg: str) -> T:
@@ -77,7 +78,7 @@ async def worker_execute(
     - `max_questions`: Optional, defaults to 10
     """
     # Import here to avoid circular dependency
-    from h_arcane.core.orchestration.run_evaluate import run_evaluate
+    from h_arcane.core.evaluation.inngest_functions import run_evaluate
 
     event_data = ctx.event.data
 
@@ -88,7 +89,6 @@ async def worker_execute(
 
     # Create run record
     async def create_run():
-        # Extract and validate event data with proper types
         worker_model = event_data.get("worker_model", "gpt-4o")
         if not isinstance(worker_model, str):
             worker_model = "gpt-4o"
@@ -99,7 +99,7 @@ async def worker_execute(
 
         run = queries.runs.create(
             Run(
-                id=uuid4(),  # Use generated UUID
+                id=uuid4(),
                 experiment_id=experiment_id,
                 worker_model=worker_model,
                 max_questions=max_questions,
@@ -124,9 +124,8 @@ async def worker_execute(
     experiment = Experiment(**experiment_dict)
 
     # Load input resources (stored with experiment_id, not run_id)
-    # Use experiment_dict["id"] instead of experiment.id to avoid serialization issues
     async def load_input_resources():
-        exp_id = UUID(experiment_dict["id"])  # Get ID from serialized dict
+        exp_id = UUID(experiment_dict["id"])
         resources = queries.resources.get_by_experiment(exp_id)
         resource_dicts = [r.model_dump(mode="json") for r in resources]
         return {
@@ -139,7 +138,6 @@ async def worker_execute(
         "load-input-resources",
         load_input_resources,
     )
-    # Extract resources from result dict
     input_resources_dicts = input_resources_result.get("resources", [])
     input_resources = [Resource(**r_dict) for r_dict in input_resources_dicts]
 
@@ -154,7 +152,6 @@ async def worker_execute(
                 }
             )
             queries.runs.update(updated)
-        # Return updated run status for visibility
         updated_run = queries.runs.get(run.id)
         if updated_run:
             return updated_run.model_dump(mode="json")
@@ -166,26 +163,21 @@ async def worker_execute(
     )
 
     # Set step context for durable tools (before any tool execution)
-    # This enables each tool call to become an individual Inngest step
     set_step(ctx.step)
 
     try:
-        # Normalize benchmark_name to enum for comparisons
         benchmark_name = (
             BenchmarkName(experiment.benchmark_name)
             if isinstance(experiment.benchmark_name, str)
             else experiment.benchmark_name
         )
 
-        # Get skills directory for this benchmark
         skills_dir = get_skills_dir(benchmark_name)
 
         # === COMPOSITION ROOT: lookup factories from registry ===
         stakeholder_factory = get_stakeholder_factory(benchmark_name)
         toolkit_factory = get_toolkit_factory(benchmark_name)
 
-        # Create instances via factories - return types are base interfaces
-        # Get benchmark-specific sandbox manager (singleton per benchmark type)
         sandbox_manager = get_sandbox_manager(benchmark_name)
         stakeholder: BaseStakeholder = stakeholder_factory(experiment)
         toolkit: BaseToolkit = toolkit_factory(
@@ -204,27 +196,23 @@ async def worker_execute(
                     name=f"{stakeholder_display_name} Stakeholder",
                     agent_type="stakeholder",
                     model=stakeholder.model,
-                    system_prompt=stakeholder.system_prompt,  # Use interface property
-                    tools=[],  # Stakeholder doesn't use tools, just answers questions
+                    system_prompt=stakeholder.system_prompt,
+                    tools=[],
                 )
             )
 
-        # Create agent config record for stakeholder
         await ctx.step.run(
             "create-stakeholder-agent-config",
             create_stakeholder_agent_config,
             output_type=AgentConfig,
         )
 
-        # Execute (tools execute in sandbox via skills)
         worker_config = get_worker_config(benchmark_name)
         worker = ReActWorker(model=run.worker_model, config=worker_config)
 
         output_dir = Path(f"data/runs/{run.id}")
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create sandbox outside step - idempotent (returns early if exists)
-        # Pass environment variables needed by skills (e.g., EXA_API_KEY for ResearchRubrics)
         sandbox_envs = {
             "EXA_API_KEY": settings.exa_api_key,
         }
@@ -232,7 +220,6 @@ async def worker_execute(
             run.id, skills_dir=skills_dir, timeout_minutes=30, envs=sandbox_envs
         )
 
-        # Save sandbox ID to run for cleanup across process boundaries
         async def save_sandbox_id():
             existing = queries.runs.get(run.id)
             if existing and not existing.e2b_sandbox_id:
@@ -244,7 +231,6 @@ async def worker_execute(
 
         await sandbox_manager.upload_inputs(run.id, input_resources)
 
-        # Execute worker - tool calls become individual steps via as_step()
         exec_out = await worker.execute(
             run_id=run.id,
             task_description=experiment.task_description,
@@ -252,7 +238,6 @@ async def worker_execute(
             toolkit=toolkit,
         )
 
-        # Download outputs as step
         async def download_outputs():
             downloaded_files = await sandbox_manager.download_all_outputs(run.id, output_dir)
             return downloaded_files
@@ -262,7 +247,6 @@ async def worker_execute(
         )
         execution_output = exec_out
 
-        # Register downloaded files as Resources
         output_resource_ids = []
         for file_info in downloaded_files.files:
             local_path = file_info.local_path
@@ -286,7 +270,6 @@ async def worker_execute(
             )
             output_resource_ids.append(str(resource.id))
 
-        # Save output to run
         async def save_output() -> Run | None:
             existing = queries.runs.get(run.id)
             if existing:
@@ -299,7 +282,6 @@ async def worker_execute(
                 )
                 queries.runs.update(updated)
                 return updated
-
             return None
 
         await ctx.step.run(
@@ -308,15 +290,12 @@ async def worker_execute(
             output_type=Run | None,
         )
 
-        # Invoke evaluation function (separate Inngest function)
-        # Use step.invoke() to call another Inngest function
         evaluation_result: RunEvaluateResult = await ctx.step.invoke(
             step_id="run-evaluate",
             function=run_evaluate,
             data=ExecutionDoneEvent(run_id=str(run.id)).model_dump(),
         )
 
-        # Emit cleanup event for successful completion
         async def emit_cleanup_success():
             await inngest_client.send(
                 inngest.Event(
@@ -332,7 +311,6 @@ async def worker_execute(
         await ctx.step.run("emit-cleanup-success", emit_cleanup_success)
 
     except Exception as exc:
-        # Mark as failed and emit cleanup event
         error_msg = str(exc)
 
         async def mark_failed() -> str:
@@ -352,7 +330,6 @@ async def worker_execute(
             mark_failed,
         )
 
-        # Emit cleanup event for failure
         async def emit_cleanup_failure():
             await inngest_client.send(
                 inngest.Event(
@@ -368,9 +345,6 @@ async def worker_execute(
 
         await ctx.step.run("emit-cleanup-failure", emit_cleanup_failure)
 
-        # Don't re-raise - this prevents Inngest from retrying after an intentional failure.
-        # Re-raising would cause the function to retry, and since worker.execute() is
-        # non-deterministic (LLM makes different tool calls), we'd see tool runs AFTER mark-failed.
         raise inngest.NonRetriableError(f"Worker execution failed: {error_msg}")
 
     return {
