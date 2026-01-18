@@ -46,6 +46,7 @@ from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
 from h_arcane.benchmarks.researchrubrics.loader import get_ablated_dataset_name
 from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
+from h_arcane.core._internal.db import models  # noqa: F401 - register models
 
 
 # Number of samples per benchmark - configurable via env var
@@ -89,7 +90,6 @@ def get_test_engine():
 
 def init_test_db():
     """Initialize database - create all tables if they don't exist."""
-    from h_arcane.core._internal.db import models  # noqa: F401 - register models
 
     engine = get_test_engine()
     SQLModel.metadata.create_all(engine)
@@ -103,7 +103,6 @@ def cleanup_test_db():
     Drops and recreates all tables for a fresh start.
     WARNING: This will delete ALL data in the database!
     """
-    from h_arcane.core._internal.db import models  # noqa: F401
 
     engine = get_test_engine()
     SQLModel.metadata.drop_all(engine)
@@ -181,14 +180,22 @@ def clean_db(db_engine):
 
 
 async def trigger_run(experiment_id: UUID, model: str = "gpt-4o-mini") -> UUID:
-    """Trigger a run via Inngest."""
+    """Trigger a run via Inngest using the new workflow system.
+
+    TODO: This needs to be updated to create a proper Task from the Experiment
+    and emit workflow/started with the serialized task tree. For now, tests
+    should use execute_task() from h_arcane.core.runner directly.
+    """
+    from h_arcane.core._internal.task.events import WorkflowStartedEvent
+
+    # Emit workflow/started event
+    # Note: This requires the experiment to have a task_tree field populated
     await inngest_client.send(
         inngest.Event(
-            name="run/start",
+            name=WorkflowStartedEvent.name,
             data={
                 "experiment_id": str(experiment_id),
-                "worker_model": model,
-                "max_questions": 3,
+                "run_id": str(uuid4()),
             },
         )
     )

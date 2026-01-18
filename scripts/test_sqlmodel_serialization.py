@@ -5,9 +5,10 @@ import traceback
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from h_arcane.core._internal.db.models import Run, RunStatus, Experiment, Resource
+from h_arcane.core._internal.db.models import Run, RunStatus, Experiment
 from sqlmodel import SQLModel
 from h_arcane.benchmarks.enums import BenchmarkName
+from h_arcane.core._internal.db.models import ResourceRecord
 
 
 def test_run_serialization():
@@ -112,7 +113,7 @@ def test_resource_serialization():
     print("=" * 60)
 
     # Create a test Resource object
-    resource = Resource(
+    resource = ResourceRecord(
         id=uuid4(),
         run_id=uuid4(),
         name="test.pdf",
@@ -131,7 +132,7 @@ def test_resource_serialization():
         print("✅ JSON serialization succeeded")
 
         loaded = json.loads(json_str)
-        resource_recreated = Resource(**loaded)
+        resource_recreated = ResourceRecord(**loaded)
         print("✅ Recreating Resource from dict succeeded")
         print(f"Recreated Resource name: {resource_recreated.name}")
 
@@ -149,7 +150,7 @@ def test_list_serialization():
     print("=" * 60)
 
     resources = [
-        Resource(
+        ResourceRecord(
             id=uuid4(),
             run_id=uuid4(),
             name=f"file_{i}.pdf",
@@ -171,7 +172,7 @@ def test_list_serialization():
         print(f"JSON length: {len(json_str)} chars")
 
         loaded = json.loads(json_str)
-        resources_recreated = [Resource(**r_dict) for r_dict in loaded]
+        resources_recreated = [ResourceRecord(**r_dict) for r_dict in loaded]
         print("✅ Recreating list from JSON succeeded")
         print(f"Recreated {len(resources_recreated)} resources")
 

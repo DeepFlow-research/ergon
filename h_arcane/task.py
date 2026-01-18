@@ -5,7 +5,7 @@ This is the PUBLIC API for defining tasks and workflows.
 
 Usage:
     from h_arcane import Task, Resource, TaskStatus
-    
+
     task = Task(
         name="Analyze Data",
         description="Process the quarterly report",

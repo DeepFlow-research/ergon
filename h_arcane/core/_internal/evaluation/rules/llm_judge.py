@@ -1,7 +1,7 @@
 """LLM-judge evaluation rule."""
 
 import base64
-from typing import Literal, TYPE_CHECKING, TypeVar
+from typing import Literal, TYPE_CHECKING
 
 from pydantic import Field
 from openai.types.chat import (
@@ -14,19 +14,12 @@ from openai.types.chat import (
 )
 
 from h_arcane.core._internal.evaluation.rules.base import BaseRule
-from h_arcane.core._internal.db.models import CriterionResult, Resource
+from h_arcane.core._internal.db.models import CriterionResult, ResourceRecord
+from h_arcane.core._internal.evaluation.schemas import LLMJudgeResponse
+from h_arcane.core._internal.utils import require_not_none
 
 if TYPE_CHECKING:
     from h_arcane.core._internal.evaluation.runner import EvaluationRunner
-
-T = TypeVar("T")
-
-
-def _require_not_none(value: T | None, error_msg: str) -> T:
-    """Helper to raise error if value is None."""
-    if value is None:
-        raise ValueError(error_msg)
-    return value
 
 
 class LLMJudgeRule(BaseRule):
@@ -65,9 +58,6 @@ class LLMJudgeRule(BaseRule):
 
         # Step 1: Call LLM API with structured output
         async def call_llm_api():
-            # Import here to avoid circular dependency
-            from h_arcane.core._internal.evaluation.schemas import LLMJudgeResponse
-
             response = await runner.call_llm_judge(messages, LLMJudgeResponse)
             # Return serializable dict for Inngest step
             return {
@@ -77,7 +67,7 @@ class LLMJudgeRule(BaseRule):
 
         try:
             llm_result = await runner.step("call-llm-api", call_llm_api)
-            llm_result = _require_not_none(llm_result, "call-llm-api step returned None")
+            llm_result = require_not_none(llm_result, "call-llm-api step returned None")
 
             # Step 2: Convert verdict to score (simple, but as step for visibility)
             async def compute_score():
@@ -85,7 +75,7 @@ class LLMJudgeRule(BaseRule):
                 return {"score": score, "feedback": llm_result["reasoning"]}
 
             score_result = await runner.step("compute-score", compute_score)
-            score_result = _require_not_none(score_result, "compute-score step returned None")
+            score_result = require_not_none(score_result, "compute-score step returned None")
             score = score_result["score"]
             feedback = score_result["feedback"]
 
@@ -134,7 +124,7 @@ This is a pass/fail decision. The criterion is either satisfied (True) or not sa
     def _build_content_parts(
         self,
         text_content: str,
-        agent_outputs: list[Resource],
+        agent_outputs: list[ResourceRecord],
     ) -> list[ChatCompletionContentPartParam]:
         """Build content parts for LLM judge evaluation with multimodal support."""
         content_parts: list[ChatCompletionContentPartParam] = [

@@ -1,17 +1,28 @@
-"""ResearchRubrics data loading from HuggingFace."""
+"""ResearchRubrics data loading using the Task facade.
 
+This module provides functions to load ResearchRubrics samples from HuggingFace:
+- load_researchrubrics_task(): Load a single sample as a Task object
+- load_researchrubrics_to_database(): Bulk load samples using the Task persistence layer
+"""
+
+from __future__ import annotations
+
+import functools
 import sys
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from datasets import Dataset, load_dataset
 from huggingface_hub import HfApi
-from sqlmodel import Session, select
 
-from h_arcane.core._internal.db.connection import get_engine
-from h_arcane.core._internal.db.models import Experiment
+from h_arcane.benchmarks.common.loader import load_benchmark_to_database
 from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
 from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
+from h_arcane.core.task import Task
+
+if TYPE_CHECKING:
+    from h_arcane.core.worker import BaseWorker
 
 
 def get_ablated_dataset_name() -> str:
@@ -35,123 +46,164 @@ def get_ablated_dataset_name() -> str:
         ) from e
 
 
+@functools.lru_cache(maxsize=4)
+def _load_dataset_cached(ablated_dataset_name: str) -> Dataset:
+    """Load dataset with caching to avoid repeated downloads."""
+    print(f"Loading dataset from HuggingFace: {ablated_dataset_name}...", file=sys.stderr)
+    ds_dict = load_dataset(ablated_dataset_name)
+    return ds_dict["train"]  # type: ignore[return-value]
+
+
+def _find_sample_by_id(ds: Dataset, sample_id: str) -> dict[str, Any] | None:
+    """Find a sample by its ID in the dataset."""
+    for idx in range(len(ds)):
+        row: dict[str, Any] = ds[idx]  # type: ignore[index]
+        if row["sample_id"] == sample_id:
+            return row
+    return None
+
+
+def load_researchrubrics_task(
+    sample_id: str,
+    worker: "BaseWorker",
+    ablated_dataset_name: str | None = None,
+) -> Task:
+    """
+    Load a single ResearchRubrics sample as a Task object.
+
+    This function returns a Task that is NOT yet persisted - the caller
+    decides whether to execute it immediately or persist it first.
+
+    Args:
+        sample_id: The ResearchRubrics sample ID
+        worker: The worker to assign to this task
+        ablated_dataset_name: Optional HuggingFace dataset name
+
+    Returns:
+        A Task object ready for execution or persistence
+
+    Example:
+        >>> worker = ReActWorker(model="gpt-4o", config=RESEARCHRUBRICS_CONFIG)
+        >>> task = load_researchrubrics_task("sample_001", worker)
+        >>> result = await execute_task(task)
+    """
+    # Auto-detect dataset name if not provided
+    if ablated_dataset_name is None:
+        ablated_dataset_name = get_ablated_dataset_name()
+
+    # Load dataset
+    ds = _load_dataset_cached(ablated_dataset_name)
+
+    # Find the specific sample
+    row = _find_sample_by_id(ds, sample_id)
+    if row is None:
+        raise ValueError(f"Sample {sample_id} not found in dataset {ablated_dataset_name}")
+
+    # Parse rubrics into RubricCriterion objects
+    rubric_criteria = [
+        RubricCriterion(
+            criterion=r["criterion"],
+            axis=r["axis"],
+            weight=r["weight"],
+        )
+        for r in row["rubrics"]
+    ]
+
+    # Create rubric evaluator
+    rubric = ResearchRubricsRubric(
+        benchmark="researchrubrics",
+        criteria=rubric_criteria,
+    )
+
+    # ResearchRubrics has no input files - just the ablated prompt
+    return Task(
+        name=sample_id,
+        description=row["ablated_prompt"],
+        assigned_to=worker,
+        resources=[],  # ResearchRubrics samples don't have input files
+        evaluator=rubric,
+    )
+
+
+def _researchrubrics_item_to_task(row: dict[str, Any], worker: "BaseWorker") -> Task:
+    """Convert a ResearchRubrics dataset row to a Task object."""
+    # Parse rubrics into RubricCriterion objects
+    rubric_criteria = [
+        RubricCriterion(
+            criterion=r["criterion"],
+            axis=r["axis"],
+            weight=r["weight"],
+        )
+        for r in row["rubrics"]
+    ]
+
+    # Create rubric evaluator
+    rubric = ResearchRubricsRubric(
+        benchmark="researchrubrics",
+        criteria=rubric_criteria,
+    )
+
+    return Task(
+        name=row["sample_id"],
+        description=row["ablated_prompt"],
+        assigned_to=worker,
+        resources=[],  # ResearchRubrics samples don't have input files
+        evaluator=rubric,
+    )
+
+
 def load_researchrubrics_to_database(
     ablated_dataset_name: str | None = None,
     limit: int | None = None,
+    worker: "BaseWorker | None" = None,
 ) -> list[UUID]:
-    """Load ResearchRubrics from ablated HuggingFace dataset into database.
+    """
+    Load ResearchRubrics from HuggingFace dataset into database using Task facade.
 
-    The ablated dataset is a superset containing:
-    - All original fields (sample_id, domain, prompt, rubrics, etc.)
-    - Ablated prompts (ablated_prompt, ablation_type, removed_elements)
+    This function creates Task objects and uses the Task persistence layer
+    to create Experiment, Run placeholder, and Resource records.
 
     Args:
         ablated_dataset_name: HuggingFace dataset name for ablated dataset
                              (e.g., "{username}/researchrubrics-ablated").
                              If None, auto-detects from HuggingFace credentials.
         limit: Optional limit on number of tasks to load
+        worker: The worker to assign to tasks (required for Task-based loading)
 
     Returns:
-        List of experiment UUIDs
+        List of created experiment IDs
+
+    Raises:
+        ValueError: If worker is not provided
+
+    Example:
+        >>> worker = ReActWorker(model="gpt-4o", config=RESEARCHRUBRICS_CONFIG)
+        >>> experiment_ids = load_researchrubrics_to_database(worker=worker, limit=10)
     """
+    if worker is None:
+        raise ValueError("worker is required for Task-based loading")
+
     # Auto-detect dataset name if not provided
     if ablated_dataset_name is None:
         ablated_dataset_name = get_ablated_dataset_name()
-        print(f"📦 Using ablated dataset: {ablated_dataset_name}", file=sys.stderr)
+        print(f"Using ablated dataset: {ablated_dataset_name}", file=sys.stderr)
 
-    # Load dataset from HuggingFace
-    print(f"📥 Loading dataset from HuggingFace: {ablated_dataset_name}...", file=sys.stderr)
-    ds_dict = load_dataset(ablated_dataset_name)
-    ds: Dataset = ds_dict["train"]  # type: ignore[assignment]
+    # Load dataset
+    ds = _load_dataset_cached(ablated_dataset_name)
 
     if limit:
         ds = ds.select(range(min(limit, len(ds))))
         print(f"   Limited to {len(ds)} samples", file=sys.stderr)
 
-    # Load to database
-    experiment_ids = []
-    total = len(ds)
+    # Convert dataset to list of dicts for the generic loader
+    rows = [ds[idx] for idx in range(len(ds))]
 
-    print(f"💾 Saving {total} tasks to database...", file=sys.stderr, flush=True)
+    print(f"Saving {len(rows)} tasks to database using Task facade...", file=sys.stderr, flush=True)
 
-    engine = get_engine()
-    session = Session(engine)
-
-    try:
-        for idx in range(total):
-            row: dict = ds[idx]  # type: ignore[index]
-            sample_id: str = row["sample_id"]
-            print(
-                f"   Processing task {idx + 1}/{total}: {sample_id}...",
-                file=sys.stderr,
-                flush=True,
-            )
-
-            # Check if experiment already exists
-            existing_experiment = session.exec(
-                select(Experiment).where(
-                    Experiment.benchmark_name == BenchmarkName.RESEARCHRUBRICS,
-                    Experiment.task_id == sample_id,
-                )
-            ).first()
-
-            if existing_experiment:
-                print(
-                    f"      ⚠️  Experiment already exists (ID: {existing_experiment.id})",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                experiment_ids.append(existing_experiment.id)
-                continue
-
-            # Parse rubrics into RubricCriterion objects
-            rubric_criteria = [
-                RubricCriterion(
-                    criterion=r["criterion"],
-                    axis=r["axis"],
-                    weight=r["weight"],
-                )
-                for r in row["rubrics"]
-            ]
-
-            # Create rubric
-            rubric = ResearchRubricsRubric(
-                benchmark="researchrubrics",
-                criteria=rubric_criteria,
-            )
-            ground_truth_rubric = rubric.model_dump()
-
-            # Create experiment
-            experiment = Experiment(
-                benchmark_name=BenchmarkName.RESEARCHRUBRICS,
-                task_id=sample_id,
-                task_description=row["ablated_prompt"],
-                ground_truth_rubric=ground_truth_rubric,
-                benchmark_specific_data={
-                    "domain": row["domain"],
-                    "ablation_type": row.get("ablation_type"),
-                    "removed_elements": row.get("removed_elements"),
-                },
-                category=row["domain"],
-            )
-
-            session.add(experiment)
-            session.commit()
-            session.refresh(experiment)
-
-            experiment_ids.append(experiment.id)
-            print(
-                f"      ✅ Created experiment (ID: {experiment.id})",
-                file=sys.stderr,
-                flush=True,
-            )
-
-    except Exception as e:
-        session.rollback()
-        print(f"   ❌ Error loading to database: {e}", file=sys.stderr)
-        raise
-    finally:
-        session.close()
-
-    print(f"   ✅ Loaded {len(experiment_ids)} experiments", file=sys.stderr)
-    return experiment_ids
+    return load_benchmark_to_database(
+        items=iter(rows),
+        item_to_task=_researchrubrics_item_to_task,
+        benchmark_name=BenchmarkName.RESEARCHRUBRICS.value,
+        worker=worker,
+        total=len(rows),
+    )

@@ -5,10 +5,9 @@ These are the contracts for evaluation-related Inngest events.
 
 from typing import ClassVar
 
-from pydantic import BaseModel
 
 from h_arcane.benchmarks.types import AnyRubric, AnyRule
-from h_arcane.core._internal.db.models import Resource
+from h_arcane.core._internal.db.models import ResourceRecord
 from h_arcane.core._internal.events.base import InngestEventContract
 
 
@@ -23,7 +22,7 @@ class TaskEvaluationEvent(InngestEventContract):
     run_id: str
     task_input: str
     agent_reasoning: str
-    agent_outputs: list[Resource]
+    agent_outputs: list[ResourceRecord]
     rubric: AnyRubric
 
     model_config = {"extra": "allow"}  # Allow extra fields for rubric polymorphism
@@ -40,7 +39,10 @@ class CriterionEvaluationEvent(InngestEventContract):
     run_id: str
     task_input: str
     agent_reasoning: str
-    agent_outputs: list[Resource]
+    agent_outputs: list[ResourceRecord]
+
+    # Benchmark identification (for sandbox manager lookup)
+    benchmark_name: str
 
     # Stage info as primitives (instead of EvaluationStage object)
     stage_name: str
@@ -52,11 +54,3 @@ class CriterionEvaluationEvent(InngestEventContract):
     rule: AnyRule
 
     model_config = {"extra": "allow"}  # Allow extra fields for rule polymorphism
-
-
-class RunEvaluateResult(BaseModel):
-    """Result from run_evaluate function (not an event contract)."""
-
-    run_id: str
-    normalized_score: float
-    questions_asked: int

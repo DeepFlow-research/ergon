@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from h_arcane.core._internal.db.models import Resource
+from h_arcane.core._internal.db.models import ResourceRecord
 
 
 class SandboxResult(BaseModel):
@@ -39,7 +39,7 @@ class EvaluationData(BaseModel):
     run_id: UUID
     task_input: str
     agent_reasoning: str
-    agent_outputs: list[Resource]
+    agent_outputs: list[ResourceRecord]
     stage_idx: int
     stage_name: str
     rule_idx: int
@@ -57,5 +57,5 @@ class TaskEvaluationContext(BaseModel):
     run_id: UUID
     task_input: str
     agent_reasoning: str
-    agent_outputs: list[Resource]
+    agent_outputs: list[ResourceRecord]
     rubric: Any  # AnyRubric at runtime - discriminated union of rubric types

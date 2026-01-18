@@ -4,6 +4,7 @@ from sqlmodel import SQLModel, create_engine, Session
 from typing import Generator
 
 from h_arcane.core.settings import settings
+from h_arcane.core._internal.db import models  # noqa: F401
 
 # Create engine with connection pooling
 _engine = None
@@ -34,9 +35,7 @@ def get_session() -> Generator[Session, None, None]:
 
 def init_db():
     """Initialize database - create all tables."""
-    # Import all models so they register with SQLModel.metadata
     # This must happen BEFORE create_all() is called
-    from h_arcane.core._internal.db import models  # noqa: F401
 
     engine = get_engine()
     SQLModel.metadata.create_all(engine)

@@ -160,15 +160,6 @@ class TaskRegistry:
                         return True
                 elif dep_id in rec_stack:
                     # Found a cycle - dep is in current recursion stack
-                    cycle_start_idx = next(
-                        i
-                        for i, name in enumerate(path)
-                        if self.tasks[dep_id].name == name
-                        or any(
-                            t.name == name and t.id == dep_id
-                            for t in self.tasks.values()
-                        )
-                    )
                     # Try to find the cycle path
                     dep_task = self.tasks[dep_id]
                     path.append(dep_task.name)
@@ -237,11 +228,7 @@ class TaskRegistry:
 
         These are the tasks that are waiting for task_id to complete.
         """
-        return [
-            t
-            for t in self.tasks.values()
-            if task_id in t._resolved_dependency_ids
-        ]
+        return [t for t in self.tasks.values() if task_id in t._resolved_dependency_ids]
 
     def get_dependencies(self, task_id: UUID) -> list[Task]:
         """

@@ -31,6 +31,14 @@ from h_arcane.core._internal.db.models import RunStatus
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.task.events import WorkflowStartedEvent
+from h_arcane.core._internal.agents.registry import AgentRegistry
+from h_arcane.core._internal.task.persistence import (
+    persist_agent_mapping,
+    persist_workflow,
+)
+from h_arcane.core._internal.task.registry import TaskRegistry
+from h_arcane.core._internal.task.schema import parse_task_tree
+from h_arcane.core._internal.task.worker_context import store_workers_from_task
 from h_arcane.core.task import Resource, Task, TaskStatus
 
 
@@ -162,24 +170,21 @@ async def execute_task(
         workflow = Task(name="Root", assigned_to=worker, children=[a, b])
         result = await execute_task(workflow, timeout_seconds=300)
     """
-    from h_arcane.core._internal.agents.registry import AgentRegistry
-    from h_arcane.core._internal.task.persistence import (
-        persist_agent_mapping,
-        persist_workflow,
-    )
-    from h_arcane.core._internal.task.registry import TaskRegistry
-
     started_at = datetime.now(timezone.utc)
 
     try:
         # 1. Validate and process task tree (TaskRegistry)
         registry = TaskRegistry(task)
 
-        # 2. Build agent registry (collect all workers)
+        # 2. Store workers in context for later retrieval during execution
+        # This allows worker_execute to get the worker instance by task_id
+        store_workers_from_task(task)
+
+        # 3. Build agent registry (collect all workers)
         agent_registry = AgentRegistry()
         agent_registry.register_from_task(task)
 
-        # 3. Persist to database (Experiment, Run, Resources, AgentConfigs)
+        # 4. Persist to database (Experiment, Run, Resources, AgentConfigs)
         experiment, run, resource_mapping = persist_workflow(
             task=task,
             registry=registry,
@@ -192,7 +197,7 @@ async def execute_task(
         agent_registry.persist(run.id)
         persist_agent_mapping(run.id, agent_registry)
 
-        # 4. Trigger execution via Inngest
+        # 5. Trigger execution via Inngest
         event = WorkflowStartedEvent(
             run_id=str(run.id),
             experiment_id=str(experiment.id),
@@ -201,7 +206,7 @@ async def execute_task(
             inngest.Event(name=WorkflowStartedEvent.name, data=event.model_dump())
         )
 
-        # 5. Wait for completion
+        # 6. Wait for completion
         result = await _wait_for_completion(
             run_id=run.id,
             experiment_id=experiment.id,
@@ -294,6 +299,10 @@ def _build_result_from_run(
     success = run.status == RunStatus.COMPLETED
     status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
 
+    # Load experiment to get task_tree for task names
+    experiment = queries.experiments.get(experiment_id)
+    task_tree = experiment.task_tree if experiment else {}
+
     # Load output resources
     output_resources: list[Resource] = []
     if run.output_resource_ids:
@@ -316,14 +325,22 @@ def _build_result_from_run(
     task_results: dict[UUID, TaskResult] = {}
     task_attempts: dict[UUID, int] = {}
     executions = queries.task_executions.get_by_run(run.id)
+
+    # Parse task_tree once for efficient lookups
+    tree = parse_task_tree(task_tree)
+
     for exec in executions:
         # Get the latest execution for each task (by attempt number)
         current_attempt = task_attempts.get(exec.task_id, 0)
         if exec.attempt_number > current_attempt:
+            # Extract task name from typed task_tree
+            task_node = tree.find_by_id(str(exec.task_id)) if tree else None
+            task_name = task_node.name if task_node else f"Task-{exec.task_id}"
+
             task_status = TaskStatus.COMPLETED if exec.status == "completed" else TaskStatus.FAILED
             task_results[exec.task_id] = TaskResult(
                 task_id=exec.task_id,
-                name=f"Task-{exec.task_id}",  # TODO: Get name from task_tree
+                name=task_name,
                 status=task_status,
                 score=exec.score,
                 outputs=[],  # TODO: Load task-specific outputs

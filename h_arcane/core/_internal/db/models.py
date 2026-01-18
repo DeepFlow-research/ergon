@@ -244,8 +244,8 @@ class Action(SQLModel, table=True):
         return ExecutionError(**self.error)
 
 
-class Resource(SQLModel, table=True):
-    """A file resource (input or output)."""
+class ResourceRecord(SQLModel, table=True):
+    """A file resource (input or output) - database record."""
 
     __tablename__ = "resources"
 
@@ -271,6 +271,13 @@ class Resource(SQLModel, table=True):
     file_path: str
     size_bytes: int
 
+    # Resource lineage tracking (for output resources)
+    source_resource_ids: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSON),
+        description="Input resource IDs this output was derived from",
+    )
+
     preview_text: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -281,70 +288,19 @@ class Resource(SQLModel, table=True):
         Index("ix_resources_task_execution", "task_execution_id"),
     )
 
-    def _resolve_file_path(self) -> Path:
-        """Resolve file path, trying DATA_DIR if stored path doesn't exist.
-
-        This handles both local development and Docker container environments.
-
-        Returns:
-            Resolved Path object
-
-        Raises:
-            FileNotFoundError: If file cannot be found in any location
-        """
-        file_path = Path(self.file_path)
-
-        # If path exists, return it directly
-        if file_path.exists():
-            return file_path
-
-        # Import here to avoid circular dependency (loader imports models)
-        # Type checker sees this via TYPE_CHECKING import above
-        from h_arcane.benchmarks.gdpeval.loader import DATA_DIR  # noqa: PLC0415
-
-        # If stored path is absolute, try to extract relative part
-        if file_path.is_absolute():
-            # Check if path contains "data/" and extract everything after it
-            path_str = str(file_path)
-            if "/data/" in path_str:
-                # Extract relative part after "data/"
-                relative_part = path_str.split("/data/", 1)[1]
-                resolved_path = DATA_DIR / relative_part
-            else:
-                # Try treating the whole path as relative to DATA_DIR
-                resolved_path = DATA_DIR / self.file_path
-        else:
-            # Path is already relative, resolve against DATA_DIR
-            resolved_path = DATA_DIR / self.file_path
-
-        if resolved_path.exists():
-            return resolved_path
-        else:
-            # Provide helpful error message
-            raise FileNotFoundError(
-                f"Resource file not found. Tried:\n"
-                f"  1. {file_path}\n"
-                f"  2. {resolved_path}\n"
-                f"  (DATA_DIR={DATA_DIR})"
-            )
-
     def load_content(self) -> bytes:
-        """Load file content from disk.
-
-        Resolves paths relative to DATA_DIR if the stored path doesn't exist.
-        This handles both local development and Docker container environments.
-        """
-        file_path = self._resolve_file_path()
-        return file_path.read_bytes()
+        """Load file content from disk."""
+        path = Path(self.file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Resource file not found: {path}")
+        return path.read_bytes()
 
     def load_text(self) -> str:
-        """Load file content as text.
-
-        Resolves paths relative to DATA_DIR if the stored path doesn't exist.
-        This handles both local development and Docker container environments.
-        """
-        file_path = self._resolve_file_path()
-        return file_path.read_text()
+        """Load file content as text."""
+        path = Path(self.file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Resource file not found: {path}")
+        return path.read_text()
 
 
 class AgentRole(str, Enum):
@@ -364,6 +320,7 @@ class AgentConfig(SQLModel, table=True):
     run_id: UUID = Field(foreign_key="runs.id", index=True)
 
     # Agent identity
+    worker_id: UUID | None = Field(default=None, index=True)  # Original worker UUID from SDK
     name: str  # e.g., "TaskWorker"
     agent_type: str  # e.g., "react_worker"
 
@@ -415,7 +372,7 @@ class TaskExecution(SQLModel, table=True):
     agent_id: UUID | None = Field(foreign_key="agent_configs.id", default=None, index=True)
 
     # Status tracking
-    status: str = Field(default="pending", index=True)  # pending, running, completed, failed
+    status: TaskStatus = Field(default=TaskStatus.PENDING, index=True)
     attempt_number: int = Field(default=1)
 
     # Timing
@@ -510,9 +467,7 @@ class TaskDependency(SQLModel, table=True):
     # Satisfaction tracking
     is_satisfied: bool = Field(default=False, index=True)
     satisfied_at: datetime | None = None
-    satisfied_by_execution_id: UUID | None = Field(
-        foreign_key="task_executions.id", default=None
-    )
+    satisfied_by_execution_id: UUID | None = Field(foreign_key="task_executions.id", default=None)
 
     __table_args__ = (
         Index("ix_task_deps_waiting", "run_id", "dependent_task_id"),
@@ -542,7 +497,7 @@ class TaskEvaluator(SQLModel, table=True):
     evaluator_config: dict = Field(sa_column=Column(JSON))  # Serialized rubric
 
     # Status tracking
-    status: str = Field(default="pending", index=True)  # pending, running, completed, failed
+    status: TaskStatus = Field(default=TaskStatus.PENDING, index=True)
 
     # Results (populated after evaluation)
     score: float | None = None

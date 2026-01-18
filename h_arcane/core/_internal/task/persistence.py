@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import mimetypes
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -16,7 +17,7 @@ from uuid import UUID
 from h_arcane.core._internal.db.models import (
     Action,
     Experiment,
-    Resource as DBResource,
+    ResourceRecord,
     Run,
     TaskExecution,
 )
@@ -24,6 +25,7 @@ from h_arcane.core._internal.db.queries import queries
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.core.task import Resource as SDKResource
 from h_arcane.core.task import Task
+from h_arcane.core._internal.task.schema import TaskTreeNode
 
 if TYPE_CHECKING:
     from h_arcane.core._internal.agents.registry import AgentRegistry
@@ -35,23 +37,23 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
-def serialize_task_tree(task: Task) -> dict:
+def serialize_task_tree(task: Task) -> TaskTreeNode:
     """
-    Serialize a task tree to a JSON-compatible dict.
+    Serialize a task tree to a typed TaskTreeNode.
 
     Uses Pydantic's model_dump() with field serializers defined on Task.
-    Recursively serializes children.
+    Recursively serializes children and validates against TaskTreeNode schema.
 
     Args:
         task: The root task to serialize
 
     Returns:
-        Dictionary representation of the task tree
+        TaskTreeNode representation of the task tree
 
     Example:
         >>> task = Task(name="Root", children=[child1, child2])
         >>> tree = serialize_task_tree(task)
-        >>> # tree can be stored as JSON in Experiment.task_tree
+        >>> # tree.model_dump() can be stored as JSON in Experiment.task_tree
     """
     # Use model_dump() - field serializers handle workers, depends_on, etc.
     # Exclude status and children (children handled separately)
@@ -61,7 +63,7 @@ def serialize_task_tree(task: Task) -> dict:
     )
 
     # Recursively serialize children
-    data["children"] = [serialize_task_tree(child) for child in task.children]
+    data["children"] = [serialize_task_tree(child).model_dump() for child in task.children]
 
     # Add computed property
     data["is_leaf"] = task.is_leaf
@@ -72,7 +74,8 @@ def serialize_task_tree(task: Task) -> dict:
     # Add evaluator type for reference
     data["evaluator_type"] = type(task.evaluator).__name__ if task.evaluator else None
 
-    return data
+    # Validate and return as typed model
+    return TaskTreeNode.model_validate(data)
 
 
 def compute_initial_task_states(registry: "TaskRegistry") -> dict[str, str]:
@@ -127,7 +130,7 @@ def create_experiment_from_task(
         "task_id": str(task.id),
         "task_description": task.description,
         "ground_truth_rubric": {},
-        "task_tree": task_tree,
+        "task_tree": task_tree.model_dump(),  # Store as dict in DB
         "root_task_id": str(task.id),
         "category": "custom",
     }
@@ -275,9 +278,7 @@ def create_resource_from_sdk(
 
         # Create a temp file to store the content
         suffix = _get_extension_from_mime(sdk_resource.mime_type)
-        with tempfile.NamedTemporaryFile(
-            mode="wb", suffix=suffix, delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=suffix, delete=False) as f:
             f.write(content_bytes)
             temp_path = f.name
 
@@ -333,10 +334,8 @@ def persist_input_resources(
         resource_ids: list[UUID] = []
 
         for sdk_resource in task.resources:
-            resource_data = create_resource_from_sdk(
-                sdk_resource, experiment_id, task.id
-            )
-            db_resource = DBResource(**resource_data)
+            resource_data = create_resource_from_sdk(sdk_resource, experiment_id, task.id)
+            db_resource = ResourceRecord(**resource_data)
             created = queries.resources.create(db_resource)
             resource_ids.append(created.id)
 
@@ -441,9 +440,7 @@ def create_output_resource_from_sdk(
             content_bytes = content
 
         suffix = _get_extension_from_mime(sdk_resource.mime_type)
-        with tempfile.NamedTemporaryFile(
-            mode="wb", suffix=suffix, delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=suffix, delete=False) as f:
             f.write(content_bytes)
             temp_path = f.name
 
@@ -498,7 +495,7 @@ def persist_output_resources(
         resource_data = create_output_resource_from_sdk(
             sdk_resource, run_id, task_id, task_execution_id
         )
-        db_resource = DBResource(**resource_data)
+        db_resource = ResourceRecord(**resource_data)
         created = queries.resources.create(db_resource)
         resource_ids.append(created.id)
 
@@ -526,15 +523,7 @@ def create_task_execution(
     Returns:
         The created TaskExecution record
     """
-    from datetime import datetime, timezone
 
-    execution = TaskExecution(
-        run_id=run_id,
-        task_id=task_id,
-        agent_id=agent_config_id,
-        status="running",
-        started_at=datetime.now(timezone.utc),
-    )
     return queries.task_executions.create_execution(
         run_id=run_id,
         task_id=task_id,
@@ -566,9 +555,10 @@ def complete_task_execution(
     Returns:
         The updated TaskExecution record
     """
-    from datetime import datetime, timezone
 
-    status = "completed" if success else "failed"
+    from h_arcane.core._internal.db.models import TaskStatus
+
+    status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
 
     return queries.task_executions.update_status(
         execution_id=execution_id,
@@ -673,9 +663,7 @@ def persist_workflow(
     experiment = persist_experiment(task, registry, benchmark_name)
 
     # 2. Create run
-    run = persist_run(
-        experiment.id, registry, worker_model, max_questions
-    )
+    run = persist_run(experiment.id, registry, worker_model, max_questions)
 
     # 3. Create input resources
     resource_mapping = persist_input_resources(experiment.id, registry)

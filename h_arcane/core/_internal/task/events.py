@@ -130,5 +130,3 @@ class WorkflowFailedEvent(InngestEventContract):
     run_id: str
     experiment_id: str
     error: str
-
-

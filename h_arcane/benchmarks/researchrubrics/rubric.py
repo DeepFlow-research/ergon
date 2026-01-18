@@ -46,9 +46,6 @@ class ResearchRubricsRubric(BaseModel):
         Returns:
             TaskEvaluationResult with criterion-level and aggregate scores
         """
-        # Import here to avoid circular imports
-        from h_arcane.core._internal.evaluation.inngest_functions import evaluate_criterion_fn
-        from h_arcane.core._internal.evaluation.events import CriterionEvaluationEvent
 
         # Step 1: Convert RubricCriterion to LLMJudgeRule
         async def convert_criteria_step() -> list[dict]:
@@ -89,6 +86,12 @@ class ResearchRubricsRubric(BaseModel):
             llm_rule_dict: dict,
         ):
             """Create an invoker for evaluating a single criterion."""
+            # Lazy imports to avoid circular import
+            from h_arcane.core._internal.evaluation.events import CriterionEvaluationEvent
+            from h_arcane.core._internal.evaluation.inngest_functions.criterion import (
+                evaluate_criterion_fn,
+            )
+
             step_id = f"criterion-{criterion_idx}"
             # Max score is abs(weight) - we handle sign in aggregation
             max_score = abs(criterion_weight)
@@ -102,6 +105,7 @@ class ResearchRubricsRubric(BaseModel):
                 task_input=context.task_input,
                 agent_reasoning=context.agent_reasoning,
                 agent_outputs=context.agent_outputs,
+                benchmark_name="researchrubrics",
                 stage_name=f"Criterion-{criterion_idx}",  # No stages in ResearchRubrics
                 stage_idx=0,  # All criteria at same level
                 rule_idx=criterion_idx,

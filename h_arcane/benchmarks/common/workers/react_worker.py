@@ -8,7 +8,7 @@ from inngest_agents import as_step
 
 from h_arcane.core._internal.agents.base import BaseToolkit, WorkerExecutionOutput
 from h_arcane.benchmarks.common.workers.tracing import log_actions_from_result
-from h_arcane.core._internal.db.models import AgentConfig, Resource
+from h_arcane.core._internal.db.models import AgentConfig, ResourceRecord
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
 
@@ -39,7 +39,7 @@ class ReActWorker:
         self,
         run_id: UUID,
         task_description: str,
-        input_resources: list[Resource],
+        input_resources: list[ResourceRecord],
         toolkit: BaseToolkit,
     ) -> WorkerExecutionOutput:
         """
@@ -144,7 +144,7 @@ class ReActWorker:
 
         return ask_stakeholder
 
-    def _format_task(self, task_description: str, input_resources: list[Resource]) -> str:
+    def _format_task(self, task_description: str, input_resources: list[ResourceRecord]) -> str:
         """
         Format task description with input resources.
 

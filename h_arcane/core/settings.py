@@ -25,6 +25,18 @@ class Settings(BaseSettings):
     inngest_dev: bool = True
     inngest_api_base_url: str = "http://localhost:8289"  # Default for local dev (host port)
 
+    # Data directory (computed from project root)
+    @property
+    def data_dir(self) -> Path:
+        """Get the data directory path."""
+        return Path(__file__).parent.parent / "data"
+
+    # Output directory for runs
+    @property
+    def runs_dir(self) -> Path:
+        """Get the runs directory path."""
+        return self.data_dir / "runs"
+
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent / ".env"),
         env_file_encoding="utf-8",

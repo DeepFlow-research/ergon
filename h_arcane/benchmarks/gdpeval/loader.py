@@ -1,44 +1,51 @@
-"""GDPEval data loading."""
+"""GDPEval data loading using the Task facade.
 
+This module provides two main functions:
+- load_gdpeval_task(): Load a single GDPEval task as a Task object
+- load_gdpeval_to_database(): Bulk load tasks using the Task persistence layer
+"""
+
+from __future__ import annotations
+
+import functools
 import json
-import mimetypes
 import sys
-import traceback
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
+
 import pandas as pd
 
-from sqlmodel import Session, select
-
-from h_arcane.core._internal.db.connection import get_engine
-from h_arcane.core._internal.db.models import Experiment, Resource
+from h_arcane.benchmarks.common.loader import load_benchmark_to_database
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.gdpeval.rubric import GDPEvalStagedRubric, GDPEvalTask
+from h_arcane.core.settings import settings
+from h_arcane.core.task import Resource, Task
 
-# Default paths relative to project root
-DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
-
-# Cache for parquet data to avoid reloading
-_parquet_cache: pd.DataFrame | None = None
+if TYPE_CHECKING:
+    from h_arcane.core.worker import BaseWorker
 
 
-def _load_parquet_cache() -> pd.DataFrame:
-    """Load and cache parquet file."""
-    global _parquet_cache
-    if _parquet_cache is None:
-        parquet_path = DATA_DIR / "raw" / "gdpeval.parquet"
-        if not parquet_path.exists():
-            raise FileNotFoundError(
-                f"GDPEval parquet file not found at {parquet_path}. "
-                "Please copy data from manager_agent_gym/curation/gdpeval/data to data/"
-            )
-        _parquet_cache = pd.read_parquet(parquet_path)
-    return _parquet_cache
+def get_data_dir() -> Path:
+    """Get the data directory path from settings."""
+    return settings.data_dir
+
+
+@functools.lru_cache(maxsize=1)
+def _load_parquet() -> pd.DataFrame:
+    """Load parquet file (cached)."""
+    parquet_path = get_data_dir() / "raw" / "gdpeval.parquet"
+    if not parquet_path.exists():
+        raise FileNotFoundError(
+            f"GDPEval parquet file not found at {parquet_path}. "
+            "Please copy data from manager_agent_gym/curation/gdpeval/data to data/"
+        )
+    return pd.read_parquet(parquet_path)
 
 
 def extract_task_description(task_id: str) -> str:
     """Extract task description from gdpeval.parquet."""
-    tasks_df = _load_parquet_cache()
+    tasks_df = _load_parquet()
     task_row = tasks_df[tasks_df["task_id"] == task_id]
     if task_row.empty:
         raise ValueError(f"Task {task_id} not found in gdpeval.parquet")
@@ -77,10 +84,80 @@ def find_reference_files(task_id: str, reference_dir: Path) -> list[Path]:
     return sorted(task_files)
 
 
-def get_mime_type(file_path: Path) -> str:
-    """Get MIME type from file extension using standard library."""
-    mime_type, _ = mimetypes.guess_type(str(file_path))
-    return mime_type or "application/octet-stream"
+def _load_rubric_data(
+    rubric_file: Path,
+) -> dict[str, GDPEvalStagedRubric]:
+    """Load all rubrics from JSONL file into a lookup dict."""
+    rubrics: dict[str, GDPEvalStagedRubric] = {}
+    with open(rubric_file) as f:
+        for line in f:
+            data = json.loads(line)
+            staged_rubric = GDPEvalStagedRubric(**data)
+            rubrics[staged_rubric.task_id] = staged_rubric
+    return rubrics
+
+
+def load_gdpeval_task(
+    task_id: str,
+    worker: "BaseWorker",
+    rubric_file: Path | None = None,
+    reference_dir: Path | None = None,
+) -> Task:
+    """
+    Load a single GDPEval task as a Task object.
+
+    This function returns a Task that is NOT yet persisted - the caller
+    decides whether to execute it immediately or persist it first.
+
+    Args:
+        task_id: The GDPEval task ID (e.g., "task_001")
+        worker: The worker to assign to this task
+        rubric_file: Optional path to staged rubrics JSONL file
+        reference_dir: Optional path to reference files directory
+
+    Returns:
+        A Task object ready for execution or persistence
+
+    Example:
+        >>> worker = ReActWorker(model="gpt-4o", config=GDPEVAL_CONFIG)
+        >>> task = load_gdpeval_task("task_001", worker)
+        >>> result = await execute_task(task)
+    """
+    if rubric_file is None:
+        rubric_file = get_data_dir() / "generated" / "staged_v2" / "staged_rubrics.jsonl"
+    if reference_dir is None:
+        reference_dir = get_data_dir() / "raw" / "reference_files"
+
+    if not rubric_file.exists():
+        raise FileNotFoundError(
+            f"Rubric file not found at {rubric_file}. "
+            "Please copy data from manager_agent_gym/curation/gdpeval/data to data/"
+        )
+
+    # Load rubrics and find the specific one
+    rubrics = _load_rubric_data(rubric_file)
+    if task_id not in rubrics:
+        raise ValueError(f"Task {task_id} not found in rubric file")
+
+    staged_rubric = rubrics[task_id]
+
+    # Get task description
+    task_description = extract_task_description(task_id)
+
+    # Get reference files
+    reference_files = find_reference_files(task_id, reference_dir)
+
+    # Create SDK Resources
+    resources = [Resource(path=str(f), name=f.name) for f in reference_files]
+
+    # Create and return Task
+    return Task(
+        name=task_id,
+        description=task_description,
+        assigned_to=worker,
+        resources=resources,
+        evaluator=staged_rubric.rubric,
+    )
 
 
 def load_gdpeval_tasks(
@@ -88,11 +165,11 @@ def load_gdpeval_tasks(
     reference_dir: Path | None = None,
     limit: int | None = None,
 ) -> list[GDPEvalTask]:
-    """Load GDPEval tasks with their staged rubrics."""
+    """Load GDPEval tasks with their staged rubrics (legacy format)."""
     if rubric_file is None:
-        rubric_file = DATA_DIR / "generated" / "staged_v2" / "staged_rubrics.jsonl"
+        rubric_file = get_data_dir() / "generated" / "staged_v2" / "staged_rubrics.jsonl"
     if reference_dir is None:
-        reference_dir = DATA_DIR / "raw" / "reference_files"
+        reference_dir = get_data_dir() / "raw" / "reference_files"
 
     if not rubric_file.exists():
         raise FileNotFoundError(
@@ -104,7 +181,7 @@ def load_gdpeval_tasks(
     total_lines = sum(1 for _ in open(rubric_file)) if limit else None
     current_limit = limit or total_lines or 0
 
-    print(f"📂 Loading tasks from {rubric_file.name}...", file=sys.stderr)
+    print(f"Loading tasks from {rubric_file.name}...", file=sys.stderr)
 
     with open(rubric_file) as f:
         for i, line in enumerate(f):
@@ -127,148 +204,75 @@ def load_gdpeval_tasks(
             )
             tasks.append(task)
 
-    print(f"   ✅ Loaded {len(tasks)} tasks", file=sys.stderr)
+    print(f"   Loaded {len(tasks)} tasks", file=sys.stderr)
     return tasks
+
+
+def _gdpeval_item_to_task(gdp_task: GDPEvalTask, worker: "BaseWorker") -> Task:
+    """Convert a GDPEvalTask to a Task object."""
+    sdk_resources = [Resource(path=str(f), name=f.name) for f in gdp_task.reference_files]
+    return Task(
+        name=gdp_task.task_id,
+        description=gdp_task.task_description,
+        assigned_to=worker,
+        resources=sdk_resources,
+        evaluator=gdp_task.rubric,
+    )
 
 
 def load_gdpeval_to_database(
     rubric_file: Path | None = None,
     reference_dir: Path | None = None,
     limit: int | None = None,
+    worker: "BaseWorker | None" = None,
 ) -> list[UUID]:
-    """Load GDPEval tasks into database."""
-    tasks = load_gdpeval_tasks(rubric_file=rubric_file, reference_dir=reference_dir, limit=limit)
-    return _load_to_database(tasks)
+    """
+    Load GDPEval tasks into database using the Task facade.
 
+    This function creates Task objects and uses the Task persistence layer
+    to create Experiment, Run placeholder, and Resource records.
 
-def _load_to_database(tasks: list[GDPEvalTask]) -> list[UUID]:
-    """Load tasks into experiments table and create input Resource records."""
-    experiment_ids = []
-    total = len(tasks)
+    Args:
+        rubric_file: Optional path to staged rubrics JSONL file
+        reference_dir: Optional path to reference files directory
+        limit: Optional limit on number of tasks to load
+        worker: The worker to assign to tasks (required for Task-based loading)
 
-    print(f"💾 Saving {total} tasks to database...", file=sys.stderr, flush=True)
+    Returns:
+        List of created experiment IDs
 
-    # Create session directly (not using generator pattern with 'with')
-    engine = get_engine()
-    session = Session(engine)
+    Raises:
+        ValueError: If worker is not provided
 
-    try:
-        for idx, task in enumerate(tasks, 1):
-            # Show progress
-            print(
-                f"   Processing task {idx}/{total}: {task.task_id[:8]}...",
-                file=sys.stderr,
-                flush=True,
-            )
+    Example:
+        >>> worker = ReActWorker(model="gpt-4o", config=GDPEVAL_CONFIG)
+        >>> experiment_ids = load_gdpeval_to_database(worker=worker, limit=10)
+    """
+    if worker is None:
+        raise ValueError("worker is required for Task-based loading")
 
-            # Check if experiment already exists
-            existing_experiment = session.exec(
-                select(Experiment).where(
-                    Experiment.benchmark_name == BenchmarkName.GDPEVAL,
-                    Experiment.task_id == task.task_id,
-                )
-            ).first()
+    if rubric_file is None:
+        rubric_file = get_data_dir() / "generated" / "staged_v2" / "staged_rubrics.jsonl"
+    if reference_dir is None:
+        reference_dir = get_data_dir() / "raw" / "reference_files"
 
-            if existing_experiment:
-                print(
-                    f"      ⚠️  Experiment already exists (ID: {existing_experiment.id})",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                experiment_ids.append(existing_experiment.id)
+    # Load legacy tasks for compatibility with existing data structures
+    legacy_tasks = load_gdpeval_tasks(
+        rubric_file=rubric_file,
+        reference_dir=reference_dir,
+        limit=limit,
+    )
 
-                # Check if resources exist for this experiment
-                existing_resources = session.exec(
-                    select(Resource).where(Resource.experiment_id == existing_experiment.id)
-                ).all()
+    print(
+        f"Saving {len(legacy_tasks)} tasks to database using Task facade...",
+        file=sys.stderr,
+        flush=True,
+    )
 
-                if existing_resources:
-                    print(
-                        f"      ✅ Experiment already has {len(existing_resources)} resources, skipping",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                    continue
-                else:
-                    # Backfill: create resources for existing experiment
-                    print(
-                        f"      🔄 No resources found, creating {len(task.reference_files)} resources...",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                    experiment = existing_experiment
-            else:
-                # Create new experiment
-                print("      Serializing rubric...", file=sys.stderr, flush=True)
-                rubric_dict = task.rubric.model_dump()
-                print(
-                    f"      Rubric serialized ({len(str(rubric_dict))} chars)",
-                    file=sys.stderr,
-                    flush=True,
-                )
-
-                print("      Creating Experiment object...", file=sys.stderr, flush=True)
-                experiment = Experiment(
-                    benchmark_name=BenchmarkName.GDPEVAL,
-                    task_id=task.task_id,
-                    task_description=task.task_description,
-                    ground_truth_rubric=rubric_dict,
-                    benchmark_specific_data={},  # GDPEval doesn't need extra data
-                    category=task.category,
-                )
-                print("      Adding experiment to session...", file=sys.stderr, flush=True)
-                session.add(experiment)
-                print("      Flushing to get ID...", file=sys.stderr, flush=True)
-                session.flush()  # Flush to get the ID without committing
-                print(f"      Got experiment ID: {experiment.id}", file=sys.stderr, flush=True)
-                experiment_ids.append(experiment.id)
-
-            # Create Resource records for input files (not JSON)
-            print(
-                f"      Processing {len(task.reference_files)} reference files...",
-                file=sys.stderr,
-                flush=True,
-            )
-            for ref_idx, ref_file in enumerate(task.reference_files, 1):
-                print(
-                    f"         File {ref_idx}/{len(task.reference_files)}: {ref_file.name}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-
-                # Store path relative to DATA_DIR for portability between local and Docker
-                # ref_file is already relative to reference_dir, which is DATA_DIR / "raw" / "reference_files"
-                # So we need to get the path relative to DATA_DIR
-                try:
-                    # Try to make path relative to DATA_DIR
-                    file_path_relative = ref_file.relative_to(DATA_DIR)
-                    file_path_str = str(file_path_relative)
-                except ValueError:
-                    # If ref_file is not relative to DATA_DIR, store as absolute (fallback)
-                    file_path_str = str(ref_file.absolute())
-
-                resource = Resource(
-                    experiment_id=experiment.id,
-                    run_id=None,  # Input files don't belong to a run
-                    name=ref_file.name,
-                    mime_type=get_mime_type(ref_file),
-                    file_path=file_path_str,
-                    size_bytes=ref_file.stat().st_size,
-                )
-                session.add(resource)
-            print(f"      ✅ Task {idx} processed", file=sys.stderr, flush=True)
-
-        # Commit all at once
-        print("   Committing all changes...", file=sys.stderr, flush=True)
-        session.commit()
-        print("   ✅ Commit successful!", file=sys.stderr, flush=True)
-    except Exception as e:
-        print(f"   ❌ Error: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
-        session.rollback()
-        traceback.print_exc(file=sys.stderr)
-        raise
-    finally:
-        session.close()
-
-    print(f"   ✅ Saved {total} experiments to database", file=sys.stderr, flush=True)
-    return experiment_ids
+    return load_benchmark_to_database(
+        items=iter(legacy_tasks),
+        item_to_task=_gdpeval_item_to_task,
+        benchmark_name=BenchmarkName.GDPEVAL.value,
+        worker=worker,
+        total=len(legacy_tasks),
+    )

@@ -3,7 +3,6 @@
 from pathlib import Path
 from uuid import UUID, uuid4
 
-import pytest
 
 from h_arcane import Resource, Task, TaskStatus
 
@@ -86,7 +85,10 @@ class TestResource:
         resource = Resource(path=Path("data/report.xlsx"), name="Report")
 
         assert resource.path == Path("data/report.xlsx")
-        assert resource.mime_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        assert (
+            resource.mime_type
+            == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 
 # =============================================================================
@@ -197,7 +199,9 @@ class TestTaskProperties:
         """Task with children is composite."""
         worker = MockWorker()
         child = Task(name="Child", description="Child task", assigned_to=worker)
-        parent = Task(name="Parent", description="Parent task", assigned_to=worker, children=[child])
+        parent = Task(
+            name="Parent", description="Parent task", assigned_to=worker, children=[child]
+        )
 
         assert parent.is_leaf is False
         assert parent.is_composite is True
@@ -207,7 +211,9 @@ class TestTaskProperties:
         worker = MockWorker()
         dep1 = Task(name="Dep1", description="First dep", assigned_to=worker)
         dep2 = Task(name="Dep2", description="Second dep", assigned_to=worker)
-        task = Task(name="Task", description="Main task", assigned_to=worker, depends_on=[dep1, dep2])
+        task = Task(
+            name="Task", description="Main task", assigned_to=worker, depends_on=[dep1, dep2]
+        )
 
         assert task.dependency_ids == [dep1.id, dep2.id]
 
@@ -225,7 +231,9 @@ class TestTaskProperties:
         worker = MockWorker()
         dep_task = Task(name="Dep", description="Dependency", assigned_to=worker)
         dep_uuid = uuid4()
-        task = Task(name="Task", description="Test", assigned_to=worker, depends_on=[dep_task, dep_uuid])
+        task = Task(
+            name="Task", description="Test", assigned_to=worker, depends_on=[dep_task, dep_uuid]
+        )
 
         assert task.dependency_ids == [dep_task.id, dep_uuid]
 

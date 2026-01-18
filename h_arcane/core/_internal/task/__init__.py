@@ -3,11 +3,28 @@ Task processing internals.
 
 This module contains the internal machinery for processing task DAGs:
 - TaskRegistry: Flattens, validates, and manages task trees
+- TaskTreeNode: Typed schema for serialized task trees
 - TaskEvents/WorkflowEvents: Event constants for Inngest
 - Persistence functions: SDK types -> DB records
+- Worker context: In-memory task_id -> worker mapping
 """
 
 from h_arcane.core._internal.task.registry import TaskRegistry
+from h_arcane.core._internal.task.schema import (
+    # Typed task tree schema
+    TaskTreeNode,
+    WorkerRef,
+    ResourceRef,
+    EvaluatorRef,
+    parse_task_tree,
+)
+from h_arcane.core._internal.task.worker_context import (
+    store_worker,
+    get_worker,
+    clear_worker,
+    clear_all_workers,
+    store_workers_from_task,
+)
 from h_arcane.core._internal.task.persistence import (
     # Task tree serialization
     serialize_task_tree,
@@ -37,6 +54,18 @@ from h_arcane.core._internal.task.persistence import (
 __all__ = [
     # Registry
     "TaskRegistry",
+    # Schema
+    "TaskTreeNode",
+    "WorkerRef",
+    "ResourceRef",
+    "EvaluatorRef",
+    "parse_task_tree",
+    # Worker context
+    "store_worker",
+    "get_worker",
+    "clear_worker",
+    "clear_all_workers",
+    "store_workers_from_task",
     # Events
     "TaskEvents",
     "WorkflowEvents",

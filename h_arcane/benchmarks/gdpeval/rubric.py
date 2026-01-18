@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID
 
 import inngest
@@ -10,18 +10,10 @@ from pydantic import BaseModel, Field, model_validator
 
 from h_arcane.benchmarks.gdpeval.rules import GDPEvalRule
 from h_arcane.core._internal.db.models import CriterionResult, Evaluation, TaskEvaluationResult
+from h_arcane.core._internal.utils import require_not_none
 
 if TYPE_CHECKING:
     from h_arcane.core._internal.evaluation.schemas import TaskEvaluationContext
-
-T = TypeVar("T")
-
-
-def _require_not_none(value: T | None, error_msg: str) -> T:
-    """Helper to raise error if value is None."""
-    if value is None:
-        raise ValueError(error_msg)
-    return value
 
 
 class EvaluationStage(BaseModel):
@@ -146,9 +138,6 @@ class StagedRubric(BaseModel):
         Returns:
             TaskEvaluationResult with criterion-level and aggregate scores
         """
-        # Import here to avoid circular imports
-        from h_arcane.core._internal.evaluation.inngest_functions import evaluate_criterion_fn
-        from h_arcane.core._internal.evaluation.events import CriterionEvaluationEvent
 
         # Flatten rubric into criteria list
         async def flatten_rubric_step():
@@ -168,9 +157,7 @@ class StagedRubric(BaseModel):
             flatten_rubric_step,
             output_type=list[FlattenedCriterion],
         )
-        criteria_models = _require_not_none(
-            criteria_models, "flatten-rubric step returned None"
-        )
+        criteria_models = require_not_none(criteria_models, "flatten-rubric step returned None")
         criteria = [(c.stage, c.rule, c.stage_idx, c.rule_idx) for c in criteria_models]
 
         # Create step invokers that call the generic criteria_evaluator
@@ -181,6 +168,12 @@ class StagedRubric(BaseModel):
             rule_idx: int,
         ):
             """Create an invoker for the generic criterion evaluator."""
+            # Lazy imports to avoid circular import
+            from h_arcane.core._internal.evaluation.events import CriterionEvaluationEvent
+            from h_arcane.core._internal.evaluation.inngest_functions.criterion import (
+                evaluate_criterion_fn,
+            )
+
             rule_type = rule.type  # "code" or "llm_judge"
             step_id = f"criterion-{stage_idx}-{rule_idx}-{rule_type}"
             max_score = rule.weight * stage.max_points
@@ -191,6 +184,7 @@ class StagedRubric(BaseModel):
                 task_input=context.task_input,
                 agent_reasoning=context.agent_reasoning,
                 agent_outputs=context.agent_outputs,
+                benchmark_name="gdpeval",
                 stage_name=stage.name,
                 stage_idx=stage_idx,
                 rule_idx=rule_idx,

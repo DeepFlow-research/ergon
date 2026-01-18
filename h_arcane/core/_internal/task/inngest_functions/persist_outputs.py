@@ -1,0 +1,106 @@
+"""Persist outputs child function.
+
+Downloads outputs from sandbox and registers them as resources.
+"""
+
+from functools import partial
+from pathlib import Path
+
+import inngest
+
+from h_arcane.benchmarks.enums import BenchmarkName
+from h_arcane.benchmarks.registry import get_sandbox_manager
+from h_arcane.core._internal.db.models import ResourceRecord
+from h_arcane.core._internal.db.queries import queries
+from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.infrastructure.sandbox import DownloadedFiles
+from h_arcane.core._internal.task.requests import PersistOutputsRequest
+from h_arcane.core._internal.task.results import PersistOutputsResult
+from h_arcane.core._internal.utils import get_mime_type, require_not_none
+
+
+@inngest_client.create_function(
+    fn_id="persist-outputs",
+    trigger=inngest.TriggerEvent(event=PersistOutputsRequest.name),
+    retries=1,
+    output_type=PersistOutputsResult,
+)
+async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
+    """
+    Download outputs from sandbox and register them as resources.
+
+    This child function:
+    1. Downloads all outputs from sandbox
+    2. Registers each file as a ResourceRecord
+    3. Returns list of created resource IDs
+    """
+    payload = PersistOutputsRequest.model_validate(ctx.event.data)
+    run_id = payload.run_id
+    task_id = payload.task_id
+    execution_id = payload.execution_id
+    output_dir = Path(payload.output_dir)
+
+    # Get experiment to determine benchmark
+    run = require_not_none(queries.runs.get(run_id), f"Run {run_id} not found")
+    experiment = require_not_none(
+        queries.experiments.get(run.experiment_id),
+        f"Experiment {run.experiment_id} not found",
+    )
+    benchmark_name = BenchmarkName(experiment.benchmark_name)
+    sandbox_manager = get_sandbox_manager(benchmark_name)
+
+    # Download outputs from sandbox
+    async def download_outputs() -> DownloadedFiles:
+        return await sandbox_manager.download_all_outputs(run_id, output_dir)
+
+    downloaded = await ctx.step.run(
+        "download-outputs", download_outputs, output_type=DownloadedFiles
+    )
+    downloaded = require_not_none(downloaded, "download-outputs returned None")
+
+    # Register each output as a resource (in parallel)
+    source_ids = [str(rid) for rid in payload.input_resource_ids]
+
+    if not downloaded.files:
+        return PersistOutputsResult(output_resource_ids=[], outputs_count=0)
+
+    # Define the registration function for a single file
+    def make_register_step(local_path: str, size_bytes: int):
+        async def register_resource() -> ResourceRecord:
+            return queries.resources.create(
+                ResourceRecord(
+                    run_id=run_id,
+                    task_id=task_id,
+                    task_execution_id=execution_id,
+                    is_input=False,
+                    name=Path(local_path).name,
+                    mime_type=get_mime_type(local_path),
+                    file_path=local_path,
+                    size_bytes=size_bytes,
+                    source_resource_ids=source_ids,
+                )
+            )
+
+        return partial(
+            ctx.step.run,
+            f"register-resource-{Path(local_path).name}",
+            register_resource,
+            output_type=ResourceRecord,
+        )
+
+    # Run all registrations in parallel
+    resources: tuple[ResourceRecord, ...] = await ctx.group.parallel(
+        tuple(
+            make_register_step(file_info.local_path, file_info.size_bytes)
+            for file_info in downloaded.files
+        )
+    )
+
+    output_resource_ids = [
+        require_not_none(r, "register-resource returned None").id for r in resources
+    ]
+
+    return PersistOutputsResult(
+        output_resource_ids=output_resource_ids,
+        outputs_count=len(output_resource_ids),
+    )

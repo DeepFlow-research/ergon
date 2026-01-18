@@ -7,10 +7,15 @@ and related DAG execution components without requiring actual Inngest/DB.
 
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+from datetime import datetime, timezone
 
 import pytest
 
 from h_arcane.core.task import Task, TaskStatus
+from h_arcane.core.runner import ExecutionResult, TaskResult, execute_task, _wait_for_completion
+from h_arcane.core._internal.db.models import RunStatus
+from h_arcane.core._internal.task.registry import TaskRegistry
+from h_arcane.core._internal.task.persistence import serialize_task_tree
 
 
 # =============================================================================
@@ -47,7 +52,6 @@ class TestExecutionResult:
 
     def test_execution_result_defaults(self):
         """ExecutionResult has correct defaults."""
-        from h_arcane.core.runner import ExecutionResult
 
         result = ExecutionResult(success=True, status=TaskStatus.COMPLETED)
 
@@ -60,7 +64,6 @@ class TestExecutionResult:
 
     def test_execution_result_with_all_fields(self):
         """ExecutionResult accepts all fields."""
-        from h_arcane.core.runner import ExecutionResult
 
         run_id = uuid4()
         exp_id = uuid4()
@@ -85,7 +88,6 @@ class TestTaskResult:
 
     def test_task_result_required_fields(self):
         """TaskResult requires task_id, name, status."""
-        from h_arcane.core.runner import TaskResult
 
         task_id = uuid4()
         result = TaskResult(
@@ -100,7 +102,6 @@ class TestTaskResult:
 
     def test_task_result_optional_fields(self):
         """TaskResult optional fields have defaults."""
-        from h_arcane.core.runner import TaskResult
 
         result = TaskResult(
             task_id=uuid4(),
@@ -134,7 +135,6 @@ class TestExecuteTaskStructure:
         mock_inngest,
     ):
         """execute_task creates TaskRegistry from task."""
-        from h_arcane.core.runner import execute_task
 
         worker = MockWorker()
         task = make_task("Test", worker)
@@ -159,8 +159,6 @@ class TestExecuteTaskStructure:
 
         # Patch _wait_for_completion to return immediately
         with patch("h_arcane.core.runner._wait_for_completion") as mock_wait:
-            from h_arcane.core.runner import ExecutionResult
-
             mock_wait.return_value = ExecutionResult(
                 success=True,
                 status=TaskStatus.COMPLETED,
@@ -168,7 +166,7 @@ class TestExecuteTaskStructure:
                 experiment_id=mock_experiment.id,
             )
 
-            result = await execute_task(task, timeout_seconds=1)
+            await execute_task(task, timeout_seconds=1)
 
         # Verify TaskRegistry was created
         mock_task_registry.assert_called_once_with(task)
@@ -176,7 +174,6 @@ class TestExecuteTaskStructure:
     @pytest.mark.asyncio
     async def test_execute_task_handles_exception(self):
         """execute_task handles exceptions gracefully."""
-        from h_arcane.core.runner import execute_task
 
         worker = MockWorker()
         task = make_task("Test", worker)
@@ -204,10 +201,6 @@ class TestWaitForCompletion:
     @patch("h_arcane.core.runner.queries")
     async def test_returns_on_completed_status(self, mock_queries):
         """Returns immediately when run is COMPLETED."""
-        from datetime import datetime, timezone
-
-        from h_arcane.core._internal.db.models import RunStatus
-        from h_arcane.core.runner import _wait_for_completion
 
         run_id = uuid4()
         exp_id = uuid4()
@@ -239,10 +232,6 @@ class TestWaitForCompletion:
     @patch("h_arcane.core.runner.queries")
     async def test_returns_on_failed_status(self, mock_queries):
         """Returns immediately when run is FAILED."""
-        from datetime import datetime, timezone
-
-        from h_arcane.core._internal.db.models import RunStatus
-        from h_arcane.core.runner import _wait_for_completion
 
         run_id = uuid4()
         exp_id = uuid4()
@@ -276,10 +265,6 @@ class TestWaitForCompletion:
     @patch("h_arcane.core.runner.asyncio.sleep", new_callable=AsyncMock)
     async def test_times_out_when_not_terminal(self, mock_sleep, mock_queries):
         """Times out when run doesn't reach terminal state."""
-        from datetime import datetime, timezone
-
-        from h_arcane.core._internal.db.models import RunStatus
-        from h_arcane.core.runner import _wait_for_completion
 
         run_id = uuid4()
         exp_id = uuid4()
@@ -305,9 +290,6 @@ class TestWaitForCompletion:
     @patch("h_arcane.core.runner.queries")
     async def test_handles_run_not_found(self, mock_queries):
         """Handles case when run is not found."""
-        from datetime import datetime, timezone
-
-        from h_arcane.core.runner import _wait_for_completion
 
         run_id = uuid4()
         exp_id = uuid4()
@@ -335,7 +317,6 @@ class TestDAGStructure:
 
     def test_single_task_dag(self):
         """Single task creates valid DAG structure."""
-        from h_arcane.core._internal.task.registry import TaskRegistry
 
         worker = MockWorker()
         task = make_task("Single", worker)
@@ -350,7 +331,6 @@ class TestDAGStructure:
 
     def test_linear_dag(self):
         """Linear A -> B -> C creates valid DAG."""
-        from h_arcane.core._internal.task.registry import TaskRegistry
 
         worker = MockWorker()
         a = make_task("A", worker)
@@ -369,7 +349,6 @@ class TestDAGStructure:
 
     def test_diamond_dag(self):
         """Diamond A -> (B, C) -> D creates valid DAG."""
-        from h_arcane.core._internal.task.registry import TaskRegistry
 
         worker = MockWorker()
         a = make_task("A", worker)
@@ -399,24 +378,22 @@ class TestPropagationIntegration:
     @patch("h_arcane.core._internal.task.propagation.queries")
     def test_extract_dependencies(self, mock_queries):
         """Extract dependencies from task tree."""
-        from h_arcane.core._internal.task.propagation import extract_dependencies_from_tree
 
         worker = MockWorker()
         a = make_task("A", worker)
         b = make_task("B", worker, depends_on=[a])
 
         # Serialize the task tree
-        from h_arcane.core._internal.task.persistence import serialize_task_tree
-        from h_arcane.core._internal.task.registry import TaskRegistry
 
         root = make_task("Root", worker, children=[a, b])
-        registry = TaskRegistry(root)
+        TaskRegistry(root)
         tree = serialize_task_tree(root)
 
-        dependencies = extract_dependencies_from_tree(tree)
+        # Use schema method directly
+        dependencies = tree.extract_dependencies()
 
         # B depends on A
         assert len(dependencies) == 1
         dep_b_id, dep_a_id = dependencies[0]
-        assert dep_b_id == b.id
-        assert dep_a_id == a.id
+        assert dep_b_id == str(b.id)
+        assert dep_a_id == str(a.id)

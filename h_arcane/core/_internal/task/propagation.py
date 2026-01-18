@@ -16,18 +16,17 @@ Usage:
 
     # When a task finishes executing:
     ready_tasks = on_task_completed(run_id, task_id, execution_id)
-    
+
     # ready_tasks is a list of task_ids that should now be executed
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
 from uuid import UUID
 
-from h_arcane.core._internal.db.models import Run, TaskStatus
+from h_arcane.core._internal.db.models import TaskStatus
 from h_arcane.core._internal.db.queries import queries
+from h_arcane.core._internal.task.schema import parse_task_tree
 
 
 # =============================================================================
@@ -140,6 +139,8 @@ def _update_task_state(
     """
     Internal helper to update task state in Run and log to TaskStateEvent.
 
+    Uses atomic update to ensure consistency between Run.task_states and TaskStateEvent.
+
     Args:
         run_id: The run ID
         task_id: The task ID
@@ -148,7 +149,7 @@ def _update_task_state(
         triggered_by: What caused this transition
         metadata: Additional metadata for the event
     """
-    # Get current run and state
+    # Get current run and state to determine old_status
     run = queries.runs.get(run_id)
     if run is None:
         raise ValueError(f"Run {run_id} not found")
@@ -156,19 +157,13 @@ def _update_task_state(
     task_states = run.task_states or {}
     old_status = task_states.get(str(task_id))
 
-    # Update Run.task_states
-    task_states[str(task_id)] = new_status.value
-    run.task_states = task_states
-    queries.runs.update(run)
-
-    # Record TaskStateEvent
-    queries.task_state_events.record(
+    # Atomically update both Run.task_states and TaskStateEvent
+    queries.task_state_events.update_task_state_atomic(
         run_id=run_id,
         task_id=task_id,
-        event_type="status_change",
         new_status=new_status.value,
         old_status=old_status,
-        task_execution_id=execution_id,
+        execution_id=execution_id,
         triggered_by=triggered_by,
         metadata=metadata or {},
     )
@@ -287,40 +282,46 @@ def propagate_to_parent(run_id: UUID, task_id: UUID) -> bool:
     if experiment is None:
         return False
 
-    task_tree = experiment.task_tree
-    if not task_tree:
+    # Parse task_tree into typed model
+    tree = parse_task_tree(experiment.task_tree)
+    if tree is None:
         return False
 
     # Find the task in the tree to get its parent_id
-    task_data = _find_task_in_tree(task_tree, str(task_id))
-    if task_data is None:
+    task_node = tree.find_by_id(str(task_id))
+    if task_node is None:
         return False
 
-    parent_id = task_data.get("parent_id")
-    if parent_id is None:
+    if task_node.parent_id is None:
         # This is the root task - check if workflow is complete
         return False
 
     # Get all leaf descendants of the parent
-    parent_data = _find_task_in_tree(task_tree, parent_id)
-    if parent_data is None:
+    parent_node = tree.find_by_id(task_node.parent_id)
+    if parent_node is None:
         return False
 
-    leaf_descendants = get_leaf_descendants(parent_data)
+    leaf_ids = parent_node.get_leaf_ids()
 
     # Check if all leaf descendants are completed
     task_states = run.task_states or {}
     all_complete = all(
-        task_states.get(leaf_id) == TaskStatus.COMPLETED.value
-        for leaf_id in leaf_descendants
+        task_states.get(leaf_id) == TaskStatus.COMPLETED.value for leaf_id in leaf_ids
     )
 
     if all_complete:
-        # Mark parent as completed
-        parent_uuid = UUID(parent_id)
-        mark_task_completed(run_id, parent_uuid, execution_id=None)
+        # Mark parent as completed WITHOUT emitting event
+        # Parent completion doesn't need propagation - it's just state tracking
+        parent_uuid = UUID(task_node.parent_id)
+        _update_task_state(
+            run_id,
+            parent_uuid,
+            TaskStatus.COMPLETED,
+            execution_id=None,
+            triggered_by="children_completed",
+        )
 
-        # Recursively propagate to grandparent
+        # Recursively propagate to grandparent (also without emitting events)
         propagate_to_parent(run_id, parent_uuid)
         return True
 
@@ -330,60 +331,6 @@ def propagate_to_parent(run_id: UUID, task_id: UUID) -> bool:
 # =============================================================================
 # Tree Traversal Helpers
 # =============================================================================
-
-
-def get_leaf_descendants(task_data: dict) -> list[str]:
-    """
-    Get all leaf task IDs under a composite task.
-
-    A leaf task is one with no children (is_leaf=True or empty children).
-
-    Args:
-        task_data: Task dict from task_tree
-
-    Returns:
-        List of task IDs (as strings) that are leaf descendants
-    """
-    leaves: list[str] = []
-    _collect_leaves(task_data, leaves)
-    return leaves
-
-
-def _collect_leaves(task_data: dict, leaves: list[str]) -> None:
-    """Recursively collect leaf task IDs."""
-    children = task_data.get("children", [])
-
-    if not children or task_data.get("is_leaf", False):
-        # This is a leaf
-        task_id = task_data.get("id")
-        if task_id:
-            leaves.append(str(task_id))
-    else:
-        # Recurse into children
-        for child in children:
-            _collect_leaves(child, leaves)
-
-
-def _find_task_in_tree(task_tree: dict, task_id: str) -> dict | None:
-    """
-    Find a task by ID in the task_tree.
-
-    Args:
-        task_tree: The root task dict
-        task_id: The task ID to find (as string)
-
-    Returns:
-        The task dict, or None if not found
-    """
-    if str(task_tree.get("id")) == task_id:
-        return task_tree
-
-    for child in task_tree.get("children", []):
-        found = _find_task_in_tree(child, task_id)
-        if found is not None:
-            return found
-
-    return None
 
 
 def get_root_task_id(run_id: UUID) -> UUID | None:
@@ -425,19 +372,17 @@ def is_workflow_complete(run_id: UUID) -> bool:
     if experiment is None:
         return False
 
-    task_tree = experiment.task_tree
-    if not task_tree:
+    # Parse task_tree into typed model
+    tree = parse_task_tree(experiment.task_tree)
+    if tree is None:
         return False
 
-    # Get all leaf tasks
-    all_leaves = get_leaf_descendants(task_tree)
+    # Get all leaf tasks using typed method
+    all_leaf_ids = tree.get_leaf_ids()
 
     # Check if all are completed
     task_states = run.task_states or {}
-    return all(
-        task_states.get(leaf_id) == TaskStatus.COMPLETED.value
-        for leaf_id in all_leaves
-    )
+    return all(task_states.get(leaf_id) == TaskStatus.COMPLETED.value for leaf_id in all_leaf_ids)
 
 
 def is_workflow_failed(run_id: UUID) -> bool:
@@ -455,10 +400,7 @@ def is_workflow_failed(run_id: UUID) -> bool:
         return False
 
     task_states = run.task_states or {}
-    return any(
-        status == TaskStatus.FAILED.value
-        for status in task_states.values()
-    )
+    return any(status == TaskStatus.FAILED.value for status in task_states.values())
 
 
 # =============================================================================
@@ -486,16 +428,17 @@ def get_initial_ready_tasks(run_id: UUID) -> list[UUID]:
     if experiment is None:
         return []
 
-    task_tree = experiment.task_tree
-    if not task_tree:
+    # Parse task_tree into typed model
+    tree = parse_task_tree(experiment.task_tree)
+    if tree is None:
         return []
 
-    # Get all leaf tasks
-    all_leaves = get_leaf_descendants(task_tree)
+    # Get all leaf tasks using typed method
+    all_leaf_ids = tree.get_leaf_ids()
 
     # Find those with no dependencies
     ready_tasks: list[UUID] = []
-    for leaf_id_str in all_leaves:
+    for leaf_id_str in all_leaf_ids:
         leaf_id = UUID(leaf_id_str)
 
         # Check if this task has any dependencies
@@ -503,38 +446,3 @@ def get_initial_ready_tasks(run_id: UUID) -> list[UUID]:
             ready_tasks.append(leaf_id)
 
     return ready_tasks
-
-
-def extract_dependencies_from_tree(task_tree: dict) -> list[tuple[UUID, UUID]]:
-    """
-    Extract dependency edges from task_tree for TaskDependency records.
-
-    Args:
-        task_tree: The root task dict
-
-    Returns:
-        List of (dependent_task_id, dependency_task_id) tuples
-    """
-    dependencies: list[tuple[UUID, UUID]] = []
-    _extract_deps(task_tree, dependencies)
-    return dependencies
-
-
-def _extract_deps(task_data: dict, dependencies: list[tuple[UUID, UUID]]) -> None:
-    """Recursively extract dependencies from task tree."""
-    task_id = task_data.get("id")
-    if not task_id:
-        return
-
-    dependent_id = UUID(task_id)
-
-    # Extract depends_on (should be list of task ID strings)
-    depends_on = task_data.get("depends_on", [])
-    for dep_id_str in depends_on:
-        if dep_id_str:
-            dependency_id = UUID(dep_id_str)
-            dependencies.append((dependent_id, dependency_id))
-
-    # Recurse into children
-    for child in task_data.get("children", []):
-        _extract_deps(child, dependencies)

@@ -13,7 +13,7 @@ from h_arcane.core._internal.db.models import (
     RunStatus,
     Message,
     Action,
-    Resource,
+    ResourceRecord,
     Evaluation,
     CriterionResult,
     TaskEvaluationResult,
@@ -21,6 +21,7 @@ from h_arcane.core._internal.db.models import (
     TaskStateEvent,
     TaskDependency,
     TaskEvaluator,
+    TaskStatus,
     Thread,
     ThreadMessage,
 )
@@ -135,65 +136,67 @@ class ExperimentsQueries(BaseQueries[Experiment]):
             return result
 
 
-class ResourcesQueries(BaseQueries[Resource]):
-    """Query methods for Resource model."""
+class ResourcesQueries(BaseQueries[ResourceRecord]):
+    """Query methods for ResourceRecord model."""
 
     def __init__(self):
-        super().__init__(Resource)
+        super().__init__(ResourceRecord)
 
     @staticmethod
-    def get_by_experiment(experiment_id: UUID) -> list[Resource]:
+    def get_by_experiment(experiment_id: UUID) -> list[ResourceRecord]:
         """Get all input resources for an experiment."""
         with next(get_session()) as session:
-            statement = select(Resource).where(Resource.experiment_id == experiment_id)
+            statement = select(ResourceRecord).where(ResourceRecord.experiment_id == experiment_id)
             return list(session.exec(statement).all())
 
     @staticmethod
-    def get_by_run(run_id: UUID) -> list[Resource]:
+    def get_by_run(run_id: UUID) -> list[ResourceRecord]:
         """Get all output resources for a run."""
         with next(get_session()) as session:
-            statement = select(Resource).where(Resource.run_id == run_id)
+            statement = select(ResourceRecord).where(ResourceRecord.run_id == run_id)
             return list(session.exec(statement).all())
 
     @staticmethod
-    def get_all(run_id: UUID | None = None, experiment_id: UUID | None = None) -> list[Resource]:
+    def get_all(
+        run_id: UUID | None = None, experiment_id: UUID | None = None
+    ) -> list[ResourceRecord]:
         """Get all resources, optionally filtered by run_id or experiment_id."""
         with next(get_session()) as session:
-            statement = select(Resource)
+            statement = select(ResourceRecord)
             if run_id:
-                statement = statement.where(Resource.run_id == run_id)
+                statement = statement.where(ResourceRecord.run_id == run_id)
             if experiment_id:
-                statement = statement.where(Resource.experiment_id == experiment_id)
+                statement = statement.where(ResourceRecord.experiment_id == experiment_id)
             return list(session.exec(statement).all())
 
     # === NEW: Task-level resource queries ===
 
     @staticmethod
-    def get_inputs_for_task(experiment_id: UUID, task_id: UUID) -> list[Resource]:
+    def get_inputs_for_task(experiment_id: UUID, task_id: UUID) -> list[ResourceRecord]:
         """Get all input resources for a specific task."""
         with next(get_session()) as session:
-            statement = select(Resource).where(
-                Resource.experiment_id == experiment_id,
-                Resource.task_id == task_id,
-                Resource.is_input == True,  # noqa: E712
+            statement = select(ResourceRecord).where(
+                ResourceRecord.experiment_id == experiment_id,
+                ResourceRecord.task_id == task_id,
+                ResourceRecord.is_input == True,  # noqa: E712
             )
             return list(session.exec(statement).all())
 
     @staticmethod
-    def get_outputs_for_execution(task_execution_id: UUID) -> list[Resource]:
+    def get_outputs_for_execution(task_execution_id: UUID) -> list[ResourceRecord]:
         """Get all output resources produced by a task execution."""
         with next(get_session()) as session:
-            statement = select(Resource).where(
-                Resource.task_execution_id == task_execution_id,
-                Resource.is_input == False,  # noqa: E712
+            statement = select(ResourceRecord).where(
+                ResourceRecord.task_execution_id == task_execution_id,
+                ResourceRecord.is_input == False,  # noqa: E712
             )
             return list(session.exec(statement).all())
 
     @staticmethod
-    def get_by_task(task_id: UUID) -> list[Resource]:
+    def get_by_task(task_id: UUID) -> list[ResourceRecord]:
         """Get all resources (inputs and outputs) for a task."""
         with next(get_session()) as session:
-            statement = select(Resource).where(Resource.task_id == task_id)
+            statement = select(ResourceRecord).where(ResourceRecord.task_id == task_id)
             return list(session.exec(statement).all())
 
     def create_input(
@@ -205,9 +208,9 @@ class ResourcesQueries(BaseQueries[Resource]):
         file_path: str,
         size_bytes: int,
         preview_text: str | None = None,
-    ) -> Resource:
+    ) -> ResourceRecord:
         """Create an input resource for a task."""
-        resource = Resource(
+        resource = ResourceRecord(
             experiment_id=experiment_id,
             task_id=task_id,
             is_input=True,
@@ -229,9 +232,9 @@ class ResourcesQueries(BaseQueries[Resource]):
         file_path: str,
         size_bytes: int,
         preview_text: str | None = None,
-    ) -> Resource:
+    ) -> ResourceRecord:
         """Create an output resource from a task execution."""
-        resource = Resource(
+        resource = ResourceRecord(
             run_id=run_id,
             task_id=task_id,
             task_execution_id=task_execution_id,
@@ -401,7 +404,7 @@ class TaskExecutionQueries(BaseQueries[TaskExecution]):
             task_id=task_id,
             agent_id=agent_id,
             attempt_number=attempt_number,
-            status="pending",
+            status=TaskStatus.PENDING,
         )
         return self.create(execution)
 
@@ -434,10 +437,10 @@ class TaskExecutionQueries(BaseQueries[TaskExecution]):
     def get_running(self) -> list[TaskExecution]:
         """Get all currently running task executions."""
         with next(get_session()) as session:
-            statement = select(TaskExecution).where(TaskExecution.status == "running")
+            statement = select(TaskExecution).where(TaskExecution.status == TaskStatus.RUNNING)
             return list(session.exec(statement).all())
 
-    def get_by_status(self, status: str) -> list[TaskExecution]:
+    def get_by_status(self, status: TaskStatus) -> list[TaskExecution]:
         """Get all task executions with a given status."""
         with next(get_session()) as session:
             statement = select(TaskExecution).where(TaskExecution.status == status)
@@ -446,7 +449,7 @@ class TaskExecutionQueries(BaseQueries[TaskExecution]):
     def update_status(
         self,
         execution_id: UUID,
-        status: str,
+        status: TaskStatus,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
         output_text: str | None = None,
@@ -529,9 +532,7 @@ class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
         """Get all state events for a run, ordered by timestamp."""
         with next(get_session()) as session:
             statement = (
-                select(TaskStateEvent)
-                .where(TaskStateEvent.run_id == run_id)
-                .order_by("timestamp")
+                select(TaskStateEvent).where(TaskStateEvent.run_id == run_id).order_by("timestamp")
             )
             return list(session.exec(statement).all())
 
@@ -544,6 +545,45 @@ class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
                 .order_by("timestamp")
             )
             return list(session.exec(statement).all())
+
+    def update_task_state_atomic(
+        self,
+        run_id: UUID,
+        task_id: UUID,
+        new_status: str,
+        old_status: str | None,
+        execution_id: UUID | None = None,
+        triggered_by: str | None = None,
+        metadata: dict | None = None,
+    ) -> None:
+        """
+        Atomically update Run.task_states and create TaskStateEvent.
+
+        This ensures both writes happen in a single transaction, preventing
+        inconsistency if one write fails.
+        """
+        with next(get_session()) as session:
+            # Update Run.task_states
+            run = session.get(Run, run_id)
+            if run is None:
+                raise ValueError(f"Run {run_id} not found")
+            task_states = run.task_states or {}
+            task_states[str(task_id)] = new_status
+            run.task_states = task_states
+
+            # Create TaskStateEvent
+            event = TaskStateEvent(
+                run_id=run_id,
+                task_id=task_id,
+                task_execution_id=execution_id,
+                event_type="status_change",
+                old_status=old_status,
+                new_status=new_status,
+                triggered_by=triggered_by,
+                event_metadata=metadata or {},
+            )
+            session.add(event)
+            session.commit()  # Single atomic commit
 
 
 class TaskDependencyQueries(BaseQueries[TaskDependency]):
@@ -670,7 +710,7 @@ class TaskEvaluatorQueries(BaseQueries[TaskEvaluator]):
             task_id=task_id,
             evaluator_type=evaluator_type,
             evaluator_config=evaluator_config,
-            status="pending",
+            status=TaskStatus.PENDING,
         )
         return self.create(evaluator)
 
@@ -685,7 +725,7 @@ class TaskEvaluatorQueries(BaseQueries[TaskEvaluator]):
     def get_pending(self) -> list[TaskEvaluator]:
         """Get all evaluators with pending status."""
         with next(get_session()) as session:
-            statement = select(TaskEvaluator).where(TaskEvaluator.status == "pending")
+            statement = select(TaskEvaluator).where(TaskEvaluator.status == TaskStatus.PENDING)
             return list(session.exec(statement).all())
 
     def get_by_run(self, run_id: UUID) -> list[TaskEvaluator]:
@@ -699,7 +739,7 @@ class TaskEvaluatorQueries(BaseQueries[TaskEvaluator]):
         existing = self.get(evaluator_id)
         if existing is None:
             raise ValueError(f"TaskEvaluator {evaluator_id} not found")
-        updated = existing.model_copy(update={"status": "running"})
+        updated = existing.model_copy(update={"status": TaskStatus.RUNNING})
         return self.update(updated)
 
     def mark_completed(
@@ -714,7 +754,7 @@ class TaskEvaluatorQueries(BaseQueries[TaskEvaluator]):
             raise ValueError(f"TaskEvaluator {evaluator_id} not found")
         updated = existing.model_copy(
             update={
-                "status": "completed",
+                "status": TaskStatus.COMPLETED,
                 "score": score,
                 "evaluation_id": evaluation_id,
                 "evaluated_at": datetime.now(timezone.utc),
@@ -729,7 +769,7 @@ class TaskEvaluatorQueries(BaseQueries[TaskEvaluator]):
             raise ValueError(f"TaskEvaluator {evaluator_id} not found")
         updated = existing.model_copy(
             update={
-                "status": "failed",
+                "status": TaskStatus.FAILED,
                 "evaluated_at": datetime.now(timezone.utc),
             }
         )

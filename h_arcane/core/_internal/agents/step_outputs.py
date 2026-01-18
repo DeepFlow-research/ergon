@@ -6,10 +6,10 @@ the shape of data passed between steps within a single Inngest function.
 
 from pydantic import BaseModel
 
-from h_arcane.core._internal.db.models import Resource
+from h_arcane.core._internal.db.models import ResourceRecord
 
 
 class InputResourcesResult(BaseModel):
     """Result of load-input-resources step."""
 
-    resources: list[Resource]
+    resources: list[ResourceRecord]

@@ -1,21 +1,34 @@
-"""MiniF2F data loading."""
+"""MiniF2F data loading using the Task facade.
+
+This module provides functions to load MiniF2F (formal mathematics) problems:
+- load_minif2f_task(): Load a single problem as a Task object
+- load_minif2f_to_database(): Bulk load problems using the Task persistence layer
+"""
+
+from __future__ import annotations
 
 import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlmodel import Session, select
-
-from h_arcane.core._internal.db.connection import get_engine
-from h_arcane.core._internal.db.models import Experiment
+from h_arcane.benchmarks.common.loader import load_benchmark_to_database
 from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.benchmarks.minif2f.schemas import MiniF2FProblem
 from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
+from h_arcane.benchmarks.minif2f.schemas import MiniF2FProblem
+from h_arcane.core.settings import settings
+from h_arcane.core.task import Task
 
-# Default paths relative to project root
-DATA_DIR = Path(__file__).parent.parent.parent.parent / "data"
+if TYPE_CHECKING:
+    from h_arcane.core.worker import BaseWorker
+
+
+def get_data_dir() -> Path:
+    """Get the data directory path from settings."""
+    return settings.data_dir
+
 
 MINIF2F_REPO = "https://github.com/facebookresearch/miniF2F"
 
@@ -30,18 +43,18 @@ def download_minif2f(data_dir: Path | None = None) -> Path:
         Path to minif2f directory
     """
     if data_dir is None:
-        data_dir = DATA_DIR
+        data_dir = get_data_dir()
 
     minif2f_dir = data_dir / "raw" / "minif2f"
     if not minif2f_dir.exists():
-        print(f"📥 Cloning MiniF2F repository to {minif2f_dir}...", file=sys.stderr)
+        print(f"Cloning MiniF2F repository to {minif2f_dir}...", file=sys.stderr)
         subprocess.run(
             ["git", "clone", MINIF2F_REPO, str(minif2f_dir)],
             check=True,
         )
-        print("   ✅ Cloned MiniF2F repository", file=sys.stderr)
+        print("   Cloned MiniF2F repository", file=sys.stderr)
     else:
-        print(f"   ✅ MiniF2F repository already exists at {minif2f_dir}", file=sys.stderr)
+        print(f"   MiniF2F repository already exists at {minif2f_dir}", file=sys.stderr)
 
     return minif2f_dir
 
@@ -92,12 +105,12 @@ def parse_lean_problems(minif2f_dir: Path, limit: int | None = None) -> list[Min
     Returns:
         List of MiniF2FProblem objects
     """
-    problems = []
+    problems: list[MiniF2FProblem] = []
 
     for split in ["valid", "test"]:
         lean_file = minif2f_dir / "lean" / "src" / f"{split}.lean"
         if not lean_file.exists():
-            print(f"   ⚠️  File not found: {lean_file}", file=sys.stderr)
+            print(f"   File not found: {lean_file}", file=sys.stderr)
             continue
 
         try:
@@ -138,37 +151,131 @@ def parse_lean_problems(minif2f_dir: Path, limit: int | None = None) -> list[Min
                     problems.append(problem)
                 except Exception as e:
                     print(
-                        f"   ⚠️  Failed to parse theorem {theorem_name}: {e}",
+                        f"   Failed to parse theorem {theorem_name}: {e}",
                         file=sys.stderr,
                     )
                     continue
 
             print(
-                f"   📂 Found {len([m for m in re.finditer(theorem_pattern, content, re.DOTALL)])} theorems in {split}.lean",
+                f"   Found {len([m for m in re.finditer(theorem_pattern, content, re.DOTALL)])} theorems in {split}.lean",
                 file=sys.stderr,
             )
 
         except Exception as e:
-            print(f"   ⚠️  Failed to read {lean_file}: {e}", file=sys.stderr)
+            print(f"   Failed to read {lean_file}: {e}", file=sys.stderr)
             continue
 
         if limit and len(problems) >= limit:
             break
 
-    print(f"   ✅ Parsed {len(problems)} problems", file=sys.stderr)
+    print(f"   Parsed {len(problems)} problems", file=sys.stderr)
     return problems
 
 
-def load_minif2f_to_database(data_dir: Path | None = None, limit: int | None = None) -> list[UUID]:
-    """Load MiniF2F problems into database as Experiments.
+def _get_problem_by_id(problem_id: str, problems: list[MiniF2FProblem]) -> MiniF2FProblem | None:
+    """Find a problem by its ID in a list of problems."""
+    for problem in problems:
+        if problem.problem_id == problem_id:
+            return problem
+    return None
+
+
+def load_minif2f_task(
+    problem_id: str,
+    worker: "BaseWorker",
+    data_dir: Path | None = None,
+) -> Task:
+    """
+    Load a single MiniF2F problem as a Task object.
+
+    This function returns a Task that is NOT yet persisted - the caller
+    decides whether to execute it immediately or persist it first.
+
+    Args:
+        problem_id: The MiniF2F problem ID (theorem name, e.g., "amc12a_2008_p25")
+        worker: The worker to assign to this task
+        data_dir: Optional data directory (will clone repo if needed)
+
+    Returns:
+        A Task object ready for execution or persistence
+
+    Example:
+        >>> worker = ReActWorker(model="gpt-4o", config=MINIF2F_CONFIG)
+        >>> task = load_minif2f_task("amc12a_2008_p25", worker)
+        >>> result = await execute_task(task)
+    """
+    # Download/clone repository if needed
+    minif2f_dir = download_minif2f(data_dir)
+
+    # Parse all problems (we need to find the specific one)
+    problems = parse_lean_problems(minif2f_dir)
+
+    problem = _get_problem_by_id(problem_id, problems)
+    if problem is None:
+        raise ValueError(f"Problem {problem_id} not found in MiniF2F dataset")
+
+    # Create rubric evaluator
+    rubric = MiniF2FRubric(
+        benchmark="minif2f",
+        max_score=1.0,
+        partial_credit_for_syntax=0.2,
+    )
+
+    # MiniF2F has no input files - just the problem statement
+    return Task(
+        name=problem.problem_id,
+        description=problem.problem_statement,
+        assigned_to=worker,
+        resources=[],  # MiniF2F problems don't have input files
+        evaluator=rubric,
+    )
+
+
+def _minif2f_item_to_task(problem: MiniF2FProblem, worker: "BaseWorker") -> Task:
+    """Convert a MiniF2FProblem to a Task object."""
+    rubric = MiniF2FRubric(
+        benchmark="minif2f",
+        max_score=1.0,
+        partial_credit_for_syntax=0.2,
+    )
+    return Task(
+        name=problem.problem_id,
+        description=problem.problem_statement,
+        assigned_to=worker,
+        resources=[],  # MiniF2F problems don't have input files
+        evaluator=rubric,
+    )
+
+
+def load_minif2f_to_database(
+    data_dir: Path | None = None,
+    limit: int | None = None,
+    worker: "BaseWorker | None" = None,
+) -> list[UUID]:
+    """
+    Load MiniF2F problems into database using the Task facade.
+
+    This function creates Task objects and uses the Task persistence layer
+    to create Experiment, Run placeholder, and Resource records.
 
     Args:
         data_dir: Base data directory (defaults to project data/ directory)
         limit: Optional limit on number of problems to load
+        worker: The worker to assign to tasks (required for Task-based loading)
 
     Returns:
-        List of experiment UUIDs
+        List of created experiment IDs
+
+    Raises:
+        ValueError: If worker is not provided
+
+    Example:
+        >>> worker = ReActWorker(model="gpt-4o", config=MINIF2F_CONFIG)
+        >>> experiment_ids = load_minif2f_to_database(worker=worker, limit=10)
     """
+    if worker is None:
+        raise ValueError("worker is required for Task-based loading")
+
     # Download/clone repository
     minif2f_dir = download_minif2f(data_dir)
 
@@ -176,79 +283,19 @@ def load_minif2f_to_database(data_dir: Path | None = None, limit: int | None = N
     problems = parse_lean_problems(minif2f_dir, limit=limit)
 
     if not problems:
-        print("   ⚠️  No problems found to load", file=sys.stderr)
+        print("   No problems found to load", file=sys.stderr)
         return []
 
-    # Load to database
-    experiment_ids = []
-    total = len(problems)
+    print(
+        f"Saving {len(problems)} problems to database using Task facade...",
+        file=sys.stderr,
+        flush=True,
+    )
 
-    print(f"💾 Saving {total} problems to database...", file=sys.stderr, flush=True)
-
-    engine = get_engine()
-    session = Session(engine)
-
-    try:
-        for idx, problem in enumerate(problems, 1):
-            print(
-                f"   Processing problem {idx}/{total}: {problem.problem_id}...",
-                file=sys.stderr,
-                flush=True,
-            )
-
-            # Check if experiment already exists
-            existing_experiment = session.exec(
-                select(Experiment).where(
-                    Experiment.benchmark_name == BenchmarkName.MINIF2F,
-                    Experiment.task_id == problem.problem_id,
-                )
-            ).first()
-
-            if existing_experiment:
-                print(
-                    f"      ⚠️  Experiment already exists (ID: {existing_experiment.id})",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                experiment_ids.append(existing_experiment.id)
-                continue
-
-            rubric = MiniF2FRubric(
-                benchmark="minif2f",
-                max_score=1.0,
-                partial_credit_for_syntax=0.2,
-            )
-            ground_truth_rubric = rubric.model_dump()
-
-            experiment = Experiment(
-                benchmark_name=BenchmarkName.MINIF2F,
-                task_id=problem.problem_id,
-                task_description=problem.problem_statement,
-                ground_truth_rubric=ground_truth_rubric,
-                benchmark_specific_data={
-                    "split": problem.split,
-                    "ground_truth_proof": problem.ground_truth_proof,
-                },
-                category=f"minif2f-{problem.split}",
-            )
-
-            session.add(experiment)
-            session.commit()
-            session.refresh(experiment)
-
-            experiment_ids.append(experiment.id)
-            print(
-                f"      ✅ Created experiment (ID: {experiment.id})",
-                file=sys.stderr,
-                flush=True,
-            )
-
-    except Exception as e:
-        session.rollback()
-        print(f"   ❌ Error loading to database: {e}", file=sys.stderr)
-        raise
-    finally:
-        session.close()
-
-    print(f"   ✅ Loaded {len(experiment_ids)} experiments", file=sys.stderr)
-    return experiment_ids
+    return load_benchmark_to_database(
+        items=iter(problems),
+        item_to_task=_minif2f_item_to_task,
+        benchmark_name=BenchmarkName.MINIF2F.value,
+        worker=worker,
+        total=len(problems),
+    )

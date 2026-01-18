@@ -7,7 +7,7 @@ import inngest
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from h_arcane.core._internal.db.models import Resource
+from h_arcane.core._internal.db.models import ResourceRecord
 from h_arcane.core._internal.evaluation.schemas import EvaluationData, SandboxResult
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core.settings import settings
@@ -91,7 +91,7 @@ class EvaluationRunner:
         await self.sandbox_manager.reset_timeout(self.data.run_id, timeout_minutes=30)
         return {"created": False, "run_id": str(self.data.run_id), "timeout_reset": True}
 
-    async def upload_files(self, files: list[Resource]) -> dict:
+    async def upload_files(self, files: list[ResourceRecord]) -> dict:
         """Upload files to sandbox /evaluation/ directory."""
         logger = logging.getLogger(__name__)
 

@@ -1,24 +1,16 @@
 """Code-based evaluation rule executed in sandbox."""
 
 import json
-from typing import Literal, TYPE_CHECKING, TypeVar
+from typing import Literal, TYPE_CHECKING
 
 from pydantic import Field
 
 from h_arcane.core._internal.evaluation.rules.base import BaseRule
-from h_arcane.core._internal.db.models import CriterionResult, Resource
+from h_arcane.core._internal.db.models import CriterionResult, ResourceRecord
+from h_arcane.core._internal.utils import require_not_none
 
 if TYPE_CHECKING:
     from h_arcane.core._internal.evaluation.runner import EvaluationRunner
-
-T = TypeVar("T")
-
-
-def _require_not_none(value: T | None, error_msg: str) -> T:
-    """Helper to raise error if value is None."""
-    if value is None:
-        raise ValueError(error_msg)
-    return value
 
 
 class CodeRule(BaseRule):
@@ -67,7 +59,7 @@ class CodeRule(BaseRule):
             return {"stdout": result.stdout, "stderr": result.stderr}
 
         exec_result = await runner.step("execute-code", execute_code)
-        exec_result = _require_not_none(exec_result, "execute-code step returned None")
+        exec_result = require_not_none(exec_result, "execute-code step returned None")
 
         # Step 5: Parse result
         def parse_result():
@@ -81,7 +73,7 @@ class CodeRule(BaseRule):
             return parse_result()
 
         parsed = await runner.step("parse-result", async_parse)
-        parsed = _require_not_none(parsed, "parse-result step returned None")
+        parsed = require_not_none(parsed, "parse-result step returned None")
 
         # Build and return criterion result
         return CriterionResult(
@@ -103,7 +95,7 @@ class CodeRule(BaseRule):
         self,
         task_input: str,
         agent_reasoning: str,
-        agent_outputs: list[Resource],
+        agent_outputs: list[ResourceRecord],
         max_score: float,
     ) -> str:
         """Build Python code string for sandbox execution."""

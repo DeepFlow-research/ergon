@@ -13,13 +13,12 @@ from typing import Any
 
 from inngest import Function
 
-from h_arcane.core._internal.agents.inngest_functions import worker_execute
 from h_arcane.core._internal.evaluation.inngest_functions import (
     evaluate_criterion_fn,
     evaluate_task_run,
-    run_evaluate,
 )
 from h_arcane.core._internal.infrastructure.inngest_functions import run_cleanup
+from h_arcane.core._internal.task.evaluation import check_and_run_evaluators
 from h_arcane.core._internal.task.inngest_functions import (
     task_execute,
     task_propagate,
@@ -30,16 +29,15 @@ from h_arcane.core._internal.task.inngest_functions import (
 
 # All Inngest functions for registration with FastAPI/Inngest
 ALL_FUNCTIONS: list[Function[Any]] = [
-    # Legacy single-task execution
-    worker_execute,
     # DAG workflow orchestration
     workflow_start,
     task_execute,
     task_propagate,
     workflow_complete,
     workflow_failed,
-    # Evaluation
-    run_evaluate,
+    # Task-level evaluation
+    check_and_run_evaluators,
+    # Criterion-level evaluation
     evaluate_task_run,
     evaluate_criterion_fn,
     # Infrastructure
@@ -48,16 +46,15 @@ ALL_FUNCTIONS: list[Function[Any]] = [
 
 __all__ = [
     "ALL_FUNCTIONS",
-    # Agents (legacy)
-    "worker_execute",
-    # Task/Workflow orchestration (new DAG)
+    # Task/Workflow orchestration (DAG)
     "workflow_start",
     "task_execute",
     "task_propagate",
     "workflow_complete",
     "workflow_failed",
-    # Evaluation
-    "run_evaluate",
+    # Task-level evaluation
+    "check_and_run_evaluators",
+    # Criterion-level evaluation
     "evaluate_task_run",
     "evaluate_criterion_fn",
     # Infrastructure

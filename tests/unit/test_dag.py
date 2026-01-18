@@ -75,7 +75,7 @@ class TestTaskRegistryBasic:
         child = make_task("Child", worker)
         parent = make_task("Parent", worker, children=[child])
 
-        registry = TaskRegistry(parent)
+        TaskRegistry(parent)
 
         assert parent.parent_id is None  # Root has no parent
         assert child.parent_id == parent.id
@@ -116,7 +116,7 @@ class TestDependencyResolution:
         b = make_task("B", worker, depends_on=[a])
         root = make_task("Root", worker, children=[a, b])
 
-        registry = TaskRegistry(root)
+        TaskRegistry(root)
 
         assert b._resolved_dependency_ids == [a.id]
 
@@ -127,7 +127,7 @@ class TestDependencyResolution:
         b = make_task("B", worker, depends_on=[a.id])
         root = make_task("Root", worker, children=[a, b])
 
-        registry = TaskRegistry(root)
+        TaskRegistry(root)
 
         assert b._resolved_dependency_ids == [a.id]
 
@@ -215,7 +215,7 @@ class TestInitialStatuses:
         worker = MockWorker()
         task = make_task("Leaf", worker)
 
-        registry = TaskRegistry(task)
+        TaskRegistry(task)
 
         assert task.status == TaskStatus.READY
 
@@ -226,7 +226,7 @@ class TestInitialStatuses:
         b = make_task("B", worker, depends_on=[a])
         root = make_task("Root", worker, children=[a, b])
 
-        registry = TaskRegistry(root)
+        TaskRegistry(root)
 
         assert a.status == TaskStatus.READY  # No deps
         assert b.status == TaskStatus.PENDING  # Has deps
@@ -237,7 +237,7 @@ class TestInitialStatuses:
         child = make_task("Child", worker)
         parent = make_task("Parent", worker, children=[child])
 
-        registry = TaskRegistry(parent)
+        TaskRegistry(parent)
 
         assert parent.status == TaskStatus.PENDING
         assert child.status == TaskStatus.READY

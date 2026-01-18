@@ -10,7 +10,7 @@ from uuid import UUID
 from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
 from pydantic import BaseModel
 
-from h_arcane.core._internal.db.models import Resource
+from h_arcane.core._internal.db.models import ResourceRecord
 from h_arcane.core.settings import settings
 
 logger = getLogger(__name__)
@@ -356,7 +356,7 @@ print("SKILL_SUCCESS")
                 success=False, error=f"Failed to read skill result: {e}. Stdout: {stdout[:200]}"
             )
 
-    async def upload_inputs(self, run_id: UUID, resources: list[Resource]) -> None:
+    async def upload_inputs(self, run_id: UUID, resources: list[ResourceRecord]) -> None:
         """Upload input resources to /inputs/ for a run."""
         sandbox = self._get_sandbox(run_id)
         self._ensure_registries(run_id)

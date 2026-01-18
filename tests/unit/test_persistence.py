@@ -1,12 +1,11 @@
 """Unit tests for the persistence layer."""
 
-import tempfile
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
-from h_arcane import Resource, Task, TaskStatus, Action
+from h_arcane import Resource, Task
 from h_arcane.core._internal.task.persistence import (
     compute_initial_task_states,
     create_experiment_from_task,
@@ -100,7 +99,7 @@ class TestSerializeTaskTree:
         root = make_task("Root", worker, children=[dep1, dep2, task])
 
         # Process through registry to resolve dependencies
-        registry = TaskRegistry(root)
+        TaskRegistry(root)
         result = serialize_task_tree(task)
 
         assert len(result["depends_on"]) == 2
@@ -138,7 +137,7 @@ class TestSerializeTaskTree:
         root = make_task("Root", worker, children=[parent])
 
         # Process through registry to set parent_ids
-        registry = TaskRegistry(root)
+        TaskRegistry(root)
         result = serialize_task_tree(root)
 
         assert result["name"] == "Root"
@@ -400,9 +399,7 @@ class TestPersistenceIntegration:
         assert len(run_data["task_states"]) == 3  # workflow + 2 children
 
         # Create resource data
-        resource_data = create_resource_from_sdk(
-            task_a.resources[0], exp_id, task_a.id
-        )
+        resource_data = create_resource_from_sdk(task_a.resources[0], exp_id, task_a.id)
         assert resource_data["name"] == "Data"
 
 
@@ -526,9 +523,7 @@ class TestCreateOutputResourceFromSDK:
         task_id = uuid4()
         execution_id = uuid4()
 
-        data = create_output_resource_from_sdk(
-            sdk_resource, run_id, task_id, execution_id
-        )
+        data = create_output_resource_from_sdk(sdk_resource, run_id, task_id, execution_id)
 
         assert data["run_id"] == run_id
         assert data["task_id"] == task_id
@@ -543,9 +538,7 @@ class TestCreateOutputResourceFromSDK:
         task_id = uuid4()
         execution_id = uuid4()
 
-        data = create_output_resource_from_sdk(
-            sdk_resource, run_id, task_id, execution_id
-        )
+        data = create_output_resource_from_sdk(sdk_resource, run_id, task_id, execution_id)
 
         assert data["run_id"] == run_id
         assert data["task_execution_id"] == execution_id
@@ -560,9 +553,7 @@ class TestCreateOutputResourceFromSDK:
         task_id = uuid4()
         execution_id = uuid4()
 
-        data = create_output_resource_from_sdk(
-            sdk_resource, run_id, task_id, execution_id
-        )
+        data = create_output_resource_from_sdk(sdk_resource, run_id, task_id, execution_id)
 
         assert data["run_id"] == run_id
         assert data["is_input"] is False

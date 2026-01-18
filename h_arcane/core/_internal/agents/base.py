@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from h_arcane.core._internal.db.models import Resource
+    from h_arcane.core._internal.db.models import ResourceRecord
     from h_arcane.core._internal.communication.schemas import MessageResponse
 
 
@@ -31,7 +31,7 @@ class BaseWorker(Protocol):
         self,
         run_id: UUID,
         task_description: str,
-        input_resources: list["Resource"],
+        input_resources: list["ResourceRecord"],
         toolkit: "BaseToolkit",
     ) -> WorkerExecutionOutput:
         """Execute a task and return structured output.

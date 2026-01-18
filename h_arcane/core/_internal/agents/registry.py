@@ -84,10 +84,7 @@ class AgentRegistry:
         Args:
             worker: Worker instance implementing BaseWorker protocol
         """
-        worker_id = getattr(worker, "id", None)
-        if worker_id is None:
-            raise ValueError(f"Worker {worker} has no 'id' attribute")
-
+        worker_id = worker.id
         # Only add if not already registered
         if worker_id not in self.workers:
             self.workers[worker_id] = worker
@@ -138,7 +135,7 @@ class AgentRegistry:
         """
         # Get tool names - handle both callable tools and string names
         tool_names = []
-        for tool in getattr(worker, "tools", []):
+        for tool in worker.tools:
             if hasattr(tool, "__name__"):
                 tool_names.append(tool.__name__)
             elif hasattr(tool, "name"):
@@ -148,12 +145,14 @@ class AgentRegistry:
             else:
                 tool_names.append(str(type(tool).__name__))
 
+        worker_id = worker.id
         return {
             "run_id": run_id,
-            "name": getattr(worker, "name", "unknown"),
-            "agent_type": type(worker).__name__,
-            "model": getattr(worker, "model", "unknown"),
-            "system_prompt": getattr(worker, "system_prompt", ""),
+            "worker_id": worker_id,  # Store original worker UUID
+            "name": worker.name,
+            "agent_type": worker.__class__.__name__,
+            "model": worker.model,
+            "system_prompt": worker.system_prompt,
             "tools": tool_names,
             "role": role,
         }
@@ -168,10 +167,7 @@ class AgentRegistry:
         Returns:
             List of dicts suitable for creating AgentConfig records
         """
-        return [
-            self.create_agent_config_data(worker, run_id)
-            for worker in self.workers.values()
-        ]
+        return [self.create_agent_config_data(worker, run_id) for worker in self.workers.values()]
 
     # === Persistence ===
 

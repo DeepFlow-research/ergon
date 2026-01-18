@@ -24,6 +24,13 @@ For workflows (DAGs):
     b = Task(name="Write", description="...", assigned_to=writer, depends_on=[a])
     workflow = Task(name="Report", description="...", assigned_to=writer, children=[a, b])
     result = await execute_task(workflow)
+
+For benchmark tasks:
+    from h_arcane import load_gdpeval_task, load_minif2f_task, load_researchrubrics_task
+
+    # Load a single benchmark task
+    task = load_gdpeval_task("task_001", worker)
+    result = await execute_task(task)
 """
 
 __version__ = "0.1.0"
@@ -39,6 +46,11 @@ from h_arcane.core._internal.db.models import Action
 
 # Public API - Execution
 from h_arcane.core.runner import ExecutionResult, TaskResult, execute_task
+
+# Benchmark task loaders
+from h_arcane.benchmarks.gdpeval.loader import load_gdpeval_task
+from h_arcane.benchmarks.minif2f.loader import load_minif2f_task
+from h_arcane.benchmarks.researchrubrics.loader import load_researchrubrics_task
 
 # Rebuild Task model to resolve forward references (BaseWorker)
 # AnyRubric is optional - will be resolved lazily when benchmarks are used
@@ -60,4 +72,8 @@ __all__ = [
     "execute_task",
     "ExecutionResult",
     "TaskResult",
+    # Benchmark task loaders
+    "load_gdpeval_task",
+    "load_minif2f_task",
+    "load_researchrubrics_task",
 ]

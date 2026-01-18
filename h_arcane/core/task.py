@@ -5,7 +5,7 @@ This is the PUBLIC API for defining tasks and workflows.
 
 Usage:
     from h_arcane import Task, Resource, TaskStatus
-    
+
     task = Task(
         name="Analyze Data",
         description="Process the quarterly report",
@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_serializer
+
+from h_arcane.core._internal.evaluation.serialization import serialize_rubric
 
 if TYPE_CHECKING:
     from h_arcane.core.worker import BaseWorker
@@ -207,11 +209,11 @@ class Task(BaseModel):
     @field_serializer("assigned_to")
     @staticmethod
     def serialize_assigned_to(worker: "BaseWorker") -> dict:
-        """Serialize worker to ID + metadata for reconstruction."""
+        """Serialize worker to ID + metadata for display."""
         return {
             "id": str(worker.id),
-            "name": getattr(worker, "name", "unknown"),
-            "type": type(worker).__name__,
+            "name": worker.name,
+            "type": worker.__class__.__name__,
         }
 
     @field_serializer("full_team")
@@ -223,8 +225,8 @@ class Task(BaseModel):
         return [
             {
                 "id": str(w.id),
-                "name": getattr(w, "name", "unknown"),
-                "type": type(w).__name__,
+                "name": w.name,
+                "type": w.__class__.__name__,
             }
             for w in team
         ]
@@ -238,10 +240,11 @@ class Task(BaseModel):
     @field_serializer("evaluator")
     @staticmethod
     def serialize_evaluator(evaluator: Any) -> dict | None:
-        """Serialize evaluator to type info."""
+        """Serialize evaluator to full config including type."""
         if evaluator is None:
             return None
-        return {"type": type(evaluator).__name__}
+        evaluator_type, config = serialize_rubric(evaluator)
+        return {"type": evaluator_type, **config}
 
     # === Computed Properties ===
 

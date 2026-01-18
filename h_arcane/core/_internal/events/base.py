@@ -7,7 +7,7 @@ Each event contract defines:
 Usage:
     class TaskReadyEvent(InngestEventContract):
         name: ClassVar[str] = "task/ready"
-        
+
         run_id: str
         experiment_id: str
         task_id: str
