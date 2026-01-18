@@ -9,11 +9,10 @@ import sys
 import time
 from pathlib import Path
 
-from h_arcane.core.db.connection import init_db
-from h_arcane.config.experiment import ExperimentConfig
+from h_arcane.core._internal.db.connection import init_db
 from h_arcane.benchmarks.common.workers import BaselineType
 from scripts.experiment_runner import ExperimentRunner
-from h_arcane.settings import settings
+from h_arcane.core.settings import settings
 from h_arcane.benchmarks.enums import BenchmarkName
 from sqlalchemy import create_engine, text
 
@@ -351,12 +350,13 @@ Examples:
         print("🔧 Ensuring database tables exist...")
         init_db()
 
-    # Create config (validate baseline via enum, then use string value)
-    config = ExperimentConfig(
-        baseline=BaselineType(args.baseline).value,
+    # Validate baseline via enum, then create runner with inline config
+    baseline = BaselineType(args.baseline).value
+    runner = ExperimentRunner(
+        baseline=baseline,
+        worker_model="gpt-4o",
+        max_questions=10,
     )
-
-    runner = ExperimentRunner(config=config)
 
     if args.progress:
         progress = await runner.get_progress()

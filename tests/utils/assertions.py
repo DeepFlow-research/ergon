@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 from sqlmodel import Session, select
 
-from h_arcane.core.db.models import (
+from h_arcane.core._internal.db.models import (
     Run,
     RunStatus,
     Action,

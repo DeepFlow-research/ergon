@@ -6,10 +6,10 @@ from pydantic import BaseModel, Field
 from agents import Agent, Runner, function_tool
 from inngest_agents import as_step
 
-from h_arcane.core.agents.base import BaseToolkit, WorkerExecutionOutput
+from h_arcane.core._internal.agents.base import BaseToolkit, WorkerExecutionOutput
 from h_arcane.benchmarks.common.workers.tracing import log_actions_from_result
-from h_arcane.core.db.models import AgentConfig, Resource
-from h_arcane.core.db.queries import queries
+from h_arcane.core._internal.db.models import AgentConfig, Resource
+from h_arcane.core._internal.db.queries import queries
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
 
 

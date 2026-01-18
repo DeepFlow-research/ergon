@@ -2,8 +2,8 @@
 
 from uuid import UUID
 
-from h_arcane.core.db.models import Experiment
-from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
+from h_arcane.core._internal.db.models import Experiment
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.benchmarks.minif2f.stakeholder import MiniF2FStakeholder
 from h_arcane.benchmarks.minif2f.toolkit import MiniF2FToolkit
 

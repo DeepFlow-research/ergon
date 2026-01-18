@@ -8,11 +8,10 @@ from openai.types.chat import (
     ChatCompletionUserMessageParam,
 )
 
-from h_arcane.core.agents.base import BaseStakeholder
-from h_arcane.core.communication.schemas import MessageResponse
-from h_arcane.config.evaluation import evaluation_config
-from h_arcane.core.db.models import Experiment
-from h_arcane.settings import settings
+from h_arcane.core._internal.agents.base import BaseStakeholder
+from h_arcane.core._internal.communication.schemas import MessageResponse
+from h_arcane.core._internal.db.models import Experiment
+from h_arcane.core.settings import settings
 
 
 class RubricAwareStakeholder(BaseStakeholder):
@@ -45,7 +44,9 @@ Research request: {task_prompt}
     def __init__(
         self,
         experiment: Experiment,
-        model: str | None = None,
+        model: str = "gpt-4o",
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
     ):
         """
         Initialize stakeholder with experiment data.
@@ -53,9 +54,13 @@ Research request: {task_prompt}
         Args:
             experiment: The Experiment containing task_description (ablated prompt)
                        and ground_truth_rubric (criteria)
-            model: LLM model to use for answering (None = use config default)
+            model: LLM model to use for answering
+            max_tokens: Maximum tokens for response
+            temperature: Temperature for LLM
         """
-        self._model = model or evaluation_config.llm_stakeholder.model
+        self._model = model
+        self._max_tokens = max_tokens
+        self._temperature = temperature
         self._task_prompt = experiment.task_description  # ablated prompt
         self._rubric_criteria = experiment.ground_truth_rubric.get("criteria", [])
         self._client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -150,8 +155,8 @@ Research request: {task_prompt}
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=messages,
-            max_tokens=evaluation_config.llm_stakeholder.max_tokens,
-            temperature=evaluation_config.llm_stakeholder.temperature,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
         )
 
         content = response.choices[0].message.content

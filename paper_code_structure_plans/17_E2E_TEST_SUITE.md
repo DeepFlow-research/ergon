@@ -215,7 +215,7 @@ Since tests trigger Inngest events → worker handles them → writes to DB, the
 ```bash
 # Run worker with test DB
 DATABASE_URL=postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test \
-  python -m h_arcane.api.main
+  python -m h_arcane.core._internal.api.main
 ```
 
 **Option 2: Separate Docker Compose for Tests**

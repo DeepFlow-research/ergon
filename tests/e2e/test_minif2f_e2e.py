@@ -12,7 +12,7 @@ import pytest
 
 from sqlmodel import Session
 
-from h_arcane.core.db.models import Experiment
+from h_arcane.core._internal.db.models import Experiment
 from tests.conftest import wait_for_run_completion, AllDispatchedRuns
 from tests.utils.assertions import assert_run_completed_and_print_failures
 

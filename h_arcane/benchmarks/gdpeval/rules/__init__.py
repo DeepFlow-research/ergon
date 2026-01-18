@@ -1,6 +1,6 @@
 """GDPEval evaluation rules."""
 
-from h_arcane.core.evaluation.rules import CodeRule, LLMJudgeRule
+from h_arcane.core._internal.evaluation.rules import CodeRule, LLMJudgeRule
 
 GDPEvalRule = CodeRule | LLMJudgeRule
 

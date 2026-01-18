@@ -26,5 +26,5 @@ EXPOSE 9000
 # Run FastAPI server
 # Use --reload in development (when INNGEST_DEV=1) for hot-reload on code changes
 # Explicitly watch mounted directories for changes
-CMD ["sh", "-c", "if [ \"$INNGEST_DEV\" = \"1\" ]; then uvicorn h_arcane.api.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir /app/h_arcane --reload-dir /app/scripts; else uvicorn h_arcane.api.main:app --host 0.0.0.0 --port 9000; fi"]
+CMD ["sh", "-c", "if [ \"$INNGEST_DEV\" = \"1\" ]; then uvicorn h_arcane.core._internal.api.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir /app/h_arcane --reload-dir /app/scripts; else uvicorn h_arcane.core._internal.api.main:app --host 0.0.0.0 --port 9000; fi"]
 

@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, Literal, cast
 import inngest
 from pydantic import BaseModel, Field
 
-from h_arcane.core.db.models import TaskEvaluationResult, CriterionResult
-from h_arcane.core.evaluation.rules import LLMJudgeRule
+from h_arcane.core._internal.db.models import TaskEvaluationResult, CriterionResult
+from h_arcane.core._internal.evaluation.rules import LLMJudgeRule
 from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.schemas import TaskEvaluationContext
+    from h_arcane.core._internal.evaluation.schemas import TaskEvaluationContext
 
 
 class ResearchRubricsRubric(BaseModel):
@@ -47,8 +47,8 @@ class ResearchRubricsRubric(BaseModel):
             TaskEvaluationResult with criterion-level and aggregate scores
         """
         # Import here to avoid circular imports
-        from h_arcane.core.evaluation.inngest_functions import evaluate_criterion_fn
-        from h_arcane.core.evaluation.events import CriterionEvaluationEvent
+        from h_arcane.core._internal.evaluation.inngest_functions import evaluate_criterion_fn
+        from h_arcane.core._internal.evaluation.events import CriterionEvaluationEvent
 
         # Step 1: Convert RubricCriterion to LLMJudgeRule
         async def convert_criteria_step() -> list[dict]:

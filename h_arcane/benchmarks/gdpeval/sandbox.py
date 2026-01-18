@@ -5,7 +5,7 @@ from uuid import UUID
 
 from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
 
-from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 
 logger = getLogger(__name__)
 

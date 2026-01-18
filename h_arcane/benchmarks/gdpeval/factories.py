@@ -2,8 +2,8 @@
 
 from uuid import UUID
 
-from h_arcane.core.db.models import Experiment
-from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
+from h_arcane.core._internal.db.models import Experiment
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.benchmarks.gdpeval.stakeholder import RubricStakeholder
 from h_arcane.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 from h_arcane.benchmarks.gdpeval.rubric import StagedRubric

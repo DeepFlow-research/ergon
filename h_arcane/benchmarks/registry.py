@@ -5,7 +5,7 @@ from typing import Callable, TypedDict
 
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
-from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 
 # Import benchmark implementations
 from h_arcane.benchmarks.gdpeval.config import GDPEVAL_CONFIG

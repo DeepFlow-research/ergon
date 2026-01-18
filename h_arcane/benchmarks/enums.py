@@ -9,3 +9,4 @@ class BenchmarkName(str, Enum):
     GDPEVAL = "gdpeval"
     MINIF2F = "minif2f"
     RESEARCHRUBRICS = "researchrubrics"
+    CUSTOM = "custom"  # For user-defined workflows

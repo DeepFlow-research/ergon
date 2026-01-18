@@ -1,13 +1,13 @@
 """Test SQLModel serialization with model_dump(mode='json')."""
 
 import json
+import traceback
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from h_arcane.core.db.models import Run, RunStatus, Experiment, Resource
+from h_arcane.core._internal.db.models import Run, RunStatus, Experiment, Resource
 from sqlmodel import SQLModel
 from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.config.evaluation import evaluation_config
 
 
 def test_run_serialization():
@@ -20,7 +20,7 @@ def test_run_serialization():
     run = Run(
         id=uuid4(),
         experiment_id=uuid4(),
-        worker_model=evaluation_config.llm_stakeholder.model,
+        worker_model="gpt-4o",
         max_questions=10,
         status=RunStatus.EXECUTING,
         created_at=datetime.now(timezone.utc),
@@ -61,8 +61,6 @@ def test_run_serialization():
         return True
     except Exception as e:
         print(f"\n❌ Error: {e}")
-        import traceback
-
         traceback.print_exc()
         return False
 
@@ -103,8 +101,6 @@ def test_experiment_serialization():
         return True
     except Exception as e:
         print(f"\n❌ Error: {e}")
-        import traceback
-
         traceback.print_exc()
         return False
 
@@ -142,8 +138,6 @@ def test_resource_serialization():
         return True
     except Exception as e:
         print(f"\n❌ Error: {e}")
-        import traceback
-
         traceback.print_exc()
         return False
 
@@ -184,8 +178,6 @@ def test_list_serialization():
         return True
     except Exception as e:
         print(f"\n❌ Error: {e}")
-        import traceback
-
         traceback.print_exc()
         return False
 

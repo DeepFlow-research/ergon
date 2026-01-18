@@ -19,12 +19,33 @@ from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 import inngest
+from datasets import load_dataset
 from sqlmodel import SQLModel, Session, select, create_engine
 
-from h_arcane.settings import settings
-from h_arcane.core.db.models import Run, RunStatus, Experiment, Resource
-from h_arcane.core.infrastructure.inngest_client import inngest_client
+from h_arcane.core.settings import settings
+from h_arcane.core._internal.db.models import (
+    Action,
+    AgentConfig,
+    CriterionResult,
+    Evaluation,
+    Experiment,
+    Message,
+    Resource,
+    Run,
+    RunStatus,
+    TaskEvaluationResult,
+    Thread,
+    ThreadMessage,
+)
+from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.benchmarks.enums import BenchmarkName
+from h_arcane.benchmarks.gdpeval.loader import DATA_DIR, get_mime_type, load_gdpeval_tasks
+from h_arcane.benchmarks.minif2f.loader import download_minif2f, parse_lean_problems
+from h_arcane.benchmarks.minif2f.loader import DATA_DIR as MINIF2F_DATA_DIR
+from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
+from h_arcane.benchmarks.researchrubrics.loader import get_ablated_dataset_name
+from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
 
 
 # Number of samples per benchmark - configurable via env var
@@ -68,7 +89,7 @@ def get_test_engine():
 
 def init_test_db():
     """Initialize database - create all tables if they don't exist."""
-    from h_arcane.core.db import models  # noqa: F401 - register models
+    from h_arcane.core._internal.db import models  # noqa: F401 - register models
 
     engine = get_test_engine()
     SQLModel.metadata.create_all(engine)
@@ -82,7 +103,7 @@ def cleanup_test_db():
     Drops and recreates all tables for a fresh start.
     WARNING: This will delete ALL data in the database!
     """
-    from h_arcane.core.db import models  # noqa: F401
+    from h_arcane.core._internal.db import models  # noqa: F401
 
     engine = get_test_engine()
     SQLModel.metadata.drop_all(engine)
@@ -136,20 +157,6 @@ def clean_db(db_engine):
     # Cleanup after test
     with Session(db_engine) as session:
         # Delete in dependency order (reverse of foreign key relationships)
-        from h_arcane.core.db.models import (
-            ThreadMessage,
-            Thread,
-            CriterionResult,
-            Evaluation,
-            TaskEvaluationResult,
-            Action,
-            AgentConfig,
-            Message,
-            Resource,
-            Run,
-            Experiment,
-        )
-
         tables = [
             ThreadMessage,
             Thread,
@@ -246,8 +253,6 @@ class AllDispatchedRuns:
 
 def _create_gdpeval_experiments(session: Session) -> list[DispatchedExperiment]:
     """Create GDPEval experiments with input Resource records."""
-    from h_arcane.benchmarks.gdpeval.loader import load_gdpeval_tasks, get_mime_type, DATA_DIR
-
     tasks = load_gdpeval_tasks(limit=N_SAMPLES)
     dispatched = []
 
@@ -297,10 +302,7 @@ def _create_gdpeval_experiments(session: Session) -> list[DispatchedExperiment]:
 
 def _create_minif2f_experiments(session: Session) -> list[DispatchedExperiment]:
     """Create MiniF2F experiments."""
-    from h_arcane.benchmarks.minif2f.loader import download_minif2f, parse_lean_problems, DATA_DIR
-    from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
-
-    minif2f_dir = download_minif2f(DATA_DIR)
+    minif2f_dir = download_minif2f(MINIF2F_DATA_DIR)
     problems = parse_lean_problems(minif2f_dir, limit=N_SAMPLES)
     dispatched = []
 
@@ -336,11 +338,6 @@ def _create_minif2f_experiments(session: Session) -> list[DispatchedExperiment]:
 
 def _create_researchrubrics_experiments(session: Session) -> list[DispatchedExperiment]:
     """Create ResearchRubrics experiments."""
-    from datasets import load_dataset
-    from h_arcane.benchmarks.researchrubrics.loader import get_ablated_dataset_name
-    from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
-    from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
-
     dataset_name = get_ablated_dataset_name()
     ds_dict = load_dataset(dataset_name)
     ds = ds_dict["train"]

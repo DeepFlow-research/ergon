@@ -18,6 +18,7 @@ Output:
 
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
@@ -25,8 +26,8 @@ from uuid import UUID
 from sqlmodel import Session, create_engine, select
 
 from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.settings import settings
-from h_arcane.core.db.models import (
+from h_arcane.core.settings import settings
+from h_arcane.core._internal.db.models import (
     Action,
     CriterionResult,
     Experiment,
@@ -40,8 +41,6 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 
 def get_test_db_engine():
     """Get engine for test database (uses main DB by default, like E2E tests)."""
-    import os
-
     use_test_db = os.environ.get("E2E_USE_TEST_DB", "").lower() in ("1", "true", "yes")
 
     if use_test_db:

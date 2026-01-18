@@ -1,5 +1,6 @@
 """MiniF2F data loading."""
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -7,8 +8,8 @@ from uuid import UUID
 
 from sqlmodel import Session, select
 
-from h_arcane.core.db.connection import get_engine
-from h_arcane.core.db.models import Experiment
+from h_arcane.core._internal.db.connection import get_engine
+from h_arcane.core._internal.db.models import Experiment
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.minif2f.schemas import MiniF2FProblem
 from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
@@ -91,8 +92,6 @@ def parse_lean_problems(minif2f_dir: Path, limit: int | None = None) -> list[Min
     Returns:
         List of MiniF2FProblem objects
     """
-    import re
-
     problems = []
 
     for split in ["valid", "test"]:

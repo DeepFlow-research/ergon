@@ -3,11 +3,12 @@
 import sys
 from uuid import UUID
 
-from datasets import load_dataset
+from datasets import Dataset, load_dataset
+from huggingface_hub import HfApi
 from sqlmodel import Session, select
 
-from h_arcane.core.db.connection import get_engine
-from h_arcane.core.db.models import Experiment
+from h_arcane.core._internal.db.connection import get_engine
+from h_arcane.core._internal.db.models import Experiment
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
 from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
@@ -22,8 +23,6 @@ def get_ablated_dataset_name() -> str:
     Raises:
         RuntimeError: If not logged in to HuggingFace
     """
-    from huggingface_hub import HfApi
-
     api = HfApi()
     try:
         user_info = api.whoami()
@@ -62,8 +61,6 @@ def load_researchrubrics_to_database(
 
     # Load dataset from HuggingFace
     print(f"📥 Loading dataset from HuggingFace: {ablated_dataset_name}...", file=sys.stderr)
-    from datasets import Dataset
-
     ds_dict = load_dataset(ablated_dataset_name)
     ds: Dataset = ds_dict["train"]  # type: ignore[assignment]
 

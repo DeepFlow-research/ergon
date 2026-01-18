@@ -8,10 +8,9 @@ from openai.types.chat import (
 )
 
 from h_arcane.benchmarks.common import format_conversation_history
-from h_arcane.core.agents.base import BaseStakeholder
-from h_arcane.core.communication.schemas import MessageResponse
-from h_arcane.config.evaluation import evaluation_config
-from h_arcane.settings import settings
+from h_arcane.core._internal.agents.base import BaseStakeholder
+from h_arcane.core._internal.communication.schemas import MessageResponse
+from h_arcane.core.settings import settings
 
 
 class MiniF2FStakeholder(BaseStakeholder):
@@ -38,7 +37,10 @@ Be encouraging and helpful, but don't reveal the complete proof."""
         self,
         ground_truth_proof: str,
         problem_statement: str,
-        model: str | None = None,
+        model: str = "gpt-4o",
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        seed: int | None = None,
     ):
         """
         Initialize stakeholder with ground truth proof.
@@ -46,11 +48,17 @@ Be encouraging and helpful, but don't reveal the complete proof."""
         Args:
             ground_truth_proof: The complete ground truth proof (for generating hints)
             problem_statement: The theorem statement to prove
-            model: LLM model to use for answering (None = use config default)
+            model: LLM model to use for answering
+            max_tokens: Maximum tokens for response
+            temperature: Temperature for LLM
+            seed: Random seed for deterministic responses
         """
         self.ground_truth_proof = ground_truth_proof
         self.problem_statement = problem_statement
-        self._model = model or evaluation_config.llm_stakeholder.model
+        self._model = model
+        self._max_tokens = max_tokens
+        self._temperature = temperature
+        self._seed = seed
         self._client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     @property
@@ -111,9 +119,9 @@ Provide a helpful hint without revealing the complete proof.""",
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=messages,
-            max_tokens=evaluation_config.llm_stakeholder.max_tokens,
-            temperature=evaluation_config.llm_stakeholder.temperature,
-            seed=evaluation_config.llm_stakeholder.seed,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+            seed=self._seed,
         )
 
         content = response.choices[0].message.content

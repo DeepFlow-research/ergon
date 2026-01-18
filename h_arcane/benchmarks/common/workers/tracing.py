@@ -19,8 +19,8 @@ from agents.result import RunResult
 from agents.usage import Usage
 from openai.types.responses import ResponseFunctionToolCall, ResponseOutputText
 
-from h_arcane.core.db.models import Action, ExecutionError
-from h_arcane.core.db.queries import queries
+from h_arcane.core._internal.db.models import Action, ExecutionError
+from h_arcane.core._internal.db.queries import queries
 
 
 def _extract_error_from_output(output: Any) -> dict | None:

@@ -1,3 +1,63 @@
-"""H-ARCANE: Hypothesis-Based Modeling for Uncertainty-Aware Alignment"""
+"""
+H-ARCANE: Task and workflow execution for AI research.
+
+Usage:
+    from h_arcane import Task, execute_task, BaseWorker, Resource
+
+    # Create a worker
+    worker = ReactWorker(model="gpt-4o", tools=[...])
+
+    # Define a task with worker assignment
+    task = Task(
+        name="Analyze Data",
+        description="Process the quarterly report",
+        assigned_to=worker,
+        resources=[Resource(path="data/report.xlsx", name="Quarterly Report")],
+    )
+
+    # Run - worker is already on the task
+    result = await execute_task(task)
+    print(f"Success: {result.success}, Score: {result.score}")
+
+For workflows (DAGs):
+    a = Task(name="Research", description="...", assigned_to=researcher)
+    b = Task(name="Write", description="...", assigned_to=writer, depends_on=[a])
+    workflow = Task(name="Report", description="...", assigned_to=writer, children=[a, b])
+    result = await execute_task(workflow)
+"""
 
 __version__ = "0.1.0"
+
+# Public API - Task definition
+from h_arcane.core.task import Resource, Task, TaskStatus
+
+# Public API - Worker protocol
+from h_arcane.core.worker import BaseWorker, NamedTool, Tool, WorkerContext, WorkerResult
+
+# Re-export Action from internal for worker implementations
+from h_arcane.core._internal.db.models import Action
+
+# Public API - Execution
+from h_arcane.core.runner import ExecutionResult, TaskResult, execute_task
+
+# Rebuild Task model to resolve forward references (BaseWorker)
+# AnyRubric is optional - will be resolved lazily when benchmarks are used
+Task.model_rebuild(_types_namespace={"BaseWorker": BaseWorker})
+
+__all__ = [
+    # Task definition
+    "Task",
+    "TaskStatus",
+    "Resource",
+    # Worker protocol
+    "BaseWorker",
+    "WorkerContext",
+    "WorkerResult",
+    "Action",
+    "Tool",
+    "NamedTool",
+    # Execution
+    "execute_task",
+    "ExecutionResult",
+    "TaskResult",
+]

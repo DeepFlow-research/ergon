@@ -56,8 +56,8 @@ from uuid import UUID
 from sqlmodel import Session, select
 
 from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.core.db.connection import get_session
-from h_arcane.core.db.models import (
+from h_arcane.core._internal.db.connection import get_session
+from h_arcane.core._internal.db.models import (
     Action,
     AgentConfig,
     CriterionResult,

@@ -6,9 +6,9 @@ from uuid import UUID
 from agents import function_tool, Tool
 from e2b.sandbox.commands.command_handle import CommandExitException
 
-from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
-from h_arcane.core.agents.base import BaseToolkit, BaseStakeholder
-from h_arcane.core.communication import communication_service, CreateMessageRequest
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
+from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
+from h_arcane.core._internal.communication import communication_service, CreateMessageRequest
 
 # Import response types from the skills package
 from h_arcane.benchmarks.minif2f.skills.responses import (

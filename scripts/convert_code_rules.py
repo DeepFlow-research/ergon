@@ -3,12 +3,14 @@ Convert GDPEval code rules from (workflow, context) to (task_input, agent_reason
 Uses LLM to transpile Python functions.
 """
 
-from pathlib import Path
-import json
+import argparse
 import asyncio
+import json
+from pathlib import Path
+
 from openai import AsyncOpenAI
 
-from h_arcane.settings import settings
+from h_arcane.core.settings import settings
 
 # Initialize OpenAI client
 client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -217,8 +219,6 @@ async def convert_rubric_file(
 
 
 async def main():
-    import argparse
-
     parser = argparse.ArgumentParser(description="Convert GDPEval code rules to new signature")
     parser.add_argument(
         "--rubric-file",

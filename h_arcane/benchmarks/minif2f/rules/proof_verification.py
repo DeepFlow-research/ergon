@@ -1,15 +1,24 @@
 """Proof verification rule for formal math (Lean)."""
 
-from typing import Literal, TYPE_CHECKING
+from typing import Literal, TYPE_CHECKING, TypeVar
 
 from e2b.sandbox.commands.command_handle import CommandExitException
 from pydantic import Field
 
-from h_arcane.core.evaluation.rules.base import BaseRule
-from h_arcane.core.db.models import CriterionResult
+from h_arcane.core._internal.evaluation.rules.base import BaseRule
+from h_arcane.core._internal.db.models import CriterionResult
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.runner import EvaluationRunner
+    from h_arcane.core._internal.evaluation.runner import EvaluationRunner
+
+T = TypeVar("T")
+
+
+def _require_not_none(value: T | None, error_msg: str) -> T:
+    """Helper to raise error if value is None."""
+    if value is None:
+        raise ValueError(error_msg)
+    return value
 
 
 class ProofVerificationRule(BaseRule):
@@ -65,6 +74,7 @@ class ProofVerificationRule(BaseRule):
             }
 
         proof_data = await runner.step("extract-proof", extract_proof)
+        proof_data = _require_not_none(proof_data, "extract-proof step returned None")
         proof_code = proof_data["proof_code"]
 
         # Agent's file is already a complete valid Lean file with imports.
@@ -123,6 +133,7 @@ class ProofVerificationRule(BaseRule):
             }
 
         verify_result = await runner.step("verify-proof", verify_proof)
+        verify_result = _require_not_none(verify_result, "verify-proof step returned None")
 
         # Step 4: Compute score
         score = data.max_score if verify_result["verified"] else 0.0

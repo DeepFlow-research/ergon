@@ -3,7 +3,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from h_arcane.core.communication.schemas import MessageResponse
+    from h_arcane.core._internal.communication.schemas import MessageResponse
 
 
 def format_conversation_history(history: list["MessageResponse"] | None) -> str:

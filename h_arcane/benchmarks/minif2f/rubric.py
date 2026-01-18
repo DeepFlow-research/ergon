@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING, Literal
 import inngest
 from pydantic import BaseModel, Field
 
-from h_arcane.core.db.models import TaskEvaluationResult
-from h_arcane.core.evaluation.runner import EvaluationRunner
-from h_arcane.core.evaluation.schemas import EvaluationData
+from h_arcane.core._internal.db.models import TaskEvaluationResult
+from h_arcane.core._internal.evaluation.runner import EvaluationRunner
+from h_arcane.core._internal.evaluation.schemas import EvaluationData
 from h_arcane.benchmarks.minif2f.sandbox import MiniF2FSandboxManager
 from h_arcane.benchmarks.minif2f.rules import ProofVerificationRule
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.schemas import TaskEvaluationContext
+    from h_arcane.core._internal.evaluation.schemas import TaskEvaluationContext
 
 
 class MiniF2FRubric(BaseModel):

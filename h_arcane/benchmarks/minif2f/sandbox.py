@@ -7,7 +7,7 @@ from uuid import UUID
 from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
 from e2b.sandbox.commands.command_handle import CommandExitException
 
-from h_arcane.core.infrastructure.sandbox import BaseSandboxManager, DownloadedFile, DownloadedFiles
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager, DownloadedFile, DownloadedFiles
 
 logger = getLogger(__name__)
 

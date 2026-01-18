@@ -2,11 +2,11 @@
 
 from uuid import UUID
 
-from h_arcane.core.db.models import Experiment
-from h_arcane.core.infrastructure.sandbox import BaseSandboxManager
+from h_arcane.core._internal.db.models import Experiment
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.benchmarks.researchrubrics.stakeholder import RubricAwareStakeholder
 from h_arcane.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit
-from h_arcane.settings import settings
+from h_arcane.core.settings import settings
 
 
 def create_stakeholder(experiment: Experiment) -> RubricAwareStakeholder:

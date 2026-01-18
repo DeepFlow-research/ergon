@@ -2,17 +2,26 @@
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypeVar
 from uuid import UUID
 
 import inngest
 from pydantic import BaseModel, Field, model_validator
 
 from h_arcane.benchmarks.gdpeval.rules import GDPEvalRule
-from h_arcane.core.db.models import CriterionResult, Evaluation, TaskEvaluationResult
+from h_arcane.core._internal.db.models import CriterionResult, Evaluation, TaskEvaluationResult
 
 if TYPE_CHECKING:
-    from h_arcane.core.evaluation.schemas import TaskEvaluationContext
+    from h_arcane.core._internal.evaluation.schemas import TaskEvaluationContext
+
+T = TypeVar("T")
+
+
+def _require_not_none(value: T | None, error_msg: str) -> T:
+    """Helper to raise error if value is None."""
+    if value is None:
+        raise ValueError(error_msg)
+    return value
 
 
 class EvaluationStage(BaseModel):
@@ -138,8 +147,8 @@ class StagedRubric(BaseModel):
             TaskEvaluationResult with criterion-level and aggregate scores
         """
         # Import here to avoid circular imports
-        from h_arcane.core.evaluation.inngest_functions import evaluate_criterion_fn
-        from h_arcane.core.evaluation.events import CriterionEvaluationEvent
+        from h_arcane.core._internal.evaluation.inngest_functions import evaluate_criterion_fn
+        from h_arcane.core._internal.evaluation.events import CriterionEvaluationEvent
 
         # Flatten rubric into criteria list
         async def flatten_rubric_step():
@@ -158,6 +167,9 @@ class StagedRubric(BaseModel):
             "flatten-rubric",
             flatten_rubric_step,
             output_type=list[FlattenedCriterion],
+        )
+        criteria_models = _require_not_none(
+            criteria_models, "flatten-rubric step returned None"
         )
         criteria = [(c.stage, c.rule, c.stage_idx, c.rule_idx) for c in criteria_models]
 

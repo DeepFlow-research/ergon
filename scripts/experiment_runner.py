@@ -11,10 +11,9 @@ import structlog
 
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.registry import get_benchmark_loader
-from h_arcane.config.experiment import DEFAULT_CONFIG, ExperimentConfig
-from h_arcane.core.db.models import RunStatus
-from h_arcane.core.db.queries import queries
-from h_arcane.core.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.db.models import RunStatus
+from h_arcane.core._internal.db.queries import queries
+from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 
 logger = structlog.get_logger()
 
@@ -31,8 +30,15 @@ class ExperimentRunner:
     The actual execution logic is in the core pipeline (worker_execute, run_evaluate, etc.)
     """
 
-    def __init__(self, config: ExperimentConfig | None = None):
-        self.config = config or DEFAULT_CONFIG
+    def __init__(
+        self,
+        baseline: str = "react",
+        worker_model: str = "gpt-4o",
+        max_questions: int = 10,
+    ):
+        self.baseline = baseline
+        self.worker_model = worker_model
+        self.max_questions = max_questions
 
     async def run_full_suite(
         self,
@@ -83,8 +89,8 @@ class ExperimentRunner:
                             name="run/start",
                             data={
                                 "experiment_id": str(exp_id),
-                                "worker_model": self.config.worker_model,
-                                "max_questions": self.config.max_questions,
+                                "worker_model": self.worker_model,
+                                "max_questions": self.max_questions,
                             },
                         )
                     ),
