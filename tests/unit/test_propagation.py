@@ -72,6 +72,7 @@ class TestGetLeafDescendants:
         tree_data = make_task_tree(task_id, is_leaf=True)
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
         result = tree.get_leaf_ids()
 
         assert result == [str(task_id)]
@@ -94,6 +95,7 @@ class TestGetLeafDescendants:
         )
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
         result = tree.get_leaf_ids()
 
         assert set(result) == {str(child1_id), str(child2_id)}
@@ -126,6 +128,7 @@ class TestGetLeafDescendants:
         )
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
         result = tree.get_leaf_ids()
 
         assert set(result) == {str(leaf1_id), str(leaf2_id), str(leaf3_id)}
@@ -146,6 +149,7 @@ class TestFindTaskInTree:
         tree_data = make_task_tree(task_id, name="Root")
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
         result = tree.find_by_id(str(task_id))
 
         assert result is not None
@@ -175,6 +179,7 @@ class TestFindTaskInTree:
         )
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
         result = tree.find_by_id(str(target_id))
 
         assert result is not None
@@ -187,6 +192,7 @@ class TestFindTaskInTree:
         missing_id = uuid4()
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
         result = tree.find_by_id(str(missing_id))
 
         assert result is None
@@ -206,6 +212,7 @@ class TestExtractDependenciesFromTree:
         tree_data = make_task_tree(uuid4(), depends_on=[])
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
         result = tree.extract_dependencies()
 
         assert result == []
@@ -227,6 +234,7 @@ class TestExtractDependenciesFromTree:
         )
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
         result = tree.extract_dependencies()
 
         assert (str(task_id), str(dep_id)) in result
@@ -250,6 +258,8 @@ class TestExtractDependenciesFromTree:
         )
 
         tree = parse_task_tree(tree_data)
+        assert tree is not None
+
         result = tree.extract_dependencies()
 
         assert (str(task_id), str(dep1_id)) in result

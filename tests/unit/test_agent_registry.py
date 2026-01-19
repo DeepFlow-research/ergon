@@ -110,7 +110,7 @@ class TestAgentRegistryBasic:
             name = "bad"
 
         with pytest.raises(ValueError, match="has no 'id' attribute"):
-            registry.register_worker(BadWorker())
+            registry.register_worker(BadWorker())  # type: ignore[arg-type]
 
 
 # =============================================================================

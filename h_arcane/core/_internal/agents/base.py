@@ -7,45 +7,21 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from h_arcane.core._internal.db.models import ResourceRecord
     from h_arcane.core._internal.communication.schemas import MessageResponse
 
 
 class WorkerExecutionOutput(BaseModel):
-    """Structured output from worker execution."""
+    """Structured output from worker execution.
+
+    NOTE: This is still used by ReActWorker as output_type for Agent.
+    Workers return WorkerResult (from SDK), but Agent uses this for structured extraction.
+    """
 
     reasoning: str = Field(description="Explanation of approach and decisions made")
     output_text: str = Field(description="Text summary/output of what was accomplished")
     output_resource_ids: list[str] = Field(
         default_factory=list, description="UUIDs of resources created during execution"
     )
-
-
-class BaseWorker(Protocol):
-    """Protocol for worker agents.
-
-    Workers execute tasks using a toolkit and return structured output.
-    """
-
-    async def execute(
-        self,
-        run_id: UUID,
-        task_description: str,
-        input_resources: list["ResourceRecord"],
-        toolkit: "BaseToolkit",
-    ) -> WorkerExecutionOutput:
-        """Execute a task and return structured output.
-
-        Args:
-            run_id: The run ID
-            task_description: Task description
-            input_resources: List of input resources
-            toolkit: Toolkit with tools for the worker
-
-        Returns:
-            WorkerExecutionOutput with reasoning, output_text, and output_resource_ids
-        """
-        ...
 
 
 class BenchmarkLoader(Protocol):
@@ -123,5 +99,14 @@ class BaseToolkit(ABC):
 
         Returns:
             The stakeholder's response
+        """
+        ...
+
+    @abstractmethod
+    def get_qa_history(self) -> list:
+        """Return Q&A history for inclusion in WorkerResult.
+
+        Called by worker after execution to collect trace data.
+        Returns list of QAExchange objects (using list to avoid circular import).
         """
         ...

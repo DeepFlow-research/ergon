@@ -36,10 +36,18 @@ For benchmark tasks:
 __version__ = "0.1.0"
 
 # Public API - Task definition
-from h_arcane.core.task import Resource, Task, TaskStatus
+from h_arcane.core.status import TaskStatus
+from h_arcane.core.task import Resource, Task
 
 # Public API - Worker protocol
-from h_arcane.core.worker import BaseWorker, NamedTool, Tool, WorkerContext, WorkerResult
+from h_arcane.core.worker import (
+    BaseWorker,
+    NamedTool,
+    Tool,
+    WorkerContext,
+    WorkerResult,
+    QAExchange,
+)
 
 # Re-export Action from internal for worker implementations
 from h_arcane.core._internal.db.models import Action
@@ -65,6 +73,7 @@ __all__ = [
     "BaseWorker",
     "WorkerContext",
     "WorkerResult",
+    "QAExchange",
     "Action",
     "Tool",
     "NamedTool",

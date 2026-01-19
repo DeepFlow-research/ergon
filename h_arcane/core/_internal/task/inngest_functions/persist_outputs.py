@@ -49,9 +49,9 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     benchmark_name = BenchmarkName(experiment.benchmark_name)
     sandbox_manager = get_sandbox_manager(benchmark_name)
 
-    # Download outputs from sandbox
+    # Download outputs from sandbox (keyed by task_id)
     async def download_outputs() -> DownloadedFiles:
-        return await sandbox_manager.download_all_outputs(run_id, output_dir)
+        return await sandbox_manager.download_all_outputs(task_id, output_dir)
 
     downloaded = await ctx.step.run(
         "download-outputs", download_outputs, output_type=DownloadedFiles

@@ -7,6 +7,7 @@ from agents import function_tool, Tool
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
 from h_arcane.core._internal.communication import communication_service, CreateMessageRequest
+from h_arcane.core.worker import QAExchange
 
 # Import response types from skills
 from h_arcane.benchmarks.researchrubrics.skills.responses import (
@@ -28,6 +29,7 @@ class ResearchRubricsToolkit(BaseToolkit):
 
     def __init__(
         self,
+        task_id: UUID,
         run_id: UUID,
         experiment_id: UUID,
         stakeholder: BaseStakeholder,
@@ -38,23 +40,30 @@ class ResearchRubricsToolkit(BaseToolkit):
         Initialize ResearchRubrics toolkit.
 
         Args:
-            run_id: The run ID for logging messages and actions
-            experiment_id: The experiment ID for traceability
+            task_id: The task ID for sandbox keying (sandboxes are per-task)
+            run_id: The run ID for communication service
+            experiment_id: The experiment ID for communication service
             stakeholder: Stakeholder for answering questions
             sandbox_manager: Sandbox manager for skill execution
             max_questions: Maximum number of questions allowed
         """
+        self.task_id = task_id
         self.run_id = run_id
         self.experiment_id = experiment_id
         self.stakeholder = stakeholder
         self.sandbox_manager = sandbox_manager
         self.max_questions = max_questions
         self._questions_asked = 0
+        self._qa_history: list[QAExchange] = []
 
     @property
     def questions_asked(self) -> int:
         """Get number of questions asked so far."""
         return self._questions_asked
+
+    def get_qa_history(self) -> list[QAExchange]:
+        """Return Q&A history for inclusion in WorkerResult."""
+        return self._qa_history
 
     def get_tools(self) -> list[Tool]:
         """Return all ResearchRubrics tools."""
@@ -123,6 +132,9 @@ class ResearchRubricsToolkit(BaseToolkit):
             )
         )
 
+        # Accumulate Q&A history for WorkerResult
+        self._qa_history.append(QAExchange(question=question, answer=answer))
+
         self._questions_asked += 1
         return answer
 
@@ -149,7 +161,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with search results including titles, URLs, summaries, and content.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "exa_search",
                 ExaSearchResponse,
                 query=query,
@@ -179,7 +191,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with answer and source citations.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "exa_qa",
                 ExaQAResponse,
                 question=question,
@@ -202,7 +214,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with extracted content, title, and metadata.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "exa_get_content",
                 ExaGetContentResponse,
                 url=url,
@@ -238,7 +250,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with file path and bytes written.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "write_report_draft",
                 WriteReportDraftResponse,
                 content=content,
@@ -270,7 +282,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with file path and number of replacements made.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "edit_report_draft",
                 EditReportDraftResponse,
                 old_string=old_string,
@@ -298,7 +310,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with file content.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "read_report_draft",
                 ReadReportDraftResponse,
                 file_path=file_path,

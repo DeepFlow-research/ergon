@@ -14,11 +14,11 @@ from typing import Any
 from inngest import Function
 
 from h_arcane.core._internal.evaluation.inngest_functions import (
+    check_and_run_evaluators,
     evaluate_criterion_fn,
     evaluate_task_run,
 )
 from h_arcane.core._internal.infrastructure.inngest_functions import run_cleanup
-from h_arcane.core._internal.task.evaluation import check_and_run_evaluators
 from h_arcane.core._internal.task.inngest_functions import (
     task_execute,
     task_propagate,

@@ -60,7 +60,7 @@ class TestResource:
         resource = Resource(
             path="data/custom.bin",
             name="Binary",
-            mime_type="application/octet-stream",
+            mime_type_override="application/octet-stream",
         )
 
         assert resource.mime_type == "application/octet-stream"

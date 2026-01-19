@@ -106,6 +106,13 @@ class BaseWorker(Protocol):
 # =============================================================================
 
 
+class QAExchange(BaseModel):
+    """A single question-answer exchange with stakeholder."""
+
+    question: str
+    answer: str
+
+
 class WorkerContext(BaseModel):
     """
     Context provided to workers during execution.
@@ -133,6 +140,17 @@ class WorkerContext(BaseModel):
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional context (benchmark-specific data, etc.)",
+    )
+
+    # For workers that need benchmark tools (e.g., ReActWorker)
+    #TODO: tighten type
+    toolkit: Any = Field(
+        default=None,
+        description="Benchmark toolkit with tools and stakeholder access (BaseToolkit)",
+    )
+    agent_config_id: UUID | None = Field(
+        default=None,
+        description="Agent config ID for action persistence",
     )
 
     model_config = {"arbitrary_types_allowed": True}
@@ -171,6 +189,10 @@ class WorkerResult(BaseModel):
     reasoning: str | None = Field(
         default=None,
         description="Worker's reasoning/thought process (if available)",
+    )
+    qa_exchanges: list[QAExchange] = Field(
+        default_factory=list,
+        description="Q&A exchanges with stakeholder (for benchmark workers)",
     )
     error: str | None = Field(
         default=None,

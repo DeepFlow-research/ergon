@@ -61,14 +61,14 @@ class TestSerializeTaskTree:
 
         result = serialize_task_tree(task)
 
-        assert result["id"] == str(task.id)
-        assert result["name"] == "Single Task"
-        assert result["description"] == "A single task"
-        assert result["depends_on"] == []
-        assert result["children"] == []
-        assert result["is_leaf"] is True
-        assert result["parent_id"] is None
-        assert result["evaluator_type"] is None
+        assert result.id == str(task.id)
+        assert result.name == "Single Task"
+        assert result.description == "A single task"
+        assert result.depends_on == []
+        assert result.children == []
+        assert result.is_leaf is True
+        assert result.parent_id is None
+        assert result.evaluator_type is None
 
     def test_serialize_task_with_children(self):
         """Serialize a task with children."""
@@ -84,11 +84,11 @@ class TestSerializeTaskTree:
 
         result = serialize_task_tree(parent)
 
-        assert result["name"] == "Parent"
-        assert result["is_leaf"] is False
-        assert len(result["children"]) == 2
-        assert result["children"][0]["name"] == "Child 1"
-        assert result["children"][1]["name"] == "Child 2"
+        assert result.name == "Parent"
+        assert result.is_leaf is False
+        assert len(result.children) == 2
+        assert result.children[0].name == "Child 1"
+        assert result.children[1].name == "Child 2"
 
     def test_serialize_task_with_dependencies(self):
         """Serialize a task with dependencies."""
@@ -102,9 +102,9 @@ class TestSerializeTaskTree:
         TaskRegistry(root)
         result = serialize_task_tree(task)
 
-        assert len(result["depends_on"]) == 2
-        assert str(dep1.id) in result["depends_on"]
-        assert str(dep2.id) in result["depends_on"]
+        assert len(result.depends_on) == 2
+        assert str(dep1.id) in result.depends_on
+        assert str(dep2.id) in result.depends_on
 
     def test_serialize_task_with_resources(self):
         """Serialize a task with resources."""
@@ -121,11 +121,11 @@ class TestSerializeTaskTree:
 
         result = serialize_task_tree(task)
 
-        assert len(result["resources"]) == 2
-        assert result["resources"][0]["name"] == "File 1"
-        assert result["resources"][0]["path"] == "/path/to/file1.txt"
-        assert result["resources"][1]["name"] == "File 2"
-        assert result["resources"][1]["content"] == "inline content"
+        assert len(result.resources) == 2
+        assert result.resources[0].name == "File 1"
+        assert result.resources[0].path == "/path/to/file1.txt"
+        assert result.resources[1].name == "File 2"
+        assert result.resources[1].content == "inline content"
 
     def test_serialize_nested_tree(self):
         """Serialize a deeply nested task tree."""
@@ -140,11 +140,11 @@ class TestSerializeTaskTree:
         TaskRegistry(root)
         result = serialize_task_tree(root)
 
-        assert result["name"] == "Root"
-        assert len(result["children"]) == 1
-        assert result["children"][0]["name"] == "Parent"
-        assert len(result["children"][0]["children"]) == 1
-        assert result["children"][0]["children"][0]["name"] == "Child"
+        assert result.name == "Root"
+        assert len(result.children) == 1
+        assert result.children[0].name == "Parent"
+        assert len(result.children[0].children) == 1
+        assert result.children[0].children[0].name == "Child"
 
 
 # =============================================================================
@@ -216,7 +216,7 @@ class TestCreateExperimentFromTask:
         assert data["task_description"] == "A test task description"
         assert data["root_task_id"] == str(task.id)
         assert "task_tree" in data
-        assert data["task_tree"]["name"] == "Test Task"
+        assert data["task_tree"].name == "Test Task"
 
     def test_creates_experiment_with_custom_benchmark(self):
         """Create experiment with custom benchmark name."""
@@ -390,8 +390,8 @@ class TestPersistenceIntegration:
 
         # Create experiment data
         exp_data = create_experiment_from_task(workflow, registry)
-        assert exp_data["task_tree"]["name"] == "Workflow"
-        assert len(exp_data["task_tree"]["children"]) == 2
+        assert exp_data["task_tree"].name == "Workflow"
+        assert len(exp_data["task_tree"].children) == 2
 
         # Create run data
         exp_id = uuid4()
@@ -575,10 +575,10 @@ class TestSerializeTaskTreeWithSerializers:
 
         result = serialize_task_tree(task)
 
-        assert "assigned_to" in result
-        assert result["assigned_to"]["id"] == str(worker.id)
-        assert result["assigned_to"]["name"] == "my_worker"
-        assert result["assigned_to"]["type"] == "MockWorker"
+        assert result.assigned_to is not None
+        assert result.assigned_to.id == str(worker.id)
+        assert result.assigned_to.name == "my_worker"
+        assert result.assigned_to.type == "MockWorker"
 
     def test_includes_full_team(self):
         """Serialized tree should include full team."""
@@ -593,8 +593,8 @@ class TestSerializeTaskTreeWithSerializers:
 
         result = serialize_task_tree(task)
 
-        assert result["full_team"] is not None
-        assert len(result["full_team"]) == 2
+        assert result.full_team is not None
+        assert len(result.full_team) == 2
 
     def test_nested_tree_includes_worker_info(self):
         """Nested tree serialization includes worker info at all levels."""
@@ -615,5 +615,5 @@ class TestSerializeTaskTreeWithSerializers:
 
         result = serialize_task_tree(parent)
 
-        assert result["assigned_to"]["name"] == "parent_worker"
-        assert result["children"][0]["assigned_to"]["name"] == "child_worker"
+        assert result.assigned_to.name == "parent_worker"
+        assert result.children[0].assigned_to.name == "child_worker"

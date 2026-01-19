@@ -22,6 +22,7 @@ def create_stakeholder(experiment: Experiment) -> RubricAwareStakeholder:
 
 
 def create_toolkit(
+    task_id: UUID,
     run_id: UUID,
     experiment_id: UUID,
     stakeholder: RubricAwareStakeholder,
@@ -31,8 +32,9 @@ def create_toolkit(
     """Create ResearchRubrics toolkit.
 
     Args:
-        run_id: The run ID for logging
-        experiment_id: The experiment ID for traceability
+        task_id: UUID of the task (for sandbox keying)
+        run_id: The run ID for communication service
+        experiment_id: The experiment ID for communication service
         stakeholder: The stakeholder for answering questions
         sandbox_manager: Sandbox manager (not actively used for Exa tools)
         max_questions: Maximum stakeholder questions allowed
@@ -51,6 +53,7 @@ def create_toolkit(
         )
 
     return ResearchRubricsToolkit(
+        task_id=task_id,
         run_id=run_id,
         experiment_id=experiment_id,
         stakeholder=stakeholder,

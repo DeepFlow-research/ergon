@@ -64,7 +64,7 @@ from h_arcane.core._internal.db.models import (
     Evaluation,
     Experiment,
     Message,
-    Resource,
+    ResourceRecord,
     Run,
     TaskEvaluationResult,
     Thread,
@@ -177,14 +177,14 @@ def get_filtered_data(
         if experiment_ids:
             exp_resources = list(
                 session.exec(
-                    select(Resource).where(Resource.experiment_id.in_(experiment_ids))  # type: ignore[union-attr]
+                    select(ResourceRecord).where(ResourceRecord.experiment_id.in_(experiment_ids))  # type: ignore[union-attr]
                 ).all()
             )
             resource_rows.extend(exp_resources)
         if run_ids:
             run_resources = list(
                 session.exec(
-                    select(Resource).where(Resource.run_id.in_(run_ids))  # type: ignore[union-attr]
+                    select(ResourceRecord).where(ResourceRecord.run_id.in_(run_ids))  # type: ignore[union-attr]
                 ).all()
             )
             resource_rows.extend(run_resources)
@@ -197,7 +197,7 @@ def get_filtered_data(
                 unique_resources.append(r)
         data["resources"] = unique_resources
     else:
-        data["resources"] = list(session.exec(select(Resource)).all())
+        data["resources"] = list(session.exec(select(ResourceRecord)).all())
 
     return data
 
@@ -252,7 +252,7 @@ def dump_all_tables(benchmark: BenchmarkName | None = None) -> str:
             "runs": Run,
             "messages": Message,
             "actions": Action,
-            "resources": Resource,
+            "resources": ResourceRecord,
             "agent_configs": AgentConfig,
             "evaluations": Evaluation,
             "criterion_results": CriterionResult,

@@ -18,14 +18,25 @@ def create_stakeholder(experiment: Experiment) -> MiniF2FStakeholder:
 
 
 def create_toolkit(
+    task_id: UUID,
     run_id: UUID,
     experiment_id: UUID,
     stakeholder: MiniF2FStakeholder,
     sandbox_manager: BaseSandboxManager,
     max_questions: int,
 ) -> MiniF2FToolkit:
-    """Create MiniF2F toolkit."""
+    """Create MiniF2F toolkit.
+
+    Args:
+        task_id: UUID of the task (for sandbox keying)
+        run_id: UUID of the run (for communication service)
+        experiment_id: UUID of the experiment (for communication service)
+        stakeholder: The stakeholder for Q&A
+        sandbox_manager: The sandbox manager for skill execution
+        max_questions: Maximum number of questions allowed
+    """
     return MiniF2FToolkit(
+        task_id=task_id,
         run_id=run_id,
         experiment_id=experiment_id,
         stakeholder=stakeholder,

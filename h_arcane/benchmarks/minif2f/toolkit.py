@@ -9,6 +9,8 @@ from e2b.sandbox.commands.command_handle import CommandExitException
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
 from h_arcane.core._internal.communication import communication_service, CreateMessageRequest
+from h_arcane.core.worker import QAExchange
+
 
 # Import response types from the skills package
 from h_arcane.benchmarks.minif2f.skills.responses import (
@@ -78,6 +80,7 @@ class MiniF2FToolkit(BaseToolkit):
 
     def __init__(
         self,
+        task_id: UUID,
         run_id: UUID,
         experiment_id: UUID,
         stakeholder: BaseStakeholder,
@@ -88,23 +91,30 @@ class MiniF2FToolkit(BaseToolkit):
         Initialize MiniF2F toolkit.
 
         Args:
-            run_id: The run ID for logging messages and actions
-            experiment_id: The experiment ID for traceability
+            task_id: The task ID for sandbox keying (sandboxes are per-task)
+            run_id: The run ID for communication service
+            experiment_id: The experiment ID for communication service
             stakeholder: Stakeholder for providing proof hints
             sandbox_manager: BaseSandboxManager for skill execution
             max_questions: Maximum number of questions allowed
         """
+        self.task_id = task_id
         self.run_id = run_id
         self.experiment_id = experiment_id
         self.stakeholder = stakeholder
         self.sandbox_manager = sandbox_manager
         self.max_questions = max_questions
         self._questions_asked = 0
+        self._qa_history: list[QAExchange] = []
 
     @property
     def questions_asked(self) -> int:
         """Get number of questions asked so far."""
         return self._questions_asked
+
+    def get_qa_history(self) -> list[QAExchange]:
+        """Return Q&A history for inclusion in WorkerResult."""
+        return self._qa_history
 
     def get_tools(self) -> list[Tool]:
         """Return all MiniF2F tools."""
@@ -168,6 +178,9 @@ class MiniF2FToolkit(BaseToolkit):
             )
         )
 
+        # Accumulate Q&A history for WorkerResult
+        self._qa_history.append(QAExchange(question=question, answer=answer))
+
         self._questions_asked += 1
         return answer
 
@@ -197,7 +210,7 @@ class MiniF2FToolkit(BaseToolkit):
                 Response model with bytes written, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "write_lean_file",
                 WriteLeanResponse,
                 file_path=file_path,
@@ -228,7 +241,7 @@ class MiniF2FToolkit(BaseToolkit):
             """
             # Get sandbox and run Lean directly via shell command
             # This uses the same shell environment where Lean was installed
-            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
+            sandbox = self.sandbox_manager.get_sandbox(self.task_id)
             if not sandbox:
                 return LeanCheckResponse(
                     success=False,
@@ -289,7 +302,7 @@ class MiniF2FToolkit(BaseToolkit):
                 Response model with verification result and details.
             """
             # Get sandbox and run Lean directly via shell command
-            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
+            sandbox = self.sandbox_manager.get_sandbox(self.task_id)
             if not sandbox:
                 return LeanVerificationResponse(
                     success=False,
@@ -368,7 +381,7 @@ class MiniF2FToolkit(BaseToolkit):
             Returns:
                 The Lean output showing the type or definition.
             """
-            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
+            sandbox = self.sandbox_manager.get_sandbox(self.task_id)
             if not sandbox:
                 return "Error: Sandbox not available"
 

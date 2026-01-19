@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from h_arcane.benchmarks.types import AnyRubric
 
 
-from h_arcane.benchmarks.gdpeval.rubric import GDPEvalStagedRubric, StagedRubric
+from h_arcane.benchmarks.gdpeval.rubric import StagedRubric
 from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
 from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 
@@ -35,8 +35,6 @@ def deserialize_rubric(evaluator_type: str, config: dict) -> "AnyRubric":
     # Map evaluator type names to their classes
     if evaluator_type == "StagedRubric":
         return StagedRubric.model_validate(config)
-    elif evaluator_type == "GDPEvalStagedRubric":
-        return GDPEvalStagedRubric.model_validate(config)
     elif evaluator_type == "MiniF2FRubric":
         return MiniF2FRubric.model_validate(config)
     elif evaluator_type == "ResearchRubricsRubric":
@@ -44,7 +42,7 @@ def deserialize_rubric(evaluator_type: str, config: dict) -> "AnyRubric":
     else:
         raise ValueError(
             f"Unknown evaluator type: {evaluator_type}. "
-            f"Known types: ['StagedRubric', 'GDPEvalStagedRubric', 'MiniF2FRubric', 'ResearchRubricsRubric']"
+            f"Known types: ['StagedRubric', 'MiniF2FRubric', 'ResearchRubricsRubric']"
         )
 
 

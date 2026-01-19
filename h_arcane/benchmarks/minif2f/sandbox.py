@@ -26,62 +26,62 @@ class MiniF2FSandboxManager(BaseSandboxManager):
     MiniF2F problems require Mathlib imports (e.g., data.real.basic).
     """
 
-    async def _install_dependencies(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         """Install Lean 3, leanproject, and set up Mathlib project."""
-        logger.info(f"Installing Lean 3 + Mathlib (run_id={run_id})...")
+        logger.info(f"Installing Lean 3 + Mathlib (task_id={task_id})...")
 
         # Step 1: Install elan (Lean version manager)
-        if not await self._install_elan(sandbox, run_id):
-            raise RuntimeError(f"Failed to install elan for run_id={run_id}")
+        if not await self._install_elan(sandbox, task_id):
+            raise RuntimeError(f"Failed to install elan for task_id={task_id}")
 
         # Step 2: Install Lean 3 community toolchain
-        if not await self._install_lean3(sandbox, run_id):
-            raise RuntimeError(f"Failed to install Lean 3 for run_id={run_id}")
+        if not await self._install_lean3(sandbox, task_id):
+            raise RuntimeError(f"Failed to install Lean 3 for task_id={task_id}")
 
         # Step 3: Install leanproject (Python tool for Mathlib)
-        if not await self._install_leanproject(sandbox, run_id):
-            raise RuntimeError(f"Failed to install leanproject for run_id={run_id}")
+        if not await self._install_leanproject(sandbox, task_id):
+            raise RuntimeError(f"Failed to install leanproject for task_id={task_id}")
 
         # Step 4: Set up Mathlib project in /workspace
-        if not await self._setup_mathlib_project(sandbox, run_id):
-            raise RuntimeError(f"Failed to set up Mathlib project for run_id={run_id}")
+        if not await self._setup_mathlib_project(sandbox, task_id):
+            raise RuntimeError(f"Failed to set up Mathlib project for task_id={task_id}")
 
-        logger.info(f"Successfully installed Lean 3 + Mathlib (run_id={run_id})")
+        logger.info(f"Successfully installed Lean 3 + Mathlib (task_id={task_id})")
 
-    async def _install_elan(self, sandbox: AsyncSandbox, run_id: UUID) -> bool:
+    async def _install_elan(self, sandbox: AsyncSandbox, task_id: UUID) -> bool:
         """Install elan (Lean version manager)."""
         try:
             check_result = await sandbox.commands.run("which elan", timeout=5)
             if check_result.exit_code == 0:
-                logger.info(f"elan already installed (run_id={run_id})")
+                logger.info(f"elan already installed (task_id={task_id})")
                 return True
         except CommandExitException:
             pass  # Not installed
 
-        logger.info(f"Installing elan (run_id={run_id})...")
+        logger.info(f"Installing elan (task_id={task_id})...")
         try:
             result = await sandbox.commands.run(
                 "curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y",
                 timeout=120,
             )
             if result.exit_code != 0:
-                logger.error(f"elan install failed (run_id={run_id}): {result.stderr}")
+                logger.error(f"elan install failed (task_id={task_id}): {result.stderr}")
                 return False
             return True
         except CommandExitException as e:
-            logger.error(f"elan install exception (run_id={run_id}): {e}")
+            logger.error(f"elan install exception (task_id={task_id}): {e}")
             return False
 
-    async def _install_lean3(self, sandbox: AsyncSandbox, run_id: UUID) -> bool:
+    async def _install_lean3(self, sandbox: AsyncSandbox, task_id: UUID) -> bool:
         """Install Lean 3 community toolchain."""
-        logger.info(f"Installing Lean 3 toolchain: {LEAN3_TOOLCHAIN} (run_id={run_id})...")
+        logger.info(f"Installing Lean 3 toolchain: {LEAN3_TOOLCHAIN} (task_id={task_id})...")
         try:
             result = await sandbox.commands.run(
                 f"export PATH=$HOME/.elan/bin:$PATH && elan toolchain install {LEAN3_TOOLCHAIN}",
                 timeout=300,
             )
             if result.exit_code != 0:
-                logger.error(f"Lean 3 install failed (run_id={run_id}): {result.stderr}")
+                logger.error(f"Lean 3 install failed (task_id={task_id}): {result.stderr}")
                 return False
 
             # Set as default
@@ -89,36 +89,36 @@ class MiniF2FSandboxManager(BaseSandboxManager):
                 f"export PATH=$HOME/.elan/bin:$PATH && elan default {LEAN3_TOOLCHAIN}",
                 timeout=30,
             )
-            logger.info(f"Lean 3 installed (run_id={run_id})")
+            logger.info(f"Lean 3 installed (task_id={task_id})")
             return True
         except CommandExitException as e:
-            logger.error(f"Lean 3 install exception (run_id={run_id}): {e}")
+            logger.error(f"Lean 3 install exception (task_id={task_id}): {e}")
             return False
 
-    async def _install_leanproject(self, sandbox: AsyncSandbox, run_id: UUID) -> bool:
+    async def _install_leanproject(self, sandbox: AsyncSandbox, task_id: UUID) -> bool:
         """Install leanproject via pip."""
-        logger.info(f"Installing leanproject (run_id={run_id})...")
+        logger.info(f"Installing leanproject (task_id={task_id})...")
         try:
             result = await sandbox.commands.run(
                 "pip install mathlibtools",
                 timeout=120,
             )
             if result.exit_code != 0:
-                logger.error(f"leanproject install failed (run_id={run_id}): {result.stderr}")
+                logger.error(f"leanproject install failed (task_id={task_id}): {result.stderr}")
                 return False
-            logger.info(f"leanproject installed (run_id={run_id})")
+            logger.info(f"leanproject installed (task_id={task_id})")
             return True
         except CommandExitException as e:
-            logger.error(f"leanproject install exception (run_id={run_id}): {e}")
+            logger.error(f"leanproject install exception (task_id={task_id}): {e}")
             return False
 
-    async def _setup_mathlib_project(self, sandbox: AsyncSandbox, run_id: UUID) -> bool:
+    async def _setup_mathlib_project(self, sandbox: AsyncSandbox, task_id: UUID) -> bool:
         """Set up a Mathlib project in /tools for proof verification.
 
         NOTE: We install to /tools (not /workspace) so that download_all_outputs()
-        doesn't download the thousands of Mathlib .lean files as run outputs.
+        doesn't download the thousands of Mathlib .lean files as task outputs.
         """
-        logger.info(f"Setting up Mathlib project in /tools (run_id={run_id})...")
+        logger.info(f"Setting up Mathlib project in /tools (task_id={task_id})...")
         try:
             # Create a new Mathlib project (this downloads Mathlib and its cache)
             # NOTE: /tools directory is created by BaseSandboxManager._create_directory_structure()
@@ -128,11 +128,11 @@ class MiniF2FSandboxManager(BaseSandboxManager):
                 timeout=600,  # Can take a while to download Mathlib cache
             )
             if result.exit_code != 0:
-                logger.error(f"Mathlib project setup failed (run_id={run_id}): {result.stderr}")
+                logger.error(f"Mathlib project setup failed (task_id={task_id}): {result.stderr}")
                 return False
 
             # Get the Mathlib cache (pre-compiled .olean files)
-            logger.info(f"Fetching Mathlib cache (run_id={run_id})...")
+            logger.info(f"Fetching Mathlib cache (task_id={task_id})...")
             cache_result = await sandbox.commands.run(
                 "cd /tools/mathlib_project && export PATH=$HOME/.elan/bin:$PATH && "
                 "leanproject get-mathlib-cache",
@@ -140,20 +140,20 @@ class MiniF2FSandboxManager(BaseSandboxManager):
             )
             if cache_result.exit_code != 0:
                 logger.warning(
-                    f"Mathlib cache fetch failed (run_id={run_id}), "
+                    f"Mathlib cache fetch failed (task_id={task_id}), "
                     f"proofs may be slower: {cache_result.stderr}"
                 )
                 # Don't fail - can still work without cache, just slower
 
-            logger.info(f"Mathlib project ready (run_id={run_id})")
+            logger.info(f"Mathlib project ready (task_id={task_id})")
             return True
         except CommandExitException as e:
-            logger.error(f"Mathlib project setup exception (run_id={run_id}): {e}")
+            logger.error(f"Mathlib project setup exception (task_id={task_id}): {e}")
             return False
 
-    async def _verify_setup(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+    async def _verify_setup(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         """Verify Lean 3 + Mathlib is accessible and working."""
-        logger.info(f"Verifying Lean 3 + Mathlib setup (run_id={run_id})...")
+        logger.info(f"Verifying Lean 3 + Mathlib setup (task_id={task_id})...")
 
         try:
             # Verify Lean version
@@ -162,23 +162,23 @@ class MiniF2FSandboxManager(BaseSandboxManager):
             )
             if result.exit_code != 0:
                 raise RuntimeError(
-                    f"Lean verification failed (run_id={run_id}): "
+                    f"Lean verification failed (task_id={task_id}): "
                     f"exit_code={result.exit_code}, stderr={result.stderr}"
                 )
-            logger.info(f"Lean setup verified: {result.stdout.strip()} (run_id={run_id})")
+            logger.info(f"Lean setup verified: {result.stdout.strip()} (task_id={task_id})")
 
             # Verify Mathlib project exists
             proj_check = await sandbox.commands.run("test -d /tools/mathlib_project", timeout=5)
             if proj_check.exit_code != 0:
                 raise RuntimeError(
-                    f"Mathlib project not found at /tools/mathlib_project (run_id={run_id})"
+                    f"Mathlib project not found at /tools/mathlib_project (task_id={task_id})"
                 )
-            logger.info(f"Mathlib project verified (run_id={run_id})")
+            logger.info(f"Mathlib project verified (task_id={task_id})")
 
         except CommandExitException as e:
-            raise RuntimeError(f"Setup verification failed (run_id={run_id}): {e}") from e
+            raise RuntimeError(f"Setup verification failed (task_id={task_id}): {e}") from e
 
-    async def download_all_outputs(self, run_id: UUID, output_dir: Path) -> DownloadedFiles:
+    async def download_all_outputs(self, task_id: UUID, output_dir: Path) -> DownloadedFiles:
         """Download outputs from /workspace/final_output and Lean proof files.
 
         For MiniF2F, agent's final proof should be in /workspace/final_output/final_solution.lean.
@@ -188,7 +188,7 @@ class MiniF2FSandboxManager(BaseSandboxManager):
         This avoids downloading the thousands of Mathlib library files in _target/.
         """
         # Get standard /workspace/final_output outputs first
-        downloaded = await super().download_all_outputs(run_id, output_dir)
+        downloaded = await super().download_all_outputs(task_id, output_dir)
 
         # Also check /tools/mathlib_project/src/ for any agent-created .lean files
         # (Agent may have written drafts there for Mathlib import access)
@@ -196,7 +196,7 @@ class MiniF2FSandboxManager(BaseSandboxManager):
         downloaded_names = {Path(f.local_path).name for f in downloaded.files}
 
         try:
-            lean_src_files = await self.list_files(run_id, "/tools/mathlib_project/src")
+            lean_src_files = await self.list_files(task_id, "/tools/mathlib_project/src")
             for file_path in lean_src_files:
                 filename = Path(file_path).name
                 # Skip if already downloaded from final_output
@@ -210,7 +210,7 @@ class MiniF2FSandboxManager(BaseSandboxManager):
                     and filename != "verify.lean"
                 ):
                     try:
-                        content = await self.download_file(run_id, file_path)
+                        content = await self.download_file(task_id, file_path)
                         local_path = output_dir / filename
                         local_path.write_bytes(content)
                         downloaded.files.append(
@@ -227,7 +227,7 @@ class MiniF2FSandboxManager(BaseSandboxManager):
             error_msg = str(e).lower()
             if "timeout" in error_msg or "sandbox was not found" in error_msg:
                 logger.warning(
-                    f"Sandbox timeout/not found when downloading Lean files for run_id={run_id}: {e}"
+                    f"Sandbox timeout/not found when downloading Lean files for task_id={task_id}: {e}"
                 )
             else:
                 logger.warning(f"Failed to download Lean files from Mathlib project: {e}")

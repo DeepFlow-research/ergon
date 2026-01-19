@@ -19,14 +19,25 @@ def create_stakeholder(experiment: Experiment) -> RubricStakeholder:
 
 
 def create_toolkit(
+    task_id: UUID,
     run_id: UUID,
     experiment_id: UUID,
     stakeholder: RubricStakeholder,
     sandbox_manager: BaseSandboxManager,
     max_questions: int,
 ) -> GDPEvalToolkit:
-    """Create GDPEval toolkit."""
+    """Create GDPEval toolkit.
+
+    Args:
+        task_id: UUID of the task (for sandbox keying)
+        run_id: UUID of the run (for communication service)
+        experiment_id: UUID of the experiment (for communication service)
+        stakeholder: The stakeholder for Q&A
+        sandbox_manager: The sandbox manager for skill execution
+        max_questions: Maximum number of questions allowed
+    """
     return GDPEvalToolkit(
+        task_id=task_id,
         run_id=run_id,
         experiment_id=experiment_id,
         stakeholder=stakeholder,

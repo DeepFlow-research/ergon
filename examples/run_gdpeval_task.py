@@ -51,7 +51,7 @@ async def main(task_id: str = "task_001") -> None:
         print(f"Score: {result.score}")
 
     if result.task_results:
-        for task_id, task_result in result.task_results.items():
+        for task_uuid, task_result in result.task_results.items():
             print(f"  Task {task_result.name}: {task_result.status}")
 
     if result.error:

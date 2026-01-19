@@ -37,7 +37,6 @@ from h_arcane.core._internal.task.persistence import (
     persist_workflow,
 )
 from h_arcane.core._internal.task.registry import TaskRegistry
-from h_arcane.core._internal.task.schema import parse_task_tree
 from h_arcane.core._internal.task.worker_context import store_workers_from_task
 from h_arcane.core.task import Resource, Task, TaskStatus
 
@@ -271,7 +270,16 @@ async def _wait_for_completion(
 
         # Check if terminal state
         if run.status in terminal_statuses:
-            return _build_result_from_run(run, started_at, experiment_id)
+            # Deserialize precomputed ExecutionResult from run
+            if run.execution_result:
+                return ExecutionResult.model_validate(run.execution_result)
+            # Fallback if execution_result not set (shouldn't happen)
+            return _build_error_result(
+                started_at=started_at,
+                error="Run completed but execution_result not populated",
+                run_id=run_id,
+                experiment_id=experiment_id,
+            )
 
         # Check timeout
         if timeout and (time.time() - start_time) > timeout:
@@ -284,85 +292,6 @@ async def _wait_for_completion(
 
         # Wait before next poll
         await asyncio.sleep(poll_interval)
-
-
-def _build_result_from_run(
-    run: Any,  # Run model
-    started_at: datetime,
-    experiment_id: UUID,
-) -> ExecutionResult:
-    """Build ExecutionResult from a completed Run."""
-    completed_at = run.completed_at or datetime.now(timezone.utc)
-    duration = (completed_at - started_at).total_seconds()
-
-    # Determine success and status
-    success = run.status == RunStatus.COMPLETED
-    status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
-
-    # Load experiment to get task_tree for task names
-    experiment = queries.experiments.get(experiment_id)
-    task_tree = experiment.task_tree if experiment else {}
-
-    # Load output resources
-    output_resources: list[Resource] = []
-    if run.output_resource_ids:
-        for res_id_str in run.output_resource_ids:
-            try:
-                db_resource = queries.resources.get(UUID(res_id_str))
-                if db_resource:
-                    # Convert DB Resource to SDK Resource
-                    output_resources.append(
-                        Resource(
-                            name=db_resource.name,
-                            path=db_resource.file_path,
-                        )
-                    )
-            except Exception:
-                pass  # Skip invalid resource IDs
-
-    # Build task results from task_executions
-    # Track the highest attempt number seen for each task
-    task_results: dict[UUID, TaskResult] = {}
-    task_attempts: dict[UUID, int] = {}
-    executions = queries.task_executions.get_by_run(run.id)
-
-    # Parse task_tree once for efficient lookups
-    tree = parse_task_tree(task_tree)
-
-    for exec in executions:
-        # Get the latest execution for each task (by attempt number)
-        current_attempt = task_attempts.get(exec.task_id, 0)
-        if exec.attempt_number > current_attempt:
-            # Extract task name from typed task_tree
-            task_node = tree.find_by_id(str(exec.task_id)) if tree else None
-            task_name = task_node.name if task_node else f"Task-{exec.task_id}"
-
-            task_status = TaskStatus.COMPLETED if exec.status == "completed" else TaskStatus.FAILED
-            task_results[exec.task_id] = TaskResult(
-                task_id=exec.task_id,
-                name=task_name,
-                status=task_status,
-                score=exec.score,
-                outputs=[],  # TODO: Load task-specific outputs
-                error=exec.error_message,
-            )
-            task_attempts[exec.task_id] = exec.attempt_number
-
-    return ExecutionResult(
-        success=success,
-        status=status,
-        outputs=output_resources,
-        score=run.final_score,
-        evaluation_details=run.benchmark_specific_results or {},
-        started_at=started_at,
-        completed_at=completed_at,
-        duration_seconds=duration,
-        total_cost_usd=run.total_cost_usd or 0.0,
-        task_results=task_results,
-        run_id=run.id,
-        experiment_id=experiment_id,
-        error=run.error_message,
-    )
 
 
 def _build_error_result(

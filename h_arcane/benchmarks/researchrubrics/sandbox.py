@@ -21,28 +21,28 @@ class ResearchRubricsSandboxManager(BaseSandboxManager):
     EXA_API_KEY is passed via environment variables at sandbox creation.
     """
 
-    async def _install_dependencies(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         """Install exa_py for Exa API access in sandbox.
 
         Args:
             sandbox: E2B sandbox instance
-            run_id: UUID of the run (for logging)
+            task_id: UUID of the task (for logging)
         """
-        logger.info(f"Installing exa_py for ResearchRubrics (run_id={run_id})")
+        logger.info(f"Installing exa_py for ResearchRubrics (task_id={task_id})")
 
         # Install exa_py for Exa API access
         result = await sandbox.commands.run("pip install exa_py --quiet")
         if result.exit_code != 0:
             raise RuntimeError(f"Failed to install exa_py: {result.stderr}")
 
-        logger.info(f"ResearchRubrics dependencies installed (run_id={run_id})")
+        logger.info(f"ResearchRubrics dependencies installed (task_id={task_id})")
 
-    async def _verify_setup(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+    async def _verify_setup(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         """Verify exa_py is importable.
 
         Args:
             sandbox: E2B sandbox instance
-            run_id: UUID of the run (for logging)
+            task_id: UUID of the task (for logging)
         """
         verify_code = """
 import exa_py
@@ -52,4 +52,4 @@ print("exa_py imported successfully")
         if result.error:
             raise RuntimeError(f"Failed to verify exa_py import: {result.error}")
 
-        logger.info(f"ResearchRubrics sandbox setup verified (run_id={run_id})")
+        logger.info(f"ResearchRubrics sandbox setup verified (task_id={task_id})")

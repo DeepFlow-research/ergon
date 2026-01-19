@@ -7,6 +7,7 @@ from agents import function_tool, Tool
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
 from h_arcane.core._internal.communication import communication_service, CreateMessageRequest
+from h_arcane.core.worker import QAExchange
 
 # Import response types from the skills package (same types used in VM!)
 from h_arcane.benchmarks.gdpeval.skills.responses import (
@@ -26,6 +27,7 @@ class GDPEvalToolkit(BaseToolkit):
 
     def __init__(
         self,
+        task_id: UUID,
         run_id: UUID,
         experiment_id: UUID,
         stakeholder: BaseStakeholder,
@@ -36,23 +38,34 @@ class GDPEvalToolkit(BaseToolkit):
         Initialize GDPEval toolkit.
 
         Args:
-            run_id: The run ID for logging messages and actions
-            experiment_id: The experiment ID for traceability
+            task_id: The task ID for sandbox keying (sandboxes are per-task)
+            run_id: The run ID for communication service
+            experiment_id: The experiment ID for communication service
             stakeholder: Stakeholder for answering questions
             sandbox_manager: Sandbox manager for skill execution
             max_questions: Maximum number of questions allowed
         """
+        self.task_id = task_id
         self.run_id = run_id
         self.experiment_id = experiment_id
         self.stakeholder = stakeholder
         self.sandbox_manager = sandbox_manager
         self.max_questions = max_questions
         self._questions_asked = 0
+        self._qa_history: list[QAExchange] = []
 
     @property
     def questions_asked(self) -> int:
         """Get number of questions asked so far."""
         return self._questions_asked
+
+    def get_qa_history(self) -> list[QAExchange]:
+        """Return Q&A history for inclusion in WorkerResult.
+
+        This allows the execution layer to persist Q&A exchanges after
+        worker execution completes.
+        """
+        return self._qa_history
 
     def get_tools(self) -> list[Tool]:
         """Return all GDPEval tools."""
@@ -120,6 +133,9 @@ class GDPEvalToolkit(BaseToolkit):
             )
         )
 
+        # Accumulate Q&A history for WorkerResult
+        self._qa_history.append(QAExchange(question=question, answer=answer))
+
         self._questions_asked += 1
         return answer
 
@@ -140,7 +156,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with extracted text and page count, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "read_pdf",
                 ReadPDFResponse,
                 file_path=file_path,
@@ -163,7 +179,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with CSV data, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "read_csv",
                 ReadCsvResponse,
                 file_path=file_path,
@@ -187,7 +203,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with sheet data, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "read_excel",
                 ReadExcelResponse,
                 file_path=file_path,
@@ -221,7 +237,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with file path and size, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "create_docx",
                 CreateDocxResponse,
                 content=content,
@@ -255,7 +271,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with file path and size, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "create_excel",
                 CreateExcelResponse,
                 data=data,
@@ -283,7 +299,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with file path and size, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "create_csv",
                 CreateCsvResponse,
                 data=data,
@@ -307,7 +323,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with extracted text, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "ocr_image",
                 OcrImageResponse,
                 file_path=file_path,
@@ -330,7 +346,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with stdout/stderr/return_value, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.run_id,
+                self.task_id,
                 "run_python",
                 RunPythonResponse,
                 code=code,

@@ -30,7 +30,7 @@ from h_arcane.core._internal.db.models import (
     Evaluation,
     Experiment,
     Message,
-    Resource,
+    ResourceRecord,
     Run,
     RunStatus,
     TaskEvaluationResult,
@@ -38,10 +38,14 @@ from h_arcane.core._internal.db.models import (
     ThreadMessage,
 )
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.utils import get_mime_type
 from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.benchmarks.gdpeval.loader import DATA_DIR, get_mime_type, load_gdpeval_tasks
-from h_arcane.benchmarks.minif2f.loader import download_minif2f, parse_lean_problems
-from h_arcane.benchmarks.minif2f.loader import DATA_DIR as MINIF2F_DATA_DIR
+from h_arcane.benchmarks.gdpeval.loader import get_data_dir, load_gdpeval_tasks
+from h_arcane.benchmarks.minif2f.loader import (
+    download_minif2f,
+    parse_lean_problems,
+    get_data_dir as get_minif2f_data_dir,
+)
 from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
 from h_arcane.benchmarks.researchrubrics.loader import get_ablated_dataset_name
 from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
@@ -165,7 +169,7 @@ def clean_db(db_engine):
             Action,
             AgentConfig,
             Message,
-            Resource,
+            ResourceRecord,
             Run,
             Experiment,
         ]
@@ -281,12 +285,12 @@ def _create_gdpeval_experiments(session: Session) -> list[DispatchedExperiment]:
         # Create Resource records for input files (critical for sandbox upload!)
         for ref_file in task.reference_files:
             try:
-                file_path_relative = ref_file.relative_to(DATA_DIR)
+                file_path_relative = ref_file.relative_to(get_data_dir())
                 file_path_str = str(file_path_relative)
             except ValueError:
                 file_path_str = str(ref_file.absolute())
 
-            resource = Resource(
+            resource = ResourceRecord(
                 experiment_id=experiment.id,
                 run_id=None,  # Input files don't belong to a run
                 name=ref_file.name,
@@ -309,7 +313,7 @@ def _create_gdpeval_experiments(session: Session) -> list[DispatchedExperiment]:
 
 def _create_minif2f_experiments(session: Session) -> list[DispatchedExperiment]:
     """Create MiniF2F experiments."""
-    minif2f_dir = download_minif2f(MINIF2F_DATA_DIR)
+    minif2f_dir = download_minif2f(get_minif2f_data_dir())
     problems = parse_lean_problems(minif2f_dir, limit=N_SAMPLES)
     dispatched = []
 

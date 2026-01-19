@@ -22,74 +22,84 @@ arcane_extension/
 │
 ├── h_arcane/                             # Python package (existing + new dashboard module)
 │   ├── __init__.py
-│   ├── task.py                           # PUBLIC: Task, Resource, TaskStatus
-│   ├── runner.py                         # PUBLIC: execute_task() - MODIFIED to emit events
-│   ├── worker.py                         # PUBLIC: BaseWorker protocol
 │   │
-│   ├── _internal/
+│   ├── dashboard/                        # EXISTING + NEW: Dashboard event emission
+│   │   ├── __init__.py                   # NEW
+│   │   ├── events.py                     # EXISTING: Event contracts (InngestEventContract)
+│   │   └── emitter.py                    # NEW: DashboardEmitter class
+│   │
+│   ├── core/                             # Core SDK module
+│   │   ├── __init__.py
+│   │   ├── task.py                       # PUBLIC: Task, Resource, TaskStatus
+│   │   ├── runner.py                     # PUBLIC: execute_task() - MODIFIED to emit events
+│   │   ├── worker.py                     # PUBLIC: BaseWorker protocol
 │   │   │
-│   │   ├── dashboard/                    # NEW: Dashboard event emission
-│   │   │   ├── __init__.py
-│   │   │   ├── events.py                 # Event constants + payload dataclasses
-│   │   │   └── emitter.py                # DashboardEmitter class
-│   │   │
-│   │   ├── task/
-│   │   │   ├── __init__.py
-│   │   │   ├── events.py                 # Existing task events
-│   │   │   ├── registry.py               # TaskRegistry
-│   │   │   ├── propagation.py            # MODIFIED: emit dashboard events
-│   │   │   └── persistence.py            # MODIFIED: emit resource events
-│   │   │
-│   │   ├── inngest/
-│   │   │   ├── __init__.py
-│   │   │   ├── client.py
-│   │   │   ├── task_functions.py         # MODIFIED: emit task status events
-│   │   │   ├── eval_functions.py
-│   │   │   └── workflow_functions.py     # MODIFIED: emit workflow events
-│   │   │
-│   │   ├── infrastructure/
-│   │   │   ├── __init__.py
-│   │   │   ├── sandbox.py                # MODIFIED: emit sandbox events
-│   │   │   └── inngest_client.py
-│   │   │
-│   │   ├── agents/
-│   │   │   ├── __init__.py
-│   │   │   ├── registry.py
-│   │   │   └── base.py                   # MODIFIED: emit action events from workers
-│   │   │
-│   │   ├── db/
-│   │   │   ├── __init__.py
-│   │   │   ├── connection.py
-│   │   │   ├── models.py
-│   │   │   └── queries.py
-│   │   │
-│   │   ├── evaluation/
-│   │   │   └── ... (unchanged)
-│   │   │
-│   │   └── communication/
-│   │       └── ... (unchanged)
+│   │   └── _internal/
+│   │       │
+│   │       ├── task/
+│   │       │   ├── __init__.py
+│   │       │   ├── events.py             # Existing task events
+│   │       │   ├── registry.py           # TaskRegistry
+│   │       │   ├── propagation.py        # MODIFIED: emit dashboard events
+│   │       │   ├── persistence.py        # Existing persistence logic
+│   │       │   └── inngest_functions/    # Inngest function handlers
+│   │       │       ├── __init__.py
+│   │       │       ├── workflow_start.py     # MODIFIED: emit workflow events
+│   │       │       ├── workflow_complete.py  # MODIFIED: emit workflow events
+│   │       │       ├── workflow_failed.py    # MODIFIED: emit workflow events
+│   │       │       ├── task_execute.py       # MODIFIED: emit task status events
+│   │       │       ├── task_propagate.py     # MODIFIED: emit task status events
+│   │       │       ├── worker_execute.py     # MODIFIED: emit action events
+│   │       │       ├── persist_outputs.py    # MODIFIED: emit resource events
+│   │       │       └── sandbox_setup.py      # Existing
+│   │       │
+│   │       ├── infrastructure/
+│   │       │   ├── __init__.py
+│   │       │   ├── sandbox.py            # MODIFIED: emit sandbox events
+│   │       │   └── inngest_client.py
+│   │       │
+│   │       ├── agents/
+│   │       │   ├── __init__.py
+│   │       │   ├── registry.py
+│   │       │   └── base.py               # BaseToolkit, BaseStakeholder protocols
+│   │       │
+│   │       ├── db/
+│   │       │   ├── __init__.py
+│   │       │   ├── connection.py
+│   │       │   ├── models.py
+│   │       │   └── queries.py
+│   │       │
+│   │       ├── evaluation/
+│   │       │   └── ... (unchanged)
+│   │       │
+│   │       └── communication/
+│   │           └── ... (unchanged)
 │   │
 │   ├── benchmarks/
 │   │   ├── __init__.py
+│   │   ├── enums.py                      # MODIFIED: add SMOKE_TEST enum
+│   │   ├── registry.py                   # MODIFIED: register smoke_test benchmark
 │   │   ├── smoke_test/                   # NEW: Fast smoke test benchmark
 │   │   │   ├── __init__.py
 │   │   │   ├── config.py                 # WorkerConfig for smoke test
 │   │   │   ├── toolkit.py                # SmokeTestToolkit with stub tools
 │   │   │   ├── stakeholder.py            # Simple mock stakeholder
+│   │   │   ├── sandbox.py                # DummySandboxManager (no real sandbox)
 │   │   │   ├── loader.py                 # Load smoke test experiments
 │   │   │   ├── factories.py              # Factory functions
 │   │   │   ├── stub_responses.py         # Pydantic response models
 │   │   │   └── cli.py                    # CLI to run smoke tests
 │   │   │
+│   │   ├── common/
+│   │   │   └── workers/
+│   │   │       ├── config.py
+│   │   │       └── react_worker.py       # Action extraction logic lives here
+│   │   │
 │   │   ├── gdpeval/
 │   │   ├── minif2f/
 │   │   └── researchrubrics/
 │   │
-│   ├── api/
-│   │   └── main.py                       # Existing FastAPI server
-│   │
-│   └── config/
-│       └── ... (unchanged)
+│   └── ... (other existing modules)
 │
 ├── arcane-dashboard/                     # NEW: Next.js diagnostic dashboard
 │   │
@@ -187,8 +197,9 @@ arcane_extension/
 | Area | Files Added/Modified |
 |------|---------------------|
 | **Python: Smoke Test Benchmark** | `h_arcane/benchmarks/smoke_test/` (new benchmark following existing pattern) |
-| **Python: Dashboard Module** | `h_arcane/_internal/dashboard/` (new directory with `events.py`, `emitter.py`) |
-| **Python: Event Emission Points** | Modify `tracing.py` to emit dashboard events after writing to PG |
+| **Python: Dashboard Module** | `h_arcane/dashboard/` (existing `events.py`, add `emitter.py` and `__init__.py`) |
+| **Python: Benchmark Registry** | Modify `h_arcane/benchmarks/enums.py` and `registry.py` to add SMOKE_TEST |
+| **Python: Event Emission Points** | Modify inngest functions in `h_arcane/core/_internal/task/inngest_functions/` |
 | **Next.js: Full App** | `arcane-dashboard/` (new directory - entire Next.js application) |
 | **Docker** | `docker-compose.yml` updated, `arcane-dashboard/Dockerfile` added |
 
@@ -265,7 +276,9 @@ class StubAnalyzeResponse(BaseModel):
 from uuid import UUID
 from agents import function_tool, Tool
 
-from h_arcane._internal.agents.base import BaseToolkit, BaseStakeholder
+from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
+from h_arcane.core.worker import QAExchange
 from h_arcane.benchmarks.smoke_test.stub_responses import (
     StubReadFileResponse,
     StubWriteFileResponse,
@@ -274,24 +287,37 @@ from h_arcane.benchmarks.smoke_test.stub_responses import (
 
 
 class SmokeTestToolkit(BaseToolkit):
-    """Fast toolkit with stub tools for smoke testing."""
+    """Fast toolkit with stub tools for smoke testing.
+    
+    Follows the same constructor signature as other toolkits (GDPEval, MiniF2F, etc.)
+    to ensure compatibility with the benchmark registry factory pattern.
+    """
 
     def __init__(
         self,
+        task_id: UUID,
         run_id: UUID,
         experiment_id: UUID,
         stakeholder: BaseStakeholder,
+        sandbox_manager: BaseSandboxManager,  # Required by registry pattern (DummySandboxManager)
         max_questions: int = 3,
     ):
+        self.task_id = task_id
         self.run_id = run_id
         self.experiment_id = experiment_id
         self.stakeholder = stakeholder
+        self.sandbox_manager = sandbox_manager  # Not used for smoke test, but required for pattern
         self.max_questions = max_questions
         self._questions_asked = 0
+        self._qa_history: list[QAExchange] = []
 
     @property
     def questions_asked(self) -> int:
         return self._questions_asked
+
+    def get_qa_history(self) -> list[QAExchange]:
+        """Return Q&A history for inclusion in WorkerResult."""
+        return self._qa_history
 
     def get_tools(self) -> list[Tool]:
         return [
@@ -302,10 +328,18 @@ class SmokeTestToolkit(BaseToolkit):
         ]
 
     async def ask_stakeholder(self, question: str) -> str:
+        """Ask the stakeholder a question directly."""
         if self._questions_asked >= self.max_questions:
             return f"[Maximum questions ({self.max_questions}) reached.]"
+        
+        # Get answer from stakeholder
+        answer = await self.stakeholder.answer(question)
+        
+        # Accumulate Q&A history for WorkerResult
+        self._qa_history.append(QAExchange(question=question, answer=answer))
+        
         self._questions_asked += 1
-        return await self.stakeholder.answer(question)
+        return answer
 
     def _read_file(self) -> Tool:
         @function_tool
@@ -393,8 +427,8 @@ class SmokeTestToolkit(BaseToolkit):
 ```python
 # h_arcane/benchmarks/smoke_test/stakeholder.py
 
-from h_arcane._internal.agents.base import BaseStakeholder
-from h_arcane._internal.communication.schemas import MessageResponse
+from h_arcane.core._internal.agents.base import BaseStakeholder
+from h_arcane.core._internal.communication.schemas import MessageResponse
 
 
 class MockStakeholder(BaseStakeholder):
@@ -434,8 +468,8 @@ class MockStakeholder(BaseStakeholder):
 """Load smoke test experiments into database."""
 
 from uuid import UUID
-from h_arcane._internal.db.models import Experiment
-from h_arcane._internal.db.queries import queries
+from h_arcane.core._internal.db.models import Experiment
+from h_arcane.core._internal.db.queries import queries
 from h_arcane.benchmarks.enums import BenchmarkName
 
 
@@ -481,7 +515,297 @@ class SmokeTestLoader:
         return experiment_ids
 ```
 
-### 0.6 CLI Entry Point
+### 0.6 BenchmarkName Enum Update
+
+Add `SMOKE_TEST` to the existing enum:
+
+```python
+# h_arcane/benchmarks/enums.py (MODIFY - add new enum value)
+
+"""Shared benchmark types."""
+
+from enum import Enum
+
+
+class BenchmarkName(str, Enum):
+    """Supported benchmark names."""
+
+    GDPEVAL = "gdpeval"
+    MINIF2F = "minif2f"
+    RESEARCHRUBRICS = "researchrubrics"
+    CUSTOM = "custom"  # For user-defined workflows
+    SMOKE_TEST = "smoke_test"  # NEW - for dashboard testing
+```
+
+### 0.7 DummySandboxManager
+
+The smoke test doesn't need a real E2B sandbox - tools return mock data immediately.
+However, we need a `BaseSandboxManager` implementation to satisfy the registry pattern:
+
+```python
+# h_arcane/benchmarks/smoke_test/sandbox.py
+
+"""Dummy sandbox manager for smoke testing (no real E2B sandbox)."""
+
+from pathlib import Path
+from uuid import UUID
+
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager, DownloadedFiles
+from h_arcane.core._internal.db.models import ResourceRecord
+
+
+class DummySandboxManager(BaseSandboxManager):
+    """
+    No-op sandbox manager for smoke testing.
+    
+    The smoke test uses stub tools that don't need a real sandbox.
+    This class satisfies the registry pattern interface.
+    """
+
+    async def create(self, task_id: UUID, skills_dir: Path | None = None) -> str:
+        """Return a fake sandbox ID (no real sandbox created)."""
+        return f"dummy-sandbox-{task_id}"
+
+    def get_sandbox(self, task_id: UUID):
+        """Return None (no real sandbox)."""
+        return None
+
+    async def upload_inputs(self, task_id: UUID, resources: list[ResourceRecord]) -> None:
+        """No-op (no sandbox to upload to)."""
+        pass
+
+    async def download_all_outputs(self, task_id: UUID, output_dir: Path) -> DownloadedFiles:
+        """Return empty list (smoke test doesn't produce real outputs)."""
+        return DownloadedFiles(files=[])
+
+    async def run_skill(self, task_id: UUID, skill_name: str, response_type, **kwargs):
+        """
+        Smoke test doesn't use sandbox skills - tools are stubbed inline.
+        
+        Raise error if called - toolkit should use stub tools directly.
+        """
+        raise NotImplementedError(
+            f"DummySandboxManager.run_skill() should not be called. "
+            f"Smoke test toolkit uses stub tools directly, not sandbox skills."
+        )
+
+    async def cleanup(self, task_id: UUID) -> None:
+        """No-op (nothing to clean up)."""
+        pass
+```
+
+### 0.8 Factory Functions
+
+Factory functions to create stakeholder and toolkit instances (following existing benchmark pattern):
+
+```python
+# h_arcane/benchmarks/smoke_test/factories.py
+
+"""Factory functions for smoke test benchmark."""
+
+from uuid import UUID
+
+from h_arcane.core._internal.db.models import Experiment
+from h_arcane.core._internal.agents.base import BaseStakeholder, BaseToolkit
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
+
+from h_arcane.benchmarks.smoke_test.stakeholder import MockStakeholder
+from h_arcane.benchmarks.smoke_test.toolkit import SmokeTestToolkit
+
+
+def create_stakeholder(experiment: Experiment) -> BaseStakeholder:
+    """
+    Create a stakeholder for smoke test.
+    
+    Args:
+        experiment: The experiment record (contains task context)
+        
+    Returns:
+        MockStakeholder instance
+    """
+    return MockStakeholder()
+
+
+def create_toolkit(
+    task_id: UUID,
+    run_id: UUID,
+    experiment_id: UUID,
+    stakeholder: BaseStakeholder,
+    sandbox_manager: BaseSandboxManager,
+    max_questions: int = 3,
+) -> BaseToolkit:
+    """
+    Create a toolkit for smoke test.
+    
+    Args:
+        task_id: The task ID
+        run_id: The run ID  
+        experiment_id: The experiment ID
+        stakeholder: The stakeholder instance
+        sandbox_manager: The sandbox manager (DummySandboxManager)
+        max_questions: Maximum questions allowed
+        
+    Returns:
+        SmokeTestToolkit instance
+    """
+    return SmokeTestToolkit(
+        task_id=task_id,
+        run_id=run_id,
+        experiment_id=experiment_id,
+        stakeholder=stakeholder,
+        sandbox_manager=sandbox_manager,
+        max_questions=max_questions,
+    )
+```
+
+### 0.9 Registry Registration
+
+Register the smoke test benchmark in the central registry:
+
+```python
+# h_arcane/benchmarks/registry.py (MODIFY - add smoke_test registration)
+
+"""Benchmark registry for config, loader, factories, and evaluator lookup."""
+
+from pathlib import Path
+from typing import Callable, TypedDict
+
+from h_arcane.benchmarks.enums import BenchmarkName
+from h_arcane.benchmarks.common.workers.config import WorkerConfig
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
+
+# === Existing imports ===
+from h_arcane.benchmarks.gdpeval.config import GDPEVAL_CONFIG
+from h_arcane.benchmarks.gdpeval.loader import load_gdpeval_to_database
+from h_arcane.benchmarks.gdpeval.factories import (
+    create_stakeholder as gdpeval_create_stakeholder,
+    create_toolkit as gdpeval_create_toolkit,
+)
+from h_arcane.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
+
+from h_arcane.benchmarks.minif2f.config import MINIF2F_CONFIG
+from h_arcane.benchmarks.minif2f.loader import load_minif2f_to_database
+from h_arcane.benchmarks.minif2f.factories import (
+    create_stakeholder as minif2f_create_stakeholder,
+    create_toolkit as minif2f_create_toolkit,
+)
+from h_arcane.benchmarks.minif2f.sandbox import MiniF2FSandboxManager
+
+from h_arcane.benchmarks.researchrubrics.config import RESEARCHRUBRICS_CONFIG
+from h_arcane.benchmarks.researchrubrics.loader import load_researchrubrics_to_database
+from h_arcane.benchmarks.researchrubrics.factories import (
+    create_stakeholder as researchrubrics_create_stakeholder,
+    create_toolkit as researchrubrics_create_toolkit,
+)
+from h_arcane.benchmarks.researchrubrics.sandbox import ResearchRubricsSandboxManager
+
+# === NEW: Smoke test imports ===
+from h_arcane.benchmarks.smoke_test.config import SMOKE_TEST_CONFIG
+from h_arcane.benchmarks.smoke_test.loader import load_smoke_test_to_database
+from h_arcane.benchmarks.smoke_test.factories import (
+    create_stakeholder as smoke_test_create_stakeholder,
+    create_toolkit as smoke_test_create_toolkit,
+)
+from h_arcane.benchmarks.smoke_test.sandbox import DummySandboxManager
+
+
+# ... (BenchmarkConfig TypedDict remains the same) ...
+
+_BENCHMARKS_DIR = Path(__file__).parent
+
+
+BENCHMARK_CONFIGS: dict[BenchmarkName, BenchmarkConfig] = {
+    # === Existing benchmarks ===
+    BenchmarkName.GDPEVAL: {
+        "config": GDPEVAL_CONFIG,
+        "skills_dir": _BENCHMARKS_DIR / "gdpeval" / "skills",
+        "loader": load_gdpeval_to_database,
+        "stakeholder_factory": gdpeval_create_stakeholder,
+        "toolkit_factory": gdpeval_create_toolkit,
+        "sandbox_manager_class": GDPEvalSandboxManager,
+    },
+    BenchmarkName.MINIF2F: {
+        "config": MINIF2F_CONFIG,
+        "skills_dir": _BENCHMARKS_DIR / "minif2f" / "skills",
+        "loader": load_minif2f_to_database,
+        "stakeholder_factory": minif2f_create_stakeholder,
+        "toolkit_factory": minif2f_create_toolkit,
+        "sandbox_manager_class": MiniF2FSandboxManager,
+    },
+    BenchmarkName.RESEARCHRUBRICS: {
+        "config": RESEARCHRUBRICS_CONFIG,
+        "skills_dir": _BENCHMARKS_DIR / "researchrubrics" / "skills",
+        "loader": load_researchrubrics_to_database,
+        "stakeholder_factory": researchrubrics_create_stakeholder,
+        "toolkit_factory": researchrubrics_create_toolkit,
+        "sandbox_manager_class": ResearchRubricsSandboxManager,
+    },
+    # === NEW: Smoke test benchmark ===
+    BenchmarkName.SMOKE_TEST: {
+        "config": SMOKE_TEST_CONFIG,
+        "skills_dir": None,  # Smoke test doesn't use sandbox skills
+        "loader": load_smoke_test_to_database,
+        "stakeholder_factory": smoke_test_create_stakeholder,
+        "toolkit_factory": smoke_test_create_toolkit,
+        "sandbox_manager_class": DummySandboxManager,
+    },
+}
+
+# ... (getter functions remain the same) ...
+```
+
+### 0.10 WorkerConfig for Smoke Test
+
+```python
+# h_arcane/benchmarks/smoke_test/config.py
+
+"""Worker configuration for smoke test benchmark."""
+
+from h_arcane.benchmarks.common.workers.config import WorkerConfig
+
+
+SMOKE_TEST_CONFIG = WorkerConfig(
+    name="smoke_test_worker",
+    system_prompt="""You are a test worker for the h_arcane smoke test benchmark.
+
+Your goal is to demonstrate the workflow system by:
+1. Reading any input files provided
+2. Asking clarifying questions if needed
+3. Analyzing data when relevant
+4. Producing output files
+
+This is a test environment - tools return mock data for fast execution.
+Focus on exercising the workflow correctly rather than producing real outputs.""",
+)
+```
+
+### 0.11 Loader Function for Registry
+
+The registry expects a `loader` function. Add this wrapper:
+
+```python
+# h_arcane/benchmarks/smoke_test/loader.py (ADD to existing file)
+
+# Add this function at the end of the file:
+
+def load_smoke_test_to_database(limit: int | None = None) -> list[UUID]:
+    """
+    Load smoke test tasks to database.
+    
+    This is the registry-compatible loader function.
+    
+    Args:
+        limit: Optional limit on number of tasks to load
+        
+    Returns:
+        List of created experiment IDs
+    """
+    loader = SmokeTestLoader()
+    tasks = loader.load_tasks(limit=limit)
+    return loader.load_to_database(tasks)
+```
+
+### 0.12 CLI Entry Point
 
 ```python
 # h_arcane/benchmarks/smoke_test/cli.py
@@ -507,7 +831,7 @@ def run(
 
 async def _run_task(task_id: str, model: str):
     from h_arcane.benchmarks.smoke_test.loader import SmokeTestLoader
-    from h_arcane._internal.infrastructure.inngest_client import inngest_client
+    from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
     
     console.print(f"[cyan]Running smoke test: {task_id}[/cyan]")
     
@@ -540,31 +864,7 @@ if __name__ == "__main__":
     app()
 ```
 
-### 0.7 Usage
-
-```bash
-# Run a simple smoke test
-python -m h_arcane.benchmarks.smoke_test.cli run --task smoke_simple_001
-
-# Run with a specific model
-python -m h_arcane.benchmarks.smoke_test.cli run --task smoke_analysis_001 --model gpt-4o
-
-# Open dashboard to watch
-open http://localhost:3000
-```
-
-### 0.8 What This Validates
-
-| Component | Validated By |
-|-----------|-------------|
-| **Existing benchmark pattern** | Uses same toolkit/stakeholder/loader structure |
-| **OpenAI Agents SDK** | Uses `@function_tool`, `Agent`, `Runner.run()` |
-| **Action tracing** | Existing `log_actions_from_result()` records to PG |
-| **Inngest orchestration** | Same `run/start` event as other benchmarks |
-| **Dashboard events** | Events emitted at same points as production |
-| **Fast execution** | Stub tools return immediately (no E2B, no real LLM for tools) |
-
-### 0.5 Test Workflows
+### 0.13 Test Workflows
 
 ```python
 # h_arcane/benchmarks/smoke_test/workflows.py
@@ -580,12 +880,13 @@ Each workflow exercises different DAG patterns:
 """
 
 from h_arcane import Task, Resource
-from h_arcane.benchmarks.smoke_test.dummy_worker import DummyWorker
+from h_arcane.benchmarks.common.workers.react_worker import ReActWorker
+from h_arcane.benchmarks.smoke_test.config import SMOKE_TEST_CONFIG
 
 
 def create_single_task_workflow() -> Task:
     """Simplest case: one task, one worker."""
-    worker = DummyWorker(name="single_worker", execution_delay_ms=50)
+    worker = ReActWorker(model="gpt-4o-mini", config=SMOKE_TEST_CONFIG)
     
     return Task(
         name="Simple Analysis",
@@ -599,7 +900,7 @@ def create_single_task_workflow() -> Task:
 
 def create_linear_chain_workflow() -> Task:
     """Linear dependency: A → B → C"""
-    worker = DummyWorker(name="chain_worker", execution_delay_ms=50)
+    worker = ReActWorker(model="gpt-4o-mini", config=SMOKE_TEST_CONFIG)
     
     task_a = Task(
         name="Gather Data",
@@ -632,8 +933,8 @@ def create_linear_chain_workflow() -> Task:
 
 def create_parallel_workflow() -> Task:
     """Parallel tasks that converge: A → [B, C] → D"""
-    analyst = DummyWorker(name="analyst", execution_delay_ms=75)
-    writer = DummyWorker(name="writer", execution_delay_ms=50)
+    analyst = ReActWorker(model="gpt-4o-mini", config=SMOKE_TEST_CONFIG)
+    writer = ReActWorker(model="gpt-4o-mini", config=SMOKE_TEST_CONFIG)
     
     gather = Task(
         name="Gather Requirements",
@@ -683,8 +984,8 @@ def create_nested_hierarchy_workflow() -> Task:
         ├── Statistical Analysis (L3)
         └── Write Findings (L3)
     """
-    researcher = DummyWorker(name="researcher", execution_delay_ms=60)
-    analyst = DummyWorker(name="analyst", execution_delay_ms=80)
+    researcher = ReActWorker(model="gpt-4o-mini", config=SMOKE_TEST_CONFIG)
+    analyst = ReActWorker(model="gpt-4o-mini", config=SMOKE_TEST_CONFIG)
     
     # L3 tasks under Research Phase
     lit_review = Task(
@@ -750,10 +1051,12 @@ SMOKE_TEST_WORKFLOWS = {
 }
 ```
 
-### 0.6 CLI Entry Point
+### 0.14 CLI Entry Point (Workflow-based)
+
+This CLI focuses on running pre-defined workflow patterns:
 
 ```python
-# h_arcane/benchmarks/smoke_test/cli.py
+# h_arcane/benchmarks/smoke_test/cli.py (alternative workflow-based CLI)
 
 """
 CLI for running smoke test workflows.
@@ -848,7 +1151,7 @@ if __name__ == "__main__":
     app()
 ```
 
-### 0.7 How to Use
+### 0.15 How to Use
 
 ```bash
 # 1. Start the infrastructure
@@ -867,10 +1170,11 @@ python -m h_arcane.benchmarks.smoke_test.cli run --all
 open http://localhost:3000
 ```
 
-### 0.8 What This Validates
+### 0.16 What This Validates
 
 | Component | Validated By |
 |-----------|-------------|
+| **Benchmark registry** | Smoke test registered correctly, factories work |
 | **Task schema** | Workflows create valid Task trees |
 | **DAG execution** | Dependencies resolve correctly |
 | **Event emission** | All dashboard events fire |
@@ -879,27 +1183,37 @@ open http://localhost:3000
 | **WebSocket** | Live updates reach frontend |
 | **DAG visualization** | Multiple hierarchy levels render |
 
-### 0.9 File Location Summary
+### 0.17 File Location Summary
 
 All smoke test code goes in `h_arcane/benchmarks/smoke_test/`:
 
 | File | Purpose | Section |
 |------|---------|---------|
 | `__init__.py` | Package init, exports | - |
+| `config.py` | `SMOKE_TEST_CONFIG` (WorkerConfig) | 0.10 |
 | `stub_responses.py` | Pydantic models for stub tool responses | 0.3 |
 | `toolkit.py` | `SmokeTestToolkit` with `@function_tool` stub tools | 0.3 |
 | `stakeholder.py` | `MockStakeholder` returning canned responses | 0.4 |
-| `loader.py` | `SmokeTestLoader` + `SMOKE_TEST_TASKS` definitions | 0.5 |
-| `workflows.py` | Pre-defined DAG patterns (single, linear, parallel, nested) | 0.5 |
-| `cli.py` | Typer CLI entry point (`list`, `run` commands) | 0.6 |
+| `sandbox.py` | `DummySandboxManager` (no-op sandbox) | 0.7 |
+| `loader.py` | `SmokeTestLoader` + `load_smoke_test_to_database()` | 0.5, 0.11 |
+| `factories.py` | `create_stakeholder()`, `create_toolkit()` | 0.8 |
+| `workflows.py` | Pre-defined DAG patterns (single, linear, parallel, nested) | 0.13 |
+| `cli.py` | Typer CLI entry point (`list`, `run` commands) | 0.12, 0.14 |
+
+**Files to modify:**
+
+| File | Modification | Section |
+|------|--------------|---------|
+| `h_arcane/benchmarks/enums.py` | Add `SMOKE_TEST = "smoke_test"` enum value | 0.6 |
+| `h_arcane/benchmarks/registry.py` | Add SMOKE_TEST to BENCHMARK_CONFIGS | 0.9 |
 
 **Also needed** (from Part 2):
 
 | File | Purpose |
 |------|---------|
-| `h_arcane/_internal/dashboard/__init__.py` | Package init |
-| `h_arcane/_internal/dashboard/events.py` | `DashboardEvents` constants + payload dataclasses |
-| `h_arcane/_internal/dashboard/emitter.py` | `DashboardEmitter` class wrapping Inngest sends |
+| `h_arcane/dashboard/__init__.py` | Package init |
+| `h_arcane/dashboard/events.py` | **ALREADY EXISTS** - event contracts |
+| `h_arcane/dashboard/emitter.py` | `DashboardEmitter` class wrapping Inngest sends |
 
 ---
 
@@ -978,179 +1292,135 @@ We need to emit events for the dashboard to build a complete picture:
 
 ### 2.2 Event Schemas
 
+**NOTE: These event contracts ALREADY EXIST in `h_arcane/dashboard/events.py`.**
+
+The existing file uses the `InngestEventContract` pattern. Here are the events already defined:
+
 ```python
-# h_arcane/_internal/dashboard/events.py
+# h_arcane/dashboard/events.py (ALREADY EXISTS)
 
+"""Dashboard event contracts following InngestEventContract pattern.
+
+These events are consumed by the Next.js dashboard for real-time visualization.
+They are separate from orchestration events (task/*, workflow/*) to avoid interference.
+
+All events use the "dashboard/" prefix.
 """
-Events emitted for dashboard consumption.
 
-These events are subscribed to by the Next.js dashboard app.
-All events include run_id for correlation.
-"""
-
-from dataclasses import dataclass
-from datetime import datetime
-from uuid import UUID
-from typing import Any
+from typing import ClassVar
+from h_arcane.core._internal.events.base import InngestEventContract
 
 
-# === Event Names (constants for Inngest) ===
-
-class DashboardEvents:
-    """Events the dashboard subscribes to."""
+# Workflow Lifecycle Events
+class DashboardWorkflowStartedEvent(InngestEventContract):
+    """Emitted when execute_task() is called - for dashboard visualization."""
+    name: ClassVar[str] = "dashboard/workflow.started"
     
-    # Workflow lifecycle
-    WORKFLOW_STARTED = "dashboard/workflow.started"
-    WORKFLOW_COMPLETED = "dashboard/workflow.completed"
-    WORKFLOW_FAILED = "dashboard/workflow.failed"
-    
-    # Task lifecycle
-    TASK_STATUS_CHANGED = "dashboard/task.status_changed"
-    TASK_ASSIGNED = "dashboard/task.assigned"
-    
-    # Agent actions (high-frequency)
-    AGENT_ACTION_STARTED = "dashboard/agent.action_started"
-    AGENT_ACTION_COMPLETED = "dashboard/agent.action_completed"
-    AGENT_THINKING = "dashboard/agent.thinking"  # For streaming thought process
-    
-    # Resources
-    RESOURCE_LOADED = "dashboard/resource.loaded"
-    RESOURCE_PUBLISHED = "dashboard/resource.published"
-    
-    # Sandbox (optional - for E2B integration)
-    SANDBOX_CREATED = "dashboard/sandbox.created"
-    SANDBOX_COMMAND = "dashboard/sandbox.command"
-    SANDBOX_CLOSED = "dashboard/sandbox.closed"
-
-
-# === Event Payloads ===
-
-@dataclass
-class WorkflowStartedPayload:
-    """Emitted when execute_task() is called."""
     run_id: str
     experiment_id: str
     workflow_name: str
-    task_tree: dict  # Full DAG structure for rendering
-    started_at: str  # ISO format
-    
-    # Metadata for display
+    task_tree: dict
+    started_at: str
     total_tasks: int
     total_leaf_tasks: int
 
 
-@dataclass
-class WorkflowCompletedPayload:
+class DashboardWorkflowCompletedEvent(InngestEventContract):
+    """Emitted when workflow finishes - for dashboard visualization."""
+    name: ClassVar[str] = "dashboard/workflow.completed"
+    
     run_id: str
     status: str  # "completed" | "failed"
     completed_at: str
     duration_seconds: float
-    final_score: float | None
-    error: str | None
+    final_score: float | None = None
+    error: str | None = None
 
 
-@dataclass  
-class TaskStatusChangedPayload:
+# Task Lifecycle Events
+class DashboardTaskStatusChangedEvent(InngestEventContract):
     """Emitted on any task status transition."""
+    name: ClassVar[str] = "dashboard/task.status_changed"
+    
     run_id: str
     task_id: str
     task_name: str
-    parent_task_id: str | None  # For DAG hierarchy
-    
-    old_status: str | None
-    new_status: str  # pending | ready | running | completed | failed
-    
-    # Context
-    triggered_by: str | None  # "dependency_satisfied", "worker_started", etc.
+    parent_task_id: str | None = None
+    old_status: str | None = None
+    new_status: str
+    triggered_by: str | None = None
     timestamp: str
+    assigned_worker_id: str | None = None
+    assigned_worker_name: str | None = None
+
+
+# Agent Action Events
+class DashboardAgentActionStartedEvent(InngestEventContract):
+    """Emitted when an agent begins a tool call."""
+    name: ClassVar[str] = "dashboard/agent.action_started"
     
-    # For running tasks
-    assigned_worker_id: str | None
-    assigned_worker_name: str | None
-
-
-@dataclass
-class TaskAssignedPayload:
-    """Emitted when a worker is assigned to execute a task."""
-    run_id: str
-    task_id: str
-    task_name: str
-    worker_id: str
-    worker_name: str
-    worker_model: str
-    timestamp: str
-
-
-@dataclass
-class AgentActionStartedPayload:
-    """Emitted when an agent begins an action (tool call)."""
     run_id: str
     task_id: str
     action_id: str
     worker_id: str
     worker_name: str
-    
-    action_type: str  # Tool name or "thinking"
-    action_input: dict | str  # Tool arguments or prompt
-    timestamp: str
-
-
-@dataclass
-class AgentActionCompletedPayload:
-    """Emitted when an agent completes an action."""
-    run_id: str
-    task_id: str
-    action_id: str
-    worker_id: str
-    
     action_type: str
-    action_output: dict | str | None
+    action_input: str  # JSON string
+    timestamp: str
+
+
+class DashboardAgentActionCompletedEvent(InngestEventContract):
+    """Emitted when an agent completes a tool call."""
+    name: ClassVar[str] = "dashboard/agent.action_completed"
+    
+    run_id: str
+    task_id: str
+    action_id: str
+    worker_id: str
+    action_type: str
+    action_output: str | None = None  # JSON string
     duration_ms: int
     success: bool
-    error: str | None
+    error: str | None = None
     timestamp: str
 
 
-@dataclass
-class AgentThinkingPayload:
-    """Emitted for streaming agent reasoning (if model supports it)."""
-    run_id: str
-    task_id: str
-    worker_id: str
-    
-    content: str  # Partial thinking content
-    is_complete: bool
-    timestamp: str
-
-
-@dataclass
-class ResourcePublishedPayload:
+# Resource Events
+class DashboardResourcePublishedEvent(InngestEventContract):
     """Emitted when a task produces an output resource."""
+    name: ClassVar[str] = "dashboard/resource.published"
+    
     run_id: str
     task_id: str
     task_execution_id: str
-    
     resource_id: str
     resource_name: str
     mime_type: str
     size_bytes: int
-    preview_text: str | None  # First N chars for text files
-    file_path: str  # Path in sandbox
+    preview_text: str | None = None
+    file_path: str
     timestamp: str
+```
 
+**Sandbox events can be added to the same file if needed:**
 
-@dataclass
-class SandboxCreatedPayload:
+```python
+# Add these to h_arcane/dashboard/events.py if sandbox visibility is desired
+
+class DashboardSandboxCreatedEvent(InngestEventContract):
     """Emitted when an E2B sandbox is created for a run."""
+    name: ClassVar[str] = "dashboard/sandbox.created"
+    
     run_id: str
     sandbox_id: str
     template_id: str
     created_at: str
 
 
-@dataclass
-class SandboxCommandPayload:
+class DashboardSandboxCommandEvent(InngestEventContract):
     """Emitted when a command runs in the sandbox."""
+    name: ClassVar[str] = "dashboard/sandbox.command"
+    
     run_id: str
     sandbox_id: str
     command: str
@@ -1163,31 +1433,38 @@ class SandboxCommandPayload:
 
 ### 2.3 Emitting Events from Python
 
-Add emission points throughout the execution flow:
+Add emission points throughout the execution flow. The emitter uses the **existing** event contracts
+defined in `h_arcane/dashboard/events.py` (which use the `InngestEventContract` pattern).
 
 ```python
-# h_arcane/_internal/dashboard/emitter.py
+# h_arcane/dashboard/emitter.py
 
 """
 Dashboard event emitter.
 
 Wraps Inngest event sending with dashboard-specific payloads.
+Uses the existing InngestEventContract classes from events.py.
 """
 
-from h_arcane._internal.inngest.client import inngest
-from h_arcane._internal.dashboard.events import (
-    DashboardEvents,
-    WorkflowStartedPayload,
-    TaskStatusChangedPayload,
-    AgentActionStartedPayload,
-    AgentActionCompletedPayload,
-    ResourcePublishedPayload,
+from datetime import datetime, timezone
+import inngest
+
+from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.dashboard.events import (
+    DashboardWorkflowStartedEvent,
+    DashboardWorkflowCompletedEvent,
+    DashboardTaskStatusChangedEvent,
+    DashboardAgentActionStartedEvent,
+    DashboardAgentActionCompletedEvent,
+    DashboardResourcePublishedEvent,
 )
 
 
 class DashboardEmitter:
     """
     Emits events for dashboard consumption.
+    
+    Uses the InngestEventContract pattern from h_arcane.dashboard.events.
     
     Usage:
         emitter = DashboardEmitter()
@@ -1209,17 +1486,40 @@ class DashboardEmitter:
         if not self._enabled:
             return
         
-        await inngest.send(
-            DashboardEvents.WORKFLOW_STARTED,
-            data=WorkflowStartedPayload(
-                run_id=run_id,
-                experiment_id=experiment_id,
-                workflow_name=workflow_name,
-                task_tree=task_tree,
-                started_at=datetime.now(timezone.utc).isoformat(),
-                total_tasks=total_tasks,
-                total_leaf_tasks=total_leaf_tasks,
-            ).__dict__
+        event = DashboardWorkflowStartedEvent(
+            run_id=run_id,
+            experiment_id=experiment_id,
+            workflow_name=workflow_name,
+            task_tree=task_tree,
+            started_at=datetime.now(timezone.utc).isoformat(),
+            total_tasks=total_tasks,
+            total_leaf_tasks=total_leaf_tasks,
+        )
+        await inngest_client.send(
+            inngest.Event(name=DashboardWorkflowStartedEvent.name, data=event.model_dump())
+        )
+    
+    async def workflow_completed(
+        self,
+        run_id: str,
+        status: str,
+        duration_seconds: float,
+        final_score: float | None = None,
+        error: str | None = None,
+    ) -> None:
+        if not self._enabled:
+            return
+        
+        event = DashboardWorkflowCompletedEvent(
+            run_id=run_id,
+            status=status,
+            completed_at=datetime.now(timezone.utc).isoformat(),
+            duration_seconds=duration_seconds,
+            final_score=final_score,
+            error=error,
+        )
+        await inngest_client.send(
+            inngest.Event(name=DashboardWorkflowCompletedEvent.name, data=event.model_dump())
         )
     
     async def task_status_changed(
@@ -1227,9 +1527,9 @@ class DashboardEmitter:
         run_id: str,
         task_id: str,
         task_name: str,
-        parent_task_id: str | None,
-        old_status: str | None,
         new_status: str,
+        parent_task_id: str | None = None,
+        old_status: str | None = None,
         triggered_by: str | None = None,
         assigned_worker_id: str | None = None,
         assigned_worker_name: str | None = None,
@@ -1237,20 +1537,20 @@ class DashboardEmitter:
         if not self._enabled:
             return
         
-        await inngest.send(
-            DashboardEvents.TASK_STATUS_CHANGED,
-            data=TaskStatusChangedPayload(
-                run_id=run_id,
-                task_id=task_id,
-                task_name=task_name,
-                parent_task_id=parent_task_id,
-                old_status=old_status,
-                new_status=new_status,
-                triggered_by=triggered_by,
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                assigned_worker_id=assigned_worker_id,
-                assigned_worker_name=assigned_worker_name,
-            ).__dict__
+        event = DashboardTaskStatusChangedEvent(
+            run_id=run_id,
+            task_id=task_id,
+            task_name=task_name,
+            parent_task_id=parent_task_id,
+            old_status=old_status,
+            new_status=new_status,
+            triggered_by=triggered_by,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            assigned_worker_id=assigned_worker_id,
+            assigned_worker_name=assigned_worker_name,
+        )
+        await inngest_client.send(
+            inngest.Event(name=DashboardTaskStatusChangedEvent.name, data=event.model_dump())
         )
     
     async def agent_action_started(
@@ -1261,23 +1561,23 @@ class DashboardEmitter:
         worker_id: str,
         worker_name: str,
         action_type: str,
-        action_input: dict | str,
+        action_input: str,  # JSON string
     ) -> None:
         if not self._enabled:
             return
         
-        await inngest.send(
-            DashboardEvents.AGENT_ACTION_STARTED,
-            data=AgentActionStartedPayload(
-                run_id=run_id,
-                task_id=task_id,
-                action_id=action_id,
-                worker_id=worker_id,
-                worker_name=worker_name,
-                action_type=action_type,
-                action_input=action_input,
-                timestamp=datetime.now(timezone.utc).isoformat(),
-            ).__dict__
+        event = DashboardAgentActionStartedEvent(
+            run_id=run_id,
+            task_id=task_id,
+            action_id=action_id,
+            worker_id=worker_id,
+            worker_name=worker_name,
+            action_type=action_type,
+            action_input=action_input,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        await inngest_client.send(
+            inngest.Event(name=DashboardAgentActionStartedEvent.name, data=event.model_dump())
         )
     
     async def agent_action_completed(
@@ -1287,28 +1587,28 @@ class DashboardEmitter:
         action_id: str,
         worker_id: str,
         action_type: str,
-        action_output: dict | str | None,
         duration_ms: int,
         success: bool,
+        action_output: str | None = None,  # JSON string
         error: str | None = None,
     ) -> None:
         if not self._enabled:
             return
         
-        await inngest.send(
-            DashboardEvents.AGENT_ACTION_COMPLETED,
-            data=AgentActionCompletedPayload(
-                run_id=run_id,
-                task_id=task_id,
-                action_id=action_id,
-                worker_id=worker_id,
-                action_type=action_type,
-                action_output=action_output,
-                duration_ms=duration_ms,
-                success=success,
-                error=error,
-                timestamp=datetime.now(timezone.utc).isoformat(),
-            ).__dict__
+        event = DashboardAgentActionCompletedEvent(
+            run_id=run_id,
+            task_id=task_id,
+            action_id=action_id,
+            worker_id=worker_id,
+            action_type=action_type,
+            action_output=action_output,
+            duration_ms=duration_ms,
+            success=success,
+            error=error,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        await inngest_client.send(
+            inngest.Event(name=DashboardAgentActionCompletedEvent.name, data=event.model_dump())
         )
     
     async def resource_published(
@@ -1326,20 +1626,20 @@ class DashboardEmitter:
         if not self._enabled:
             return
         
-        await inngest.send(
-            DashboardEvents.RESOURCE_PUBLISHED,
-            data=ResourcePublishedPayload(
-                run_id=run_id,
-                task_id=task_id,
-                task_execution_id=task_execution_id,
-                resource_id=resource_id,
-                resource_name=resource_name,
-                mime_type=mime_type,
-                size_bytes=size_bytes,
-                preview_text=preview_text,
-                file_path=file_path,
-                timestamp=datetime.now(timezone.utc).isoformat(),
-            ).__dict__
+        event = DashboardResourcePublishedEvent(
+            run_id=run_id,
+            task_id=task_id,
+            task_execution_id=task_execution_id,
+            resource_id=resource_id,
+            resource_name=resource_name,
+            mime_type=mime_type,
+            size_bytes=size_bytes,
+            preview_text=preview_text,
+            file_path=file_path,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        await inngest_client.send(
+            inngest.Event(name=DashboardResourcePublishedEvent.name, data=event.model_dump())
         )
 
 
@@ -1349,19 +1649,22 @@ dashboard_emitter = DashboardEmitter(enabled=True)
 
 ### 2.4 Integration Points in h_arcane
 
-Where to emit events in the existing codebase:
+Where to emit events in the existing codebase (using correct paths):
 
 | Location | Event(s) to Emit |
 |----------|------------------|
-| `runner.py` → `execute_task()` start | `WORKFLOW_STARTED` with full task_tree |
-| `_internal/inngest/task_functions.py` → task status changes | `TASK_STATUS_CHANGED` |
-| `_internal/inngest/task_functions.py` → task execution start | `TASK_ASSIGNED` |
-| Worker `execute()` → before tool call | `AGENT_ACTION_STARTED` |
-| Worker `execute()` → after tool call | `AGENT_ACTION_COMPLETED` |
-| Worker `execute()` → streaming callback | `AGENT_THINKING` |
-| `_internal/task/persistence.py` → resource created | `RESOURCE_PUBLISHED` |
-| `_internal/infrastructure/sandbox.py` → sandbox lifecycle | `SANDBOX_*` events |
-| `runner.py` → workflow completion | `WORKFLOW_COMPLETED` |
+| `h_arcane/core/runner.py` → `execute_task()` start | `dashboard/workflow.started` with full task_tree |
+| `h_arcane/core/_internal/task/inngest_functions/workflow_start.py` | `dashboard/workflow.started` |
+| `h_arcane/core/_internal/task/inngest_functions/workflow_complete.py` | `dashboard/workflow.completed` |
+| `h_arcane/core/_internal/task/inngest_functions/task_execute.py` | `dashboard/task.status_changed` |
+| `h_arcane/core/_internal/task/inngest_functions/task_propagate.py` | `dashboard/task.status_changed` |
+| `h_arcane/core/_internal/task/inngest_functions/worker_execute.py` | `dashboard/agent.action_*` events |
+| `h_arcane/core/_internal/task/inngest_functions/persist_outputs.py` | `dashboard/resource.published` |
+| `h_arcane/core/_internal/infrastructure/sandbox.py` | `dashboard/sandbox.*` events |
+
+**Note**: Action extraction logic lives in `h_arcane/benchmarks/common/workers/react_worker.py` 
+(the `_extract_actions_from_result()` method). Dashboard events for actions should be emitted 
+from `worker_execute.py` after actions are persisted to PostgreSQL.
 
 ### 2.5 File Location Summary (Part 2)
 
@@ -1369,19 +1672,27 @@ Where to emit events in the existing codebase:
 
 | File | Contents | Section |
 |------|----------|---------|
-| `h_arcane/_internal/dashboard/__init__.py` | Package init, re-exports | - |
-| `h_arcane/_internal/dashboard/events.py` | `DashboardEvents` class + payload dataclasses | 2.2 |
-| `h_arcane/_internal/dashboard/emitter.py` | `DashboardEmitter` class + global `dashboard_emitter` | 2.3 |
+| `h_arcane/dashboard/__init__.py` | Package init, re-exports | - |
+| `h_arcane/dashboard/emitter.py` | `DashboardEmitter` class + global `dashboard_emitter` | 2.3 |
+
+**Existing files (already exist, no changes needed to events.py):**
+
+| File | Status |
+|------|--------|
+| `h_arcane/dashboard/events.py` | **EXISTS** - already has event contracts |
 
 **Existing files to modify:**
 
 | File | Modification |
 |------|--------------|
-| `h_arcane/runner.py` | Add `dashboard_emitter.workflow_started()` and `workflow_completed()` calls |
-| `h_arcane/_internal/inngest/task_functions.py` | Add `dashboard_emitter.task_status_changed()` calls |
-| `h_arcane/_internal/task/persistence.py` | Add `dashboard_emitter.resource_published()` calls |
-| `h_arcane/_internal/infrastructure/sandbox.py` | Add `dashboard_emitter.sandbox_*()` calls |
-| `h_arcane/benchmarks/common/workers/tracing.py` | Add `dashboard_emitter.agent_action_*()` calls after PG writes |
+| `h_arcane/core/runner.py` | Add `dashboard_emitter.workflow_started()` call |
+| `h_arcane/core/_internal/task/inngest_functions/workflow_start.py` | Emit workflow started event |
+| `h_arcane/core/_internal/task/inngest_functions/workflow_complete.py` | Add `dashboard_emitter.workflow_completed()` call |
+| `h_arcane/core/_internal/task/inngest_functions/task_execute.py` | Add `dashboard_emitter.task_status_changed()` calls |
+| `h_arcane/core/_internal/task/inngest_functions/task_propagate.py` | Add `dashboard_emitter.task_status_changed()` calls |
+| `h_arcane/core/_internal/task/inngest_functions/worker_execute.py` | Add `dashboard_emitter.agent_action_*()` calls after action persistence |
+| `h_arcane/core/_internal/task/inngest_functions/persist_outputs.py` | Add `dashboard_emitter.resource_published()` calls |
+| `h_arcane/core/_internal/infrastructure/sandbox.py` | Add `dashboard_emitter.sandbox_*()` calls |
 
 ---
 
@@ -2342,9 +2653,9 @@ You already have [e2b_sandbox_inspector](https://github.com/cm2435/e2b_sandbox_i
 Add event emission in the sandbox wrapper:
 
 ```python
-# h_arcane/_internal/infrastructure/sandbox.py
+# h_arcane/core/_internal/infrastructure/sandbox.py
 
-from h_arcane._internal.dashboard.emitter import dashboard_emitter
+from h_arcane.dashboard.emitter import dashboard_emitter
 
 class SandboxWrapper:
     async def create(self, template_id: str, run_id: str) -> Sandbox:
@@ -2579,17 +2890,32 @@ module.exports = nextConfig;
 
 **Files to create:**
 - `h_arcane/benchmarks/smoke_test/__init__.py`
-- `h_arcane/benchmarks/smoke_test/dummy_worker.py`
-- `h_arcane/benchmarks/smoke_test/stub_tools.py`
-- `h_arcane/benchmarks/smoke_test/workflows.py`
-- `h_arcane/benchmarks/smoke_test/cli.py`
+- `h_arcane/benchmarks/smoke_test/config.py` (WorkerConfig)
+- `h_arcane/benchmarks/smoke_test/stub_responses.py` (Pydantic response models)
+- `h_arcane/benchmarks/smoke_test/toolkit.py` (SmokeTestToolkit with stub tools)
+- `h_arcane/benchmarks/smoke_test/stakeholder.py` (MockStakeholder)
+- `h_arcane/benchmarks/smoke_test/sandbox.py` (DummySandboxManager)
+- `h_arcane/benchmarks/smoke_test/loader.py` (SmokeTestLoader + load function)
+- `h_arcane/benchmarks/smoke_test/factories.py` (create_stakeholder, create_toolkit)
+- `h_arcane/benchmarks/smoke_test/workflows.py` (test workflow definitions)
+- `h_arcane/benchmarks/smoke_test/cli.py` (CLI entry point)
+
+**Files to modify:**
+- `h_arcane/benchmarks/enums.py` - Add `SMOKE_TEST = "smoke_test"`
+- `h_arcane/benchmarks/registry.py` - Register smoke_test in BENCHMARK_CONFIGS
 
 **Tasks:**
-- [ ] Implement `DummyWorker` class (implements `BaseWorker` protocol)
-- [ ] Implement stub tools (`stub_read_file`, `stub_write_file`, `stub_analyze_data`)
+- [ ] Add `SMOKE_TEST` to `BenchmarkName` enum
+- [ ] Create `SMOKE_TEST_CONFIG` (WorkerConfig)
+- [ ] Implement `DummySandboxManager` (no-op sandbox)
+- [ ] Implement `MockStakeholder` (canned responses)
+- [ ] Implement `SmokeTestToolkit` with stub tools (read_file, write_file, analyze_data)
+- [ ] Create `SmokeTestLoader` + `load_smoke_test_to_database()`
+- [ ] Create factory functions (create_stakeholder, create_toolkit)
+- [ ] Register smoke_test in benchmark registry
 - [ ] Create test workflows (single, linear, parallel, nested)
 - [ ] Create CLI with `list` and `run` commands
-- [ ] Test that `execute_task()` works with DummyWorker
+- [ ] Test that `execute_task()` works with smoke test
 - [ ] Verify workflows persist to PostgreSQL correctly
 - [ ] Verify task status transitions work
 
@@ -2600,19 +2926,21 @@ module.exports = nextConfig;
 **Goal:** Emit all necessary events from h_arcane
 
 **Files to create:**
-- `h_arcane/_internal/dashboard/__init__.py`
-- `h_arcane/_internal/dashboard/events.py` (event constants and payloads)
-- `h_arcane/_internal/dashboard/emitter.py` (DashboardEmitter class)
+- `h_arcane/dashboard/__init__.py`
+- `h_arcane/dashboard/events.py` (**ALREADY EXISTS** - event contracts)
+- `h_arcane/dashboard/emitter.py` (DashboardEmitter class)
 
 **Tasks:**
-- [ ] Define all event schemas
-- [ ] Create DashboardEmitter class
-- [ ] Add emission points in `runner.py` (workflow start/complete)
-- [ ] Add emission points in `_internal/inngest/task_functions.py` (task status)
-- [ ] Add emission points in worker execution (actions)
-- [ ] Add emission points in resource persistence
-- [ ] Add emission points in sandbox wrapper
-- [ ] Wire up DummyWorker to emit action events
+- [x] Define all event schemas (**DONE** - already exists in `h_arcane/dashboard/events.py`)
+- [ ] Create `h_arcane/dashboard/__init__.py` (package init)
+- [ ] Create DashboardEmitter class in `h_arcane/dashboard/emitter.py`
+- [ ] Add emission points in `h_arcane/core/runner.py` (workflow start/complete)
+- [ ] Add emission points in `h_arcane/core/_internal/task/inngest_functions/workflow_start.py`
+- [ ] Add emission points in `h_arcane/core/_internal/task/inngest_functions/workflow_complete.py`
+- [ ] Add emission points in `h_arcane/core/_internal/task/inngest_functions/task_execute.py` and `task_propagate.py` (task status)
+- [ ] Add emission points in `h_arcane/core/_internal/task/inngest_functions/worker_execute.py` (actions)
+- [ ] Add emission points in `h_arcane/core/_internal/task/inngest_functions/persist_outputs.py` (resources)
+- [ ] Add emission points in `h_arcane/core/_internal/infrastructure/sandbox.py` (sandbox lifecycle)
 - [ ] Test events appear in Inngest dev server
 
 **Exit criteria:** Run smoke test → events visible in Inngest dev server UI (http://localhost:8288).
@@ -2676,7 +3004,7 @@ module.exports = nextConfig;
 - [ ] `<ResourcePanel>` - Input/output resources
 - [ ] WebSocket integration for live updates
 
-**Exit criteria:** Click task node → see live action stream for DummyWorker.
+**Exit criteria:** Click task node → see live action stream for smoke test worker.
 
 ### Phase 6: E2B Integration (1 day)
 
@@ -2706,7 +3034,7 @@ module.exports = nextConfig;
 
 | Phase | Days | Deliverable |
 |-------|------|-------------|
-| **0: Smoke Test** | 1-2 | DummyWorker + test workflows + CLI |
+| **0: Smoke Test** | 1-2 | Smoke test benchmark + test workflows + CLI |
 | **1: Event Emission** | 1-2 | Dashboard events emitting from Python |
 | **2: Next.js Setup** | 1 | Dashboard container receiving events |
 | **3: State & WebSocket** | 1-2 | Event → Store → WebSocket pipeline |
@@ -2729,14 +3057,16 @@ The smoke test (and all benchmarks) use the **existing action recording infrastr
 │                        Action Data Flow                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  ReActWorker                                                                │
+│  ReActWorker._extract_actions_from_result()                                 │
+│      │  (in h_arcane/benchmarks/common/workers/react_worker.py)             │
 │      │                                                                      │
-│      │  1. Runner.run() executes agent                                      │
+│      │  1. Extracts actions from RunResult.new_items                        │
 │      ▼                                                                      │
-│  log_actions_from_result()  (existing in tracing.py)                        │
+│  worker_execute.py → persist actions                                        │
+│      │  (in h_arcane/core/_internal/task/inngest_functions/worker_execute.py)│
 │      │                                                                      │
-│      │  2. Extracts actions from RunResult                                  │
-│      │  3. Writes to PostgreSQL Action table                                │
+│      │  2. Writes to PostgreSQL Action table                                │
+│      │  3. After write, emit dashboard event  ← ADD THIS                    │
 │      ▼                                                                      │
 │  PostgreSQL (SSoT)                                                          │
 │      │                                                                      │
@@ -2753,7 +3083,8 @@ The smoke test (and all benchmarks) use the **existing action recording infrastr
 
 ### 8.2 What We Need to Add
 
-The existing `log_actions_from_result()` already writes to PostgreSQL. We just need to:
+The action extraction happens in `ReActWorker._extract_actions_from_result()` (react_worker.py),
+and persistence happens in `worker_execute.py` (lines 174-178). We just need to:
 
 1. **Emit dashboard events** after writing to PG (add calls to `dashboard_emitter`)
 2. **Dashboard reads from PG** for action history (SSoT)

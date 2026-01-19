@@ -40,7 +40,9 @@ class BenchmarkConfig(TypedDict):
     skills_dir: Path
     loader: Callable
     stakeholder_factory: Callable  # (Experiment) -> BaseStakeholder
-    toolkit_factory: Callable  # (run_id, experiment_id, stakeholder, sandbox, max_q) -> BaseToolkit
+    toolkit_factory: (
+        Callable  # (task_id, run_id, experiment_id, stakeholder, sandbox, max_q) -> BaseToolkit
+    )
     sandbox_manager_class: type[BaseSandboxManager]
     # NOTE: No rubric_evaluator - evaluation logic is on BaseRubric.compute_scores()
 
@@ -110,7 +112,7 @@ def get_stakeholder_factory(benchmark_name: BenchmarkName) -> Callable:
 
 
 def get_toolkit_factory(benchmark_name: BenchmarkName) -> Callable:
-    """Get factory function: (run_id, experiment_id, stakeholder, sandbox, max_q) -> BaseToolkit."""
+    """Get factory function: (task_id, run_id, experiment_id, stakeholder, sandbox, max_q) -> BaseToolkit."""
     return _get_config(benchmark_name)["toolkit_factory"]
 
 

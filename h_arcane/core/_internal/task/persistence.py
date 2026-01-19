@@ -556,7 +556,7 @@ def complete_task_execution(
         The updated TaskExecution record
     """
 
-    from h_arcane.core._internal.db.models import TaskStatus
+    from h_arcane.core.task import TaskStatus
 
     status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
 

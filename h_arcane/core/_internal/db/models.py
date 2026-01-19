@@ -12,6 +12,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from h_arcane.benchmarks.enums import BenchmarkName
+from h_arcane.core.status import TaskStatus
 
 
 # =============================================================================
@@ -167,6 +168,10 @@ class Run(SQLModel, table=True):
 
     # Benchmark-specific results (flexible JSON)
     benchmark_specific_results: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+    # Precomputed execution result (set by workflow_complete/workflow_failed)
+    # Serialized ExecutionResult - avoids re-querying on completion
+    execution_result: dict | None = Field(default=None, sa_column=Column(JSON))
 
     __table_args__ = (
         Index("ix_runs_experiment", "experiment_id"),
@@ -340,16 +345,6 @@ class AgentConfig(SQLModel, table=True):
 # =============================================================================
 # Task Execution Models (for DAG-based workflows)
 # =============================================================================
-
-
-class TaskStatus(str, Enum):
-    """Task execution status (for DAG workflows)."""
-
-    PENDING = "pending"  # Not ready (dependencies not met)
-    READY = "ready"  # Dependencies satisfied, waiting for execution
-    RUNNING = "running"  # Currently executing
-    COMPLETED = "completed"  # Successfully finished
-    FAILED = "failed"  # Execution failed
 
 
 class TaskExecution(SQLModel, table=True):

@@ -42,10 +42,10 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
     output_dir = settings.runs_dir / str(run_id) / "tasks" / str(task_id)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create sandbox
+    # Create sandbox (keyed by task_id)
     async def create_sandbox() -> SandboxReadyResult:
         sandbox_id = await sandbox_manager.create(
-            run_id,
+            task_id,
             skills_dir=skills_dir,
             timeout_minutes=30,
             envs=payload.envs,

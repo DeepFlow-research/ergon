@@ -18,9 +18,9 @@ class GDPEvalSandboxManager(BaseSandboxManager):
     - pytesseract: OCR support
     """
 
-    async def _install_dependencies(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         """Install Python packages for GDPEval code rules."""
-        logger.info(f"Installing GDPEval packages (run_id={run_id})...")
+        logger.info(f"Installing GDPEval packages (task_id={task_id})...")
 
         # E2B default has: numpy, pandas, matplotlib, sklearn, scipy, openpyxl, docx, seaborn, plotly
         # Need: pdfplumber, PyPDF2, reportlab, pytesseract
@@ -30,17 +30,17 @@ class GDPEvalSandboxManager(BaseSandboxManager):
         if pip_result.exit_code != 0:
             error_msg = (
                 f"Failed to install GDPEval packages (pdfplumber, PyPDF2, reportlab, pytesseract) "
-                f"for run_id={run_id}. Exit code: {pip_result.exit_code}. "
+                f"for task_id={task_id}. Exit code: {pip_result.exit_code}. "
                 f"Stderr: {pip_result.stderr if pip_result.stderr else 'N/A'}"
             )
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
-        logger.info(f"Successfully installed GDPEval packages (run_id={run_id})")
+        logger.info(f"Successfully installed GDPEval packages (task_id={task_id})")
 
-    async def _verify_setup(self, sandbox: AsyncSandbox, run_id: UUID) -> None:
+    async def _verify_setup(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         """Verify GDPEval packages are importable."""
-        logger.info(f"Verifying GDPEval package installation (run_id={run_id})...")
+        logger.info(f"Verifying GDPEval package installation (task_id={task_id})...")
 
         verify_code = """
 import sys
@@ -64,10 +64,10 @@ print("All GDPEval packages verified successfully")
                 stderr_parts = list(verify_result.logs.stderr)
                 stderr_text = "\n".join(stderr_parts) if stderr_parts else "N/A"
             error_msg = (
-                f"GDPEval package verification failed for run_id={run_id}. "
+                f"GDPEval package verification failed for task_id={task_id}. "
                 f"Error: {verify_result.error}, Stderr: {stderr_text}"
             )
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
-        logger.info(f"GDPEval package verification passed (run_id={run_id})")
+        logger.info(f"GDPEval package verification passed (task_id={task_id})")

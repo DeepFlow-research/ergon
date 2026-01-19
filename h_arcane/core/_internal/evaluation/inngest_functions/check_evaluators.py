@@ -7,7 +7,6 @@ This function runs evaluators bound to tasks when they complete.
 from __future__ import annotations
 
 from functools import partial
-from typing import cast
 from uuid import UUID
 
 import inngest
@@ -87,7 +86,7 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
     for evaluator in evaluators:
         try:
             rubric = deserialize_rubric(evaluator.evaluator_type, evaluator.evaluator_config)
-            valid_evaluators.append((evaluator.id, cast(AnyRubric, rubric)))
+            valid_evaluators.append((evaluator.id, rubric))
         except ValueError:
             failed_evaluator_ids.append(evaluator.id)
 

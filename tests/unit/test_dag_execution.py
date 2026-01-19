@@ -186,7 +186,7 @@ class TestExecuteTaskStructure:
 
         assert result.success is False
         assert result.status == TaskStatus.FAILED
-        assert "Invalid task tree" in result.error
+        assert result.error is not None and "Invalid task tree" in result.error
 
 
 # =============================================================================
@@ -284,7 +284,7 @@ class TestWaitForCompletion:
         )
 
         assert result.success is False
-        assert "timed out" in result.error.lower()
+        assert result.error is not None and "timed out" in result.error.lower()
 
     @pytest.mark.asyncio
     @patch("h_arcane.core.runner.queries")
@@ -304,7 +304,7 @@ class TestWaitForCompletion:
         )
 
         assert result.success is False
-        assert "not found" in result.error.lower()
+        assert result.error is not None and "not found" in result.error.lower()
 
 
 # =============================================================================

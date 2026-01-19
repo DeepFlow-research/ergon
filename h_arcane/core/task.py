@@ -17,27 +17,16 @@ Usage:
 from __future__ import annotations
 
 import mimetypes
-from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_serializer
 
-from h_arcane.core._internal.evaluation.serialization import serialize_rubric
+from h_arcane.core.status import TaskStatus
 
 if TYPE_CHECKING:
     from h_arcane.core.worker import BaseWorker
-
-
-class TaskStatus(str, Enum):
-    """Task execution status."""
-
-    PENDING = "pending"  # Not ready (dependencies not met)
-    READY = "ready"  # Dependencies satisfied, waiting for execution
-    RUNNING = "running"  # Currently executing
-    COMPLETED = "completed"  # Successfully finished
-    FAILED = "failed"  # Execution failed
 
 
 class Resource(BaseModel):
@@ -243,6 +232,9 @@ class Task(BaseModel):
         """Serialize evaluator to full config including type."""
         if evaluator is None:
             return None
+        # Lazy import to avoid circular dependency
+        from h_arcane.core._internal.evaluation.serialization import serialize_rubric
+
         evaluator_type, config = serialize_rubric(evaluator)
         return {"type": evaluator_type, **config}
 

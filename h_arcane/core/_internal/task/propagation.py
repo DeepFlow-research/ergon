@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from h_arcane.core._internal.db.models import TaskStatus
+from h_arcane.core.task import TaskStatus
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.task.schema import parse_task_tree
 
