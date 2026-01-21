@@ -130,7 +130,7 @@ class Run(SQLModel, table=True):
     __tablename__ = "runs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
+    experiment_id: UUID = Field(foreign_key="experiments.id")  # Index defined in __table_args__
 
     # Worker configuration
     worker_model: str = Field(default="gpt-4o")
@@ -153,10 +153,6 @@ class Run(SQLModel, table=True):
     output_resource_ids: list[str] = Field(
         default_factory=list, sa_column=Column(JSON)
     )  # UUIDs of output resources
-
-    # === NEW: Task states for DAG-based workflows ===
-    # Maps task_id (string) -> status (string) for all tasks in the DAG
-    task_states: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
     # Results (populated on completion)
     final_score: float | None = None
@@ -257,15 +253,17 @@ class ResourceRecord(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
 
     # Association: either experiment_id (input) or run_id (output)
-    experiment_id: UUID | None = Field(foreign_key="experiments.id", index=True, default=None)
-    run_id: UUID | None = Field(foreign_key="runs.id", index=True, default=None)
+    # Indexes defined in __table_args__
+    experiment_id: UUID | None = Field(foreign_key="experiments.id", default=None)
+    run_id: UUID | None = Field(foreign_key="runs.id", default=None)
 
     # === NEW: Task-level association for DAG workflows ===
     # Which task this resource belongs to (references task_id in task_tree)
-    task_id: UUID | None = Field(default=None, index=True)
+    task_id: UUID | None = Field(default=None)  # Index in __table_args__
     # Which task execution produced this output (for output resources)
     task_execution_id: UUID | None = Field(
-        foreign_key="task_executions.id", default=None, index=True
+        foreign_key="task_executions.id",
+        default=None,  # Index in __table_args__
     )
     # True for input resources, False for outputs
     is_input: bool = Field(default=False)
@@ -322,7 +320,7 @@ class AgentConfig(SQLModel, table=True):
     __tablename__ = "agent_configs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    run_id: UUID = Field(foreign_key="runs.id")  # Index in __table_args__
 
     # Agent identity
     worker_id: UUID | None = Field(default=None, index=True)  # Original worker UUID from SDK
@@ -358,16 +356,16 @@ class TaskExecution(SQLModel, table=True):
     __tablename__ = "task_executions"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    run_id: UUID = Field(foreign_key="runs.id")  # Index in __table_args__
 
     # References task in the task_tree JSON (not a foreign key)
-    task_id: UUID = Field(index=True)
+    task_id: UUID = Field()  # Index in __table_args__
 
     # Which agent executed this task
     agent_id: UUID | None = Field(foreign_key="agent_configs.id", default=None, index=True)
 
     # Status tracking
-    status: TaskStatus = Field(default=TaskStatus.PENDING, index=True)
+    status: TaskStatus = Field(default=TaskStatus.PENDING)  # Index in __table_args__
     attempt_number: int = Field(default=1)
 
     # Timing
@@ -419,7 +417,9 @@ class TaskStateEvent(SQLModel, table=True):
     )
 
     # State transition
-    event_type: str = Field(index=True)  # "status_change", "assigned", "retry", "error"
+    event_type: str = (
+        Field()
+    )  # "status_change", "assigned", "retry", "error" - Index in __table_args__
     old_status: str | None = None
     new_status: str
 
@@ -433,41 +433,6 @@ class TaskStateEvent(SQLModel, table=True):
         Index("ix_task_state_events_run_task", "run_id", "task_id"),
         Index("ix_task_state_events_timestamp", "timestamp"),
         Index("ix_task_state_events_type", "event_type"),
-    )
-
-
-class TaskDependency(SQLModel, table=True):
-    """
-    Materialized dependency edges for queryability.
-
-    Created when a Run starts (extracted from task_tree JSON).
-    Updated as tasks complete (is_satisfied = True).
-
-    Enables fast queries:
-    - "What's blocking task X?"
-    - "What tasks will unblock when X completes?"
-    """
-
-    __tablename__ = "task_dependencies"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
-
-    # The task that waits (depends on another)
-    dependent_task_id: UUID = Field(index=True)
-
-    # The task it waits for (the dependency)
-    dependency_task_id: UUID = Field(index=True)
-
-    # Satisfaction tracking
-    is_satisfied: bool = Field(default=False, index=True)
-    satisfied_at: datetime | None = None
-    satisfied_by_execution_id: UUID | None = Field(foreign_key="task_executions.id", default=None)
-
-    __table_args__ = (
-        Index("ix_task_deps_waiting", "run_id", "dependent_task_id"),
-        Index("ix_task_deps_blocking", "run_id", "dependency_task_id"),
-        Index("ix_task_deps_unsatisfied", "run_id", "is_satisfied"),
     )
 
 
@@ -492,7 +457,7 @@ class TaskEvaluator(SQLModel, table=True):
     evaluator_config: dict = Field(sa_column=Column(JSON))  # Serialized rubric
 
     # Status tracking
-    status: TaskStatus = Field(default=TaskStatus.PENDING, index=True)
+    status: TaskStatus = Field(default=TaskStatus.PENDING)  # Index defined in __table_args__
 
     # Results (populated after evaluation)
     score: float | None = None
@@ -534,7 +499,7 @@ class CriterionResult(SQLModel, table=True):
     __tablename__ = "criterion_results"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    run_id: UUID = Field(foreign_key="runs.id")  # Index in __table_args__
 
     # Stage context
     stage_num: int
@@ -595,7 +560,7 @@ class TaskEvaluationResult(SQLModel, table=True):
     __tablename__ = "task_evaluation_results"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True, unique=True)
+    run_id: UUID = Field(foreign_key="runs.id", unique=True)  # Index in __table_args__
 
     # Criterion results stored as JSON snapshot
     criterion_results: list[dict] = Field(
@@ -660,15 +625,15 @@ class ThreadMessage(SQLModel, table=True):
     __tablename__ = "thread_messages"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    thread_id: UUID = Field(foreign_key="threads.id", index=True)
+    thread_id: UUID = Field(foreign_key="threads.id", index=True)  # Also in composite index
 
-    # Context - denormalized for query convenience
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
-    experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
+    # Context - denormalized for query convenience (indexes in __table_args__)
+    run_id: UUID = Field(foreign_key="runs.id")
+    experiment_id: UUID = Field(foreign_key="experiments.id")
 
-    # Sender/Recipient (e.g. "{run_id}:worker", "{run_id}:stakeholder")
-    from_agent_id: str = Field(index=True)
-    to_agent_id: str = Field(index=True)
+    # Sender/Recipient - indexes in __table_args__
+    from_agent_id: str = Field()
+    to_agent_id: str = Field()
 
     # Content
     content: str

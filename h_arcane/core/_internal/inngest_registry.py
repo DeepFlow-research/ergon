@@ -20,8 +20,11 @@ from h_arcane.core._internal.evaluation.inngest_functions import (
 )
 from h_arcane.core._internal.infrastructure.inngest_functions import run_cleanup
 from h_arcane.core._internal.task.inngest_functions import (
+    persist_outputs_fn,
+    sandbox_setup_fn,
     task_execute,
     task_propagate,
+    worker_execute_fn,
     workflow_complete,
     workflow_failed,
     workflow_start,
@@ -35,6 +38,10 @@ ALL_FUNCTIONS: list[Function[Any]] = [
     task_propagate,
     workflow_complete,
     workflow_failed,
+    # Task execution child functions (invoked by task_execute)
+    sandbox_setup_fn,
+    worker_execute_fn,
+    persist_outputs_fn,
     # Task-level evaluation
     check_and_run_evaluators,
     # Criterion-level evaluation
@@ -52,6 +59,10 @@ __all__ = [
     "task_propagate",
     "workflow_complete",
     "workflow_failed",
+    # Task execution child functions
+    "sandbox_setup_fn",
+    "worker_execute_fn",
+    "persist_outputs_fn",
     # Task-level evaluation
     "check_and_run_evaluators",
     # Criterion-level evaluation

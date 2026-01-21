@@ -24,6 +24,8 @@ from h_arcane.core._internal.task.results import (
 )
 from h_arcane.core._internal.task.schema import parse_task_tree
 from h_arcane.core._internal.utils import require_not_none
+from h_arcane.core.status import TaskStatus, TaskTrigger
+from h_arcane.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -38,10 +40,13 @@ async def workflow_start(ctx: inngest.Context) -> WorkflowStartResult:
 
     This function:
     1. Loads experiment and parses task_tree (inlined)
-    2. Creates TaskDependency and TaskEvaluator records (combined)
+    2. Records initial PENDING state and creates TaskEvaluator records
     3. Marks run as EXECUTING
     4. Finds initial ready tasks
     5. Emits task/ready events
+
+    Note: Dependencies are stored in task_tree JSON (depends_on field) and
+    checked at runtime via TaskStateEvent.
     """
     payload = WorkflowStartedEvent.model_validate(ctx.event.data)
     run_id = UUID(payload.run_id)
@@ -53,21 +58,39 @@ async def workflow_start(ctx: inngest.Context) -> WorkflowStartResult:
         f"Experiment {experiment_id} not found",
     )
     tree = parse_task_tree(experiment.task_tree)
+    if tree is None:
+        raise ValueError(f"Experiment {experiment_id} has no task_tree")
 
-    # Combined: Create dependencies + evaluators
+    # Initialize task states and evaluators
     async def initialize_dag() -> DagInitResult:
-        dependency_count = 0
         evaluator_count = 0
 
         if tree is None:
             return DagInitResult(dependency_count=0, evaluator_count=0)
 
-        # Create TaskDependency records
-        str_deps = tree.extract_dependencies()
-        dependencies = [(UUID(dep), UUID(target)) for dep, target in str_deps]
-        if dependencies:
-            queries.task_dependencies.create_for_run(run_id, dependencies)
-        dependency_count = len(dependencies)
+        # Record initial PENDING state for all tasks (event sourcing)
+        # This ensures the event log is complete from workflow start
+        for task_node in tree.walk():
+            queries.task_state_events.record_state_change(
+                run_id=run_id,
+                task_id=UUID(task_node.id),
+                new_status="pending",
+                old_status=None,
+                triggered_by=TaskTrigger.WORKFLOW_STARTED.value,
+            )
+            # Emit dashboard event for initial pending state
+            await dashboard_emitter.task_status_changed(
+                run_id=run_id,
+                task_id=UUID(task_node.id),
+                task_name=task_node.name,
+                old_status=None,
+                new_status=TaskStatus.PENDING,
+                parent_task_id=task_node.parent_id,
+                triggered_by=TaskTrigger.WORKFLOW_STARTED,
+            )
+
+        # Count dependencies from task_tree (for logging/metrics only)
+        dependency_count = len(tree.extract_dependencies())
 
         # Create TaskEvaluator records
         for task_id_str, eval_ref in tree.extract_evaluators():
@@ -100,11 +123,39 @@ async def workflow_start(ctx: inngest.Context) -> WorkflowStartResult:
 
     await ctx.step.run("mark-executing", mark_run_executing)
 
+    # Emit dashboard workflow started event
+    async def emit_dashboard_workflow_started() -> None:
+        await dashboard_emitter.workflow_started(
+            run_id=run_id,
+            experiment_id=experiment_id,
+            workflow_name=tree.name,
+            task_tree=tree,
+            total_tasks=len(list(tree.walk())),
+            total_leaf_tasks=len(tree.get_leaf_ids()),
+        )
+
+    await ctx.step.run("emit-dashboard-workflow-started", emit_dashboard_workflow_started)
+
     # Find and mark initial ready tasks
     async def get_and_mark_initial_tasks() -> ReadyTaskIdsResult:
         ready_task_ids = get_initial_ready_tasks(run_id)
         for tid in ready_task_ids:
-            mark_task_ready(run_id, tid, triggered_by="workflow_started")
+            mark_task_ready(run_id, tid, triggered_by=TaskTrigger.WORKFLOW_STARTED)
+            # Emit dashboard event for ready state
+            # Get task name from tree
+            task_name = f"Task {tid}"
+            task_node = tree.find_by_id(str(tid))
+            if task_node:
+                task_name = task_node.name
+
+            await dashboard_emitter.task_status_changed(
+                run_id=run_id,
+                task_id=tid,
+                task_name=task_name,
+                old_status=TaskStatus.PENDING,
+                new_status=TaskStatus.READY,
+                triggered_by=TaskTrigger.WORKFLOW_STARTED,
+            )
         return ReadyTaskIdsResult(ready_task_ids=ready_task_ids)
 
     ready_result = await ctx.step.run(

@@ -188,7 +188,7 @@ class Task(BaseModel):
     parent_id: UUID | None = Field(default=None, exclude=True)
     status: TaskStatus = Field(default=TaskStatus.PENDING, exclude=True)
 
-    # Resolved dependency IDs (set by TaskRegistry during processing)
+    # Resolved dependency IDs (set by validate_task_dag() during processing)
     _resolved_dependency_ids: list[UUID] = []
 
     model_config = {"arbitrary_types_allowed": True}
@@ -269,6 +269,10 @@ class Task(BaseModel):
             descendants.append(child)
             descendants.extend(child.get_all_descendants())
         return descendants
+
+    def get_all_tasks(self) -> list["Task"]:
+        """Get all tasks in this subtree (self + all descendants)."""
+        return [self] + self.get_all_descendants()
 
     def get_leaf_descendants(self) -> list["Task"]:
         """Get all leaf (atomic) tasks in this subtree."""

@@ -3,11 +3,13 @@
 Handles task completion and propagates through DAG.
 """
 
+from datetime import datetime, timezone
 from functools import partial
 from uuid import UUID
 
 import inngest
 
+from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.task.events import (
     TaskCompletedEvent,
@@ -21,7 +23,10 @@ from h_arcane.core._internal.task.propagation import (
     on_task_completed,
 )
 from h_arcane.core._internal.task.results import ReadyTaskIdsResult, TaskPropagateResult
+from h_arcane.core._internal.task.schema import parse_task_tree
 from h_arcane.core._internal.utils import require_not_none
+from h_arcane.core.status import TaskStatus, TaskTrigger
+from h_arcane.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -46,6 +51,27 @@ async def task_propagate(ctx: inngest.Context) -> TaskPropagateResult:
     task_id = UUID(payload.task_id)
     execution_id = UUID(payload.execution_id)
 
+    # Load task tree for task names
+    run = queries.runs.get(run_id)
+    experiment = queries.experiments.get(experiment_id) if run else None
+    tree = parse_task_tree(experiment.task_tree) if experiment else None
+
+    def get_task_name(tid: UUID) -> str:
+        """Get task name from tree or return default."""
+        if tree:
+            task_node = tree.find_by_id(str(tid))
+            if task_node:
+                return task_node.name
+        return f"Task {tid}"
+
+    def get_parent_id(tid: UUID) -> str | None:
+        """Get parent task ID from tree."""
+        if tree:
+            task_node = tree.find_by_id(str(tid))
+            if task_node:
+                return task_node.parent_id
+        return None
+
     # Call propagation logic (DB writes, must be in step)
     async def propagate() -> ReadyTaskIdsResult:
         ready_tasks = on_task_completed(run_id, task_id, execution_id)
@@ -67,6 +93,16 @@ async def task_propagate(ctx: inngest.Context) -> TaskPropagateResult:
                 )
                 await inngest_client.send(
                     inngest.Event(name=TaskReadyEvent.name, data=event.model_dump())
+                )
+                # Emit dashboard task ready event
+                await dashboard_emitter.task_status_changed(
+                    run_id=run_id,
+                    task_id=tid,
+                    task_name=get_task_name(tid),
+                    old_status=TaskStatus.PENDING,
+                    new_status=TaskStatus.READY,
+                    parent_task_id=get_parent_id(tid),
+                    triggered_by=TaskTrigger.DEPENDENCY_SATISFIED,
                 )
 
             return partial(ctx.step.run, f"emit-ready-{tid}", emit_ready)
@@ -101,6 +137,17 @@ async def task_propagate(ctx: inngest.Context) -> TaskPropagateResult:
             await inngest_client.send(
                 inngest.Event(name=WorkflowFailedEvent.name, data=event.model_dump())
             )
+            # Emit dashboard workflow failed event
+            run = queries.runs.get(run_id)
+            if run:
+                started_at = run.started_at or run.created_at
+                duration_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
+                await dashboard_emitter.workflow_completed(
+                    run_id=run_id,
+                    status="failed",
+                    duration_seconds=duration_seconds,
+                    error="One or more tasks failed",
+                )
 
         await ctx.step.run("emit-workflow-failed", emit_workflow_failed)
 

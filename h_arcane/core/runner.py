@@ -36,7 +36,7 @@ from h_arcane.core._internal.task.persistence import (
     persist_agent_mapping,
     persist_workflow,
 )
-from h_arcane.core._internal.task.registry import TaskRegistry
+from h_arcane.core._internal.task.validation import validate_task_dag
 from h_arcane.core._internal.task.worker_context import store_workers_from_task
 from h_arcane.core.task import Resource, Task, TaskStatus
 
@@ -172,8 +172,8 @@ async def execute_task(
     started_at = datetime.now(timezone.utc)
 
     try:
-        # 1. Validate and process task tree (TaskRegistry)
-        registry = TaskRegistry(task)
+        # 1. Validate and process task tree
+        validate_task_dag(task)
 
         # 2. Store workers in context for later retrieval during execution
         # This allows worker_execute to get the worker instance by task_id
@@ -186,7 +186,6 @@ async def execute_task(
         # 4. Persist to database (Experiment, Run, Resources, AgentConfigs)
         experiment, run, resource_mapping = persist_workflow(
             task=task,
-            registry=registry,
             worker_model=worker_model,
             max_questions=max_questions,
             benchmark_name=benchmark_name,

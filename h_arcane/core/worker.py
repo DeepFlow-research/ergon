@@ -32,9 +32,10 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from h_arcane.core._internal.db.models import Action
+from h_arcane.core.task import Resource
 
 if TYPE_CHECKING:
-    from h_arcane.core.task import Resource, Task
+    from h_arcane.core.task import Task
 
 
 class NamedTool(Protocol):
@@ -133,7 +134,7 @@ class WorkerContext(BaseModel):
         default=None,
         description="E2B sandbox instance for code execution",
     )
-    input_resources: list["Resource"] = Field(
+    input_resources: list[Resource] = Field(
         default_factory=list,
         description="Input resources (files, data) available to the worker",
     )
@@ -143,7 +144,7 @@ class WorkerContext(BaseModel):
     )
 
     # For workers that need benchmark tools (e.g., ReActWorker)
-    #TODO: tighten type
+    # TODO: tighten type
     toolkit: Any = Field(
         default=None,
         description="Benchmark toolkit with tools and stakeholder access (BaseToolkit)",
@@ -178,7 +179,7 @@ class WorkerResult(BaseModel):
         default_factory=list,
         description="Ordered list of actions (tool calls) taken during execution",
     )
-    outputs: list["Resource"] = Field(
+    outputs: list[Resource] = Field(
         default_factory=list,
         description="Output resources (files) produced by the worker",
     )

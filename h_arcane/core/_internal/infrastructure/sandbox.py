@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from h_arcane.core._internal.db.models import ResourceRecord
 from h_arcane.core.settings import settings
+from h_arcane.dashboard import dashboard_emitter
 
 logger = getLogger(__name__)
 
@@ -260,6 +261,13 @@ if created:
             logger.info(
                 f"Uploaded skills from {skills_dir} to /skills/{package_name} (task_id={task_id})"
             )
+
+        # Emit dashboard sandbox created event
+        await dashboard_emitter.sandbox_created(
+            task_id=task_id,
+            sandbox_id=sandbox.sandbox_id,
+            timeout_minutes=timeout_minutes,
+        )
 
         return sandbox.sandbox_id
 
@@ -511,8 +519,13 @@ print("SKILL_SUCCESS")
             logger.warning(f"Failed to reset sandbox timeout for task_id={task_id}: {e}")
             return False
 
-    async def terminate(self, task_id: UUID) -> None:
-        """Terminate sandbox for a task (idempotent). Always clears registry even if kill() fails."""
+    async def terminate(self, task_id: UUID, reason: str = "completed") -> None:
+        """Terminate sandbox for a task (idempotent). Always clears registry even if kill() fails.
+
+        Args:
+            task_id: UUID of the task whose sandbox to terminate
+            reason: Why the sandbox is being terminated ("completed", "timeout", "error", "cleanup")
+        """
         # Use pop() to safely remove - returns None if not present
         sandbox = self._sandboxes.pop(task_id, None)
         if sandbox is None:
@@ -525,16 +538,25 @@ print("SKILL_SUCCESS")
             self._skills_packages.pop(task_id, None)
             return
 
+        sandbox_id = sandbox.sandbox_id
         try:
             await sandbox.kill()  # type: ignore[call-overload]
         except Exception as e:
             # Log but continue - we want to clear the reference even if kill fails
             print(f"Warning: Error killing sandbox for task_id={task_id}: {e}")
+            reason = "error"  # Update reason if kill failed
         finally:
             # Always clear registries to prevent reuse
             self._file_registries.pop(task_id, None)
             self._created_files_registry.pop(task_id, None)
             self._skills_packages.pop(task_id, None)
+
+            # Emit dashboard sandbox closed event
+            await dashboard_emitter.sandbox_closed(
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                reason=reason,
+            )
 
     @staticmethod
     async def terminate_by_sandbox_id(sandbox_id: str) -> bool:

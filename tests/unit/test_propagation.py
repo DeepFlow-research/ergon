@@ -22,12 +22,11 @@ from h_arcane.core._internal.task.schema import parse_task_tree
 # =============================================================================
 
 
-def make_run(run_id, experiment_id, task_states=None):
+def make_run(run_id, experiment_id):
     """Create a mock Run object."""
     run = MagicMock()
     run.id = run_id
     run.experiment_id = experiment_id
-    run.task_states = task_states or {}
     return run
 
 
@@ -275,33 +274,16 @@ class TestMarkTaskReady:
     """Tests for mark_task_ready()."""
 
     @patch("h_arcane.core._internal.task.propagation.queries")
-    def test_updates_task_state(self, mock_queries):
-        """mark_task_ready updates Run.task_states."""
+    def test_records_state_change_event(self, mock_queries):
+        """mark_task_ready records a TaskStateEvent via record_state_change."""
 
         run_id = uuid4()
         task_id = uuid4()
-        run = make_run(run_id, uuid4(), task_states={str(task_id): "pending"})
-        mock_queries.runs.get.return_value = run
-
-        mark_task_ready(run_id, task_id, triggered_by="test")
-
-        # Should update task_states
-        assert run.task_states[str(task_id)] == "ready"
-        mock_queries.runs.update.assert_called_once_with(run)
-
-    @patch("h_arcane.core._internal.task.propagation.queries")
-    def test_records_state_event(self, mock_queries):
-        """mark_task_ready records a TaskStateEvent."""
-
-        run_id = uuid4()
-        task_id = uuid4()
-        run = make_run(run_id, uuid4(), task_states={})
-        mock_queries.runs.get.return_value = run
 
         mark_task_ready(run_id, task_id, triggered_by="dependency_satisfied")
 
-        mock_queries.task_state_events.record.assert_called_once()
-        call_kwargs = mock_queries.task_state_events.record.call_args.kwargs
+        mock_queries.task_state_events.record_state_change.assert_called_once()
+        call_kwargs = mock_queries.task_state_events.record_state_change.call_args.kwargs
         assert call_kwargs["run_id"] == run_id
         assert call_kwargs["task_id"] == task_id
         assert call_kwargs["new_status"] == "ready"
@@ -317,12 +299,10 @@ class TestMarkTaskFailed:
 
         run_id = uuid4()
         task_id = uuid4()
-        run = make_run(run_id, uuid4(), task_states={})
-        mock_queries.runs.get.return_value = run
 
         mark_task_failed(run_id, task_id, error="Something went wrong")
 
-        call_kwargs = mock_queries.task_state_events.record.call_args.kwargs
+        call_kwargs = mock_queries.task_state_events.record_state_change.call_args.kwargs
         assert call_kwargs["metadata"] == {"error": "Something went wrong"}
 
 
@@ -335,17 +315,77 @@ class TestIsTaskReady:
     """Tests for is_task_ready()."""
 
     @patch("h_arcane.core._internal.task.propagation.queries")
-    def test_delegates_to_query(self, mock_queries):
-        """is_task_ready delegates to TaskDependencyQueries."""
+    def test_task_with_no_deps_is_ready(self, mock_queries):
+        """Task with no dependencies is ready."""
 
         run_id = uuid4()
         task_id = uuid4()
-        mock_queries.task_dependencies.is_task_unblocked.return_value = True
+        experiment_id = uuid4()
+
+        tree = make_task_tree(task_id, depends_on=[])
+        run = make_run(run_id, experiment_id)
+        mock_queries.runs.get.return_value = run
+        mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
 
         result = is_task_ready(run_id, task_id)
 
         assert result is True
-        mock_queries.task_dependencies.is_task_unblocked.assert_called_once_with(run_id, task_id)
+
+    @patch("h_arcane.core._internal.task.propagation.queries")
+    def test_task_with_completed_deps_is_ready(self, mock_queries):
+        """Task is ready when all dependencies are completed."""
+
+        run_id = uuid4()
+        dep_id = uuid4()
+        task_id = uuid4()
+        experiment_id = uuid4()
+
+        tree = make_task_tree(
+            uuid4(),
+            is_leaf=False,
+            children=[
+                make_task_tree(dep_id, is_leaf=True),
+                make_task_tree(task_id, is_leaf=True, depends_on=[dep_id]),
+            ],
+        )
+        run = make_run(run_id, experiment_id)
+        mock_queries.runs.get.return_value = run
+        mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(dep_id): "completed",
+        }
+
+        result = is_task_ready(run_id, task_id)
+
+        assert result is True
+
+    @patch("h_arcane.core._internal.task.propagation.queries")
+    def test_task_with_pending_deps_is_not_ready(self, mock_queries):
+        """Task is not ready when dependencies are not completed."""
+
+        run_id = uuid4()
+        dep_id = uuid4()
+        task_id = uuid4()
+        experiment_id = uuid4()
+
+        tree = make_task_tree(
+            uuid4(),
+            is_leaf=False,
+            children=[
+                make_task_tree(dep_id, is_leaf=True),
+                make_task_tree(task_id, is_leaf=True, depends_on=[dep_id]),
+            ],
+        )
+        run = make_run(run_id, experiment_id)
+        mock_queries.runs.get.return_value = run
+        mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(dep_id): "pending",
+        }
+
+        result = is_task_ready(run_id, task_id)
+
+        assert result is False
 
 
 # =============================================================================
@@ -358,24 +398,27 @@ class TestOnTaskCompleted:
 
     @patch("h_arcane.core._internal.task.propagation.queries")
     def test_marks_task_completed(self, mock_queries):
-        """on_task_completed marks the task as completed."""
+        """on_task_completed records a completed state event."""
 
         run_id = uuid4()
         task_id = uuid4()
         execution_id = uuid4()
         experiment_id = uuid4()
 
-        run = make_run(run_id, experiment_id, task_states={str(task_id): "running"})
+        run = make_run(run_id, experiment_id)
         mock_queries.runs.get.return_value = run
-        mock_queries.task_dependencies.mark_satisfied.return_value = []
         mock_queries.experiments.get.return_value = make_experiment(
             experiment_id, make_task_tree(task_id), root_task_id=str(task_id)
         )
+        # Mock get_current_states to return task as completed (for propagate_to_parent check)
+        mock_queries.task_state_events.get_current_states.return_value = {str(task_id): "completed"}
 
         on_task_completed(run_id, task_id, execution_id)
 
-        # Task should be marked completed
-        assert run.task_states[str(task_id)] == "completed"
+        # Verify completed event was recorded
+        calls = mock_queries.task_state_events.record_state_change.call_args_list
+        completed_calls = [c for c in calls if c.kwargs.get("new_status") == "completed"]
+        assert len(completed_calls) >= 1
 
     @patch("h_arcane.core._internal.task.propagation.queries")
     def test_returns_ready_tasks(self, mock_queries):
@@ -387,20 +430,6 @@ class TestOnTaskCompleted:
         execution_id = uuid4()
         experiment_id = uuid4()
 
-        run = make_run(
-            run_id,
-            experiment_id,
-            task_states={
-                str(completed_task_id): "running",
-                str(waiting_task_id): "pending",
-            },
-        )
-        mock_queries.runs.get.return_value = run
-
-        # waiting_task_id becomes unblocked when completed_task_id completes
-        mock_queries.task_dependencies.mark_satisfied.return_value = [waiting_task_id]
-        mock_queries.task_dependencies.is_task_unblocked.return_value = True
-
         tree = make_task_tree(
             uuid4(),
             is_leaf=False,
@@ -409,9 +438,17 @@ class TestOnTaskCompleted:
                 make_task_tree(waiting_task_id, is_leaf=True, depends_on=[completed_task_id]),
             ],
         )
+
+        run = make_run(run_id, experiment_id)
+        mock_queries.runs.get.return_value = run
         mock_queries.experiments.get.return_value = make_experiment(
             experiment_id, tree, root_task_id=str(tree["id"])
         )
+        # completed_task_id is completed, so waiting_task_id becomes ready
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(completed_task_id): "completed",
+            str(waiting_task_id): "pending",
+        }
 
         result = on_task_completed(run_id, completed_task_id, execution_id)
 
@@ -419,7 +456,7 @@ class TestOnTaskCompleted:
 
     @patch("h_arcane.core._internal.task.propagation.queries")
     def test_marks_unblocked_tasks_ready(self, mock_queries):
-        """on_task_completed marks unblocked tasks as READY."""
+        """on_task_completed records ready events for unblocked tasks."""
 
         run_id = uuid4()
         completed_id = uuid4()
@@ -427,32 +464,71 @@ class TestOnTaskCompleted:
         execution_id = uuid4()
         experiment_id = uuid4()
 
-        run = make_run(
-            run_id,
-            experiment_id,
-            task_states={
-                str(completed_id): "running",
-                str(unblocked_id): "pending",
-            },
+        tree = make_task_tree(
+            uuid4(),
+            is_leaf=False,
+            children=[
+                make_task_tree(completed_id, is_leaf=True),
+                make_task_tree(unblocked_id, is_leaf=True, depends_on=[completed_id]),
+            ],
         )
+
+        run = make_run(run_id, experiment_id)
         mock_queries.runs.get.return_value = run
-        mock_queries.task_dependencies.mark_satisfied.return_value = [unblocked_id]
-        mock_queries.task_dependencies.is_task_unblocked.return_value = True
-        mock_queries.experiments.get.return_value = make_experiment(
-            experiment_id,
-            make_task_tree(
-                uuid4(),
-                children=[
-                    make_task_tree(completed_id),
-                    make_task_tree(unblocked_id, depends_on=[completed_id]),
-                ],
-            ),
-        )
+        mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
+        # Mock current states: completed_id is done, unblocked_id is pending
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(completed_id): "completed",
+            str(unblocked_id): "pending",
+        }
 
         on_task_completed(run_id, completed_id, execution_id)
 
-        # Unblocked task should now be READY
-        assert run.task_states[str(unblocked_id)] == "ready"
+        # Verify ready event was recorded for unblocked task
+        calls = mock_queries.task_state_events.record_state_change.call_args_list
+        ready_calls = [
+            c
+            for c in calls
+            if c.kwargs.get("new_status") == "ready" and c.kwargs.get("task_id") == unblocked_id
+        ]
+        assert len(ready_calls) == 1
+
+    @patch("h_arcane.core._internal.task.propagation.queries")
+    def test_does_not_return_task_with_unsatisfied_deps(self, mock_queries):
+        """on_task_completed doesn't return tasks that still have unsatisfied dependencies."""
+
+        run_id = uuid4()
+        dep1_id = uuid4()
+        dep2_id = uuid4()
+        waiting_id = uuid4()
+        execution_id = uuid4()
+        experiment_id = uuid4()
+
+        # waiting_id depends on both dep1 and dep2
+        tree = make_task_tree(
+            uuid4(),
+            is_leaf=False,
+            children=[
+                make_task_tree(dep1_id, is_leaf=True),
+                make_task_tree(dep2_id, is_leaf=True),
+                make_task_tree(waiting_id, is_leaf=True, depends_on=[dep1_id, dep2_id]),
+            ],
+        )
+
+        run = make_run(run_id, experiment_id)
+        mock_queries.runs.get.return_value = run
+        mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
+        # Only dep1 is completed, dep2 is still pending
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(dep1_id): "completed",
+            str(dep2_id): "pending",
+            str(waiting_id): "pending",
+        }
+
+        result = on_task_completed(run_id, dep1_id, execution_id)
+
+        # waiting_id should NOT be ready (still waiting on dep2)
+        assert waiting_id not in result
 
 
 # =============================================================================
@@ -487,27 +563,31 @@ class TestPropagateToParent:
         tree["children"][0]["parent_id"] = str(parent_id)
         tree["children"][1]["parent_id"] = str(parent_id)
 
-        # Both children are completed
-        run = make_run(
-            run_id,
-            experiment_id,
-            task_states={
-                str(parent_id): "pending",
-                str(child1_id): "completed",
-                str(child2_id): "completed",
-            },
-        )
+        run = make_run(run_id, experiment_id)
         mock_queries.runs.get.return_value = run
         mock_queries.experiments.get.return_value = make_experiment(
             experiment_id, tree, root_task_id=str(parent_id)
         )
+        # Both children are completed (via event log)
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(parent_id): "pending",
+            str(child1_id): "completed",
+            str(child2_id): "completed",
+        }
 
         # Call propagate for child1 (child1 just completed)
         result = propagate_to_parent(run_id, child1_id)
 
         # Parent should be marked completed
         assert result is True
-        assert run.task_states[str(parent_id)] == "completed"
+        # Verify completed event was recorded for parent
+        calls = mock_queries.task_state_events.record_state_change.call_args_list
+        parent_completed = [
+            c
+            for c in calls
+            if c.kwargs.get("task_id") == parent_id and c.kwargs.get("new_status") == "completed"
+        ]
+        assert len(parent_completed) == 1
 
     @patch("h_arcane.core._internal.task.propagation.queries")
     def test_does_not_mark_parent_if_children_pending(self, mock_queries):
@@ -530,23 +610,27 @@ class TestPropagateToParent:
         tree["children"][0]["parent_id"] = str(parent_id)
         tree["children"][1]["parent_id"] = str(parent_id)
 
-        # Only child1 is completed
-        run = make_run(
-            run_id,
-            experiment_id,
-            task_states={
-                str(parent_id): "pending",
-                str(child1_id): "completed",
-                str(child2_id): "pending",  # Still pending
-            },
-        )
+        run = make_run(run_id, experiment_id)
         mock_queries.runs.get.return_value = run
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
+        # Only child1 is completed
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(parent_id): "pending",
+            str(child1_id): "completed",
+            str(child2_id): "pending",  # Still pending
+        }
 
         result = propagate_to_parent(run_id, child1_id)
 
         assert result is False
-        assert run.task_states[str(parent_id)] == "pending"
+        # Verify no completed event was recorded for parent
+        calls = mock_queries.task_state_events.record_state_change.call_args_list
+        parent_completed = [
+            c
+            for c in calls
+            if c.kwargs.get("task_id") == parent_id and c.kwargs.get("new_status") == "completed"
+        ]
+        assert len(parent_completed) == 0
 
 
 # =============================================================================
@@ -575,16 +659,14 @@ class TestIsWorkflowComplete:
             ],
         )
 
-        run = make_run(
-            run_id,
-            experiment_id,
-            task_states={
-                str(leaf1_id): "completed",
-                str(leaf2_id): "completed",
-            },
-        )
+        run = make_run(run_id, experiment_id)
         mock_queries.runs.get.return_value = run
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
+        # Both leaves completed via event log
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(leaf1_id): "completed",
+            str(leaf2_id): "completed",
+        }
 
         result = is_workflow_complete(run_id)
 
@@ -608,16 +690,14 @@ class TestIsWorkflowComplete:
             ],
         )
 
-        run = make_run(
-            run_id,
-            experiment_id,
-            task_states={
-                str(leaf1_id): "completed",
-                str(leaf2_id): "running",  # Not complete
-            },
-        )
+        run = make_run(run_id, experiment_id)
         mock_queries.runs.get.return_value = run
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
+        # One leaf still running via event log
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(leaf1_id): "completed",
+            str(leaf2_id): "running",  # Not complete
+        }
 
         result = is_workflow_complete(run_id)
 
@@ -632,15 +712,11 @@ class TestIsWorkflowFailed:
         """Returns True when any task has FAILED status."""
 
         run_id = uuid4()
-        run = make_run(
-            run_id,
-            uuid4(),
-            task_states={
-                str(uuid4()): "completed",
-                str(uuid4()): "failed",  # One failed
-            },
-        )
-        mock_queries.runs.get.return_value = run
+        # State from event log shows one failed
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(uuid4()): "completed",
+            str(uuid4()): "failed",  # One failed
+        }
 
         result = is_workflow_failed(run_id)
 
@@ -651,15 +727,11 @@ class TestIsWorkflowFailed:
         """Returns False when no tasks have FAILED status."""
 
         run_id = uuid4()
-        run = make_run(
-            run_id,
-            uuid4(),
-            task_states={
-                str(uuid4()): "completed",
-                str(uuid4()): "running",
-            },
-        )
-        mock_queries.runs.get.return_value = run
+        # State from event log shows no failures
+        mock_queries.task_state_events.get_current_states.return_value = {
+            str(uuid4()): "completed",
+            str(uuid4()): "running",
+        }
 
         result = is_workflow_failed(run_id)
 
@@ -699,13 +771,41 @@ class TestGetInitialReadyTasks:
         mock_queries.runs.get.return_value = run
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
 
-        # leaf1 and leaf2 are ready (no blocking deps), dep_leaf is blocked
-        def is_unblocked(rid, tid):
-            return tid in [leaf1_id, leaf2_id]
+        result = get_initial_ready_tasks(run_id)
 
-        mock_queries.task_dependencies.is_task_unblocked.side_effect = is_unblocked
+        # leaf1 and leaf2 have no deps so are ready, dep_leaf has a dep so is not ready
+        assert set(result) == {leaf1_id, leaf2_id}
+        assert dep_leaf_id not in result
+
+    @patch("h_arcane.core._internal.task.propagation.queries")
+    def test_returns_empty_when_no_tree(self, mock_queries):
+        """Returns empty list when there's no task tree."""
+
+        run_id = uuid4()
+        experiment_id = uuid4()
+
+        run = make_run(run_id, experiment_id)
+        mock_queries.runs.get.return_value = run
+        mock_queries.experiments.get.return_value = make_experiment(experiment_id, {})
 
         result = get_initial_ready_tasks(run_id)
 
-        assert set(result) == {leaf1_id, leaf2_id}
-        assert dep_leaf_id not in result
+        assert result == []
+
+    @patch("h_arcane.core._internal.task.propagation.queries")
+    def test_single_leaf_with_no_deps(self, mock_queries):
+        """Single leaf task with no dependencies is ready."""
+
+        run_id = uuid4()
+        task_id = uuid4()
+        experiment_id = uuid4()
+
+        tree = make_task_tree(task_id, is_leaf=True, depends_on=[])
+
+        run = make_run(run_id, experiment_id)
+        mock_queries.runs.get.return_value = run
+        mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
+
+        result = get_initial_ready_tasks(run_id)
+
+        assert result == [task_id]

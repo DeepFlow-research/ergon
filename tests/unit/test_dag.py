@@ -1,14 +1,14 @@
-"""Unit tests for TaskRegistry and DAG processing."""
+"""Unit tests for task DAG validation."""
 
 from uuid import uuid4
 
 import pytest
 
 from h_arcane import Task, TaskStatus
-from h_arcane.core._internal.task.registry import (
+from h_arcane.core._internal.task.validation import (
     CycleDetectedError,
     MissingDependencyError,
-    TaskRegistry,
+    validate_task_dag,
 )
 
 
@@ -37,26 +37,25 @@ def make_task(name: str, worker: MockWorker, **kwargs) -> Task:
 
 
 # =============================================================================
-# Basic Registry Tests
+# Basic Validation Tests
 # =============================================================================
 
 
-class TestTaskRegistryBasic:
-    """Basic TaskRegistry functionality tests."""
+class TestValidateTaskDagBasic:
+    """Basic validate_task_dag functionality tests."""
 
-    def test_registry_with_single_task(self):
-        """Registry handles single task."""
+    def test_validates_single_task(self):
+        """Validation handles single task."""
         worker = MockWorker()
         task = make_task("Single", worker)
 
-        registry = TaskRegistry(task)
+        validate_task_dag(task)
 
-        assert len(registry) == 1
-        assert registry.root_id == task.id
-        assert task.id in registry
+        # Task should be ready (leaf with no deps)
+        assert task.status == TaskStatus.READY
 
-    def test_registry_flattens_tree(self):
-        """Registry flattens nested task tree."""
+    def test_flattens_tree_sets_parent_ids(self):
+        """Validation flattens tree and sets parent_id on all tasks."""
         worker = MockWorker()
         c = make_task("C", worker)
         d = make_task("D", worker)
@@ -64,41 +63,13 @@ class TestTaskRegistryBasic:
         b = make_task("B", worker)
         root = make_task("Root", worker, children=[a, b])
 
-        registry = TaskRegistry(root)
+        validate_task_dag(root)
 
-        assert len(registry) == 5
-        assert all(t.id in registry for t in [root, a, b, c, d])
-
-    def test_registry_sets_parent_ids(self):
-        """Registry sets parent_id on all tasks."""
-        worker = MockWorker()
-        child = make_task("Child", worker)
-        parent = make_task("Parent", worker, children=[child])
-
-        TaskRegistry(parent)
-
-        assert parent.parent_id is None  # Root has no parent
-        assert child.parent_id == parent.id
-
-    def test_get_task(self):
-        """get_task returns task by ID."""
-        worker = MockWorker()
-        task = make_task("Task", worker)
-
-        registry = TaskRegistry(task)
-
-        assert registry.get_task(task.id) == task
-        assert registry.get_task(uuid4()) is None
-
-    def test_get_root(self):
-        """get_root returns the root task."""
-        worker = MockWorker()
-        child = make_task("Child", worker)
-        root = make_task("Root", worker, children=[child])
-
-        registry = TaskRegistry(root)
-
-        assert registry.get_root() == root
+        assert root.parent_id is None  # Root has no parent
+        assert a.parent_id == root.id
+        assert b.parent_id == root.id
+        assert c.parent_id == a.id
+        assert d.parent_id == a.id
 
 
 # =============================================================================
@@ -116,7 +87,7 @@ class TestDependencyResolution:
         b = make_task("B", worker, depends_on=[a])
         root = make_task("Root", worker, children=[a, b])
 
-        TaskRegistry(root)
+        validate_task_dag(root)
 
         assert b._resolved_dependency_ids == [a.id]
 
@@ -127,7 +98,7 @@ class TestDependencyResolution:
         b = make_task("B", worker, depends_on=[a.id])
         root = make_task("Root", worker, children=[a, b])
 
-        TaskRegistry(root)
+        validate_task_dag(root)
 
         assert b._resolved_dependency_ids == [a.id]
 
@@ -138,7 +109,7 @@ class TestDependencyResolution:
         task = make_task("Task", worker, depends_on=[missing_id])
 
         with pytest.raises(MissingDependencyError) as exc_info:
-            TaskRegistry(task)
+            validate_task_dag(task)
 
         assert exc_info.value.missing_dep_id == missing_id
 
@@ -160,8 +131,7 @@ class TestCycleDetection:
         root = make_task("Root", worker, children=[a, b, c])
 
         # Should not raise
-        registry = TaskRegistry(root)
-        assert len(registry) == 4
+        validate_task_dag(root)
 
     def test_detects_direct_cycle(self):
         """Detects A → B → A cycle."""
@@ -175,7 +145,7 @@ class TestCycleDetection:
         root = make_task("Root", worker, children=[a, b])
 
         with pytest.raises(CycleDetectedError):
-            TaskRegistry(root)
+            validate_task_dag(root)
 
     def test_detects_self_cycle(self):
         """Detects A → A self-cycle."""
@@ -184,7 +154,7 @@ class TestCycleDetection:
         a.depends_on = [a]  # Self-dependency
 
         with pytest.raises(CycleDetectedError):
-            TaskRegistry(a)
+            validate_task_dag(a)
 
     def test_detects_long_cycle(self):
         """Detects A → B → C → A cycle."""
@@ -199,7 +169,7 @@ class TestCycleDetection:
         root = make_task("Root", worker, children=[a, b, c])
 
         with pytest.raises(CycleDetectedError):
-            TaskRegistry(root)
+            validate_task_dag(root)
 
 
 # =============================================================================
@@ -215,7 +185,7 @@ class TestInitialStatuses:
         worker = MockWorker()
         task = make_task("Leaf", worker)
 
-        TaskRegistry(task)
+        validate_task_dag(task)
 
         assert task.status == TaskStatus.READY
 
@@ -226,7 +196,7 @@ class TestInitialStatuses:
         b = make_task("B", worker, depends_on=[a])
         root = make_task("Root", worker, children=[a, b])
 
-        TaskRegistry(root)
+        validate_task_dag(root)
 
         assert a.status == TaskStatus.READY  # No deps
         assert b.status == TaskStatus.PENDING  # Has deps
@@ -237,22 +207,32 @@ class TestInitialStatuses:
         child = make_task("Child", worker)
         parent = make_task("Parent", worker, children=[child])
 
-        TaskRegistry(parent)
+        validate_task_dag(parent)
 
         assert parent.status == TaskStatus.PENDING
         assert child.status == TaskStatus.READY
 
 
 # =============================================================================
-# Query Method Tests
+# Task.get_all_tasks() Tests
 # =============================================================================
 
 
-class TestQueryMethods:
-    """Tests for registry query methods."""
+class TestGetAllTasks:
+    """Tests for Task.get_all_tasks() method."""
 
-    def test_get_leaf_tasks(self):
-        """get_leaf_tasks returns only leaf tasks."""
+    def test_single_task_returns_self(self):
+        """get_all_tasks on single task returns just itself."""
+        worker = MockWorker()
+        task = make_task("Single", worker)
+
+        all_tasks = task.get_all_tasks()
+
+        assert len(all_tasks) == 1
+        assert all_tasks[0] == task
+
+    def test_returns_all_descendants(self):
+        """get_all_tasks returns self and all descendants."""
         worker = MockWorker()
         c = make_task("C", worker)
         d = make_task("D", worker)
@@ -260,117 +240,11 @@ class TestQueryMethods:
         b = make_task("B", worker)
         root = make_task("Root", worker, children=[a, b])
 
-        registry = TaskRegistry(root)
-        leaves = registry.get_leaf_tasks()
-        names = {t.name for t in leaves}
+        all_tasks = root.get_all_tasks()
 
-        assert names == {"B", "C", "D"}
-
-    def test_get_ready_tasks(self):
-        """get_ready_tasks returns tasks that are READY."""
-        worker = MockWorker()
-        a = make_task("A", worker)
-        b = make_task("B", worker)
-        c = make_task("C", worker, depends_on=[a, b])
-        root = make_task("Root", worker, children=[a, b, c])
-
-        registry = TaskRegistry(root)
-        ready = registry.get_ready_tasks()
-        names = {t.name for t in ready}
-
-        assert names == {"A", "B"}  # C is pending (deps not met)
-
-    def test_get_dependents(self):
-        """get_dependents returns tasks waiting on the given task."""
-        worker = MockWorker()
-        a = make_task("A", worker)
-        b = make_task("B", worker, depends_on=[a])
-        c = make_task("C", worker, depends_on=[a])
-        d = make_task("D", worker, depends_on=[b])
-        root = make_task("Root", worker, children=[a, b, c, d])
-
-        registry = TaskRegistry(root)
-
-        # B and C depend on A
-        a_dependents = registry.get_dependents(a.id)
-        names = {t.name for t in a_dependents}
-        assert names == {"B", "C"}
-
-        # Only D depends on B
-        b_dependents = registry.get_dependents(b.id)
-        assert len(b_dependents) == 1
-        assert b_dependents[0].name == "D"
-
-    def test_get_dependencies(self):
-        """get_dependencies returns tasks that must complete first."""
-        worker = MockWorker()
-        a = make_task("A", worker)
-        b = make_task("B", worker)
-        c = make_task("C", worker, depends_on=[a, b])
-        root = make_task("Root", worker, children=[a, b, c])
-
-        registry = TaskRegistry(root)
-
-        c_deps = registry.get_dependencies(c.id)
-        names = {t.name for t in c_deps}
-        assert names == {"A", "B"}
-
-    def test_get_blocking_dependencies(self):
-        """get_blocking_dependencies returns incomplete dependencies."""
-        worker = MockWorker()
-        a = make_task("A", worker)
-        b = make_task("B", worker)
-        c = make_task("C", worker, depends_on=[a, b])
-        root = make_task("Root", worker, children=[a, b, c])
-
-        registry = TaskRegistry(root)
-
-        # Initially both A and B block C
-        blocking = registry.get_blocking_dependencies(c.id)
-        names = {t.name for t in blocking}
-        assert names == {"A", "B"}
-
-        # Mark A as completed
-        a.status = TaskStatus.COMPLETED
-
-        # Now only B blocks C
-        blocking = registry.get_blocking_dependencies(c.id)
-        assert len(blocking) == 1
-        assert blocking[0].name == "B"
-
-    def test_can_run(self):
-        """can_run returns True when all dependencies are satisfied."""
-        worker = MockWorker()
-        a = make_task("A", worker)
-        b = make_task("B", worker, depends_on=[a])
-        root = make_task("Root", worker, children=[a, b])
-
-        registry = TaskRegistry(root)
-
-        # A can run (no deps)
-        assert registry.can_run(a.id) is True
-
-        # B cannot run (A not complete)
-        assert registry.can_run(b.id) is False
-
-        # Mark A complete
-        a.status = TaskStatus.COMPLETED
-
-        # Now B can run
-        assert registry.can_run(b.id) is True
-
-    def test_get_parent(self):
-        """get_parent returns the parent task."""
-        worker = MockWorker()
-        grandchild = make_task("Grandchild", worker)
-        child = make_task("Child", worker, children=[grandchild])
-        root = make_task("Root", worker, children=[child])
-
-        registry = TaskRegistry(root)
-
-        assert registry.get_parent(root.id) is None
-        assert registry.get_parent(child.id) == root
-        assert registry.get_parent(grandchild.id) == child
+        assert len(all_tasks) == 5
+        task_ids = {t.id for t in all_tasks}
+        assert task_ids == {root.id, a.id, b.id, c.id, d.id}
 
 
 # =============================================================================
@@ -382,30 +256,22 @@ class TestDAGPatterns:
     """Tests for common DAG patterns."""
 
     def test_linear_dag(self):
-        """Linear DAG: A → B → C."""
+        """Linear DAG: A → B → C validates correctly."""
         worker = MockWorker()
         a = make_task("A", worker)
         b = make_task("B", worker, depends_on=[a])
         c = make_task("C", worker, depends_on=[b])
         root = make_task("Root", worker, children=[a, b, c])
 
-        registry = TaskRegistry(root)
+        validate_task_dag(root)
 
         # Only A is ready initially
-        ready = registry.get_ready_tasks()
-        assert len(ready) == 1
-        assert ready[0].name == "A"
-
-        # Simulate execution
-        a.status = TaskStatus.COMPLETED
-        assert registry.can_run(b.id) is True
-        assert registry.can_run(c.id) is False
-
-        b.status = TaskStatus.COMPLETED
-        assert registry.can_run(c.id) is True
+        assert a.status == TaskStatus.READY
+        assert b.status == TaskStatus.PENDING
+        assert c.status == TaskStatus.PENDING
 
     def test_diamond_dag(self):
-        """Diamond DAG: A → B, A → C, B+C → D."""
+        """Diamond DAG: A → B, A → C, B+C → D validates correctly."""
         worker = MockWorker()
         a = make_task("A", worker)
         b = make_task("B", worker, depends_on=[a])
@@ -413,25 +279,13 @@ class TestDAGPatterns:
         d = make_task("D", worker, depends_on=[b, c])
         root = make_task("Root", worker, children=[a, b, c, d])
 
-        registry = TaskRegistry(root)
+        validate_task_dag(root)
 
         # Only A is ready initially
-        ready = registry.get_ready_tasks()
-        assert len(ready) == 1
-        assert ready[0].name == "A"
-
-        # After A completes, B and C are ready
-        a.status = TaskStatus.COMPLETED
-        assert registry.can_run(b.id) is True
-        assert registry.can_run(c.id) is True
-        assert registry.can_run(d.id) is False
-
-        # D needs both B and C
-        b.status = TaskStatus.COMPLETED
-        assert registry.can_run(d.id) is False  # Still waiting on C
-
-        c.status = TaskStatus.COMPLETED
-        assert registry.can_run(d.id) is True
+        assert a.status == TaskStatus.READY
+        assert b.status == TaskStatus.PENDING
+        assert c.status == TaskStatus.PENDING
+        assert d.status == TaskStatus.PENDING
 
     def test_parallel_tasks(self):
         """Parallel tasks: A, B, C all independent."""
@@ -441,93 +295,11 @@ class TestDAGPatterns:
         c = make_task("C", worker)
         root = make_task("Root", worker, children=[a, b, c])
 
-        registry = TaskRegistry(root)
+        validate_task_dag(root)
 
-        # All are ready immediately
-        ready = registry.get_ready_tasks()
-        names = {t.name for t in ready}
-        assert names == {"A", "B", "C"}
-
-
-# =============================================================================
-# Serialization Tests
-# =============================================================================
-
-
-class TestSerialization:
-    """Tests for registry serialization."""
-
-    def test_to_dict(self):
-        """to_dict serializes the task tree."""
-        worker = MockWorker()
-        child = Task(name="Child", description="A child task", assigned_to=worker)
-        root = Task(
-            name="Root",
-            description="Root task",
-            assigned_to=worker,
-            children=[child],
-        )
-
-        registry = TaskRegistry(root)
-        data = registry.to_dict()
-
-        assert data["name"] == "Root"
-        assert data["description"] == "Root task"
-        assert data["id"] == str(root.id)
-        assert len(data["children"]) == 1
-        assert data["children"][0]["name"] == "Child"
-
-    def test_to_dict_includes_dependencies(self):
-        """to_dict includes resolved dependencies."""
-        worker = MockWorker()
-        a = make_task("A", worker)
-        b = make_task("B", worker, depends_on=[a])
-        root = make_task("Root", worker, children=[a, b])
-
-        registry = TaskRegistry(root)
-        data = registry.to_dict()
-
-        # Find B in children
-        b_data = next(c for c in data["children"] if c["name"] == "B")
-        assert b_data["depends_on"] == [str(a.id)]
-
-
-# =============================================================================
-# Status Aggregation Tests
-# =============================================================================
-
-
-class TestStatusAggregation:
-    """Tests for status aggregation methods."""
-
-    def test_is_all_complete(self):
-        """is_all_complete returns True when all tasks are COMPLETED."""
-        worker = MockWorker()
-        a = make_task("A", worker)
-        b = make_task("B", worker)
-        root = make_task("Root", worker, children=[a, b])
-
-        registry = TaskRegistry(root)
-
-        assert registry.is_all_complete() is False
-
-        a.status = TaskStatus.COMPLETED
-        b.status = TaskStatus.COMPLETED
-        root.status = TaskStatus.COMPLETED
-
-        assert registry.is_all_complete() is True
-
-    def test_is_any_failed(self):
-        """is_any_failed returns True if any task has FAILED status."""
-        worker = MockWorker()
-        a = make_task("A", worker)
-        b = make_task("B", worker)
-        root = make_task("Root", worker, children=[a, b])
-
-        registry = TaskRegistry(root)
-
-        assert registry.is_any_failed() is False
-
-        a.status = TaskStatus.FAILED
-
-        assert registry.is_any_failed() is True
+        # All leaf tasks are ready
+        assert a.status == TaskStatus.READY
+        assert b.status == TaskStatus.READY
+        assert c.status == TaskStatus.READY
+        # Root is pending (composite)
+        assert root.status == TaskStatus.PENDING

@@ -19,7 +19,6 @@ from h_arcane.core._internal.db.models import (
     TaskEvaluationResult,
     TaskExecution,
     TaskStateEvent,
-    TaskDependency,
     TaskEvaluator,
     TaskStatus,
     Thread,
@@ -485,10 +484,50 @@ class TaskExecutionQueries(BaseQueries[TaskExecution]):
 
 
 class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
-    """Query methods for TaskStateEvent model (append-only event log)."""
+    """Query methods for TaskStateEvent model (append-only event log).
+
+    This is the source of truth for task state. Use get_current_states() to
+    compute the current state of all tasks from the event log.
+    """
 
     def __init__(self):
         super().__init__(TaskStateEvent)
+
+    def get_current_states(self, run_id: UUID) -> dict[str, str]:
+        """
+        Compute current task states from event log.
+
+        Returns a dict mapping task_id (as string) -> current status (as string).
+        This replaces the old Run.task_states denormalized column.
+        """
+        from sqlalchemy import func
+
+        with next(get_session()) as session:
+            # Subquery to get max timestamp per task
+            subquery = (
+                select(TaskStateEvent.task_id, func.max(TaskStateEvent.timestamp).label("max_ts"))
+                .where(TaskStateEvent.run_id == run_id)
+                .group_by(TaskStateEvent.task_id)
+                .subquery()
+            )
+
+            # Join to get the status at that max timestamp
+            statement = select(TaskStateEvent.task_id, TaskStateEvent.new_status).join(
+                subquery,
+                (TaskStateEvent.task_id == subquery.c.task_id)
+                & (TaskStateEvent.timestamp == subquery.c.max_ts)
+                & (TaskStateEvent.run_id == run_id),
+            )
+
+            results = session.exec(statement).all()
+            return {str(row.task_id): row.new_status for row in results}
+
+    def get_task_state(self, run_id: UUID, task_id: UUID) -> str | None:
+        """Get the current state of a single task."""
+        events = self.get_history(run_id, task_id)
+        if not events:
+            return None
+        return events[-1].new_status
 
     def record(
         self,
@@ -546,149 +585,39 @@ class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
             )
             return list(session.exec(statement).all())
 
-    def update_task_state_atomic(
+    def record_state_change(
         self,
         run_id: UUID,
         task_id: UUID,
         new_status: str,
-        old_status: str | None,
+        old_status: str | None = None,
         execution_id: UUID | None = None,
         triggered_by: str | None = None,
         metadata: dict | None = None,
-    ) -> None:
+    ) -> TaskStateEvent:
         """
-        Atomically update Run.task_states and create TaskStateEvent.
+        Record a task state change event.
 
-        This ensures both writes happen in a single transaction, preventing
-        inconsistency if one write fails.
+        This is the primary way to update task state. The current state is
+        derived from the event log via get_current_states().
+
+        If old_status is not provided, it will be looked up from the event history.
         """
-        with next(get_session()) as session:
-            # Update Run.task_states
-            run = session.get(Run, run_id)
-            if run is None:
-                raise ValueError(f"Run {run_id} not found")
-            task_states = run.task_states or {}
-            task_states[str(task_id)] = new_status
-            run.task_states = task_states
+        # Look up old_status if not provided
+        if old_status is None:
+            old_status = self.get_task_state(run_id, task_id)
 
-            # Create TaskStateEvent
-            event = TaskStateEvent(
-                run_id=run_id,
-                task_id=task_id,
-                task_execution_id=execution_id,
-                event_type="status_change",
-                old_status=old_status,
-                new_status=new_status,
-                triggered_by=triggered_by,
-                event_metadata=metadata or {},
-            )
-            session.add(event)
-            session.commit()  # Single atomic commit
-
-
-class TaskDependencyQueries(BaseQueries[TaskDependency]):
-    """Query methods for TaskDependency model (materialized dependency edges)."""
-
-    def __init__(self):
-        super().__init__(TaskDependency)
-
-    def create_for_run(
-        self,
-        run_id: UUID,
-        dependencies: list[tuple[UUID, UUID]],
-    ) -> list[TaskDependency]:
-        """
-        Create dependency records for a run.
-
-        Args:
-            run_id: The run these dependencies belong to
-            dependencies: List of (dependent_task_id, dependency_task_id) tuples
-
-        Returns:
-            List of created TaskDependency records
-        """
-        created = []
-        for dependent_id, dependency_id in dependencies:
-            dep = TaskDependency(
-                run_id=run_id,
-                dependent_task_id=dependent_id,
-                dependency_task_id=dependency_id,
-                is_satisfied=False,
-            )
-            created.append(self.create(dep))
-        return created
-
-    def get_blocking(self, run_id: UUID, task_id: UUID) -> list[TaskDependency]:
-        """
-        Get all unsatisfied dependencies blocking a task.
-
-        Returns dependencies where task_id is waiting on other tasks.
-        """
-        with next(get_session()) as session:
-            statement = select(TaskDependency).where(
-                TaskDependency.run_id == run_id,
-                TaskDependency.dependent_task_id == task_id,
-                TaskDependency.is_satisfied == False,  # noqa: E712
-            )
-            return list(session.exec(statement).all())
-
-    def get_waiting_on(self, run_id: UUID, task_id: UUID) -> list[TaskDependency]:
-        """
-        Get all tasks that are waiting on this task to complete.
-
-        Returns dependencies where task_id is a dependency of other tasks.
-        """
-        with next(get_session()) as session:
-            statement = select(TaskDependency).where(
-                TaskDependency.run_id == run_id,
-                TaskDependency.dependency_task_id == task_id,
-                TaskDependency.is_satisfied == False,  # noqa: E712
-            )
-            return list(session.exec(statement).all())
-
-    def mark_satisfied(
-        self,
-        run_id: UUID,
-        dependency_task_id: UUID,
-        execution_id: UUID,
-    ) -> list[UUID]:
-        """
-        Mark all dependencies on a task as satisfied.
-
-        Args:
-            run_id: The run
-            dependency_task_id: The task that completed
-            execution_id: The execution that satisfied the dependency
-
-        Returns:
-            List of task_ids that may now be unblocked (need further checking)
-        """
-        waiting = self.get_waiting_on(run_id, dependency_task_id)
-        potentially_unblocked: list[UUID] = []
-
-        for dep in waiting:
-            updated = dep.model_copy(
-                update={
-                    "is_satisfied": True,
-                    "satisfied_at": datetime.now(timezone.utc),
-                    "satisfied_by_execution_id": execution_id,
-                }
-            )
-            self.update(updated)
-            potentially_unblocked.append(dep.dependent_task_id)
-
-        return potentially_unblocked
-
-    def is_task_unblocked(self, run_id: UUID, task_id: UUID) -> bool:
-        """Check if a task has all its dependencies satisfied."""
-        blocking = self.get_blocking(run_id, task_id)
-        return len(blocking) == 0
-
-    def get_all_for_run(self, run_id: UUID) -> list[TaskDependency]:
-        """Get all dependencies for a run."""
-        with next(get_session()) as session:
-            statement = select(TaskDependency).where(TaskDependency.run_id == run_id)
-            return list(session.exec(statement).all())
+        event = TaskStateEvent(
+            run_id=run_id,
+            task_id=task_id,
+            task_execution_id=execution_id,
+            event_type="status_change",
+            old_status=old_status,
+            new_status=new_status,
+            triggered_by=triggered_by,
+            event_metadata=metadata or {},
+        )
+        return self.create(event)
 
 
 class TaskEvaluatorQueries(BaseQueries[TaskEvaluator]):
@@ -935,7 +864,6 @@ class Queries:
     agent_configs: AgentConfigsQueries
     task_executions: TaskExecutionQueries
     task_state_events: TaskStateEventQueries
-    task_dependencies: TaskDependencyQueries
     task_evaluators: TaskEvaluatorQueries
     threads: ThreadsQueries
     thread_messages: ThreadMessagesQueries
@@ -952,7 +880,6 @@ class Queries:
         self.agent_configs = AgentConfigsQueries()
         self.task_executions = TaskExecutionQueries()
         self.task_state_events = TaskStateEventQueries()
-        self.task_dependencies = TaskDependencyQueries()
         self.task_evaluators = TaskEvaluatorQueries()
         self.threads = ThreadsQueries()
         self.thread_messages = ThreadMessagesQueries()

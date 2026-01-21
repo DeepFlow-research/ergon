@@ -16,6 +16,7 @@ from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.task.events import WorkflowFailedEvent
 from h_arcane.core._internal.task.results import WorkflowFailedResult
 from h_arcane.core.runner import ExecutionResult
+from h_arcane.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -88,6 +89,24 @@ async def workflow_failed(ctx: inngest.Context) -> WorkflowFailedResult:
         await inngest_client.send(inngest.Event(name=RunCleanupEvent.name, data=event.model_dump()))
 
     await ctx.step.run("fail-and-cleanup", fail_and_cleanup)
+
+    # Emit dashboard workflow completed (failed) event
+    async def emit_dashboard_workflow_failed() -> None:
+        run = queries.runs.get(run_id)
+        if run:
+            started_at = run.started_at or run.created_at
+            completed_at = run.completed_at or datetime.now(timezone.utc)
+            duration_seconds = (completed_at - started_at).total_seconds()
+
+            await dashboard_emitter.workflow_completed(
+                run_id=run_id,
+                status="failed",
+                duration_seconds=duration_seconds,
+                final_score=None,
+                error=error_msg,
+            )
+
+    await ctx.step.run("emit-dashboard-workflow-failed", emit_dashboard_workflow_failed)
 
     return WorkflowFailedResult(
         run_id=run_id,

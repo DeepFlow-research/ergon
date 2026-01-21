@@ -14,7 +14,7 @@ import pytest
 from h_arcane.core.task import Task, TaskStatus
 from h_arcane.core.runner import ExecutionResult, TaskResult, execute_task, _wait_for_completion
 from h_arcane.core._internal.db.models import RunStatus
-from h_arcane.core._internal.task.registry import TaskRegistry
+from h_arcane.core._internal.task.validation import validate_task_dag
 from h_arcane.core._internal.task.persistence import serialize_task_tree
 
 
@@ -125,23 +125,19 @@ class TestExecuteTaskStructure:
     @pytest.mark.asyncio
     @patch("h_arcane.core.runner.inngest_client")
     @patch("h_arcane.core.runner.persist_workflow")
-    @patch("h_arcane.core.runner.TaskRegistry")
+    @patch("h_arcane.core.runner.validate_task_dag")
     @patch("h_arcane.core.runner.AgentRegistry")
-    async def test_execute_task_creates_registry(
+    async def test_execute_task_validates_dag(
         self,
         mock_agent_registry,
-        mock_task_registry,
+        mock_validate,
         mock_persist_workflow,
         mock_inngest,
     ):
-        """execute_task creates TaskRegistry from task."""
+        """execute_task calls validate_task_dag."""
 
         worker = MockWorker()
         task = make_task("Test", worker)
-
-        # Mock the registry
-        mock_registry_instance = MagicMock()
-        mock_task_registry.return_value = mock_registry_instance
 
         # Mock agent registry
         mock_agent_instance = MagicMock()
@@ -168,8 +164,8 @@ class TestExecuteTaskStructure:
 
             await execute_task(task, timeout_seconds=1)
 
-        # Verify TaskRegistry was created
-        mock_task_registry.assert_called_once_with(task)
+        # Verify validate_task_dag was called
+        mock_validate.assert_called_once_with(task)
 
     @pytest.mark.asyncio
     async def test_execute_task_handles_exception(self):
@@ -178,9 +174,9 @@ class TestExecuteTaskStructure:
         worker = MockWorker()
         task = make_task("Test", worker)
 
-        # Patch TaskRegistry to raise an exception
-        with patch("h_arcane.core.runner.TaskRegistry") as mock_registry:
-            mock_registry.side_effect = ValueError("Invalid task tree")
+        # Patch validate_task_dag to raise an exception
+        with patch("h_arcane.core.runner.validate_task_dag") as mock_validate:
+            mock_validate.side_effect = ValueError("Invalid task tree")
 
             result = await execute_task(task)
 
@@ -205,18 +201,26 @@ class TestWaitForCompletion:
         run_id = uuid4()
         exp_id = uuid4()
 
-        # Mock a completed run
+        # Mock a completed run with execution_result
         mock_run = MagicMock()
         mock_run.id = run_id
         mock_run.status = RunStatus.COMPLETED
-        mock_run.completed_at = datetime.now(timezone.utc)
-        mock_run.output_resource_ids = []
-        mock_run.final_score = 0.9
-        mock_run.benchmark_specific_results = {}
-        mock_run.total_cost_usd = 0.05
-        mock_run.error_message = None
+        mock_run.execution_result = {
+            "success": True,
+            "status": "completed",
+            "outputs": [],
+            "score": 0.9,
+            "evaluation_details": {},
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "duration_seconds": 5.0,
+            "total_cost_usd": 0.05,
+            "task_results": {},
+            "run_id": str(run_id),
+            "experiment_id": str(exp_id),
+            "error": None,
+        }
         mock_queries.runs.get.return_value = mock_run
-        mock_queries.task_executions.get_by_run.return_value = []
 
         result = await _wait_for_completion(
             run_id=run_id,
@@ -236,18 +240,26 @@ class TestWaitForCompletion:
         run_id = uuid4()
         exp_id = uuid4()
 
-        # Mock a failed run
+        # Mock a failed run with execution_result
         mock_run = MagicMock()
         mock_run.id = run_id
         mock_run.status = RunStatus.FAILED
-        mock_run.completed_at = datetime.now(timezone.utc)
-        mock_run.output_resource_ids = []
-        mock_run.final_score = None
-        mock_run.benchmark_specific_results = {}
-        mock_run.total_cost_usd = 0.0
-        mock_run.error_message = "Task execution failed"
+        mock_run.execution_result = {
+            "success": False,
+            "status": "failed",
+            "outputs": [],
+            "score": None,
+            "evaluation_details": {},
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "duration_seconds": 2.0,
+            "total_cost_usd": 0.0,
+            "task_results": {},
+            "run_id": str(run_id),
+            "experiment_id": str(exp_id),
+            "error": "Task execution failed",
+        }
         mock_queries.runs.get.return_value = mock_run
-        mock_queries.task_executions.get_by_run.return_value = []
 
         result = await _wait_for_completion(
             run_id=run_id,
@@ -321,13 +333,10 @@ class TestDAGStructure:
         worker = MockWorker()
         task = make_task("Single", worker)
 
-        registry = TaskRegistry(task)
+        validate_task_dag(task)
 
-        assert len(registry) == 1
-        assert registry.root_id == task.id
-        ready = registry.get_ready_tasks()
-        assert len(ready) == 1
-        assert ready[0].id == task.id
+        # Task should be ready (leaf with no deps)
+        assert task.status == TaskStatus.READY
 
     def test_linear_dag(self):
         """Linear A -> B -> C creates valid DAG."""
@@ -338,14 +347,12 @@ class TestDAGStructure:
         c = make_task("C", worker, depends_on=[b])
         root = make_task("Root", worker, children=[a, b, c])
 
-        registry = TaskRegistry(root)
-
-        assert len(registry) == 4  # root + 3 children
+        validate_task_dag(root)
 
         # Only A should be ready initially
-        ready = registry.get_ready_tasks()
-        assert len(ready) == 1
-        assert ready[0].name == "A"
+        assert a.status == TaskStatus.READY
+        assert b.status == TaskStatus.PENDING
+        assert c.status == TaskStatus.PENDING
 
     def test_diamond_dag(self):
         """Diamond A -> (B, C) -> D creates valid DAG."""
@@ -357,19 +364,13 @@ class TestDAGStructure:
         d = make_task("D", worker, depends_on=[b, c])
         root = make_task("Root", worker, children=[a, b, c, d])
 
-        registry = TaskRegistry(root)
-
-        assert len(registry) == 5
+        validate_task_dag(root)
 
         # Only A should be ready initially
-        ready = registry.get_ready_tasks()
-        assert len(ready) == 1
-        assert ready[0].name == "A"
-
-        # B and C depend on A
-        dependents = registry.get_dependents(a.id)
-        dependent_names = {t.name for t in dependents}
-        assert dependent_names == {"B", "C"}
+        assert a.status == TaskStatus.READY
+        assert b.status == TaskStatus.PENDING
+        assert c.status == TaskStatus.PENDING
+        assert d.status == TaskStatus.PENDING
 
 
 class TestPropagationIntegration:
@@ -386,7 +387,7 @@ class TestPropagationIntegration:
         # Serialize the task tree
 
         root = make_task("Root", worker, children=[a, b])
-        TaskRegistry(root)
+        validate_task_dag(root)
         tree = serialize_task_tree(root)
 
         # Use schema method directly

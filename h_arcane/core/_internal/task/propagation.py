@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from h_arcane.core.task import TaskStatus
+from h_arcane.core.status import TaskStatus, TaskTrigger
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.task.schema import parse_task_tree
 
@@ -37,17 +37,17 @@ from h_arcane.core._internal.task.schema import parse_task_tree
 def mark_task_ready(
     run_id: UUID,
     task_id: UUID,
-    triggered_by: str | None = None,
+    triggered_by: TaskTrigger | None = None,
 ) -> None:
     """
     Mark a task as READY to execute.
 
-    Updates Run.task_states and records a TaskStateEvent.
+    Records a TaskStateEvent. Current state is derived from event log.
 
     Args:
         run_id: The run ID
         task_id: The task ID (from task_tree)
-        triggered_by: What caused this transition (e.g., "dependency_satisfied")
+        triggered_by: What caused this transition (e.g., TaskTrigger.DEPENDENCY_SATISFIED)
     """
     _update_task_state(run_id, task_id, TaskStatus.READY, triggered_by=triggered_by)
 
@@ -60,7 +60,7 @@ def mark_task_running(
     """
     Mark a task as RUNNING.
 
-    Updates Run.task_states and records a TaskStateEvent.
+    Records a TaskStateEvent. Current state is derived from event log.
 
     Args:
         run_id: The run ID
@@ -72,7 +72,7 @@ def mark_task_running(
         task_id,
         TaskStatus.RUNNING,
         execution_id=execution_id,
-        triggered_by="worker_started",
+        triggered_by=TaskTrigger.WORKER_STARTED,
     )
 
 
@@ -84,7 +84,7 @@ def mark_task_completed(
     """
     Mark a task as COMPLETED.
 
-    Updates Run.task_states and records a TaskStateEvent.
+    Records a TaskStateEvent. Current state is derived from event log.
 
     Args:
         run_id: The run ID
@@ -96,7 +96,7 @@ def mark_task_completed(
         task_id,
         TaskStatus.COMPLETED,
         execution_id=execution_id,
-        triggered_by="execution_succeeded",
+        triggered_by=TaskTrigger.EXECUTION_SUCCEEDED,
     )
 
 
@@ -109,7 +109,7 @@ def mark_task_failed(
     """
     Mark a task as FAILED.
 
-    Updates Run.task_states and records a TaskStateEvent.
+    Records a TaskStateEvent. Current state is derived from event log.
 
     Args:
         run_id: The run ID
@@ -123,7 +123,7 @@ def mark_task_failed(
         task_id,
         TaskStatus.FAILED,
         execution_id=execution_id,
-        triggered_by="execution_failed",
+        triggered_by=TaskTrigger.EXECUTION_FAILED,
         metadata=metadata,
     )
 
@@ -133,13 +133,14 @@ def _update_task_state(
     task_id: UUID,
     new_status: TaskStatus,
     execution_id: UUID | None = None,
-    triggered_by: str | None = None,
+    triggered_by: TaskTrigger | None = None,
     metadata: dict | None = None,
 ) -> None:
     """
-    Internal helper to update task state in Run and log to TaskStateEvent.
+    Internal helper to record task state change to TaskStateEvent.
 
-    Uses atomic update to ensure consistency between Run.task_states and TaskStateEvent.
+    Task state is derived from the event log (event sourcing).
+    Use queries.task_state_events.get_current_states() to get current state.
 
     Args:
         run_id: The run ID
@@ -149,22 +150,13 @@ def _update_task_state(
         triggered_by: What caused this transition
         metadata: Additional metadata for the event
     """
-    # Get current run and state to determine old_status
-    run = queries.runs.get(run_id)
-    if run is None:
-        raise ValueError(f"Run {run_id} not found")
-
-    task_states = run.task_states or {}
-    old_status = task_states.get(str(task_id))
-
-    # Atomically update both Run.task_states and TaskStateEvent
-    queries.task_state_events.update_task_state_atomic(
+    # Record the state change event (old_status is looked up automatically)
+    queries.task_state_events.record_state_change(
         run_id=run_id,
         task_id=task_id,
         new_status=new_status.value,
-        old_status=old_status,
         execution_id=execution_id,
-        triggered_by=triggered_by,
+        triggered_by=triggered_by.value if triggered_by else None,
         metadata=metadata or {},
     )
 
@@ -174,13 +166,31 @@ def _update_task_state(
 # =============================================================================
 
 
+def _get_task_tree(run_id: UUID):
+    """
+    Helper to load and parse the task tree for a run.
+
+    Returns:
+        TaskTreeNode or None if not found
+    """
+    run = queries.runs.get(run_id)
+    if run is None:
+        return None
+
+    experiment = queries.experiments.get(run.experiment_id)
+    if experiment is None:
+        return None
+
+    return parse_task_tree(experiment.task_tree)
+
+
 def is_task_ready(run_id: UUID, task_id: UUID) -> bool:
     """
     Check if a task has all its dependencies satisfied.
 
     A task is ready when:
     1. It has no dependencies, OR
-    2. All its dependencies are satisfied (marked in TaskDependency table)
+    2. All its dependencies are COMPLETED (checked via TaskStateEvent)
 
     Args:
         run_id: The run ID
@@ -189,7 +199,20 @@ def is_task_ready(run_id: UUID, task_id: UUID) -> bool:
     Returns:
         True if the task can be executed, False otherwise
     """
-    return queries.task_dependencies.is_task_unblocked(run_id, task_id)
+    tree = _get_task_tree(run_id)
+    if tree is None:
+        # No tree means no dependencies - task is ready
+        return True
+
+    # Get this task's dependencies from the tree
+    dependencies = tree.get_dependencies(str(task_id))
+    if not dependencies:
+        # No dependencies - task is ready
+        return True
+
+    # Check if all dependencies are completed
+    task_states = queries.task_state_events.get_current_states(run_id)
+    return all(task_states.get(dep_id) == TaskStatus.COMPLETED.value for dep_id in dependencies)
 
 
 def get_blocking_dependencies(run_id: UUID, task_id: UUID) -> list[UUID]:
@@ -203,8 +226,23 @@ def get_blocking_dependencies(run_id: UUID, task_id: UUID) -> list[UUID]:
     Returns:
         List of task IDs that must complete first
     """
-    blocking = queries.task_dependencies.get_blocking(run_id, task_id)
-    return [dep.dependency_task_id for dep in blocking]
+    tree = _get_task_tree(run_id)
+    if tree is None:
+        return []
+
+    # Get this task's dependencies from the tree
+    dependencies = tree.get_dependencies(str(task_id))
+    if not dependencies:
+        return []
+
+    # Filter to only non-completed dependencies
+    task_states = queries.task_state_events.get_current_states(run_id)
+    blocking = [
+        UUID(dep_id)
+        for dep_id in dependencies
+        if task_states.get(dep_id) != TaskStatus.COMPLETED.value
+    ]
+    return blocking
 
 
 # =============================================================================
@@ -222,7 +260,7 @@ def on_task_completed(
 
     This function:
     1. Marks the task as COMPLETED (state + event)
-    2. Marks dependencies on this task as satisfied
+    2. Finds tasks that depend on this task (from task_tree)
     3. Checks which dependent tasks are now unblocked
     4. Propagates completion to parent composite tasks (if applicable)
 
@@ -237,19 +275,19 @@ def on_task_completed(
     # 1. Mark this task as completed
     mark_task_completed(run_id, task_id, execution_id)
 
-    # 2. Mark dependencies as satisfied and get potentially unblocked tasks
-    potentially_unblocked = queries.task_dependencies.mark_satisfied(
-        run_id=run_id,
-        dependency_task_id=task_id,
-        execution_id=execution_id,
-    )
+    # 2. Find tasks that depend on this task (from task_tree)
+    tree = _get_task_tree(run_id)
+    potentially_unblocked: list[UUID] = []
+    if tree is not None:
+        dependent_ids = tree.get_dependents(str(task_id))
+        potentially_unblocked = [UUID(tid) for tid in dependent_ids]
 
     # 3. Check which tasks are actually ready (all deps satisfied)
     ready_tasks: list[UUID] = []
     for candidate_id in potentially_unblocked:
         if is_task_ready(run_id, candidate_id):
             # Task is ready - update its state
-            mark_task_ready(run_id, candidate_id, triggered_by="dependency_satisfied")
+            mark_task_ready(run_id, candidate_id, triggered_by=TaskTrigger.DEPENDENCY_SATISFIED)
             ready_tasks.append(candidate_id)
 
     # 4. Propagate to parent composite tasks
@@ -303,14 +341,14 @@ def propagate_to_parent(run_id: UUID, task_id: UUID) -> bool:
 
     leaf_ids = parent_node.get_leaf_ids()
 
-    # Check if all leaf descendants are completed
-    task_states = run.task_states or {}
+    # Check if all leaf descendants are completed (from event log)
+    task_states = queries.task_state_events.get_current_states(run_id)
     all_complete = all(
         task_states.get(leaf_id) == TaskStatus.COMPLETED.value for leaf_id in leaf_ids
     )
 
     if all_complete:
-        # Mark parent as completed WITHOUT emitting event
+        # Mark parent as completed
         # Parent completion doesn't need propagation - it's just state tracking
         parent_uuid = UUID(task_node.parent_id)
         _update_task_state(
@@ -318,10 +356,10 @@ def propagate_to_parent(run_id: UUID, task_id: UUID) -> bool:
             parent_uuid,
             TaskStatus.COMPLETED,
             execution_id=None,
-            triggered_by="children_completed",
+            triggered_by=TaskTrigger.CHILDREN_COMPLETED,
         )
 
-        # Recursively propagate to grandparent (also without emitting events)
+        # Recursively propagate to grandparent
         propagate_to_parent(run_id, parent_uuid)
         return True
 
@@ -380,8 +418,8 @@ def is_workflow_complete(run_id: UUID) -> bool:
     # Get all leaf tasks using typed method
     all_leaf_ids = tree.get_leaf_ids()
 
-    # Check if all are completed
-    task_states = run.task_states or {}
+    # Check if all are completed (from event log)
+    task_states = queries.task_state_events.get_current_states(run_id)
     return all(task_states.get(leaf_id) == TaskStatus.COMPLETED.value for leaf_id in all_leaf_ids)
 
 
@@ -395,11 +433,8 @@ def is_workflow_failed(run_id: UUID) -> bool:
     Returns:
         True if any task is FAILED, False otherwise
     """
-    run = queries.runs.get(run_id)
-    if run is None:
-        return False
-
-    task_states = run.task_states or {}
+    # Get current states from event log
+    task_states = queries.task_state_events.get_current_states(run_id)
     return any(status == TaskStatus.FAILED.value for status in task_states.values())
 
 
@@ -412,7 +447,7 @@ def get_initial_ready_tasks(run_id: UUID) -> list[UUID]:
     """
     Get tasks that are ready to execute at workflow start.
 
-    These are leaf tasks with no dependencies.
+    These are leaf tasks with no dependencies (or all dependencies already satisfied).
 
     Args:
         run_id: The run ID
@@ -420,29 +455,19 @@ def get_initial_ready_tasks(run_id: UUID) -> list[UUID]:
     Returns:
         List of task UUIDs that should be executed first
     """
-    run = queries.runs.get(run_id)
-    if run is None:
-        return []
-
-    experiment = queries.experiments.get(run.experiment_id)
-    if experiment is None:
-        return []
-
-    # Parse task_tree into typed model
-    tree = parse_task_tree(experiment.task_tree)
+    tree = _get_task_tree(run_id)
     if tree is None:
         return []
 
     # Get all leaf tasks using typed method
-    all_leaf_ids = tree.get_leaf_ids()
+    all_leaves = tree.get_all_leaves()
 
-    # Find those with no dependencies
+    # At workflow start, no tasks are completed yet, so only tasks
+    # with no dependencies are ready
     ready_tasks: list[UUID] = []
-    for leaf_id_str in all_leaf_ids:
-        leaf_id = UUID(leaf_id_str)
-
-        # Check if this task has any dependencies
-        if is_task_ready(run_id, leaf_id):
-            ready_tasks.append(leaf_id)
+    for leaf in all_leaves:
+        if not leaf.depends_on:
+            # No dependencies - task is ready
+            ready_tasks.append(UUID(leaf.id))
 
     return ready_tasks

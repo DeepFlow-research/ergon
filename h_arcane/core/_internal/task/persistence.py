@@ -29,7 +29,6 @@ from h_arcane.core._internal.task.schema import TaskTreeNode
 
 if TYPE_CHECKING:
     from h_arcane.core._internal.agents.registry import AgentRegistry
-    from h_arcane.core._internal.task.registry import TaskRegistry
 
 
 # =============================================================================
@@ -78,21 +77,6 @@ def serialize_task_tree(task: Task) -> TaskTreeNode:
     return TaskTreeNode.model_validate(data)
 
 
-def compute_initial_task_states(registry: "TaskRegistry") -> dict[str, str]:
-    """
-    Compute initial task states from a TaskRegistry.
-
-    Returns a dict mapping task_id (as string) -> status (as string).
-
-    Args:
-        registry: The TaskRegistry containing processed tasks
-
-    Returns:
-        Dictionary of task_id -> status
-    """
-    return {str(task.id): task.status.value for task in registry.tasks.values()}
-
-
 # =============================================================================
 # Experiment Persistence
 # =============================================================================
@@ -100,7 +84,6 @@ def compute_initial_task_states(registry: "TaskRegistry") -> dict[str, str]:
 
 def create_experiment_from_task(
     task: Task,
-    registry: "TaskRegistry",
     benchmark_name: str = "CUSTOM",
 ) -> dict:
     """
@@ -110,8 +93,7 @@ def create_experiment_from_task(
     but does not actually persist it (to allow for synchronous testing).
 
     Args:
-        task: The root task
-        registry: The TaskRegistry containing processed task tree
+        task: The root task (must be validated via validate_task_dag first)
         benchmark_name: The benchmark name (default: "CUSTOM")
 
     Returns:
@@ -138,21 +120,19 @@ def create_experiment_from_task(
 
 def persist_experiment(
     task: Task,
-    registry: "TaskRegistry",
     benchmark_name: str = "CUSTOM",
 ) -> Any:
     """
     Create and persist an Experiment record from a Task.
 
     Args:
-        task: The root task
-        registry: The TaskRegistry containing processed task tree
+        task: The root task (must be validated via validate_task_dag first)
         benchmark_name: The benchmark name (default: "CUSTOM")
 
     Returns:
         The created Experiment record
     """
-    experiment_data = create_experiment_from_task(task, registry, benchmark_name)
+    experiment_data = create_experiment_from_task(task, benchmark_name)
     experiment = Experiment(**experiment_data)
     return queries.experiments.create(experiment)
 
@@ -164,7 +144,6 @@ def persist_experiment(
 
 def create_run_from_config(
     experiment_id: UUID,
-    registry: "TaskRegistry",
     worker_model: str = "gpt-4o",
     max_questions: int = 10,
     **extra_config: Any,
@@ -175,9 +154,11 @@ def create_run_from_config(
     This function creates the data needed for a Run record,
     but does not actually persist it.
 
+    Note: Initial task states are recorded as TaskStateEvents during workflow_start,
+    not stored in Run. Use queries.task_state_events.get_current_states() to query.
+
     Args:
         experiment_id: The experiment ID
-        registry: The TaskRegistry containing processed task tree
         worker_model: The model to use for workers
         max_questions: Maximum questions allowed
         **extra_config: Additional configuration
@@ -185,19 +166,15 @@ def create_run_from_config(
     Returns:
         Dictionary suitable for creating a Run record
     """
-    task_states = compute_initial_task_states(registry)
-
     return {
         "experiment_id": experiment_id,
         "worker_model": worker_model,
         "max_questions": max_questions,
-        "task_states": task_states,
     }
 
 
 def persist_run(
     experiment_id: UUID,
-    registry: "TaskRegistry",
     worker_model: str = "gpt-4o",
     max_questions: int = 10,
     **extra_config: Any,
@@ -207,7 +184,6 @@ def persist_run(
 
     Args:
         experiment_id: The experiment ID
-        registry: The TaskRegistry containing processed task tree
         worker_model: The model to use for workers
         max_questions: Maximum questions allowed
         **extra_config: Additional configuration
@@ -215,9 +191,7 @@ def persist_run(
     Returns:
         The created Run record
     """
-    run_data = create_run_from_config(
-        experiment_id, registry, worker_model, max_questions, **extra_config
-    )
+    run_data = create_run_from_config(experiment_id, worker_model, max_questions, **extra_config)
     run = Run(**run_data)
     return queries.runs.create(run)
 
@@ -316,21 +290,21 @@ def _get_extension_from_mime(mime_type: str) -> str:
 
 def persist_input_resources(
     experiment_id: UUID,
-    registry: "TaskRegistry",
+    root_task: Task,
 ) -> dict[UUID, list[UUID]]:
     """
     Create Resource records for all task inputs.
 
     Args:
         experiment_id: The experiment ID
-        registry: The TaskRegistry containing tasks with resources
+        root_task: The root task (must be validated via validate_task_dag first)
 
     Returns:
         Mapping of task_id -> list of created resource IDs
     """
     task_to_resources: dict[UUID, list[UUID]] = {}
 
-    for task in registry.tasks.values():
+    for task in root_task.get_all_tasks():
         resource_ids: list[UUID] = []
 
         for sdk_resource in task.resources:
@@ -638,7 +612,6 @@ def load_agent_mapping(run_id: UUID) -> dict[UUID, UUID]:
 
 def persist_workflow(
     task: Task,
-    registry: "TaskRegistry",
     worker_model: str = "gpt-4o",
     max_questions: int = 10,
     benchmark_name: str = "CUSTOM",
@@ -650,8 +623,7 @@ def persist_workflow(
     persist_run, and persist_input_resources in sequence.
 
     Args:
-        task: The root task
-        registry: The TaskRegistry containing processed task tree
+        task: The root task (must be validated via validate_task_dag first)
         worker_model: The model to use for workers
         max_questions: Maximum questions allowed
         benchmark_name: The benchmark name
@@ -660,12 +632,12 @@ def persist_workflow(
         Tuple of (experiment, run, task_to_resource_ids)
     """
     # 1. Create experiment
-    experiment = persist_experiment(task, registry, benchmark_name)
+    experiment = persist_experiment(task, benchmark_name)
 
     # 2. Create run
-    run = persist_run(experiment.id, registry, worker_model, max_questions)
+    run = persist_run(experiment.id, worker_model, max_questions)
 
     # 3. Create input resources
-    resource_mapping = persist_input_resources(experiment.id, registry)
+    resource_mapping = persist_input_resources(experiment.id, task)
 
     return experiment, run, resource_mapping

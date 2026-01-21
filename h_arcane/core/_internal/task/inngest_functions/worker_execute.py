@@ -25,6 +25,7 @@ from h_arcane.core._internal.task.schema import parse_task_tree
 from h_arcane.core._internal.utils import require_not_none
 from h_arcane.core.worker import WorkerContext, WorkerResult
 from h_arcane.core.task import Task
+from h_arcane.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -171,11 +172,23 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
             # Call worker with SDK types
             result: WorkerResult = await worker.execute(task, context)
 
-            # Persist actions with run_id/agent_id
+            # Persist actions with run_id/agent_id and emit dashboard events
             for action in result.actions:
                 action.run_id = run_id
                 action.agent_id = agent_config.id
                 queries.actions.create(action)
+
+                await dashboard_emitter.agent_action_completed(
+                    run_id=run_id,
+                    task_id=task_id,
+                    action_id=action.id,
+                    worker_id=agent_config.id,
+                    action_type=action.action_type,
+                    duration_ms=action.duration_ms or 0,
+                    success=action.success,
+                    action_output=action.output,
+                    error=str(action.error),
+                )
 
             # Persist Q&A exchanges (via communication service if needed)
             # Q&A is already persisted by toolkit during execution, but we could

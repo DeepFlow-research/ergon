@@ -15,7 +15,7 @@ from h_arcane.benchmarks.types import AnyRubric
 from h_arcane.core._internal.db.models import TaskEvaluationResult
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.evaluation.events import TaskEvaluationEvent
-from h_arcane.core._internal.evaluation.inngest_functions import evaluate_task_run
+from h_arcane.core._internal.evaluation.inngest_functions.task_run import evaluate_task_run
 from h_arcane.core._internal.evaluation.results import EvaluatorsResult
 from h_arcane.core._internal.evaluation.serialization import deserialize_rubric
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client

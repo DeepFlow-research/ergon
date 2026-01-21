@@ -4,7 +4,7 @@ import sys
 from typing import TYPE_CHECKING, Callable, Iterator, TypeVar
 
 from h_arcane.core._internal.task.persistence import persist_workflow
-from h_arcane.core._internal.task.registry import TaskRegistry
+from h_arcane.core._internal.task.validation import validate_task_dag
 from h_arcane.core.task import Task
 
 if TYPE_CHECKING:
@@ -57,8 +57,8 @@ def load_benchmark_to_database(
             print(f"   Processing {idx}/{total}...", file=sys.stderr, flush=True)
 
         task = item_to_task(item, worker)
-        registry = TaskRegistry(task)
-        experiment, _, _ = persist_workflow(task, registry, benchmark_name=benchmark_name)
+        validate_task_dag(task)
+        experiment, _, _ = persist_workflow(task, benchmark_name=benchmark_name)
         experiment_ids.append(experiment.id)
 
     return experiment_ids

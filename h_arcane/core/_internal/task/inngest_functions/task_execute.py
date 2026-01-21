@@ -38,6 +38,8 @@ from h_arcane.core._internal.task.results import (
 from h_arcane.core._internal.task.schema import parse_task_tree
 from h_arcane.core._internal.utils import require_not_none
 from h_arcane.core.settings import settings
+from h_arcane.core.status import TaskStatus, TaskTrigger
+from h_arcane.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -112,6 +114,20 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
     execution = require_not_none(execution, "create-running-execution returned None")
     execution_id = execution.id
 
+    # Emit dashboard task running event
+    async def emit_dashboard_task_running() -> None:
+        await dashboard_emitter.task_status_changed(
+            run_id=run_id,
+            task_id=task_id,
+            task_name=task_node.name,
+            old_status=TaskStatus.READY,
+            new_status=TaskStatus.RUNNING,
+            parent_task_id=task_node.parent_id,
+            triggered_by=TaskTrigger.WORKER_STARTED,
+        )
+
+    await ctx.step.run("emit-dashboard-task-running", emit_dashboard_task_running)
+
     try:
         # Invoke: Setup sandbox
         sandbox_result: SandboxReadyResult = await ctx.step.invoke(
@@ -177,6 +193,16 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
             await inngest_client.send(
                 inngest.Event(name=TaskCompletedEvent.name, data=event.model_dump())
             )
+            # Emit dashboard task completed event
+            await dashboard_emitter.task_status_changed(
+                run_id=run_id,
+                task_id=task_id,
+                task_name=task_node.name,
+                old_status=TaskStatus.RUNNING,
+                new_status=TaskStatus.COMPLETED,
+                parent_task_id=task_node.parent_id,
+                triggered_by=TaskTrigger.EXECUTION_SUCCEEDED,
+            )
 
         await ctx.step.run("complete-and-emit", complete_and_emit)
 
@@ -209,6 +235,16 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
             )
             await inngest_client.send(
                 inngest.Event(name=TaskFailedEvent.name, data=event.model_dump())
+            )
+            # Emit dashboard task failed event
+            await dashboard_emitter.task_status_changed(
+                run_id=run_id,
+                task_id=task_id,
+                task_name=task_node.name,
+                old_status=TaskStatus.RUNNING,
+                new_status=TaskStatus.FAILED,
+                parent_task_id=task_node.parent_id,
+                triggered_by=TaskTrigger.EXECUTION_FAILED,
             )
 
         await ctx.step.run("fail-and-emit", fail_and_emit)

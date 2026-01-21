@@ -2,14 +2,19 @@
 Task processing internals.
 
 This module contains the internal machinery for processing task DAGs:
-- TaskRegistry: Flattens, validates, and manages task trees
+- validate_task_dag: Validates and prepares task trees for execution
 - TaskTreeNode: Typed schema for serialized task trees
 - TaskEvents/WorkflowEvents: Event constants for Inngest
 - Persistence functions: SDK types -> DB records
 - Worker context: In-memory task_id -> worker mapping
 """
 
-from h_arcane.core._internal.task.registry import TaskRegistry
+from h_arcane.core._internal.task.validation import (
+    validate_task_dag,
+    CycleDetectedError,
+    MissingDependencyError,
+    TaskValidationError,
+)
 from h_arcane.core._internal.task.schema import (
     # Typed task tree schema
     TaskTreeNode,
@@ -28,7 +33,6 @@ from h_arcane.core._internal.task.worker_context import (
 from h_arcane.core._internal.task.persistence import (
     # Task tree serialization
     serialize_task_tree,
-    compute_initial_task_states,
     # Experiment/Run persistence
     create_experiment_from_task,
     persist_experiment,
@@ -52,8 +56,11 @@ from h_arcane.core._internal.task.persistence import (
 )
 
 __all__ = [
-    # Registry
-    "TaskRegistry",
+    # Validation
+    "validate_task_dag",
+    "CycleDetectedError",
+    "MissingDependencyError",
+    "TaskValidationError",
     # Schema
     "TaskTreeNode",
     "WorkerRef",
@@ -71,7 +78,6 @@ __all__ = [
     "WorkflowEvents",
     # Task tree serialization
     "serialize_task_tree",
-    "compute_initial_task_states",
     # Experiment/Run persistence
     "create_experiment_from_task",
     "persist_experiment",

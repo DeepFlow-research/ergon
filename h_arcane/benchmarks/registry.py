@@ -32,12 +32,20 @@ from h_arcane.benchmarks.researchrubrics.factories import (
 )
 from h_arcane.benchmarks.researchrubrics.sandbox import ResearchRubricsSandboxManager
 
+from h_arcane.benchmarks.smoke_test.config import SMOKE_TEST_CONFIG
+from h_arcane.benchmarks.smoke_test.loader import load_smoke_test_to_database
+from h_arcane.benchmarks.smoke_test.factories import (
+    create_stakeholder as smoke_test_create_stakeholder,
+    create_toolkit as smoke_test_create_toolkit,
+)
+from h_arcane.benchmarks.smoke_test.sandbox import DummySandboxManager
+
 
 class BenchmarkConfig(TypedDict):
     """Full configuration for a benchmark."""
 
     config: WorkerConfig
-    skills_dir: Path
+    skills_dir: Path | None  # None for benchmarks that don't use sandbox skills (e.g., smoke_test)
     loader: Callable
     stakeholder_factory: Callable  # (Experiment) -> BaseStakeholder
     toolkit_factory: (
@@ -76,6 +84,14 @@ BENCHMARK_CONFIGS: dict[BenchmarkName, BenchmarkConfig] = {
         "toolkit_factory": researchrubrics_create_toolkit,
         "sandbox_manager_class": ResearchRubricsSandboxManager,
     },
+    BenchmarkName.SMOKE_TEST: {
+        "config": SMOKE_TEST_CONFIG,
+        "skills_dir": None,  # Smoke test uses stub tools, not sandbox skills
+        "loader": load_smoke_test_to_database,
+        "stakeholder_factory": smoke_test_create_stakeholder,
+        "toolkit_factory": smoke_test_create_toolkit,
+        "sandbox_manager_class": DummySandboxManager,
+    },
 }
 
 
@@ -96,8 +112,8 @@ def get_worker_config(benchmark_name: BenchmarkName) -> WorkerConfig:
     return _get_config(benchmark_name)["config"]
 
 
-def get_skills_dir(benchmark_name: BenchmarkName) -> Path:
-    """Get skills directory for a benchmark."""
+def get_skills_dir(benchmark_name: BenchmarkName) -> Path | None:
+    """Get skills directory for a benchmark (None for benchmarks without sandbox skills)."""
     return _get_config(benchmark_name)["skills_dir"]
 
 

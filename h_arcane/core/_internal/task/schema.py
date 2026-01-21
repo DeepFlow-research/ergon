@@ -198,6 +198,40 @@ class TaskTreeNode(BaseModel):
                 evaluators.append((node.id, node.evaluator))
         return evaluators
 
+    def get_dependents(self, task_id: str) -> list[str]:
+        """
+        Find all task IDs that depend on the given task.
+
+        This is the reverse lookup of depends_on - finds all tasks
+        that have task_id in their depends_on list.
+
+        Args:
+            task_id: The task UUID string to find dependents for
+
+        Returns:
+            List of task ID strings that depend on task_id
+        """
+        dependents: list[str] = []
+        for node in self.walk():
+            if task_id in node.depends_on:
+                dependents.append(node.id)
+        return dependents
+
+    def get_dependencies(self, task_id: str) -> list[str]:
+        """
+        Get the dependencies for a specific task.
+
+        Args:
+            task_id: The task UUID string
+
+        Returns:
+            List of task ID strings this task depends on, or empty list if not found
+        """
+        node = self.find_by_id(task_id)
+        if node is None:
+            return []
+        return node.depends_on
+
 
 def parse_task_tree(data: dict | None) -> TaskTreeNode | None:
     """

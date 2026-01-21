@@ -19,6 +19,7 @@ from h_arcane.core._internal.task.schema import parse_task_tree
 from h_arcane.core._internal.utils import require_not_none
 from h_arcane.core.runner import ExecutionResult, TaskResult
 from h_arcane.core.task import Resource
+from h_arcane.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -138,6 +139,23 @@ async def workflow_complete(ctx: inngest.Context) -> WorkflowCompleteResult:
 
     result = await ctx.step.run("finalize-run", finalize_run, output_type=WorkflowCompleteResult)
     result = require_not_none(result, "finalize-run returned None")
+
+    # Emit dashboard workflow completed event
+    async def emit_dashboard_workflow_completed() -> None:
+        run = queries.runs.get(run_id)
+        if run:
+            started_at = run.started_at or run.created_at
+            completed_at = run.completed_at or datetime.now(timezone.utc)
+            duration_seconds = (completed_at - started_at).total_seconds()
+
+            await dashboard_emitter.workflow_completed(
+                run_id=run_id,
+                status="completed",
+                duration_seconds=duration_seconds,
+                final_score=result.final_score,
+            )
+
+    await ctx.step.run("emit-dashboard-workflow-completed", emit_dashboard_workflow_completed)
 
     # Emit cleanup event
     async def emit_cleanup() -> None:

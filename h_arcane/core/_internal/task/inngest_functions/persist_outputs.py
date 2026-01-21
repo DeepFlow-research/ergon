@@ -17,6 +17,7 @@ from h_arcane.core._internal.infrastructure.sandbox import DownloadedFiles
 from h_arcane.core._internal.task.requests import PersistOutputsRequest
 from h_arcane.core._internal.task.results import PersistOutputsResult
 from h_arcane.core._internal.utils import get_mime_type, require_not_none
+from h_arcane.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -67,7 +68,7 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     # Define the registration function for a single file
     def make_register_step(local_path: str, size_bytes: int):
         async def register_resource() -> ResourceRecord:
-            return queries.resources.create(
+            resource = queries.resources.create(
                 ResourceRecord(
                     run_id=run_id,
                     task_id=task_id,
@@ -80,6 +81,20 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
                     source_resource_ids=source_ids,
                 )
             )
+
+            # Emit dashboard resource published event
+            await dashboard_emitter.resource_published(
+                run_id=run_id,
+                task_id=task_id,
+                task_execution_id=execution_id,
+                resource_id=resource.id,
+                resource_name=resource.name,
+                mime_type=resource.mime_type or "application/octet-stream",
+                size_bytes=resource.size_bytes or 0,
+                file_path=resource.file_path,
+            )
+
+            return resource
 
         return partial(
             ctx.step.run,

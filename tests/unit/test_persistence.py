@@ -7,14 +7,13 @@ import pytest
 
 from h_arcane import Resource, Task
 from h_arcane.core._internal.task.persistence import (
-    compute_initial_task_states,
     create_experiment_from_task,
     create_resource_from_sdk,
     create_run_from_config,
     serialize_task_tree,
     create_output_resource_from_sdk,
 )
-from h_arcane.core._internal.task.registry import TaskRegistry
+from h_arcane.core._internal.task.validation import validate_task_dag
 from h_arcane.benchmarks.enums import BenchmarkName
 
 
@@ -98,8 +97,8 @@ class TestSerializeTaskTree:
         task = make_task("Task", worker, depends_on=[dep1, dep2])
         root = make_task("Root", worker, children=[dep1, dep2, task])
 
-        # Process through registry to resolve dependencies
-        TaskRegistry(root)
+        # Process through validation to resolve dependencies
+        validate_task_dag(root)
         result = serialize_task_tree(task)
 
         assert len(result.depends_on) == 2
@@ -136,8 +135,8 @@ class TestSerializeTaskTree:
         parent = make_task("Parent", worker, children=[child])
         root = make_task("Root", worker, children=[parent])
 
-        # Process through registry to set parent_ids
-        TaskRegistry(root)
+        # Process through validation to set parent_ids
+        validate_task_dag(root)
         result = serialize_task_tree(root)
 
         assert result.name == "Root"
@@ -145,51 +144,6 @@ class TestSerializeTaskTree:
         assert result.children[0].name == "Parent"
         assert len(result.children[0].children) == 1
         assert result.children[0].children[0].name == "Child"
-
-
-# =============================================================================
-# compute_initial_task_states Tests
-# =============================================================================
-
-
-class TestComputeInitialTaskStates:
-    """Tests for compute_initial_task_states()."""
-
-    def test_single_task_is_ready(self):
-        """Single leaf task with no deps should be READY."""
-        worker = MockWorker()
-        task = make_task("Task", worker)
-        registry = TaskRegistry(task)
-
-        states = compute_initial_task_states(registry)
-
-        assert str(task.id) in states
-        assert states[str(task.id)] == "ready"
-
-    def test_task_with_deps_is_pending(self):
-        """Task with dependencies should be PENDING."""
-        worker = MockWorker()
-        dep = make_task("Dep", worker)
-        task = make_task("Task", worker, depends_on=[dep])
-        root = make_task("Root", worker, children=[dep, task])
-
-        registry = TaskRegistry(root)
-        states = compute_initial_task_states(registry)
-
-        assert states[str(dep.id)] == "ready"  # No deps
-        assert states[str(task.id)] == "pending"  # Has deps
-
-    def test_composite_task_is_pending(self):
-        """Composite task (with children) should be PENDING."""
-        worker = MockWorker()
-        child = make_task("Child", worker)
-        parent = make_task("Parent", worker, children=[child])
-
-        registry = TaskRegistry(parent)
-        states = compute_initial_task_states(registry)
-
-        assert states[str(parent.id)] == "pending"
-        assert states[str(child.id)] == "ready"
 
 
 # =============================================================================
@@ -208,23 +162,23 @@ class TestCreateExperimentFromTask:
             description="A test task description",
             assigned_to=worker,
         )
-        registry = TaskRegistry(task)
+        validate_task_dag(task)
 
-        data = create_experiment_from_task(task, registry)
+        data = create_experiment_from_task(task)
 
         assert data["task_id"] == str(task.id)
         assert data["task_description"] == "A test task description"
         assert data["root_task_id"] == str(task.id)
         assert "task_tree" in data
-        assert data["task_tree"].name == "Test Task"
+        assert data["task_tree"]["name"] == "Test Task"
 
     def test_creates_experiment_with_custom_benchmark(self):
         """Create experiment with custom benchmark name."""
         worker = MockWorker()
         task = make_task("Task", worker)
-        registry = TaskRegistry(task)
+        validate_task_dag(task)
 
-        data = create_experiment_from_task(task, registry, benchmark_name="GDPEVAL")
+        data = create_experiment_from_task(task, benchmark_name="GDPEVAL")
 
         # Should parse benchmark name
         assert data["benchmark_name"] == BenchmarkName.GDPEVAL
@@ -240,29 +194,20 @@ class TestCreateRunFromConfig:
 
     def test_creates_run_data(self):
         """Create run data from config."""
-        worker = MockWorker()
-        task = make_task("Task", worker)
-        registry = TaskRegistry(task)
         experiment_id = uuid4()
 
-        data = create_run_from_config(experiment_id, registry)
+        data = create_run_from_config(experiment_id)
 
         assert data["experiment_id"] == experiment_id
         assert data["worker_model"] == "gpt-4o"
         assert data["max_questions"] == 10
-        assert "task_states" in data
-        assert str(task.id) in data["task_states"]
 
     def test_creates_run_with_custom_config(self):
         """Create run with custom configuration."""
-        worker = MockWorker()
-        task = make_task("Task", worker)
-        registry = TaskRegistry(task)
         experiment_id = uuid4()
 
         data = create_run_from_config(
             experiment_id,
-            registry,
             worker_model="gpt-4o-mini",
             max_questions=5,
         )
@@ -385,18 +330,18 @@ class TestPersistenceIntegration:
             children=[task_a, task_b],
         )
 
-        # Process
-        registry = TaskRegistry(workflow)
+        # Validate
+        validate_task_dag(workflow)
 
         # Create experiment data
-        exp_data = create_experiment_from_task(workflow, registry)
-        assert exp_data["task_tree"].name == "Workflow"
-        assert len(exp_data["task_tree"].children) == 2
+        exp_data = create_experiment_from_task(workflow)
+        assert exp_data["task_tree"]["name"] == "Workflow"
+        assert len(exp_data["task_tree"]["children"]) == 2
 
         # Create run data
         exp_id = uuid4()
-        run_data = create_run_from_config(exp_id, registry)
-        assert len(run_data["task_states"]) == 3  # workflow + 2 children
+        run_data = create_run_from_config(exp_id)
+        assert run_data["experiment_id"] == exp_id
 
         # Create resource data
         resource_data = create_resource_from_sdk(task_a.resources[0], exp_id, task_a.id)
