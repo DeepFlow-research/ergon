@@ -15,6 +15,11 @@ from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.core.status import TaskStatus
 
 
+def _utcnow() -> datetime:
+    """Return current UTC time as naive datetime for DB storage."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 # =============================================================================
 # Error Tracking Models
 # =============================================================================
@@ -117,7 +122,7 @@ class Experiment(SQLModel, table=True):
 
     # Generic metadata
     category: str = Field(index=True, default="custom")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=_utcnow)
 
     __table_args__ = (
         Index("ix_experiments_benchmark_task", "benchmark_name", "task_id", unique=True),
@@ -144,8 +149,8 @@ class Run(SQLModel, table=True):
     e2b_sandbox_id: str | None = None
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    started_at: datetime | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    started_at: datetime = Field(default_factory=_utcnow)
     completed_at: datetime | None = None
 
     # Execution output
@@ -189,7 +194,7 @@ class Message(SQLModel, table=True):
     sequence_num: int  # 0, 1, 2, ...
 
     # Timing
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=_utcnow)
 
     # Metadata
     tokens: int | None = None
@@ -219,7 +224,7 @@ class Action(SQLModel, table=True):
     error: dict | None = Field(default=None, sa_column=Column(JSON))
 
     # Timing
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=_utcnow)
     completed_at: datetime | None = None
     duration_ms: int | None = None
 
@@ -282,7 +287,7 @@ class ResourceRecord(SQLModel, table=True):
     )
 
     preview_text: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=_utcnow)
 
     __table_args__ = (
         Index("ix_resources_experiment", "experiment_id"),
@@ -335,7 +340,7 @@ class AgentConfig(SQLModel, table=True):
     # === NEW: Role in workflow ===
     role: str = Field(default="worker")  # "worker", "stakeholder", "manager"
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=_utcnow)
 
     __table_args__ = (Index("ix_agent_configs_run", "run_id"),)
 
@@ -369,8 +374,8 @@ class TaskExecution(SQLModel, table=True):
     attempt_number: int = Field(default=1)
 
     # Timing
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    started_at: datetime | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
+    started_at: datetime = Field(default_factory=_utcnow)
     completed_at: datetime | None = None
 
     # Output
@@ -427,7 +432,7 @@ class TaskStateEvent(SQLModel, table=True):
     triggered_by: str | None = None  # "dependency_satisfied", "worker_started", "timeout"
     event_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=_utcnow)
 
     __table_args__ = (
         Index("ix_task_state_events_run_task", "run_id", "task_id"),
@@ -463,7 +468,7 @@ class TaskEvaluator(SQLModel, table=True):
     score: float | None = None
     evaluation_id: UUID | None = Field(foreign_key="evaluations.id", default=None)
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=_utcnow)
     evaluated_at: datetime | None = None
 
     __table_args__ = (
@@ -490,7 +495,7 @@ class Evaluation(SQLModel, table=True):
     stages_passed: int
     failed_gate: str | None = None  # First required stage that failed
 
-    evaluated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    evaluated_at: datetime = Field(default_factory=_utcnow)
 
 
 class CriterionResult(SQLModel, table=True):
@@ -575,7 +580,7 @@ class TaskEvaluationResult(SQLModel, table=True):
     stages_passed: int
     failed_gate: str | None = None
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=_utcnow)
 
     __table_args__ = (Index("ix_task_evaluation_results_run", "run_id"),)
 
@@ -606,9 +611,9 @@ class Thread(SQLModel, table=True):
     topic: str = Field()
 
     # Timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=_utcnow
     )  # Updated on new message
 
     __table_args__ = (
@@ -640,7 +645,7 @@ class ThreadMessage(SQLModel, table=True):
 
     # Ordering and timing
     sequence_num: int  # 0, 1, 2, ... within thread
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=_utcnow)
 
     __table_args__ = (
         Index("ix_thread_messages_thread_seq", "thread_id", "sequence_num"),

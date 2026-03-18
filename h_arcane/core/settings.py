@@ -38,7 +38,7 @@ class Settings(BaseSettings):
         return self.data_dir / "runs"
 
     model_config = SettingsConfigDict(
-        env_file=str(Path(__file__).parent.parent / ".env"),
+        env_file=str(Path(__file__).parent.parent.parent / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -49,8 +49,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 for key, value in settings.model_dump().items():
-    if key in ["openai_api_key"]:
-        if value == "":
-            raise ValueError(
-                f"Environment variable {key} is not set. Please set it in your .env file or environment variables."
-            )
+    if value == "":
+        raise ValueError(
+            f"Environment variable {key} is not set. Please set it in your .env file or environment variables. env path: {settings.model_config['env_file']}"
+        )

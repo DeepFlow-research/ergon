@@ -104,36 +104,36 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
     # Run valid evaluators in parallel
     scores: list[float] = []
     if valid_evaluators:
+        # First, mark all evaluators as running
+        for eid, _ in valid_evaluators:
+            queries.task_evaluators.mark_running(eid)
 
-        def make_run_evaluator_step(eid: UUID, r: AnyRubric):
-            async def run_evaluator() -> float:
-                # Mark as running
-                queries.task_evaluators.mark_running(eid)
+        # Create invokers for parallel execution
+        # Note: ctx.step.invoke is already a step, so we don't wrap it in ctx.step.run
+        def make_invoker(eid: UUID, r: AnyRubric):
+            return lambda: ctx.step.invoke(
+                step_id=f"evaluate-{eid}",
+                function=evaluate_task_run,
+                data=TaskEvaluationEvent(
+                    run_id=str(run_id),
+                    task_input=task_input,
+                    agent_reasoning=agent_reasoning,
+                    agent_outputs=agent_outputs,
+                    rubric=r,
+                ).model_dump(mode="json"),
+            )
 
-                # Invoke the evaluation function
-                evaluation_result: TaskEvaluationResult = await ctx.step.invoke(
-                    step_id=f"evaluate-{eid}",
-                    function=evaluate_task_run,
-                    data=TaskEvaluationEvent(
-                        run_id=str(run_id),
-                        task_input=task_input,
-                        agent_reasoning=agent_reasoning,
-                        agent_outputs=agent_outputs,
-                        rubric=r,
-                    ).model_dump(mode="json"),
-                )
-
-                # Mark as completed with score
-                score = evaluation_result.normalized_score
-                queries.task_evaluators.mark_completed(eid, score)
-                return score
-
-            return partial(ctx.step.run, f"run-evaluator-{eid}", run_evaluator)
-
-        results: tuple[float, ...] = await ctx.group.parallel(
-            tuple(make_run_evaluator_step(eid, rubric) for eid, rubric in valid_evaluators)
+        # Execute all evaluations in parallel
+        results: tuple[TaskEvaluationResult, ...] = await ctx.group.parallel(
+            tuple(make_invoker(eid, rubric) for eid, rubric in valid_evaluators)
         )
-        scores = [s for s in results if s is not None]
+
+        # Mark evaluators as completed with scores
+        for (eid, _), result in zip(valid_evaluators, results):
+            if result is not None:
+                score = result.normalized_score
+                queries.task_evaluators.mark_completed(eid, score)
+                scores.append(score)
 
     return EvaluatorsResult(
         task_id=task_id,

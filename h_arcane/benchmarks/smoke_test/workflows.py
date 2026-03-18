@@ -13,9 +13,70 @@ Workflow Patterns:
 from typing import TYPE_CHECKING
 
 from h_arcane.core.task import Task
+from h_arcane.benchmarks.smoke_test.rubric import SmokeTestRubric
+from h_arcane.core._internal.evaluation.rules import CodeRule, LLMJudgeRule
 
 if TYPE_CHECKING:
     from h_arcane.core.worker import BaseWorker
+
+
+# Simple code rule that checks agent output contains text
+SMOKE_TEST_CODE_RULE = '''
+def evaluate(task_input: str, agent_reasoning: str, output_files: dict[str, bytes]) -> tuple[float, str]:
+    """Check that agent produced non-empty output."""
+    if not agent_reasoning or len(agent_reasoning.strip()) < 10:
+        return 0.0, "Agent produced no meaningful output text"
+    
+    word_count = len(agent_reasoning.split())
+    if word_count < 5:
+        return 0.3, f"Agent output is very short ({word_count} words)"
+    elif word_count < 20:
+        return 0.7, f"Agent produced brief output ({word_count} words)"
+    else:
+        return 1.0, f"Agent produced sufficient output ({word_count} words)"
+'''
+
+
+def create_smoke_test_rubric(task_name: str) -> SmokeTestRubric:
+    """Create a rubric for smoke test evaluation.
+
+    Uses both CodeRule and LLMJudgeRule to test the full evaluation pipeline
+    including sandbox code execution.
+
+    Args:
+        task_name: Name of the task being evaluated
+
+    Returns:
+        SmokeTestRubric with both rule types for comprehensive testing
+    """
+    return SmokeTestRubric(
+        rules=[
+            # CodeRule: Tests sandbox code execution path
+            CodeRule(
+                name="output_presence",
+                description="Check that agent produced non-empty output text",
+                weight=1.0,
+                code=SMOKE_TEST_CODE_RULE,
+            ),
+            # LLMJudgeRule: Tests LLM judge evaluation path
+            LLMJudgeRule(
+                name="output_quality",
+                description="Check if the agent produced a reasonable output",
+                weight=1.0,
+                judge_prompt=f"""Evaluate the agent's response for task '{task_name}'.
+
+The agent was asked to complete a simple smoke test task. Evaluate whether:
+1. The agent attempted to address the task
+2. The response is coherent and relevant
+3. The agent completed the task (even if with mock/simulated data)
+
+This is a smoke test - we're checking if the pipeline works, not perfection.
+Be lenient: give full credit if the agent made a reasonable attempt.
+
+Return True if the agent made a reasonable attempt, False only for complete failures.""",
+            ),
+        ],
+    )
 
 
 def create_single_task_workflow(worker: "BaseWorker") -> Task:
@@ -37,6 +98,7 @@ def create_single_task_workflow(worker: "BaseWorker") -> Task:
         ),
         assigned_to=worker,
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_single"),
     )
 
 
@@ -57,6 +119,7 @@ def create_linear_chain_workflow(worker: "BaseWorker") -> Task:
         description="Read the input data file and extract key information.",
         assigned_to=worker,
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_linear_read"),
     )
 
     # Task B: Analyze (depends on A)
@@ -69,6 +132,7 @@ def create_linear_chain_workflow(worker: "BaseWorker") -> Task:
         assigned_to=worker,
         depends_on=[task_a],
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_linear_analyze"),
     )
 
     # Task C: Report (depends on B)
@@ -81,6 +145,7 @@ def create_linear_chain_workflow(worker: "BaseWorker") -> Task:
         assigned_to=worker,
         depends_on=[task_b],
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_linear_report"),
     )
 
     # Root task containing the chain
@@ -110,6 +175,7 @@ def create_parallel_workflow(worker: "BaseWorker") -> Task:
         description="Gather the initial data and prepare it for parallel processing.",
         assigned_to=worker,
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_parallel_gather"),
     )
 
     # Task B: Analysis branch 1 (depends on A, parallel with C)
@@ -119,6 +185,7 @@ def create_parallel_workflow(worker: "BaseWorker") -> Task:
         assigned_to=worker,
         depends_on=[task_a],
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_parallel_analyze_1"),
     )
 
     # Task C: Analysis branch 2 (depends on A, parallel with B)
@@ -128,6 +195,7 @@ def create_parallel_workflow(worker: "BaseWorker") -> Task:
         assigned_to=worker,
         depends_on=[task_a],
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_parallel_analyze_2"),
     )
 
     # Task D: Merge results (depends on both B and C)
@@ -139,6 +207,7 @@ def create_parallel_workflow(worker: "BaseWorker") -> Task:
         assigned_to=worker,
         depends_on=[task_b, task_c],
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_parallel_merge"),
     )
 
     # Root task containing the parallel structure
@@ -168,6 +237,7 @@ def create_nested_hierarchy_workflow(worker: "BaseWorker") -> Task:
         description="Read the data file at the leaf level.",
         assigned_to=worker,
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_nested_l3_read"),
     )
 
     task_l3_b = Task(
@@ -176,6 +246,7 @@ def create_nested_hierarchy_workflow(worker: "BaseWorker") -> Task:
         assigned_to=worker,
         depends_on=[task_l3_a],
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_nested_l3_process"),
     )
 
     # Level 2 task (contains L3 tasks)
@@ -192,6 +263,7 @@ def create_nested_hierarchy_workflow(worker: "BaseWorker") -> Task:
         description="Independent mid-level task that runs in parallel.",
         assigned_to=worker,
         resources=[],
+        evaluator=create_smoke_test_rubric("smoke_nested_l2_independent"),
     )
 
     # Level 1 root

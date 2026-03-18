@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from h_arcane.core._internal.db.models import ResourceRecord
 from h_arcane.core.settings import settings
-from h_arcane.dashboard import dashboard_emitter
+from h_arcane.core.dashboard import dashboard_emitter
 
 logger = getLogger(__name__)
 
@@ -196,6 +196,7 @@ if created:
     async def create(
         self,
         task_id: UUID,
+        run_id: UUID,
         skills_dir: Path | None = None,
         timeout_minutes: int = 30,
         envs: dict[str, str] | None = None,
@@ -209,6 +210,7 @@ if created:
                             The sandbox will be terminated after this duration.
             envs: Optional dictionary of environment variables to set in the sandbox.
                   These will be available to all code executed in the sandbox.
+            run_id: UUID of the run (for dashboard events). Optional for backward compatibility.
 
         Returns:
             The E2B sandbox_id (needed for cleanup across process boundaries)
@@ -262,8 +264,9 @@ if created:
                 f"Uploaded skills from {skills_dir} to /skills/{package_name} (task_id={task_id})"
             )
 
-        # Emit dashboard sandbox created event
+        # Emit dashboard sandbox created event (only if run_id is provided)
         await dashboard_emitter.sandbox_created(
+            run_id=run_id,
             task_id=task_id,
             sandbox_id=sandbox.sandbox_id,
             timeout_minutes=timeout_minutes,

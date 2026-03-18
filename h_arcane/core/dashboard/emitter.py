@@ -21,8 +21,10 @@ Usage:
     )
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from logging import getLogger
+
+from h_arcane.core._internal.utils import utcnow
 from uuid import UUID
 
 import inngest
@@ -30,7 +32,7 @@ import inngest
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.task.schema import TaskTreeNode
 from h_arcane.core.status import TaskStatus, TaskTrigger
-from h_arcane.dashboard.events import (
+from h_arcane.core.dashboard.events import (
     DashboardAgentActionCompletedEvent,
     DashboardAgentActionStartedEvent,
     DashboardResourcePublishedEvent,
@@ -81,7 +83,7 @@ class DashboardEmitter:
 
     def _now(self) -> datetime:
         """Get current UTC time."""
-        return datetime.now(timezone.utc)
+        return utcnow()
 
     async def workflow_started(
         self,
@@ -293,6 +295,7 @@ class DashboardEmitter:
 
     async def sandbox_created(
         self,
+        run_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         timeout_minutes: int,
@@ -306,6 +309,7 @@ class DashboardEmitter:
             return
 
         event = DashboardSandboxCreatedEvent(
+            run_id=run_id,
             task_id=task_id,
             sandbox_id=sandbox_id,
             template=template,

@@ -102,8 +102,9 @@ class ReActWorker(BaseWorker):
         # Run agent
         result = await Runner.run(agent, task_prompt, max_turns=25)
 
-        # Extract actions from result (framework-specific logic owned by this worker)
-        actions = self._extract_actions_from_result(result)
+        # Extract actions from result with full context (run_id, agent_id)
+        # Actions are now complete - no mutation needed by orchestration layer
+        actions = self._extract_actions_from_result(result=result, context=context)
 
         # Extract structured output from result
         output_text = None
@@ -119,7 +120,7 @@ class ReActWorker(BaseWorker):
             success=True,
             output_text=output_text,
             reasoning=reasoning,
-            actions=actions,  # Execution layer will add run_id/agent_id and persist
+            actions=actions,  # Actions are now complete with run_id/agent_id
             qa_exchanges=qa_exchanges,  # Execution layer will persist
             outputs=[],  # Benchmark outputs tracked via sandbox
         )
@@ -179,12 +180,14 @@ class ReActWorker(BaseWorker):
     # Action extraction logic (framework-specific, owned by this worker)
     # ─────────────────────────────────────────────────────────────────────────────
 
-    def _extract_actions_from_result(self, result: RunResult) -> list[Action]:
+    def _extract_actions_from_result(
+        self, result: RunResult, context: WorkerContext
+    ) -> list[Action]:
         """
-        Extract actions from RunResult without persisting them.
+        Extract actions from RunResult as complete Action objects.
 
-        Returns Action objects WITHOUT run_id/agent_id set - these should be
-        added by the execution layer before persistence.
+        Actions are created with run_id and agent_id from context, so they're
+        ready for persistence without mutation.
 
         Handles all item types:
         - MessageOutputItem: LLM text responses
@@ -194,6 +197,10 @@ class ReActWorker(BaseWorker):
         """
         actions = []
         action_num = 0
+
+        # Get run_id and agent_id from context
+        run_id = context.run_id
+        agent_id = context.agent_config_id
 
         # Step 1: Build map of call_id -> ToolCallItem for matching
         tool_calls: dict[str, ToolCallItem] = {}
@@ -211,7 +218,8 @@ class ReActWorker(BaseWorker):
         # Step 3: Process all items in order
         for item in result.new_items:
             action = self._process_item(
-                item, tool_calls, action_num, agent_total_tokens, agent_total_cost_usd
+                item, tool_calls, action_num, agent_total_tokens, agent_total_cost_usd,
+                run_id, agent_id,
             )
             if action:
                 actions.append(action)
@@ -226,29 +234,35 @@ class ReActWorker(BaseWorker):
         action_num: int,
         agent_total_tokens: int,
         agent_total_cost_usd: float,
+        run_id: UUID,
+        agent_id: UUID | None,
     ) -> Action | None:
-        """Process a single RunItem and return Action object, or None to skip."""
+        """Process a single RunItem and return complete Action object, or None to skip."""
         now = datetime.now(timezone.utc)
 
         match item:
             case MessageOutputItem():
                 return self._extract_message(
-                    item, action_num, now, agent_total_tokens, agent_total_cost_usd
+                    item, action_num, now, agent_total_tokens, agent_total_cost_usd,
+                    run_id, agent_id,
                 )
             case ToolCallOutputItem():
                 return self._extract_tool_call_output(
-                    item, tool_calls, action_num, now, agent_total_tokens, agent_total_cost_usd
+                    item, tool_calls, action_num, now, agent_total_tokens, agent_total_cost_usd,
+                    run_id, agent_id,
                 )
             case ReasoningItem():
                 return self._extract_reasoning(
-                    item, action_num, now, agent_total_tokens, agent_total_cost_usd
+                    item, action_num, now, agent_total_tokens, agent_total_cost_usd,
+                    run_id, agent_id,
                 )
             case ToolCallItem():
                 # Skip - we handle these when processing ToolCallOutputItem
                 return None
             case _:
                 return self._extract_generic(
-                    item, action_num, now, agent_total_tokens, agent_total_cost_usd
+                    item, action_num, now, agent_total_tokens, agent_total_cost_usd,
+                    run_id, agent_id,
                 )
 
     def _extract_message(
@@ -258,10 +272,14 @@ class ReActWorker(BaseWorker):
         now: datetime,
         agent_total_tokens: int,
         agent_total_cost_usd: float,
+        run_id: UUID,
+        agent_id: UUID | None,
     ) -> Action:
-        """Extract action record from MessageOutputItem."""
+        """Extract complete action record from MessageOutputItem."""
         text = self._extract_message_text(item)
         return Action(
+            run_id=run_id,
+            agent_id=agent_id,
             action_num=action_num,
             started_at=now,
             completed_at=now,
@@ -280,8 +298,10 @@ class ReActWorker(BaseWorker):
         now: datetime,
         agent_total_tokens: int,
         agent_total_cost_usd: float,
+        run_id: UUID,
+        agent_id: UUID | None,
     ) -> Action:
-        """Extract action record from ToolCallOutputItem."""
+        """Extract complete action record from ToolCallOutputItem."""
         raw = item.raw_item
         call_id = raw.get("call_id") if isinstance(raw, dict) else None
 
@@ -305,6 +325,8 @@ class ReActWorker(BaseWorker):
                 error_dict = self._extract_error_from_output(output)
 
                 return Action(
+                    run_id=run_id,
+                    agent_id=agent_id,
                     action_num=action_num,
                     started_at=now,
                     completed_at=now,
@@ -318,6 +340,8 @@ class ReActWorker(BaseWorker):
 
         # Orphan output - log anyway
         return Action(
+            run_id=run_id,
+            agent_id=agent_id,
             action_num=action_num,
             started_at=now,
             completed_at=now,
@@ -335,14 +359,18 @@ class ReActWorker(BaseWorker):
         now: datetime,
         agent_total_tokens: int,
         agent_total_cost_usd: float,
+        run_id: UUID,
+        agent_id: UUID | None,
     ) -> Action:
-        """Extract action record from ReasoningItem."""
+        """Extract complete action record from ReasoningItem."""
         text = ""
         if item.raw_item.summary:
             for summary in item.raw_item.summary:
                 text += summary.text + "\n"
 
         return Action(
+            run_id=run_id,
+            agent_id=agent_id,
             action_num=action_num,
             started_at=now,
             completed_at=now,
@@ -360,9 +388,13 @@ class ReActWorker(BaseWorker):
         now: datetime,
         agent_total_tokens: int,
         agent_total_cost_usd: float,
+        run_id: UUID,
+        agent_id: UUID | None,
     ) -> Action:
-        """Extract action record from generic/unknown item types."""
+        """Extract complete action record from generic/unknown item types."""
         return Action(
+            run_id=run_id,
+            agent_id=agent_id,
             action_num=action_num,
             started_at=now,
             completed_at=now,

@@ -20,6 +20,7 @@ from h_arcane.core._internal.evaluation.inngest_functions import (
 )
 from h_arcane.core._internal.infrastructure.inngest_functions import run_cleanup
 from h_arcane.core._internal.task.inngest_functions import (
+    benchmark_run_start,
     persist_outputs_fn,
     sandbox_setup_fn,
     task_execute,
@@ -32,6 +33,8 @@ from h_arcane.core._internal.task.inngest_functions import (
 
 # All Inngest functions for registration with FastAPI/Inngest
 ALL_FUNCTIONS: list[Function[Any]] = [
+    # Benchmark CLI entry point
+    benchmark_run_start,
     # DAG workflow orchestration
     workflow_start,
     task_execute,
@@ -53,6 +56,8 @@ ALL_FUNCTIONS: list[Function[Any]] = [
 
 __all__ = [
     "ALL_FUNCTIONS",
+    # Benchmark CLI entry point
+    "benchmark_run_start",
     # Task/Workflow orchestration (DAG)
     "workflow_start",
     "task_execute",

@@ -28,6 +28,7 @@ import inngest
 from pydantic import BaseModel, Field
 
 from h_arcane.core._internal.db.models import RunStatus
+from h_arcane.core._internal.utils import utcnow
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.task.events import WorkflowStartedEvent
@@ -108,7 +109,7 @@ class ExecutionResult(BaseModel):
     evaluation_details: dict = Field(default_factory=dict)
 
     # Timing
-    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = Field(default_factory=utcnow)
     completed_at: datetime | None = None
     duration_seconds: float = 0.0
 
@@ -169,7 +170,7 @@ async def execute_task(
         workflow = Task(name="Root", assigned_to=worker, children=[a, b])
         result = await execute_task(workflow, timeout_seconds=300)
     """
-    started_at = datetime.now(timezone.utc)
+    started_at = utcnow()
 
     try:
         # 1. Validate and process task tree
@@ -215,7 +216,7 @@ async def execute_task(
         return result
 
     except Exception as exc:
-        completed_at = datetime.now(timezone.utc)
+        completed_at = utcnow()
         duration = (completed_at - started_at).total_seconds()
 
         return ExecutionResult(
@@ -300,7 +301,7 @@ def _build_error_result(
     experiment_id: UUID | None = None,
 ) -> ExecutionResult:
     """Build an error ExecutionResult."""
-    completed_at = datetime.now(timezone.utc)
+    completed_at = utcnow()
     duration = (completed_at - started_at).total_seconds()
 
     return ExecutionResult(

@@ -45,9 +45,29 @@ services:
       # Mount pyproject.toml to reinstall dependencies if changed
       - ./pyproject.toml:/app/pyproject.toml
   
+  dashboard:
+    build:
+      context: ./arcane-dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - INNGEST_DEV=1
+      - INNGEST_EVENT_KEY=dev
+      - INNGEST_API_BASE_URL=http://inngest-dev:8288
+    depends_on:
+      - inngest-dev
+    volumes:
+      # Mount source for hot-reload during development (optional)
+      - ./arcane-dashboard/src:/app/src
+  
   inngest-dev:
     image: inngest/inngest:latest
-    command: inngest dev --no-discovery -u http://api:9000/api/inngest
+    command: >
+      inngest dev --no-discovery
+      -u http://api:9000/api/inngest
+      -u http://dashboard:3000/api/inngest
     ports:
       - "8289:8288"
     environment:

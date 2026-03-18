@@ -167,8 +167,8 @@ class WorkerResult(BaseModel):
     - output_text: Text summary/answer
     - success/error: Execution status
 
-    Note: Action instances don't need run_id/agent_id/action_num set -
-    the persistence layer fills those in.
+    Note: Actions should be created complete with run_id/agent_id set
+    (available via WorkerContext). This enables immutable data flow.
     """
 
     success: bool = Field(

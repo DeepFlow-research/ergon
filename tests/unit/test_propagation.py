@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-
+from h_arcane.core.status import TaskTrigger
 from h_arcane.core._internal.task.propagation import (
     mark_task_ready,
     mark_task_failed,
@@ -280,14 +280,14 @@ class TestMarkTaskReady:
         run_id = uuid4()
         task_id = uuid4()
 
-        mark_task_ready(run_id, task_id, triggered_by="dependency_satisfied")
+        mark_task_ready(run_id, task_id, triggered_by=TaskTrigger.DEPENDENCY_SATISFIED)
 
         mock_queries.task_state_events.record_state_change.assert_called_once()
         call_kwargs = mock_queries.task_state_events.record_state_change.call_args.kwargs
         assert call_kwargs["run_id"] == run_id
         assert call_kwargs["task_id"] == task_id
         assert call_kwargs["new_status"] == "ready"
-        assert call_kwargs["triggered_by"] == "dependency_satisfied"
+        assert call_kwargs["triggered_by"] == TaskTrigger.DEPENDENCY_SATISFIED.value
 
 
 class TestMarkTaskFailed:

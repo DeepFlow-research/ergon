@@ -1,11 +1,13 @@
 """Database query methods organized by entity."""
 
-from uuid import UUID
-from typing import TypeVar, Generic, Type
-from sqlmodel import SQLModel, select, desc
-from datetime import datetime, timezone
+from __future__ import annotations
 
+from uuid import UUID
+from typing import TYPE_CHECKING, TypeVar, Generic, Type
+from sqlmodel import SQLModel, select, desc, and_
+from datetime import datetime
 from h_arcane.core._internal.db.connection import get_session
+from h_arcane.core._internal.utils import utcnow
 from h_arcane.core._internal.db.models import (
     AgentConfig,
     Experiment,
@@ -25,6 +27,9 @@ from h_arcane.core._internal.db.models import (
     ThreadMessage,
 )
 from h_arcane.benchmarks.enums import BenchmarkName
+
+if TYPE_CHECKING:
+    from h_arcane.core._internal.task.results import RunCompletionData
 
 
 T = TypeVar("T", bound=SQLModel)
@@ -111,6 +116,46 @@ class RunsQueries(BaseQueries[Run]):
                 "error_message": None,
                 "started_at": None,
                 "completed_at": None,
+            }
+        )
+        return self.update(updated)
+
+    @staticmethod
+    def get_recent(limit: int = 10) -> list[Run]:
+        """Get most recent runs, ordered by created_at descending."""
+        with next(get_session()) as session:
+            statement = select(Run).order_by(desc(Run.created_at)).limit(limit)
+            return list(session.exec(statement).all())
+
+    def complete(self, run_id: UUID, data: RunCompletionData) -> Run:
+        """Mark run as completed with all completion data.
+
+        This is a single atomic operation that sets all completion fields,
+        ensuring nothing is forgotten and making the completion explicit.
+
+        Args:
+            run_id: The run to complete
+            data: RunCompletionData with all required completion fields
+
+        Returns:
+            Updated Run
+
+        Raises:
+            ValueError: If run not found
+        """
+        existing = self.get(run_id)
+        if existing is None:
+            raise ValueError(f"Run {run_id} not found")
+
+        updated = existing.model_copy(
+            update={
+                "status": RunStatus.COMPLETED,
+                "completed_at": data.completed_at,
+                "final_score": data.final_score,
+                "normalized_score": data.normalized_score,
+                "total_cost_usd": data.total_cost_usd,
+                "output_text": data.output_text,
+                "execution_result": data.execution_result,
             }
         )
         return self.update(updated)
@@ -375,6 +420,43 @@ class AgentConfigsQueries(BaseQueries[AgentConfig]):
             statement = select(AgentConfig).where(AgentConfig.run_id == run_id)
             return list(session.exec(statement).all())
 
+    def get_or_create(
+        self,
+        run_id: UUID,
+        worker_id: UUID,
+        defaults: AgentConfig,
+    ) -> tuple[AgentConfig, bool]:
+        """Get existing config by worker_id or create new one.
+
+        This prevents duplicate agent configs for the same worker in a run.
+
+        Args:
+            run_id: The run this agent belongs to
+            worker_id: Unique identifier for the worker instance
+            defaults: AgentConfig to create if not found (run_id and worker_id will be set)
+
+        Returns:
+            (config, created) - created=True if new record was created
+        """
+        with next(get_session()) as session:
+            # Look for existing config with same run_id and worker_id
+            existing = session.exec(
+                select(AgentConfig)
+                .where(AgentConfig.run_id == run_id)
+                .where(AgentConfig.worker_id == worker_id)
+            ).first()
+
+            if existing:
+                return existing, False
+
+            # Create new config with provided defaults
+            defaults.run_id = run_id
+            defaults.worker_id = worker_id
+            session.add(defaults)
+            session.commit()
+            session.refresh(defaults)
+            return defaults, True
+
 
 # =============================================================================
 # Task Execution Queries (for DAG-based workflows)
@@ -482,6 +564,28 @@ class TaskExecutionQueries(BaseQueries[TaskExecution]):
         updated = existing.model_copy(update=update_data)
         return self.update(updated)
 
+    def set_agent(self, execution_id: UUID, agent_id: UUID) -> TaskExecution:
+        """Set the agent_id on a task execution.
+
+        Used to link an execution to the agent that performed it.
+
+        Args:
+            execution_id: The execution to update
+            agent_id: The agent config ID to link
+
+        Returns:
+            Updated TaskExecution
+
+        Raises:
+            ValueError: If execution not found
+        """
+        existing = self.get(execution_id)
+        if existing is None:
+            raise ValueError(f"TaskExecution {execution_id} not found")
+
+        updated = existing.model_copy(update={"agent_id": agent_id})
+        return self.update(updated)
+
 
 class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
     """Query methods for TaskStateEvent model (append-only event log).
@@ -514,9 +618,11 @@ class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
             # Join to get the status at that max timestamp
             statement = select(TaskStateEvent.task_id, TaskStateEvent.new_status).join(
                 subquery,
-                (TaskStateEvent.task_id == subquery.c.task_id)
-                & (TaskStateEvent.timestamp == subquery.c.max_ts)
-                & (TaskStateEvent.run_id == run_id),
+                and_(
+                    TaskStateEvent.task_id == subquery.c.task_id,
+                    TaskStateEvent.timestamp == subquery.c.max_ts,
+                    TaskStateEvent.run_id == run_id,
+                ),
             )
 
             results = session.exec(statement).all()
@@ -686,7 +792,7 @@ class TaskEvaluatorQueries(BaseQueries[TaskEvaluator]):
                 "status": TaskStatus.COMPLETED,
                 "score": score,
                 "evaluation_id": evaluation_id,
-                "evaluated_at": datetime.now(timezone.utc),
+                "evaluated_at": utcnow(),
             }
         )
         return self.update(updated)
@@ -699,7 +805,7 @@ class TaskEvaluatorQueries(BaseQueries[TaskEvaluator]):
         updated = existing.model_copy(
             update={
                 "status": TaskStatus.FAILED,
-                "evaluated_at": datetime.now(timezone.utc),
+                "evaluated_at": utcnow(),
             }
         )
         return self.update(updated)
@@ -784,7 +890,7 @@ class ThreadsQueries(BaseQueries[Thread]):
             thread = session.get(Thread, thread_id)
             if thread is None:
                 raise ValueError(f"Thread {thread_id} not found")
-            thread.updated_at = datetime.now(timezone.utc)
+            thread.updated_at = utcnow()
             session.commit()
             session.refresh(thread)
             return thread

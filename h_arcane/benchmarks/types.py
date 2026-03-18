@@ -14,13 +14,14 @@ from pydantic import Field
 from h_arcane.benchmarks.gdpeval.rubric import StagedRubric
 from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
 from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from h_arcane.benchmarks.smoke_test.rubric import SmokeTestRubric
 from h_arcane.core._internal.evaluation.rules import CodeRule, LLMJudgeRule
 from h_arcane.benchmarks.minif2f.rules import ProofVerificationRule
 
 
 # Discriminated union for rubrics - Pydantic auto-selects based on "benchmark" field
 AnyRubric = Annotated[
-    Union[StagedRubric, MiniF2FRubric, ResearchRubricsRubric],
+    Union[StagedRubric, MiniF2FRubric, ResearchRubricsRubric, SmokeTestRubric],
     Field(discriminator="benchmark"),
 ]
 

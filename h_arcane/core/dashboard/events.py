@@ -138,6 +138,7 @@ class DashboardSandboxCreatedEvent(InngestEventContract):
 
     name: ClassVar[str] = "dashboard/sandbox.created"
 
+    run_id: UUID
     task_id: UUID
     sandbox_id: str  # E2B sandbox ID (not a UUID)
     template: str | None = None  # E2B template name if used

@@ -18,19 +18,25 @@ Usage:
 """
 
 import asyncio
+import time
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
+import inngest
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from h_arcane.benchmarks.smoke_test.config import SMOKE_TEST_CONFIG
 from h_arcane.benchmarks.smoke_test.workflows import (
     WORKFLOW_FACTORIES,
-    create_workflow,
     list_workflows,
 )
-from h_arcane.benchmarks.common.workers.react_worker import ReActWorker
-from h_arcane.core.runner import execute_task
+from h_arcane.core._internal.db.models import RunStatus
+from h_arcane.core._internal.db.queries import queries
+from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.task.events import BenchmarkRunRequest
+from h_arcane.core.runner import ExecutionResult
+from h_arcane.core.task import TaskStatus
 
 app = typer.Typer(
     name="smoke-test",
@@ -127,30 +133,15 @@ async def _run_workflows(
     model: str,
     timeout: int,
 ) -> dict:
-    """Run workflows and collect results."""
-    from h_arcane.core.runner import ExecutionResult
-
+    """Run workflows by emitting Inngest events and polling for completion."""
     results: dict[str, ExecutionResult] = {}
 
     for name in workflow_names:
         console.print(f"\n[bold cyan]Running workflow: {name}[/bold cyan]")
+        started_at = datetime.now(timezone.utc)
 
-        # Create worker with smoke test config
-        worker = ReActWorker(model=model, config=SMOKE_TEST_CONFIG)
-
-        # Create workflow
-        task = create_workflow(name, worker)
-
-        console.print(f"  Task: {task.name}")
-        console.print(f"  Description: {task.description[:60]}...")
-
-        # Execute
         try:
-            result = await execute_task(
-                task,
-                timeout_seconds=timeout,
-                benchmark_name="smoke_test",
-            )
+            result = await _run_single_workflow(name, model, timeout, started_at)
             results[name] = result
 
             if result.success:
@@ -165,20 +156,141 @@ async def _run_workflows(
 
         except Exception as e:
             console.print(f"  [red]Exception: {e}[/red]")
-            # Create a failed result for the summary
-            from datetime import datetime, timezone
-
-            from h_arcane.core.task import TaskStatus
-
             results[name] = ExecutionResult(
                 success=False,
                 status=TaskStatus.FAILED,
                 error=str(e),
-                started_at=datetime.now(timezone.utc),
+                started_at=started_at,
                 duration_seconds=0.0,
             )
 
     return results
+
+
+async def _run_single_workflow(
+    workflow_name: str,
+    model: str,
+    timeout: int,
+    started_at: datetime,
+) -> ExecutionResult:
+    """Run a single workflow via Inngest event and poll for completion."""
+    # Generate unique request ID to track this run
+    request_id = str(uuid4())
+
+    console.print(f"  Workflow: {workflow_name}")
+    console.print(f"  Request ID: {request_id[:8]}...")
+
+    # Create and send the event
+    event = BenchmarkRunRequest(
+        request_id=request_id,
+        benchmark_name="smoke_test",
+        workflow_name=workflow_name,
+        model=model,
+        timeout_seconds=timeout,
+        max_questions=10,
+    )
+
+    console.print("  Sending event to Inngest...")
+    await inngest_client.send(
+        inngest.Event(name=BenchmarkRunRequest.name, data=event.model_dump())
+    )
+
+    # Poll for run creation (wait for benchmark_run_start to create the Run)
+    console.print("  Waiting for run to be created...")
+    run_id = await _poll_for_run_creation(request_id, timeout)
+
+    if run_id is None:
+        return ExecutionResult(
+            success=False,
+            status=TaskStatus.FAILED,
+            error="Timeout waiting for run to be created",
+            started_at=started_at,
+            duration_seconds=(datetime.now(timezone.utc) - started_at).total_seconds(),
+        )
+
+    console.print(f"  Run created: {run_id}")
+
+    # Poll for completion
+    console.print("  Waiting for completion...")
+    return await _poll_for_completion(run_id, timeout, started_at)
+
+
+async def _poll_for_run_creation(
+    request_id: str,
+    timeout: int,
+    poll_interval: float = 1.0,
+) -> UUID | None:
+    """Poll database for a run with matching request_id."""
+    start_time = time.time()
+
+    while (time.time() - start_time) < timeout:
+        # Query for runs with matching cli_request_id in metadata
+        # Note: This is a simple approach - queries all recent runs
+        # A more efficient approach would add a dedicated index
+        runs = queries.runs.get_recent(limit=10)
+
+        for run in runs:
+            if run.benchmark_specific_results:
+                if run.benchmark_specific_results.get("cli_request_id") == request_id:
+                    return run.id
+
+        await asyncio.sleep(poll_interval)
+
+    return None
+
+
+async def _poll_for_completion(
+    run_id: UUID,
+    timeout: int,
+    started_at: datetime,
+    poll_interval: float = 1.0,
+) -> ExecutionResult:
+    """Poll database until run completes or times out."""
+    start_time = time.time()
+    terminal_statuses = {RunStatus.COMPLETED, RunStatus.FAILED}
+
+    while True:
+        run = queries.runs.get(run_id)
+        if run is None:
+            return ExecutionResult(
+                success=False,
+                status=TaskStatus.FAILED,
+                error=f"Run {run_id} not found",
+                started_at=started_at,
+                duration_seconds=(datetime.now(timezone.utc) - started_at).total_seconds(),
+                run_id=run_id,
+            )
+
+        # Check if terminal state
+        if run.status in terminal_statuses:
+            # Deserialize precomputed ExecutionResult from run
+            if run.execution_result:
+                return ExecutionResult.model_validate(run.execution_result)
+
+            # Fallback if execution_result not set
+            completed_at = datetime.now(timezone.utc)
+            return ExecutionResult(
+                success=run.status == RunStatus.COMPLETED,
+                status=TaskStatus.COMPLETED if run.status == RunStatus.COMPLETED else TaskStatus.FAILED,
+                error=run.error_message,
+                started_at=started_at,
+                completed_at=completed_at,
+                duration_seconds=(completed_at - started_at).total_seconds(),
+                run_id=run_id,
+            )
+
+        # Check timeout
+        if (time.time() - start_time) > timeout:
+            return ExecutionResult(
+                success=False,
+                status=TaskStatus.FAILED,
+                error=f"Workflow timed out after {timeout} seconds",
+                started_at=started_at,
+                duration_seconds=(datetime.now(timezone.utc) - started_at).total_seconds(),
+                run_id=run_id,
+            )
+
+        await asyncio.sleep(poll_interval)
 
 
 def main():

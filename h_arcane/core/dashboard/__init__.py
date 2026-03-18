@@ -10,8 +10,8 @@ Usage:
     await dashboard_emitter.task_status_changed(run_id, task_id, ...)
 """
 
-from h_arcane.dashboard.emitter import DashboardEmitter, dashboard_emitter
-from h_arcane.dashboard.events import (
+from h_arcane.core.dashboard.emitter import DashboardEmitter, dashboard_emitter
+from h_arcane.core.dashboard.events import (
     DashboardAgentActionCompletedEvent,
     DashboardAgentActionStartedEvent,
     DashboardResourcePublishedEvent,

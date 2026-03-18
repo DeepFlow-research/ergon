@@ -3,12 +3,17 @@
 Creates and configures a sandbox for task execution.
 """
 
+from functools import partial
+from pathlib import Path
+from uuid import UUID
+
 import inngest
 
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.registry import get_sandbox_manager, get_skills_dir
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.task.requests import SandboxSetupRequest
 from h_arcane.core._internal.task.results import SandboxReadyResult
 from h_arcane.core.settings import settings
@@ -42,28 +47,50 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
     output_dir = settings.runs_dir / str(run_id) / "tasks" / str(task_id)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create sandbox (keyed by task_id)
-    async def create_sandbox() -> SandboxReadyResult:
-        sandbox_id = await sandbox_manager.create(
+    # Create sandbox
+    result = await ctx.step.run(
+        "create-sandbox",
+        partial(
+            _create_sandbox,
+            run_id,
             task_id,
-            skills_dir=skills_dir,
-            timeout_minutes=30,
-            envs=payload.envs,
-        )
-
-        # Save sandbox ID to run record
-        run = queries.runs.get(run_id)
-        if run and not run.e2b_sandbox_id:
-            updated = run.model_copy(update={"e2b_sandbox_id": sandbox_id})
-            queries.runs.update(updated)
-
-        return SandboxReadyResult(
-            sandbox_id=sandbox_id,
-            output_dir=str(output_dir),
-        )
-
-    result = await ctx.step.run("create-sandbox", create_sandbox, output_type=SandboxReadyResult)
+            sandbox_manager,
+            skills_dir,
+            output_dir,
+            payload.envs,
+        ),
+        output_type=SandboxReadyResult,
+    )
     if result is None:
         raise ValueError("create-sandbox step returned None")
 
     return result
+
+
+async def _create_sandbox(
+    run_id: UUID,
+    task_id: UUID,
+    sandbox_manager: BaseSandboxManager,
+    skills_dir: Path | None,
+    output_dir: Path,
+    envs: dict[str, str] | None,
+) -> SandboxReadyResult:
+    """Create sandbox via manager and save ID to run record."""
+    sandbox_id = await sandbox_manager.create(
+        task_id,
+        skills_dir=skills_dir,
+        timeout_minutes=30,
+        envs=envs,
+        run_id=run_id,
+    )
+
+    # Save sandbox ID to run record
+    run = queries.runs.get(run_id)
+    if run and not run.e2b_sandbox_id:
+        updated = run.model_copy(update={"e2b_sandbox_id": sandbox_id})
+        queries.runs.update(updated)
+
+    return SandboxReadyResult(
+        sandbox_id=sandbox_id,
+        output_dir=str(output_dir),
+    )

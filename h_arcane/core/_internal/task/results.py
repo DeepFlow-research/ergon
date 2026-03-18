@@ -8,8 +8,11 @@ Organized by:
 - Task orchestrator results (task_execute, task_propagate)
 - Child function results (sandbox_setup, worker_execute, persist_outputs)
 - Internal step results (used within functions)
+- Data transfer objects (RunCompletionData, etc.)
 """
 
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -121,3 +124,26 @@ class ReadyTaskIdsResult(BaseModel):
     """Result of steps that identify ready tasks."""
 
     ready_task_ids: list[UUID]
+
+
+# =============================================================================
+# Data Transfer Objects
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class RunCompletionData:
+    """All data needed to complete a run.
+
+    This is an immutable data transfer object that bundles all completion
+    data together, making it explicit what's required to complete a run.
+
+    Used by queries.runs.complete() for atomic run completion.
+    """
+
+    completed_at: datetime
+    final_score: float | None
+    normalized_score: float | None
+    total_cost_usd: float
+    output_text: str | None
+    execution_result: dict

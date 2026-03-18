@@ -150,7 +150,7 @@ class AgentRegistry:
             "run_id": run_id,
             "worker_id": worker_id,  # Store original worker UUID
             "name": worker.name,
-            "agent_type": worker.__class__.__name__,
+            "agent_type": worker.id,
             "model": worker.model,
             "system_prompt": worker.system_prompt,
             "tools": tool_names,
@@ -175,6 +175,9 @@ class AgentRegistry:
         """
         Create AgentConfig records for all registered workers.
 
+        Uses get_or_create to prevent duplicates if configs are created
+        elsewhere (e.g., by worker_execute during task execution).
+
         After calling this, get_config_id() can be used to look up
         the AgentConfig ID for any registered worker.
 
@@ -182,21 +185,27 @@ class AgentRegistry:
             run_id: The run ID these configs belong to
 
         Returns:
-            List of created AgentConfig records
+            List of created/existing AgentConfig records
         """
-        created_configs: list[AgentConfig] = []
+        configs: list[AgentConfig] = []
 
         for worker_id, worker in self.workers.items():
             config_data = self.create_agent_config_data(worker, run_id)
             config = AgentConfig(**config_data)
-            created = queries.agent_configs.create(config)
+
+            # Use get_or_create to prevent duplicates
+            existing_or_new, _created = queries.agent_configs.get_or_create(
+                run_id=run_id,
+                worker_id=worker_id,
+                defaults=config,
+            )
 
             # Store mapping for later lookup
-            self._config_ids[worker_id] = created.id
-            created_configs.append(created)
+            self._config_ids[worker_id] = existing_or_new.id
+            configs.append(existing_or_new)
 
         self._persisted = True
-        return created_configs
+        return configs
 
     # === Utility ===
 

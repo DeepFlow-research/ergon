@@ -5,6 +5,7 @@ Downloads outputs from sandbox and registers them as resources.
 
 from functools import partial
 from pathlib import Path
+from uuid import UUID
 
 import inngest
 
@@ -13,11 +14,11 @@ from h_arcane.benchmarks.registry import get_sandbox_manager
 from h_arcane.core._internal.db.models import ResourceRecord
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
-from h_arcane.core._internal.infrastructure.sandbox import DownloadedFiles
+from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager, DownloadedFiles
 from h_arcane.core._internal.task.requests import PersistOutputsRequest
 from h_arcane.core._internal.task.results import PersistOutputsResult
 from h_arcane.core._internal.utils import get_mime_type, require_not_none
-from h_arcane.dashboard import dashboard_emitter
+from h_arcane.core.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -41,7 +42,7 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     execution_id = payload.execution_id
     output_dir = Path(payload.output_dir)
 
-    # Get experiment to determine benchmark
+    # Get experiment to determine benchmark (inlined - pure reads)
     run = require_not_none(queries.runs.get(run_id), f"Run {run_id} not found")
     experiment = require_not_none(
         queries.experiments.get(run.experiment_id),
@@ -50,12 +51,11 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     benchmark_name = BenchmarkName(experiment.benchmark_name)
     sandbox_manager = get_sandbox_manager(benchmark_name)
 
-    # Download outputs from sandbox (keyed by task_id)
-    async def download_outputs() -> DownloadedFiles:
-        return await sandbox_manager.download_all_outputs(task_id, output_dir)
-
+    # Download outputs from sandbox
     downloaded = await ctx.step.run(
-        "download-outputs", download_outputs, output_type=DownloadedFiles
+        "download-outputs",
+        partial(_download_outputs, task_id, output_dir, sandbox_manager),
+        output_type=DownloadedFiles,
     )
     downloaded = require_not_none(downloaded, "download-outputs returned None")
 
@@ -65,7 +65,7 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     if not downloaded.files:
         return PersistOutputsResult(output_resource_ids=[], outputs_count=0)
 
-    # Define the registration function for a single file
+    # Keep as closure - dynamic parallel step needs closure capture for dynamic data
     def make_register_step(local_path: str, size_bytes: int):
         async def register_resource() -> ResourceRecord:
             resource = queries.resources.create(
@@ -119,3 +119,10 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
         output_resource_ids=output_resource_ids,
         outputs_count=len(output_resource_ids),
     )
+
+
+async def _download_outputs(
+    task_id: UUID, output_dir: Path, sandbox_manager: BaseSandboxManager
+) -> DownloadedFiles:
+    """Download all outputs from sandbox."""
+    return await sandbox_manager.download_all_outputs(task_id, output_dir)

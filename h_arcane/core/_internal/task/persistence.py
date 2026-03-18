@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import mimetypes
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -22,6 +21,7 @@ from h_arcane.core._internal.db.models import (
     TaskExecution,
 )
 from h_arcane.core._internal.db.queries import queries
+from h_arcane.core._internal.utils import utcnow
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.core.task import Resource as SDKResource
 from h_arcane.core.task import Task
@@ -537,7 +537,7 @@ def complete_task_execution(
     return queries.task_executions.update_status(
         execution_id=execution_id,
         status=status,
-        completed_at=datetime.now(timezone.utc),
+        completed_at=utcnow(),
         output_text=output_text,
         output_resource_ids=[str(rid) for rid in (output_resource_ids or [])],
         score=score,

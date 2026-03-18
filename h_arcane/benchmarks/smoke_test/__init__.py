@@ -1,8 +1,7 @@
 """Smoke test benchmark for h_arcane pipeline validation.
 
-This benchmark provides a lightweight way to validate the h_arcane execution
-pipeline without requiring real E2B sandboxes. It uses stub tools that return
-mock data instantly.
+This benchmark validates the h_arcane execution pipeline including
+evaluation with real E2B sandboxes for code rule evaluation.
 
 Usage:
     # Via CLI
@@ -14,7 +13,7 @@ Usage:
         SMOKE_TEST_CONFIG,
         SmokeTestToolkit,
         MockStakeholder,
-        DummySandboxManager,
+        SmokeTestSandboxManager,
         create_workflow,
         load_smoke_test_to_database,
     )
@@ -31,7 +30,7 @@ from h_arcane.benchmarks.smoke_test.loader import (
     get_smoke_test_tasks,
     load_smoke_test_to_database,
 )
-from h_arcane.benchmarks.smoke_test.sandbox import DummySandboxManager
+from h_arcane.benchmarks.smoke_test.sandbox import SmokeTestSandboxManager
 from h_arcane.benchmarks.smoke_test.stakeholder import MockStakeholder
 from h_arcane.benchmarks.smoke_test.stub_responses import (
     StubAnalyzeResponse,
@@ -61,7 +60,7 @@ __all__ = [
     "get_smoke_test_tasks",
     "load_smoke_test_to_database",
     # Core components
-    "DummySandboxManager",
+    "SmokeTestSandboxManager",
     "MockStakeholder",
     "SmokeTestToolkit",
     # Stub responses

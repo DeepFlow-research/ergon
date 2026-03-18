@@ -3,6 +3,7 @@
 Cleans up sandbox after completion/failure.
 """
 
+from functools import partial
 from uuid import UUID
 
 import inngest
@@ -36,45 +37,51 @@ async def run_cleanup(ctx: inngest.Context) -> RunCleanupResult:
     status = payload.status
     error_message = payload.error_message
 
-    # Combined: terminate sandbox + verify/update run status
-    async def cleanup_run() -> RunCleanupResult:
-        run = queries.runs.get(run_id)
-        if not run:
-            return RunCleanupResult(
-                run_id=run_id,
-                status=status,
-                sandbox_terminated=False,
-                error="Run not found",
-            )
+    # Terminate sandbox + verify/update run status
+    result = await ctx.step.run(
+        "cleanup-run",
+        partial(_cleanup_run, run_id, status, error_message),
+        output_type=RunCleanupResult,
+    )
+    return require_not_none(result, "cleanup-run returned None")
 
-        sandbox_id = run.e2b_sandbox_id
-        sandbox_terminated = False
 
-        # Terminate sandbox if exists
-        if sandbox_id:
-            sandbox_terminated = await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
-            # Clear sandbox ID from run
-            run = run.model_copy(update={"e2b_sandbox_id": None})
-
-        # Verify/update run status
-        expected_status = RunStatus.COMPLETED if status == "completed" else RunStatus.FAILED
-        if run.status != expected_status:
-            run = run.model_copy(
-                update={
-                    "status": expected_status,
-                    "error_message": error_message if status == "failed" else run.error_message,
-                }
-            )
-
-        # Single update with all changes
-        queries.runs.update(run)
-
+async def _cleanup_run(run_id: UUID, status: str, error_message: str | None) -> RunCleanupResult:
+    """Terminate sandbox and update run status."""
+    run = queries.runs.get(run_id)
+    if not run:
         return RunCleanupResult(
             run_id=run_id,
             status=status,
-            sandbox_terminated=sandbox_terminated,
-            sandbox_id=sandbox_id,
+            sandbox_terminated=False,
+            error="Run not found",
         )
 
-    result = await ctx.step.run("cleanup-run", cleanup_run, output_type=RunCleanupResult)
-    return require_not_none(result, "cleanup-run returned None")
+    sandbox_id = run.e2b_sandbox_id
+    sandbox_terminated = False
+
+    # Terminate sandbox if exists
+    if sandbox_id:
+        sandbox_terminated = await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
+        # Clear sandbox ID from run
+        run = run.model_copy(update={"e2b_sandbox_id": None})
+
+    # Verify/update run status
+    expected_status = RunStatus.COMPLETED if status == "completed" else RunStatus.FAILED
+    if run.status != expected_status:
+        run = run.model_copy(
+            update={
+                "status": expected_status,
+                "error_message": error_message if status == "failed" else run.error_message,
+            }
+        )
+
+    # Single update with all changes
+    queries.runs.update(run)
+
+    return RunCleanupResult(
+        run_id=run_id,
+        status=status,
+        sandbox_terminated=sandbox_terminated,
+        sandbox_id=sandbox_id,
+    )

@@ -1,11 +1,15 @@
 """Benchmark registry for config, loader, factories, and evaluator lookup."""
 
 from pathlib import Path
-from typing import Callable, TypedDict
+from typing import Callable, NotRequired, TypedDict, TYPE_CHECKING
 
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
+
+if TYPE_CHECKING:
+    from h_arcane.core.worker import BaseWorker
+    from h_arcane.core.task import Task
 
 # Import benchmark implementations
 from h_arcane.benchmarks.gdpeval.config import GDPEVAL_CONFIG
@@ -38,7 +42,13 @@ from h_arcane.benchmarks.smoke_test.factories import (
     create_stakeholder as smoke_test_create_stakeholder,
     create_toolkit as smoke_test_create_toolkit,
 )
-from h_arcane.benchmarks.smoke_test.sandbox import DummySandboxManager
+from h_arcane.benchmarks.smoke_test.sandbox import SmokeTestSandboxManager
+from h_arcane.benchmarks.smoke_test.workflows import (
+    WORKFLOW_FACTORIES as smoke_test_workflow_factories,
+)
+
+# Type alias for workflow factory: (worker) -> Task
+WorkflowFactory = Callable[["BaseWorker"], "Task"]
 
 
 class BenchmarkConfig(TypedDict):
@@ -52,7 +62,7 @@ class BenchmarkConfig(TypedDict):
         Callable  # (task_id, run_id, experiment_id, stakeholder, sandbox, max_q) -> BaseToolkit
     )
     sandbox_manager_class: type[BaseSandboxManager]
-    # NOTE: No rubric_evaluator - evaluation logic is on BaseRubric.compute_scores()
+    workflow_factories: NotRequired[dict[str, WorkflowFactory]]  # (worker) -> Task
 
 
 # Compute paths relative to this file
@@ -90,7 +100,8 @@ BENCHMARK_CONFIGS: dict[BenchmarkName, BenchmarkConfig] = {
         "loader": load_smoke_test_to_database,
         "stakeholder_factory": smoke_test_create_stakeholder,
         "toolkit_factory": smoke_test_create_toolkit,
-        "sandbox_manager_class": DummySandboxManager,
+        "sandbox_manager_class": SmokeTestSandboxManager,
+        "workflow_factories": smoke_test_workflow_factories,
     },
 }
 
@@ -145,3 +156,28 @@ def get_sandbox_manager(benchmark_name: BenchmarkName) -> BaseSandboxManager:
         Singleton instance of the benchmark's sandbox manager
     """
     return _get_config(benchmark_name)["sandbox_manager_class"]()
+
+
+def get_workflow_factories(benchmark_name: BenchmarkName) -> dict[str, WorkflowFactory]:
+    """Get workflow factories for a benchmark.
+
+    Workflow factories are functions that take a worker and return a Task.
+    Used by benchmark_run_start to dynamically create workflows from CLI requests.
+
+    Args:
+        benchmark_name: The benchmark to get workflow factories for
+
+    Returns:
+        Dict mapping workflow name to factory function: (worker) -> Task
+
+    Raises:
+        NotImplementedError: If the benchmark has no workflow factories defined
+    """
+    config = _get_config(benchmark_name)
+    workflow_factories = config.get("workflow_factories")
+    if workflow_factories is None:
+        raise NotImplementedError(
+            f"Benchmark '{benchmark_name.value}' does not define workflow_factories. "
+            f"Add a workflows.py module with WORKFLOW_FACTORIES dict and register it in the registry."
+        )
+    return workflow_factories

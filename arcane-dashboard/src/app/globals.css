@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* React Flow Customizations */
+.react-flow__node {
+  /* Remove default react-flow node styles */
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.react-flow__handle {
+  /* Better handle visibility */
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.react-flow__node:hover .react-flow__handle {
+  opacity: 1;
+}
+
+/* Dark mode adjustments for react-flow */
+@media (prefers-color-scheme: dark) {
+  .react-flow__controls button {
+    background: #1f2937;
+    border-color: #374151;
+    color: #e5e7eb;
+  }
+  
+  .react-flow__controls button:hover {
+    background: #374151;
+  }
+  
+  .react-flow__controls button svg {
+    fill: #e5e7eb;
+  }
+  
+  .react-flow__minimap {
+    background: #1f2937;
+  }
+  
+  .react-flow__minimap-mask {
+    fill: rgba(0, 0, 0, 0.5);
+  }
+  
+  .react-flow__background pattern {
+    stroke: #374151;
+  }
+}
+
+/* Animation for running status */
+@keyframes status-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.02);
+  }
+}
+
+.animate-status-pulse {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+/* Slide-in animation for panels */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.2s ease-out forwards;
+}
+
+.animate-slide-out-right {
+  animation: slideOutRight 0.2s ease-in forwards;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  /* Hide minimap on small screens */
+  .react-flow__minimap {
+    display: none;
+  }
+  
+  /* Smaller controls on mobile */
+  .react-flow__controls {
+    transform: scale(0.85);
+    transform-origin: bottom left;
+  }
+}
+
+@media (max-width: 768px) {
+  /* Adjust panel positioning on tablets */
+  .react-flow__panel {
+    max-width: calc(100vw - 2rem);
+  }
+}
+
+/* Custom scrollbar for better aesthetics */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(156, 163, 175) transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(156, 163, 175);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(107, 114, 128);
+  }
+}
+
+/* Dark mode scrollbar */
+@media (prefers-color-scheme: dark) {
+  .scrollbar-thin {
+    scrollbar-color: rgb(75, 85, 99) transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(75, 85, 99);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(107, 114, 128);
+  }
+}

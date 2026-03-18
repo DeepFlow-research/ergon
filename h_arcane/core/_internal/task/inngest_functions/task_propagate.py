@@ -3,7 +3,6 @@
 Handles task completion and propagates through DAG.
 """
 
-from datetime import datetime, timezone
 from functools import partial
 from uuid import UUID
 
@@ -24,9 +23,9 @@ from h_arcane.core._internal.task.propagation import (
 )
 from h_arcane.core._internal.task.results import ReadyTaskIdsResult, TaskPropagateResult
 from h_arcane.core._internal.task.schema import parse_task_tree
-from h_arcane.core._internal.utils import require_not_none
+from h_arcane.core._internal.utils import require_not_none, utcnow
 from h_arcane.core.status import TaskStatus, TaskTrigger
-from h_arcane.dashboard import dashboard_emitter
+from h_arcane.core.dashboard import dashboard_emitter
 
 
 @inngest_client.create_function(
@@ -51,11 +50,12 @@ async def task_propagate(ctx: inngest.Context) -> TaskPropagateResult:
     task_id = UUID(payload.task_id)
     execution_id = UUID(payload.execution_id)
 
-    # Load task tree for task names
+    # Load task tree for task names (inlined - pure read)
     run = queries.runs.get(run_id)
     experiment = queries.experiments.get(experiment_id) if run else None
     tree = parse_task_tree(experiment.task_tree) if experiment else None
 
+    # Helper functions for task tree lookups
     def get_task_name(tid: UUID) -> str:
         """Get task name from tree or return default."""
         if tree:
@@ -72,16 +72,17 @@ async def task_propagate(ctx: inngest.Context) -> TaskPropagateResult:
                 return task_node.parent_id
         return None
 
-    # Call propagation logic (DB writes, must be in step)
-    async def propagate() -> ReadyTaskIdsResult:
-        ready_tasks = on_task_completed(run_id, task_id, execution_id)
-        return ReadyTaskIdsResult(ready_task_ids=ready_tasks)
-
-    prop_result = await ctx.step.run("propagate", propagate, output_type=ReadyTaskIdsResult)
+    # Call propagation logic
+    prop_result = await ctx.step.run(
+        "propagate",
+        partial(_propagate, run_id, task_id, execution_id),
+        output_type=ReadyTaskIdsResult,
+    )
     prop_result = require_not_none(prop_result, "propagate returned None")
     ready_task_ids = prop_result.ready_task_ids
 
     # Emit task/ready for each newly ready task (in parallel)
+    # Keep as closure - dynamic parallel step needs closure capture for dynamic IDs
     if ready_task_ids:
 
         def make_emit_step(tid: UUID):
@@ -115,41 +116,15 @@ async def task_propagate(ctx: inngest.Context) -> TaskPropagateResult:
 
     # Emit workflow event if terminal state
     if workflow_complete:
-
-        async def emit_workflow_completed() -> None:
-            event = WorkflowCompletedEvent(
-                run_id=str(run_id),
-                experiment_id=str(experiment_id),
-            )
-            await inngest_client.send(
-                inngest.Event(name=WorkflowCompletedEvent.name, data=event.model_dump())
-            )
-
-        await ctx.step.run("emit-workflow-completed", emit_workflow_completed)
+        await ctx.step.run(
+            "emit-workflow-completed",
+            partial(_emit_workflow_completed, run_id, experiment_id),
+        )
     elif workflow_failed:
-
-        async def emit_workflow_failed() -> None:
-            event = WorkflowFailedEvent(
-                run_id=str(run_id),
-                experiment_id=str(experiment_id),
-                error="One or more tasks failed",
-            )
-            await inngest_client.send(
-                inngest.Event(name=WorkflowFailedEvent.name, data=event.model_dump())
-            )
-            # Emit dashboard workflow failed event
-            run = queries.runs.get(run_id)
-            if run:
-                started_at = run.started_at or run.created_at
-                duration_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
-                await dashboard_emitter.workflow_completed(
-                    run_id=run_id,
-                    status="failed",
-                    duration_seconds=duration_seconds,
-                    error="One or more tasks failed",
-                )
-
-        await ctx.step.run("emit-workflow-failed", emit_workflow_failed)
+        await ctx.step.run(
+            "emit-workflow-failed",
+            partial(_emit_workflow_failed, run_id, experiment_id),
+        )
 
     return TaskPropagateResult(
         run_id=run_id,
@@ -158,3 +133,41 @@ async def task_propagate(ctx: inngest.Context) -> TaskPropagateResult:
         workflow_complete=workflow_complete,
         workflow_failed=workflow_failed,
     )
+
+
+async def _propagate(run_id: UUID, task_id: UUID, execution_id: UUID) -> ReadyTaskIdsResult:
+    """Call on_task_completed() to update deps and find ready tasks."""
+    ready_tasks = on_task_completed(run_id, task_id, execution_id)
+    return ReadyTaskIdsResult(ready_task_ids=ready_tasks)
+
+
+async def _emit_workflow_completed(run_id: UUID, experiment_id: UUID) -> None:
+    """Emit WorkflowCompletedEvent (Inngest only, dashboard emitted in workflow_complete)."""
+    event = WorkflowCompletedEvent(
+        run_id=str(run_id),
+        experiment_id=str(experiment_id),
+    )
+    await inngest_client.send(
+        inngest.Event(name=WorkflowCompletedEvent.name, data=event.model_dump())
+    )
+
+
+async def _emit_workflow_failed(run_id: UUID, experiment_id: UUID) -> None:
+    """Emit WorkflowFailedEvent and dashboard workflow_completed(status=failed)."""
+    event = WorkflowFailedEvent(
+        run_id=str(run_id),
+        experiment_id=str(experiment_id),
+        error="One or more tasks failed",
+    )
+    await inngest_client.send(inngest.Event(name=WorkflowFailedEvent.name, data=event.model_dump()))
+    # Emit dashboard workflow failed event
+    run = queries.runs.get(run_id)
+    if run:
+        started_at = run.started_at or run.created_at
+        duration_seconds = (utcnow() - started_at).total_seconds()
+        await dashboard_emitter.workflow_completed(
+            run_id=run_id,
+            status="failed",
+            duration_seconds=duration_seconds,
+            error="One or more tasks failed",
+        )

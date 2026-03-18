@@ -8,6 +8,7 @@ Orchestrators (triggered by external events):
 - task_propagate: Handle completion, check dependencies, emit ready events
 - workflow_complete: Finalize run, aggregate results, cleanup
 - workflow_failed: Handle workflow failure
+- benchmark_run_start: Initialize benchmark run from CLI (reconstructs workers server-side)
 
 Child functions (invoked by orchestrators):
 - sandbox_setup: Create and configure sandbox for task
@@ -15,19 +16,23 @@ Child functions (invoked by orchestrators):
 - persist_outputs: Download and register output resources
 
 Event flow:
-    execute_task() -> workflow/started
-                      -> workflow_start -> task/ready (for initial tasks)
-                                           -> task_execute
-                                              -> sandbox_setup (invoke)
-                                              -> worker_execute (invoke)
-                                              -> persist_outputs (invoke)
-                                              -> task/completed
-                                                 -> task_propagate -> task/ready (next tasks)
-                                                                      ... repeat ...
-                                                                   -> workflow/completed
-                                                                      -> workflow_complete
+    CLI -> benchmark/run-request
+           -> benchmark_run_start -> workflow/started
+                                     -> workflow_start -> task/ready (for initial tasks)
+                                                          -> task_execute
+                                                             -> sandbox_setup (invoke)
+                                                             -> worker_execute (invoke)
+                                                             -> persist_outputs (invoke)
+                                                             -> task/completed
+                                                                -> task_propagate -> task/ready (next tasks)
+                                                                                     ... repeat ...
+                                                                                  -> workflow/completed
+                                                                                     -> workflow_complete
 """
 
+from h_arcane.core._internal.task.inngest_functions.benchmark_run_start import (
+    benchmark_run_start,
+)
 from h_arcane.core._internal.task.inngest_functions.persist_outputs import (
     persist_outputs_fn,
 )
@@ -48,6 +53,7 @@ __all__ = [
     "task_propagate",
     "workflow_complete",
     "workflow_failed",
+    "benchmark_run_start",
     # Child functions
     "sandbox_setup_fn",
     "worker_execute_fn",

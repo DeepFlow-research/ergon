@@ -1,12 +1,22 @@
 """Shared utility functions."""
 
 import mimetypes
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypeVar
 
 mimetypes.add_type("text/markdown", ".md")
 
 T = TypeVar("T")
+
+
+def utcnow() -> datetime:
+    """Return current UTC time as a naive datetime (no tzinfo).
+    
+    Use this instead of datetime.now(timezone.utc) for consistency with
+    PostgreSQL TIMESTAMP columns which store naive datetimes.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def require_not_none(value: T | None, error_msg: str) -> T:
