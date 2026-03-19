@@ -18,6 +18,15 @@ This plan is intended to address the core concerns behind:
 - `02_evaluation_runner_inngest_aware.md`
 - `04_rubrics_orchestrate_criterion_fanout.md`
 
+## Implementation Status
+
+- [x] Replace the Inngest-aware evaluation runner with a framework-agnostic criterion runtime/context split.
+- [x] Move rubric APIs from `compute_scores(..., inngest_ctx)` to rubric-owned `criteria` plus `aggregate(...)`.
+- [x] Migrate GDPEval, SmokeTest, ResearchRubrics, and MiniF2F onto the new criterion spec model.
+- [x] Introduce `RubricEvaluationService` and `InngestCriterionExecutor` so task-level handlers own orchestration.
+- [x] Update single-criterion orchestration wrappers to use the new runtime.
+- [ ] Run full end-to-end benchmark validation against live services.
+
 ## Problem Statement
 
 The current evaluation architecture mixes three concerns:

@@ -35,6 +35,21 @@ The target rule is:
 - `07_rubric_criterion_service_redesign.md`
   - Concrete redesign for criteria as the extension point, rubrics as metadata plus aggregation, and a separate service/executor owning Inngest orchestration.
 
+- `08_remaining_task_orchestration_cleanup.md`
+  - Implementation-ready plan for the first task/workflow cleanup wave: evaluator dispatch, task execution, and workflow finalization.
+
+- `09_post_cleanup_status_and_next_wave.md`
+  - Post-implementation status check plus the recommended next cleanup wave for the remaining thick runners.
+
+- `10_workflow_start_initialization_service.md`
+  - Implementation-ready spec for extracting `WorkflowInitializationService` from `workflow_start.py`.
+
+- `11_task_propagation_service.md`
+  - Implementation-ready spec for extracting `TaskPropagationService` from `task_propagate.py`.
+
+- `12_otel_sidecar_tracing_implementation.md`
+  - Implementation-ready spec for adding OTEL tracing via a collector sidecar across workflow, task, worker, sandbox, and evaluation execution.
+
 ## Recommended Reading Order
 
 1. `01_rubric_api_depends_on_inngest.md`
@@ -44,6 +59,11 @@ The target rule is:
 5. `05_step_durability_shapes_service_apis.md`
 6. `06_events_and_services_tightly_interleaved.md`
 7. `07_rubric_criterion_service_redesign.md`
+8. `08_remaining_task_orchestration_cleanup.md`
+9. `09_post_cleanup_status_and_next_wave.md`
+10. `10_workflow_start_initialization_service.md`
+11. `11_task_propagation_service.md`
+12. `12_otel_sidecar_tracing_implementation.md`
 
 ## Suggested Implementation Order
 
