@@ -101,6 +101,7 @@ This lets us:
 | [10_BENCHMARK_FIRST_ARCHITECTURE.md](./10_BENCHMARK_FIRST_ARCHITECTURE.md) | Benchmark-first refactoring: decoupling core from benchmark-specific code |
 | [11_GENERIC_ORCHESTRATION.md](./11_GENERIC_ORCHESTRATION.md) | Generic Inngest handlers via registry pattern |
 | [12_RESEARCHRUBRICS_IMPLEMENTATION.md](./12_RESEARCHRUBRICS_IMPLEMENTATION.md) | **ResearchRubrics implementation plan** (deep research baseline) |
+| [20_BENCHMARK_SETUP_CLI.md](./20_BENCHMARK_SETUP_CLI.md) | First-class onboarding and benchmark preparation CLI (`magym`) for compose, readiness checks, benchmark prep, and seeding |
 | [PRE_BUILD_CHECKLIST.md](./PRE_BUILD_CHECKLIST.md) | What's left before building - decisions, prerequisites, build order |
 
 ## Current Scope: ReAct Baseline
