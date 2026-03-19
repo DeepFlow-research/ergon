@@ -2,31 +2,21 @@
 
 from typing import TYPE_CHECKING, Protocol
 
-import inngest
-
 if TYPE_CHECKING:
-    from h_arcane.core._internal.db.models import TaskEvaluationResult
-    from h_arcane.core._internal.evaluation.schemas import TaskEvaluationContext
+    from h_arcane.core._internal.db.models import CriterionResult, TaskEvaluationResult
+    from h_arcane.core._internal.evaluation.schemas import CriterionSpec, TaskEvaluationContext
 
 
 class BaseRubric(Protocol):
-    """Protocol for benchmark rubrics.
+    """Protocol for benchmark rubrics."""
 
-    Each benchmark implements its own rubric as a Pydantic model
-    with a discriminator field and scoring logic.
-    """
+    benchmark: str
+    criteria: list["CriterionSpec"]
 
-    benchmark: str  # Discriminator field
-
-    async def compute_scores(
+    def aggregate(
         self,
         context: "TaskEvaluationContext",
-        inngest_ctx: inngest.Context,
+        criterion_results: list["CriterionResult"],
     ) -> "TaskEvaluationResult":
-        """Compute scores for agent outputs against this rubric.
-
-        Each benchmark implements its own scoring logic:
-        - GDPEval: staged evaluation with gates
-        - MiniF2F: binary proof verification
-        """
+        """Aggregate criterion results into a task-level evaluation result."""
         ...

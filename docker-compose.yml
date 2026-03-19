@@ -32,9 +32,14 @@ services:
       - INNGEST_DEV=1
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
+      - OTEL_TRACES_ENABLED=true
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=h-arcane
     depends_on:
       postgres:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     volumes:
       # Mount source code for hot-reload during development
       - ./h_arcane:/app/h_arcane
@@ -75,6 +80,22 @@ services:
     depends_on:
       api:
         condition: service_started
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "4317:4317"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
 
 volumes:
   postgres_data:

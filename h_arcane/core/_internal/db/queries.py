@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 from typing import TYPE_CHECKING, TypeVar, Generic, Type
+from sqlalchemy import func
 from sqlmodel import SQLModel, select, desc, and_
 from datetime import datetime
 from h_arcane.core._internal.db.connection import get_session
@@ -23,13 +24,14 @@ from h_arcane.core._internal.db.models import (
     TaskStateEvent,
     TaskEvaluator,
     TaskStatus,
+    TaskTrigger,
     Thread,
     ThreadMessage,
 )
 from h_arcane.benchmarks.enums import BenchmarkName
 
 if TYPE_CHECKING:
-    from h_arcane.core._internal.task.results import RunCompletionData
+    from h_arcane.core._internal.task.services.dto import RunCompletionData
 
 
 T = TypeVar("T", bound=SQLModel)
@@ -68,7 +70,7 @@ class BaseQueries(Generic[T]):
             if existing is None:
                 raise ValueError(f"{self.model.__name__} {entity_id} not found")
             # Merge updates: preserve unset fields, update set fields
-            update_data = entity.model_dump(exclude_none=True)
+            update_data = entity.model_dump(exclude_none=False)
             # Copy updated fields back to existing entity for SQLAlchemy tracking
             for key, value in update_data.items():
                 setattr(existing, key, value)
@@ -597,15 +599,13 @@ class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
     def __init__(self):
         super().__init__(TaskStateEvent)
 
-    def get_current_states(self, run_id: UUID) -> dict[str, str]:
+    def get_current_states(self, run_id: UUID) -> dict[UUID, TaskStatus]:
         """
         Compute current task states from event log.
 
-        Returns a dict mapping task_id (as string) -> current status (as string).
+        Returns a dict mapping task_id (UUID) -> current status (TaskStatus).
         This replaces the old Run.task_states denormalized column.
         """
-        from sqlalchemy import func
-
         with next(get_session()) as session:
             # Subquery to get max timestamp per task
             subquery = (
@@ -626,42 +626,14 @@ class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
             )
 
             results = session.exec(statement).all()
-            return {str(row.task_id): row.new_status for row in results}
+            return {row.task_id: row.new_status for row in results}
 
-    def get_task_state(self, run_id: UUID, task_id: UUID) -> str | None:
+    def get_task_state(self, run_id: UUID, task_id: UUID) -> TaskStatus | None:
         """Get the current state of a single task."""
         events = self.get_history(run_id, task_id)
         if not events:
             return None
         return events[-1].new_status
-
-    def record(
-        self,
-        run_id: UUID,
-        task_id: UUID,
-        event_type: str,
-        new_status: str,
-        old_status: str | None = None,
-        task_execution_id: UUID | None = None,
-        triggered_by: str | None = None,
-        metadata: dict | None = None,
-    ) -> TaskStateEvent:
-        """
-        Record a state change event (append-only).
-
-        This is the primary way to log task state transitions.
-        """
-        event = TaskStateEvent(
-            run_id=run_id,
-            task_id=task_id,
-            task_execution_id=task_execution_id,
-            event_type=event_type,
-            old_status=old_status,
-            new_status=new_status,
-            triggered_by=triggered_by,
-            event_metadata=metadata or {},
-        )
-        return self.create(event)
 
     def get_history(self, run_id: UUID, task_id: UUID) -> list[TaskStateEvent]:
         """Get all state events for a task, ordered by timestamp."""
@@ -695,10 +667,10 @@ class TaskStateEventQueries(BaseQueries[TaskStateEvent]):
         self,
         run_id: UUID,
         task_id: UUID,
-        new_status: str,
-        old_status: str | None = None,
+        new_status: TaskStatus,
+        old_status: TaskStatus | None = None,
         execution_id: UUID | None = None,
-        triggered_by: str | None = None,
+        triggered_by: TaskTrigger | None = None,
         metadata: dict | None = None,
     ) -> TaskStateEvent:
         """

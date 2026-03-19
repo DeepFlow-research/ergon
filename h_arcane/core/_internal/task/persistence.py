@@ -23,6 +23,7 @@ from h_arcane.core._internal.db.models import (
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.utils import utcnow
 from h_arcane.benchmarks.enums import BenchmarkName
+from h_arcane.core.status import TaskStatus
 from h_arcane.core.task import Resource as SDKResource
 from h_arcane.core.task import Task
 from h_arcane.core._internal.task.schema import TaskTreeNode
@@ -62,7 +63,9 @@ def serialize_task_tree(task: Task) -> TaskTreeNode:
     )
 
     # Recursively serialize children
-    data["children"] = [serialize_task_tree(child).model_dump() for child in task.children]
+    data["children"] = [
+        serialize_task_tree(child).model_dump(mode="json") for child in task.children
+    ]
 
     # Add computed property
     data["is_leaf"] = task.is_leaf
@@ -112,7 +115,7 @@ def create_experiment_from_task(
         "task_id": str(task.id),
         "task_description": task.description,
         "ground_truth_rubric": {},
-        "task_tree": task_tree.model_dump(),  # Store as dict in DB
+        "task_tree": task_tree.model_dump(mode="json"),  # Store as dict in DB (UUIDs→str)
         "root_task_id": str(task.id),
         "category": "custom",
     }
@@ -529,9 +532,6 @@ def complete_task_execution(
     Returns:
         The updated TaskExecution record
     """
-
-    from h_arcane.core.task import TaskStatus
-
     status = TaskStatus.COMPLETED if success else TaskStatus.FAILED
 
     return queries.task_executions.update_status(
@@ -599,10 +599,7 @@ def load_agent_mapping(run_id: UUID) -> dict[UUID, UUID]:
     if run is None:
         raise ValueError(f"Run not found: {run_id}")
 
-    results = run.benchmark_specific_results or {}
-    mapping_data = results.get("agent_mapping", {})
-
-    return {UUID(k): UUID(v) for k, v in mapping_data.items()}
+    return run.parsed_agent_mapping() or {}
 
 
 # =============================================================================

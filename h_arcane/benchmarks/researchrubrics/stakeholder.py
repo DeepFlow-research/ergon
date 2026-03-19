@@ -13,6 +13,9 @@ from h_arcane.core._internal.communication.schemas import MessageResponse
 from h_arcane.core._internal.db.models import Experiment
 from h_arcane.core.settings import settings
 
+from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
+
 
 class RubricAwareStakeholder(BaseStakeholder):
     """Stakeholder that knows rubric criteria + ablated prompt.
@@ -62,7 +65,10 @@ Research request: {task_prompt}
         self._max_tokens = max_tokens
         self._temperature = temperature
         self._task_prompt = experiment.task_description  # ablated prompt
-        self._rubric_criteria = experiment.ground_truth_rubric.get("criteria", [])
+        rubric = experiment.parsed_ground_truth_rubric()
+        if not isinstance(rubric, ResearchRubricsRubric):
+            raise ValueError("ResearchRubrics stakeholder requires ResearchRubricsRubric")
+        self._rubric_criteria = rubric.rubric_criteria
         self._client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     @property
@@ -90,9 +96,9 @@ Research request: {task_prompt}
             return "No specific criteria provided."
 
         # Group by axis
-        by_axis: dict[str, list[dict]] = {}
+        by_axis: dict[str, list[RubricCriterion]] = {}
         for criterion in self._rubric_criteria:
-            axis = criterion.get("axis", "Other")
+            axis = criterion.axis
             if axis not in by_axis:
                 by_axis[axis] = []
             by_axis[axis].append(criterion)
@@ -101,8 +107,8 @@ Research request: {task_prompt}
         for axis, criteria in sorted(by_axis.items()):
             lines.append(f"\n{axis}:")
             for c in criteria:
-                weight = c.get("weight", 1.0)
-                criterion_text = c.get("criterion", "")
+                weight = c.weight
+                criterion_text = c.criterion
                 weight_indicator = f"(weight: {weight})" if weight != 1.0 else ""
                 lines.append(f"  - {criterion_text} {weight_indicator}".strip())
 

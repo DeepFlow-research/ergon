@@ -1,17 +1,20 @@
-"""Task-level evaluation Inngest function.
-
-This function evaluates a task run by delegating to rubric.compute_scores().
-"""
-
-from uuid import UUID
+"""Task-level evaluation Inngest function."""
 
 import inngest
 
 from h_arcane.core._internal.db.models import TaskEvaluationResult, CriterionResult
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.evaluation.events import TaskEvaluationEvent
+from h_arcane.core._internal.evaluation.inngest_executor import InngestCriterionExecutor
 from h_arcane.core._internal.evaluation.schemas import TaskEvaluationContext
+from h_arcane.core._internal.evaluation.services import RubricEvaluationService
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.infrastructure.tracing import (
+    CompletedSpan,
+    evaluation_task_context,
+    get_trace_sink,
+)
+from h_arcane.core._internal.utils import utcnow
 
 
 @inngest_client.create_function(
@@ -23,7 +26,7 @@ from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 )
 async def evaluate_task_run(ctx: inngest.Context) -> TaskEvaluationResult:
     """
-    Evaluate a task run by delegating to rubric.compute_scores().
+    Evaluate a task run via rubric evaluation service + executor.
 
     Pydantic handles all deserialization automatically via model_validate():
     - agent_outputs: list[Resource] auto-deserialized
@@ -34,18 +37,29 @@ async def evaluate_task_run(ctx: inngest.Context) -> TaskEvaluationResult:
     - TaskEvaluationResult record with aggregate scores
     """
     payload = TaskEvaluationEvent.model_validate(ctx.event.data)
-    run_id = UUID(payload.run_id)
+    run_id = payload.run_id
+    task_id = payload.task_id
+    execution_id = payload.execution_id
+    evaluator_id = payload.evaluator_id
+    trace_context = evaluation_task_context(run_id, task_id, execution_id, evaluator_id)
+    started_at = utcnow()
 
     context = TaskEvaluationContext(
         run_id=run_id,
         task_input=payload.task_input,
         agent_reasoning=payload.agent_reasoning,
         agent_outputs=payload.agent_outputs,
-        rubric=payload.rubric,
     )
 
-    # Polymorphic dispatch - each rubric type implements its own scoring
-    result = await payload.rubric.compute_scores(context, ctx)
+    evaluation_service = RubricEvaluationService(
+        criterion_executor=InngestCriterionExecutor(
+            ctx,
+            task_id=task_id,
+            execution_id=execution_id,
+            evaluator_id=evaluator_id,
+        ),
+    )
+    result = await evaluation_service.evaluate(context, payload.rubric)
 
     # Persist criterion results
     async def persist_criterion_results() -> int:
@@ -65,5 +79,23 @@ async def evaluate_task_run(ctx: inngest.Context) -> TaskEvaluationResult:
         queries.task_evaluation_results.create(result)
 
     await ctx.step.run("persist-task-evaluation-result", persist_task_evaluation_result)
+
+    get_trace_sink().emit_span(
+        CompletedSpan(
+            name="evaluation.task",
+            context=trace_context,
+            start_time=started_at,
+            end_time=utcnow(),
+            attributes={
+                "task_id": task_id,
+                "execution_id": execution_id,
+                "evaluator_id": evaluator_id,
+                "normalized_score": result.normalized_score,
+                "total_score": result.total_score,
+                "max_score": result.max_score,
+                "stages_evaluated": result.stages_evaluated,
+            },
+        )
+    )
 
     return result

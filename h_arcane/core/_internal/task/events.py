@@ -18,6 +18,7 @@ Usage:
 """
 
 from typing import ClassVar
+from uuid import UUID
 
 from h_arcane.core._internal.events.base import InngestEventContract
 
@@ -36,9 +37,9 @@ class TaskReadyEvent(InngestEventContract):
 
     name: ClassVar[str] = "task/ready"
 
-    run_id: str
-    experiment_id: str
-    task_id: str
+    run_id: UUID
+    experiment_id: UUID
+    task_id: UUID
 
 
 class TaskStartedEvent(InngestEventContract):
@@ -50,10 +51,10 @@ class TaskStartedEvent(InngestEventContract):
 
     name: ClassVar[str] = "task/started"
 
-    run_id: str
-    experiment_id: str
-    task_id: str
-    execution_id: str
+    run_id: UUID
+    experiment_id: UUID
+    task_id: UUID
+    execution_id: UUID
 
 
 class TaskCompletedEvent(InngestEventContract):
@@ -65,10 +66,10 @@ class TaskCompletedEvent(InngestEventContract):
 
     name: ClassVar[str] = "task/completed"
 
-    run_id: str
-    experiment_id: str
-    task_id: str
-    execution_id: str
+    run_id: UUID
+    experiment_id: UUID
+    task_id: UUID
+    execution_id: UUID
 
 
 class TaskFailedEvent(InngestEventContract):
@@ -80,10 +81,10 @@ class TaskFailedEvent(InngestEventContract):
 
     name: ClassVar[str] = "task/failed"
 
-    run_id: str
-    experiment_id: str
-    task_id: str
-    execution_id: str
+    run_id: UUID
+    experiment_id: UUID
+    task_id: UUID
+    execution_id: UUID
     error: str
 
 
@@ -101,8 +102,8 @@ class WorkflowStartedEvent(InngestEventContract):
 
     name: ClassVar[str] = "workflow/started"
 
-    run_id: str
-    experiment_id: str
+    run_id: UUID
+    experiment_id: UUID
 
 
 class WorkflowCompletedEvent(InngestEventContract):
@@ -114,8 +115,8 @@ class WorkflowCompletedEvent(InngestEventContract):
 
     name: ClassVar[str] = "workflow/completed"
 
-    run_id: str
-    experiment_id: str
+    run_id: UUID
+    experiment_id: UUID
 
 
 class WorkflowFailedEvent(InngestEventContract):
@@ -127,8 +128,8 @@ class WorkflowFailedEvent(InngestEventContract):
 
     name: ClassVar[str] = "workflow/failed"
 
-    run_id: str
-    experiment_id: str
+    run_id: UUID
+    experiment_id: UUID
     error: str
 
 

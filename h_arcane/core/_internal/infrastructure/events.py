@@ -4,6 +4,7 @@ These are the contracts for infrastructure-related Inngest events.
 """
 
 from typing import ClassVar, Literal
+from uuid import UUID
 
 from h_arcane.core._internal.events.base import InngestEventContract
 
@@ -16,6 +17,6 @@ class RunCleanupEvent(InngestEventContract):
 
     name: ClassVar[str] = "run/cleanup"
 
-    run_id: str
+    run_id: UUID
     status: Literal["completed", "failed"]
     error_message: str | None = None

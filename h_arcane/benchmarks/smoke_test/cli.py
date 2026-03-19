@@ -230,9 +230,8 @@ async def _poll_for_run_creation(
         runs = queries.runs.get_recent(limit=10)
 
         for run in runs:
-            if run.benchmark_specific_results:
-                if run.benchmark_specific_results.get("cli_request_id") == request_id:
-                    return run.id
+            if run.cli_request_id() == request_id:
+                return run.id
 
         await asyncio.sleep(poll_interval)
 
@@ -264,8 +263,9 @@ async def _poll_for_completion(
         # Check if terminal state
         if run.status in terminal_statuses:
             # Deserialize precomputed ExecutionResult from run
-            if run.execution_result:
-                return ExecutionResult.model_validate(run.execution_result)
+            parsed_result = run.parsed_execution_result()
+            if parsed_result:
+                return parsed_result
 
             # Fallback if execution_result not set
             completed_at = datetime.now(timezone.utc)

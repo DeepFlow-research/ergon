@@ -129,6 +129,13 @@ class ExecutionResult(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
+def _as_naive_utc(value: datetime) -> datetime:
+    """Normalize aware datetimes to naive UTC for duration math."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 async def execute_task(
     task: Task,
     evaluator: Any = None,  # AnyRubric has heavy benchmark dependencies
@@ -198,8 +205,8 @@ async def execute_task(
 
         # 5. Trigger execution via Inngest
         event = WorkflowStartedEvent(
-            run_id=str(run.id),
-            experiment_id=str(experiment.id),
+            run_id=run.id,
+            experiment_id=experiment.id,
         )
         await inngest_client.send(
             inngest.Event(name=WorkflowStartedEvent.name, data=event.model_dump())
@@ -217,7 +224,7 @@ async def execute_task(
 
     except Exception as exc:
         completed_at = utcnow()
-        duration = (completed_at - started_at).total_seconds()
+        duration = (completed_at - _as_naive_utc(started_at)).total_seconds()
 
         return ExecutionResult(
             success=False,
@@ -271,8 +278,9 @@ async def _wait_for_completion(
         # Check if terminal state
         if run.status in terminal_statuses:
             # Deserialize precomputed ExecutionResult from run
-            if run.execution_result:
-                return ExecutionResult.model_validate(run.execution_result)
+            parsed_result = run.parsed_execution_result()
+            if parsed_result:
+                return parsed_result
             # Fallback if execution_result not set (shouldn't happen)
             return _build_error_result(
                 started_at=started_at,
@@ -302,7 +310,8 @@ def _build_error_result(
 ) -> ExecutionResult:
     """Build an error ExecutionResult."""
     completed_at = utcnow()
-    duration = (completed_at - started_at).total_seconds()
+    normalized_started_at = _as_naive_utc(started_at)
+    duration = (completed_at - normalized_started_at).total_seconds()
 
     return ExecutionResult(
         success=False,
@@ -310,7 +319,7 @@ def _build_error_result(
         outputs=[],
         score=None,
         evaluation_details={},
-        started_at=started_at,
+        started_at=normalized_started_at,
         completed_at=completed_at,
         duration_seconds=duration,
         total_cost_usd=0.0,

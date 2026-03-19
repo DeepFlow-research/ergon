@@ -33,7 +33,7 @@ async def run_cleanup(ctx: inngest.Context) -> RunCleanupResult:
     - Ensuring run status is correctly set (idempotent)
     """
     payload = RunCleanupEvent.model_validate(ctx.event.data)
-    run_id = UUID(payload.run_id)
+    run_id = payload.run_id
     status = payload.status
     error_message = payload.error_message
 

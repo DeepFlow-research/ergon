@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "H-ARCANE: Hypothesis-Based Modeling for Uncertainty-Aware Alignment"
 requires-python = ">=3.13"
 dependencies = [
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp-proto-grpc",
     "inngest>=0.3.0",
     "sqlmodel>=0.0.14",
     "openai>=1.12.0",
@@ -46,6 +49,9 @@ dev = [
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project.scripts]
+magym = "h_arcane.cli.main:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["h_arcane*"]
@@ -75,6 +81,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "e2e: marks tests as end-to-end (deselect with '-m \"not e2e\"')",
+    "legacy_e2e: legacy batch-dispatch smoke coverage retained temporarily during deterministic test migration",
 ]
 timeout = 600  # Default timeout for all tests
 

@@ -153,6 +153,14 @@ class WorkerContext(BaseModel):
         default=None,
         description="Agent config ID for action persistence",
     )
+    trace_context: Any = Field(
+        default=None,
+        description="Deterministic tracing context for this execution",
+    )
+    trace_sink: Any = Field(
+        default=None,
+        description="Optional tracing sink injected by the core runtime",
+    )
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -201,3 +209,4 @@ class WorkerResult(BaseModel):
     )
 
     model_config = {"arbitrary_types_allowed": True}
+

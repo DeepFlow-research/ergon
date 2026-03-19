@@ -26,7 +26,6 @@ from uuid import UUID
 
 from h_arcane.core.status import TaskStatus, TaskTrigger
 from h_arcane.core._internal.db.queries import queries
-from h_arcane.core._internal.task.schema import parse_task_tree
 
 
 # =============================================================================
@@ -154,9 +153,9 @@ def _update_task_state(
     queries.task_state_events.record_state_change(
         run_id=run_id,
         task_id=task_id,
-        new_status=new_status.value,
+        new_status=new_status,
         execution_id=execution_id,
-        triggered_by=triggered_by.value if triggered_by else None,
+        triggered_by=triggered_by,
         metadata=metadata or {},
     )
 
@@ -181,7 +180,7 @@ def _get_task_tree(run_id: UUID):
     if experiment is None:
         return None
 
-    return parse_task_tree(experiment.task_tree)
+    return experiment.parsed_task_tree()
 
 
 def is_task_ready(run_id: UUID, task_id: UUID) -> bool:
@@ -205,14 +204,14 @@ def is_task_ready(run_id: UUID, task_id: UUID) -> bool:
         return True
 
     # Get this task's dependencies from the tree
-    dependencies = tree.get_dependencies(str(task_id))
+    dependencies = tree.get_dependencies(task_id)
     if not dependencies:
         # No dependencies - task is ready
         return True
 
     # Check if all dependencies are completed
     task_states = queries.task_state_events.get_current_states(run_id)
-    return all(task_states.get(dep_id) == TaskStatus.COMPLETED.value for dep_id in dependencies)
+    return all(task_states.get(dep_id) == TaskStatus.COMPLETED for dep_id in dependencies)
 
 
 def get_blocking_dependencies(run_id: UUID, task_id: UUID) -> list[UUID]:
@@ -231,16 +230,16 @@ def get_blocking_dependencies(run_id: UUID, task_id: UUID) -> list[UUID]:
         return []
 
     # Get this task's dependencies from the tree
-    dependencies = tree.get_dependencies(str(task_id))
+    dependencies = tree.get_dependencies(task_id)
     if not dependencies:
         return []
 
     # Filter to only non-completed dependencies
     task_states = queries.task_state_events.get_current_states(run_id)
     blocking = [
-        UUID(dep_id)
+        dep_id
         for dep_id in dependencies
-        if task_states.get(dep_id) != TaskStatus.COMPLETED.value
+        if task_states.get(dep_id) != TaskStatus.COMPLETED
     ]
     return blocking
 
@@ -279,8 +278,7 @@ def on_task_completed(
     tree = _get_task_tree(run_id)
     potentially_unblocked: list[UUID] = []
     if tree is not None:
-        dependent_ids = tree.get_dependents(str(task_id))
-        potentially_unblocked = [UUID(tid) for tid in dependent_ids]
+        potentially_unblocked = tree.get_dependents(task_id)
 
     # 3. Check which tasks are actually ready (all deps satisfied)
     ready_tasks: list[UUID] = []
@@ -321,12 +319,12 @@ def propagate_to_parent(run_id: UUID, task_id: UUID) -> bool:
         return False
 
     # Parse task_tree into typed model
-    tree = parse_task_tree(experiment.task_tree)
+    tree = experiment.parsed_task_tree()
     if tree is None:
         return False
 
     # Find the task in the tree to get its parent_id
-    task_node = tree.find_by_id(str(task_id))
+    task_node = tree.find_by_id(task_id)
     if task_node is None:
         return False
 
@@ -334,7 +332,7 @@ def propagate_to_parent(run_id: UUID, task_id: UUID) -> bool:
         # This is the root task - check if workflow is complete
         return False
 
-    # Get all leaf descendants of the parent
+    # Get all leaf descendants of the parent (parent_id is UUID)
     parent_node = tree.find_by_id(task_node.parent_id)
     if parent_node is None:
         return False
@@ -344,13 +342,13 @@ def propagate_to_parent(run_id: UUID, task_id: UUID) -> bool:
     # Check if all leaf descendants are completed (from event log)
     task_states = queries.task_state_events.get_current_states(run_id)
     all_complete = all(
-        task_states.get(leaf_id) == TaskStatus.COMPLETED.value for leaf_id in leaf_ids
+        task_states.get(leaf_id) == TaskStatus.COMPLETED for leaf_id in leaf_ids
     )
 
     if all_complete:
         # Mark parent as completed
         # Parent completion doesn't need propagation - it's just state tracking
-        parent_uuid = UUID(task_node.parent_id)
+        parent_uuid = task_node.parent_id
         _update_task_state(
             run_id,
             parent_uuid,
@@ -411,7 +409,7 @@ def is_workflow_complete(run_id: UUID) -> bool:
         return False
 
     # Parse task_tree into typed model
-    tree = parse_task_tree(experiment.task_tree)
+    tree = experiment.parsed_task_tree()
     if tree is None:
         return False
 
@@ -420,7 +418,7 @@ def is_workflow_complete(run_id: UUID) -> bool:
 
     # Check if all are completed (from event log)
     task_states = queries.task_state_events.get_current_states(run_id)
-    return all(task_states.get(leaf_id) == TaskStatus.COMPLETED.value for leaf_id in all_leaf_ids)
+    return all(task_states.get(leaf_id) == TaskStatus.COMPLETED for leaf_id in all_leaf_ids)
 
 
 def is_workflow_failed(run_id: UUID) -> bool:
@@ -435,7 +433,7 @@ def is_workflow_failed(run_id: UUID) -> bool:
     """
     # Get current states from event log
     task_states = queries.task_state_events.get_current_states(run_id)
-    return any(status == TaskStatus.FAILED.value for status in task_states.values())
+    return any(status == TaskStatus.FAILED for status in task_states.values())
 
 
 # =============================================================================
@@ -468,6 +466,6 @@ def get_initial_ready_tasks(run_id: UUID) -> list[UUID]:
     for leaf in all_leaves:
         if not leaf.depends_on:
             # No dependencies - task is ready
-            ready_tasks.append(UUID(leaf.id))
+            ready_tasks.append(leaf.id)
 
     return ready_tasks

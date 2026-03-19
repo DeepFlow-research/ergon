@@ -23,6 +23,13 @@ def get_engine():
     return _engine
 
 
+def configure_database(database_url: str):
+    """Update the configured database URL and reset the cached engine."""
+    global _engine
+    settings.database_url = database_url
+    _engine = None
+
+
 def get_session() -> Generator[Session, None, None]:
     """Get database session (context manager)."""
     engine = get_engine()

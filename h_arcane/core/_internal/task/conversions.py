@@ -60,7 +60,7 @@ def sdk_resource_to_db_dict(
     return {
         "run_id": run_id,
         "experiment_id": experiment_id,
-        "task_id": str(task_id),
+        "task_id": task_id,
         "name": sdk_resource.name,
         "file_path": str(sdk_resource.path) if sdk_resource.path else "",
         "mime_type": sdk_resource.mime_type,

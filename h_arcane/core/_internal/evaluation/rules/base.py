@@ -1,4 +1,6 @@
-"""Base class for evaluation rules."""
+"""Base class for evaluation criteria."""
+
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
@@ -6,12 +8,13 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from h_arcane.core._internal.evaluation.runner import EvaluationRunner
     from h_arcane.core._internal.db.models import CriterionResult
+    from h_arcane.core._internal.evaluation.runtime import CriterionRuntime
+    from h_arcane.core._internal.evaluation.schemas import CriterionContext
 
 
-class BaseRule(BaseModel, ABC):
-    """Base class for all evaluation rules."""
+class BaseCriterion(BaseModel, ABC):
+    """Base class for all evaluation criteria."""
 
     name: str = Field(description="Short name for this criterion")
     description: str = Field(description="What this rule evaluates")
@@ -22,13 +25,22 @@ class BaseRule(BaseModel, ABC):
     )
 
     @abstractmethod
-    async def evaluate(self, runner: "EvaluationRunner") -> "CriterionResult":
-        """Evaluate this rule using the provided runner.
+    async def evaluate(
+        self,
+        runtime: "CriterionRuntime",
+        context: "CriterionContext",
+    ) -> "CriterionResult":
+        """Evaluate this criterion using the provided runtime + context.
 
         Args:
-            runner: EvaluationRunner providing data and infrastructure methods
+            runtime: Criterion runtime providing execution helpers
+            context: Criterion-specific evaluation context
 
         Returns:
             CriterionResult with score, feedback, and evaluated references
         """
         ...
+
+
+# Backwards-compatible alias while internal naming migrates.
+BaseRule = BaseCriterion

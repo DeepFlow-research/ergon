@@ -1,13 +1,11 @@
-"""Inngest event schemas for evaluation domain.
-
-These are the contracts for evaluation-related Inngest events.
-"""
+"""Inngest event schemas for evaluation domain."""
 
 from typing import ClassVar
+from uuid import UUID
 
-
-from h_arcane.benchmarks.types import AnyRubric, AnyRule
+from h_arcane.benchmarks.types import AnyRubric
 from h_arcane.core._internal.db.models import ResourceRecord
+from h_arcane.core._internal.evaluation.criterion_types import AnyCriterion
 from h_arcane.core._internal.events.base import InngestEventContract
 
 
@@ -19,7 +17,10 @@ class TaskEvaluationEvent(InngestEventContract):
 
     name: ClassVar[str] = "task/evaluate"
 
-    run_id: str
+    run_id: UUID
+    task_id: UUID
+    execution_id: UUID
+    evaluator_id: UUID
     task_input: str
     agent_reasoning: str
     agent_outputs: list[ResourceRecord]
@@ -36,7 +37,10 @@ class CriterionEvaluationEvent(InngestEventContract):
 
     name: ClassVar[str] = "criterion/evaluate"
 
-    run_id: str
+    run_id: UUID
+    task_id: UUID
+    execution_id: UUID
+    evaluator_id: UUID
     task_input: str
     agent_reasoning: str
     agent_outputs: list[ResourceRecord]
@@ -47,10 +51,10 @@ class CriterionEvaluationEvent(InngestEventContract):
     # Stage info as primitives (instead of EvaluationStage object)
     stage_name: str
     stage_idx: int
-    rule_idx: int
+    criterion_idx: int
     max_score: float
 
-    # Rule as discriminated union - Pydantic handles serialization/deserialization
-    rule: AnyRule
+    # Criterion as discriminated union - Pydantic handles serialization/deserialization
+    criterion: AnyCriterion
 
-    model_config = {"extra": "allow"}  # Allow extra fields for rule polymorphism
+    model_config = {"extra": "allow"}  # Allow extra fields for criterion polymorphism

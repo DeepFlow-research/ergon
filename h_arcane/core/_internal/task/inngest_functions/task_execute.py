@@ -8,10 +8,14 @@ from uuid import UUID
 
 import inngest
 
-from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.core._internal.db.models import TaskExecution
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.infrastructure.tracing import (
+    CompletedSpan,
+    TraceContext,
+    get_trace_sink,
+    task_execute_context,
+)
 from h_arcane.core._internal.task.events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -20,11 +24,6 @@ from h_arcane.core._internal.task.events import (
 from h_arcane.core._internal.task.inngest_functions.persist_outputs import persist_outputs_fn
 from h_arcane.core._internal.task.inngest_functions.sandbox_setup import sandbox_setup_fn
 from h_arcane.core._internal.task.inngest_functions.worker_execute import worker_execute_fn
-from h_arcane.core._internal.task.persistence import (
-    complete_task_execution,
-    create_task_execution,
-)
-from h_arcane.core._internal.task.propagation import mark_task_failed, mark_task_running
 from h_arcane.core._internal.task.requests import (
     PersistOutputsRequest,
     SandboxSetupRequest,
@@ -36,8 +35,14 @@ from h_arcane.core._internal.task.results import (
     TaskExecuteResult,
     WorkerExecuteResult,
 )
-from h_arcane.core._internal.task.schema import parse_task_tree
-from h_arcane.core._internal.utils import require_not_none
+from h_arcane.core._internal.task.services import TaskExecutionService
+from h_arcane.core._internal.task.services.dto import (
+    FailTaskExecutionCommand,
+    FinalizeTaskExecutionCommand,
+    PrepareTaskExecutionCommand,
+    PreparedTaskExecution,
+)
+from h_arcane.core._internal.utils import require_not_none, utcnow
 from h_arcane.core.settings import settings
 from h_arcane.core.status import TaskStatus, TaskTrigger
 from h_arcane.core.dashboard import dashboard_emitter
@@ -63,54 +68,54 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
     6. Completes execution and emits event
     """
     payload = TaskReadyEvent.model_validate(ctx.event.data)
-    run_id = UUID(payload.run_id)
-    experiment_id = UUID(payload.experiment_id)
-    task_id = UUID(payload.task_id)
-
-    # Inline: Load context (pure reads, safe to re-run)
-    run = require_not_none(queries.runs.get(run_id), f"Run {run_id} not found")
-    experiment = require_not_none(
-        queries.experiments.get(experiment_id),
-        f"Experiment {experiment_id} not found",
+    run_id = payload.run_id
+    experiment_id = payload.experiment_id
+    task_id = payload.task_id
+    trace_sink = get_trace_sink()
+    service_trace_context = task_execute_context(
+        run_id,
+        task_id,
+        attributes={"experiment_id": experiment_id},
     )
 
-    # Parse task tree and find this task
-    tree = parse_task_tree(experiment.task_tree)
-    if not tree:
-        raise ValueError(f"Experiment {experiment_id} has no task_tree")
-    task_node = tree.find_by_id(str(task_id))
-    if not task_node:
-        raise ValueError(f"Task {task_id} not found in task_tree")
+    prepared = await ctx.step.run(
+        "prepare-task-execution",
+        lambda: TaskExecutionService(
+            trace_sink=trace_sink,
+            trace_context=service_trace_context,
+        ).prepare(
+            PrepareTaskExecutionCommand(
+                run_id=run_id,
+                experiment_id=experiment_id,
+                task_id=task_id,
+            )
+        ),
+        output_type=PreparedTaskExecution,
+    )
 
-    # Early return for composite tasks
-    if not task_node.is_leaf:
+    if prepared.skipped:
         return TaskExecuteResult(
             run_id=run_id,
             task_id=task_id,
             success=True,
             skipped=True,
-            skip_reason="composite_task",
+            skip_reason=prepared.skip_reason,
         )
 
-    # Get benchmark name
-    benchmark_name = (
-        BenchmarkName(experiment.benchmark_name)
-        if isinstance(experiment.benchmark_name, str)
-        else experiment.benchmark_name
+    execution_id = prepared.execution_id
+    if execution_id is None:
+        raise ValueError(f"Prepared execution for task {task_id} is missing execution_id")
+    trace_context = task_execute_context(
+        run_id,
+        task_id,
+        execution_id=execution_id,
+        attributes={
+            "experiment_id": experiment_id,
+            "task_name": prepared.task_name,
+            "parent_task_id": prepared.parent_task_id,
+            "benchmark_name": prepared.benchmark_name,
+        },
     )
-
-    # Load input resources (inlined - pure read)
-    input_resources = queries.resources.get_inputs_for_task(experiment_id, task_id)
-    input_resource_ids = [r.id for r in input_resources]
-
-    # Create execution and mark running
-    execution = await ctx.step.run(
-        "create-running-execution",
-        partial(_create_running_execution, run_id, task_id),
-        output_type=TaskExecution,
-    )
-    execution = require_not_none(execution, "create-running-execution returned None")
-    execution_id = execution.id
 
     # Emit dashboard task running event
     await ctx.step.run(
@@ -119,8 +124,8 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
             _emit_dashboard_task_running,
             run_id,
             task_id,
-            task_node.name,
-            task_node.parent_id,
+            prepared.task_name,
+            prepared.parent_task_id,
         ),
     )
 
@@ -133,7 +138,8 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
                 run_id=run_id,
                 experiment_id=experiment_id,
                 task_id=task_id,
-                benchmark_name=benchmark_name.value,
+                benchmark_name=prepared.benchmark_name,
+                input_resource_ids=prepared.input_resource_ids,
                 envs={"EXA_API_KEY": settings.exa_api_key},
             ).model_dump(mode="json"),
         )
@@ -147,10 +153,10 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
                 task_id=task_id,
                 execution_id=execution_id,
                 sandbox_id=sandbox_result.sandbox_id,
-                task_description=task_node.description,
-                input_resource_ids=input_resource_ids,
-                benchmark_name=benchmark_name.value,
-                max_questions=run.max_questions,
+                task_description=prepared.task_description,
+                input_resource_ids=prepared.input_resource_ids,
+                benchmark_name=prepared.benchmark_name,
+                max_questions=prepared.max_questions,
             ).model_dump(mode="json"),
         )
 
@@ -168,7 +174,7 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
                 execution_id=execution_id,
                 sandbox_id=sandbox_result.sandbox_id,
                 output_dir=sandbox_result.output_dir,
-                input_resource_ids=input_resource_ids,
+                input_resource_ids=prepared.input_resource_ids,
             ).model_dump(mode="json"),
         )
 
@@ -181,10 +187,11 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
                 run_id,
                 experiment_id,
                 task_id,
-                task_node.name,
-                task_node.parent_id,
+                prepared.task_name,
+                prepared.parent_task_id,
                 worker_result.output_text,
                 persist_result.output_resource_ids,
+                trace_context,
             ),
         )
 
@@ -209,24 +216,18 @@ async def task_execute(ctx: inngest.Context) -> TaskExecuteResult:
                 run_id,
                 experiment_id,
                 task_id,
-                task_node.name,
-                task_node.parent_id,
+                prepared.task_name,
+                prepared.parent_task_id,
                 error_msg,
+                trace_context,
             ),
         )
 
         raise inngest.NonRetriableError(f"Task execution failed: {error_msg}")
 
 
-async def _create_running_execution(run_id: UUID, task_id: UUID) -> TaskExecution:
-    """Create task execution record and mark task as running."""
-    execution = create_task_execution(run_id, task_id)
-    mark_task_running(run_id, task_id, execution.id)
-    return execution
-
-
 async def _emit_dashboard_task_running(
-    run_id: UUID, task_id: UUID, task_name: str, parent_task_id: str | None
+    run_id: UUID, task_id: UUID, task_name: str, parent_task_id: UUID | None
 ) -> None:
     """Emit dashboard task running event."""
     await dashboard_emitter.task_status_changed(
@@ -246,22 +247,25 @@ async def _complete_and_emit(
     experiment_id: UUID,
     task_id: UUID,
     task_name: str,
-    parent_task_id: str | None,
+    parent_task_id: UUID | None,
     output_text: str | None,
     output_resource_ids: list[UUID],
+    trace_context: TraceContext,
 ) -> None:
     """Complete task execution, emit TaskCompletedEvent and dashboard event."""
-    complete_task_execution(
-        execution_id=execution_id,
-        success=True,
-        output_text=output_text,
-        output_resource_ids=output_resource_ids,
+    trace_sink = get_trace_sink()
+    TaskExecutionService(trace_sink=trace_sink, trace_context=trace_context).finalize_success(
+        FinalizeTaskExecutionCommand(
+            execution_id=execution_id,
+            output_text=output_text,
+            output_resource_ids=output_resource_ids,
+        )
     )
     event = TaskCompletedEvent(
-        run_id=str(run_id),
-        experiment_id=str(experiment_id),
-        task_id=str(task_id),
-        execution_id=str(execution_id),
+        run_id=run_id,
+        experiment_id=experiment_id,
+        task_id=task_id,
+        execution_id=execution_id,
     )
     await inngest_client.send(inngest.Event(name=TaskCompletedEvent.name, data=event.model_dump()))
     # Emit dashboard task completed event
@@ -274,6 +278,24 @@ async def _complete_and_emit(
         parent_task_id=parent_task_id,
         triggered_by=TaskTrigger.EXECUTION_SUCCEEDED,
     )
+    execution = require_not_none(
+        queries.task_executions.get(execution_id),
+        f"TaskExecution {execution_id} not found",
+    )
+    trace_sink.emit_span(
+        CompletedSpan(
+            name="task.execute",
+            context=trace_context,
+            start_time=execution.started_at,
+            end_time=execution.completed_at or utcnow(),
+            attributes={
+                "task_id": task_id,
+                "execution_id": execution_id,
+                "status": "completed",
+                "output_resource_count": len(output_resource_ids),
+            },
+        )
+    )
 
 
 async def _fail_and_emit(
@@ -282,21 +304,25 @@ async def _fail_and_emit(
     experiment_id: UUID,
     task_id: UUID,
     task_name: str,
-    parent_task_id: str | None,
+    parent_task_id: UUID | None,
     error_msg: str,
+    trace_context: TraceContext,
 ) -> None:
     """Mark task failed, emit TaskFailedEvent and dashboard event."""
-    mark_task_failed(run_id, task_id, error=error_msg, execution_id=execution_id)
-    complete_task_execution(
-        execution_id=execution_id,
-        success=False,
-        error_message=error_msg,
+    trace_sink = get_trace_sink()
+    TaskExecutionService(trace_sink=trace_sink, trace_context=trace_context).finalize_failure(
+        FailTaskExecutionCommand(
+            execution_id=execution_id,
+            run_id=run_id,
+            task_id=task_id,
+            error_message=error_msg,
+        )
     )
     event = TaskFailedEvent(
-        run_id=str(run_id),
-        experiment_id=str(experiment_id),
-        task_id=str(task_id),
-        execution_id=str(execution_id),
+        run_id=run_id,
+        experiment_id=experiment_id,
+        task_id=task_id,
+        execution_id=execution_id,
         error=error_msg,
     )
     await inngest_client.send(inngest.Event(name=TaskFailedEvent.name, data=event.model_dump()))
@@ -309,4 +335,24 @@ async def _fail_and_emit(
         new_status=TaskStatus.FAILED,
         parent_task_id=parent_task_id,
         triggered_by=TaskTrigger.EXECUTION_FAILED,
+    )
+    execution = require_not_none(
+        queries.task_executions.get(execution_id),
+        f"TaskExecution {execution_id} not found",
+    )
+    trace_sink.emit_span(
+        CompletedSpan(
+            name="task.execute",
+            context=trace_context,
+            start_time=execution.started_at,
+            end_time=execution.completed_at or utcnow(),
+            attributes={
+                "task_id": task_id,
+                "execution_id": execution_id,
+                "status": "failed",
+                "error": error_msg,
+            },
+            status_code="error",
+            status_message=error_msg,
+        )
     )

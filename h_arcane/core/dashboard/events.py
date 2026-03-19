@@ -61,7 +61,7 @@ class DashboardTaskStatusChangedEvent(InngestEventContract):
     run_id: UUID
     task_id: UUID
     task_name: str
-    parent_task_id: str | None = None  # From task_tree, kept as str
+    parent_task_id: UUID | None = None
     old_status: TaskStatus | None = None
     new_status: TaskStatus
     triggered_by: TaskTrigger | None = None

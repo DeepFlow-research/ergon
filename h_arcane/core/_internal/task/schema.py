@@ -11,6 +11,8 @@ in persistence.py.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -22,7 +24,7 @@ class WorkerRef(BaseModel):
     The actual worker instance is retrieved from worker_context at runtime.
     """
 
-    id: str = Field(description="Worker UUID as string")
+    id: UUID = Field(description="Worker UUID")
     name: str = Field(description="Human-readable worker name")
     type: str = Field(description="Worker class name for display/debugging")
 
@@ -68,7 +70,7 @@ class TaskTreeNode(BaseModel):
     """
 
     # === Identity ===
-    id: str = Field(description="Task UUID as string")
+    id: UUID = Field(description="Task UUID")
     name: str = Field(description="Human-readable task name")
     description: str = Field(description="Task description/instructions")
 
@@ -84,11 +86,11 @@ class TaskTreeNode(BaseModel):
         default_factory=list,
         description="Child tasks (empty for leaf tasks)",
     )
-    depends_on: list[str] = Field(
+    depends_on: list[UUID] = Field(
         default_factory=list,
         description="Task UUIDs this task depends on",
     )
-    parent_id: str | None = Field(
+    parent_id: UUID | None = Field(
         default=None,
         description="Parent task UUID (None for root)",
     )
@@ -119,20 +121,21 @@ class TaskTreeNode(BaseModel):
 
     # === Tree Traversal Helpers ===
 
-    def find_by_id(self, task_id: str) -> TaskTreeNode | None:
+    def find_by_id(self, task_id: UUID | str) -> TaskTreeNode | None:
         """
         Find a task by ID in this subtree.
 
         Args:
-            task_id: The task UUID string to find
+            task_id: The task UUID or string to find
 
         Returns:
             TaskTreeNode if found, None otherwise
         """
-        if self.id == task_id:
+        tid = task_id if isinstance(task_id, UUID) else UUID(task_id)
+        if self.id == tid:
             return self
         for child in self.children:
-            found = child.find_by_id(task_id)
+            found = child.find_by_id(tid)
             if found:
                 return found
         return None
@@ -151,12 +154,12 @@ class TaskTreeNode(BaseModel):
             leaves.extend(child.get_all_leaves())
         return leaves
 
-    def get_leaf_ids(self) -> list[str]:
+    def get_leaf_ids(self) -> list[UUID]:
         """
         Get all leaf task IDs in this subtree.
 
         Returns:
-            List of task ID strings for all leaf tasks
+            List of task UUIDs for all leaf tasks
         """
         return [leaf.id for leaf in self.get_all_leaves()]
 
@@ -172,33 +175,33 @@ class TaskTreeNode(BaseModel):
             nodes.extend(child.walk())
         return nodes
 
-    def extract_dependencies(self) -> list[tuple[str, str]]:
+    def extract_dependencies(self) -> list[tuple[UUID, UUID]]:
         """
         Extract all dependency edges from this subtree.
 
         Returns:
             List of (dependent_task_id, dependency_task_id) tuples
         """
-        dependencies: list[tuple[str, str]] = []
+        dependencies: list[tuple[UUID, UUID]] = []
         for node in self.walk():
             for dep_id in node.depends_on:
                 dependencies.append((node.id, dep_id))
         return dependencies
 
-    def extract_evaluators(self) -> list[tuple[str, EvaluatorRef]]:
+    def extract_evaluators(self) -> list[tuple[UUID, EvaluatorRef]]:
         """
         Extract all evaluator configs from this subtree.
 
         Returns:
             List of (task_id, evaluator_config) tuples for tasks with evaluators
         """
-        evaluators: list[tuple[str, EvaluatorRef]] = []
+        evaluators: list[tuple[UUID, EvaluatorRef]] = []
         for node in self.walk():
             if node.evaluator:
                 evaluators.append((node.id, node.evaluator))
         return evaluators
 
-    def get_dependents(self, task_id: str) -> list[str]:
+    def get_dependents(self, task_id: UUID | str) -> list[UUID]:
         """
         Find all task IDs that depend on the given task.
 
@@ -206,26 +209,27 @@ class TaskTreeNode(BaseModel):
         that have task_id in their depends_on list.
 
         Args:
-            task_id: The task UUID string to find dependents for
+            task_id: The task UUID or string to find dependents for
 
         Returns:
-            List of task ID strings that depend on task_id
+            List of task UUIDs that depend on task_id
         """
-        dependents: list[str] = []
+        tid = task_id if isinstance(task_id, UUID) else UUID(task_id)
+        dependents: list[UUID] = []
         for node in self.walk():
-            if task_id in node.depends_on:
+            if tid in node.depends_on:
                 dependents.append(node.id)
         return dependents
 
-    def get_dependencies(self, task_id: str) -> list[str]:
+    def get_dependencies(self, task_id: UUID | str) -> list[UUID]:
         """
         Get the dependencies for a specific task.
 
         Args:
-            task_id: The task UUID string
+            task_id: The task UUID or string
 
         Returns:
-            List of task ID strings this task depends on, or empty list if not found
+            List of task UUIDs this task depends on, or empty list if not found
         """
         node = self.find_by_id(task_id)
         if node is None:

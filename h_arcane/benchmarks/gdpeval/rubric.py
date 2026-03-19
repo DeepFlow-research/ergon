@@ -2,18 +2,14 @@
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 from uuid import UUID
 
-import inngest
 from pydantic import BaseModel, Field, model_validator
 
 from h_arcane.benchmarks.gdpeval.rules import GDPEvalRule
 from h_arcane.core._internal.db.models import CriterionResult, Evaluation, TaskEvaluationResult
-from h_arcane.core._internal.utils import require_not_none
-
-if TYPE_CHECKING:
-    from h_arcane.core._internal.evaluation.schemas import TaskEvaluationContext
+from h_arcane.core._internal.evaluation.schemas import CriterionSpec, TaskEvaluationContext
 
 
 class EvaluationStage(BaseModel):
@@ -106,124 +102,31 @@ class StagedRubric(BaseModel):
     )
 
     stages: list[EvaluationStage] = Field(description="Evaluation stages in order", min_length=1)
+    criteria: list[CriterionSpec] = Field(default_factory=list, exclude=True)
 
-    def validate_stages(self) -> None:
-        """Validate that stages make sense."""
+    @model_validator(mode="after")
+    def populate_criteria(self) -> "StagedRubric":
+        """Validate stages and derive executable criterion specs."""
         total_max = sum(stage.max_points for stage in self.stages)
         if total_max > self.max_total_score:
             raise ValueError(
                 f"Sum of stage max points ({total_max}) exceeds "
                 f"category max ({self.max_total_score})"
             )
+        self.criteria = flatten_rubric(self)
+        return self
 
-    async def compute_scores(
+    def aggregate(
         self,
-        context: "TaskEvaluationContext",
-        inngest_ctx: inngest.Context,
+        context: TaskEvaluationContext,
+        criterion_results: list[CriterionResult],
     ) -> TaskEvaluationResult:
-        """
-        Evaluate GDPEval's StagedRubric.
-
-        This contains all the staged evaluation logic:
-        - Flatten rubric into parallel criteria
-        - Evaluate each criterion (code rules, LLM judge)
-        - Rebuild stage results
-        - Calculate aggregate scores with gate logic
-
-        Args:
-            context: Task evaluation context with run_id, task_input,
-                     agent_reasoning, agent_outputs, and rubric
-            inngest_ctx: Inngest context for step tracing
-
-        Returns:
-            TaskEvaluationResult with criterion-level and aggregate scores
-        """
-
-        # Flatten rubric into criteria list
-        async def flatten_rubric_step():
-            criteria_tuples = flatten_rubric(self)
-            return [
-                FlattenedCriterion(
-                    stage=stage,
-                    rule=rule,
-                    stage_idx=stage_idx,
-                    rule_idx=rule_idx,
-                )
-                for stage, rule, stage_idx, rule_idx in criteria_tuples
-            ]
-
-        criteria_models = await inngest_ctx.step.run(
-            "flatten-rubric",
-            flatten_rubric_step,
-            output_type=list[FlattenedCriterion],
-        )
-        criteria_models = require_not_none(criteria_models, "flatten-rubric step returned None")
-        criteria = [(c.stage, c.rule, c.stage_idx, c.rule_idx) for c in criteria_models]
-
-        # Create step invokers that call the generic criteria_evaluator
-        def make_criterion_invoker(
-            stage: EvaluationStage,
-            rule: GDPEvalRule,
-            stage_idx: int,
-            rule_idx: int,
-        ):
-            """Create an invoker for the generic criterion evaluator."""
-            # Lazy imports to avoid circular import
-            from h_arcane.core._internal.evaluation.events import CriterionEvaluationEvent
-            from h_arcane.core._internal.evaluation.inngest_functions.criterion import (
-                evaluate_criterion_fn,
-            )
-
-            rule_type = rule.type  # "code" or "llm_judge"
-            step_id = f"criterion-{stage_idx}-{rule_idx}-{rule_type}"
-            max_score = rule.weight * stage.max_points
-
-            # Build event data - pass objects directly, Pydantic handles serialization
-            event_data = CriterionEvaluationEvent(
-                run_id=str(context.run_id),
-                task_input=context.task_input,
-                agent_reasoning=context.agent_reasoning,
-                agent_outputs=context.agent_outputs,
-                benchmark_name="gdpeval",
-                stage_name=stage.name,
-                stage_idx=stage_idx,
-                rule_idx=rule_idx,
-                max_score=max_score,
-                rule=rule,
-            )
-            event_data_dict = event_data.model_dump(mode="json")
-
-            # Return lambda that invokes the generic criterion evaluator
-            return (
-                lambda ctx_ref=inngest_ctx, sid=step_id, data=event_data_dict: ctx_ref.step.invoke(
-                    step_id=sid,
-                    function=evaluate_criterion_fn,
-                    data=data,
-                )
-            )
-
-        # Build list of parallel invokers
-        parallel_invokers = tuple(
-            make_criterion_invoker(stage, rule, stage_idx, rule_idx)
-            for stage, rule, stage_idx, rule_idx in criteria
-        )
-
-        # Execute ALL criteria in parallel
-        criterion_results_tuple = await inngest_ctx.group.parallel(parallel_invokers)
-        criterion_results = list(criterion_results_tuple)
-
-        # Rebuild stage results
         stage_results = _rebuild_stage_results(criterion_results, self)
-
-        # Calculate aggregate scores
         aggregate = _calculate_aggregate_scores(context.run_id, stage_results, self)
-
-        # Convert CriterionResult objects to dicts for JSON storage
-        criterion_results_dicts = [cr.model_dump() for cr in criterion_results]
 
         return TaskEvaluationResult(
             run_id=context.run_id,
-            criterion_results=criterion_results_dicts,
+            criterion_results=[cr.model_dump() for cr in criterion_results],
             total_score=aggregate.total_score,
             max_score=aggregate.max_score,
             normalized_score=aggregate.normalized_score,
@@ -240,15 +143,6 @@ class GDPEvalStagedRubric(BaseModel):
     rubric: StagedRubric = Field(description="Staged rubric")
 
 
-class FlattenedCriterion(BaseModel):
-    """A flattened criterion with stage, rule, and indices for step serialization."""
-
-    stage: EvaluationStage
-    rule: GDPEvalRule
-    stage_idx: int
-    rule_idx: int
-
-
 class GDPEvalTask(BaseModel):
     """A GDPEval task with its rubric."""
 
@@ -261,29 +155,21 @@ class GDPEvalTask(BaseModel):
 
 def flatten_rubric(
     rubric: StagedRubric,
-) -> list[tuple[EvaluationStage, GDPEvalRule, int, int]]:
-    """
-    Flatten StagedRubric into list of criteria for parallel evaluation.
-
-    Args:
-        rubric: The StagedRubric to flatten
-
-    Returns:
-        List of (stage, rule, stage_idx, rule_idx) tuples, one per rule in rubric
-
-    Example:
-        ```python
-        criteria = flatten_rubric(rubric)
-        for stage, rule, stage_idx, rule_idx in criteria:
-            # Evaluate each criterion
-            result = await evaluate_criterion(...)
-        ```
-    """
+) -> list[CriterionSpec]:
+    """Flatten a staged rubric into executable criterion specs."""
     criteria = []
 
     for stage_idx, stage in enumerate(rubric.stages):
-        for rule_idx, rule in enumerate(stage.rules):
-            criteria.append((stage, rule, stage_idx, rule_idx))
+        for criterion_idx, rule in enumerate(stage.rules):
+            criteria.append(
+                CriterionSpec(
+                    criterion=rule,
+                    criterion_idx=criterion_idx,
+                    max_score=rule.weight * stage.max_points,
+                    stage_idx=stage_idx,
+                    stage_name=stage.name,
+                )
+            )
 
     return criteria
 

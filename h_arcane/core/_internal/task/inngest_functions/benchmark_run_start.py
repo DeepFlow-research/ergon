@@ -31,8 +31,8 @@ class BenchmarkRunResult(BaseModel):
     """Result of benchmark run initialization."""
 
     request_id: str
-    run_id: str
-    experiment_id: str
+    run_id: UUID | None = None
+    experiment_id: UUID | None = None
     success: bool = True
     error: str | None = None
 
@@ -108,6 +108,7 @@ async def benchmark_run_start(ctx: inngest.Context) -> BenchmarkRunResult:
         if persist_result is None:
             raise ValueError("persist-workflow step returned None")
 
+        # Step output is JSON-deserialized; coerce str back to UUID
         run_id = UUID(persist_result["run_id"])
         experiment_id = UUID(persist_result["experiment_id"])
 
@@ -122,16 +123,16 @@ async def benchmark_run_start(ctx: inngest.Context) -> BenchmarkRunResult:
 
         return BenchmarkRunResult(
             request_id=payload.request_id,
-            run_id=str(run_id),
-            experiment_id=str(experiment_id),
+            run_id=run_id,
+            experiment_id=experiment_id,
             success=True,
         )
 
     except Exception as e:
         return BenchmarkRunResult(
             request_id=payload.request_id,
-            run_id="",
-            experiment_id="",
+            run_id=None,
+            experiment_id=None,
             success=False,
             error=str(e),
         )
@@ -157,6 +158,7 @@ async def _persist_workflow_step(
     run.benchmark_specific_results["cli_request_id"] = request_id
     queries.runs.update(run)
 
+    # Step output is JSON-serialized; use str for wire format
     return {
         "run_id": str(run.id),
         "experiment_id": str(experiment.id),
@@ -166,8 +168,8 @@ async def _persist_workflow_step(
 async def _emit_workflow_started(run_id: UUID, experiment_id: UUID) -> None:
     """Emit WorkflowStartedEvent to trigger workflow execution."""
     event = WorkflowStartedEvent(
-        run_id=str(run_id),
-        experiment_id=str(experiment_id),
+        run_id=run_id,
+        experiment_id=experiment_id,
     )
     await inngest_client.send(
         inngest.Event(name=WorkflowStartedEvent.name, data=event.model_dump())

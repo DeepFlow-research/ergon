@@ -97,3 +97,10 @@ def store_workers_from_task(task: "Task") -> None:
     # Recursively store for children
     for child in task.children:
         store_workers_from_task(child)
+
+
+def clear_workers_from_task(task: "Task") -> None:
+    """Recursively clear workers for a task tree."""
+    clear_worker(task.id)
+    for child in task.children:
+        clear_workers_from_task(child)

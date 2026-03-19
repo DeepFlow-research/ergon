@@ -11,16 +11,18 @@ from uuid import UUID
 
 import inngest
 
-from h_arcane.benchmarks.types import AnyRubric
 from h_arcane.core._internal.db.models import TaskEvaluationResult
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.evaluation.events import TaskEvaluationEvent
 from h_arcane.core._internal.evaluation.inngest_functions.task_run import evaluate_task_run
 from h_arcane.core._internal.evaluation.results import EvaluatorsResult
-from h_arcane.core._internal.evaluation.serialization import deserialize_rubric
+from h_arcane.core._internal.evaluation.services import EvaluatorDispatchService
+from h_arcane.core._internal.evaluation.services.dto import (
+    DispatchEvaluatorsCommand,
+    PreparedEvaluatorDispatch,
+)
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.task.events import TaskCompletedEvent
-from h_arcane.core._internal.task.schema import parse_task_tree
 
 
 @inngest_client.create_function(
@@ -43,13 +45,22 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
     4. Updates TaskEvaluator status and score
     """
     payload = TaskCompletedEvent.model_validate(ctx.event.data)
-    run_id = UUID(payload.run_id)
-    task_id = UUID(payload.task_id)
+    run_id = payload.run_id
+    task_id = payload.task_id
+    prepared = await ctx.step.run(
+        "prepare-evaluator-dispatch",
+        lambda: EvaluatorDispatchService().prepare_dispatch(
+            DispatchEvaluatorsCommand(
+                run_id=run_id,
+                task_id=task_id,
+                execution_id=payload.execution_id,
+                experiment_id=payload.experiment_id,
+            )
+        ),
+        output_type=PreparedEvaluatorDispatch,
+    )
 
-    # Inline: Query evaluators (pure read)
-    evaluators = queries.task_evaluators.get_by_task(run_id, task_id)
-
-    if not evaluators:
+    if prepared.evaluators_found == 0:
         return EvaluatorsResult(
             task_id=task_id,
             evaluators_found=0,
@@ -57,41 +68,8 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
             scores=[],
         )
 
-    # Inline: Load task execution data (pure reads)
-    executions = queries.task_executions.get_by_task(run_id, task_id)
-    if not executions:
-        raise ValueError(f"No execution found for task {task_id}")
-
-    latest_execution = max(executions, key=lambda e: e.attempt_number)
-    outputs = queries.resources.get_outputs_for_execution(latest_execution.id)
-
-    run = queries.runs.get(run_id)
-    if not run:
-        raise ValueError(f"Run {run_id} not found")
-
-    experiment = queries.experiments.get(run.experiment_id)
-    if not experiment:
-        raise ValueError(f"Experiment {run.experiment_id} not found")
-
-    tree = parse_task_tree(experiment.task_tree)
-    task_node = tree.find_by_id(str(task_id)) if tree else None
-    task_input = task_node.description if task_node else ""
-    agent_reasoning = latest_execution.output_text or ""
-    agent_outputs = list(outputs)
-
-    # Pre-process evaluators: separate valid from invalid
-    valid_evaluators: list[tuple[UUID, AnyRubric]] = []
-    failed_evaluator_ids: list[UUID] = []
-
-    for evaluator in evaluators:
-        try:
-            rubric = deserialize_rubric(evaluator.evaluator_type, evaluator.evaluator_config)
-            valid_evaluators.append((evaluator.id, rubric))
-        except ValueError:
-            failed_evaluator_ids.append(evaluator.id)
-
     # Mark failed evaluators in parallel
-    if failed_evaluator_ids:
+    if prepared.invalid_evaluator_ids:
 
         def make_mark_failed_step(eid: UUID):
             async def mark_failed() -> None:
@@ -99,45 +77,56 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
 
             return partial(ctx.step.run, f"mark-failed-{eid}", mark_failed)
 
-        await ctx.group.parallel(tuple(make_mark_failed_step(eid) for eid in failed_evaluator_ids))
+        await ctx.group.parallel(
+            tuple(make_mark_failed_step(eid) for eid in prepared.invalid_evaluator_ids)
+        )
 
     # Run valid evaluators in parallel
     scores: list[float] = []
-    if valid_evaluators:
+    if prepared.valid_evaluators:
         # First, mark all evaluators as running
-        for eid, _ in valid_evaluators:
-            queries.task_evaluators.mark_running(eid)
+        for evaluator in prepared.valid_evaluators:
+            queries.task_evaluators.mark_running(evaluator.evaluator_id)
 
         # Create invokers for parallel execution
         # Note: ctx.step.invoke is already a step, so we don't wrap it in ctx.step.run
-        def make_invoker(eid: UUID, r: AnyRubric):
+        def make_invoker(evaluator_id: UUID, evaluator_payload: TaskEvaluationEvent):
             return lambda: ctx.step.invoke(
-                step_id=f"evaluate-{eid}",
+                step_id=f"evaluate-{evaluator_id}",
                 function=evaluate_task_run,
-                data=TaskEvaluationEvent(
-                    run_id=str(run_id),
-                    task_input=task_input,
-                    agent_reasoning=agent_reasoning,
-                    agent_outputs=agent_outputs,
-                    rubric=r,
-                ).model_dump(mode="json"),
+                data=evaluator_payload.model_dump(mode="json"),
             )
 
         # Execute all evaluations in parallel
         results: tuple[TaskEvaluationResult, ...] = await ctx.group.parallel(
-            tuple(make_invoker(eid, rubric) for eid, rubric in valid_evaluators)
+            tuple(
+                make_invoker(
+                    evaluator.evaluator_id,
+                    TaskEvaluationEvent(
+                        run_id=run_id,
+                        task_id=task_id,
+                        execution_id=payload.execution_id,
+                        evaluator_id=evaluator.evaluator_id,
+                        task_input=evaluator.task_input,
+                        agent_reasoning=evaluator.agent_reasoning,
+                        agent_outputs=evaluator.agent_outputs,
+                        rubric=evaluator.rubric,
+                    ),
+                )
+                for evaluator in prepared.valid_evaluators
+            )
         )
 
         # Mark evaluators as completed with scores
-        for (eid, _), result in zip(valid_evaluators, results):
+        for evaluator, result in zip(prepared.valid_evaluators, results):
             if result is not None:
                 score = result.normalized_score
-                queries.task_evaluators.mark_completed(eid, score)
+                queries.task_evaluators.mark_completed(evaluator.evaluator_id, score)
                 scores.append(score)
 
     return EvaluatorsResult(
         task_id=task_id,
-        evaluators_found=len(evaluators),
+        evaluators_found=prepared.evaluators_found,
         evaluators_run=len(scores),
         scores=scores,
     )

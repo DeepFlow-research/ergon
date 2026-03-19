@@ -112,7 +112,7 @@ def load_researchrubrics_task(
     # Create rubric evaluator
     rubric = ResearchRubricsRubric(
         benchmark="researchrubrics",
-        criteria=rubric_criteria,
+        rubric_criteria=rubric_criteria,
     )
 
     # ResearchRubrics has no input files - just the ablated prompt
@@ -140,7 +140,7 @@ def _researchrubrics_item_to_task(row: dict[str, Any], worker: "BaseWorker") -> 
     # Create rubric evaluator
     rubric = ResearchRubricsRubric(
         benchmark="researchrubrics",
-        criteria=rubric_criteria,
+        rubric_criteria=rubric_criteria,
     )
 
     return Task(

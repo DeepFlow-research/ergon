@@ -14,10 +14,15 @@ from h_arcane.benchmarks.registry import get_sandbox_manager
 from h_arcane.core._internal.db.models import ResourceRecord
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.infrastructure.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    persist_outputs_context,
+)
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager, DownloadedFiles
 from h_arcane.core._internal.task.requests import PersistOutputsRequest
 from h_arcane.core._internal.task.results import PersistOutputsResult
-from h_arcane.core._internal.utils import get_mime_type, require_not_none
+from h_arcane.core._internal.utils import get_mime_type, require_not_none, utcnow
 from h_arcane.core.dashboard import dashboard_emitter
 
 
@@ -41,6 +46,14 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     task_id = payload.task_id
     execution_id = payload.execution_id
     output_dir = Path(payload.output_dir)
+    trace_sink = get_trace_sink()
+    trace_context = persist_outputs_context(
+        run_id,
+        task_id,
+        execution_id,
+        attributes={"sandbox_id": payload.sandbox_id},
+    )
+    started_at = utcnow()
 
     # Get experiment to determine benchmark (inlined - pure reads)
     run = require_not_none(queries.runs.get(run_id), f"Run {run_id} not found")
@@ -114,6 +127,20 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     output_resource_ids = [
         require_not_none(r, "register-resource returned None").id for r in resources
     ]
+
+    trace_sink.emit_span(
+        CompletedSpan(
+            name="persist.outputs",
+            context=trace_context,
+            start_time=started_at,
+            end_time=utcnow(),
+            attributes={
+                "sandbox_id": payload.sandbox_id,
+                "outputs_count": len(output_resource_ids),
+                "output_resource_ids": [str(resource_id) for resource_id in output_resource_ids],
+            },
+        )
+    )
 
     return PersistOutputsResult(
         output_resource_ids=output_resource_ids,

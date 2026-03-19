@@ -13,6 +13,12 @@ from h_arcane.core.task import TaskStatus
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.events import RunCleanupEvent
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.infrastructure.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    workflow_root_context,
+    workflow_terminal_context,
+)
 from h_arcane.core._internal.task.events import WorkflowFailedEvent
 from h_arcane.core._internal.task.results import WorkflowFailedResult
 from h_arcane.core._internal.utils import utcnow
@@ -36,8 +42,9 @@ async def workflow_failed(ctx: inngest.Context) -> WorkflowFailedResult:
     3. Emits dashboard workflow failed event
     """
     payload = WorkflowFailedEvent.model_validate(ctx.event.data)
-    run_id = UUID(payload.run_id)
+    run_id = payload.run_id
     error_msg = payload.error
+    trace_sink = get_trace_sink()
 
     # Mark failed + build execution result + emit cleanup
     await ctx.step.run(
@@ -51,6 +58,41 @@ async def workflow_failed(ctx: inngest.Context) -> WorkflowFailedResult:
         partial(_emit_dashboard_workflow_failed, run_id, error_msg),
     )
 
+    run = queries.runs.get(run_id)
+    if run:
+        completed_at = run.completed_at or utcnow()
+        started_at = run.started_at or run.created_at
+        trace_sink.emit_span(
+            CompletedSpan(
+                name="workflow.failed",
+                context=workflow_terminal_context(run_id, "failed"),
+                start_time=completed_at,
+                end_time=completed_at,
+                attributes={"error": error_msg},
+                status_code="error",
+                status_message=error_msg,
+            )
+        )
+        trace_sink.emit_span(
+            CompletedSpan(
+                name="workflow.execute",
+                context=workflow_root_context(
+                    run_id,
+                    attributes={"experiment_id": run.experiment_id},
+                ),
+                start_time=started_at,
+                end_time=completed_at,
+                attributes={
+                    "success": False,
+                    "error": error_msg,
+                    "worker_model": run.worker_model,
+                    "total_cost_usd": run.total_cost_usd,
+                },
+                status_code="error",
+                status_message=error_msg,
+            )
+        )
+
     return WorkflowFailedResult(
         run_id=run_id,
         error=error_msg,
@@ -63,7 +105,7 @@ async def _fail_and_cleanup(run_id: UUID, error_msg: str) -> None:
     if not run:
         # Emit cleanup anyway
         event = RunCleanupEvent(
-            run_id=str(run_id),
+            run_id=run_id,
             status="failed",
             error_message=error_msg,
         )
@@ -100,7 +142,7 @@ async def _fail_and_cleanup(run_id: UUID, error_msg: str) -> None:
 
     # Emit cleanup event
     event = RunCleanupEvent(
-        run_id=str(run_id),
+        run_id=run_id,
         status="failed",
         error_message=error_msg,
     )

@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel
 from litellm.cost_calculator import cost_per_token
 
-from agents import Agent, Runner, function_tool
+from agents import Agent, Runner
 from agents.items import (
     MessageOutputItem,
     ReasoningItem,
@@ -19,8 +19,6 @@ from agents.items import (
 from agents.result import RunResult
 from agents.usage import Usage
 from openai.types.responses import ResponseFunctionToolCall, ResponseOutputText
-from inngest_agents import as_step
-
 from h_arcane.core.worker import BaseWorker, WorkerContext, WorkerResult
 from h_arcane.core.task import Task, Resource
 from h_arcane.core._internal.agents.base import BaseToolkit, WorkerExecutionOutput
@@ -29,7 +27,7 @@ from h_arcane.benchmarks.common.workers.config import WorkerConfig
 
 
 class ReActWorker(BaseWorker):
-    """ReAct-style worker with ask_stakeholder + benchmark tools.
+    """ReAct-style worker with benchmark toolkit tools.
 
     Implements SDK BaseWorker protocol. Toolkit is read from WorkerContext.toolkit
     during execute().
@@ -78,13 +76,6 @@ class ReActWorker(BaseWorker):
         toolkit: BaseToolkit = context.toolkit
         self.tools = toolkit.get_tools()
 
-        # Build tools list with durability wrappers
-        # Each tool call becomes an individual Inngest step via as_step()
-        raw_tools = [
-            self._make_ask_tool(toolkit),
-            *toolkit.get_tools(),
-        ]
-        tools = [as_step(t) for t in raw_tools]
 
         # Create agent with structured output type
         # We use WorkerExecutionOutput for structured extraction, then convert to WorkerResult
@@ -92,7 +83,7 @@ class ReActWorker(BaseWorker):
             name=self.name,
             model=self.model,
             instructions=self.system_prompt,
-            tools=tools,
+            tools=self.tools,
             output_type=WorkerExecutionOutput,
         )
 
@@ -124,31 +115,6 @@ class ReActWorker(BaseWorker):
             qa_exchanges=qa_exchanges,  # Execution layer will persist
             outputs=[],  # Benchmark outputs tracked via sandbox
         )
-
-    def _make_ask_tool(self, toolkit: BaseToolkit):
-        """Create ask_stakeholder tool function."""
-
-        @function_tool
-        async def ask_stakeholder(question: str) -> str:
-            """
-            Ask the stakeholder a clarification question about the task.
-
-            Use this when you're uncertain about requirements, preferences, or how to proceed.
-
-            Parameters:
-                question (str): Your question for the stakeholder
-
-            Returns:
-                str: The stakeholder's answer
-
-            Example:
-                ```python
-                answer = await ask_stakeholder("What format should the output be in?")
-                ```
-            """
-            return await toolkit.ask_stakeholder(question)
-
-        return ask_stakeholder
 
     def _format_task(self, task_description: str, input_resources: list[Resource]) -> str:
         """

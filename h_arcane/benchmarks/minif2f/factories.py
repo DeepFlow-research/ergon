@@ -10,7 +10,7 @@ from h_arcane.benchmarks.minif2f.toolkit import MiniF2FToolkit
 
 def create_stakeholder(experiment: Experiment) -> MiniF2FStakeholder:
     """Create MiniF2F stakeholder from experiment."""
-    ground_truth_proof = experiment.benchmark_specific_data.get("ground_truth_proof", "")
+    ground_truth_proof = experiment.benchmark_specific_data_for().get("ground_truth_proof", "")
     return MiniF2FStakeholder(
         ground_truth_proof=ground_truth_proof,
         problem_statement=experiment.task_description,

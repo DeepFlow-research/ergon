@@ -153,7 +153,7 @@ class DashboardEmitter:
         task_id: UUID,
         task_name: str,
         new_status: TaskStatus,
-        parent_task_id: str | None = None,
+        parent_task_id: UUID | None = None,
         old_status: TaskStatus | None = None,
         triggered_by: TaskTrigger | None = None,
         assigned_worker_id: UUID | None = None,

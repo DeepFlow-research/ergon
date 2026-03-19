@@ -1,18 +1,14 @@
 """MiniF2F rubric definition."""
 
-from typing import TYPE_CHECKING, Literal
+from __future__ import annotations
 
-import inngest
-from pydantic import BaseModel, Field
+from typing import Literal
 
-from h_arcane.core._internal.db.models import TaskEvaluationResult
-from h_arcane.core._internal.evaluation.runner import EvaluationRunner
-from h_arcane.core._internal.evaluation.schemas import EvaluationData
-from h_arcane.benchmarks.minif2f.sandbox import MiniF2FSandboxManager
+from pydantic import BaseModel, Field, model_validator
+
+from h_arcane.core._internal.db.models import CriterionResult, TaskEvaluationResult
+from h_arcane.core._internal.evaluation.schemas import CriterionSpec, TaskEvaluationContext
 from h_arcane.benchmarks.minif2f.rules import ProofVerificationRule
-
-if TYPE_CHECKING:
-    from h_arcane.core._internal.evaluation.schemas import TaskEvaluationContext
 
 
 class MiniF2FRubric(BaseModel):
@@ -20,52 +16,43 @@ class MiniF2FRubric(BaseModel):
 
     benchmark: Literal["minif2f"] = "minif2f"
 
+    criteria: list[CriterionSpec] = Field(default_factory=list, exclude=True)
     max_score: float = Field(default=1.0, description="Maximum score for proof verification")
     partial_credit_for_syntax: float = Field(
         default=0.2,
         description="Partial credit multiplier for valid Lean syntax that doesn't prove theorem",
     )
 
-    async def compute_scores(
+    @model_validator(mode="after")
+    def populate_criteria(self) -> "MiniF2FRubric":
+        self.criteria = [
+            CriterionSpec(
+                criterion=ProofVerificationRule(
+                    name="proof_verification",
+                    description="Verify Lean proof compiles and proves the theorem",
+                    weight=1.0,
+                ),
+                criterion_idx=0,
+                max_score=self.max_score,
+                stage_idx=0,
+                stage_name="Proof Verification",
+            )
+        ]
+        return self
+
+    def aggregate(
         self,
-        context: "TaskEvaluationContext",
-        inngest_ctx: inngest.Context,
+        context: TaskEvaluationContext,
+        criterion_results: list[CriterionResult],
     ) -> TaskEvaluationResult:
-        """
-        Evaluate MiniF2F proof verification.
+        """Aggregate MiniF2F proof verification results."""
+        if len(criterion_results) != 1:
+            raise ValueError(
+                f"MiniF2FRubric expects exactly 1 criterion result, got {len(criterion_results)}"
+            )
 
-        MiniF2F evaluation is simpler than GDPEval:
-        - Single criterion: does the proof verify?
-        - Binary pass/fail (1.0 or 0.0)
-        - Optional partial credit for valid Lean syntax
-        """
-        # Create proof verification rule
-        rule = ProofVerificationRule(
-            name="proof_verification",
-            description="Verify Lean proof compiles and proves the theorem",
-            weight=1.0,
-            problem_statement=context.task_input,
-        )
+        criterion_result = criterion_results[0]
 
-        # Build evaluation data
-        data = EvaluationData(
-            run_id=context.run_id,
-            task_input=context.task_input,
-            agent_reasoning=context.agent_reasoning,
-            agent_outputs=context.agent_outputs,
-            stage_idx=0,
-            stage_name="Proof Verification",
-            rule_idx=0,
-            max_score=self.max_score,
-        )
-
-        # Evaluate proof - use MiniF2F sandbox manager for Lean installation
-        sandbox_manager = MiniF2FSandboxManager()
-        runner = EvaluationRunner(data, sandbox_manager, inngest_ctx=inngest_ctx)
-        criterion_result = await rule.evaluate(runner)
-        await runner.cleanup()
-
-        # Calculate final score
         if criterion_result.score >= self.max_score:
             total_score = self.max_score
             passed = True

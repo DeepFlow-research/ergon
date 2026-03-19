@@ -1,7 +1,9 @@
 """E2B sandbox lifecycle management for runs with skills support."""
 
 import json
+import time
 from abc import ABC, abstractmethod
+from datetime import UTC, datetime
 from logging import getLogger
 from pathlib import Path
 from typing import Any, TypeVar
@@ -11,8 +13,15 @@ from e2b_code_interpreter.code_interpreter_async import AsyncSandbox
 from pydantic import BaseModel
 
 from h_arcane.core._internal.db.models import ResourceRecord
+from h_arcane.core._internal.infrastructure.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    sandbox_file_op_context,
+    truncate_text,
+)
 from h_arcane.core.settings import settings
 from h_arcane.core.dashboard import dashboard_emitter
+from h_arcane.core._internal.utils import utcnow
 
 logger = getLogger(__name__)
 
@@ -50,6 +59,7 @@ class BaseSandboxManager(ABC):
     _file_registries: dict[UUID, dict[str, str]] = {}  # task_id -> {local_path: sandbox_path}
     _created_files_registry: dict[UUID, set[str]] = {}  # task_id -> {sandbox_paths}
     _skills_packages: dict[UUID, str] = {}  # task_id -> package name in VM
+    _run_ids: dict[UUID, UUID] = {}  # task_id -> run_id
 
     def __new__(cls):
         """Singleton pattern - always return the same instance per subclass."""
@@ -71,6 +81,36 @@ class BaseSandboxManager(ABC):
             self._file_registries[task_id] = {}
         if task_id not in self._created_files_registry:
             self._created_files_registry[task_id] = set()
+
+    def _emit_file_op_span(
+        self,
+        task_id: UUID,
+        operation: str,
+        started_at: float,
+        attributes: dict[str, Any] | None = None,
+        success: bool = True,
+        error: str | None = None,
+    ) -> None:
+        run_id = self._run_ids.get(task_id)
+        if run_id is None:
+            return
+        trace_sink = get_trace_sink()
+        trace_sink.emit_span(
+            CompletedSpan(
+                name="sandbox.file_ops",
+                context=sandbox_file_op_context(
+                    run_id,
+                    task_id,
+                    operation,
+                    attributes={"operation": operation},
+                ),
+                start_time=datetime.fromtimestamp(started_at, tz=UTC),
+                end_time=utcnow(),
+                attributes={**(attributes or {}), "success": success, "error": error},
+                status_code="ok" if success else "error",
+                status_message=error,
+            )
+        )
 
     async def _upload_directory(
         self, sandbox: AsyncSandbox, local_dir: Path, remote_dir: str
@@ -245,6 +285,7 @@ if created:
         # Store sandbox in registry
         self._sandboxes[task_id] = sandbox
         self._ensure_registries(task_id)
+        self._run_ids[task_id] = run_id
 
         # Create directory structure
         await self._create_directory_structure(sandbox, task_id)
@@ -305,6 +346,8 @@ if created:
                 print(result.text)
         """
         sandbox = self._get_sandbox(task_id)
+        run_id = self._run_ids.get(task_id)
+        started_at = time.time()
 
         if task_id not in self._skills_packages:
             raise RuntimeError(
@@ -350,6 +393,23 @@ print("SKILL_SUCCESS")
         if execution.error:
             # Return error as the typed response
             error_str = str(execution.error)
+            if run_id is not None:
+                get_trace_sink().emit_span(
+                    CompletedSpan(
+                        name="sandbox.run_skill",
+                        context=sandbox_file_op_context(
+                            run_id,
+                            task_id,
+                            f"run_skill:{skill_name}",
+                            attributes={"skill_name": skill_name},
+                        ),
+                        start_time=datetime.fromtimestamp(started_at, tz=UTC),
+                        end_time=utcnow(),
+                        attributes={"skill_name": skill_name, "success": False, "error": error_str},
+                        status_code="error",
+                        status_message=error_str,
+                    )
+                )
             return return_type(success=False, error=error_str)
 
         # Read result from file and validate into typed response
@@ -362,11 +422,59 @@ print("SKILL_SUCCESS")
                 result_str = result_data
             raw_result = json.loads(result_str)
             # Pydantic validation
+            if run_id is not None:
+                stdout = None
+                if execution.logs and execution.logs.stdout:
+                    stdout = "".join(execution.logs.stdout)
+                stderr = None
+                if execution.logs and execution.logs.stderr:
+                    stderr = "".join(execution.logs.stderr)
+                get_trace_sink().emit_span(
+                    CompletedSpan(
+                        name="sandbox.run_skill",
+                        context=sandbox_file_op_context(
+                            run_id,
+                            task_id,
+                            f"run_skill:{skill_name}",
+                            attributes={"skill_name": skill_name},
+                        ),
+                        start_time=datetime.fromtimestamp(started_at, tz=UTC),
+                        end_time=utcnow(),
+                        attributes={
+                            "skill_name": skill_name,
+                            "success": True,
+                            "stdout": truncate_text(stdout, settings.otel_stdout_stderr_max_length),
+                            "stderr": truncate_text(stderr, settings.otel_stdout_stderr_max_length),
+                        },
+                    )
+                )
             return return_type.model_validate(raw_result)
         except Exception as e:
             stdout = ""
             if execution.logs and execution.logs.stdout:
                 stdout = "".join(execution.logs.stdout)
+            if run_id is not None:
+                get_trace_sink().emit_span(
+                    CompletedSpan(
+                        name="sandbox.run_skill",
+                        context=sandbox_file_op_context(
+                            run_id,
+                            task_id,
+                            f"run_skill:{skill_name}",
+                            attributes={"skill_name": skill_name},
+                        ),
+                        start_time=datetime.fromtimestamp(started_at, tz=UTC),
+                        end_time=utcnow(),
+                        attributes={
+                            "skill_name": skill_name,
+                            "success": False,
+                            "stdout": truncate_text(stdout, settings.otel_stdout_stderr_max_length),
+                            "error": str(e),
+                        },
+                        status_code="error",
+                        status_message=str(e),
+                    )
+                )
             return return_type(
                 success=False, error=f"Failed to read skill result: {e}. Stdout: {stdout[:200]}"
             )
@@ -375,31 +483,52 @@ print("SKILL_SUCCESS")
         """Upload input resources to /inputs/ for a task."""
         sandbox = self._get_sandbox(task_id)
         self._ensure_registries(task_id)
+        started_at = time.time()
 
         for resource in resources:
             sandbox_path = f"/inputs/{resource.name}"
             content = resource.load_content()
             await sandbox.files.write(sandbox_path, content)
             self._file_registries[task_id][resource.file_path] = sandbox_path
+        self._emit_file_op_span(
+            task_id,
+            "upload_inputs",
+            started_at,
+            attributes={"file_count": len(resources)},
+        )
 
     async def upload_file(self, task_id: UUID, local_path: str, sandbox_path: str) -> None:
         """Upload a single file to sandbox for a task."""
         sandbox = self._get_sandbox(task_id)
         self._ensure_registries(task_id)
+        started_at = time.time()
 
         content = Path(local_path).read_bytes()
         await sandbox.files.write(sandbox_path, content)
         self._file_registries[task_id][local_path] = sandbox_path
+        self._emit_file_op_span(
+            task_id,
+            "upload_file",
+            started_at,
+            attributes={"local_path": local_path, "sandbox_path": sandbox_path, "size_bytes": len(content)},
+        )
 
     async def download_file(self, task_id: UUID, sandbox_path: str) -> bytes:
         """Download a file from sandbox for a task."""
         sandbox = self._get_sandbox(task_id)
+        started_at = time.time()
 
         try:
             content = await sandbox.files.read(sandbox_path)
             # Ensure we return bytes
             if isinstance(content, str):
-                return content.encode("utf-8")
+                content = content.encode("utf-8")
+            self._emit_file_op_span(
+                task_id,
+                "download_file",
+                started_at,
+                attributes={"sandbox_path": sandbox_path, "size_bytes": len(content)},
+            )
             return content
         except Exception as e:
             error_msg = str(e).lower()
@@ -412,6 +541,14 @@ print("SKILL_SUCCESS")
                     f"Sandbox timed out or was not found when downloading {sandbox_path}. "
                     f"Original error: {e}"
                 ) from e
+            self._emit_file_op_span(
+                task_id,
+                "download_file",
+                started_at,
+                attributes={"sandbox_path": sandbox_path},
+                success=False,
+                error=str(e),
+            )
             raise
 
     async def list_files(self, task_id: UUID, sandbox_dir: str = "/workspace") -> list[str]:
@@ -447,6 +584,7 @@ print("SKILL_SUCCESS")
         returns empty list and logs a warning. This prevents unnecessary retries at the
         Inngest step level.
         """
+        started_at = time.time()
         try:
             files = await self.list_files(task_id, "/workspace/final_output")
             downloaded: list[DownloadedFile] = []
@@ -469,6 +607,12 @@ print("SKILL_SUCCESS")
                     logger.warning(f"Failed to download {file_path}: {e}")
                     continue
 
+            self._emit_file_op_span(
+                task_id,
+                "download_all_outputs",
+                started_at,
+                attributes={"file_count": len(downloaded), "output_dir": str(output_dir)},
+            )
             return DownloadedFiles(files=downloaded)
 
         except Exception as e:
@@ -477,6 +621,14 @@ print("SKILL_SUCCESS")
             logger.error(
                 f"Error downloading outputs for task_id={task_id}: {e}. "
                 f"No outputs downloaded. This may be due to sandbox timeout or connection issues."
+            )
+            self._emit_file_op_span(
+                task_id,
+                "download_all_outputs",
+                started_at,
+                attributes={"output_dir": str(output_dir)},
+                success=False,
+                error=str(e),
             )
             return DownloadedFiles(files=[])
 
@@ -539,6 +691,7 @@ print("SKILL_SUCCESS")
             self._file_registries.pop(task_id, None)
             self._created_files_registry.pop(task_id, None)
             self._skills_packages.pop(task_id, None)
+            self._run_ids.pop(task_id, None)
             return
 
         sandbox_id = sandbox.sandbox_id
@@ -553,6 +706,7 @@ print("SKILL_SUCCESS")
             self._file_registries.pop(task_id, None)
             self._created_files_registry.pop(task_id, None)
             self._skills_packages.pop(task_id, None)
+            self._run_ids.pop(task_id, None)
 
             # Emit dashboard sandbox closed event
             await dashboard_emitter.sandbox_closed(

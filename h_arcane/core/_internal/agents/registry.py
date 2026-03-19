@@ -84,6 +84,9 @@ class AgentRegistry:
         Args:
             worker: Worker instance implementing BaseWorker protocol
         """
+        if not hasattr(worker, "id"):
+            raise ValueError(f"Worker {type(worker).__name__} has no 'id' attribute")
+
         worker_id = worker.id
         # Only add if not already registered
         if worker_id not in self.workers:
@@ -150,7 +153,7 @@ class AgentRegistry:
             "run_id": run_id,
             "worker_id": worker_id,  # Store original worker UUID
             "name": worker.name,
-            "agent_type": worker.id,
+            "agent_type": type(worker).__name__,
             "model": worker.model,
             "system_prompt": worker.system_prompt,
             "tools": tool_names,

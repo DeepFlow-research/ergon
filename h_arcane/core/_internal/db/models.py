@@ -1,6 +1,9 @@
 """Database models using SQLModel."""
 
+from __future__ import annotations
+
 import traceback
+from typing import TYPE_CHECKING
 
 from sqlmodel import SQLModel, Field, Column, Index
 from sqlalchemy import JSON
@@ -9,15 +12,25 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from h_arcane.benchmarks.enums import BenchmarkName
-from h_arcane.core.status import TaskStatus
+from h_arcane.core.status import TaskStatus, TaskTrigger
+
+if TYPE_CHECKING:
+    from h_arcane.benchmarks.types import AnyRubric
+    from h_arcane.core._internal.task.schema import TaskTreeNode
+    from h_arcane.core.runner import ExecutionResult
 
 
 def _utcnow() -> datetime:
     """Return current UTC time as naive datetime for DB storage."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _parse_uuid_list(data: list[str]) -> list[UUID]:
+    """Parse a JSON-stored list of UUID strings."""
+    return [UUID(value) for value in data]
 
 
 # =============================================================================
@@ -128,6 +141,59 @@ class Experiment(SQLModel, table=True):
         Index("ix_experiments_benchmark_task", "benchmark_name", "task_id", unique=True),
     )
 
+    def parsed_ground_truth_rubric(self) -> AnyRubric:
+        """Parse benchmark-specific ground truth rubric into its typed model."""
+        return self.__class__._parse_ground_truth_rubric(
+            self.benchmark_name,
+            self.ground_truth_rubric,
+        )
+
+    @classmethod
+    def _parse_ground_truth_rubric(
+        cls,
+        benchmark_name: BenchmarkName,
+        data: dict,
+    ) -> AnyRubric:
+        """Dispatch rubric parsing based on benchmark name."""
+        from h_arcane.core._internal.evaluation.serialization import deserialize_rubric
+
+        rubric_type_by_benchmark = {
+            BenchmarkName.GDPEVAL: "StagedRubric",
+            BenchmarkName.MINIF2F: "MiniF2FRubric",
+            BenchmarkName.RESEARCHRUBRICS: "ResearchRubricsRubric",
+            BenchmarkName.SMOKE_TEST: "SmokeTestRubric",
+        }
+        rubric_type = rubric_type_by_benchmark.get(benchmark_name)
+        if rubric_type is None:
+            raise ValueError(f"Unsupported benchmark for typed rubric parsing: {benchmark_name}")
+        return deserialize_rubric(rubric_type, data)
+
+    def benchmark_specific_data_for(self) -> dict:
+        """Return benchmark-specific data without imposing a typed schema yet."""
+        return self.__class__._parse_benchmark_specific_data(self.benchmark_specific_data)
+
+    @classmethod
+    def _parse_benchmark_specific_data(cls, data: dict) -> dict:
+        """Return raw benchmark-specific data for incremental migration."""
+        return data or {}
+
+    def parsed_task_tree(self) -> TaskTreeNode | None:
+        """Parse the JSON task tree into its typed representation."""
+        return self.__class__._parse_task_tree(self.task_tree)
+
+    @classmethod
+    def _parse_task_tree(cls, data: dict | None) -> TaskTreeNode | None:
+        """Parse stored task tree JSON into a TaskTreeNode."""
+        from h_arcane.core._internal.task.schema import parse_task_tree
+
+        return parse_task_tree(data)
+
+    @model_validator(mode="after")
+    def validate_task_tree(self) -> Experiment:
+        """Fail fast if stored task_tree cannot be parsed."""
+        self.__class__._parse_task_tree(self.task_tree)
+        return self
+
 
 class Run(SQLModel, table=True):
     """A single run of an experiment."""
@@ -178,6 +244,69 @@ class Run(SQLModel, table=True):
         Index("ix_runs_experiment", "experiment_id"),
         Index("ix_runs_status", "status"),
     )
+
+    def parsed_output_resource_ids(self) -> list[UUID]:
+        """Parse output resource IDs into typed UUIDs."""
+        return self.__class__._parse_output_resource_ids(self.output_resource_ids)
+
+    @classmethod
+    def _parse_output_resource_ids(cls, data: list[str]) -> list[UUID]:
+        """Parse output resource ID strings into UUIDs."""
+        return _parse_uuid_list(data)
+
+    def benchmark_specific_results_for(self) -> dict:
+        """Return benchmark-specific results without imposing a global schema."""
+        return self.__class__._parse_benchmark_specific_results(self.benchmark_specific_results)
+
+    @classmethod
+    def _parse_benchmark_specific_results(cls, data: dict) -> dict:
+        """Return raw benchmark-specific results for incremental migration."""
+        return data or {}
+
+    def cli_request_id(self) -> str | None:
+        """Return CLI request ID stored in benchmark-specific results, if present."""
+        return self.__class__._parse_cli_request_id(self.benchmark_specific_results_for())
+
+    @classmethod
+    def _parse_cli_request_id(cls, data: dict) -> str | None:
+        """Extract CLI request ID from benchmark-specific results."""
+        value = data.get("cli_request_id")
+        if value is None:
+            return None
+        return str(value)
+
+    def parsed_agent_mapping(self) -> dict[UUID, UUID] | None:
+        """Parse persisted worker-to-agent config mapping into UUIDs."""
+        return self.__class__._parse_agent_mapping(self.benchmark_specific_results_for())
+
+    @classmethod
+    def _parse_agent_mapping(cls, data: dict) -> dict[UUID, UUID] | None:
+        """Extract typed agent mapping from benchmark-specific results."""
+        mapping = data.get("agent_mapping")
+        if mapping is None:
+            return None
+        if not isinstance(mapping, dict):
+            raise ValueError("benchmark_specific_results['agent_mapping'] must be a dict")
+        return {UUID(worker_id): UUID(config_id) for worker_id, config_id in mapping.items()}
+
+    def parsed_execution_result(self) -> ExecutionResult | None:
+        """Parse precomputed execution result into its typed public API model."""
+        return self.__class__._parse_execution_result(self.execution_result)
+
+    @classmethod
+    def _parse_execution_result(cls, data: dict | None) -> ExecutionResult | None:
+        """Parse stored execution result JSON into ExecutionResult."""
+        if data is None:
+            return None
+        from h_arcane.core.runner import ExecutionResult
+
+        return ExecutionResult.model_validate(data)
+
+    @model_validator(mode="after")
+    def validate_execution_result(self) -> Run:
+        """Fail fast if stored execution_result cannot be parsed."""
+        self.__class__._parse_execution_result(self.execution_result)
+        return self
 
 
 class Message(SQLModel, table=True):
@@ -243,11 +372,20 @@ class Action(SQLModel, table=True):
         """Convenience: success means no error."""
         return self.error is None
 
+    def parsed_error(self) -> ExecutionError | None:
+        """Parse stored error JSON into ExecutionError."""
+        return self.__class__._parse_error(self.error)
+
+    @classmethod
+    def _parse_error(cls, data: dict | None) -> ExecutionError | None:
+        """Parse raw error JSON into ExecutionError."""
+        if data is None:
+            return None
+        return ExecutionError.model_validate(data)
+
     def get_error(self) -> ExecutionError | None:
         """Get error as ExecutionError object."""
-        if self.error is None:
-            return None
-        return ExecutionError(**self.error)
+        return self.parsed_error()
 
 
 class ResourceRecord(SQLModel, table=True):
@@ -310,6 +448,15 @@ class ResourceRecord(SQLModel, table=True):
             raise FileNotFoundError(f"Resource file not found: {path}")
         return path.read_text()
 
+    def parsed_source_resource_ids(self) -> list[UUID]:
+        """Parse source resource lineage IDs into UUIDs."""
+        return self.__class__._parse_source_resource_ids(self.source_resource_ids)
+
+    @classmethod
+    def _parse_source_resource_ids(cls, data: list[str]) -> list[UUID]:
+        """Parse source resource ID strings into UUIDs."""
+        return _parse_uuid_list(data)
+
 
 class AgentRole(str, Enum):
     """Role of an agent in a workflow."""
@@ -343,6 +490,15 @@ class AgentConfig(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
     __table_args__ = (Index("ix_agent_configs_run", "run_id"),)
+
+    def tool_names(self) -> list[str]:
+        """Return persisted tool names."""
+        return self.__class__._parse_tools(self.tools)
+
+    @classmethod
+    def _parse_tools(cls, data: list[str]) -> list[str]:
+        """Return stored tool names as a regular list."""
+        return list(data or [])
 
 
 # =============================================================================
@@ -396,6 +552,24 @@ class TaskExecution(SQLModel, table=True):
         Index("ix_task_executions_status", "status"),
     )
 
+    def parsed_output_resource_ids(self) -> list[UUID]:
+        """Parse output resource IDs into UUIDs."""
+        return self.__class__._parse_output_resource_ids(self.output_resource_ids)
+
+    @classmethod
+    def _parse_output_resource_ids(cls, data: list[str]) -> list[UUID]:
+        """Parse task execution output resource ID strings into UUIDs."""
+        return _parse_uuid_list(data)
+
+    def evaluation_details_for(self) -> dict:
+        """Return evaluation details without imposing a stable schema yet."""
+        return self.__class__._parse_evaluation_details(self.evaluation_details)
+
+    @classmethod
+    def _parse_evaluation_details(cls, data: dict) -> dict:
+        """Return raw evaluation details for incremental migration."""
+        return data or {}
+
 
 class TaskStateEvent(SQLModel, table=True):
     """
@@ -425,11 +599,11 @@ class TaskStateEvent(SQLModel, table=True):
     event_type: str = (
         Field()
     )  # "status_change", "assigned", "retry", "error" - Index in __table_args__
-    old_status: str | None = None
-    new_status: str
+    old_status: TaskStatus | None = None
+    new_status: TaskStatus
 
     # Context
-    triggered_by: str | None = None  # "dependency_satisfied", "worker_started", "timeout"
+    triggered_by: TaskTrigger | None = None
     event_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
     timestamp: datetime = Field(default_factory=_utcnow)
@@ -439,6 +613,15 @@ class TaskStateEvent(SQLModel, table=True):
         Index("ix_task_state_events_timestamp", "timestamp"),
         Index("ix_task_state_events_type", "event_type"),
     )
+
+    def metadata_for(self) -> dict:
+        """Return event metadata without imposing an event-type schema yet."""
+        return self.__class__._parse_event_metadata(self.event_metadata)
+
+    @classmethod
+    def _parse_event_metadata(cls, data: dict) -> dict:
+        """Return raw event metadata for incremental migration."""
+        return data or {}
 
 
 class TaskEvaluator(SQLModel, table=True):
@@ -475,6 +658,23 @@ class TaskEvaluator(SQLModel, table=True):
         Index("ix_task_evaluators_run_task", "run_id", "task_id"),
         Index("ix_task_evaluators_status", "status"),
     )
+
+    def parsed_evaluator(self) -> AnyRubric:
+        """Parse stored evaluator config into a live rubric object."""
+        return self.__class__._parse_evaluator(self.evaluator_type, self.evaluator_config)
+
+    @classmethod
+    def _parse_evaluator(cls, evaluator_type: str, data: dict) -> AnyRubric:
+        """Parse evaluator config based on evaluator type."""
+        from h_arcane.core._internal.evaluation.serialization import deserialize_rubric
+
+        return deserialize_rubric(evaluator_type, data)
+
+    @model_validator(mode="after")
+    def validate_evaluator_config(self) -> TaskEvaluator:
+        """Fail fast if stored evaluator config cannot be parsed."""
+        self.__class__._parse_evaluator(self.evaluator_type, self.evaluator_config)
+        return self
 
 
 class Evaluation(SQLModel, table=True):
@@ -548,11 +748,38 @@ class CriterionResult(SQLModel, table=True):
         """Convenience: ran successfully means no error."""
         return self.error is None
 
+    def parsed_error(self) -> ExecutionError | None:
+        """Parse stored error JSON into ExecutionError."""
+        return self.__class__._parse_error(self.error)
+
+    @classmethod
+    def _parse_error(cls, data: dict | None) -> ExecutionError | None:
+        """Parse raw error JSON into ExecutionError."""
+        if data is None:
+            return None
+        return ExecutionError.model_validate(data)
+
     def get_error(self) -> ExecutionError | None:
         """Get error as ExecutionError object."""
-        if self.error is None:
-            return None
-        return ExecutionError(**self.error)
+        return self.parsed_error()
+
+    def parsed_evaluated_action_ids(self) -> list[UUID]:
+        """Parse evaluated action IDs into UUIDs."""
+        return self.__class__._parse_evaluated_action_ids(self.evaluated_action_ids)
+
+    @classmethod
+    def _parse_evaluated_action_ids(cls, data: list[str]) -> list[UUID]:
+        """Parse evaluated action ID strings into UUIDs."""
+        return _parse_uuid_list(data)
+
+    def parsed_evaluated_resource_ids(self) -> list[UUID]:
+        """Parse evaluated resource IDs into UUIDs."""
+        return self.__class__._parse_evaluated_resource_ids(self.evaluated_resource_ids)
+
+    @classmethod
+    def _parse_evaluated_resource_ids(cls, data: list[str]) -> list[UUID]:
+        """Parse evaluated resource ID strings into UUIDs."""
+        return _parse_uuid_list(data)
 
 
 class TaskEvaluationResult(SQLModel, table=True):
@@ -583,6 +810,15 @@ class TaskEvaluationResult(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
     __table_args__ = (Index("ix_task_evaluation_results_run", "run_id"),)
+
+    def parsed_criterion_results(self) -> list[CriterionResult]:
+        """Parse stored criterion result snapshots into typed CriterionResult rows."""
+        return self.__class__._parse_criterion_results(self.criterion_results)
+
+    @classmethod
+    def _parse_criterion_results(cls, data: list[dict]) -> list[CriterionResult]:
+        """Parse serialized criterion result snapshots into CriterionResult objects."""
+        return [CriterionResult.model_validate(item) for item in data]
 
 
 # =============================================================================

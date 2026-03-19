@@ -15,11 +15,16 @@ class SandboxResult(BaseModel):
     stderr: list[str]
 
 
-class LLMJudgeResponse(BaseModel):
-    """Structured response from LLM judge evaluation.
+class CommandResult(BaseModel):
+    """Result from command execution in a sandbox."""
 
-    Uses binary classification: criterion is either met (True) or not met (False).
-    """
+    stdout: str | None = None
+    stderr: str | None = None
+    exit_code: int | None = None
+
+
+class LLMJudgeResponse(BaseModel):
+    """Structured response from LLM judge evaluation."""
 
     reasoning: str = Field(
         description="Detailed reasoning explaining why the criterion is met or not met. "
@@ -31,8 +36,8 @@ class LLMJudgeResponse(BaseModel):
     )
 
 
-class EvaluationData(BaseModel):
-    """Pure data for evaluation - no infrastructure methods."""
+class CriterionContext(BaseModel):
+    """Context for evaluating a single criterion."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -42,15 +47,12 @@ class EvaluationData(BaseModel):
     agent_outputs: list[ResourceRecord]
     stage_idx: int
     stage_name: str
-    rule_idx: int
+    criterion_idx: int
     max_score: float
 
 
 class TaskEvaluationContext(BaseModel):
-    """Context for evaluating an entire task (all criteria).
-
-    Bundles all data needed to evaluate task outputs against a rubric.
-    """
+    """Context for evaluating an entire task/rubric."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -58,4 +60,16 @@ class TaskEvaluationContext(BaseModel):
     task_input: str
     agent_reasoning: str
     agent_outputs: list[ResourceRecord]
-    rubric: Any  # AnyRubric at runtime - discriminated union of rubric types
+
+
+class CriterionSpec(BaseModel):
+    """Declarative description of one criterion to execute."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    criterion: Any
+    criterion_idx: int
+    max_score: float
+    stage_idx: int = 0
+    stage_name: str = "default"
+    aggregation_weight: float = 1.0

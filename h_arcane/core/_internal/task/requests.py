@@ -22,6 +22,7 @@ class SandboxSetupRequest(BaseModel):
     experiment_id: UUID
     task_id: UUID
     benchmark_name: str
+    input_resource_ids: list[UUID] = []
     envs: dict[str, str] = {}
 
 

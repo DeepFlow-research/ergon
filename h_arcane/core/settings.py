@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,15 @@ class Settings(BaseSettings):
     inngest_dev: bool = True
     inngest_api_base_url: str = "http://localhost:8289"  # Default for local dev (host port)
 
+    # OTEL tracing
+    otel_traces_enabled: bool = False
+    otel_service_name: str = "h-arcane"
+    otel_exporter_otlp_endpoint: str = "http://localhost:4317"
+    otel_exporter_otlp_insecure: bool = True
+    otel_max_attribute_length: int = 4000
+    otel_stdout_stderr_max_length: int = 4000
+    otel_tool_payload_max_length: int = 4000
+
     # Data directory (computed from project root)
     @property
     def data_dir(self) -> Path:
@@ -37,6 +47,16 @@ class Settings(BaseSettings):
         """Get the runs directory path."""
         return self.data_dir / "runs"
 
+    def get_database_url(self, target: Literal["main", "test"] = "main") -> str:
+        """Resolve the database URL for the requested target."""
+        if target == "test":
+            return self.database_url_test
+        return self.database_url
+
+    def missing_values(self, names: list[str]) -> list[str]:
+        """Return env-backed setting names that are currently blank."""
+        return [name for name in names if not getattr(self, name, "")]
+
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent.parent / ".env"),
         env_file_encoding="utf-8",
@@ -47,9 +67,3 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
-
-for key, value in settings.model_dump().items():
-    if value == "":
-        raise ValueError(
-            f"Environment variable {key} is not set. Please set it in your .env file or environment variables. env path: {settings.model_config['env_file']}"
-        )

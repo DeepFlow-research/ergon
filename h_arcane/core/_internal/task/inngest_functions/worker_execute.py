@@ -4,12 +4,10 @@ Executes the worker agent in the sandbox using SDK types.
 """
 
 from functools import partial
-from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 import inngest
-from inngest_agents import set_step
 import uuid
 
 from h_arcane.benchmarks.enums import BenchmarkName
@@ -17,19 +15,25 @@ from h_arcane.benchmarks.registry import (
     get_sandbox_manager,
     get_stakeholder_factory,
     get_toolkit_factory,
-    get_skills_dir,
 )
 from h_arcane.core._internal.agents.base import BaseStakeholder, BaseToolkit
-from h_arcane.core._internal.db.models import AgentConfig, ResourceRecord
+from h_arcane.core._internal.db.models import Action, AgentConfig, ResourceRecord
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
+from h_arcane.core._internal.infrastructure.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    safe_json_attribute,
+    tool_action_context,
+    truncate_text,
+    worker_execute_context,
+)
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.task.requests import WorkerExecuteRequest
 from h_arcane.core._internal.task.results import WorkerExecuteResult
 from h_arcane.core._internal.task.worker_context import get_worker
 from h_arcane.core._internal.task.conversions import db_resources_to_sdk
-from h_arcane.core._internal.task.schema import parse_task_tree
-from h_arcane.core._internal.utils import require_not_none
+from h_arcane.core._internal.utils import require_not_none, utcnow
 from h_arcane.core.worker import WorkerContext, WorkerResult, BaseWorker
 from h_arcane.core.task import Task
 from h_arcane.core.dashboard import dashboard_emitter
@@ -81,7 +85,6 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     sandbox_manager = get_sandbox_manager(benchmark_name)
     stakeholder_factory = get_stakeholder_factory(benchmark_name)
     toolkit_factory = get_toolkit_factory(benchmark_name)
-    skills_dir = get_skills_dir(benchmark_name)
 
     # Create stakeholder and toolkit (with task_id for sandbox keying)
     stakeholder: BaseStakeholder = stakeholder_factory(experiment)
@@ -92,13 +95,6 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         stakeholder=stakeholder,
         sandbox_manager=sandbox_manager,
         max_questions=payload.max_questions,
-    )
-
-    # Create/get sandbox for task (keyed by task_id)
-    await ctx.step.run(
-        "setup-sandbox",
-        partial(_setup_sandbox, run_id, task_id, sandbox_manager, skills_dir, input_resources),
-        output_type=str,
     )
 
     # Get worker from context (stored during execute_task)
@@ -127,13 +123,11 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         output_type=AgentConfig,
     )
 
-    # Set step context for durable tools
-    set_step(ctx.step)
-
     # Execute worker
     result = await _execute_worker(
         run_id=run_id,
         task_id=task_id,
+        execution_id=execution_id,
         experiment=experiment,
         task_description=payload.task_description,
         agent_config=agent_config,
@@ -144,20 +138,6 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     )
 
     return result
-
-
-
-async def _setup_sandbox(
-    run_id: UUID,
-    task_id: UUID,
-    sandbox_manager: BaseSandboxManager,
-    skills_dir: Path | None,
-    input_resources: list[ResourceRecord],
-) -> str:
-    """Create sandbox for task and upload inputs. Returns sandbox_id."""
-    sandbox_id = await sandbox_manager.create(task_id, run_id=run_id, skills_dir=skills_dir)
-    await sandbox_manager.upload_inputs(task_id, input_resources)
-    return sandbox_id
 
 
 async def _link_execution_to_agent(execution_id: UUID, agent_id: UUID) -> None:
@@ -215,6 +195,7 @@ async def _get_or_create_stakeholder_config(
 async def _execute_worker(
     run_id: UUID,
     task_id: UUID,
+    execution_id: UUID,
     experiment: "Experiment",
     task_description: str,
     agent_config: AgentConfig,
@@ -224,6 +205,19 @@ async def _execute_worker(
     input_resources: list[ResourceRecord],
 ) -> WorkerExecuteResult:
     """Execute worker agent, persist actions, emit dashboard agent_action_completed events."""
+    trace_sink = get_trace_sink()
+    trace_context = worker_execute_context(
+        run_id,
+        task_id,
+        execution_id,
+        attributes={
+            "experiment_id": experiment.id,
+            "agent_config_id": agent_config.id,
+            "worker_name": worker.name,
+            "worker_model": worker.model,
+        },
+    )
+    started_at = utcnow()
     try:
         # Build SDK WorkerContext with toolkit for workers that need it
         sdk_resources = db_resources_to_sdk(input_resources)
@@ -239,16 +233,18 @@ async def _execute_worker(
             agent_config_id=agent_config.id,
             metadata={
                 "benchmark_name": benchmark_name.value,
-                "experiment_id": str(experiment.id),
+                "experiment_id": experiment.id,
             },
+            trace_context=trace_context,
+            trace_sink=trace_sink,
         )
 
         # Get task name from task tree (if available)
         task_name = f"task_{task_id}"
         if experiment.task_tree:
-            tree = parse_task_tree(experiment.task_tree)
+            tree = experiment.parsed_task_tree()
             if tree:
-                task_node = tree.find_by_id(str(task_id))
+                task_node = tree.find_by_id(task_id)
                 if task_node:
                     task_name = task_node.name
 
@@ -264,10 +260,28 @@ async def _execute_worker(
         # Call worker with SDK types
         result: WorkerResult = await worker.execute(task, context)
 
+        trace_sink.emit_span(
+            CompletedSpan(
+                name="worker.execute",
+                context=trace_context,
+                start_time=started_at,
+                end_time=utcnow(),
+                attributes={
+                    "success": result.success,
+                    "question_count": len(result.qa_exchanges),
+                    "action_count": len(result.actions),
+                    "output_count": len(result.outputs),
+                },
+                status_code="ok" if result.success else "error",
+                status_message=result.error,
+            )
+        )
+
         # Persist actions (already complete with run_id/agent_id) and emit dashboard events
         for action in result.actions:
             # Actions are now created complete by worker - no mutation needed
             queries.actions.create(action)
+            _emit_tool_span(trace_context, execution_id, task_id, run_id, action)
 
             await dashboard_emitter.agent_action_completed(
                 run_id=run_id,
@@ -281,6 +295,17 @@ async def _execute_worker(
                 error=str(action.error) if action.error else None,
             )
 
+        run = queries.runs.get(run_id)
+        if run is not None:
+            queries.runs.update(
+                run.model_copy(
+                    update={
+                        "questions_asked": (run.questions_asked or 0)
+                        + (toolkit.questions_asked if hasattr(toolkit, "questions_asked") else 0)
+                    }
+                )
+            )
+
         return WorkerExecuteResult(
             success=result.success,
             output_text=result.output_text,
@@ -288,8 +313,59 @@ async def _execute_worker(
             error=result.error,
         )
     except Exception as e:
+        trace_sink.emit_span(
+            CompletedSpan(
+                name="worker.execute",
+                context=trace_context,
+                start_time=started_at,
+                end_time=utcnow(),
+                attributes={"success": False, "error": str(e)},
+                status_code="error",
+                status_message=str(e),
+            )
+        )
         return WorkerExecuteResult(
             success=False,
             error=str(e),
             questions_asked=toolkit.questions_asked if hasattr(toolkit, "questions_asked") else 0,
         )
+
+
+def _emit_tool_span(
+    parent_context,
+    execution_id: UUID,
+    task_id: UUID,
+    run_id: UUID,
+    action: Action,
+) -> None:
+    trace_sink = get_trace_sink()
+    start_time = action.started_at
+    end_time = action.completed_at or action.started_at
+    trace_sink.emit_span(
+        CompletedSpan(
+            name=f"tool.{action.action_type}",
+            context=tool_action_context(
+                run_id,
+                task_id,
+                execution_id,
+                action.id,
+                attributes={"worker_action_num": action.action_num},
+            ),
+            start_time=start_time,
+            end_time=end_time,
+            attributes={
+                "action_id": action.id,
+                "action_num": action.action_num,
+                "action_type": action.action_type,
+                "duration_ms": action.duration_ms,
+                "success": action.success,
+                "agent_total_tokens": action.agent_total_tokens,
+                "agent_total_cost_usd": action.agent_total_cost_usd,
+                "input": truncate_text(action.input),
+                "output": truncate_text(action.output),
+                "error": safe_json_attribute(action.error) if action.error else None,
+            },
+            status_code="ok" if action.success else "error",
+            status_message=safe_json_attribute(action.error) if action.error else None,
+        )
+    )
