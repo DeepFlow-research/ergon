@@ -3,7 +3,7 @@
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from h_arcane.core.status import TaskTrigger
+from h_arcane.core.status import TaskStatus, TaskTrigger
 from h_arcane.core._internal.task.propagation import (
     mark_task_ready,
     mark_task_failed,
@@ -36,6 +36,7 @@ def make_experiment(experiment_id, task_tree, root_task_id=None):
     exp.id = experiment_id
     exp.task_tree = task_tree
     exp.root_task_id = root_task_id or task_tree.get("id")
+    exp.parsed_task_tree.return_value = parse_task_tree(task_tree) if task_tree else None
     return exp
 
 
@@ -74,7 +75,7 @@ class TestGetLeafDescendants:
         assert tree is not None
         result = tree.get_leaf_ids()
 
-        assert result == [str(task_id)]
+        assert result == [task_id]
 
     def test_composite_with_leaf_children(self):
         """Composite task returns all leaf children."""
@@ -97,7 +98,7 @@ class TestGetLeafDescendants:
         assert tree is not None
         result = tree.get_leaf_ids()
 
-        assert set(result) == {str(child1_id), str(child2_id)}
+        assert set(result) == {child1_id, child2_id}
 
     def test_nested_tree(self):
         """Nested tree returns deepest leaves."""
@@ -130,7 +131,7 @@ class TestGetLeafDescendants:
         assert tree is not None
         result = tree.get_leaf_ids()
 
-        assert set(result) == {str(leaf1_id), str(leaf2_id), str(leaf3_id)}
+        assert set(result) == {leaf1_id, leaf2_id, leaf3_id}
 
 
 # =============================================================================
@@ -149,7 +150,7 @@ class TestFindTaskInTree:
 
         tree = parse_task_tree(tree_data)
         assert tree is not None
-        result = tree.find_by_id(str(task_id))
+        result = tree.find_by_id(task_id)
 
         assert result is not None
         assert result.name == "Root"
@@ -179,7 +180,7 @@ class TestFindTaskInTree:
 
         tree = parse_task_tree(tree_data)
         assert tree is not None
-        result = tree.find_by_id(str(target_id))
+        result = tree.find_by_id(target_id)
 
         assert result is not None
         assert result.name == "Target"
@@ -192,7 +193,7 @@ class TestFindTaskInTree:
 
         tree = parse_task_tree(tree_data)
         assert tree is not None
-        result = tree.find_by_id(str(missing_id))
+        result = tree.find_by_id(missing_id)
 
         assert result is None
 
@@ -236,7 +237,7 @@ class TestExtractDependenciesFromTree:
         assert tree is not None
         result = tree.extract_dependencies()
 
-        assert (str(task_id), str(dep_id)) in result
+        assert (task_id, dep_id) in result
 
     def test_multiple_dependencies(self):
         """Task with multiple dependencies."""
@@ -261,8 +262,8 @@ class TestExtractDependenciesFromTree:
 
         result = tree.extract_dependencies()
 
-        assert (str(task_id), str(dep1_id)) in result
-        assert (str(task_id), str(dep2_id)) in result
+        assert (task_id, dep1_id) in result
+        assert (task_id, dep2_id) in result
 
 
 # =============================================================================
@@ -352,7 +353,7 @@ class TestIsTaskReady:
         mock_queries.runs.get.return_value = run
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(dep_id): "completed",
+            dep_id: TaskStatus.COMPLETED,
         }
 
         result = is_task_ready(run_id, task_id)
@@ -380,7 +381,7 @@ class TestIsTaskReady:
         mock_queries.runs.get.return_value = run
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(dep_id): "pending",
+            dep_id: TaskStatus.PENDING,
         }
 
         result = is_task_ready(run_id, task_id)
@@ -411,7 +412,9 @@ class TestOnTaskCompleted:
             experiment_id, make_task_tree(task_id), root_task_id=str(task_id)
         )
         # Mock get_current_states to return task as completed (for propagate_to_parent check)
-        mock_queries.task_state_events.get_current_states.return_value = {str(task_id): "completed"}
+        mock_queries.task_state_events.get_current_states.return_value = {
+            task_id: TaskStatus.COMPLETED
+        }
 
         on_task_completed(run_id, task_id, execution_id)
 
@@ -446,8 +449,8 @@ class TestOnTaskCompleted:
         )
         # completed_task_id is completed, so waiting_task_id becomes ready
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(completed_task_id): "completed",
-            str(waiting_task_id): "pending",
+            completed_task_id: TaskStatus.COMPLETED,
+            waiting_task_id: TaskStatus.PENDING,
         }
 
         result = on_task_completed(run_id, completed_task_id, execution_id)
@@ -478,8 +481,8 @@ class TestOnTaskCompleted:
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
         # Mock current states: completed_id is done, unblocked_id is pending
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(completed_id): "completed",
-            str(unblocked_id): "pending",
+            completed_id: TaskStatus.COMPLETED,
+            unblocked_id: TaskStatus.PENDING,
         }
 
         on_task_completed(run_id, completed_id, execution_id)
@@ -520,9 +523,9 @@ class TestOnTaskCompleted:
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
         # Only dep1 is completed, dep2 is still pending
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(dep1_id): "completed",
-            str(dep2_id): "pending",
-            str(waiting_id): "pending",
+            dep1_id: TaskStatus.COMPLETED,
+            dep2_id: TaskStatus.PENDING,
+            waiting_id: TaskStatus.PENDING,
         }
 
         result = on_task_completed(run_id, dep1_id, execution_id)
@@ -570,9 +573,9 @@ class TestPropagateToParent:
         )
         # Both children are completed (via event log)
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(parent_id): "pending",
-            str(child1_id): "completed",
-            str(child2_id): "completed",
+            parent_id: TaskStatus.PENDING,
+            child1_id: TaskStatus.COMPLETED,
+            child2_id: TaskStatus.COMPLETED,
         }
 
         # Call propagate for child1 (child1 just completed)
@@ -615,9 +618,9 @@ class TestPropagateToParent:
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
         # Only child1 is completed
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(parent_id): "pending",
-            str(child1_id): "completed",
-            str(child2_id): "pending",  # Still pending
+            parent_id: TaskStatus.PENDING,
+            child1_id: TaskStatus.COMPLETED,
+            child2_id: TaskStatus.PENDING,  # Still pending
         }
 
         result = propagate_to_parent(run_id, child1_id)
@@ -664,8 +667,8 @@ class TestIsWorkflowComplete:
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
         # Both leaves completed via event log
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(leaf1_id): "completed",
-            str(leaf2_id): "completed",
+            leaf1_id: TaskStatus.COMPLETED,
+            leaf2_id: TaskStatus.COMPLETED,
         }
 
         result = is_workflow_complete(run_id)
@@ -695,8 +698,8 @@ class TestIsWorkflowComplete:
         mock_queries.experiments.get.return_value = make_experiment(experiment_id, tree)
         # One leaf still running via event log
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(leaf1_id): "completed",
-            str(leaf2_id): "running",  # Not complete
+            leaf1_id: TaskStatus.COMPLETED,
+            leaf2_id: TaskStatus.RUNNING,  # Not complete
         }
 
         result = is_workflow_complete(run_id)
@@ -714,8 +717,8 @@ class TestIsWorkflowFailed:
         run_id = uuid4()
         # State from event log shows one failed
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(uuid4()): "completed",
-            str(uuid4()): "failed",  # One failed
+            uuid4(): TaskStatus.COMPLETED,
+            uuid4(): TaskStatus.FAILED,  # One failed
         }
 
         result = is_workflow_failed(run_id)
@@ -729,8 +732,8 @@ class TestIsWorkflowFailed:
         run_id = uuid4()
         # State from event log shows no failures
         mock_queries.task_state_events.get_current_states.return_value = {
-            str(uuid4()): "completed",
-            str(uuid4()): "running",
+            uuid4(): TaskStatus.COMPLETED,
+            uuid4(): TaskStatus.RUNNING,
         }
 
         result = is_workflow_failed(run_id)

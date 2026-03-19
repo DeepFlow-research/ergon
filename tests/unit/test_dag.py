@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from h_arcane import Task, TaskStatus
+from h_arcane.core.worker import BaseWorker
 from h_arcane.core._internal.task.validation import (
     CycleDetectedError,
     MissingDependencyError,
@@ -17,7 +18,7 @@ from h_arcane.core._internal.task.validation import (
 # =============================================================================
 
 
-class MockWorker:
+class MockWorker(BaseWorker):
     """Simple mock worker for testing."""
 
     def __init__(self, name: str = "mock_worker"):

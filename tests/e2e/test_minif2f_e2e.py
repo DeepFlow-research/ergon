@@ -18,6 +18,7 @@ from tests.utils.assertions import assert_run_completed_and_print_failures
 
 
 @pytest.mark.e2e
+@pytest.mark.legacy_e2e
 class TestMiniF2FE2E:
     """
     Wait for MiniF2F runs (already dispatched) and assert on results.

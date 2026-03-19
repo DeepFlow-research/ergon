@@ -18,6 +18,7 @@ from tests.utils.assertions import assert_run_completed_and_print_failures
 
 
 @pytest.mark.e2e
+@pytest.mark.legacy_e2e
 class TestResearchRubricsE2E:
     """
     Wait for ResearchRubrics runs (already dispatched) and assert on results.

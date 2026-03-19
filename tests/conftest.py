@@ -20,6 +20,7 @@ from uuid import UUID, uuid4
 
 import inngest
 from datasets import load_dataset
+from sqlalchemy import text
 from sqlmodel import SQLModel, Session, select, create_engine
 
 from h_arcane.core.settings import settings
@@ -36,6 +37,9 @@ from h_arcane.core._internal.db.models import (
     TaskEvaluationResult,
     Thread,
     ThreadMessage,
+    TaskEvaluator,
+    TaskStateEvent,
+    TaskExecution,
 )
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.utils import get_mime_type
@@ -50,7 +54,6 @@ from h_arcane.benchmarks.minif2f.rubric import MiniF2FRubric
 from h_arcane.benchmarks.researchrubrics.loader import get_ablated_dataset_name
 from h_arcane.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from h_arcane.benchmarks.researchrubrics.schemas import RubricCriterion
-from h_arcane.core._internal.db import models  # noqa: F401 - register models
 
 
 # Number of samples per benchmark - configurable via env var
@@ -166,15 +169,18 @@ def clean_db(db_engine):
             CriterionResult,
             Evaluation,
             TaskEvaluationResult,
+            ResourceRecord,
+            TaskEvaluator,
+            TaskStateEvent,
+            TaskExecution,
             Action,
             AgentConfig,
             Message,
-            ResourceRecord,
             Run,
             Experiment,
         ]
         for model in tables:
-            session.exec(f"DELETE FROM {model.__tablename__}")  # type: ignore
+            session.exec(text(f"DELETE FROM {model.__tablename__}"))  # type: ignore[arg-type]
         session.commit()
 
 
@@ -370,7 +376,7 @@ def _create_researchrubrics_experiments(session: Session) -> list[DispatchedExpe
 
         rubric = ResearchRubricsRubric(
             benchmark="researchrubrics",
-            criteria=rubric_criteria,
+            rubric_criteria=rubric_criteria,
         )
 
         experiment = Experiment(

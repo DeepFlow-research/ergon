@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import pytest
 
 from h_arcane.core.task import Task, TaskStatus
+from h_arcane.core.worker import BaseWorker
 from h_arcane.core.runner import ExecutionResult, TaskResult, execute_task, _wait_for_completion
 from h_arcane.core._internal.db.models import RunStatus
 from h_arcane.core._internal.task.validation import validate_task_dag
@@ -23,14 +24,14 @@ from h_arcane.core._internal.task.persistence import serialize_task_tree
 # =============================================================================
 
 
-class MockWorker:
+class MockWorker(BaseWorker):
     """Simple mock worker for testing."""
 
     def __init__(self, name: str = "mock_worker"):
         self.id = uuid4()
         self.name = name
         self.model = "gpt-4o"
-        self.tools = []
+        self.tools: list[object] = []
         self.system_prompt = "You are a test worker."
 
     async def execute(self, task, context):
@@ -205,21 +206,21 @@ class TestWaitForCompletion:
         mock_run = MagicMock()
         mock_run.id = run_id
         mock_run.status = RunStatus.COMPLETED
-        mock_run.execution_result = {
-            "success": True,
-            "status": "completed",
-            "outputs": [],
-            "score": 0.9,
-            "evaluation_details": {},
-            "started_at": datetime.now(timezone.utc).isoformat(),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-            "duration_seconds": 5.0,
-            "total_cost_usd": 0.05,
-            "task_results": {},
-            "run_id": str(run_id),
-            "experiment_id": str(exp_id),
-            "error": None,
-        }
+        mock_run.parsed_execution_result.return_value = ExecutionResult(
+            success=True,
+            status=TaskStatus.COMPLETED,
+            outputs=[],
+            score=0.9,
+            evaluation_details={},
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            duration_seconds=5.0,
+            total_cost_usd=0.05,
+            task_results={},
+            run_id=run_id,
+            experiment_id=exp_id,
+            error=None,
+        )
         mock_queries.runs.get.return_value = mock_run
 
         result = await _wait_for_completion(
@@ -244,21 +245,21 @@ class TestWaitForCompletion:
         mock_run = MagicMock()
         mock_run.id = run_id
         mock_run.status = RunStatus.FAILED
-        mock_run.execution_result = {
-            "success": False,
-            "status": "failed",
-            "outputs": [],
-            "score": None,
-            "evaluation_details": {},
-            "started_at": datetime.now(timezone.utc).isoformat(),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
-            "duration_seconds": 2.0,
-            "total_cost_usd": 0.0,
-            "task_results": {},
-            "run_id": str(run_id),
-            "experiment_id": str(exp_id),
-            "error": "Task execution failed",
-        }
+        mock_run.parsed_execution_result.return_value = ExecutionResult(
+            success=False,
+            status=TaskStatus.FAILED,
+            outputs=[],
+            score=None,
+            evaluation_details={},
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            duration_seconds=2.0,
+            total_cost_usd=0.0,
+            task_results={},
+            run_id=run_id,
+            experiment_id=exp_id,
+            error="Task execution failed",
+        )
         mock_queries.runs.get.return_value = mock_run
 
         result = await _wait_for_completion(
@@ -396,5 +397,5 @@ class TestPropagationIntegration:
         # B depends on A
         assert len(dependencies) == 1
         dep_b_id, dep_a_id = dependencies[0]
-        assert dep_b_id == str(b.id)
-        assert dep_a_id == str(a.id)
+        assert dep_b_id == b.id
+        assert dep_a_id == a.id

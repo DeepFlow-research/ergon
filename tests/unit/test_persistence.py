@@ -6,6 +6,8 @@ from uuid import uuid4
 import pytest
 
 from h_arcane import Resource, Task
+from h_arcane.core.worker import BaseWorker
+from h_arcane.benchmarks.smoke_test.rubric import SmokeTestRubric
 from h_arcane.core._internal.task.persistence import (
     create_experiment_from_task,
     create_resource_from_sdk,
@@ -22,14 +24,14 @@ from h_arcane.benchmarks.enums import BenchmarkName
 # =============================================================================
 
 
-class MockWorker:
+class MockWorker(BaseWorker):
     """Simple mock worker for testing."""
 
     def __init__(self, name: str = "mock_worker"):
         self.id = uuid4()
         self.name = name
         self.model = "gpt-4o"
-        self.tools = []
+        self.tools: list[object] = []
         self.system_prompt = "You are a test worker."
 
     async def execute(self, task, context):
@@ -60,7 +62,7 @@ class TestSerializeTaskTree:
 
         result = serialize_task_tree(task)
 
-        assert result.id == str(task.id)
+        assert result.id == task.id
         assert result.name == "Single Task"
         assert result.description == "A single task"
         assert result.depends_on == []
@@ -102,8 +104,8 @@ class TestSerializeTaskTree:
         result = serialize_task_tree(task)
 
         assert len(result.depends_on) == 2
-        assert str(dep1.id) in result.depends_on
-        assert str(dep2.id) in result.depends_on
+        assert dep1.id in result.depends_on
+        assert dep2.id in result.depends_on
 
     def test_serialize_task_with_resources(self):
         """Serialize a task with resources."""
@@ -423,22 +425,18 @@ class TestTaskFieldSerializers:
 
     def test_model_dump_serializes_evaluator(self):
         """model_dump() should serialize evaluator type."""
-
-        class MockEvaluator:
-            pass
-
         worker = MockWorker()
         task = Task(
             name="Evaluated Task",
             description="Task with evaluator",
             assigned_to=worker,
-            evaluator=MockEvaluator(),
+            evaluator=SmokeTestRubric(rules=[]),
         )
 
         data = task.model_dump(mode="json")
 
         assert data["evaluator"] is not None
-        assert data["evaluator"]["type"] == "MockEvaluator"
+        assert data["evaluator"]["type"] == "SmokeTestRubric"
 
     def test_model_dump_serializes_none_evaluator(self):
         """model_dump() should handle None evaluator."""
@@ -521,7 +519,7 @@ class TestSerializeTaskTreeWithSerializers:
         result = serialize_task_tree(task)
 
         assert result.assigned_to is not None
-        assert result.assigned_to.id == str(worker.id)
+        assert result.assigned_to.id == worker.id
         assert result.assigned_to.name == "my_worker"
         assert result.assigned_to.type == "MockWorker"
 

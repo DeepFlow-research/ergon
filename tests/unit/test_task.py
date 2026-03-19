@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 
 from h_arcane import Resource, Task, TaskStatus
+from h_arcane.core.worker import BaseWorker
 
 
 # =============================================================================
@@ -12,7 +13,7 @@ from h_arcane import Resource, Task, TaskStatus
 # =============================================================================
 
 
-class MockWorker:
+class MockWorker(BaseWorker):
     """Simple mock worker for testing Task creation."""
 
     def __init__(self, name: str = "mock_worker"):

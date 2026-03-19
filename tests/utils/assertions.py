@@ -1,23 +1,35 @@
 """
 tests/utils/assertions.py
 
-Reusable assertion functions for E2E tests.
+Reusable assertion functions for E2E and deterministic PG-state tests.
 
 Uses the simplified schema where Action.error and CriterionResult.error
 are either None (success) or an ExecutionError dict.
 """
 
+import json
 from dataclasses import dataclass
+from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
 
 from h_arcane.core._internal.db.models import (
+    Experiment,
     Run,
     RunStatus,
     Action,
     CriterionResult,
     Evaluation,
+    ResourceRecord,
+    TaskExecution,
+    TaskEvaluator,
+    TaskStateEvent,
+    Thread,
+    ThreadMessage,
 )
+from h_arcane.core._internal.db.queries import queries
+from h_arcane.core.status import TaskStatus
 
 
 @dataclass
@@ -104,6 +116,203 @@ def check_run(run: Run, session: Session) -> RunResult:
         has_evaluation=has_evaluation,
         has_scores=has_scores,
     )
+
+
+# ============================================================================
+# Deterministic PG Snapshot Helpers
+# ============================================================================
+
+
+class RunStateSnapshot(BaseModel):
+    """Complete persisted state for one deterministic benchmark run."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    experiment: Experiment
+    run: Run
+    actions: list[Action] = Field(default_factory=list)
+    resources: list[ResourceRecord] = Field(default_factory=list)
+    evaluation: Evaluation | None = None
+    criterion_results: list[CriterionResult] = Field(default_factory=list)
+    task_executions: list[TaskExecution] = Field(default_factory=list)
+    task_state_events: list[TaskStateEvent] = Field(default_factory=list)
+    task_evaluators: list[TaskEvaluator] = Field(default_factory=list)
+    threads: list[Thread] = Field(default_factory=list)
+    thread_messages: list[ThreadMessage] = Field(default_factory=list)
+
+
+def load_run_state_snapshot(run_id: UUID) -> RunStateSnapshot:
+    """Load the persisted state for one run using shared query helpers."""
+    run = queries.runs.get(run_id)
+    if run is None:
+        raise ValueError(f"Run {run_id} not found")
+    experiment = queries.experiments.get(run.experiment_id)
+    if experiment is None:
+        raise ValueError(f"Experiment {run.experiment_id} not found")
+
+    threads = queries.threads.get_threads_between_agents(
+        f"{run_id}:worker",
+        f"{run_id}:stakeholder",
+    )
+    thread_messages: list[ThreadMessage] = []
+    for thread in threads:
+        thread_messages.extend(queries.thread_messages.get_by_thread(thread.id))
+
+    return RunStateSnapshot(
+        experiment=experiment,
+        run=run,
+        actions=queries.actions.get_all(run_id, order_by="action_num"),
+        resources=queries.resources.get_by_experiment(experiment.id)
+        + queries.resources.get_by_run(run_id),
+        evaluation=queries.evaluations.get_by_run(run_id),
+        criterion_results=queries.criterion_results.get_all(run_id, order_by="stage_num"),
+        task_executions=queries.task_executions.get_by_run(run_id),
+        task_state_events=queries.task_state_events.get_by_run(run_id),
+        task_evaluators=queries.task_evaluators.get_by_run(run_id),
+        threads=threads,
+        thread_messages=thread_messages,
+    )
+
+
+def _action_inputs(snapshot: RunStateSnapshot) -> list[dict]:
+    return [json.loads(action.input) for action in snapshot.actions]
+
+
+def assert_minif2f_two_pass_case(snapshot: RunStateSnapshot) -> None:
+    """Assert the MiniF2F golden case persisted the expected state."""
+    assert snapshot.experiment.benchmark_name.value == "minif2f"
+    assert snapshot.run.status == RunStatus.COMPLETED
+    assert snapshot.run.error_message is None
+    assert snapshot.run.e2b_sandbox_id is None
+    assert snapshot.run.started_at is not None
+    assert snapshot.run.completed_at is not None
+    assert snapshot.run.completed_at >= snapshot.run.started_at
+    assert snapshot.run.questions_asked == 1
+    assert snapshot.run.total_cost_usd == 0.0
+
+    action_names = [action.action_type for action in snapshot.actions]
+    assert action_names == [
+        "ask_stakeholder",
+        "write_lean_file",
+        "check_lean_file",
+        "search_lemmas",
+        "write_lean_file",
+        "verify_lean_proof",
+    ]
+
+    for action in snapshot.actions:
+        assert action.started_at is not None
+        assert action.completed_at is not None
+        assert action.completed_at >= action.started_at
+        assert action.duration_ms is not None
+        assert action.agent_total_tokens == 0
+        assert action.agent_total_cost_usd == 0.0
+
+    inputs = _action_inputs(snapshot)
+    assert inputs[0]["question"] == "Should I prefer a short direct proof if one exists?"
+    assert inputs[1]["file_path"] == "/workspace/scratchpad/solution.lean"
+    assert "sorry" in inputs[1]["content"]
+    assert inputs[2]["file_path"] == "/workspace/scratchpad/solution.lean"
+    assert "nat.add_zero" in inputs[3]["query"]
+    assert inputs[4]["file_path"] == "/workspace/final_output/final_solution.lean"
+    assert "sorry" not in inputs[4]["content"]
+    assert inputs[5]["file_path"] == "/workspace/final_output/final_solution.lean"
+
+    assert "short direct proof" in (snapshot.actions[0].output or "").lower()
+    assert '"compiled": true' in (snapshot.actions[2].output or "").lower()
+    assert '"verified": true' in (snapshot.actions[5].output or "").lower()
+
+    output_resources = [resource for resource in snapshot.resources if resource.run_id == snapshot.run.id]
+    assert len(output_resources) == 1
+    assert output_resources[0].name == "final_solution.lean"
+
+    assert len(snapshot.threads) == 1
+    assert len(snapshot.thread_messages) == 2
+    assert snapshot.thread_messages[0].content == inputs[0]["question"]
+    assert "short direct proof" in snapshot.thread_messages[1].content.lower()
+
+    assert snapshot.evaluation is not None
+    assert snapshot.evaluation.total_score == 1.0
+    assert snapshot.evaluation.normalized_score == 1.0
+    assert len(snapshot.criterion_results) == 1
+    assert snapshot.criterion_results[0].score == 1.0
+
+    assert len(snapshot.task_executions) == 1
+    assert snapshot.task_executions[0].status == TaskStatus.COMPLETED
+    assert len(snapshot.task_evaluators) == 1
+    assert snapshot.task_evaluators[0].status.value == "completed"
+
+
+def assert_researchrubrics_search_synthesize_case(snapshot: RunStateSnapshot) -> None:
+    """Assert the ResearchRubrics golden case persisted the expected state."""
+    assert snapshot.experiment.benchmark_name.value == "researchrubrics"
+    assert snapshot.run.status == RunStatus.COMPLETED
+    assert snapshot.run.error_message is None
+    assert snapshot.run.e2b_sandbox_id is None
+    assert snapshot.run.started_at is not None
+    assert snapshot.run.completed_at is not None
+    assert snapshot.run.completed_at >= snapshot.run.started_at
+    assert snapshot.run.questions_asked == 1
+    assert snapshot.run.total_cost_usd == 0.0
+
+    action_names = [action.action_type for action in snapshot.actions]
+    assert action_names == [
+        "ask_stakeholder_tool",
+        "exa_search_tool",
+        "exa_qa_tool",
+        "exa_get_content_tool",
+        "exa_get_content_tool",
+        "write_report_draft_tool",
+        "edit_report_draft_tool",
+        "read_report_draft_tool",
+    ]
+
+    for action in snapshot.actions:
+        assert action.started_at is not None
+        assert action.completed_at is not None
+        assert action.completed_at >= action.started_at
+        assert action.duration_ms is not None
+        assert action.agent_total_tokens == 0
+        assert action.agent_total_cost_usd == 0.0
+
+    inputs = _action_inputs(snapshot)
+    assert inputs[0]["question"] == "Should I prioritize risks or opportunities in the report?"
+    assert "AI chip supply chain concentration risks" in inputs[1]["query"]
+    assert "main risks" in inputs[2]["question"]
+    assert inputs[3]["url"] == "https://example.com/source-1"
+    assert inputs[4]["url"] == "https://example.com/source-2"
+    assert inputs[5]["file_path"] == "/workspace/final_output/report.md"
+    assert inputs[6]["old_string"] == "Initial draft:"
+    assert inputs[6]["new_string"] == "Revised synthesis:"
+    assert inputs[7]["file_path"] == "/workspace/final_output/report.md"
+
+    assert "prioritize risks" in (snapshot.actions[0].output or "").lower()
+    assert '"success": true' in (snapshot.actions[1].output or "").lower()
+    assert '"success": true' in (snapshot.actions[2].output or "").lower()
+    assert '"success": true' in (snapshot.actions[3].output or "").lower()
+    assert '"success": true' in (snapshot.actions[4].output or "").lower()
+    assert "revised synthesis" in (snapshot.actions[7].output or "").lower()
+
+    output_resources = [resource for resource in snapshot.resources if resource.run_id == snapshot.run.id]
+    assert len(output_resources) == 1
+    assert output_resources[0].name == "report.md"
+    assert "Revised synthesis:" in output_resources[0].load_text()
+
+    assert len(snapshot.threads) == 1
+    assert len(snapshot.thread_messages) == 2
+    assert snapshot.thread_messages[0].content == inputs[0]["question"]
+    assert "prioritize risks" in snapshot.thread_messages[1].content.lower()
+
+    assert snapshot.evaluation is not None
+    assert snapshot.evaluation.total_score == 1.0
+    assert snapshot.evaluation.normalized_score == 1.0
+    assert len(snapshot.criterion_results) == 2
+    assert all(result.score > 0 for result in snapshot.criterion_results)
+
+    assert len(snapshot.task_executions) == 1
+    assert snapshot.task_executions[0].output_text is not None
+    assert len(snapshot.task_evaluators) == 1
+    assert snapshot.task_evaluators[0].status.value == "completed"
 
 
 # ============================================================================

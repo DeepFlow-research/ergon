@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 
 from h_arcane import Task
+from h_arcane.core.worker import BaseWorker
 from h_arcane.core._internal.agents.registry import AgentRegistry
 
 
@@ -13,7 +14,7 @@ from h_arcane.core._internal.agents.registry import AgentRegistry
 # =============================================================================
 
 
-class MockWorker:
+class MockWorker(BaseWorker):
     """Simple mock worker for testing."""
 
     def __init__(self, name: str = "mock_worker", model: str = "gpt-4o"):
@@ -27,7 +28,7 @@ class MockWorker:
         pass
 
 
-class MockWorkerWithTools:
+class MockWorkerWithTools(BaseWorker):
     """Mock worker with tools for testing tool serialization."""
 
     def __init__(self, name: str = "tool_worker"):
