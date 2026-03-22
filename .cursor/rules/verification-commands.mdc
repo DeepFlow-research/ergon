@@ -1,0 +1,17 @@
+---
+description: Repo verification commands after code changes
+alwaysApply: true
+---
+
+# Verification Commands
+
+Use the smallest relevant verification set for the files you changed.
+
+- For backend Python changes, run `pnpm run check:be`.
+- If backend logic changed, also run the smallest relevant backend suite:
+  `pnpm run test:be:unit`, `pnpm run test:be:contracts`, or `pnpm run test:be:state`.
+- For frontend dashboard changes, run `pnpm run check:fe`.
+- If frontend behavior or UI changed, also run `pnpm run test:fe:e2e`.
+- For cross-frontend/backend changes, run both `pnpm run check:be` and `pnpm run check:fe`.
+- Do not run `pnpm run test:be:e2e` or `pnpm run test:fe:e2e:live` unless the change specifically requires it or the user asks.
+- If a check is skipped because services, env vars, or external dependencies are unavailable, say exactly what was skipped and why.
