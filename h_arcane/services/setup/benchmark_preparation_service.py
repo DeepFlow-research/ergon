@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sized
+from typing import cast
+
 from datasets import load_dataset
 
 from h_arcane.core.settings import settings
@@ -52,9 +55,10 @@ class BenchmarkPreparationService:
 
     def _prepare_researchrubrics(self, dataset_name: str) -> BenchmarkPrepareResult:
         dataset = load_dataset(dataset_name, split="train")
+        sample_count = len(cast(Sized, dataset))
         return BenchmarkPrepareResult(
             benchmark="researchrubrics",
             prepared=True,
-            detail=f"cached {len(dataset)} ResearchRubrics samples from {dataset_name}",
+            detail=f"cached {sample_count} ResearchRubrics samples from {dataset_name}",
             location=dataset_name,
         )

@@ -106,6 +106,126 @@ class MessageRole(str, Enum):
     STAKEHOLDER = "stakeholder"
 
 
+class ExperimentCohortStatus(str, Enum):
+    """Experiment cohort lifecycle status."""
+
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+class SandboxConfigSnapshot(BaseModel):
+    """Typed snapshot of sandbox configuration relevant to cohort reproducibility."""
+
+    provider: str | None = None
+    template_id: str | None = None
+    timeout_minutes: int | None = None
+    extras: dict = Field(default_factory=dict)
+
+
+class DispatchConfigSnapshot(BaseModel):
+    """Typed snapshot of dispatch configuration relevant to cohort reproducibility."""
+
+    worker_model: str | None = None
+    max_questions: int | None = None
+    max_concurrent_runs: int | None = None
+    max_retries: int | None = None
+    extras: dict = Field(default_factory=dict)
+
+
+class CohortMetadata(BaseModel):
+    """Typed reproducibility metadata stored on an experiment cohort."""
+
+    code_commit_sha: str | None = None
+    repo_dirty: bool | None = None
+    prompt_version: str | None = None
+    worker_version: str | None = None
+    model_provider: str | None = None
+    model_name: str | None = None
+    sandbox_config: SandboxConfigSnapshot = Field(default_factory=SandboxConfigSnapshot)
+    dispatch_config: DispatchConfigSnapshot = Field(default_factory=DispatchConfigSnapshot)
+
+
+class CohortStatsExtras(BaseModel):
+    """Optional typed extension point for cohort aggregate metrics."""
+
+    benchmark_counts: dict[str, int] = Field(default_factory=dict)
+    latest_run_at: datetime | None = None
+
+
+class RunDispatchMetadata(BaseModel):
+    """Typed dispatch metadata stored on a run."""
+
+    cli_request_id: str | None = None
+    cohort_name: str | None = None
+    agent_mapping: dict[str, str] = Field(default_factory=dict)
+    extras: dict = Field(default_factory=dict)
+
+
+class ExperimentCohort(SQLModel, table=True):
+    """A named grouping of real executions that the operator monitors as one unit."""
+
+    __tablename__ = "experiment_cohorts"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    description: str | None = None
+    created_by: str | None = None
+    status: ExperimentCohortStatus = Field(default=ExperimentCohortStatus.ACTIVE)
+    metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=_utcnow)
+
+    def parsed_metadata(self) -> CohortMetadata:
+        """Parse stored cohort metadata into its typed representation."""
+        return self.__class__._parse_metadata(self.metadata_json)
+
+    @classmethod
+    def _parse_metadata(cls, data: dict | None) -> CohortMetadata:
+        """Parse raw cohort metadata JSON into CohortMetadata."""
+        return CohortMetadata.model_validate(data or {})
+
+    @model_validator(mode="after")
+    def validate_metadata(self) -> "ExperimentCohort":
+        """Fail fast if stored metadata cannot be parsed."""
+        self.__class__._parse_metadata(self.metadata_json)
+        return self
+
+
+class ExperimentCohortStats(SQLModel, table=True):
+    """Denormalized aggregate snapshot for a cohort."""
+
+    __tablename__ = "experiment_cohort_stats"
+
+    cohort_id: UUID = Field(foreign_key="experiment_cohorts.id", primary_key=True)
+    total_runs: int = 0
+    pending_runs: int = 0
+    executing_runs: int = 0
+    evaluating_runs: int = 0
+    completed_runs: int = 0
+    failed_runs: int = 0
+    average_score: float | None = None
+    best_score: float | None = None
+    worst_score: float | None = None
+    average_duration_ms: int | None = None
+    failure_rate: float = 0.0
+    stats_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+    def parsed_stats_json(self) -> CohortStatsExtras:
+        """Parse stored aggregate extras into their typed representation."""
+        return self.__class__._parse_stats_json(self.stats_json)
+
+    @classmethod
+    def _parse_stats_json(cls, data: dict | None) -> CohortStatsExtras:
+        """Parse raw aggregate extras JSON into CohortStatsExtras."""
+        return CohortStatsExtras.model_validate(data or {})
+
+    @model_validator(mode="after")
+    def validate_stats_json(self) -> "ExperimentCohortStats":
+        """Fail fast if stored stats extras cannot be parsed."""
+        self.__class__._parse_stats_json(self.stats_json)
+        return self
+
+
 class Experiment(SQLModel, table=True):
     """A task from any supported benchmark."""
 
@@ -202,6 +322,7 @@ class Run(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     experiment_id: UUID = Field(foreign_key="experiments.id")  # Index defined in __table_args__
+    cohort_id: UUID | None = Field(default=None, foreign_key="experiment_cohorts.id", index=True)
 
     # Worker configuration
     worker_model: str = Field(default="gpt-4o")
@@ -216,7 +337,7 @@ class Run(SQLModel, table=True):
 
     # Timestamps
     created_at: datetime = Field(default_factory=_utcnow)
-    started_at: datetime = Field(default_factory=_utcnow)
+    started_at: datetime | None = None
     completed_at: datetime | None = None
 
     # Execution output
@@ -235,6 +356,9 @@ class Run(SQLModel, table=True):
 
     # Benchmark-specific results (flexible JSON)
     benchmark_specific_results: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+    # Dispatch metadata kept separate from benchmark-specific result payloads
+    dispatch_metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
     # Precomputed execution result (set by workflow_complete/workflow_failed)
     # Serialized ExecutionResult - avoids re-querying on completion
@@ -265,6 +389,9 @@ class Run(SQLModel, table=True):
 
     def cli_request_id(self) -> str | None:
         """Return CLI request ID stored in benchmark-specific results, if present."""
+        metadata = self.parsed_dispatch_metadata()
+        if metadata.cli_request_id is not None:
+            return metadata.cli_request_id
         return self.__class__._parse_cli_request_id(self.benchmark_specific_results_for())
 
     @classmethod
@@ -277,6 +404,12 @@ class Run(SQLModel, table=True):
 
     def parsed_agent_mapping(self) -> dict[UUID, UUID] | None:
         """Parse persisted worker-to-agent config mapping into UUIDs."""
+        metadata = self.parsed_dispatch_metadata()
+        if metadata.agent_mapping:
+            return {
+                UUID(worker_id): UUID(config_id)
+                for worker_id, config_id in metadata.agent_mapping.items()
+            }
         return self.__class__._parse_agent_mapping(self.benchmark_specific_results_for())
 
     @classmethod
@@ -302,10 +435,20 @@ class Run(SQLModel, table=True):
 
         return ExecutionResult.model_validate(data)
 
+    def parsed_dispatch_metadata(self) -> RunDispatchMetadata:
+        """Parse stored dispatch metadata into its typed representation."""
+        return self.__class__._parse_dispatch_metadata(self.dispatch_metadata_json)
+
+    @classmethod
+    def _parse_dispatch_metadata(cls, data: dict | None) -> RunDispatchMetadata:
+        """Parse raw dispatch metadata JSON into RunDispatchMetadata."""
+        return RunDispatchMetadata.model_validate(data or {})
+
     @model_validator(mode="after")
     def validate_execution_result(self) -> Run:
         """Fail fast if stored execution_result cannot be parsed."""
         self.__class__._parse_execution_result(self.execution_result)
+        self.__class__._parse_dispatch_metadata(self.dispatch_metadata_json)
         return self
 
 

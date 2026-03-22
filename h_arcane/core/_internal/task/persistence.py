@@ -110,11 +110,21 @@ def create_experiment_from_task(
     except ValueError:
         benchmark = BenchmarkName.CUSTOM
 
+    ground_truth_rubric: dict = {}
+    if task.evaluator is not None:
+        from h_arcane.core._internal.evaluation.serialization import serialize_rubric
+
+        _rubric_type, rubric_config = serialize_rubric(task.evaluator)
+        ground_truth_rubric = rubric_config
+
+    task_identifier = task.name if benchmark != BenchmarkName.CUSTOM else str(task.id)
+
     return {
         "benchmark_name": benchmark,
-        "task_id": str(task.id),
+        "task_id": task_identifier,
         "task_description": task.description,
-        "ground_truth_rubric": {},
+        "ground_truth_rubric": ground_truth_rubric,
+        "benchmark_specific_data": dict(task.benchmark_specific_data),
         "task_tree": task_tree.model_dump(mode="json"),  # Store as dict in DB (UUIDs→str)
         "root_task_id": str(task.id),
         "category": "custom",
@@ -169,10 +179,19 @@ def create_run_from_config(
     Returns:
         Dictionary suitable for creating a Run record
     """
+    cohort_id = extra_config.pop("cohort_id", None)
+    dispatch_metadata = dict(extra_config.pop("dispatch_metadata", {}) or {})
+    if extra_config:
+        extras = dict(dispatch_metadata.get("extras", {}) or {})
+        extras.update(extra_config)
+        dispatch_metadata["extras"] = extras
+
     return {
         "experiment_id": experiment_id,
+        "cohort_id": cohort_id,
         "worker_model": worker_model,
         "max_questions": max_questions,
+        "dispatch_metadata_json": dispatch_metadata,
     }
 
 
@@ -559,7 +578,7 @@ def persist_agent_mapping(
     Store worker_id -> agent_config_id mapping in Run for recovery.
 
     This allows the mapping to survive orchestrator restarts.
-    Stores in Run.benchmark_specific_results under "agent_mapping" key.
+    Stores in Run.dispatch_metadata_json under "agent_mapping" key.
 
     Args:
         run_id: The run ID
@@ -571,17 +590,14 @@ def persist_agent_mapping(
         for worker_id, config_id in agent_registry._config_ids.items()
     }
 
-    # Get current run and update benchmark_specific_results
+    # Get current run and update typed dispatch metadata
     run = queries.runs.get(run_id)
     if run is None:
         raise ValueError(f"Run not found: {run_id}")
 
-    # Merge with existing data
-    results = run.benchmark_specific_results or {}
-    results["agent_mapping"] = mapping
-
-    # Update the run by modifying and passing the entity
-    run.benchmark_specific_results = results
+    metadata = run.dispatch_metadata_json or {}
+    metadata["agent_mapping"] = mapping
+    run.dispatch_metadata_json = metadata
     queries.runs.update(run)
 
 
@@ -612,6 +628,7 @@ def persist_workflow(
     worker_model: str = "gpt-4o",
     max_questions: int = 10,
     benchmark_name: str = "CUSTOM",
+    **extra_config: Any,
 ) -> tuple[Any, Any, dict[UUID, list[UUID]]]:
     """
     Persist a complete workflow: Experiment, Run, and input Resources.
@@ -624,6 +641,7 @@ def persist_workflow(
         worker_model: The model to use for workers
         max_questions: Maximum questions allowed
         benchmark_name: The benchmark name
+        **extra_config: Additional run configuration
 
     Returns:
         Tuple of (experiment, run, task_to_resource_ids)
@@ -632,9 +650,32 @@ def persist_workflow(
     experiment = persist_experiment(task, benchmark_name)
 
     # 2. Create run
-    run = persist_run(experiment.id, worker_model, max_questions)
+    run = persist_run(experiment.id, worker_model, max_questions, **extra_config)
 
     # 3. Create input resources
     resource_mapping = persist_input_resources(experiment.id, task)
 
     return experiment, run, resource_mapping
+
+
+def persist_experiment_definition(
+    task: Task,
+    benchmark_name: str = "CUSTOM",
+) -> tuple[Any, dict[UUID, list[UUID]]]:
+    """
+    Persist a workflow definition without creating a Run.
+
+    This is the correct persistence path for benchmark seeding and dataset loading,
+    where we want benchmark tasks and input resources stored ahead of time but do
+    not want to create placeholder execution records.
+
+    Args:
+        task: The root task (must be validated via validate_task_dag first)
+        benchmark_name: The benchmark name
+
+    Returns:
+        Tuple of (experiment, task_to_resource_ids)
+    """
+    experiment = persist_experiment(task, benchmark_name)
+    resource_mapping = persist_input_resources(experiment.id, task)
+    return experiment, resource_mapping

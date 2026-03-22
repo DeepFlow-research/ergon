@@ -1,5 +1,7 @@
+import os
 from pathlib import Path
 from typing import Literal
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +16,12 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = ""
+
+    # OpenRouter
+    openrouter_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"),
+    )
 
     # E2B Sandbox
     e2b_api_key: str = ""
@@ -67,3 +75,8 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
+
+# PydanticAI reads OPENROUTER_API_KEY from the process environment when the
+# model is specified as a string like "openrouter:anthropic/claude-sonnet-4-5".
+if settings.openrouter_api_key:
+    os.environ.setdefault("OPENROUTER_API_KEY", settings.openrouter_api_key)

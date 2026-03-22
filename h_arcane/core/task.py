@@ -174,6 +174,14 @@ class Task(BaseModel):
         ),
     )
 
+    benchmark_specific_data: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Benchmark-specific persisted metadata needed to reconstruct stakeholders, "
+            "tooling, or benchmark context from the stored Experiment row."
+        ),
+    )
+
     # === Evaluation ===
     # Note: typed as Any because AnyRubric has heavy benchmark dependencies
     evaluator: Any = Field(

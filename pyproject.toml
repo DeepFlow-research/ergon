@@ -10,7 +10,6 @@ dependencies = [
     "inngest>=0.3.0",
     "sqlmodel>=0.0.14",
     "openai>=1.12.0",
-    "openai-agents>=0.1.0",
     "e2b-code-interpreter>=0.1.0",
     "fastapi>=0.104.0",
     "uvicorn>=0.24.0",
@@ -34,6 +33,7 @@ dependencies = [
     "inngest-backed-agents-sdk",
     "e2b-sandbox-inspector",
     "inngest-inspector",
+    "pydantic-ai-slim[openrouter]>=1.70.0",
 ]
 
 [dependency-groups]

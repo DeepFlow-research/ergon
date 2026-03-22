@@ -15,6 +15,8 @@ from h_arcane.core._internal.infrastructure.tracing import (
     get_trace_sink,
 )
 from h_arcane.core._internal.utils import utcnow
+from h_arcane.core.dashboard import dashboard_emitter
+from h_arcane.core.dashboard.events import DashboardEvaluationCriterion, DashboardTaskEvaluation
 
 
 @inngest_client.create_function(
@@ -79,6 +81,41 @@ async def evaluate_task_run(ctx: inngest.Context) -> TaskEvaluationResult:
         queries.task_evaluation_results.create(result)
 
     await ctx.step.run("persist-task-evaluation-result", persist_task_evaluation_result)
+
+    await dashboard_emitter.task_evaluation_updated(
+        run_id,
+        DashboardTaskEvaluation(
+            id=result.id,
+            run_id=run_id,
+            task_id=task_id,
+            total_score=result.total_score,
+            max_score=result.max_score,
+            normalized_score=result.normalized_score,
+            stages_evaluated=result.stages_evaluated,
+            stages_passed=result.stages_passed,
+            failed_gate=result.failed_gate,
+            created_at=result.created_at,
+            criterion_results=[
+                DashboardEvaluationCriterion(
+                    id=criterion["id"],
+                    stage_num=criterion["stage_num"],
+                    stage_name=criterion["stage_name"],
+                    criterion_num=criterion["criterion_num"],
+                    criterion_type=criterion["criterion_type"],
+                    criterion_description=criterion["criterion_description"],
+                    score=criterion["score"],
+                    max_score=criterion["max_score"],
+                    feedback=criterion["feedback"],
+                    evaluation_input=criterion["evaluation_input"],
+                    error=criterion.get("error"),
+                    evaluated_action_ids=criterion.get("evaluated_action_ids", []),
+                    evaluated_resource_ids=criterion.get("evaluated_resource_ids", []),
+                )
+                for criterion in result.criterion_results
+            ],
+        ),
+        task_id=task_id,
+    )
 
     get_trace_sink().emit_span(
         CompletedSpan(

@@ -209,7 +209,7 @@ async def execute_task(
             experiment_id=experiment.id,
         )
         await inngest_client.send(
-            inngest.Event(name=WorkflowStartedEvent.name, data=event.model_dump())
+            inngest.Event(name=WorkflowStartedEvent.name, data=event.model_dump(mode="json"))
         )
 
         # 6. Wait for completion

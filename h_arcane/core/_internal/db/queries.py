@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from uuid import UUID
-from typing import TYPE_CHECKING, TypeVar, Generic, Type
+from typing import TYPE_CHECKING, Any, TypeVar, Generic, Type, cast
 from sqlalchemy import func
 from sqlmodel import SQLModel, select, desc, and_
 from datetime import datetime
@@ -12,6 +12,9 @@ from h_arcane.core._internal.utils import utcnow
 from h_arcane.core._internal.db.models import (
     AgentConfig,
     Experiment,
+    ExperimentCohort,
+    ExperimentCohortStatus,
+    ExperimentCohortStats,
     Run,
     RunStatus,
     Message,
@@ -129,6 +132,15 @@ class RunsQueries(BaseQueries[Run]):
             statement = select(Run).order_by(desc(Run.created_at)).limit(limit)
             return list(session.exec(statement).all())
 
+    @staticmethod
+    def get_by_cohort(cohort_id: UUID, limit: int | None = None) -> list[Run]:
+        """Get runs for a cohort ordered by creation time descending."""
+        with next(get_session()) as session:
+            statement = select(Run).where(Run.cohort_id == cohort_id).order_by(desc(Run.created_at))
+            if limit is not None:
+                statement = statement.limit(limit)
+            return list(session.exec(statement).all())
+
     def complete(self, run_id: UUID, data: RunCompletionData) -> Run:
         """Mark run as completed with all completion data.
 
@@ -180,6 +192,119 @@ class ExperimentsQueries(BaseQueries[Experiment]):
             if result is None:
                 raise ValueError(f"Experiment not found: {benchmark_name.value}/{task_id}")
             return result
+
+    @staticmethod
+    def list_by_benchmark(
+        benchmark_name: BenchmarkName,
+        limit: int | None = None,
+    ) -> list[Experiment]:
+        """List experiments for a benchmark ordered by most recent first."""
+        with next(get_session()) as session:
+            statement = (
+                select(Experiment)
+                .where(Experiment.benchmark_name == benchmark_name)
+                .order_by(desc(Experiment.created_at))
+            )
+            if limit is not None:
+                statement = statement.limit(limit)
+            return list(session.exec(statement).all())
+
+    @staticmethod
+    def get_many(ids: list[UUID]) -> list[Experiment]:
+        """Get multiple experiments by ID."""
+        if not ids:
+            return []
+        with next(get_session()) as session:
+            statement = select(Experiment).where(cast(Any, Experiment.id).in_(ids))
+            return list(session.exec(statement).all())
+
+    @staticmethod
+    def get_by_task_ids(task_ids: list[str], benchmark_name: BenchmarkName) -> list[Experiment]:
+        """Get experiments by logical benchmark task IDs."""
+        if not task_ids:
+            return []
+        with next(get_session()) as session:
+            statement = select(Experiment).where(
+                Experiment.benchmark_name == benchmark_name,
+                cast(Any, Experiment.task_id).in_(task_ids),
+            )
+            return list(session.exec(statement).all())
+
+
+class ExperimentCohortsQueries(BaseQueries[ExperimentCohort]):
+    """Query methods for ExperimentCohort model."""
+
+    def __init__(self):
+        super().__init__(ExperimentCohort)
+
+    @staticmethod
+    def get_by_name(name: str) -> ExperimentCohort | None:
+        """Get a cohort by its unique name."""
+        with next(get_session()) as session:
+            statement = select(ExperimentCohort).where(ExperimentCohort.name == name)
+            return session.exec(statement).first()
+
+    @staticmethod
+    def list_all(
+        *,
+        include_archived: bool = True,
+        limit: int | None = None,
+    ) -> list[ExperimentCohort]:
+        """List cohorts ordered by newest first."""
+        with next(get_session()) as session:
+            statement = select(ExperimentCohort).order_by(desc(ExperimentCohort.created_at))
+            if not include_archived:
+                statement = statement.where(
+                    ExperimentCohort.status != ExperimentCohortStatus.ARCHIVED
+                )
+            if limit is not None:
+                statement = statement.limit(limit)
+            return list(session.exec(statement).all())
+
+    @staticmethod
+    def set_status(
+        cohort_id: UUID,
+        status: ExperimentCohortStatus,
+    ) -> ExperimentCohort | None:
+        """Persist a cohort status transition."""
+        with next(get_session()) as session:
+            cohort = session.get(ExperimentCohort, cohort_id)
+            if cohort is None:
+                return None
+
+            cohort.status = status
+            session.add(cohort)
+            session.commit()
+            session.refresh(cohort)
+            return cohort
+
+
+class ExperimentCohortStatsQueries:
+    """Query methods for ExperimentCohortStats model."""
+
+    @staticmethod
+    def get(cohort_id: UUID) -> ExperimentCohortStats | None:
+        """Get aggregate stats for a cohort."""
+        with next(get_session()) as session:
+            return session.get(ExperimentCohortStats, cohort_id)
+
+    @staticmethod
+    def upsert(stats: ExperimentCohortStats) -> ExperimentCohortStats:
+        """Create or update a cohort stats row keyed by cohort_id."""
+        with next(get_session()) as session:
+            existing = session.get(ExperimentCohortStats, stats.cohort_id)
+            if existing is None:
+                session.add(stats)
+                session.commit()
+                session.refresh(stats)
+                return stats
+
+            update_data = stats.model_dump(exclude_none=False)
+            for key, value in update_data.items():
+                setattr(existing, key, value)
+            session.commit()
+            session.refresh(existing)
+            return existing
 
 
 class ResourcesQueries(BaseQueries[ResourceRecord]):
@@ -867,6 +992,16 @@ class ThreadsQueries(BaseQueries[Thread]):
             session.refresh(thread)
             return thread
 
+    def get_by_run(self, run_id: UUID) -> list[Thread]:
+        """Get all threads for a run ordered by most recently updated."""
+        with next(get_session()) as session:
+            statement = (
+                select(Thread)
+                .where(Thread.run_id == run_id)
+                .order_by(desc(Thread.updated_at))
+            )
+            return list(session.exec(statement).all())
+
 
 class ThreadMessagesQueries(BaseQueries[ThreadMessage]):
     """Query methods for ThreadMessage model."""
@@ -933,6 +1068,8 @@ class Queries:
 
     runs: RunsQueries
     experiments: ExperimentsQueries
+    experiment_cohorts: ExperimentCohortsQueries
+    experiment_cohort_stats: ExperimentCohortStatsQueries
     resources: ResourcesQueries
     messages: MessagesQueries
     actions: ActionsQueries
@@ -949,6 +1086,8 @@ class Queries:
     def __init__(self):
         self.runs = RunsQueries()
         self.experiments = ExperimentsQueries()
+        self.experiment_cohorts = ExperimentCohortsQueries()
+        self.experiment_cohort_stats = ExperimentCohortStatsQueries()
         self.resources = ResourcesQueries()
         self.messages = MessagesQueries()
         self.actions = ActionsQueries()

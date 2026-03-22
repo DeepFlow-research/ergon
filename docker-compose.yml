@@ -40,6 +40,12 @@ services:
         condition: service_healthy
       otel-collector:
         condition: service_started
+    command: >
+      sh -c "if [ \"$INNGEST_DEV\" = \"1\" ]; then
+      uv run uvicorn h_arcane.core._internal.api.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir /app/h_arcane --reload-dir /app/scripts;
+      else
+      uvicorn h_arcane.core._internal.api.main:app --host 0.0.0.0 --port 9000;
+      fi"
     volumes:
       # Mount source code for hot-reload during development
       - ./h_arcane:/app/h_arcane
@@ -49,6 +55,7 @@ services:
       - ./config:/app/config
       # Mount pyproject.toml to reinstall dependencies if changed
       - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
   
   dashboard:
     build:
@@ -57,15 +64,21 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
+      - ARCANE_API_BASE_URL=http://api:9000
       - INNGEST_DEV=1
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
+      - WATCHPACK_POLLING=true
     depends_on:
       - inngest-dev
+      - api
+    command: pnpm dev
     volumes:
-      # Mount source for hot-reload during development (optional)
-      - ./arcane-dashboard/src:/app/src
+      # Mount the full app so Next.js + the custom server see live edits.
+      - ./arcane-dashboard:/app
+      - /app/node_modules
+      - /app/.next
   
   inngest-dev:
     image: inngest/inngest:latest

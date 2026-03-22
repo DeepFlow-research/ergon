@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from h_arcane.benchmarks.common.workers.react_worker import ReActWorker
 from h_arcane.benchmarks.minif2f.config import MINIF2F_CONFIG
 from h_arcane.benchmarks.minif2f.loader import load_minif2f_to_database
@@ -20,7 +22,7 @@ class BenchmarkSeedService:
         self,
         benchmark: str,
         limit: int | None = None,
-        database_target: str = "main",
+        database_target: Literal["main", "test"] = "main",
         model: str = "gpt-4o-mini",
         researchrubrics_dataset_name: str | None = None,
     ) -> BenchmarkSeedResult:

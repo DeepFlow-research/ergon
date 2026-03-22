@@ -24,6 +24,7 @@ from h_arcane.core._internal.task.inngest_functions import (
     persist_outputs_fn,
     sandbox_setup_fn,
     task_execute,
+    task_failure_propagate,
     task_propagate,
     worker_execute_fn,
     workflow_complete,
@@ -39,6 +40,7 @@ ALL_FUNCTIONS: list[Function[Any]] = [
     workflow_start,
     task_execute,
     task_propagate,
+    task_failure_propagate,
     workflow_complete,
     workflow_failed,
     # Task execution child functions (invoked by task_execute)
@@ -62,6 +64,7 @@ __all__ = [
     "workflow_start",
     "task_execute",
     "task_propagate",
+    "task_failure_propagate",
     "workflow_complete",
     "workflow_failed",
     # Task execution child functions

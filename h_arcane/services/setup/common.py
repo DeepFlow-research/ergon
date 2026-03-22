@@ -7,6 +7,15 @@ from pathlib import Path
 DEFAULT_RESEARCHRUBRICS_DATASET = "cm2435cm2435cm2435/researchrubrics-ablated"
 # TODO: Re-add `gdpeval` here once its benchmark assets are hosted cleanly on Hugging Face.
 SUPPORTED_BENCHMARKS = ("minif2f", "researchrubrics")
+# Benchmarks that currently expose workflow factories and can be launched via
+# the workflow-construction branch of `magym benchmark run`.
+WORKFLOW_RUN_BENCHMARKS = ("smoke_test",)
+
+# Benchmarks that should be launched from previously seeded Experiment rows.
+SEEDED_EXPERIMENT_RUN_BENCHMARKS = ("minif2f", "researchrubrics")
+
+# All benchmarks currently supported by the top-level run command.
+RUNNABLE_BENCHMARKS = WORKFLOW_RUN_BENCHMARKS + SEEDED_EXPERIMENT_RUN_BENCHMARKS
 MINIF2F_REQUIRED_FILES = ("lean/src/valid.lean", "lean/src/test.lean")
 
 
