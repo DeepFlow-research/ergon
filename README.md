@@ -57,6 +57,25 @@ This PoC focuses on the **ReAct baseline** - measuring natural LLM clarification
 
 ## Usage
 
+### Current Benchmark Workflow
+
+The benchmark workflow now has an important separation:
+
+- `Experiment` means a persisted benchmark task definition
+- `Run` means a real execution attempt of an experiment
+- `ExperimentCohort` means a named grouping of many real runs
+
+This means `magym benchmark seed ...` prepares reusable benchmark definitions in Postgres, but it does not create `Run` rows.
+
+If you need cohort-backed execution data for the dashboard or FE tests, use `magym benchmark run ... --cohort-name ...`.
+
+Today that top-level run command has two backends:
+
+- `smoke_test` uses workflow factories via `--workflow ...` or `--all`
+- `minif2f` and `researchrubrics` run from seeded `Experiment` rows via `--experiment-id`, `--task-id`, or `--limit`
+
+See `docs/benchmark_cohorts_and_seeding.md` for the operator-facing workflow and examples.
+
 ### Running Experiments
 
 **Automatic Service Management**: The CLI automatically checks if required services (PostgreSQL, Inngest dev server, API server) are running and starts them if needed. You don't need to manually start docker-compose services!
