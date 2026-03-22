@@ -30,6 +30,8 @@ from h_arcane.core._internal.db.models import (
     CriterionResult,
     Evaluation,
     Experiment,
+    ExperimentCohort,
+    ExperimentCohortStats,
     Message,
     ResourceRecord,
     Run,
@@ -176,7 +178,9 @@ def clean_db(db_engine):
             Action,
             AgentConfig,
             Message,
+            ExperimentCohortStats,
             Run,
+            ExperimentCohort,
             Experiment,
         ]
         for model in tables:

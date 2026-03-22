@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from h_arcane import Resource, Task
-from h_arcane.core.worker import BaseWorker
+from h_arcane.core.worker import BaseWorker, Tool
 from h_arcane.benchmarks.smoke_test.rubric import SmokeTestRubric
 from h_arcane.core._internal.task.persistence import (
     create_experiment_from_task,
@@ -31,7 +31,7 @@ class MockWorker(BaseWorker):
         self.id = uuid4()
         self.name = name
         self.model = "gpt-4o"
-        self.tools: list[object] = []
+        self.tools: list[Tool] = []
         self.system_prompt = "You are a test worker."
 
     async def execute(self, task, context):
@@ -184,6 +184,24 @@ class TestCreateExperimentFromTask:
 
         # Should parse benchmark name
         assert data["benchmark_name"] == BenchmarkName.GDPEVAL
+
+    def test_creates_benchmark_experiment_with_logical_task_id_and_rubric(self):
+        """Benchmark experiments should keep logical task identifiers and rubric data."""
+        worker = MockWorker()
+        task = Task(
+            name="sample_001",
+            description="A benchmark task",
+            assigned_to=worker,
+            benchmark_specific_data={"ground_truth_proof": "proof"},
+            evaluator=SmokeTestRubric(rules=[]),
+        )
+        validate_task_dag(task)
+
+        data = create_experiment_from_task(task, benchmark_name="researchrubrics")
+
+        assert data["task_id"] == "sample_001"
+        assert data["ground_truth_rubric"]["benchmark"] == "smoke_test"
+        assert data["benchmark_specific_data"]["ground_truth_proof"] == "proof"
 
 
 # =============================================================================
