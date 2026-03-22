@@ -11,12 +11,12 @@
  * - failed: red
  */
 
-import { TaskStatus } from "@/lib/types";
+import { ExperimentCohortStatus, RunLifecycleStatus, TaskStatus } from "@/lib/types";
 
 // Status type includes TaskStatus enum values and run-level status strings
 // Note: TaskStatus.RUNNING = "running", TaskStatus.COMPLETED = "completed", etc.
 // So "running" | "completed" | "failed" are already covered by TaskStatus
-type StatusType = TaskStatus | "running" | "completed" | "failed";
+type StatusType = TaskStatus | RunLifecycleStatus | ExperimentCohortStatus;
 
 interface StatusBadgeProps {
   status: StatusType;
@@ -69,6 +69,36 @@ const statusConfig: Record<string, StatusConfig> = {
     ring: "ring-red-200 dark:ring-red-800",
     label: "Failed",
     color: "#ef4444",
+  },
+  executing: {
+    bg: "bg-yellow-100 dark:bg-yellow-900/30",
+    text: "text-yellow-700 dark:text-yellow-400",
+    ring: "ring-yellow-200 dark:ring-yellow-800",
+    label: "Executing",
+    animate: true,
+    color: "#eab308",
+  },
+  evaluating: {
+    bg: "bg-violet-100 dark:bg-violet-900/30",
+    text: "text-violet-700 dark:text-violet-400",
+    ring: "ring-violet-200 dark:ring-violet-800",
+    label: "Evaluating",
+    animate: true,
+    color: "#8b5cf6",
+  },
+  active: {
+    bg: "bg-blue-100 dark:bg-blue-900/30",
+    text: "text-blue-700 dark:text-blue-400",
+    ring: "ring-blue-200 dark:ring-blue-800",
+    label: "Active",
+    color: "#3b82f6",
+  },
+  archived: {
+    bg: "bg-gray-100 dark:bg-gray-800",
+    text: "text-gray-600 dark:text-gray-400",
+    ring: "ring-gray-200 dark:ring-gray-700",
+    label: "Archived",
+    color: "#9ca3af",
   },
 };
 

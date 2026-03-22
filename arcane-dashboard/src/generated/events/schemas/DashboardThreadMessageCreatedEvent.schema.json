@@ -1,0 +1,164 @@
+{
+  "$defs": {
+    "DashboardCommunicationMessage": {
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "from_agent_id": {
+          "title": "From Agent Id",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence_num": {
+          "title": "Sequence Num",
+          "type": "integer"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "thread_id": {
+          "format": "uuid",
+          "title": "Thread Id",
+          "type": "string"
+        },
+        "thread_topic": {
+          "title": "Thread Topic",
+          "type": "string"
+        },
+        "to_agent_id": {
+          "title": "To Agent Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "thread_id",
+        "run_id",
+        "thread_topic",
+        "from_agent_id",
+        "to_agent_id",
+        "content",
+        "sequence_num",
+        "created_at"
+      ],
+      "title": "DashboardCommunicationMessage",
+      "type": "object"
+    },
+    "DashboardCommunicationThread": {
+      "properties": {
+        "agent_a_id": {
+          "title": "Agent A Id",
+          "type": "string"
+        },
+        "agent_b_id": {
+          "title": "Agent B Id",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/DashboardCommunicationMessage"
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "topic",
+        "agent_a_id",
+        "agent_b_id",
+        "created_at",
+        "updated_at",
+        "messages"
+      ],
+      "title": "DashboardCommunicationThread",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Emitted when a thread gains a new message.",
+  "properties": {
+    "message": {
+      "$ref": "#/$defs/DashboardCommunicationMessage"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "thread": {
+      "$ref": "#/$defs/DashboardCommunicationThread"
+    }
+  },
+  "required": [
+    "run_id",
+    "thread",
+    "message"
+  ],
+  "title": "DashboardThreadMessageCreatedEvent",
+  "type": "object"
+}

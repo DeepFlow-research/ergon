@@ -13,13 +13,16 @@
 
 import { config } from "../config";
 import {
+  ExecutionAttemptState,
   TaskStatus,
   TaskTreeNode,
   TaskState,
   ActionState,
+  CommunicationThreadState,
   ResourceState,
   SandboxState,
   SandboxCommandState,
+  TaskEvaluationState,
   WorkflowRunState,
 } from "../types";
 
@@ -31,6 +34,8 @@ declare global {
 
 class DashboardStore {
   private runs: Map<string, WorkflowRunState> = new Map();
+  private pendingSandboxCommands: Map<string, Map<string, SandboxCommandState[]>> =
+    new Map();
 
   // ==========================================================================
   // Queries
@@ -45,7 +50,9 @@ class DashboardStore {
   }
 
   getActiveRuns(): WorkflowRunState[] {
-    return this.getAllRuns().filter((r) => r.status === "running");
+    return this.getAllRuns().filter(
+      (r) => r.status === "pending" || r.status === "executing" || r.status === "evaluating",
+    );
   }
 
   getRecentRuns(limit: number = 10): WorkflowRunState[] {
@@ -76,6 +83,15 @@ class DashboardStore {
     return this.runs.get(runId)?.sandboxesByTask.get(taskId);
   }
 
+  reset(): void {
+    this.runs.clear();
+    this.pendingSandboxCommands.clear();
+  }
+
+  seedRun(run: WorkflowRunState): void {
+    this.runs.set(run.id, run);
+  }
+
   // ==========================================================================
   // Mutations (called by Inngest event handlers)
   // ==========================================================================
@@ -99,12 +115,15 @@ class DashboardStore {
       id: runId,
       experimentId,
       name,
-      status: "running",
+      status: "executing",
       tasks,
       rootTaskId,
       actionsByTask: new Map(),
       resourcesByTask: new Map(),
+      executionsByTask: new Map(),
       sandboxesByTask: new Map(),
+      threads: [],
+      evaluationsByTask: new Map(),
       startedAt,
       completedAt: null,
       durationSeconds: null,
@@ -156,6 +175,49 @@ class DashboardStore {
     const run = this.runs.get(runId);
     const task = run?.tasks.get(taskId);
     if (!run || !task) return;
+
+    const nextExecutionStatus =
+      newStatus === TaskStatus.READY ? TaskStatus.PENDING : newStatus;
+    const executions = run.executionsByTask.get(taskId) ?? [];
+    const latestExecution = executions[executions.length - 1];
+
+    if (newStatus === TaskStatus.RUNNING) {
+      if (
+        !latestExecution ||
+        latestExecution.status === TaskStatus.COMPLETED ||
+        latestExecution.status === TaskStatus.FAILED
+      ) {
+        const nextExecution: ExecutionAttemptState = {
+          id: `${taskId}:attempt:${executions.length + 1}`,
+          taskId,
+          attemptNumber: executions.length + 1,
+          status: TaskStatus.RUNNING,
+          agentId: assignedWorkerId ?? task.assignedWorkerId,
+          agentName: assignedWorkerName ?? task.assignedWorkerName,
+          startedAt: timestamp,
+          completedAt: null,
+          outputText: null,
+          outputResourceIds: [],
+          errorMessage: null,
+          score: null,
+          evaluationDetails: {},
+        };
+        run.executionsByTask.set(taskId, [...executions, nextExecution]);
+      } else {
+        latestExecution.status = TaskStatus.RUNNING;
+        latestExecution.startedAt = latestExecution.startedAt ?? timestamp;
+        latestExecution.agentId = assignedWorkerId ?? latestExecution.agentId;
+        latestExecution.agentName = assignedWorkerName ?? latestExecution.agentName;
+      }
+    } else if (latestExecution) {
+      latestExecution.status = nextExecutionStatus;
+      if (newStatus === TaskStatus.COMPLETED || newStatus === TaskStatus.FAILED) {
+        latestExecution.completedAt = timestamp;
+        if (newStatus === TaskStatus.FAILED && latestExecution.errorMessage === null) {
+          latestExecution.errorMessage = "Task execution failed";
+        }
+      }
+    }
 
     task.status = newStatus;
 
@@ -213,6 +275,25 @@ class DashboardStore {
     run.resourcesByTask.set(resource.taskId, taskResources);
   }
 
+  upsertThread(runId: string, thread: CommunicationThreadState): void {
+    const run = this.runs.get(runId);
+    if (!run) return;
+
+    const existingIndex = run.threads.findIndex((candidate) => candidate.id === thread.id);
+    if (existingIndex >= 0) {
+      run.threads[existingIndex] = thread;
+    } else {
+      run.threads.push(thread);
+    }
+  }
+
+  upsertEvaluation(runId: string, taskId: string | null, evaluation: TaskEvaluationState): void {
+    const run = this.runs.get(runId);
+    if (!run) return;
+
+    run.evaluationsByTask.set(taskId ?? "__run__", evaluation);
+  }
+
   /**
    * Create or update a sandbox from sandbox.created event.
    */
@@ -227,6 +308,9 @@ class DashboardStore {
     const run = this.runs.get(runId);
     if (!run) return;
 
+    const pendingCommands =
+      this.pendingSandboxCommands.get(runId)?.get(taskId) ?? [];
+
     const sandbox: SandboxState = {
       sandboxId,
       taskId,
@@ -236,10 +320,18 @@ class DashboardStore {
       createdAt: timestamp,
       closedAt: null,
       closeReason: null,
-      commands: [],
+      commands: pendingCommands,
     };
 
     run.sandboxesByTask.set(taskId, sandbox);
+
+    const pendingByTask = this.pendingSandboxCommands.get(runId);
+    if (pendingByTask) {
+      pendingByTask.delete(taskId);
+      if (pendingByTask.size === 0) {
+        this.pendingSandboxCommands.delete(runId);
+      }
+    }
   }
 
   /**
@@ -252,7 +344,17 @@ class DashboardStore {
   ): void {
     const run = this.runs.get(runId);
     const sandbox = run?.sandboxesByTask.get(taskId);
-    if (!sandbox) return;
+    if (!run) return;
+
+    if (!sandbox) {
+      const pendingByTask =
+        this.pendingSandboxCommands.get(runId) ?? new Map();
+      const pendingCommands = pendingByTask.get(taskId) ?? [];
+      pendingCommands.push(command);
+      pendingByTask.set(taskId, pendingCommands);
+      this.pendingSandboxCommands.set(runId, pendingByTask);
+      return;
+    }
 
     sandbox.commands.push(command);
   }
@@ -289,7 +391,7 @@ class DashboardStore {
 
     for (const run of toRemove) {
       // Only remove completed/failed runs
-      if (run.status !== "running") {
+      if (run.status === "completed" || run.status === "failed") {
         this.runs.delete(run.id);
       }
     }

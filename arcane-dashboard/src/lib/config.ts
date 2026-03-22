@@ -16,8 +16,14 @@ export const config = {
   inngestEventKey: process.env.INNGEST_EVENT_KEY || "dev",
   inngestApiBaseUrl: process.env.INNGEST_API_BASE_URL,
 
+  // Backend API
+  arcaneApiBaseUrl: process.env.ARCANE_API_BASE_URL || "http://localhost:9000",
+
   // Socket.io
   socketCorsOrigin: process.env.SOCKET_CORS_ORIGIN || "*",
+
+  // Testing
+  enableTestHarness: process.env.ENABLE_TEST_HARNESS === "1",
 
   // Store
   maxRunsToKeep: parseInt(process.env.MAX_RUNS_TO_KEEP || "50", 10),

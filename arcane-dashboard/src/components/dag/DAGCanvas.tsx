@@ -27,15 +27,19 @@ import {
 import dagre from "dagre";
 import "@xyflow/react/dist/style.css";
 
-import { useRunState } from "@/hooks/useRunState";
-import { TaskState, TaskStatus } from "@/lib/types";
+import { TaskState, TaskStatus, WorkflowRunState } from "@/lib/types";
 import { nodeTypes, type TaskNodeType } from "./TaskNode";
 import { LevelSelector } from "./LevelSelector";
 import { SearchInput } from "@/components/common/SearchInput";
 
 interface DAGCanvasProps {
   runId: string;
+  runState: WorkflowRunState | null;
+  isLoading?: boolean;
+  error?: string | null;
+  isSubscribed?: boolean;
   onTaskClick?: (taskId: string) => void;
+  selectedTaskId?: string | null;
 }
 
 // Node dimensions for dagre layout
@@ -95,7 +99,8 @@ function tasksToFlowElements(
   tasks: Map<string, TaskState>,
   selectedLevel: number | null,
   searchQuery: string,
-  onTaskClick?: (taskId: string) => void
+  onTaskClick?: (taskId: string) => void,
+  selectedTaskId?: string | null,
 ): { nodes: TaskNodeType[]; edges: Edge[]; matchingNodeIds: Set<string> } {
   const nodes: TaskNodeType[] = [];
   const edges: Edge[] = [];
@@ -133,6 +138,7 @@ function tasksToFlowElements(
       data: {
         task,
         onClick: onTaskClick,
+        selected: task.id === selectedTaskId,
         dimmed: searchLower ? !isMatch : false,
         highlighted: searchLower ? isMatch : false,
       },
@@ -209,8 +215,15 @@ function getMinimapNodeColor(node: TaskNodeType): string {
   }
 }
 
-function DAGCanvasInner({ runId, onTaskClick }: DAGCanvasProps) {
-  const { runState, isLoading, error, isSubscribed } = useRunState(runId);
+function DAGCanvasInner({
+  runId,
+  runState,
+  isLoading = false,
+  error = null,
+  isSubscribed = false,
+  onTaskClick,
+  selectedTaskId,
+}: DAGCanvasProps) {
   const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [nodes, setNodes, onNodesChange] = useNodesState<TaskNodeType>([]);
@@ -241,7 +254,8 @@ function DAGCanvasInner({ runId, onTaskClick }: DAGCanvasProps) {
       runState.tasks,
       selectedLevel,
       searchQuery,
-      onTaskClick
+      onTaskClick,
+      selectedTaskId,
     );
 
     // Apply dagre layout
@@ -252,7 +266,7 @@ function DAGCanvasInner({ runId, onTaskClick }: DAGCanvasProps) {
 
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
-  }, [runState?.tasks, selectedLevel, searchQuery, onTaskClick, setNodes, setEdges]);
+  }, [runState?.tasks, selectedLevel, searchQuery, onTaskClick, selectedTaskId, setNodes, setEdges]);
 
   // Handle level change
   const handleLevelChange = useCallback((level: number | null) => {
@@ -374,7 +388,7 @@ function DAGCanvasInner({ runId, onTaskClick }: DAGCanvasProps) {
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full min-h-[60vh] w-full" data-testid="graph-canvas">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -457,7 +471,9 @@ function DAGCanvasInner({ runId, onTaskClick }: DAGCanvasProps) {
             <div className="flex items-center gap-2 sm:gap-4 mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
               <span
                 className={`flex items-center gap-1 ${
-                  runState.status === "running"
+                  runState.status === "pending" ||
+                  runState.status === "executing" ||
+                  runState.status === "evaluating"
                     ? "text-yellow-600 dark:text-yellow-400"
                     : runState.status === "completed"
                       ? "text-green-600 dark:text-green-400"
@@ -466,7 +482,9 @@ function DAGCanvasInner({ runId, onTaskClick }: DAGCanvasProps) {
               >
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    runState.status === "running"
+                    runState.status === "pending" ||
+                    runState.status === "executing" ||
+                    runState.status === "evaluating"
                       ? "bg-yellow-500 animate-pulse"
                       : runState.status === "completed"
                         ? "bg-green-500"

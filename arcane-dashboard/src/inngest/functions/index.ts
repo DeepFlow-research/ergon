@@ -9,8 +9,11 @@ import { inngest } from "../client";
 import { store } from "@/lib/state/store";
 import {
   broadcastRunStarted,
+  broadcastCohortUpdated,
   broadcastRunCompleted,
+  broadcastTaskEvaluation,
   broadcastTaskStatus,
+  broadcastThreadMessage,
   broadcastActionNew,
   broadcastActionCompleted,
   broadcastResourceNew,
@@ -18,7 +21,26 @@ import {
   broadcastSandboxCommand,
   broadcastSandboxClosed,
 } from "@/lib/socket/server";
-import { ActionState, ResourceState, SandboxCommandState } from "@/lib/types";
+import {
+  parseDashboardAgentActionCompletedData,
+  parseDashboardAgentActionStartedData,
+  parseDashboardCohortUpdatedData,
+  parseDashboardResourcePublishedData,
+  parseDashboardSandboxClosedData,
+  parseDashboardSandboxCommandData,
+  parseDashboardSandboxCreatedData,
+  parseDashboardTaskEvaluationUpdatedData,
+  parseDashboardTaskStatusChangedData,
+  parseDashboardThreadMessageCreatedData,
+  parseDashboardWorkflowCompletedData,
+  parseDashboardWorkflowStartedData,
+} from "@/lib/contracts/events";
+import {
+  ActionState,
+  ResourceState,
+  SandboxCommandState,
+  TaskStatus,
+} from "@/lib/types";
 
 // =============================================================================
 // Workflow Lifecycle Events
@@ -28,6 +50,7 @@ const onWorkflowStarted = inngest.createFunction(
   { id: "dashboard-workflow-started" },
   { event: "dashboard/workflow.started" },
   async ({ event }) => {
+    const payload = parseDashboardWorkflowStartedData(event.data);
     const {
       run_id,
       experiment_id,
@@ -36,7 +59,7 @@ const onWorkflowStarted = inngest.createFunction(
       started_at,
       total_tasks,
       total_leaf_tasks,
-    } = event.data;
+    } = payload;
 
     console.log("[Dashboard] Workflow started - INNGEST FUNCTION TRIGGERED:", {
       run_id,
@@ -75,6 +98,7 @@ const onWorkflowCompleted = inngest.createFunction(
   { id: "dashboard-workflow-completed" },
   { event: "dashboard/workflow.completed" },
   async ({ event }) => {
+    const payload = parseDashboardWorkflowCompletedData(event.data);
     const {
       run_id,
       status,
@@ -82,7 +106,7 @@ const onWorkflowCompleted = inngest.createFunction(
       duration_seconds,
       final_score,
       error,
-    } = event.data;
+    } = payload;
 
     console.log("[Dashboard] Workflow completed:", {
       run_id,
@@ -104,6 +128,7 @@ const onWorkflowCompleted = inngest.createFunction(
     broadcastRunCompleted(
       run_id,
       status,
+      completed_at,
       duration_seconds,
       final_score ?? null,
       error ?? null
@@ -111,6 +136,42 @@ const onWorkflowCompleted = inngest.createFunction(
 
     return { success: true };
   }
+);
+
+const onCohortUpdated = inngest.createFunction(
+  { id: "dashboard-cohort-updated" },
+  { event: "dashboard/cohort.updated" },
+  async ({ event }) => {
+    const payload = parseDashboardCohortUpdatedData(event.data);
+    console.log("[Dashboard] Cohort updated:", {
+      cohort_id: payload.cohort_id,
+      total_runs: payload.summary.total_runs,
+    });
+    broadcastCohortUpdated(payload);
+    return { success: true };
+  },
+);
+
+const onThreadMessageCreated = inngest.createFunction(
+  { id: "dashboard-thread-message-created" },
+  { event: "dashboard/thread.message_created" },
+  async ({ event }) => {
+    const payload = parseDashboardThreadMessageCreatedData(event.data);
+    store.upsertThread(payload.run_id, payload.thread);
+    broadcastThreadMessage(payload);
+    return { success: true };
+  },
+);
+
+const onTaskEvaluationUpdated = inngest.createFunction(
+  { id: "dashboard-task-evaluation-updated" },
+  { event: "dashboard/task.evaluation_updated" },
+  async ({ event }) => {
+    const payload = parseDashboardTaskEvaluationUpdatedData(event.data);
+    store.upsertEvaluation(payload.run_id, payload.task_id, payload.evaluation);
+    broadcastTaskEvaluation(payload);
+    return { success: true };
+  },
 );
 
 // =============================================================================
@@ -121,6 +182,7 @@ const onTaskStatusChanged = inngest.createFunction(
   { id: "dashboard-task-status-changed" },
   { event: "dashboard/task.status_changed" },
   async ({ event }) => {
+    const payload = parseDashboardTaskStatusChangedData(event.data);
     const {
       run_id,
       task_id,
@@ -129,7 +191,7 @@ const onTaskStatusChanged = inngest.createFunction(
       timestamp,
       assigned_worker_id,
       assigned_worker_name,
-    } = event.data;
+    } = payload;
 
     console.log("[Dashboard] Task status changed:", {
       run_id,
@@ -142,17 +204,18 @@ const onTaskStatusChanged = inngest.createFunction(
     store.updateTaskStatus(
       run_id,
       task_id,
-      new_status,
+      new_status as TaskStatus,
       timestamp,
-      assigned_worker_id,
-      assigned_worker_name
+      assigned_worker_id ?? null,
+      assigned_worker_name ?? null
     );
 
     // Broadcast to run subscribers
     broadcastTaskStatus(
       run_id,
       task_id,
-      new_status,
+      new_status as TaskStatus,
+      timestamp,
       assigned_worker_id ?? null,
       assigned_worker_name ?? null
     );
@@ -169,6 +232,7 @@ const onAgentActionStarted = inngest.createFunction(
   { id: "dashboard-agent-action-started" },
   { event: "dashboard/agent.action_started" },
   async ({ event }) => {
+    const payload = parseDashboardAgentActionStartedData(event.data);
     const {
       run_id,
       task_id,
@@ -178,7 +242,7 @@ const onAgentActionStarted = inngest.createFunction(
       action_type,
       action_input,
       timestamp,
-    } = event.data;
+    } = payload;
 
     console.log("[Dashboard] Agent action started:", {
       run_id,
@@ -218,6 +282,7 @@ const onAgentActionCompleted = inngest.createFunction(
   { id: "dashboard-agent-action-completed" },
   { event: "dashboard/agent.action_completed" },
   async ({ event }) => {
+    const payload = parseDashboardAgentActionCompletedData(event.data);
     const {
       run_id,
       task_id,
@@ -229,7 +294,7 @@ const onAgentActionCompleted = inngest.createFunction(
       success,
       error,
       timestamp,
-    } = event.data;
+    } = payload;
 
     console.log("[Dashboard] Agent action completed:", {
       run_id,
@@ -255,7 +320,7 @@ const onAgentActionCompleted = inngest.createFunction(
       status: success ? "completed" : "failed",
       startedAt: existingAction?.startedAt ?? timestamp,
       completedAt: timestamp,
-      durationMs: duration_ms,
+      durationMs: duration_ms ?? null,
       success,
       error: error ?? null,
     };
@@ -278,6 +343,7 @@ const onResourcePublished = inngest.createFunction(
   { id: "dashboard-resource-published" },
   { event: "dashboard/resource.published" },
   async ({ event }) => {
+    const payload = parseDashboardResourcePublishedData(event.data);
     const {
       run_id,
       task_id,
@@ -288,7 +354,7 @@ const onResourcePublished = inngest.createFunction(
       size_bytes,
       file_path,
       timestamp,
-    } = event.data;
+    } = payload;
 
     console.log("[Dashboard] Resource published:", {
       run_id,
@@ -328,8 +394,9 @@ const onSandboxCreated = inngest.createFunction(
   { id: "dashboard-sandbox-created" },
   { event: "dashboard/sandbox.created" },
   async ({ event }) => {
+    const payload = parseDashboardSandboxCreatedData(event.data);
     const { run_id, task_id, sandbox_id, template, timeout_minutes, timestamp } =
-      event.data;
+      payload;
 
     console.log("[Dashboard] Sandbox created:", {
       run_id,
@@ -364,6 +431,7 @@ const onSandboxCommand = inngest.createFunction(
   { id: "dashboard-sandbox-command" },
   { event: "dashboard/sandbox.command" },
   async ({ event }) => {
+    const payload = parseDashboardSandboxCommandData(event.data);
     const {
       task_id,
       sandbox_id,
@@ -373,7 +441,7 @@ const onSandboxCommand = inngest.createFunction(
       exit_code,
       duration_ms,
       timestamp,
-    } = event.data;
+    } = payload;
 
     console.log("[Dashboard] Sandbox command:", {
       task_id,
@@ -424,7 +492,9 @@ const onSandboxClosed = inngest.createFunction(
   { id: "dashboard-sandbox-closed" },
   { event: "dashboard/sandbox.closed" },
   async ({ event }) => {
-    const { task_id, sandbox_id, reason, timestamp } = event.data;
+    const { task_id, sandbox_id, reason, timestamp } = parseDashboardSandboxClosedData(
+      event.data,
+    );
 
     console.log("[Dashboard] Sandbox closed:", {
       task_id,
@@ -467,6 +537,9 @@ const onSandboxClosed = inngest.createFunction(
 export const functions = [
   onWorkflowStarted,
   onWorkflowCompleted,
+  onCohortUpdated,
+  onThreadMessageCreated,
+  onTaskEvaluationUpdated,
   onTaskStatusChanged,
   onAgentActionStarted,
   onAgentActionCompleted,

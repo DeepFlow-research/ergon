@@ -1,0 +1,62 @@
+[
+  {
+    "eventName": "dashboard/cohort.updated",
+    "modelName": "CohortUpdatedEvent",
+    "schemaFile": "CohortUpdatedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/workflow.started",
+    "modelName": "DashboardWorkflowStartedEvent",
+    "schemaFile": "DashboardWorkflowStartedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/workflow.completed",
+    "modelName": "DashboardWorkflowCompletedEvent",
+    "schemaFile": "DashboardWorkflowCompletedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/task.status_changed",
+    "modelName": "DashboardTaskStatusChangedEvent",
+    "schemaFile": "DashboardTaskStatusChangedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/agent.action_started",
+    "modelName": "DashboardAgentActionStartedEvent",
+    "schemaFile": "DashboardAgentActionStartedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/agent.action_completed",
+    "modelName": "DashboardAgentActionCompletedEvent",
+    "schemaFile": "DashboardAgentActionCompletedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/resource.published",
+    "modelName": "DashboardResourcePublishedEvent",
+    "schemaFile": "DashboardResourcePublishedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/sandbox.created",
+    "modelName": "DashboardSandboxCreatedEvent",
+    "schemaFile": "DashboardSandboxCreatedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/sandbox.command",
+    "modelName": "DashboardSandboxCommandEvent",
+    "schemaFile": "DashboardSandboxCommandEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/sandbox.closed",
+    "modelName": "DashboardSandboxClosedEvent",
+    "schemaFile": "DashboardSandboxClosedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/thread.message_created",
+    "modelName": "DashboardThreadMessageCreatedEvent",
+    "schemaFile": "DashboardThreadMessageCreatedEvent.schema.json"
+  },
+  {
+    "eventName": "dashboard/task.evaluation_updated",
+    "modelName": "DashboardTaskEvaluationUpdatedEvent",
+    "schemaFile": "DashboardTaskEvaluationUpdatedEvent.schema.json"
+  }
+]

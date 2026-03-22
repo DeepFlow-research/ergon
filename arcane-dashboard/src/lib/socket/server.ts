@@ -9,10 +9,14 @@ import { Server as HttpServer } from "http";
 import { Server as SocketServer, Socket } from "socket.io";
 import { config } from "../config";
 import { store } from "../state/store";
+import { serializeRunState } from "../runState";
 import {
   ServerToClientEvents,
   ClientToServerEvents,
   ActionState,
+  DashboardCohortUpdatedData,
+  DashboardTaskEvaluationUpdatedData,
+  DashboardThreadMessageCreatedData,
   ResourceState,
   SandboxState,
   SandboxCommandState,
@@ -97,14 +101,7 @@ export function initSocketServer(httpServer: HttpServer): TypedServer {
       const run = store.getRun(runId);
       if (run) {
         console.log(`[Socket.io] Found run! Sending full state (${run.tasks.size} tasks, status: ${run.status})`);
-        // Convert Maps to arrays for JSON serialization
-        socket.emit("sync:run", {
-          ...run,
-          tasks: Array.from(run.tasks.entries()),
-          actionsByTask: Array.from(run.actionsByTask.entries()),
-          resourcesByTask: Array.from(run.resourcesByTask.entries()),
-          sandboxesByTask: Array.from(run.sandboxesByTask.entries()),
-        });
+        socket.emit("sync:run", serializeRunState(run));
       } else {
         console.log(`[Socket.io] Run ${runId} NOT FOUND in store. Available runs: ${allRuns.map(r => r.id.substring(0, 8)).join(', ') || 'none'}`);
         socket.emit("sync:run", null);
@@ -161,12 +158,18 @@ export function broadcastRunStarted(runId: string, name: string): void {
   }
 }
 
+export function broadcastCohortUpdated(data: DashboardCohortUpdatedData): void {
+  const io = getIO();
+  io?.emit("cohort:updated", data);
+}
+
 /**
  * Broadcast run completed to subscribers of that run.
  */
 export function broadcastRunCompleted(
   runId: string,
   status: "completed" | "failed",
+  completedAt: string,
   durationSeconds: number,
   finalScore: number | null,
   error: string | null
@@ -176,6 +179,7 @@ export function broadcastRunCompleted(
   io?.emit("run:completed", {
     runId,
     status,
+    completedAt,
     durationSeconds,
     finalScore,
     error,
@@ -189,6 +193,7 @@ export function broadcastTaskStatus(
   runId: string,
   taskId: string,
   status: TaskStatus,
+  timestamp: string,
   assignedWorkerId: string | null,
   assignedWorkerName: string | null
 ): void {
@@ -197,6 +202,7 @@ export function broadcastTaskStatus(
     runId,
     taskId,
     status,
+    timestamp,
     assignedWorkerId,
     assignedWorkerName,
   });
@@ -265,4 +271,18 @@ export function broadcastSandboxClosed(
 ): void {
   const io = getIO();
   io?.to(`run:${runId}`).emit("sandbox:closed", { runId, taskId, reason });
+}
+
+export function broadcastThreadMessage(
+  data: DashboardThreadMessageCreatedData
+): void {
+  const io = getIO();
+  io?.to(`run:${data.run_id}`).emit("thread:message", data);
+}
+
+export function broadcastTaskEvaluation(
+  data: DashboardTaskEvaluationUpdatedData
+): void {
+  const io = getIO();
+  io?.to(`run:${data.run_id}`).emit("task:evaluation", data);
 }

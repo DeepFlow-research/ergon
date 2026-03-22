@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "description": "Emitted when a task produces an output resource.",
+  "properties": {
+    "file_path": {
+      "title": "File Path",
+      "type": "string"
+    },
+    "mime_type": {
+      "title": "Mime Type",
+      "type": "string"
+    },
+    "resource_id": {
+      "format": "uuid",
+      "title": "Resource Id",
+      "type": "string"
+    },
+    "resource_name": {
+      "title": "Resource Name",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "size_bytes": {
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "task_execution_id": {
+      "format": "uuid",
+      "title": "Task Execution Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "task_id",
+    "task_execution_id",
+    "resource_id",
+    "resource_name",
+    "mime_type",
+    "size_bytes",
+    "file_path",
+    "timestamp"
+  ],
+  "title": "DashboardResourcePublishedEvent",
+  "type": "object"
+}

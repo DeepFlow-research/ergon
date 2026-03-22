@@ -13,15 +13,28 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSocket } from "@/hooks/useSocket";
 import {
+  parseActionSocketData,
+  parseDashboardTaskEvaluationUpdatedData,
+  parseDashboardThreadMessageCreatedData,
+  parseResourceSocketData,
+  parseRunCompletedSocketData,
+  parseSandboxClosedSocketData,
+  parseSandboxCommandSocketData,
+  parseSandboxCreatedSocketData,
+  parseTaskStatusSocketData,
+} from "@/lib/contracts/events";
+import type { RunAction, RunSandbox, RunSandboxCommand } from "@/lib/contracts/rest";
+import {
+  ExecutionAttemptState,
   TaskStatus,
   TaskState,
   ActionState,
-  ResourceState,
   SandboxState,
   SandboxCommandState,
   WorkflowRunState,
   SerializedWorkflowRunState,
 } from "@/lib/types";
+import { deserializeRunState } from "@/lib/runState";
 
 interface UseRunStateResult {
   runState: WorkflowRunState | null;
@@ -30,50 +43,128 @@ interface UseRunStateResult {
   isSubscribed: boolean;
 }
 
-/**
- * Create an empty WorkflowRunState placeholder.
- */
-function createEmptyRunState(runId: string): WorkflowRunState {
+function recalculateTaskMetrics(tasks: Map<string, TaskState>): Pick<
+  WorkflowRunState,
+  "completedTasks" | "runningTasks" | "failedTasks"
+> {
+  let completedTasks = 0;
+  let runningTasks = 0;
+  let failedTasks = 0;
+
+  for (const task of tasks.values()) {
+    if (!task.isLeaf) continue;
+    switch (task.status) {
+      case TaskStatus.COMPLETED:
+        completedTasks += 1;
+        break;
+      case TaskStatus.RUNNING:
+        runningTasks += 1;
+        break;
+      case TaskStatus.FAILED:
+        failedTasks += 1;
+        break;
+    }
+  }
+
+  return { completedTasks, runningTasks, failedTasks };
+}
+
+function nextExecutionStatus(status: TaskStatus): TaskStatus {
+  return status === TaskStatus.READY ? TaskStatus.PENDING : status;
+}
+
+function normalizeActionState(action: RunAction): ActionState {
   return {
-    id: runId,
-    experimentId: "",
-    name: "Loading...",
-    status: "running",
-    tasks: new Map(),
-    rootTaskId: "",
-    actionsByTask: new Map(),
-    resourcesByTask: new Map(),
-    sandboxesByTask: new Map(),
-    startedAt: new Date().toISOString(),
-    completedAt: null,
-    durationSeconds: null,
-    totalTasks: 0,
-    totalLeafTasks: 0,
-    completedTasks: 0,
-    runningTasks: 0,
-    failedTasks: 0,
-    finalScore: null,
-    error: null,
+    ...action,
+    status: action.status as ActionState["status"],
+    output: action.output ?? null,
+    completedAt: action.completedAt ?? null,
+    durationMs: action.durationMs ?? null,
+    error: action.error ?? null,
+    startedAt: action.startedAt ?? new Date(0).toISOString(),
   };
 }
 
-export function useRunState(runId: string): UseRunStateResult {
+function normalizeSandboxState(sandbox: RunSandbox): SandboxState {
+  return {
+    ...sandbox,
+    status: sandbox.status as SandboxState["status"],
+    template: sandbox.template ?? null,
+    closedAt: sandbox.closedAt ?? null,
+    closeReason: sandbox.closeReason ?? null,
+    commands: (sandbox.commands ?? []).map((command) => ({
+      command: command.command,
+      stdout: command.stdout ?? null,
+      stderr: command.stderr ?? null,
+      exitCode: command.exitCode ?? null,
+      durationMs: command.durationMs ?? null,
+      timestamp: command.timestamp,
+    })),
+  };
+}
+
+function normalizeSandboxCommandState(command: RunSandboxCommand): SandboxCommandState {
+  return {
+    command: command.command,
+    stdout: command.stdout ?? null,
+    stderr: command.stderr ?? null,
+    exitCode: command.exitCode ?? null,
+    durationMs: command.durationMs ?? null,
+    timestamp: command.timestamp,
+  };
+}
+
+export function useRunState(
+  runId: string,
+  initialRunState: SerializedWorkflowRunState | null = null,
+): UseRunStateResult {
   const { socket, isConnected, subscribe, unsubscribe } = useSocket();
-  const [runState, setRunState] = useState<WorkflowRunState | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [runState, setRunState] = useState<WorkflowRunState | null>(
+    initialRunState ? deserializeRunState(initialRunState) : null,
+  );
+  const [isLoading, setIsLoading] = useState(initialRunState === null);
   const [error, setError] = useState<string | null>(null);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const subscriptionRef = useRef<string | null>(null);
+  const hasRunStateRef = useRef(initialRunState !== null);
+
+  const loadSnapshot = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/runs/${runId}`, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Failed to load run (${response.status})`);
+      }
+      const data = (await response.json()) as unknown;
+      setRunState(deserializeRunState(data));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load run");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [runId]);
+
+  useEffect(() => {
+    hasRunStateRef.current = runState !== null;
+  }, [runState]);
+
+  useEffect(() => {
+    if (initialRunState) {
+      setRunState(deserializeRunState(initialRunState));
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+    setRunState(null);
+    setIsLoading(true);
+    void loadSnapshot();
+  }, [initialRunState, loadSnapshot]);
 
   // Handle task status updates
   const handleTaskStatus = useCallback(
-    (data: {
-      runId: string;
-      taskId: string;
-      status: TaskStatus;
-      assignedWorkerId: string | null;
-      assignedWorkerName: string | null;
-    }) => {
+    (payload: unknown) => {
+      const data = parseTaskStatusSocketData(payload);
+      const status = data.status as TaskStatus;
       if (data.runId !== runId) return;
 
       setRunState((prev) => {
@@ -84,46 +175,90 @@ export function useRunState(runId: string): UseRunStateResult {
 
         const updatedTask: TaskState = {
           ...task,
-          status: data.status,
+          status,
           assignedWorkerId: data.assignedWorkerId ?? task.assignedWorkerId,
           assignedWorkerName: data.assignedWorkerName ?? task.assignedWorkerName,
           startedAt:
-            data.status === TaskStatus.RUNNING && !task.startedAt
-              ? new Date().toISOString()
+            status === TaskStatus.RUNNING && !task.startedAt
+              ? data.timestamp
               : task.startedAt,
           completedAt:
-            data.status === TaskStatus.COMPLETED ||
-            data.status === TaskStatus.FAILED
-              ? new Date().toISOString()
+            status === TaskStatus.COMPLETED ||
+            status === TaskStatus.FAILED
+              ? data.timestamp
               : task.completedAt,
         };
 
         const newTasks = new Map(prev.tasks);
         newTasks.set(data.taskId, updatedTask);
 
-        // Recalculate metrics
-        let completedTasks = 0;
-        let runningTasks = 0;
-        let failedTasks = 0;
+        const existingExecutions = prev.executionsByTask.get(data.taskId) ?? [];
+        const latestExecution = existingExecutions[existingExecutions.length - 1];
+        let nextExecutions = existingExecutions;
 
-        for (const t of newTasks.values()) {
-          if (!t.isLeaf) continue;
-          switch (t.status) {
-            case TaskStatus.COMPLETED:
-              completedTasks++;
-              break;
-            case TaskStatus.RUNNING:
-              runningTasks++;
-              break;
-            case TaskStatus.FAILED:
-              failedTasks++;
-              break;
+        if (status === TaskStatus.RUNNING) {
+          if (
+            !latestExecution ||
+            latestExecution.status === TaskStatus.COMPLETED ||
+            latestExecution.status === TaskStatus.FAILED
+          ) {
+            const createdExecution: ExecutionAttemptState = {
+              id: `${data.taskId}:attempt:${existingExecutions.length + 1}`,
+              taskId: data.taskId,
+              attemptNumber: existingExecutions.length + 1,
+              status: TaskStatus.RUNNING,
+              agentId: data.assignedWorkerId,
+              agentName: data.assignedWorkerName,
+              startedAt: data.timestamp,
+              completedAt: null,
+              outputText: null,
+              outputResourceIds: [],
+              errorMessage: null,
+              score: null,
+              evaluationDetails: {},
+            };
+            nextExecutions = [...existingExecutions, createdExecution];
+          } else {
+            nextExecutions = existingExecutions.map((execution, index) =>
+              index === existingExecutions.length - 1
+                ? {
+                    ...execution,
+                    status: TaskStatus.RUNNING,
+                    agentId: data.assignedWorkerId ?? execution.agentId,
+                    agentName: data.assignedWorkerName ?? execution.agentName,
+                    startedAt: execution.startedAt ?? data.timestamp,
+                  }
+                : execution,
+            );
           }
+        } else if (latestExecution) {
+          nextExecutions = existingExecutions.map((execution, index) =>
+            index === existingExecutions.length - 1
+              ? {
+                  ...execution,
+                  status: nextExecutionStatus(status),
+                  completedAt:
+                    status === TaskStatus.COMPLETED || status === TaskStatus.FAILED
+                      ? data.timestamp
+                      : execution.completedAt,
+                  errorMessage:
+                    status === TaskStatus.FAILED
+                      ? execution.errorMessage ?? "Task execution failed"
+                      : execution.errorMessage,
+                }
+              : execution,
+          );
         }
+
+        const newExecutionsByTask = new Map(prev.executionsByTask);
+        newExecutionsByTask.set(data.taskId, nextExecutions);
+
+        const { completedTasks, runningTasks, failedTasks } = recalculateTaskMetrics(newTasks);
 
         return {
           ...prev,
           tasks: newTasks,
+          executionsByTask: newExecutionsByTask,
           completedTasks,
           runningTasks,
           failedTasks,
@@ -135,7 +270,8 @@ export function useRunState(runId: string): UseRunStateResult {
 
   // Handle new action
   const handleActionNew = useCallback(
-    (data: { runId: string; action: ActionState }) => {
+    (payload: unknown) => {
+      const data = parseActionSocketData(payload);
       if (data.runId !== runId) return;
 
       setRunState((prev) => {
@@ -143,7 +279,10 @@ export function useRunState(runId: string): UseRunStateResult {
 
         const taskActions = prev.actionsByTask.get(data.action.taskId) ?? [];
         const newActionsByTask = new Map(prev.actionsByTask);
-        newActionsByTask.set(data.action.taskId, [...taskActions, data.action]);
+        newActionsByTask.set(data.action.taskId, [
+          ...taskActions,
+          normalizeActionState(data.action),
+        ]);
 
         return { ...prev, actionsByTask: newActionsByTask };
       });
@@ -153,7 +292,8 @@ export function useRunState(runId: string): UseRunStateResult {
 
   // Handle action completed
   const handleActionCompleted = useCallback(
-    (data: { runId: string; action: ActionState }) => {
+    (payload: unknown) => {
+      const data = parseActionSocketData(payload);
       if (data.runId !== runId) return;
 
       setRunState((prev) => {
@@ -161,7 +301,7 @@ export function useRunState(runId: string): UseRunStateResult {
 
         const taskActions = prev.actionsByTask.get(data.action.taskId) ?? [];
         const updatedActions = taskActions.map((a) =>
-          a.id === data.action.id ? data.action : a
+          a.id === data.action.id ? normalizeActionState(data.action) : a
         );
 
         const newActionsByTask = new Map(prev.actionsByTask);
@@ -175,7 +315,8 @@ export function useRunState(runId: string): UseRunStateResult {
 
   // Handle new resource
   const handleResourceNew = useCallback(
-    (data: { runId: string; resource: ResourceState }) => {
+    (payload: unknown) => {
+      const data = parseResourceSocketData(payload);
       if (data.runId !== runId) return;
 
       setRunState((prev) => {
@@ -197,14 +338,15 @@ export function useRunState(runId: string): UseRunStateResult {
 
   // Handle sandbox created
   const handleSandboxCreated = useCallback(
-    (data: { runId: string; sandbox: SandboxState }) => {
+    (payload: unknown) => {
+      const data = parseSandboxCreatedSocketData(payload);
       if (data.runId !== runId) return;
 
       setRunState((prev) => {
         if (!prev) return prev;
 
         const newSandboxesByTask = new Map(prev.sandboxesByTask);
-        newSandboxesByTask.set(data.sandbox.taskId, data.sandbox);
+        newSandboxesByTask.set(data.sandbox.taskId, normalizeSandboxState(data.sandbox));
 
         return { ...prev, sandboxesByTask: newSandboxesByTask };
       });
@@ -214,7 +356,8 @@ export function useRunState(runId: string): UseRunStateResult {
 
   // Handle sandbox command
   const handleSandboxCommand = useCallback(
-    (data: { runId: string; taskId: string; command: SandboxCommandState }) => {
+    (payload: unknown) => {
+      const data = parseSandboxCommandSocketData(payload);
       if (data.runId !== runId) return;
 
       setRunState((prev) => {
@@ -225,7 +368,7 @@ export function useRunState(runId: string): UseRunStateResult {
 
         const updatedSandbox: SandboxState = {
           ...sandbox,
-          commands: [...sandbox.commands, data.command],
+          commands: [...sandbox.commands, normalizeSandboxCommandState(data.command)],
         };
 
         const newSandboxesByTask = new Map(prev.sandboxesByTask);
@@ -239,7 +382,8 @@ export function useRunState(runId: string): UseRunStateResult {
 
   // Handle sandbox closed
   const handleSandboxClosed = useCallback(
-    (data: { runId: string; taskId: string; reason: string }) => {
+    (payload: unknown) => {
+      const data = parseSandboxClosedSocketData(payload);
       if (data.runId !== runId) return;
 
       setRunState((prev) => {
@@ -266,13 +410,8 @@ export function useRunState(runId: string): UseRunStateResult {
 
   // Handle run completed
   const handleRunCompleted = useCallback(
-    (data: {
-      runId: string;
-      status: "completed" | "failed";
-      durationSeconds: number;
-      finalScore: number | null;
-      error: string | null;
-    }) => {
+    (payload: unknown) => {
+      const data = parseRunCompletedSocketData(payload);
       if (data.runId !== runId) return;
 
       setRunState((prev) => {
@@ -281,7 +420,7 @@ export function useRunState(runId: string): UseRunStateResult {
         return {
           ...prev,
           status: data.status,
-          completedAt: new Date().toISOString(),
+          completedAt: data.completedAt,
           durationSeconds: data.durationSeconds,
           finalScore: data.finalScore,
           error: data.error,
@@ -291,47 +430,74 @@ export function useRunState(runId: string): UseRunStateResult {
     [runId]
   );
 
+  const handleThreadMessage = useCallback(
+    (payload: unknown) => {
+      const data = parseDashboardThreadMessageCreatedData(payload);
+      if (data.run_id !== runId) return;
+
+      setRunState((prev) => {
+        if (!prev) return prev;
+
+        const existingIndex = prev.threads.findIndex((thread) => thread.id === data.thread.id);
+        const nextThreads = [...prev.threads];
+        if (existingIndex >= 0) {
+          nextThreads[existingIndex] = data.thread;
+        } else {
+          nextThreads.push(data.thread);
+        }
+
+        nextThreads.sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+        return {
+          ...prev,
+          threads: nextThreads,
+        };
+      });
+    },
+    [runId]
+  );
+
+  const handleTaskEvaluation = useCallback(
+    (payload: unknown) => {
+      const data = parseDashboardTaskEvaluationUpdatedData(payload);
+      if (data.run_id !== runId) return;
+
+      setRunState((prev) => {
+        if (!prev) return prev;
+
+        const nextEvaluations = new Map(prev.evaluationsByTask);
+        nextEvaluations.set(data.task_id ?? "__run__", data.evaluation);
+        return {
+          ...prev,
+          evaluationsByTask: nextEvaluations,
+        };
+      });
+    },
+    [runId]
+  );
+
   // Handle full run state sync (for initial load / completed runs)
   const handleSyncRun = useCallback(
     (data: SerializedWorkflowRunState | null) => {
-      console.log("[useRunState] Received sync:run", data ? `(${data.tasks.length} tasks)` : "(null)");
+      console.log(
+        "[useRunState] Received sync:run",
+        data ? `(${Object.keys(data.tasks ?? {}).length} tasks)` : "(null)",
+      );
       
       if (!data) {
-        // Run not in store - this happens when viewing old runs after dashboard restart
-        setError("Run not found. The dashboard only stores runs from the current session. Try running a new workflow.");
         setIsLoading(false);
-        // Keep runState null so error UI shows (error is checked before empty state)
+        setError((prev) =>
+          runState
+            ? prev
+            : "Live dashboard state is unavailable. Showing persisted snapshot only when possible."
+        );
         return;
       }
 
-      // Convert serialized arrays back to Maps
-      const runState: WorkflowRunState = {
-        id: data.id,
-        experimentId: data.experimentId,
-        name: data.name,
-        status: data.status,
-        tasks: new Map(data.tasks),
-        rootTaskId: data.rootTaskId,
-        actionsByTask: new Map(data.actionsByTask),
-        resourcesByTask: new Map(data.resourcesByTask),
-        sandboxesByTask: new Map(data.sandboxesByTask),
-        startedAt: data.startedAt,
-        completedAt: data.completedAt,
-        durationSeconds: data.durationSeconds,
-        totalTasks: data.totalTasks,
-        totalLeafTasks: data.totalLeafTasks,
-        completedTasks: data.completedTasks,
-        runningTasks: data.runningTasks,
-        failedTasks: data.failedTasks,
-        finalScore: data.finalScore,
-        error: data.error,
-      };
-
-      setRunState(runState);
+      setRunState(deserializeRunState(data));
       setIsLoading(false);
       setError(null);
     },
-    []
+    [runState]
   );
 
   // Subscribe to run updates
@@ -355,7 +521,7 @@ export function useRunState(runId: string): UseRunStateResult {
       subscribe(runId);
       subscriptionRef.current = runId;
       setIsSubscribed(true);
-      setIsLoading(true);
+      setIsLoading((prev) => (hasRunStateRef.current ? false : prev));
 
       // Request full run state from server
       console.log("[useRunState] Requesting full state for run", runId, "socket.connected:", socket.connected);
@@ -380,6 +546,8 @@ export function useRunState(runId: string): UseRunStateResult {
     socket.on("sandbox:command", handleSandboxCommand);
     socket.on("sandbox:closed", handleSandboxClosed);
     socket.on("run:completed", handleRunCompleted);
+    socket.on("thread:message", handleThreadMessage);
+    socket.on("task:evaluation", handleTaskEvaluation);
 
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
@@ -392,6 +560,8 @@ export function useRunState(runId: string): UseRunStateResult {
       socket.off("sandbox:command", handleSandboxCommand);
       socket.off("sandbox:closed", handleSandboxClosed);
       socket.off("run:completed", handleRunCompleted);
+      socket.off("thread:message", handleThreadMessage);
+      socket.off("task:evaluation", handleTaskEvaluation);
     };
   }, [
     socket,
@@ -408,6 +578,8 @@ export function useRunState(runId: string): UseRunStateResult {
     handleSandboxCommand,
     handleSandboxClosed,
     handleRunCompleted,
+    handleThreadMessage,
+    handleTaskEvaluation,
   ]);
 
   // Unsubscribe on unmount
@@ -423,9 +595,7 @@ export function useRunState(runId: string): UseRunStateResult {
   // Handle connection errors
   useEffect(() => {
     if (!isConnected && socket) {
-      setError("Disconnected from server");
-    } else {
-      setError(null);
+      setError((prev) => prev ?? "Disconnected from server");
     }
   }, [isConnected, socket]);
 

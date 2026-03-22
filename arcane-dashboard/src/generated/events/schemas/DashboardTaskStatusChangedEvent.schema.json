@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "TaskStatus": {
+      "description": "Task execution status.",
+      "enum": [
+        "pending",
+        "ready",
+        "running",
+        "completed",
+        "failed"
+      ],
+      "title": "TaskStatus",
+      "type": "string"
+    },
+    "TaskTrigger": {
+      "description": "What triggered a task state transition.",
+      "enum": [
+        "workflow_started",
+        "dependency_satisfied",
+        "worker_started",
+        "execution_succeeded",
+        "execution_failed",
+        "children_completed"
+      ],
+      "title": "TaskTrigger",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Emitted on any task status transition - for dashboard visualization.",
+  "properties": {
+    "assigned_worker_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Assigned Worker Id"
+    },
+    "assigned_worker_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Assigned Worker Name"
+    },
+    "new_status": {
+      "$ref": "#/$defs/TaskStatus"
+    },
+    "old_status": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "parent_task_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Task Id"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "task_name": {
+      "title": "Task Name",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "triggered_by": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TaskTrigger"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "run_id",
+    "task_id",
+    "task_name",
+    "new_status",
+    "timestamp"
+  ],
+  "title": "DashboardTaskStatusChangedEvent",
+  "type": "object"
+}

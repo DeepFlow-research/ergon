@@ -20,6 +20,7 @@ import { StatusDot } from "@/components/common/StatusBadge";
 export type TaskNodeData = {
   task: TaskState;
   onClick?: (taskId: string) => void;
+  selected?: boolean;
   dimmed?: boolean;
   highlighted?: boolean;
 };
@@ -44,7 +45,7 @@ const statusBgColors: Record<TaskStatus, string> = {
 };
 
 function TaskNodeComponent({ data }: NodeProps<TaskNodeType>) {
-  const { task, onClick, dimmed = false, highlighted = false } = data;
+  const { task, onClick, selected = false, dimmed = false, highlighted = false } = data;
   const [isAnimating, setIsAnimating] = useState(false);
   const [prevStatus, setPrevStatus] = useState(task.status);
 
@@ -68,6 +69,7 @@ function TaskNodeComponent({ data }: NodeProps<TaskNodeType>) {
   return (
     <div
       onClick={handleClick}
+      data-testid={`graph-node-${task.id}`}
       className={`
         relative cursor-pointer min-w-[180px] max-w-[280px]
         rounded-lg border-2 shadow-sm
@@ -76,6 +78,7 @@ function TaskNodeComponent({ data }: NodeProps<TaskNodeType>) {
         ${borderColor} ${bgColor}
         ${isAnimating ? "ring-2 ring-offset-2 ring-blue-400 dark:ring-blue-500" : ""}
         ${task.status === TaskStatus.RUNNING ? "shadow-yellow-200 dark:shadow-yellow-900" : ""}
+        ${selected ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400" : ""}
         ${dimmed ? "opacity-30" : ""}
         ${highlighted ? "ring-2 ring-blue-500 ring-offset-2" : ""}
       `}

@@ -1,0 +1,3 @@
+import { z } from "zod"
+
+export const DashboardAgentActionCompletedEventSchema = z.object({ "action_id": z.string().uuid(), "action_output": z.union([z.string(), z.null()]).default(null), "action_type": z.string(), "duration_ms": z.union([z.number().int(), z.null()]).default(null), "error": z.union([z.string(), z.null()]).default(null), "run_id": z.string().uuid(), "success": z.boolean(), "task_id": z.string().uuid(), "timestamp": z.string().datetime({ offset: true }), "worker_id": z.string().uuid() }).strict().describe("Emitted when an agent completes a tool call - for dashboard action stream.")

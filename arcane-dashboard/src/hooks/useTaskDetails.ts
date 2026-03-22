@@ -8,12 +8,15 @@
  */
 
 import { useMemo } from "react";
-import { useRunState } from "@/hooks/useRunState";
 import {
+  ExecutionAttemptState,
   TaskState,
   ActionState,
+  CommunicationThreadState,
   ResourceState,
   SandboxState,
+  TaskEvaluationState,
+  WorkflowRunState,
 } from "@/lib/types";
 
 export interface TaskDependencies {
@@ -30,8 +33,14 @@ export interface UseTaskDetailsResult {
   actions: ActionState[];
   /** Resources produced by this task */
   resources: ResourceState[];
+  /** Execution attempts for this task */
+  executions: ExecutionAttemptState[];
   /** Sandbox associated with this task (if any) */
   sandbox: SandboxState | undefined;
+  /** Communication threads relevant to this task or run */
+  threads: CommunicationThreadState[];
+  /** Evaluation snapshot at task scope, or run scope if only that exists */
+  evaluation: TaskEvaluationState | null;
   /** Dependency information */
   dependencies: TaskDependencies;
   /** Whether the run state is still loading */
@@ -47,11 +56,9 @@ export interface UseTaskDetailsResult {
  * @param taskId - The task ID (null means no task selected)
  */
 export function useTaskDetails(
-  runId: string,
+  runState: WorkflowRunState | null,
   taskId: string | null
 ): UseTaskDetailsResult {
-  const { runState, isLoading, error } = useRunState(runId);
-
   // Extract task
   const task = useMemo(() => {
     if (!runState || !taskId) return null;
@@ -70,10 +77,25 @@ export function useTaskDetails(
     return runState.resourcesByTask.get(taskId) ?? [];
   }, [runState, taskId]);
 
+  const executions = useMemo(() => {
+    if (!runState || !taskId) return [];
+    return runState.executionsByTask.get(taskId) ?? [];
+  }, [runState, taskId]);
+
   // Extract sandbox for this task
   const sandbox = useMemo(() => {
     if (!runState || !taskId) return undefined;
     return runState.sandboxesByTask.get(taskId);
+  }, [runState, taskId]);
+
+  const threads = useMemo(() => {
+    if (!runState || !taskId) return [];
+    return runState.threads.filter((thread) => thread.taskId === null || thread.taskId === taskId);
+  }, [runState, taskId]);
+
+  const evaluation = useMemo(() => {
+    if (!runState || !taskId) return null;
+    return runState.evaluationsByTask.get(taskId) ?? runState.evaluationsByTask.get("__run__") ?? null;
   }, [runState, taskId]);
 
   // Calculate dependencies
@@ -106,9 +128,12 @@ export function useTaskDetails(
     task,
     actions,
     resources,
+    executions,
     sandbox,
+    threads,
+    evaluation,
     dependencies,
-    isLoading,
-    error,
+    isLoading: runState === null,
+    error: null,
   };
 }

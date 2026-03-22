@@ -1,15 +1,40 @@
-/**
- * Dashboard Event Types
- *
- * TypeScript interfaces mirroring the Python event contracts in h_arcane/dashboard/events.py.
- * These types provide type safety when handling Inngest events in the dashboard.
- *
- * UUIDs are serialized as strings over the wire.
- * Timestamps are ISO 8601 strings.
- */
+import type {
+  BenchmarkName as RestBenchmarkName,
+  CohortDetail as RestCohortDetail,
+  CohortSummary as RestCohortSummary,
+  ExperimentCohortStatusValue,
+  RunCommunicationMessage as RestRunCommunicationMessage,
+  RunCommunicationThread as RestRunCommunicationThread,
+  RunLifecycleStatus as RestRunLifecycleStatus,
+  RunSnapshot,
+  RunTaskEvaluation as RestRunTaskEvaluation,
+} from "@/lib/contracts/rest";
+import type {
+  ActionSocketData,
+  DashboardAgentActionCompletedData as GeneratedDashboardAgentActionCompletedData,
+  DashboardAgentActionStartedData as GeneratedDashboardAgentActionStartedData,
+  DashboardCohortUpdatedData as GeneratedDashboardCohortUpdatedData,
+  DashboardResourcePublishedData as GeneratedDashboardResourcePublishedData,
+  ResourceSocketData,
+  RunCompletedSocketData,
+  DashboardSandboxClosedData as GeneratedDashboardSandboxClosedData,
+  SandboxClosedSocketData,
+  SandboxCommandSocketData,
+  SandboxCreatedSocketData,
+  DashboardSandboxCommandData as GeneratedDashboardSandboxCommandData,
+  DashboardSandboxCreatedData as GeneratedDashboardSandboxCreatedData,
+  DashboardTaskEvaluationUpdatedData as GeneratedDashboardTaskEvaluationUpdatedData,
+  DashboardTaskStatusChangedData as GeneratedDashboardTaskStatusChangedData,
+  DashboardThreadMessageCreatedData as GeneratedDashboardThreadMessageCreatedData,
+  DashboardWorkflowCompletedData as GeneratedDashboardWorkflowCompletedData,
+  DashboardWorkflowStartedData as GeneratedDashboardWorkflowStartedData,
+  RunListEntry,
+  TaskStatusSocketData,
+  TaskTreeNode,
+} from "@/lib/contracts/events";
 
 // =============================================================================
-// Enums (mirror h_arcane/core/status.py)
+// Internal enums mirrored from backend wire values
 // =============================================================================
 
 export enum TaskStatus {
@@ -29,52 +54,10 @@ export enum TaskTrigger {
   CHILDREN_COMPLETED = "children_completed",
 }
 
-// =============================================================================
-// Task Tree Types (mirror h_arcane/core/_internal/task/schema.py)
-// =============================================================================
-
-export interface WorkerRef {
-  id: string;
-  name: string;
-}
-
-export interface ResourceRef {
-  id: string;
-  name: string;
-  url?: string | null;
-  mime_type?: string | null;
-}
-
-export interface EvaluatorRef {
-  type: string;
-  [key: string]: unknown; // Extra fields allowed
-}
-
-export interface TaskTreeNode {
-  // Identity
-  id: string;
-  name: string;
-  description: string;
-
-  // Worker Assignment
-  assigned_to: WorkerRef;
-  full_team?: WorkerRef[] | null;
-
-  // DAG Structure
-  children: TaskTreeNode[];
-  depends_on: string[];
-  parent_id?: string | null;
-
-  // Computed Properties
-  is_leaf: boolean;
-
-  // I/O
-  resources: ResourceRef[];
-
-  // Evaluation
-  evaluator?: EvaluatorRef | null;
-  evaluator_type?: string | null;
-}
+export type BenchmarkName = RestBenchmarkName;
+export type RunLifecycleStatus = RestRunLifecycleStatus;
+export type ExperimentCohortStatus = ExperimentCohortStatusValue;
+export type { TaskTreeNode };
 
 // =============================================================================
 // Event Names
@@ -83,6 +66,7 @@ export interface TaskTreeNode {
 export const DashboardEventNames = {
   WORKFLOW_STARTED: "dashboard/workflow.started",
   WORKFLOW_COMPLETED: "dashboard/workflow.completed",
+  COHORT_UPDATED: "dashboard/cohort.updated",
   TASK_STATUS_CHANGED: "dashboard/task.status_changed",
   AGENT_ACTION_STARTED: "dashboard/agent.action_started",
   AGENT_ACTION_COMPLETED: "dashboard/agent.action_completed",
@@ -90,6 +74,8 @@ export const DashboardEventNames = {
   SANDBOX_CREATED: "dashboard/sandbox.created",
   SANDBOX_COMMAND: "dashboard/sandbox.command",
   SANDBOX_CLOSED: "dashboard/sandbox.closed",
+  THREAD_MESSAGE_CREATED: "dashboard/thread.message_created",
+  TASK_EVALUATION_UPDATED: "dashboard/task.evaluation_updated",
 } as const;
 
 export type DashboardEventName =
@@ -99,116 +85,25 @@ export type DashboardEventName =
 // Workflow Lifecycle Events
 // =============================================================================
 
-export interface DashboardWorkflowStartedData {
-  run_id: string;
-  experiment_id: string;
-  workflow_name: string;
-  task_tree: TaskTreeNode;
-  started_at: string; // ISO 8601
-  total_tasks: number;
-  total_leaf_tasks: number;
-}
-
-export interface DashboardWorkflowCompletedData {
-  run_id: string;
-  status: "completed" | "failed";
-  completed_at: string; // ISO 8601
-  duration_seconds: number;
-  final_score?: number | null;
-  error?: string | null;
-}
-
-// =============================================================================
-// Task Lifecycle Events
-// =============================================================================
-
-export interface DashboardTaskStatusChangedData {
-  run_id: string;
-  task_id: string;
-  task_name: string;
-  parent_task_id?: string | null;
-  old_status?: TaskStatus | null;
-  new_status: TaskStatus;
-  triggered_by?: TaskTrigger | null;
-  timestamp: string; // ISO 8601
-  assigned_worker_id?: string | null;
-  assigned_worker_name?: string | null;
-}
-
-// =============================================================================
-// Agent Action Events
-// =============================================================================
-
-export interface DashboardAgentActionStartedData {
-  run_id: string;
-  task_id: string;
-  action_id: string;
-  worker_id: string;
-  worker_name: string;
-  action_type: string;
-  action_input: string; // JSON string
-  timestamp: string; // ISO 8601
-}
-
-export interface DashboardAgentActionCompletedData {
-  run_id: string;
-  task_id: string;
-  action_id: string;
-  worker_id: string;
-  action_type: string;
-  action_output?: string | null; // JSON string
-  duration_ms: number;
-  success: boolean;
-  error?: string | null;
-  timestamp: string; // ISO 8601
-}
-
-// =============================================================================
-// Resource Events
-// =============================================================================
-
-export interface DashboardResourcePublishedData {
-  run_id: string;
-  task_id: string;
-  task_execution_id: string;
-  resource_id: string;
-  resource_name: string;
-  mime_type: string;
-  size_bytes: number;
-  file_path: string;
-  timestamp: string; // ISO 8601
-}
-
-// =============================================================================
-// Sandbox Lifecycle Events
-// =============================================================================
-
-export interface DashboardSandboxCreatedData {
-  run_id: string;
-  task_id: string;
-  sandbox_id: string;
-  template?: string | null;
-  timeout_minutes: number;
-  timestamp: string; // ISO 8601
-}
-
-export interface DashboardSandboxCommandData {
-  task_id: string;
-  sandbox_id: string;
-  command: string;
-  stdout?: string | null;
-  stderr?: string | null;
-  exit_code?: number | null;
-  duration_ms?: number | null;
-  timestamp: string; // ISO 8601
-}
-
-export interface DashboardSandboxClosedData {
-  task_id: string;
-  sandbox_id: string;
-  reason: "completed" | "timeout" | "error" | "cleanup";
-  timestamp: string; // ISO 8601
-}
+export type DashboardWorkflowStartedData = GeneratedDashboardWorkflowStartedData;
+export type DashboardWorkflowCompletedData = GeneratedDashboardWorkflowCompletedData;
+export type CohortSummary = RestCohortSummary;
+export type CohortRunRow = NonNullable<RestCohortDetail["runs"]>[number];
+export type CohortDetail = RestCohortDetail;
+export type DashboardCohortUpdatedData = GeneratedDashboardCohortUpdatedData;
+export type DashboardTaskStatusChangedData = GeneratedDashboardTaskStatusChangedData;
+export type DashboardAgentActionStartedData = GeneratedDashboardAgentActionStartedData;
+export type DashboardAgentActionCompletedData = GeneratedDashboardAgentActionCompletedData;
+export type DashboardResourcePublishedData = GeneratedDashboardResourcePublishedData;
+export type DashboardSandboxCreatedData = GeneratedDashboardSandboxCreatedData;
+export type DashboardSandboxCommandData = GeneratedDashboardSandboxCommandData;
+export type DashboardSandboxClosedData = GeneratedDashboardSandboxClosedData;
+export type CommunicationMessageState = RestRunCommunicationMessage;
+export type CommunicationThreadState = RestRunCommunicationThread;
+export type EvaluationCriterionState = NonNullable<RestRunTaskEvaluation["criterionResults"]>[number];
+export type TaskEvaluationState = RestRunTaskEvaluation;
+export type DashboardThreadMessageCreatedData = GeneratedDashboardThreadMessageCreatedData;
+export type DashboardTaskEvaluationUpdatedData = GeneratedDashboardTaskEvaluationUpdatedData;
 
 // =============================================================================
 // Union Types for Inngest Event Handling
@@ -217,13 +112,16 @@ export interface DashboardSandboxClosedData {
 export type DashboardEventData =
   | DashboardWorkflowStartedData
   | DashboardWorkflowCompletedData
+  | DashboardCohortUpdatedData
   | DashboardTaskStatusChangedData
   | DashboardAgentActionStartedData
   | DashboardAgentActionCompletedData
   | DashboardResourcePublishedData
   | DashboardSandboxCreatedData
   | DashboardSandboxCommandData
-  | DashboardSandboxClosedData;
+  | DashboardSandboxClosedData
+  | DashboardThreadMessageCreatedData
+  | DashboardTaskEvaluationUpdatedData;
 
 // =============================================================================
 // Inngest Event Types (for type-safe event handling)
@@ -232,6 +130,7 @@ export type DashboardEventData =
 export type DashboardEvents = {
   "dashboard/workflow.started": { data: DashboardWorkflowStartedData };
   "dashboard/workflow.completed": { data: DashboardWorkflowCompletedData };
+  "dashboard/cohort.updated": { data: DashboardCohortUpdatedData };
   "dashboard/task.status_changed": { data: DashboardTaskStatusChangedData };
   "dashboard/agent.action_started": { data: DashboardAgentActionStartedData };
   "dashboard/agent.action_completed": {
@@ -241,6 +140,8 @@ export type DashboardEvents = {
   "dashboard/sandbox.created": { data: DashboardSandboxCreatedData };
   "dashboard/sandbox.command": { data: DashboardSandboxCommandData };
   "dashboard/sandbox.closed": { data: DashboardSandboxClosedData };
+  "dashboard/thread.message_created": { data: DashboardThreadMessageCreatedData };
+  "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
 };
 
 // =============================================================================
@@ -265,6 +166,22 @@ export interface TaskState {
   completedAt: string | null;
   isLeaf: boolean;
   level: number; // Depth in tree (root = 0)
+}
+
+export interface ExecutionAttemptState {
+  id: string;
+  taskId: string;
+  attemptNumber: number;
+  status: TaskStatus;
+  agentId: string | null;
+  agentName: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  outputText: string | null;
+  outputResourceIds: string[];
+  errorMessage: string | null;
+  score: number | null;
+  evaluationDetails: Record<string, unknown>;
 }
 
 /**
@@ -338,7 +255,7 @@ export interface WorkflowRunState {
   id: string;
   experimentId: string;
   name: string;
-  status: "running" | "completed" | "failed";
+  status: RunLifecycleStatus;
 
   // Task DAG (flattened)
   tasks: Map<string, TaskState>;
@@ -350,8 +267,17 @@ export interface WorkflowRunState {
   // Resources by task
   resourcesByTask: Map<string, ResourceState[]>;
 
+  // Execution attempts by task
+  executionsByTask: Map<string, ExecutionAttemptState[]>;
+
   // Sandboxes by task
   sandboxesByTask: Map<string, SandboxState>;
+
+  // Communication threads scoped to the run, optionally linked to a task
+  threads: CommunicationThreadState[];
+
+  // Task evaluation snapshots keyed by task ID or "__run__" for run-scoped judgments
+  evaluationsByTask: Map<string, TaskEvaluationState>;
 
   // Timing
   startedAt: string;
@@ -378,74 +304,28 @@ export interface WorkflowRunState {
  * Events sent from server to client via Socket.io.
  */
 export interface ServerToClientEvents {
+  "cohort:updated": (data: DashboardCohortUpdatedData) => void;
   "run:started": (data: { runId: string; name: string }) => void;
-  "run:completed": (data: {
-    runId: string;
-    status: "completed" | "failed";
-    durationSeconds: number;
-    finalScore: number | null;
-    error: string | null;
-  }) => void;
-  "task:status": (data: {
-    runId: string;
-    taskId: string;
-    status: TaskStatus;
-    assignedWorkerId: string | null;
-    assignedWorkerName: string | null;
-  }) => void;
-  "action:new": (data: { runId: string; action: ActionState }) => void;
-  "action:completed": (data: { runId: string; action: ActionState }) => void;
-  "resource:new": (data: { runId: string; resource: ResourceState }) => void;
-  "sandbox:created": (data: { runId: string; sandbox: SandboxState }) => void;
-  "sandbox:command": (data: {
-    runId: string;
-    taskId: string;
-    command: SandboxCommandState;
-  }) => void;
-  "sandbox:closed": (data: {
-    runId: string;
-    taskId: string;
-    reason: string;
-  }) => void;
+  "run:completed": (data: RunCompletedSocketData) => void;
+  "task:status": (data: TaskStatusSocketData) => void;
+  "action:new": (data: ActionSocketData) => void;
+  "action:completed": (data: ActionSocketData) => void;
+  "resource:new": (data: ResourceSocketData) => void;
+  "sandbox:created": (data: SandboxCreatedSocketData) => void;
+  "sandbox:command": (data: SandboxCommandSocketData) => void;
+  "sandbox:closed": (data: SandboxClosedSocketData) => void;
+  "thread:message": (data: DashboardThreadMessageCreatedData) => void;
+  "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
   // Sync event - sends all current runs to a client on request
-  "sync:runs": (runs: Array<{
-    runId: string;
-    name: string;
-    status: "running" | "completed" | "failed";
-    startedAt: string;
-    completedAt: string | null;
-    durationSeconds: number | null;
-    finalScore: number | null;
-    error: string | null;
-  }>) => void;
+  "sync:runs": (runs: RunListEntry[]) => void;
   // Sync event - sends full state for a specific run
   "sync:run": (run: SerializedWorkflowRunState | null) => void;
 }
 
 /**
- * Serialized WorkflowRunState for network transfer (Maps become arrays)
+ * Validated run snapshot payload used over REST and Socket.io sync.
  */
-export interface SerializedWorkflowRunState {
-  id: string;
-  experimentId: string;
-  name: string;
-  status: "running" | "completed" | "failed";
-  tasks: Array<[string, TaskState]>;
-  rootTaskId: string;
-  actionsByTask: Array<[string, ActionState[]]>;
-  resourcesByTask: Array<[string, ResourceState[]]>;
-  sandboxesByTask: Array<[string, SandboxState]>;
-  startedAt: string;
-  completedAt: string | null;
-  durationSeconds: number | null;
-  totalTasks: number;
-  totalLeafTasks: number;
-  completedTasks: number;
-  runningTasks: number;
-  failedTasks: number;
-  finalScore: number | null;
-  error: string | null;
-}
+export type SerializedWorkflowRunState = RunSnapshot;
 
 /**
  * Events sent from client to server via Socket.io.

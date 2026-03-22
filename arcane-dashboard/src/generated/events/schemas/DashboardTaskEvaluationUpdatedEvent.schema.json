@@ -1,0 +1,207 @@
+{
+  "$defs": {
+    "DashboardEvaluationCriterion": {
+      "properties": {
+        "criterion_description": {
+          "title": "Criterion Description",
+          "type": "string"
+        },
+        "criterion_num": {
+          "title": "Criterion Num",
+          "type": "integer"
+        },
+        "criterion_type": {
+          "title": "Criterion Type",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "evaluated_action_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evaluated Action Ids",
+          "type": "array"
+        },
+        "evaluated_resource_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evaluated Resource Ids",
+          "type": "array"
+        },
+        "evaluation_input": {
+          "title": "Evaluation Input",
+          "type": "string"
+        },
+        "feedback": {
+          "title": "Feedback",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "max_score": {
+          "title": "Max Score",
+          "type": "number"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "stage_name": {
+          "title": "Stage Name",
+          "type": "string"
+        },
+        "stage_num": {
+          "title": "Stage Num",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "stage_num",
+        "stage_name",
+        "criterion_num",
+        "criterion_type",
+        "criterion_description",
+        "score",
+        "max_score",
+        "feedback",
+        "evaluation_input",
+        "evaluated_action_ids",
+        "evaluated_resource_ids"
+      ],
+      "title": "DashboardEvaluationCriterion",
+      "type": "object"
+    },
+    "DashboardTaskEvaluation": {
+      "properties": {
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "criterion_results": {
+          "items": {
+            "$ref": "#/$defs/DashboardEvaluationCriterion"
+          },
+          "title": "Criterion Results",
+          "type": "array"
+        },
+        "failed_gate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed Gate"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "max_score": {
+          "title": "Max Score",
+          "type": "number"
+        },
+        "normalized_score": {
+          "title": "Normalized Score",
+          "type": "number"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "stages_evaluated": {
+          "title": "Stages Evaluated",
+          "type": "integer"
+        },
+        "stages_passed": {
+          "title": "Stages Passed",
+          "type": "integer"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "total_score": {
+          "title": "Total Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "total_score",
+        "max_score",
+        "normalized_score",
+        "stages_evaluated",
+        "stages_passed",
+        "created_at",
+        "criterion_results"
+      ],
+      "title": "DashboardTaskEvaluation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Emitted when task evaluation truth becomes available or changes.",
+  "properties": {
+    "evaluation": {
+      "$ref": "#/$defs/DashboardTaskEvaluation"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "task_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task Id"
+    }
+  },
+  "required": [
+    "run_id",
+    "evaluation"
+  ],
+  "title": "DashboardTaskEvaluationUpdatedEvent",
+  "type": "object"
+}
