@@ -67,7 +67,7 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     # Download outputs from sandbox
     downloaded = await ctx.step.run(
         "download-outputs",
-        partial(_download_outputs, task_id, output_dir, sandbox_manager),
+        partial(_download_outputs, run_id, output_dir, sandbox_manager),
         output_type=DownloadedFiles,
     )
     downloaded = require_not_none(downloaded, "download-outputs returned None")
@@ -149,7 +149,7 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
 
 
 async def _download_outputs(
-    task_id: UUID, output_dir: Path, sandbox_manager: BaseSandboxManager
+    run_id: UUID, output_dir: Path, sandbox_manager: BaseSandboxManager
 ) -> DownloadedFiles:
     """Download all outputs from sandbox."""
-    return await sandbox_manager.download_all_outputs(task_id, output_dir)
+    return await sandbox_manager.download_all_outputs(run_id, output_dir)

@@ -3,8 +3,8 @@
 import re
 from uuid import UUID
 
-from agents import function_tool, Tool
-from e2b.sandbox.commands.command_handle import CommandExitException
+from e2b.sandbox.commands.command_handle import CommandExitException  # type: ignore[import-untyped]
+from pydantic_ai.tools import Tool
 
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
@@ -17,6 +17,7 @@ from h_arcane.benchmarks.minif2f.skills.responses import (
     WriteLeanResponse,
     LeanCheckResponse,
     LeanVerificationResponse,
+    SearchLemmasResponse,
 )
 
 # Lean command prefix - runs from Mathlib project directory for access to imports
@@ -189,7 +190,6 @@ class MiniF2FToolkit(BaseToolkit):
     # ─────────────────────────────────────────────────────────────────
 
     def _write_lean_file(self) -> Tool:
-        @function_tool
         async def write_lean_file(file_path: str, content: str) -> WriteLeanResponse:
             """
             Write or update a Lean proof file.
@@ -210,7 +210,7 @@ class MiniF2FToolkit(BaseToolkit):
                 Response model with bytes written, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "write_lean_file",
                 WriteLeanResponse,
                 file_path=file_path,
@@ -218,10 +218,9 @@ class MiniF2FToolkit(BaseToolkit):
             )
             return result
 
-        return write_lean_file
+        return Tool(function=write_lean_file, takes_ctx=False)
 
     def _check_lean_file(self) -> Tool:
-        @function_tool
         async def check_lean_file(file_path: str) -> LeanCheckResponse:
             """
             Check a Lean file for errors and get proof goals.
@@ -241,7 +240,7 @@ class MiniF2FToolkit(BaseToolkit):
             """
             # Get sandbox and run Lean directly via shell command
             # This uses the same shell environment where Lean was installed
-            sandbox = self.sandbox_manager.get_sandbox(self.task_id)
+            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
             if not sandbox:
                 return LeanCheckResponse(
                     success=False,
@@ -280,10 +279,9 @@ class MiniF2FToolkit(BaseToolkit):
                     error=f"Error checking Lean file: {e}",
                 )
 
-        return check_lean_file
+        return Tool(function=check_lean_file, takes_ctx=False)
 
     def _verify_lean_proof(self) -> Tool:
-        @function_tool
         async def verify_lean_proof(file_path: str) -> LeanVerificationResponse:
             """
             Verify a complete Lean proof (no `sorry` allowed).
@@ -302,7 +300,7 @@ class MiniF2FToolkit(BaseToolkit):
                 Response model with verification result and details.
             """
             # Get sandbox and run Lean directly via shell command
-            sandbox = self.sandbox_manager.get_sandbox(self.task_id)
+            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
             if not sandbox:
                 return LeanVerificationResponse(
                     success=False,
@@ -359,11 +357,10 @@ class MiniF2FToolkit(BaseToolkit):
                     error=f"Error verifying Lean proof: {e}",
                 )
 
-        return verify_lean_proof
+        return Tool(function=verify_lean_proof, takes_ctx=False)
 
     def _search_lemmas(self) -> Tool:
-        @function_tool
-        async def search_lemmas(query: str) -> str:
+        async def search_lemmas(query: str) -> SearchLemmasResponse:
             """
             Search for lemmas, definitions, or check types in Mathlib.
 
@@ -379,11 +376,15 @@ class MiniF2FToolkit(BaseToolkit):
                 query: A Lean query like "#check lemma_name" or "#print lemma_name"
 
             Returns:
-                The Lean output showing the type or definition.
+                Structured output showing the Lean result or a search failure.
             """
-            sandbox = self.sandbox_manager.get_sandbox(self.task_id)
+            sandbox = self.sandbox_manager.get_sandbox(self.run_id)
             if not sandbox:
-                return "Error: Sandbox not available"
+                return SearchLemmasResponse(
+                    success=False,
+                    query=query,
+                    error="Sandbox not available",
+                )
 
             try:
                 # Create a temporary Lean file with the query
@@ -428,15 +429,22 @@ import algebra.big_operators.basic
                     else:
                         cleaned_lines.append(line)
 
-                return "\n".join(cleaned_lines).strip() or "No output from query"
+                return SearchLemmasResponse(
+                    success=True,
+                    query=query,
+                    output="\n".join(cleaned_lines).strip() or "No output from query",
+                )
 
             except Exception as e:
-                return f"Error searching: {e}"
+                return SearchLemmasResponse(
+                    success=False,
+                    query=query,
+                    error=f"Error searching: {e}",
+                )
 
-        return search_lemmas
+        return Tool(function=search_lemmas, takes_ctx=False)
 
     def _ask_stakeholder(self) -> Tool:
-        @function_tool
         async def ask_stakeholder(question: str) -> str:
             """
             Ask for a hint about the proof strategy.
@@ -449,4 +457,4 @@ import algebra.big_operators.basic
             """
             return await self.ask_stakeholder(question)
 
-        return ask_stakeholder
+        return Tool(function=ask_stakeholder, takes_ctx=False)

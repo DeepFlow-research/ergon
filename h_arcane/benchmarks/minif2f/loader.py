@@ -227,6 +227,11 @@ def load_minif2f_task(
         description=problem.problem_statement,
         assigned_to=worker,
         resources=[],  # MiniF2F problems don't have input files
+        benchmark_specific_data={
+            "ground_truth_proof": problem.ground_truth_proof,
+            "split": problem.split,
+            "lean_file_path": str(problem.lean_file_path) if problem.lean_file_path else None,
+        },
         evaluator=rubric,
     )
 
@@ -243,6 +248,11 @@ def _minif2f_item_to_task(problem: MiniF2FProblem, worker: "BaseWorker") -> Task
         description=problem.problem_statement,
         assigned_to=worker,
         resources=[],  # MiniF2F problems don't have input files
+        benchmark_specific_data={
+            "ground_truth_proof": problem.ground_truth_proof,
+            "split": problem.split,
+            "lean_file_path": str(problem.lean_file_path) if problem.lean_file_path else None,
+        },
         evaluator=rubric,
     )
 

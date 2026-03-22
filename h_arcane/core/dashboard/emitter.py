@@ -29,17 +29,24 @@ from uuid import UUID
 
 import inngest
 
+from h_arcane.core._internal.cohorts.events import CohortUpdatedEvent
+from h_arcane.core._internal.cohorts.schemas import CohortSummaryDto
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.task.schema import TaskTreeNode
 from h_arcane.core.status import TaskStatus, TaskTrigger
 from h_arcane.core.dashboard.events import (
     DashboardAgentActionCompletedEvent,
     DashboardAgentActionStartedEvent,
+    DashboardCommunicationMessage,
+    DashboardCommunicationThread,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
     DashboardSandboxCommandEvent,
     DashboardSandboxCreatedEvent,
+    DashboardTaskEvaluation,
+    DashboardTaskEvaluationUpdatedEvent,
     DashboardTaskStatusChangedEvent,
+    DashboardThreadMessageCreatedEvent,
     DashboardWorkflowCompletedEvent,
     DashboardWorkflowStartedEvent,
 )
@@ -147,6 +154,19 @@ class DashboardEmitter:
         except Exception as e:
             logger.warning(f"Failed to emit {event.name}: {e}")
 
+    async def cohort_updated(self, summary: CohortSummaryDto) -> None:
+        """Emit cohort updated event for frontend cohort views."""
+        if not self._enabled:
+            return
+
+        event = CohortUpdatedEvent(cohort_id=summary.cohort_id, summary=summary)
+        try:
+            await inngest_client.send(
+                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            )
+        except Exception as e:
+            logger.warning(f"Failed to emit {event.name}: {e}")
+
     async def task_status_changed(
         self,
         run_id: UUID,
@@ -226,7 +246,7 @@ class DashboardEmitter:
         action_id: UUID,
         worker_id: UUID,
         action_type: str,
-        duration_ms: int,
+        duration_ms: int | None,
         success: bool,
         action_output: str | None = None,
         error: str | None = None,
@@ -238,18 +258,21 @@ class DashboardEmitter:
         if not self._enabled:
             return
 
-        event = DashboardAgentActionCompletedEvent(
-            run_id=run_id,
-            task_id=task_id,
-            action_id=action_id,
-            worker_id=worker_id,
-            action_type=action_type,
-            action_output=action_output,
-            duration_ms=duration_ms,
-            success=success,
-            error=error,
-            timestamp=self._now(),
-        )
+        event_payload = {
+            "run_id": run_id,
+            "task_id": task_id,
+            "action_id": action_id,
+            "worker_id": worker_id,
+            "action_type": action_type,
+            "action_output": action_output,
+            "success": success,
+            "error": error,
+            "timestamp": self._now(),
+        }
+        if duration_ms is not None:
+            event_payload["duration_ms"] = duration_ms
+
+        event = DashboardAgentActionCompletedEvent(**event_payload)
         try:
             await inngest_client.send(
                 inngest.Event(name=event.name, data=event.model_dump(mode="json"))
@@ -375,6 +398,46 @@ class DashboardEmitter:
             sandbox_id=sandbox_id,
             reason=reason,
             timestamp=self._now(),
+        )
+        try:
+            await inngest_client.send(
+                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            )
+        except Exception as e:
+            logger.warning(f"Failed to emit {event.name}: {e}")
+
+    async def thread_message_created(
+        self,
+        run_id: UUID,
+        thread: DashboardCommunicationThread,
+        message: DashboardCommunicationMessage,
+    ) -> None:
+        """Emit communication thread updates for dashboard workspace views."""
+        if not self._enabled:
+            return
+
+        event = DashboardThreadMessageCreatedEvent(run_id=run_id, thread=thread, message=message)
+        try:
+            await inngest_client.send(
+                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            )
+        except Exception as e:
+            logger.warning(f"Failed to emit {event.name}: {e}")
+
+    async def task_evaluation_updated(
+        self,
+        run_id: UUID,
+        evaluation: DashboardTaskEvaluation,
+        task_id: UUID | None = None,
+    ) -> None:
+        """Emit evaluation updates for dashboard judgment surfaces."""
+        if not self._enabled:
+            return
+
+        event = DashboardTaskEvaluationUpdatedEvent(
+            run_id=run_id,
+            task_id=task_id,
+            evaluation=evaluation,
         )
         try:
             await inngest_client.send(

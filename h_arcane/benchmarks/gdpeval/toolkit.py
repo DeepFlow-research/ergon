@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from agents import function_tool, Tool
+from pydantic_ai.tools import Tool
 
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
@@ -144,7 +144,6 @@ class GDPEvalToolkit(BaseToolkit):
     # ─────────────────────────────────────────────────────────────────
 
     def _read_pdf(self) -> Tool:
-        @function_tool
         async def read_pdf(file_path: str) -> ReadPDFResponse:
             """
             Extract text from a PDF file with page markers.
@@ -156,17 +155,16 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with extracted text and page count, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "read_pdf",
                 ReadPDFResponse,
                 file_path=file_path,
             )
             return result
 
-        return read_pdf
+        return Tool(function=read_pdf, takes_ctx=False)
 
     def _read_csv(self) -> Tool:
-        @function_tool
         async def read_csv(file_path: str, max_rows: int | None = None) -> ReadCsvResponse:
             """
             Read a CSV file and return its contents.
@@ -179,7 +177,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with CSV data, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "read_csv",
                 ReadCsvResponse,
                 file_path=file_path,
@@ -187,10 +185,9 @@ class GDPEvalToolkit(BaseToolkit):
             )
             return result
 
-        return read_csv
+        return Tool(function=read_csv, takes_ctx=False)
 
     def _read_excel(self) -> Tool:
-        @function_tool
         async def read_excel(file_path: str, sheet_name: str | None = None) -> ReadExcelResponse:
             """
             Read an Excel file and return data from specified sheet.
@@ -203,7 +200,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with sheet data, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "read_excel",
                 ReadExcelResponse,
                 file_path=file_path,
@@ -211,10 +208,9 @@ class GDPEvalToolkit(BaseToolkit):
             )
             return result
 
-        return read_excel
+        return Tool(function=read_excel, takes_ctx=False)
 
     def _create_docx(self) -> Tool:
-        @function_tool
         async def create_docx(
             content: str,
             output_path: str,
@@ -237,7 +233,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with file path and size, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "create_docx",
                 CreateDocxResponse,
                 content=content,
@@ -247,10 +243,9 @@ class GDPEvalToolkit(BaseToolkit):
             )
             return result
 
-        return create_docx
+        return Tool(function=create_docx, takes_ctx=False)
 
     def _create_excel(self) -> Tool:
-        @function_tool
         async def create_excel(
             data: list[list[str]],
             output_path: str,
@@ -271,7 +266,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with file path and size, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "create_excel",
                 CreateExcelResponse,
                 data=data,
@@ -280,10 +275,9 @@ class GDPEvalToolkit(BaseToolkit):
             )
             return result
 
-        return create_excel
+        return Tool(function=create_excel, takes_ctx=False)
 
     def _create_csv(self) -> Tool:
-        @function_tool
         async def create_csv(data: list[list[str]], output_path: str) -> CreateCsvResponse:
             """
             Create a CSV file with the given data.
@@ -299,7 +293,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with file path and size, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "create_csv",
                 CreateCsvResponse,
                 data=data,
@@ -307,10 +301,9 @@ class GDPEvalToolkit(BaseToolkit):
             )
             return result
 
-        return create_csv
+        return Tool(function=create_csv, takes_ctx=False)
 
     def _ocr_image(self) -> Tool:
-        @function_tool
         async def ocr_image(file_path: str, language: str = "eng") -> OcrImageResponse:
             """
             Extract text from an image using OCR.
@@ -323,7 +316,7 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with extracted text, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "ocr_image",
                 OcrImageResponse,
                 file_path=file_path,
@@ -331,10 +324,9 @@ class GDPEvalToolkit(BaseToolkit):
             )
             return result
 
-        return ocr_image
+        return Tool(function=ocr_image, takes_ctx=False)
 
     def _run_python(self) -> Tool:
-        @function_tool
         async def execute_python_code(code: str) -> RunPythonResponse:
             """
             Execute Python code in the sandbox.
@@ -346,17 +338,16 @@ class GDPEvalToolkit(BaseToolkit):
                 Response model with stdout/stderr/return_value, or error message.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "run_python",
                 RunPythonResponse,
                 code=code,
             )
             return result
 
-        return execute_python_code
+        return Tool(function=execute_python_code, takes_ctx=False)
 
     def _ask_stakeholder(self) -> Tool:
-        @function_tool
         async def ask_stakeholder(question: str) -> str:
             """
             Ask the stakeholder a clarifying question.
@@ -369,4 +360,4 @@ class GDPEvalToolkit(BaseToolkit):
             """
             return await self.ask_stakeholder(question)
 
-        return ask_stakeholder
+        return Tool(function=ask_stakeholder, takes_ctx=False)

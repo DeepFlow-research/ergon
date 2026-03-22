@@ -221,7 +221,7 @@ async def _execute_worker(
     try:
         # Build SDK WorkerContext with toolkit for workers that need it
         sdk_resources = db_resources_to_sdk(input_resources)
-        sandbox = sandbox_manager.get_sandbox(task_id)
+        sandbox = sandbox_manager.get_sandbox(run_id)
         benchmark_name = BenchmarkName(experiment.benchmark_name)
 
         context = WorkerContext(
@@ -278,6 +278,7 @@ async def _execute_worker(
         )
 
         # Persist actions (already complete with run_id/agent_id) and emit dashboard events
+        persist_actions_started_at = utcnow()
         for action in result.actions:
             # Actions are now created complete by worker - no mutation needed
             queries.actions.create(action)
@@ -289,11 +290,26 @@ async def _execute_worker(
                 action_id=action.id,
                 worker_id=agent_config.id,
                 action_type=action.action_type,
-                duration_ms=action.duration_ms or 0,
+                duration_ms=action.duration_ms,
                 success=action.success,
                 action_output=action.output,
                 error=str(action.error) if action.error else None,
             )
+        trace_sink.emit_span(
+            CompletedSpan(
+                name="worker.persist_actions",
+                context=trace_sink.child_context(
+                    trace_context,
+                    span_key="worker.persist_actions",
+                ),
+                start_time=persist_actions_started_at,
+                end_time=utcnow(),
+                attributes={
+                    "action_count": len(result.actions),
+                    "dashboard_emit_count": len(result.actions),
+                },
+            )
+        )
 
         run = queries.runs.get(run_id)
         if run is not None:

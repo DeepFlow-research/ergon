@@ -11,6 +11,8 @@ from datetime import datetime
 from typing import ClassVar
 from uuid import UUID
 
+from pydantic import BaseModel
+
 from h_arcane.core._internal.events.base import InngestEventContract
 from h_arcane.core._internal.task.schema import TaskTreeNode
 from h_arcane.core.status import TaskStatus, TaskTrigger
@@ -101,7 +103,7 @@ class DashboardAgentActionCompletedEvent(InngestEventContract):
     worker_id: UUID
     action_type: str
     action_output: str | None = None  # JSON string
-    duration_ms: int
+    duration_ms: int | None = None
     success: bool
     error: str | None = None
     timestamp: datetime
@@ -170,3 +172,83 @@ class DashboardSandboxClosedEvent(InngestEventContract):
     sandbox_id: str  # E2B sandbox ID (not a UUID)
     reason: str  # "completed" | "timeout" | "error" | "cleanup"
     timestamp: datetime
+
+
+# =============================================================================
+# Communication + Evaluation Events (for Dashboard)
+# =============================================================================
+
+
+class DashboardCommunicationMessage(BaseModel):
+    id: UUID
+    thread_id: UUID
+    run_id: UUID
+    task_id: UUID | None = None
+    thread_topic: str
+    from_agent_id: str
+    to_agent_id: str
+    content: str
+    sequence_num: int
+    created_at: datetime
+
+
+class DashboardCommunicationThread(BaseModel):
+    id: UUID
+    run_id: UUID
+    task_id: UUID | None = None
+    topic: str
+    agent_a_id: str
+    agent_b_id: str
+    created_at: datetime
+    updated_at: datetime
+    messages: list[DashboardCommunicationMessage]
+
+
+class DashboardThreadMessageCreatedEvent(InngestEventContract):
+    """Emitted when a thread gains a new message."""
+
+    name: ClassVar[str] = "dashboard/thread.message_created"
+
+    run_id: UUID
+    thread: DashboardCommunicationThread
+    message: DashboardCommunicationMessage
+
+
+class DashboardEvaluationCriterion(BaseModel):
+    id: UUID
+    stage_num: int
+    stage_name: str
+    criterion_num: int
+    criterion_type: str
+    criterion_description: str
+    score: float
+    max_score: float
+    feedback: str
+    evaluation_input: str
+    error: dict | None = None
+    evaluated_action_ids: list[str]
+    evaluated_resource_ids: list[str]
+
+
+class DashboardTaskEvaluation(BaseModel):
+    id: UUID
+    run_id: UUID
+    task_id: UUID | None = None
+    total_score: float
+    max_score: float
+    normalized_score: float
+    stages_evaluated: int
+    stages_passed: int
+    failed_gate: str | None = None
+    created_at: datetime
+    criterion_results: list[DashboardEvaluationCriterion]
+
+
+class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
+    """Emitted when task evaluation truth becomes available or changes."""
+
+    name: ClassVar[str] = "dashboard/task.evaluation_updated"
+
+    run_id: UUID
+    task_id: UUID | None = None
+    evaluation: DashboardTaskEvaluation

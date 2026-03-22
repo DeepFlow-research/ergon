@@ -86,6 +86,11 @@ def run_cmd(
         "-m",
         help="LLM model to use",
     ),
+    cohort_name: str = typer.Option(
+        ...,
+        "--cohort-name",
+        help="Compulsory cohort name used to group the real execution runs.",
+    ),
     timeout: int = typer.Option(
         300,
         "--timeout",
@@ -108,7 +113,7 @@ def run_cmd(
             raise typer.Exit(1)
 
     # Run workflows
-    results = asyncio.run(_run_workflows(workflows_to_run, model, timeout))
+    results = asyncio.run(_run_workflows(workflows_to_run, model, cohort_name, timeout))
 
     # Summary
     console.print("\n[bold]Summary[/bold]")
@@ -131,6 +136,7 @@ def run_cmd(
 async def _run_workflows(
     workflow_names: list[str],
     model: str,
+    cohort_name: str,
     timeout: int,
 ) -> dict:
     """Run workflows by emitting Inngest events and polling for completion."""
@@ -141,7 +147,7 @@ async def _run_workflows(
         started_at = datetime.now(timezone.utc)
 
         try:
-            result = await _run_single_workflow(name, model, timeout, started_at)
+            result = await _run_single_workflow(name, model, cohort_name, timeout, started_at)
             results[name] = result
 
             if result.success:
@@ -170,6 +176,7 @@ async def _run_workflows(
 async def _run_single_workflow(
     workflow_name: str,
     model: str,
+    cohort_name: str,
     timeout: int,
     started_at: datetime,
 ) -> ExecutionResult:
@@ -183,6 +190,7 @@ async def _run_single_workflow(
     # Create and send the event
     event = BenchmarkRunRequest(
         request_id=request_id,
+        cohort_name=cohort_name,
         benchmark_name="smoke_test",
         workflow_name=workflow_name,
         model=model,
@@ -192,7 +200,7 @@ async def _run_single_workflow(
 
     console.print("  Sending event to Inngest...")
     await inngest_client.send(
-        inngest.Event(name=BenchmarkRunRequest.name, data=event.model_dump())
+            inngest.Event(name=BenchmarkRunRequest.name, data=event.model_dump(mode="json"))
     )
 
     # Poll for run creation (wait for benchmark_run_start to create the Run)

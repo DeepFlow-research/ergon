@@ -14,6 +14,8 @@ from h_arcane.core.dashboard.emitter import DashboardEmitter, dashboard_emitter
 from h_arcane.core.dashboard.events import (
     DashboardAgentActionCompletedEvent,
     DashboardAgentActionStartedEvent,
+    DashboardTaskEvaluationUpdatedEvent,
+    DashboardThreadMessageCreatedEvent,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
     DashboardSandboxCommandEvent,
@@ -37,6 +39,9 @@ __all__ = [
     "DashboardAgentActionCompletedEvent",
     # Resource Events
     "DashboardResourcePublishedEvent",
+    # Communication + Evaluation Events
+    "DashboardThreadMessageCreatedEvent",
+    "DashboardTaskEvaluationUpdatedEvent",
     # Sandbox Events
     "DashboardSandboxCreatedEvent",
     "DashboardSandboxCommandEvent",

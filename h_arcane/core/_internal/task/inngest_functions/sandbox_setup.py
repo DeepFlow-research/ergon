@@ -92,11 +92,12 @@ async def _create_sandbox(
     trace_sink = get_trace_sink()
     setup_started_at = utcnow()
     sandbox_id = await sandbox_manager.create(
-        task_id,
+        run_id,
         skills_dir=skills_dir,
         timeout_minutes=30,
         envs=envs,
         run_id=run_id,
+        display_task_id=task_id,
     )
     setup_completed_at = utcnow()
 
@@ -116,7 +117,7 @@ async def _create_sandbox(
 
     if input_resources:
         upload_started_at = utcnow()
-        await sandbox_manager.upload_inputs(task_id, input_resources)
+        await sandbox_manager.upload_inputs(run_id, input_resources)
         trace_sink.emit_span(
             CompletedSpan(
                 name="sandbox.file_ops",

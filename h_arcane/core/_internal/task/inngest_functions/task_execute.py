@@ -267,7 +267,9 @@ async def _complete_and_emit(
         task_id=task_id,
         execution_id=execution_id,
     )
-    await inngest_client.send(inngest.Event(name=TaskCompletedEvent.name, data=event.model_dump()))
+    await inngest_client.send(
+        inngest.Event(name=TaskCompletedEvent.name, data=event.model_dump(mode="json"))
+    )
     # Emit dashboard task completed event
     await dashboard_emitter.task_status_changed(
         run_id=run_id,
@@ -325,7 +327,9 @@ async def _fail_and_emit(
         execution_id=execution_id,
         error=error_msg,
     )
-    await inngest_client.send(inngest.Event(name=TaskFailedEvent.name, data=event.model_dump()))
+    await inngest_client.send(
+        inngest.Event(name=TaskFailedEvent.name, data=event.model_dump(mode="json"))
+    )
     # Emit dashboard task failed event
     await dashboard_emitter.task_status_changed(
         run_id=run_id,

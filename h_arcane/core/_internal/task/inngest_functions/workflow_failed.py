@@ -9,6 +9,7 @@ from uuid import UUID
 import inngest
 
 from h_arcane.core._internal.db.models import RunStatus
+from h_arcane.core._internal.cohorts.events import emit_cohort_updated_for_run
 from h_arcane.core.task import TaskStatus
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.events import RunCleanupEvent
@@ -56,6 +57,10 @@ async def workflow_failed(ctx: inngest.Context) -> WorkflowFailedResult:
     await ctx.step.run(
         "emit-dashboard-workflow-failed",
         partial(_emit_dashboard_workflow_failed, run_id, error_msg),
+    )
+    await ctx.step.run(
+        "emit-cohort-updated",
+        partial(emit_cohort_updated_for_run, run_id),
     )
 
     run = queries.runs.get(run_id)
@@ -109,7 +114,9 @@ async def _fail_and_cleanup(run_id: UUID, error_msg: str) -> None:
             status="failed",
             error_message=error_msg,
         )
-        await inngest_client.send(inngest.Event(name=RunCleanupEvent.name, data=event.model_dump()))
+        await inngest_client.send(
+            inngest.Event(name=RunCleanupEvent.name, data=event.model_dump(mode="json"))
+        )
         return
 
     # Set completion timestamp
@@ -146,7 +153,9 @@ async def _fail_and_cleanup(run_id: UUID, error_msg: str) -> None:
         status="failed",
         error_message=error_msg,
     )
-    await inngest_client.send(inngest.Event(name=RunCleanupEvent.name, data=event.model_dump()))
+    await inngest_client.send(
+        inngest.Event(name=RunCleanupEvent.name, data=event.model_dump(mode="json"))
+    )
 
 
 async def _emit_dashboard_workflow_failed(run_id: UUID, error_msg: str) -> None:

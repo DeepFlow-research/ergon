@@ -8,6 +8,7 @@ from uuid import UUID
 
 import inngest
 
+from h_arcane.core._internal.cohorts.events import emit_cohort_updated_for_run
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
 from h_arcane.core._internal.infrastructure.tracing import (
     CompletedSpan,
@@ -57,21 +58,28 @@ async def workflow_start(ctx: inngest.Context) -> WorkflowStartResult:
     )
     started_at = utcnow()
 
-    initialized = await ctx.step.run(
-        "initialize-workflow",
-        lambda: WorkflowInitializationService(
+    async def initialize_workflow() -> InitializedWorkflow:
+        return WorkflowInitializationService(
             trace_sink=trace_sink,
             trace_context=trace_context,
-        ).initialize(
-            InitializeWorkflowCommand(run_id=run_id, experiment_id=experiment_id)
-        ),
+        ).initialize(InitializeWorkflowCommand(run_id=run_id, experiment_id=experiment_id))
+
+    initialized = await ctx.step.run(
+        "initialize-workflow",
+        initialize_workflow,
         output_type=InitializedWorkflow,
     )
+    if initialized is None:
+        raise RuntimeError("initialize-workflow returned no result")
 
     # Emit dashboard workflow started event
     await ctx.step.run(
         "emit-dashboard-workflow-started",
         partial(_emit_dashboard_workflow_started, initialized),
+    )
+    await ctx.step.run(
+        "emit-cohort-updated",
+        partial(emit_cohort_updated_for_run, run_id),
     )
 
     if initialized.pending_tasks:
@@ -171,4 +179,6 @@ async def _emit_task_ready_event(run_id: UUID, experiment_id: UUID, task_id: UUI
         experiment_id=experiment_id,
         task_id=task_id,
     )
-    await inngest_client.send(inngest.Event(name=TaskReadyEvent.name, data=event.model_dump()))
+    await inngest_client.send(
+        inngest.Event(name=TaskReadyEvent.name, data=event.model_dump(mode="json"))
+    )

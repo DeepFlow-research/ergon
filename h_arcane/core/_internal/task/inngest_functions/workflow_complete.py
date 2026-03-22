@@ -8,6 +8,7 @@ from uuid import UUID
 
 import inngest
 
+from h_arcane.core._internal.cohorts.events import emit_cohort_updated_for_run
 from h_arcane.core._internal.db.queries import queries
 from h_arcane.core._internal.infrastructure.events import RunCleanupEvent
 from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
@@ -110,6 +111,10 @@ async def workflow_complete(ctx: inngest.Context) -> WorkflowCompleteResult:
         "emit-dashboard-workflow-completed",
         partial(_emit_dashboard_workflow_completed, run_id, result.final_score),
     )
+    await ctx.step.run(
+        "emit-cohort-updated",
+        partial(emit_cohort_updated_for_run, run_id),
+    )
 
     # Emit cleanup event
     await ctx.step.run("emit-cleanup", partial(_emit_cleanup, run_id))
@@ -144,4 +149,6 @@ async def _emit_cleanup(run_id: UUID) -> None:
         run_id=run_id,
         status="completed",
     )
-    await inngest_client.send(inngest.Event(name=RunCleanupEvent.name, data=event.model_dump()))
+    await inngest_client.send(
+        inngest.Event(name=RunCleanupEvent.name, data=event.model_dump(mode="json"))
+    )

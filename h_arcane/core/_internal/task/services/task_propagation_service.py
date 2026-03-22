@@ -76,3 +76,30 @@ class TaskPropagationService:
             ready_tasks=ready_tasks,
             workflow_terminal_state=terminal_state,
         )
+
+    def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+        """Advance workflow state after a task fails."""
+        self._add_event(
+            "task_failure_propagation.started",
+            run_id=command.run_id,
+            task_id=command.task_id,
+            execution_id=command.execution_id,
+        )
+
+        terminal_state = WorkflowTerminalState.NONE
+        if is_workflow_failed(command.run_id):
+            terminal_state = WorkflowTerminalState.FAILED
+
+        self._add_event(
+            "task_failure_propagation.completed",
+            failed_task_id=command.task_id,
+            workflow_terminal_state=terminal_state.value,
+        )
+
+        return PropagationResult(
+            run_id=command.run_id,
+            experiment_id=command.experiment_id,
+            completed_task_id=command.task_id,
+            ready_tasks=[],
+            workflow_terminal_state=terminal_state,
+        )

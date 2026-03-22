@@ -40,3 +40,12 @@ class LeanVerificationResponse(BaseModel):
     )
     message: str | None = Field(default=None, description="Verification result message")
     output: str | None = Field(default=None, description="Lean compiler output")
+
+
+class SearchLemmasResponse(BaseModel):
+    """Response from search_lemmas - query output or structured failure."""
+
+    success: bool = Field(description="Whether the search completed successfully")
+    error: str | None = Field(default=None, description="Error message if the search failed")
+    query: str | None = Field(default=None, description="The Lean query that was executed")
+    output: str | None = Field(default=None, description="Lean output for the query")

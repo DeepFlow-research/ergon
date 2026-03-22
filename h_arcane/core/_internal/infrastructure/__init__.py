@@ -6,7 +6,7 @@ This domain handles:
 - Infrastructure cleanup (run_cleanup)
 
 Structure:
-- sandbox.py: BaseSandboxManager and related types
+- sandbox/: BaseSandboxManager and related types
 - inngest_client.py: Inngest client singleton
 - inngest_functions.py: run_cleanup
 - events.py: RunCleanupEvent

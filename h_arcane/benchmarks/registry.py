@@ -1,11 +1,15 @@
 """Benchmark registry for config, loader, factories, and evaluator lookup."""
 
 from pathlib import Path
-from typing import Callable, NotRequired, TypedDict, TYPE_CHECKING
+from typing import Callable, NotRequired, TypedDict, TYPE_CHECKING, cast
 
 from h_arcane.benchmarks.enums import BenchmarkName
 from h_arcane.benchmarks.common.workers.config import WorkerConfig
-from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
+from h_arcane.core._internal.infrastructure.sandbox import (
+    BaseSandboxManager,
+    DashboardEmitterSandboxEventSink,
+)
+from h_arcane.core.dashboard import dashboard_emitter
 
 if TYPE_CHECKING:
     from h_arcane.core.worker import BaseWorker
@@ -49,6 +53,7 @@ from h_arcane.benchmarks.smoke_test.workflows import (
 
 # Type alias for workflow factory: (worker) -> Task
 WorkflowFactory = Callable[["BaseWorker"], "Task"]
+_SANDBOX_EVENT_SINK = DashboardEmitterSandboxEventSink(dashboard_emitter)
 
 
 class BenchmarkConfig(TypedDict):
@@ -101,7 +106,7 @@ BENCHMARK_CONFIGS: dict[BenchmarkName, BenchmarkConfig] = {
         "stakeholder_factory": smoke_test_create_stakeholder,
         "toolkit_factory": smoke_test_create_toolkit,
         "sandbox_manager_class": SmokeTestSandboxManager,
-        "workflow_factories": smoke_test_workflow_factories,
+        "workflow_factories": cast(dict[str, WorkflowFactory], smoke_test_workflow_factories),
     },
 }
 
@@ -155,7 +160,7 @@ def get_sandbox_manager(benchmark_name: BenchmarkName) -> BaseSandboxManager:
     Returns:
         Singleton instance of the benchmark's sandbox manager
     """
-    return _get_config(benchmark_name)["sandbox_manager_class"]()
+    return _get_config(benchmark_name)["sandbox_manager_class"](event_sink=_SANDBOX_EVENT_SINK)
 
 
 def get_workflow_factories(benchmark_name: BenchmarkName) -> dict[str, WorkflowFactory]:

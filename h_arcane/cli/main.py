@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 import argparse
 import sys
+from typing import Literal, cast
+from uuid import UUID
 
 from h_arcane.services.setup.benchmark_preparation_service import BenchmarkPreparationService
+from h_arcane.services.setup.benchmark_run_service import BenchmarkRunService
 from h_arcane.services.setup.benchmark_seed_service import BenchmarkSeedService
-from h_arcane.services.setup.common import DEFAULT_RESEARCHRUBRICS_DATASET, SUPPORTED_BENCHMARKS
+from h_arcane.services.setup.common import (
+    DEFAULT_RESEARCHRUBRICS_DATASET,
+    RUNNABLE_BENCHMARKS,
+    SUPPORTED_BENCHMARKS,
+)
 from h_arcane.services.setup.compose_service import ComposeService
 from h_arcane.services.setup.readiness_service import ReadinessService
+
+DEFAULT_BENCHMARK_RUN_TIMEOUT_SECONDS = 30 * 60
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -78,12 +88,69 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_seed.add_argument(
         "--model",
         default="gpt-4o-mini",
-        help="Worker model persisted on seeded runs",
+        help="Worker model used while constructing seeded benchmark definitions",
     )
     benchmark_seed.add_argument(
         "--researchrubrics-dataset-name",
         default=DEFAULT_RESEARCHRUBRICS_DATASET,
         help="Hugging Face dataset to seed for ResearchRubrics",
+    )
+
+    benchmark_run = benchmark_subparsers.add_parser(
+        "run",
+        help="Run a benchmark workflow into a named cohort",
+    )
+    benchmark_run.add_argument("benchmark", choices=RUNNABLE_BENCHMARKS)
+    benchmark_run.add_argument(
+        "--workflow",
+        help="Workflow name to run for the selected benchmark",
+    )
+    benchmark_run.add_argument(
+        "--all",
+        action="store_true",
+        dest="all_workflows",
+        help="Run all available workflows for the selected benchmark",
+    )
+    benchmark_run.add_argument(
+        "--experiment-id",
+        action="append",
+        type=UUID,
+        default=[],
+        help="Run one or more seeded experiments by database UUID",
+    )
+    benchmark_run.add_argument(
+        "--task-id",
+        action="append",
+        default=[],
+        help="Run one or more seeded experiments by logical benchmark task_id",
+    )
+    benchmark_run.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Run the most recently seeded N experiments for the selected benchmark",
+    )
+    benchmark_run.add_argument(
+        "--cohort-name",
+        required=True,
+        help="Compulsory cohort name for the real runs created by this command",
+    )
+    benchmark_run.add_argument(
+        "--model",
+        default="gpt-4o",
+        help="Worker model to use for the launched runs",
+    )
+    benchmark_run.add_argument(
+        "--timeout",
+        type=int,
+        default=DEFAULT_BENCHMARK_RUN_TIMEOUT_SECONDS,
+        help="Timeout in seconds for waiting on each run (default: 1800 / 30 minutes)",
+    )
+    benchmark_run.add_argument(
+        "--max-questions",
+        type=int,
+        default=10,
+        help="Maximum questions allowed during each launched run",
     )
 
     return parser
@@ -106,7 +173,7 @@ def _add_shared_benchmark_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--model",
         default="gpt-4o-mini",
-        help="Worker model persisted on seeded runs",
+        help="Worker model used while constructing seeded benchmark definitions",
     )
     parser.add_argument(
         "--researchrubrics-dataset-name",
@@ -179,6 +246,7 @@ def _handle_compose(args: argparse.Namespace) -> int:
 def _handle_benchmark(args: argparse.Namespace) -> int:
     preparation_service = BenchmarkPreparationService()
     seed_service = BenchmarkSeedService()
+    run_service = BenchmarkRunService()
 
     if args.benchmark_command == "list":
         for benchmark in preparation_service.supported_benchmarks():
@@ -205,11 +273,12 @@ def _handle_benchmark(args: argparse.Namespace) -> int:
         return 0
 
     if args.benchmark_command == "seed":
+        database_target = cast(Literal["main", "test"], args.database)
         for benchmark in args.benchmarks:
             seed_result = seed_service.seed(
                 benchmark,
                 limit=args.limit,
-                database_target=args.database,
+                database_target=database_target,
                 model=args.model,
                 researchrubrics_dataset_name=args.researchrubrics_dataset_name,
             )
@@ -219,6 +288,56 @@ def _handle_benchmark(args: argparse.Namespace) -> int:
             )
         return 0
 
+    if args.benchmark_command == "run":
+        workflow_names = None
+        experiment_ids = list(args.experiment_id or [])
+        task_ids = list(args.task_id or [])
+
+        if run_service.uses_workflow_factories(args.benchmark):
+            if not args.workflow and not args.all_workflows:
+                raise ValueError("Specify --workflow NAME or --all")
+            if experiment_ids or task_ids or args.limit is not None:
+                raise ValueError(
+                    "Workflow-factory benchmarks do not support --experiment-id, --task-id, or --limit"
+                )
+            workflow_names = (
+                list(run_service.workflows_for_benchmark(args.benchmark))
+                if args.all_workflows
+                else [args.workflow]
+            )
+        else:
+            if args.workflow or args.all_workflows:
+                raise ValueError(
+                    "Seeded-experiment benchmarks do not support --workflow or --all; "
+                    "use --experiment-id, --task-id, or --limit"
+                )
+
+        results = asyncio.run(
+            run_service.run(
+                benchmark=args.benchmark,
+                cohort_name=args.cohort_name,
+                workflow_names=workflow_names,
+                experiment_ids=experiment_ids,
+                task_ids=task_ids,
+                limit=args.limit,
+                model=args.model,
+                timeout=args.timeout,
+                max_questions=args.max_questions,
+            )
+        )
+
+        all_success = True
+        for workflow_name, result in results.items():
+            status = "PASS" if result.success else "FAIL"
+            print(f"{args.benchmark}/{workflow_name}: {status} ({result.duration_seconds:.1f}s)")
+            if result.run_id:
+                print(f"  run_id={result.run_id}")
+            if result.error:
+                print(f"  error={result.error}")
+            if not result.success:
+                all_success = False
+        return 0 if all_success else 1
+
     raise ValueError(f"Unknown benchmark command: {args.benchmark_command}")
 
 
@@ -226,6 +345,7 @@ def _handle_init(args: argparse.Namespace) -> int:
     compose = ComposeService()
     preparation_service = BenchmarkPreparationService()
     seed_service = BenchmarkSeedService()
+    database_target = cast(Literal["main", "test"], args.database)
 
     if not args.skip_compose:
         if args.yes or _confirm("Start docker compose services? [Y/n] ", default=True):
@@ -258,7 +378,7 @@ def _handle_init(args: argparse.Namespace) -> int:
             seed_result = seed_service.seed(
                 benchmark,
                 limit=args.limit,
-                database_target=args.database,
+                database_target=database_target,
                 model=args.model,
                 researchrubrics_dataset_name=args.researchrubrics_dataset_name,
             )

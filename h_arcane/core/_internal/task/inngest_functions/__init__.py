@@ -6,6 +6,7 @@ Orchestrators (triggered by external events):
 - workflow_start: Initialize DAG, create dependencies, start initial tasks
 - task_execute: Orchestrate single task execution via child functions
 - task_propagate: Handle completion, check dependencies, emit ready events
+- task_failure_propagate: Handle task failures and emit workflow failure
 - workflow_complete: Finalize run, aggregate results, cleanup
 - workflow_failed: Handle workflow failure
 - benchmark_run_start: Initialize benchmark run from CLI (reconstructs workers server-side)
@@ -28,6 +29,10 @@ Event flow:
                                                                                      ... repeat ...
                                                                                   -> workflow/completed
                                                                                      -> workflow_complete
+                                                             -> task/failed
+                                                                -> task_failure_propagate
+                                                                                     -> workflow/failed
+                                                                                        -> workflow_failed
 """
 
 from h_arcane.core._internal.task.inngest_functions.benchmark_run_start import (
@@ -38,7 +43,10 @@ from h_arcane.core._internal.task.inngest_functions.persist_outputs import (
 )
 from h_arcane.core._internal.task.inngest_functions.sandbox_setup import sandbox_setup_fn
 from h_arcane.core._internal.task.inngest_functions.task_execute import task_execute
-from h_arcane.core._internal.task.inngest_functions.task_propagate import task_propagate
+from h_arcane.core._internal.task.inngest_functions.task_propagate import (
+    task_failure_propagate,
+    task_propagate,
+)
 from h_arcane.core._internal.task.inngest_functions.worker_execute import worker_execute_fn
 from h_arcane.core._internal.task.inngest_functions.workflow_complete import (
     workflow_complete,
@@ -51,6 +59,7 @@ __all__ = [
     "workflow_start",
     "task_execute",
     "task_propagate",
+    "task_failure_propagate",
     "workflow_complete",
     "workflow_failed",
     "benchmark_run_start",

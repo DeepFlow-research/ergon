@@ -3,7 +3,7 @@
 import sys
 from typing import TYPE_CHECKING, Callable, Iterator, TypeVar
 
-from h_arcane.core._internal.task.persistence import persist_workflow
+from h_arcane.core._internal.task.persistence import persist_experiment_definition
 from h_arcane.core._internal.task.validation import validate_task_dag
 from h_arcane.core.task import Task
 
@@ -58,7 +58,7 @@ def load_benchmark_to_database(
 
         task = item_to_task(item, worker)
         validate_task_dag(task)
-        experiment, _, _ = persist_workflow(task, benchmark_name=benchmark_name)
+        experiment, _ = persist_experiment_definition(task, benchmark_name=benchmark_name)
         experiment_ids.append(experiment.id)
 
     return experiment_ids

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 if TYPE_CHECKING:
+    from h_arcane.core._internal.task.schema import TaskTreeNode
     from h_arcane.core.worker import BaseWorker
     from h_arcane.core.task import Task
 
@@ -104,3 +105,9 @@ def clear_workers_from_task(task: "Task") -> None:
     clear_worker(task.id)
     for child in task.children:
         clear_workers_from_task(child)
+
+
+def store_worker_for_tree(task_tree: "TaskTreeNode", worker: "BaseWorker") -> None:
+    """Register one reconstructed worker instance for every node in a stored task tree."""
+    for node in task_tree.walk():
+        store_worker(node.id, worker)

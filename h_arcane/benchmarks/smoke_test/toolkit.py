@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from agents import function_tool, Tool
+from pydantic_ai.tools import Tool
 
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
@@ -126,7 +126,6 @@ class SmokeTestToolkit(BaseToolkit):
     # ─────────────────────────────────────────────────────────────────
 
     def _read_file(self) -> Tool:
-        @function_tool
         async def read_file(file_path: str) -> StubReadFileResponse:
             """
             Read contents of a file (stub - returns mock data).
@@ -153,10 +152,9 @@ class SmokeTestToolkit(BaseToolkit):
                 size_bytes=len(content),
             )
 
-        return read_file
+        return Tool(function=read_file, takes_ctx=False)
 
     def _write_file(self) -> Tool:
-        @function_tool
         async def write_file(file_path: str, content: str) -> StubWriteFileResponse:
             """
             Write content to a file (stub - returns mock success).
@@ -174,10 +172,9 @@ class SmokeTestToolkit(BaseToolkit):
                 size_bytes=len(content),
             )
 
-        return write_file
+        return Tool(function=write_file, takes_ctx=False)
 
     def _analyze_data(self) -> Tool:
-        @function_tool
         async def analyze_data(data_description: str) -> StubAnalyzeResponse:
             """
             Analyze data based on description (stub - returns mock findings).
@@ -198,10 +195,9 @@ class SmokeTestToolkit(BaseToolkit):
                 ],
             )
 
-        return analyze_data
+        return Tool(function=analyze_data, takes_ctx=False)
 
     def _ask_stakeholder(self) -> Tool:
-        @function_tool
         async def ask_stakeholder(question: str) -> str:
             """
             Ask the stakeholder a clarifying question.
@@ -214,4 +210,4 @@ class SmokeTestToolkit(BaseToolkit):
             """
             return await self.ask_stakeholder(question)
 
-        return ask_stakeholder
+        return Tool(function=ask_stakeholder, takes_ctx=False)

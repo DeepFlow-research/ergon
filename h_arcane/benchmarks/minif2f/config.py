@@ -59,6 +59,10 @@ open_locale big_operators
 4. Iteratively refine your proof based on error messages
 5. Use `verify_lean_proof` for final verification (no sorry allowed)
 
+If `search_lemmas` returns `success=false`, treat that as a real tool failure rather
+than useful search output. Do not spam repeated identical searches after timeout-style
+failures; switch strategy, simplify the query, or continue with other available tools.
+
 ## Searching for Lemmas
 Use `search_lemmas` to explore Mathlib:
 - `#check lemma_name` - See the type signature of a lemma

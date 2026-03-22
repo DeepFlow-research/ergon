@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from agents import function_tool, Tool
+from pydantic_ai.tools import Tool
 
 from h_arcane.core._internal.infrastructure.sandbox import BaseSandboxManager
 from h_arcane.core._internal.agents.base import BaseToolkit, BaseStakeholder
@@ -143,7 +143,6 @@ class ResearchRubricsToolkit(BaseToolkit):
     # ─────────────────────────────────────────────────────────────────
 
     def _exa_search(self) -> Tool:
-        @function_tool
         async def exa_search_tool(
             query: str,
             num_results: int = 5,
@@ -161,7 +160,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with search results including titles, URLs, summaries, and content.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "exa_search",
                 ExaSearchResponse,
                 query=query,
@@ -170,10 +169,9 @@ class ResearchRubricsToolkit(BaseToolkit):
             )
             return result
 
-        return exa_search_tool
+        return Tool(function=exa_search_tool, takes_ctx=False)
 
     def _exa_qa(self) -> Tool:
-        @function_tool
         async def exa_qa_tool(
             question: str,
             num_results: int = 3,
@@ -191,7 +189,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with answer and source citations.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "exa_qa",
                 ExaQAResponse,
                 question=question,
@@ -199,10 +197,9 @@ class ResearchRubricsToolkit(BaseToolkit):
             )
             return result
 
-        return exa_qa_tool
+        return Tool(function=exa_qa_tool, takes_ctx=False)
 
     def _exa_get_content(self) -> Tool:
-        @function_tool
         async def exa_get_content_tool(url: str) -> ExaGetContentResponse:
             """
             Extract full content from a URL.
@@ -214,21 +211,20 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with extracted content, title, and metadata.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "exa_get_content",
                 ExaGetContentResponse,
                 url=url,
             )
             return result
 
-        return exa_get_content_tool
+        return Tool(function=exa_get_content_tool, takes_ctx=False)
 
     # ─────────────────────────────────────────────────────────────────
     # Report Drafting Tools - execute in sandbox via run_skill()
     # ─────────────────────────────────────────────────────────────────
 
     def _write_report_draft(self) -> Tool:
-        @function_tool
         async def write_report_draft_tool(
             content: str,
             file_path: str = "/workspace/final_output/report.md",
@@ -250,7 +246,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with file path and bytes written.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "write_report_draft",
                 WriteReportDraftResponse,
                 content=content,
@@ -258,10 +254,9 @@ class ResearchRubricsToolkit(BaseToolkit):
             )
             return result
 
-        return write_report_draft_tool
+        return Tool(function=write_report_draft_tool, takes_ctx=False)
 
     def _edit_report_draft(self) -> Tool:
-        @function_tool
         async def edit_report_draft_tool(
             old_string: str,
             new_string: str,
@@ -282,7 +277,7 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with file path and number of replacements made.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "edit_report_draft",
                 EditReportDraftResponse,
                 old_string=old_string,
@@ -291,10 +286,9 @@ class ResearchRubricsToolkit(BaseToolkit):
             )
             return result
 
-        return edit_report_draft_tool
+        return Tool(function=edit_report_draft_tool, takes_ctx=False)
 
     def _read_report_draft(self) -> Tool:
-        @function_tool
         async def read_report_draft_tool(
             file_path: str = "/workspace/final_output/report.md",
         ) -> ReadReportDraftResponse:
@@ -310,21 +304,20 @@ class ResearchRubricsToolkit(BaseToolkit):
                 Response with file content.
             """
             result = await self.sandbox_manager.run_skill(
-                self.task_id,
+                self.run_id,
                 "read_report_draft",
                 ReadReportDraftResponse,
                 file_path=file_path,
             )
             return result
 
-        return read_report_draft_tool
+        return Tool(function=read_report_draft_tool, takes_ctx=False)
 
     # ─────────────────────────────────────────────────────────────────
     # Stakeholder Interaction
     # ─────────────────────────────────────────────────────────────────
 
     def _ask_stakeholder(self) -> Tool:
-        @function_tool
         async def ask_stakeholder_tool(question: str) -> str:
             """
             Ask the stakeholder a clarifying question about the research task.
@@ -342,4 +335,4 @@ class ResearchRubricsToolkit(BaseToolkit):
             """
             return await self.ask_stakeholder(question)
 
-        return ask_stakeholder_tool
+        return Tool(function=ask_stakeholder_tool, takes_ctx=False)

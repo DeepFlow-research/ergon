@@ -1,5 +1,6 @@
 """Communication Service - manages inter-agent messaging."""
 
+import asyncio
 from uuid import UUID
 
 from h_arcane.core._internal.db.queries import queries
@@ -10,6 +11,8 @@ from h_arcane.core._internal.communication.schemas import (
     ThreadWithMessages,
     ThreadListResponse,
 )
+from h_arcane.core.dashboard import dashboard_emitter
+from h_arcane.core.dashboard.events import DashboardCommunicationMessage, DashboardCommunicationThread
 
 
 class CommunicationService:
@@ -45,7 +48,45 @@ class CommunicationService:
         )
 
         # Update thread timestamp
-        queries.threads.update_timestamp(thread.id)
+        thread = queries.threads.update_timestamp(thread.id)
+
+        # Emit dashboard live update without changing the public sync API.
+        dashboard_message = DashboardCommunicationMessage(
+            id=message.id,
+            thread_id=thread.id,
+            run_id=message.run_id,
+            thread_topic=thread.topic,
+            from_agent_id=message.from_agent_id,
+            to_agent_id=message.to_agent_id,
+            content=message.content,
+            sequence_num=message.sequence_num,
+            created_at=message.created_at,
+        )
+        thread_messages = queries.thread_messages.get_by_thread(thread.id)
+        dashboard_thread = DashboardCommunicationThread(
+            id=thread.id,
+            run_id=thread.run_id,
+            topic=thread.topic,
+            agent_a_id=thread.agent_a_id,
+            agent_b_id=thread.agent_b_id,
+            created_at=thread.created_at,
+            updated_at=thread.updated_at,
+            messages=[
+                DashboardCommunicationMessage(
+                    id=item.id,
+                    thread_id=item.thread_id,
+                    run_id=item.run_id,
+                    thread_topic=thread.topic,
+                    from_agent_id=item.from_agent_id,
+                    to_agent_id=item.to_agent_id,
+                    content=item.content,
+                    sequence_num=item.sequence_num,
+                    created_at=item.created_at,
+                )
+                for item in thread_messages
+            ],
+        )
+        self._emit_dashboard_message(request.run_id, dashboard_thread, dashboard_message)
 
         return MessageResponse(
             message_id=message.id,
@@ -59,6 +100,20 @@ class CommunicationService:
             sequence_num=message.sequence_num,
             created_at=message.created_at,
         )
+
+    @staticmethod
+    def _emit_dashboard_message(
+        run_id: UUID,
+        thread: DashboardCommunicationThread,
+        message: DashboardCommunicationMessage,
+    ) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(dashboard_emitter.thread_message_created(run_id, thread, message))
+            return
+
+        loop.create_task(dashboard_emitter.thread_message_created(run_id, thread, message))
 
     def get_message(self, message_id: UUID) -> MessageResponse | None:
         """Get a message by ID.
