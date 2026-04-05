@@ -1,14 +1,14 @@
-"""Pydantic DTOs for the run detail API surface."""
+"""Pydantic DTOs for the run detail API surface.
 
-from __future__ import annotations
+Adapted for definition-backed schema: task structure comes from
+ExperimentDefinitionTask rows rather than a serialized task tree.
+
+"""
 
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
-
-from h_arcane.core._internal.db.models import RunStatus
-from h_arcane.core.status import TaskStatus
 
 
 def _to_camel(value: str) -> str:
@@ -30,16 +30,16 @@ class RunTaskDto(CamelModel):
     id: str
     name: str
     description: str
-    status: TaskStatus
+    status: str
     parent_id: str | None = None
     child_ids: list[str] = Field(default_factory=list)
     depends_on_ids: list[str] = Field(default_factory=list)
+    is_leaf: bool
+    level: int
     assigned_worker_id: str | None = None
     assigned_worker_name: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
-    is_leaf: bool
-    level: int
 
 
 class RunActionDto(CamelModel):
@@ -51,10 +51,10 @@ class RunActionDto(CamelModel):
     input: str
     output: str | None = None
     status: str
+    success: bool
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_ms: int | None = None
-    success: bool
     error: str | None = None
 
 
@@ -64,8 +64,8 @@ class RunResourceDto(CamelModel):
     task_execution_id: str
     name: str
     mime_type: str
-    size_bytes: int
     file_path: str
+    size_bytes: int
     created_at: datetime
 
 
@@ -73,41 +73,16 @@ class RunExecutionAttemptDto(CamelModel):
     id: str
     task_id: str
     attempt_number: int
-    status: TaskStatus
-    agent_id: str | None = None
-    agent_name: str | None = None
+    status: str
     started_at: datetime | None = None
     completed_at: datetime | None = None
     output_text: str | None = None
-    output_resource_ids: list[str] = Field(default_factory=list)
     error_message: str | None = None
     score: float | None = None
-    evaluation_details: dict[str, Any] = Field(default_factory=dict)
-
-
-class RunCommunicationMessageDto(CamelModel):
-    id: str
-    thread_id: str
-    run_id: str
-    task_id: str | None = None
-    thread_topic: str
-    from_agent_id: str
-    to_agent_id: str
-    content: str
-    sequence_num: int
-    created_at: datetime
-
-
-class RunCommunicationThreadDto(CamelModel):
-    id: str
-    run_id: str
-    task_id: str | None = None
-    topic: str
-    agent_a_id: str
-    agent_b_id: str
-    created_at: datetime
-    updated_at: datetime
-    messages: list[RunCommunicationMessageDto] = Field(default_factory=list)
+    agent_id: str | None = None
+    agent_name: str | None = None
+    evaluation_details: dict[str, Any] | None = None
+    output_resource_ids: list[str] = Field(default_factory=list)
 
 
 class RunEvaluationCriterionDto(CamelModel):
@@ -117,13 +92,13 @@ class RunEvaluationCriterionDto(CamelModel):
     criterion_num: int
     criterion_type: str
     criterion_description: str
+    evaluation_input: str
     score: float
     max_score: float
     feedback: str
-    evaluation_input: str
-    error: dict[str, Any] | None = None
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
+    error: dict[str, Any] | None = None
 
 
 class RunTaskEvaluationDto(CamelModel):
@@ -161,26 +136,51 @@ class RunSandboxDto(CamelModel):
     commands: list[RunSandboxCommandDto] = Field(default_factory=list)
 
 
+class RunCommunicationMessageDto(CamelModel):
+    id: str
+    thread_id: str
+    thread_topic: str
+    run_id: str
+    task_id: str | None = None
+    from_agent_id: str
+    to_agent_id: str
+    content: str
+    sequence_num: int
+    created_at: datetime
+
+
+class RunCommunicationThreadDto(CamelModel):
+    id: str
+    run_id: str
+    task_id: str | None = None
+    topic: str
+    agent_a_id: str
+    agent_b_id: str
+    created_at: datetime
+    updated_at: datetime
+    messages: list[RunCommunicationMessageDto] = Field(default_factory=list)
+
+
 class RunSnapshotDto(CamelModel):
     id: str
     experiment_id: str
     name: str
-    status: RunStatus
+    status: str
     tasks: dict[str, RunTaskDto] = Field(default_factory=dict)
     root_task_id: str = ""
     actions_by_task: dict[str, list[RunActionDto]] = Field(default_factory=dict)
     resources_by_task: dict[str, list[RunResourceDto]] = Field(default_factory=dict)
     executions_by_task: dict[str, list[RunExecutionAttemptDto]] = Field(default_factory=dict)
+    evaluations_by_task: dict[str, RunTaskEvaluationDto] = Field(default_factory=dict)
     sandboxes_by_task: dict[str, RunSandboxDto] = Field(default_factory=dict)
     threads: list[RunCommunicationThreadDto] = Field(default_factory=list)
-    evaluations_by_task: dict[str, RunTaskEvaluationDto] = Field(default_factory=dict)
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_seconds: float | None = None
     total_tasks: int = 0
     total_leaf_tasks: int = 0
     completed_tasks: int = 0
-    running_tasks: int = 0
     failed_tasks: int = 0
+    running_tasks: int = 0
     final_score: float | None = None
     error: str | None = None

@@ -1,49 +1,32 @@
-"""Dashboard event emitter.
+"""Fire-and-forget dashboard event emitter.
 
-Wraps Inngest event sending with dashboard-specific payloads.
-Uses the existing InngestEventContract classes from events.py.
-
-The emitter provides a clean API for emitting dashboard events from
-the orchestration layer (Inngest functions). All events use the
-"dashboard/" prefix to avoid interference with orchestration events.
-
-Usage:
-    from h_arcane.dashboard import dashboard_emitter
-
-    # In an Inngest function:
-    await dashboard_emitter.workflow_started(
-        run_id=run_id,  # UUID - no str() conversion needed
-        experiment_id=experiment_id,
-        workflow_name="My Workflow",
-        task_tree=tree.model_dump(),
-        total_tasks=10,
-        total_leaf_tasks=5,
-    )
+Every method builds a typed event contract and sends it through the Inngest
+client. Errors are caught and logged so callers are never blocked.
 """
 
+import logging
 from datetime import datetime
-from logging import getLogger
-
-from h_arcane.core._internal.utils import utcnow
+from typing import Any
 from uuid import UUID
 
 import inngest
+from h_arcane.core.persistence.shared.db import get_session
+from h_arcane.core.persistence.telemetry.models import RunRecord
+from h_arcane.core.runtime.inngest_client import inngest_client
+from h_arcane.core.runtime.services.cohort_service import experiment_cohort_service
+from h_arcane.core.runtime.services.cohort_stats_service import (
+    experiment_cohort_stats_service,
+)
+from h_arcane.core.utils import utcnow
 
-from h_arcane.core._internal.cohorts.events import CohortUpdatedEvent
-from h_arcane.core._internal.cohorts.schemas import CohortSummaryDto
-from h_arcane.core._internal.infrastructure.inngest_client import inngest_client
-from h_arcane.core._internal.task.schema import TaskTreeNode
-from h_arcane.core.status import TaskStatus, TaskTrigger
-from h_arcane.core.dashboard.events import (
+from .event_contracts import (
+    CohortUpdatedEvent,
     DashboardAgentActionCompletedEvent,
     DashboardAgentActionStartedEvent,
-    DashboardCommunicationMessage,
-    DashboardCommunicationThread,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
     DashboardSandboxCommandEvent,
     DashboardSandboxCreatedEvent,
-    DashboardTaskEvaluation,
     DashboardTaskEvaluationUpdatedEvent,
     DashboardTaskStatusChangedEvent,
     DashboardThreadMessageCreatedEvent,
@@ -51,78 +34,56 @@ from h_arcane.core.dashboard.events import (
     DashboardWorkflowStartedEvent,
 )
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class DashboardEmitter:
-    """
-    Emits events for dashboard consumption.
+    """Sends dashboard events via Inngest for real-time UI updates."""
 
-    Uses the InngestEventContract pattern from h_arcane.dashboard.events.
-    Events are sent asynchronously via Inngest and do not block the main
-    execution flow.
-
-    The emitter can be disabled via the `enabled` flag for testing or
-    when dashboard visualization is not needed.
-
-    Attributes:
-        enabled: Whether to emit events (default: True)
-    """
-
-    def __init__(self, enabled: bool = True):
-        """Initialize the emitter.
-
-        Args:
-            enabled: Whether to emit events. Set to False to disable
-                     all event emission (useful for testing).
-        """
+    def __init__(self, *, enabled: bool = True) -> None:
         self._enabled = enabled
 
     @property
     def enabled(self) -> bool:
-        """Whether the emitter is enabled."""
         return self._enabled
 
     @enabled.setter
     def enabled(self, value: bool) -> None:
-        """Enable or disable the emitter."""
         self._enabled = value
 
     def _now(self) -> datetime:
-        """Get current UTC time."""
         return utcnow()
+
+    # ------------------------------------------------------------------
+    # Workflow
+    # ------------------------------------------------------------------
 
     async def workflow_started(
         self,
         run_id: UUID,
         experiment_id: UUID,
         workflow_name: str,
-        task_tree: TaskTreeNode,
+        task_tree: dict[str, Any],
         total_tasks: int,
         total_leaf_tasks: int,
     ) -> None:
-        """Emit workflow started event.
-
-        Called when execute_task() begins a new workflow execution.
-        """
         if not self._enabled:
             return
-
-        event = DashboardWorkflowStartedEvent(
-            run_id=run_id,
-            experiment_id=experiment_id,
-            workflow_name=workflow_name,
-            task_tree=task_tree,
-            started_at=self._now(),
-            total_tasks=total_tasks,
-            total_leaf_tasks=total_leaf_tasks,
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardWorkflowStartedEvent(
+                run_id=run_id,
+                experiment_id=experiment_id,
+                workflow_name=workflow_name,
+                task_tree=task_tree,
+                started_at=self._now(),
+                total_tasks=total_tasks,
+                total_leaf_tasks=total_leaf_tasks,
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning("Failed to emit dashboard/workflow.started", exc_info=True)
 
     async def workflow_completed(
         self,
@@ -132,153 +93,156 @@ class DashboardEmitter:
         final_score: float | None = None,
         error: str | None = None,
     ) -> None:
-        """Emit workflow completed event.
-
-        Called when a workflow finishes (success or failure).
-        """
         if not self._enabled:
             return
-
-        event = DashboardWorkflowCompletedEvent(
-            run_id=run_id,
-            status=status,
-            completed_at=self._now(),
-            duration_seconds=duration_seconds,
-            final_score=final_score,
-            error=error,
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardWorkflowCompletedEvent(
+                run_id=run_id,
+                status=status,
+                completed_at=self._now(),
+                duration_seconds=duration_seconds,
+                final_score=final_score,
+                error=error,
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
-
-    async def cohort_updated(self, summary: CohortSummaryDto) -> None:
-        """Emit cohort updated event for frontend cohort views."""
-        if not self._enabled:
-            return
-
-        event = CohortUpdatedEvent(cohort_id=summary.cohort_id, summary=summary)
-        try:
             await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+        except Exception:
+            logger.warning("Failed to emit dashboard/workflow.completed", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Task
+    # ------------------------------------------------------------------
 
     async def task_status_changed(
         self,
         run_id: UUID,
         task_id: UUID,
         task_name: str,
-        new_status: TaskStatus,
+        new_status: str,
+        old_status: str | None = None,
         parent_task_id: UUID | None = None,
-        old_status: TaskStatus | None = None,
-        triggered_by: TaskTrigger | None = None,
+        triggered_by: str | None = None,
         assigned_worker_id: UUID | None = None,
         assigned_worker_name: str | None = None,
     ) -> None:
-        """Emit task status changed event.
-
-        Called on any task status transition (pending -> ready -> running -> completed/failed).
-        """
         if not self._enabled:
             return
-
-        event = DashboardTaskStatusChangedEvent(
-            run_id=run_id,
-            task_id=task_id,
-            task_name=task_name,
-            parent_task_id=parent_task_id,
-            old_status=old_status,
-            new_status=new_status,
-            triggered_by=triggered_by,
-            timestamp=self._now(),
-            assigned_worker_id=assigned_worker_id,
-            assigned_worker_name=assigned_worker_name,
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardTaskStatusChangedEvent(
+                run_id=run_id,
+                task_id=task_id,
+                task_name=task_name,
+                parent_task_id=parent_task_id,
+                old_status=old_status,
+                new_status=new_status,
+                triggered_by=triggered_by,
+                timestamp=self._now(),
+                assigned_worker_id=assigned_worker_id,
+                assigned_worker_name=assigned_worker_name,
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning("Failed to emit dashboard/task.status_changed", exc_info=True)
+
+    async def task_evaluation_updated(
+        self,
+        run_id: UUID,
+        task_id: UUID | None,
+        evaluation: dict[str, Any],
+    ) -> None:
+        """Send evaluation update. `evaluation` must be a camelCase RunTaskEvaluationDto dict."""
+        if not self._enabled:
+            return
+        try:
+            evt = DashboardTaskEvaluationUpdatedEvent(
+                run_id=run_id,
+                task_id=task_id,
+                evaluation=evaluation,
+            )
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning(
+                "Failed to emit dashboard/task.evaluation_updated", exc_info=True
+            )
+
+    # ------------------------------------------------------------------
+    # Agent actions
+    # ------------------------------------------------------------------
 
     async def agent_action_started(
         self,
         run_id: UUID,
         task_id: UUID,
-        action_id: UUID,
+        action_id: str,
         worker_id: UUID,
         worker_name: str,
         action_type: str,
         action_input: str,
     ) -> None:
-        """Emit agent action started event.
-
-        Called when an agent begins a tool call.
-        """
         if not self._enabled:
             return
-
-        event = DashboardAgentActionStartedEvent(
-            run_id=run_id,
-            task_id=task_id,
-            action_id=action_id,
-            worker_id=worker_id,
-            worker_name=worker_name,
-            action_type=action_type,
-            action_input=action_input,
-            timestamp=self._now(),
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardAgentActionStartedEvent(
+                run_id=run_id,
+                task_id=task_id,
+                action_id=action_id,
+                worker_id=worker_id,
+                worker_name=worker_name,
+                action_type=action_type,
+                action_input=action_input,
+                timestamp=self._now(),
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning(
+                "Failed to emit dashboard/agent.action_started", exc_info=True
+            )
 
     async def agent_action_completed(
         self,
         run_id: UUID,
         task_id: UUID,
-        action_id: UUID,
+        action_id: str,
         worker_id: UUID,
         action_type: str,
-        duration_ms: int | None,
-        success: bool,
+        duration_ms: int,
+        success: bool = True,
         action_output: str | None = None,
         error: str | None = None,
     ) -> None:
-        """Emit agent action completed event.
-
-        Called when an agent completes a tool call.
-        """
         if not self._enabled:
             return
-
-        event_payload = {
-            "run_id": run_id,
-            "task_id": task_id,
-            "action_id": action_id,
-            "worker_id": worker_id,
-            "action_type": action_type,
-            "action_output": action_output,
-            "success": success,
-            "error": error,
-            "timestamp": self._now(),
-        }
-        if duration_ms is not None:
-            event_payload["duration_ms"] = duration_ms
-
-        event = DashboardAgentActionCompletedEvent(**event_payload)
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardAgentActionCompletedEvent(
+                run_id=run_id,
+                task_id=task_id,
+                action_id=action_id,
+                worker_id=worker_id,
+                action_type=action_type,
+                action_output=action_output,
+                duration_ms=duration_ms,
+                success=success,
+                error=error,
+                timestamp=self._now(),
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning(
+                "Failed to emit dashboard/agent.action_completed", exc_info=True
+            )
+
+    # ------------------------------------------------------------------
+    # Resources
+    # ------------------------------------------------------------------
 
     async def resource_published(
         self,
@@ -291,30 +255,31 @@ class DashboardEmitter:
         size_bytes: int,
         file_path: str,
     ) -> None:
-        """Emit resource published event.
-
-        Called when a task produces an output resource (file).
-        """
         if not self._enabled:
             return
-
-        event = DashboardResourcePublishedEvent(
-            run_id=run_id,
-            task_id=task_id,
-            task_execution_id=task_execution_id,
-            resource_id=resource_id,
-            resource_name=resource_name,
-            mime_type=mime_type,
-            size_bytes=size_bytes,
-            file_path=file_path,
-            timestamp=self._now(),
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardResourcePublishedEvent(
+                run_id=run_id,
+                task_id=task_id,
+                task_execution_id=task_execution_id,
+                resource_id=resource_id,
+                resource_name=resource_name,
+                mime_type=mime_type,
+                size_bytes=size_bytes,
+                file_path=file_path,
+                timestamp=self._now(),
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning(
+                "Failed to emit dashboard/resource.published", exc_info=True
+            )
+
+    # ------------------------------------------------------------------
+    # Sandbox
+    # ------------------------------------------------------------------
 
     async def sandbox_created(
         self,
@@ -324,27 +289,22 @@ class DashboardEmitter:
         timeout_minutes: int,
         template: str | None = None,
     ) -> None:
-        """Emit sandbox created event.
-
-        Called when an E2B sandbox is created for a task.
-        """
         if not self._enabled:
             return
-
-        event = DashboardSandboxCreatedEvent(
-            run_id=run_id,
-            task_id=task_id,
-            sandbox_id=sandbox_id,
-            template=template,
-            timeout_minutes=timeout_minutes,
-            timestamp=self._now(),
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardSandboxCreatedEvent(
+                run_id=run_id,
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                template=template,
+                timeout_minutes=timeout_minutes,
+                timestamp=self._now(),
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning("Failed to emit dashboard/sandbox.created", exc_info=True)
 
     async def sandbox_command(
         self,
@@ -356,29 +316,24 @@ class DashboardEmitter:
         exit_code: int | None = None,
         duration_ms: int | None = None,
     ) -> None:
-        """Emit sandbox command event.
-
-        Called when a command is executed in a sandbox.
-        """
         if not self._enabled:
             return
-
-        event = DashboardSandboxCommandEvent(
-            task_id=task_id,
-            sandbox_id=sandbox_id,
-            command=command,
-            stdout=stdout,
-            stderr=stderr,
-            exit_code=exit_code,
-            duration_ms=duration_ms,
-            timestamp=self._now(),
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardSandboxCommandEvent(
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                command=command,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=exit_code,
+                duration_ms=duration_ms,
+                timestamp=self._now(),
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning("Failed to emit dashboard/sandbox.command", exc_info=True)
 
     async def sandbox_closed(
         self,
@@ -386,66 +341,89 @@ class DashboardEmitter:
         sandbox_id: str,
         reason: str,
     ) -> None:
-        """Emit sandbox closed event.
-
-        Called when a sandbox is terminated.
-        """
         if not self._enabled:
             return
-
-        event = DashboardSandboxClosedEvent(
-            task_id=task_id,
-            sandbox_id=sandbox_id,
-            reason=reason,
-            timestamp=self._now(),
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardSandboxClosedEvent(
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                reason=reason,
+                timestamp=self._now(),
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning("Failed to emit dashboard/sandbox.closed", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Thread / messaging
+    # ------------------------------------------------------------------
 
     async def thread_message_created(
         self,
         run_id: UUID,
-        thread: DashboardCommunicationThread,
-        message: DashboardCommunicationMessage,
+        thread: dict[str, Any],
+        message: dict[str, Any],
     ) -> None:
-        """Emit communication thread updates for dashboard workspace views."""
+        """Send thread message event. `thread` and `message` must be camelCase DTO dicts."""
         if not self._enabled:
             return
-
-        event = DashboardThreadMessageCreatedEvent(run_id=run_id, thread=thread, message=message)
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = DashboardThreadMessageCreatedEvent(
+                run_id=run_id,
+                thread=thread,
+                message=message,
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning(
+                "Failed to emit dashboard/thread.message_created", exc_info=True
+            )
 
-    async def task_evaluation_updated(
+    # ------------------------------------------------------------------
+    # Cohort
+    # ------------------------------------------------------------------
+
+    async def cohort_updated(
         self,
-        run_id: UUID,
-        evaluation: DashboardTaskEvaluation,
-        task_id: UUID | None = None,
+        cohort_id: UUID,
+        summary: dict[str, Any],
     ) -> None:
-        """Emit evaluation updates for dashboard judgment surfaces."""
+        """Send cohort update. `summary` must be a camelCase CohortSummaryDto dict."""
         if not self._enabled:
             return
-
-        event = DashboardTaskEvaluationUpdatedEvent(
-            run_id=run_id,
-            task_id=task_id,
-            evaluation=evaluation,
-        )
         try:
-            await inngest_client.send(
-                inngest.Event(name=event.name, data=event.model_dump(mode="json"))
+            evt = CohortUpdatedEvent(
+                cohort_id=cohort_id,
+                summary=summary,
             )
-        except Exception as e:
-            logger.warning(f"Failed to emit {event.name}: {e}")
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:
+            logger.warning("Failed to emit dashboard/cohort.updated", exc_info=True)
 
 
-# Global instance (can be disabled via config or for testing)
 dashboard_emitter = DashboardEmitter(enabled=True)
+
+
+async def emit_cohort_updated_for_run(run_id: UUID) -> None:
+    """Refresh and emit the current cohort summary for a run, if it has a cohort."""
+    with get_session() as session:
+        run = session.get(RunRecord, run_id)
+        if run is None or run.cohort_id is None:
+            return
+
+        cohort_id = run.cohort_id
+
+    experiment_cohort_stats_service.recompute(cohort_id)
+    summary = experiment_cohort_service.get_summary(cohort_id)
+    if summary is None:
+        return
+    await dashboard_emitter.cohort_updated(
+        cohort_id=summary.cohort_id,
+        summary=summary.model_dump(mode="json"),
+    )

@@ -1,40 +1,36 @@
+"""Application settings loaded from environment / .env file."""
+
 import os
 from pathlib import Path
 from typing import Literal
+
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings."""
+    database_url: str = Field(
+        default="sqlite:///arcane.db",
+        validation_alias=AliasChoices("ARCANE_DATABASE_URL", "DATABASE_URL"),
+    )
+    database_url_test: str = Field(
+        default="postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test",
+        validation_alias=AliasChoices("ARCANE_DATABASE_URL_TEST", "DATABASE_URL_TEST"),
+    )
 
-    # Database
-    database_url: str = "postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane"
-
-    # Test Database (separate from production for E2E tests)
-    database_url_test: str = "postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test"
-
-    # OpenAI
     openai_api_key: str = ""
-
-    # OpenRouter
     openrouter_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"),
     )
 
-    # E2B Sandbox
     e2b_api_key: str = ""
-
-    # Exa API (for ResearchRubrics web search)
     exa_api_key: str = ""
 
-    # Inngest
     inngest_event_key: str = "dev"
     inngest_dev: bool = True
-    inngest_api_base_url: str = "http://localhost:8289"  # Default for local dev (host port)
+    inngest_api_base_url: str = "http://localhost:8289"
 
-    # OTEL tracing
     otel_traces_enabled: bool = False
     otel_service_name: str = "h-arcane"
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
@@ -43,26 +39,20 @@ class Settings(BaseSettings):
     otel_stdout_stderr_max_length: int = 4000
     otel_tool_payload_max_length: int = 4000
 
-    # Data directory (computed from project root)
     @property
     def data_dir(self) -> Path:
-        """Get the data directory path."""
         return Path(__file__).parent.parent / "data"
 
-    # Output directory for runs
     @property
     def runs_dir(self) -> Path:
-        """Get the runs directory path."""
         return self.data_dir / "runs"
 
     def get_database_url(self, target: Literal["main", "test"] = "main") -> str:
-        """Resolve the database URL for the requested target."""
         if target == "test":
             return self.database_url_test
         return self.database_url
 
     def missing_values(self, names: list[str]) -> list[str]:
-        """Return env-backed setting names that are currently blank."""
         return [name for name in names if not getattr(self, name, "")]
 
     model_config = SettingsConfigDict(
@@ -73,10 +63,7 @@ class Settings(BaseSettings):
     )
 
 
-# Global settings instance
 settings = Settings()
 
-# PydanticAI reads OPENROUTER_API_KEY from the process environment when the
-# model is specified as a string like "openrouter:anthropic/claude-sonnet-4-5".
 if settings.openrouter_api_key:
     os.environ.setdefault("OPENROUTER_API_KEY", settings.openrouter_api_key)

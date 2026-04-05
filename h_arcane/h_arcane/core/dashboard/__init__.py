@@ -1,49 +1,37 @@
-"""Dashboard event emission module.
+"""Dashboard emission module — re-exports for convenience."""
 
-This module provides event emission for workflow visualization dashboards.
-Events are emitted via Inngest and can be consumed by any dashboard implementation.
-
-Usage:
-    from h_arcane.dashboard import dashboard_emitter
-
-    await dashboard_emitter.workflow_started(run_id, experiment_id, ...)
-    await dashboard_emitter.task_status_changed(run_id, task_id, ...)
-"""
-
-from h_arcane.core.dashboard.emitter import DashboardEmitter, dashboard_emitter
-from h_arcane.core.dashboard.events import (
+from .emitter import DashboardEmitter, dashboard_emitter, emit_cohort_updated_for_run
+from .event_contracts import (
+    CohortUpdatedEvent,
     DashboardAgentActionCompletedEvent,
     DashboardAgentActionStartedEvent,
-    DashboardTaskEvaluationUpdatedEvent,
-    DashboardThreadMessageCreatedEvent,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
     DashboardSandboxCommandEvent,
     DashboardSandboxCreatedEvent,
+    DashboardTaskEvaluationUpdatedEvent,
     DashboardTaskStatusChangedEvent,
+    DashboardThreadMessageCreatedEvent,
     DashboardWorkflowCompletedEvent,
     DashboardWorkflowStartedEvent,
+    TaskTreeNode,
 )
 
 __all__ = [
-    # Emitter
-    "DashboardEmitter",
-    "dashboard_emitter",
-    # Workflow Events
-    "DashboardWorkflowStartedEvent",
-    "DashboardWorkflowCompletedEvent",
-    # Task Events
-    "DashboardTaskStatusChangedEvent",
-    # Agent Events
-    "DashboardAgentActionStartedEvent",
+    "CohortUpdatedEvent",
     "DashboardAgentActionCompletedEvent",
-    # Resource Events
+    "DashboardAgentActionStartedEvent",
+    "DashboardEmitter",
     "DashboardResourcePublishedEvent",
-    # Communication + Evaluation Events
-    "DashboardThreadMessageCreatedEvent",
-    "DashboardTaskEvaluationUpdatedEvent",
-    # Sandbox Events
-    "DashboardSandboxCreatedEvent",
-    "DashboardSandboxCommandEvent",
     "DashboardSandboxClosedEvent",
+    "DashboardSandboxCommandEvent",
+    "DashboardSandboxCreatedEvent",
+    "DashboardTaskEvaluationUpdatedEvent",
+    "DashboardTaskStatusChangedEvent",
+    "DashboardThreadMessageCreatedEvent",
+    "DashboardWorkflowCompletedEvent",
+    "DashboardWorkflowStartedEvent",
+    "TaskTreeNode",
+    "dashboard_emitter",
+    "emit_cohort_updated_for_run",
 ]

@@ -5,19 +5,20 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-
-from h_arcane.core._internal.cohorts import (
+from h_arcane.core.runtime.services.cohort_schemas import (
     CohortDetailDto,
     CohortSummaryDto,
     UpdateCohortRequest,
-    experiment_cohort_service,
 )
+from h_arcane.core.runtime.services.cohort_service import experiment_cohort_service
 
 router = APIRouter(prefix="/cohorts", tags=["cohorts"])
 
 
 @router.get("", response_model=list[CohortSummaryDto])
-def list_cohorts(include_archived: bool = Query(default=False)) -> list[CohortSummaryDto]:
+def list_cohorts(
+    include_archived: bool = Query(default=False),
+) -> list[CohortSummaryDto]:
     """List all experiment cohorts."""
     return experiment_cohort_service.list_summaries(include_archived=include_archived)
 

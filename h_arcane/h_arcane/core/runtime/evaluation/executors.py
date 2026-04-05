@@ -1,11 +1,9 @@
 """Execution strategy abstractions for rubric evaluation."""
 
-from __future__ import annotations
-
 from typing import Protocol
 
-from h_arcane.core._internal.db.models import CriterionResult
-from h_arcane.core._internal.evaluation.schemas import CriterionSpec, TaskEvaluationContext
+from h_arcane.api.results import CriterionResult
+from h_arcane.core.runtime.evaluation.evaluation_schemas import CriterionSpec, TaskEvaluationContext
 
 
 class CriterionExecutor(Protocol):
@@ -16,5 +14,4 @@ class CriterionExecutor(Protocol):
         task_context: TaskEvaluationContext,
         benchmark_name: str,
         criteria: list[CriterionSpec],
-    ) -> list[CriterionResult]:
-        ...
+    ) -> list[CriterionResult]: ...
