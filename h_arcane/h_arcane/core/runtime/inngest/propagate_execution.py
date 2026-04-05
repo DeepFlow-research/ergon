@@ -1,0 +1,142 @@
+"""Inngest functions: task completion propagation and failure propagation.
+
+Resolves DAG dependencies and detects workflow terminal states.
+"""
+
+import logging
+
+import inngest
+from h_arcane.core.runtime.events.task_events import (
+    TaskCompletedEvent,
+    TaskFailedEvent,
+    TaskReadyEvent,
+    WorkflowCompletedEvent,
+    WorkflowFailedEvent,
+)
+from h_arcane.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from h_arcane.core.runtime.services.inngest_function_results import TaskPropagateResult
+from h_arcane.core.runtime.services.orchestration_dto import (
+    PropagateTaskCompletionCommand,
+    WorkflowTerminalState,
+)
+from h_arcane.core.runtime.services.task_propagation_service import (
+    TaskPropagationService,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@inngest_client.create_function(
+    fn_id="task-propagate",
+    trigger=inngest.TriggerEvent(event="task/completed"),
+    cancel=RUN_CANCEL,
+    retries=1,
+    output_type=TaskPropagateResult,
+)
+async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
+    payload = TaskCompletedEvent(**ctx.event.data)
+    logger.info("task-propagate run_id=%s task_id=%s", payload.run_id, payload.task_id)
+
+    svc = TaskPropagationService()
+    propagation = svc.propagate(
+        PropagateTaskCompletionCommand(
+            run_id=payload.run_id,
+            definition_id=payload.definition_id,
+            task_id=payload.task_id,
+            execution_id=payload.execution_id,
+        )
+    )
+
+    events: list[inngest.Event] = [
+        inngest.Event(
+            name=TaskReadyEvent.name,
+            data=TaskReadyEvent(
+                run_id=payload.run_id,
+                definition_id=payload.definition_id,
+                task_id=td.task_id,
+            ).model_dump(mode="json"),
+        )
+        for td in propagation.ready_tasks
+    ]
+
+    if propagation.workflow_terminal_state == WorkflowTerminalState.COMPLETED:
+        events.append(
+            inngest.Event(
+                name=WorkflowCompletedEvent.name,
+                data=WorkflowCompletedEvent(
+                    run_id=payload.run_id,
+                    definition_id=payload.definition_id,
+                ).model_dump(mode="json"),
+            )
+        )
+    elif propagation.workflow_terminal_state == WorkflowTerminalState.FAILED:
+        events.append(
+            inngest.Event(
+                name=WorkflowFailedEvent.name,
+                data=WorkflowFailedEvent(
+                    run_id=payload.run_id,
+                    definition_id=payload.definition_id,
+                    error="Workflow failed during task propagation",
+                ).model_dump(mode="json"),
+            )
+        )
+
+    if events:
+        await inngest_client.send(events)
+
+    result = TaskPropagateResult(
+        run_id=payload.run_id,
+        task_id=payload.task_id,
+        newly_ready_tasks=len(propagation.ready_tasks),
+        workflow_complete=(propagation.workflow_terminal_state == WorkflowTerminalState.COMPLETED),
+        workflow_failed=(propagation.workflow_terminal_state == WorkflowTerminalState.FAILED),
+    )
+    return result
+
+
+@inngest_client.create_function(
+    fn_id="task-failure-propagate",
+    trigger=inngest.TriggerEvent(event="task/failed"),
+    cancel=RUN_CANCEL,
+    retries=1,
+    output_type=TaskPropagateResult,
+)
+async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult:
+    payload = TaskFailedEvent(**ctx.event.data)
+    logger.info(
+        "task-failure-propagate run_id=%s task_id=%s error=%s",
+        payload.run_id,
+        payload.task_id,
+        payload.error,
+    )
+
+    svc = TaskPropagationService()
+    propagation = svc.propagate_failure(
+        PropagateTaskCompletionCommand(
+            run_id=payload.run_id,
+            definition_id=payload.definition_id,
+            task_id=payload.task_id,
+            execution_id=payload.execution_id,
+        )
+    )
+
+    if propagation.workflow_terminal_state == WorkflowTerminalState.FAILED:
+        await inngest_client.send(
+            inngest.Event(
+                name=WorkflowFailedEvent.name,
+                data=WorkflowFailedEvent(
+                    run_id=payload.run_id,
+                    definition_id=payload.definition_id,
+                    error=payload.error,
+                ).model_dump(mode="json"),
+            )
+        )
+
+    result = TaskPropagateResult(
+        run_id=payload.run_id,
+        task_id=payload.task_id,
+        newly_ready_tasks=0,
+        workflow_complete=False,
+        workflow_failed=(propagation.workflow_terminal_state == WorkflowTerminalState.FAILED),
+    )
+    return result

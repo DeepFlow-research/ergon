@@ -1,0 +1,27 @@
+[project]
+name = "h-arcane"
+version = "0.1.0"
+description = "Core Arcane library: public API, runtime, and persistence"
+requires-python = ">=3.13"
+dependencies = [
+    "inngest>=0.3.0",
+    "sqlmodel>=0.0.14",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "psycopg2-binary>=2.9.9",
+    "structlog>=23.2.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "e2b-code-interpreter",
+    "openai",
+    "pydantic-ai",
+    "litellm",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["h_arcane*"]

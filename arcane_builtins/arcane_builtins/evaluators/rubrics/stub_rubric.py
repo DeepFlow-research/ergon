@@ -1,0 +1,17 @@
+"""TEST FIXTURE ONLY. Do not use as a template for real rubrics.
+
+Bundles a single StubCriterion. For smoke tests only.
+"""
+
+from __future__ import annotations
+
+from h_arcane.api import Rubric
+
+from arcane_builtins.evaluators.criteria.stub_criterion import StubCriterion
+
+
+class StubRubric(Rubric):
+    type_slug = "stub-rubric"
+
+    def __init__(self, *, name: str = "stub-rubric") -> None:
+        super().__init__(name=name, criteria=[StubCriterion()])

@@ -1,0 +1,14 @@
+[project]
+name = "arcane-builtins"
+version = "0.1.0"
+description = "Built-in benchmarks, workers, evaluators, and criteria for Arcane"
+requires-python = ">=3.13"
+dependencies = ["h-arcane"]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["arcane_builtins*"]
