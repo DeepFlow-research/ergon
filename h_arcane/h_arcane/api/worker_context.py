@@ -1,0 +1,22 @@
+"""Per-execution runtime state passed to Worker.execute()."""
+
+from typing import Any
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+
+class WorkerContext(BaseModel):
+    """Runtime context for a single worker execution.
+
+    Contains only per-execution state that the worker cannot know at
+    construction time.  Tools and configuration belong on the Worker itself.
+    """
+
+    model_config = {"frozen": True}
+
+    run_id: UUID
+    task_id: UUID
+    execution_id: UUID
+    sandbox_id: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
