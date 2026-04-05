@@ -2,45 +2,32 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-build/
-dist/
 *.egg-info/
+*.egg
+dist/
+build/
+.venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
 
 # Environment
 .env
-.env.local
+
+# Databases
+*.db
+
+# Node / Next.js
+node_modules/
+.next/
+arcane-dashboard/tsconfig.tsbuildinfo
+
+# Data (vendored third-party corpora)
+data/
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# Database
-*.db
-*.sqlite
-
-# Data
-data/*
-!data/generated/
-data/generated/*
-!data/generated/staged_v2/
-data/generated/staged_v2/*
-!data/generated/staged_v2/*.jsonl
-!data/generated/staged_v2/*.json
-paper_code_structure_plans/data/
-*.parquet
-
-# Logs
-*.log
-logs/
 
 # OS
 .DS_Store
-Thumbs.db
-

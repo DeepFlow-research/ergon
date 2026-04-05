@@ -1,0 +1,67 @@
+name: CI Fast
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-and-type-check:
+    name: "Lint + type-check (Python)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+      - name: Install project
+        run: uv sync --frozen
+
+      - name: Ruff check
+        run: uv run ruff check h_arcane arcane_builtins arcane_cli
+
+      - name: Ruff format check
+        run: uv run ruff format --check h_arcane arcane_builtins arcane_cli
+
+      - name: Type check (ty)
+        run: uv run ty check h_arcane
+
+  frontend-checks:
+    name: "Lint + type-check (Frontend)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: arcane-dashboard/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm -C arcane-dashboard install --frozen-lockfile
+
+      - name: ESLint
+        run: pnpm -C arcane-dashboard run lint
+
+      - name: TypeScript check
+        run: pnpm -C arcane-dashboard run typecheck
+
+  unit-tests:
+    name: "Unit + state tests (Python)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: lint-and-type-check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+      - name: Install project
+        run: uv sync --frozen
+
+      - name: Run fast test suites
+        env:
+          ARCANE_DATABASE_URL: "sqlite:///test.db"
+        run: uv run pytest tests/state -v

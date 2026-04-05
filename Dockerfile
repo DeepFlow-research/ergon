@@ -2,7 +2,6 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
@@ -10,21 +9,20 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
 RUN pip install uv
 
-# Copy requirements and lock file
-COPY pyproject.toml uv.lock ./
-RUN uv pip install --system -e .
+# Install h_arcane package
+COPY h_arcane/pyproject.toml h_arcane/
+COPY h_arcane/h_arcane/ h_arcane/h_arcane/
+RUN cd h_arcane && uv pip install --system -e .
 
-# Copy application code
-COPY . .
+# Install arcane_builtins package
+COPY arcane_builtins/pyproject.toml arcane_builtins/
+COPY arcane_builtins/arcane_builtins/ arcane_builtins/arcane_builtins/
+RUN cd arcane_builtins && uv pip install --system -e .
 
-# Expose port
+COPY .env ./
+
 EXPOSE 9000
 
-# Run FastAPI server
-# Use --reload in development (when INNGEST_DEV=1) for hot-reload on code changes
-# Explicitly watch mounted directories for changes
-CMD ["sh", "-c", "if [ \"$INNGEST_DEV\" = \"1\" ]; then uvicorn h_arcane.core._internal.api.main:app --host 0.0.0.0 --port 9000 --reload --reload-dir /app/h_arcane --reload-dir /app/scripts; else uvicorn h_arcane.core._internal.api.main:app --host 0.0.0.0 --port 9000; fi"]
-
+CMD ["uvicorn", "h_arcane.core.api.app:app", "--host", "0.0.0.0", "--port", "9000"]
