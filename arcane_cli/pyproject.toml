@@ -1,0 +1,17 @@
+[project]
+name = "arcane-cli"
+version = "0.1.0"
+description = "CLI for Arcane experiment orchestration"
+requires-python = ">=3.13"
+dependencies = ["h-arcane", "arcane-builtins"]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["arcane_cli*"]
+
+[project.scripts]
+arcane = "arcane_cli.main:main"

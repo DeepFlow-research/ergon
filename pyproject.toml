@@ -1,87 +1,30 @@
 [project]
-name = "h-arcane"
+name = "arcane-extension"
 version = "0.1.0"
-description = "H-ARCANE: Hypothesis-Based Modeling for Uncertainty-Aware Alignment"
+description = "Arcane experiment orchestration platform"
 requires-python = ">=3.13"
-dependencies = [
-    "opentelemetry-api",
-    "opentelemetry-sdk",
-    "opentelemetry-exporter-otlp-proto-grpc",
-    "inngest>=0.3.0",
-    "sqlmodel>=0.0.14",
-    "openai>=1.12.0",
-    "e2b-code-interpreter>=0.1.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "pydantic>=2.5.0",
-    "pydantic-settings>=2.1.0",
-    "pandas>=2.1.0",
-    "pdfplumber>=0.10.0",
-    "python-docx>=1.1.0",
-    "openpyxl>=3.1.0",
-    "pytesseract>=0.3.10",
-    "pillow>=10.0.0",
-    "psycopg2-binary>=2.9.9",
-    "python-multipart>=0.0.6",
-    "structlog>=23.2.0",
-    "pyarrow>=22.0.0",
-    "litellm>=1.80.8",
-    "ipykernel>=7.1.0",
-    "datasets>=4.4.1",
-    "matplotlib>=3.10.8",
-    "exa-py>=1.0.0",
-    "inngest-backed-agents-sdk",
-    "e2b-sandbox-inspector",
-    "inngest-inspector",
-    "pydantic-ai-slim[openrouter]>=1.70.0",
-]
-
-[dependency-groups]
-dev = [
-    "ruff",
-    "ty",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "pytest-timeout>=2.2.0",
-]
+dependencies = []
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[project.scripts]
-magym = "h_arcane.cli.main:main"
-
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["h_arcane*"]
+include = []
 
-[tool.black]
-line-length = 100
-target-version = ['py313']
+[tool.uv.workspace]
+members = ["h_arcane", "arcane_builtins", "arcane_cli"]
+
+[tool.uv.sources]
+h-arcane = { workspace = true }
+arcane-builtins = { workspace = true }
+arcane-cli = { workspace = true }
 
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-exclude = ["h_arcane/notebooks"]
-
-[tool.ty.src]
-exclude = ["h_arcane/notebooks"]
-
-[tool.pyright]
-exclude = ["data/runs"]
-
-[tool.uv.sources]
-inngest-backed-agents-sdk = { git = "https://github.com/cm2435/inngest-agents" }
-e2b-sandbox-inspector = { git = "https://github.com/cm2435/e2b_sandbox_inspector.git" }
-inngest-inspector = { git = "https://github.com/cm2435/inngest_cli_python.git" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-markers = [
-    "e2e: marks tests as end-to-end (deselect with '-m \"not e2e\"')",
-    "legacy_e2e: legacy batch-dispatch smoke coverage retained temporarily during deterministic test migration",
-]
-timeout = 600  # Default timeout for all tests
-
+timeout = 600
