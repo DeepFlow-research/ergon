@@ -2,8 +2,6 @@
 
 from typing import Any
 
-from h_arcane.core._internal.infrastructure.tracing import truncate_text
-
 
 def coerce_text(value: Any) -> str | None:
     """Best-effort conversion of sandbox output values to text."""
@@ -29,9 +27,17 @@ def bytes_length(value: Any) -> int | None:
     return None
 
 
+def _truncate(text: str | None, max_length: int) -> str | None:
+    if text is None:
+        return None
+    if len(text) <= max_length:
+        return text
+    return text[:max_length] + "..."
+
+
 def preview_python_code(code: str, max_length: int = 120) -> str:
     """Generate a short, single-line preview for Python execution."""
     lines = [line.strip() for line in code.splitlines() if line.strip()]
     preview = lines[0] if lines else "<empty>"
-    truncated = truncate_text(preview, max_length) or "<empty>"
+    truncated = _truncate(preview, max_length) or "<empty>"
     return truncated.replace("\n", " ")

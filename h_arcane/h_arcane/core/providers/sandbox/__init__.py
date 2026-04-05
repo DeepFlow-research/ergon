@@ -1,12 +1,13 @@
-"""E2B sandbox lifecycle management package."""
+"""Sandbox management: provisioning, file I/O, lifecycle."""
 
-from h_arcane.core._internal.infrastructure.sandbox.events import (
+from h_arcane.core.providers.sandbox.event_sink import (
     DashboardEmitterSandboxEventSink,
     NoopSandboxEventSink,
     SandboxEventSink,
 )
-from h_arcane.core._internal.infrastructure.sandbox.manager import (
+from h_arcane.core.providers.sandbox.manager import (
     BaseSandboxManager,
+    DefaultSandboxManager,
     DownloadedFile,
     DownloadedFiles,
 )
@@ -14,6 +15,7 @@ from h_arcane.core._internal.infrastructure.sandbox.manager import (
 __all__ = [
     "BaseSandboxManager",
     "DashboardEmitterSandboxEventSink",
+    "DefaultSandboxManager",
     "DownloadedFile",
     "DownloadedFiles",
     "NoopSandboxEventSink",
