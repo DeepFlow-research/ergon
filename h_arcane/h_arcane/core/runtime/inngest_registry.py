@@ -1,0 +1,41 @@
+"""Central registry of all Inngest functions for the h-arcane app.
+
+Pass ALL_FUNCTIONS to inngest.serve() or the framework integration.
+"""
+
+from h_arcane.core.runtime.inngest.benchmark_run_start import benchmark_run_start_fn
+from h_arcane.core.runtime.inngest.check_evaluators import check_and_run_evaluators
+from h_arcane.core.runtime.inngest.complete_workflow import complete_workflow_fn
+from h_arcane.core.runtime.inngest.evaluate_task_run import evaluate_task_run
+from h_arcane.core.runtime.inngest.execute_task import execute_task_fn
+from h_arcane.core.runtime.inngest.fail_workflow import fail_workflow_fn
+from h_arcane.core.runtime.inngest.persist_outputs import persist_outputs_fn
+from h_arcane.core.runtime.inngest.propagate_execution import (
+    propagate_task_failure_fn,
+    propagate_task_fn,
+)
+from h_arcane.core.runtime.inngest.run_cleanup import run_cleanup_fn
+from h_arcane.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
+from h_arcane.core.runtime.inngest.start_workflow import start_workflow_fn
+from h_arcane.core.runtime.inngest.worker_execute import worker_execute_fn
+
+ALL_FUNCTIONS = [
+    # Benchmark entry point
+    benchmark_run_start_fn,
+    # Task orchestration
+    start_workflow_fn,
+    execute_task_fn,
+    propagate_task_fn,
+    propagate_task_failure_fn,
+    complete_workflow_fn,
+    fail_workflow_fn,
+    # Task child functions
+    sandbox_setup_fn,
+    worker_execute_fn,
+    persist_outputs_fn,
+    # Evaluation
+    check_and_run_evaluators,
+    evaluate_task_run,
+    # Infrastructure
+    run_cleanup_fn,
+]
