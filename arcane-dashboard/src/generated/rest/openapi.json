@@ -1,1860 +1,1595 @@
 {
-  "components": {
-    "schemas": {
-      "BenchmarkName": {
-        "description": "Supported benchmark names.",
-        "enum": [
-          "gdpeval",
-          "minif2f",
-          "researchrubrics",
-          "custom",
-          "smoke_test"
-        ],
-        "title": "BenchmarkName",
-        "type": "string"
-      },
-      "CohortDetailDto": {
-        "description": "Full frontend payload for a single cohort detail page.",
-        "properties": {
-          "runs": {
-            "items": {
-              "$ref": "#/components/schemas/CohortRunRowDto"
+    "openapi": "3.1.0",
+    "info": {
+        "title": "H-Arcane",
+        "description": "Arcane experiment orchestration API",
+        "version": "0.1.0"
+    },
+    "paths": {
+        "/runs/{run_id}": {
+            "get": {
+                "tags": [
+                    "runs"
+                ],
+                "summary": "Get Run",
+                "description": "Get a persisted run-detail snapshot suitable for frontend hydration.",
+                "operationId": "get_run_runs__run_id__get",
+                "parameters": [
+                    {
+                        "name": "run_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Run Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RunSnapshotDto"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/cohorts": {
+            "get": {
+                "tags": [
+                    "cohorts"
+                ],
+                "summary": "List Cohorts",
+                "description": "List all experiment cohorts.",
+                "operationId": "list_cohorts_cohorts_get",
+                "parameters": [
+                    {
+                        "name": "include_archived",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false,
+                            "title": "Include Archived"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/CohortSummaryDto"
+                                    },
+                                    "title": "Response List Cohorts Cohorts Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/cohorts/{cohort_id}": {
+            "get": {
+                "tags": [
+                    "cohorts"
+                ],
+                "summary": "Get Cohort",
+                "description": "Get one cohort detail payload.",
+                "operationId": "get_cohort_cohorts__cohort_id__get",
+                "parameters": [
+                    {
+                        "name": "cohort_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Cohort Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CohortDetailDto"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
             },
-            "title": "Runs",
-            "type": "array"
-          },
-          "summary": {
-            "$ref": "#/components/schemas/CohortSummaryDto"
-          }
-        },
-        "required": [
-          "summary"
-        ],
-        "title": "CohortDetailDto",
-        "type": "object"
-      },
-      "CohortMetadataSummaryDto": {
-        "description": "Typed reproducibility metadata exposed to the frontend.",
-        "properties": {
-          "code_commit_sha": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code Commit Sha"
-          },
-          "dispatch_config": {
-            "$ref": "#/components/schemas/DispatchConfigSnapshot"
-          },
-          "model_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Name"
-          },
-          "model_provider": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Provider"
-          },
-          "prompt_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prompt Version"
-          },
-          "repo_dirty": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Repo Dirty"
-          },
-          "sandbox_config": {
-            "$ref": "#/components/schemas/SandboxConfigSnapshot"
-          },
-          "worker_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Worker Version"
-          }
-        },
-        "title": "CohortMetadataSummaryDto",
-        "type": "object"
-      },
-      "CohortRunRowDto": {
-        "description": "A frontend-facing row describing one run inside a cohort.",
-        "properties": {
-          "benchmark_name": {
-            "$ref": "#/components/schemas/BenchmarkName"
-          },
-          "cohort_id": {
-            "format": "uuid",
-            "title": "Cohort Id",
-            "type": "string"
-          },
-          "cohort_name": {
-            "title": "Cohort Name",
-            "type": "string"
-          },
-          "completed_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed At"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          },
-          "experiment_id": {
-            "format": "uuid",
-            "title": "Experiment Id",
-            "type": "string"
-          },
-          "experiment_task_id": {
-            "title": "Experiment Task Id",
-            "type": "string"
-          },
-          "final_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Final Score"
-          },
-          "max_questions": {
-            "title": "Max Questions",
-            "type": "integer"
-          },
-          "normalized_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Normalized Score"
-          },
-          "run_id": {
-            "format": "uuid",
-            "title": "Run Id",
-            "type": "string"
-          },
-          "running_time_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Running Time Ms"
-          },
-          "started_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Started At"
-          },
-          "status": {
-            "$ref": "#/components/schemas/RunStatus"
-          },
-          "worker_model": {
-            "title": "Worker Model",
-            "type": "string"
-          },
-          "workflow_name": {
-            "title": "Workflow Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "run_id",
-          "experiment_id",
-          "benchmark_name",
-          "experiment_task_id",
-          "workflow_name",
-          "cohort_id",
-          "cohort_name",
-          "status",
-          "worker_model",
-          "max_questions",
-          "created_at"
-        ],
-        "title": "CohortRunRowDto",
-        "type": "object"
-      },
-      "CohortStatsExtras": {
-        "description": "Optional typed extension point for cohort aggregate metrics.",
-        "properties": {
-          "benchmark_counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "title": "Benchmark Counts",
-            "type": "object"
-          },
-          "latest_run_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latest Run At"
-          }
-        },
-        "title": "CohortStatsExtras",
-        "type": "object"
-      },
-      "CohortStatusCountsDto": {
-        "description": "Aggregate run counts by lifecycle status.",
-        "properties": {
-          "completed": {
-            "default": 0,
-            "title": "Completed",
-            "type": "integer"
-          },
-          "evaluating": {
-            "default": 0,
-            "title": "Evaluating",
-            "type": "integer"
-          },
-          "executing": {
-            "default": 0,
-            "title": "Executing",
-            "type": "integer"
-          },
-          "failed": {
-            "default": 0,
-            "title": "Failed",
-            "type": "integer"
-          },
-          "pending": {
-            "default": 0,
-            "title": "Pending",
-            "type": "integer"
-          }
-        },
-        "title": "CohortStatusCountsDto",
-        "type": "object"
-      },
-      "CohortSummaryDto": {
-        "description": "Summary row for cohort list and live updates.",
-        "properties": {
-          "average_duration_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Duration Ms"
-          },
-          "average_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Score"
-          },
-          "best_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Best Score"
-          },
-          "cohort_id": {
-            "format": "uuid",
-            "title": "Cohort Id",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "extras": {
-            "$ref": "#/components/schemas/CohortStatsExtras"
-          },
-          "failure_rate": {
-            "default": 0.0,
-            "title": "Failure Rate",
-            "type": "number"
-          },
-          "metadata_summary": {
-            "$ref": "#/components/schemas/CohortMetadataSummaryDto"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "stats_updated_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stats Updated At"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ExperimentCohortStatus"
-          },
-          "status_counts": {
-            "$ref": "#/components/schemas/CohortStatusCountsDto"
-          },
-          "total_runs": {
-            "default": 0,
-            "title": "Total Runs",
-            "type": "integer"
-          },
-          "worst_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Worst Score"
-          }
-        },
-        "required": [
-          "cohort_id",
-          "name",
-          "created_at",
-          "status"
-        ],
-        "title": "CohortSummaryDto",
-        "type": "object"
-      },
-      "DispatchConfigSnapshot": {
-        "description": "Typed snapshot of dispatch configuration relevant to cohort reproducibility.",
-        "properties": {
-          "extras": {
-            "additionalProperties": true,
-            "title": "Extras",
-            "type": "object"
-          },
-          "max_concurrent_runs": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Concurrent Runs"
-          },
-          "max_questions": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Questions"
-          },
-          "max_retries": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Retries"
-          },
-          "worker_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Worker Model"
-          }
-        },
-        "title": "DispatchConfigSnapshot",
-        "type": "object"
-      },
-      "ExperimentCohortStatus": {
-        "description": "Experiment cohort lifecycle status.",
-        "enum": [
-          "active",
-          "archived"
-        ],
-        "title": "ExperimentCohortStatus",
-        "type": "string"
-      },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "title": "Detail",
-            "type": "array"
-          }
-        },
-        "title": "HTTPValidationError",
-        "type": "object"
-      },
-      "RunActionDto": {
-        "additionalProperties": false,
-        "properties": {
-          "completedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completedat"
-          },
-          "durationMs": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Durationms"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "input": {
-            "title": "Input",
-            "type": "string"
-          },
-          "output": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Output"
-          },
-          "startedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Startedat"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "success": {
-            "title": "Success",
-            "type": "boolean"
-          },
-          "taskId": {
-            "title": "Taskid",
-            "type": "string"
-          },
-          "type": {
-            "title": "Type",
-            "type": "string"
-          },
-          "workerId": {
-            "title": "Workerid",
-            "type": "string"
-          },
-          "workerName": {
-            "title": "Workername",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "taskId",
-          "workerId",
-          "workerName",
-          "type",
-          "input",
-          "status",
-          "success"
-        ],
-        "title": "RunActionDto",
-        "type": "object"
-      },
-      "RunCommunicationMessageDto": {
-        "additionalProperties": false,
-        "properties": {
-          "content": {
-            "title": "Content",
-            "type": "string"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "title": "Createdat",
-            "type": "string"
-          },
-          "fromAgentId": {
-            "title": "Fromagentid",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "runId": {
-            "title": "Runid",
-            "type": "string"
-          },
-          "sequenceNum": {
-            "title": "Sequencenum",
-            "type": "integer"
-          },
-          "taskId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Taskid"
-          },
-          "threadId": {
-            "title": "Threadid",
-            "type": "string"
-          },
-          "threadTopic": {
-            "title": "Threadtopic",
-            "type": "string"
-          },
-          "toAgentId": {
-            "title": "Toagentid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "threadId",
-          "runId",
-          "threadTopic",
-          "fromAgentId",
-          "toAgentId",
-          "content",
-          "sequenceNum",
-          "createdAt"
-        ],
-        "title": "RunCommunicationMessageDto",
-        "type": "object"
-      },
-      "RunCommunicationThreadDto": {
-        "additionalProperties": false,
-        "properties": {
-          "agentAId": {
-            "title": "Agentaid",
-            "type": "string"
-          },
-          "agentBId": {
-            "title": "Agentbid",
-            "type": "string"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "title": "Createdat",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/RunCommunicationMessageDto"
-            },
-            "title": "Messages",
-            "type": "array"
-          },
-          "runId": {
-            "title": "Runid",
-            "type": "string"
-          },
-          "taskId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Taskid"
-          },
-          "topic": {
-            "title": "Topic",
-            "type": "string"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "title": "Updatedat",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "runId",
-          "topic",
-          "agentAId",
-          "agentBId",
-          "createdAt",
-          "updatedAt"
-        ],
-        "title": "RunCommunicationThreadDto",
-        "type": "object"
-      },
-      "RunEvaluationCriterionDto": {
-        "additionalProperties": false,
-        "properties": {
-          "criterionDescription": {
-            "title": "Criteriondescription",
-            "type": "string"
-          },
-          "criterionNum": {
-            "title": "Criterionnum",
-            "type": "integer"
-          },
-          "criterionType": {
-            "title": "Criteriontype",
-            "type": "string"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "evaluatedActionIds": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Evaluatedactionids",
-            "type": "array"
-          },
-          "evaluatedResourceIds": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Evaluatedresourceids",
-            "type": "array"
-          },
-          "evaluationInput": {
-            "title": "Evaluationinput",
-            "type": "string"
-          },
-          "feedback": {
-            "title": "Feedback",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "maxScore": {
-            "title": "Maxscore",
-            "type": "number"
-          },
-          "score": {
-            "title": "Score",
-            "type": "number"
-          },
-          "stageName": {
-            "title": "Stagename",
-            "type": "string"
-          },
-          "stageNum": {
-            "title": "Stagenum",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "stageNum",
-          "stageName",
-          "criterionNum",
-          "criterionType",
-          "criterionDescription",
-          "score",
-          "maxScore",
-          "feedback",
-          "evaluationInput"
-        ],
-        "title": "RunEvaluationCriterionDto",
-        "type": "object"
-      },
-      "RunExecutionAttemptDto": {
-        "additionalProperties": false,
-        "properties": {
-          "agentId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agentid"
-          },
-          "agentName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agentname"
-          },
-          "attemptNumber": {
-            "title": "Attemptnumber",
-            "type": "integer"
-          },
-          "completedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completedat"
-          },
-          "errorMessage": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Errormessage"
-          },
-          "evaluationDetails": {
-            "additionalProperties": true,
-            "title": "Evaluationdetails",
-            "type": "object"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "outputResourceIds": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Outputresourceids",
-            "type": "array"
-          },
-          "outputText": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Outputtext"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          },
-          "startedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Startedat"
-          },
-          "status": {
-            "$ref": "#/components/schemas/TaskStatus"
-          },
-          "taskId": {
-            "title": "Taskid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "taskId",
-          "attemptNumber",
-          "status"
-        ],
-        "title": "RunExecutionAttemptDto",
-        "type": "object"
-      },
-      "RunResourceDto": {
-        "additionalProperties": false,
-        "properties": {
-          "createdAt": {
-            "format": "date-time",
-            "title": "Createdat",
-            "type": "string"
-          },
-          "filePath": {
-            "title": "Filepath",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "mimeType": {
-            "title": "Mimetype",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "sizeBytes": {
-            "title": "Sizebytes",
-            "type": "integer"
-          },
-          "taskExecutionId": {
-            "title": "Taskexecutionid",
-            "type": "string"
-          },
-          "taskId": {
-            "title": "Taskid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "taskId",
-          "taskExecutionId",
-          "name",
-          "mimeType",
-          "sizeBytes",
-          "filePath",
-          "createdAt"
-        ],
-        "title": "RunResourceDto",
-        "type": "object"
-      },
-      "RunSandboxCommandDto": {
-        "additionalProperties": false,
-        "properties": {
-          "command": {
-            "title": "Command",
-            "type": "string"
-          },
-          "durationMs": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Durationms"
-          },
-          "exitCode": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Exitcode"
-          },
-          "stderr": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stderr"
-          },
-          "stdout": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stdout"
-          },
-          "timestamp": {
-            "format": "date-time",
-            "title": "Timestamp",
-            "type": "string"
-          }
-        },
-        "required": [
-          "command",
-          "timestamp"
-        ],
-        "title": "RunSandboxCommandDto",
-        "type": "object"
-      },
-      "RunSandboxDto": {
-        "additionalProperties": false,
-        "properties": {
-          "closeReason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Closereason"
-          },
-          "closedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Closedat"
-          },
-          "commands": {
-            "items": {
-              "$ref": "#/components/schemas/RunSandboxCommandDto"
-            },
-            "title": "Commands",
-            "type": "array"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "title": "Createdat",
-            "type": "string"
-          },
-          "sandboxId": {
-            "title": "Sandboxid",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "taskId": {
-            "title": "Taskid",
-            "type": "string"
-          },
-          "template": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Template"
-          },
-          "timeoutMinutes": {
-            "title": "Timeoutminutes",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "sandboxId",
-          "taskId",
-          "timeoutMinutes",
-          "status",
-          "createdAt"
-        ],
-        "title": "RunSandboxDto",
-        "type": "object"
-      },
-      "RunSnapshotDto": {
-        "additionalProperties": false,
-        "properties": {
-          "actionsByTask": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/RunActionDto"
-              },
-              "type": "array"
-            },
-            "title": "Actionsbytask",
-            "type": "object"
-          },
-          "completedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completedat"
-          },
-          "completedTasks": {
-            "default": 0,
-            "title": "Completedtasks",
-            "type": "integer"
-          },
-          "durationSeconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Durationseconds"
-          },
-          "error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error"
-          },
-          "evaluationsByTask": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/RunTaskEvaluationDto"
-            },
-            "title": "Evaluationsbytask",
-            "type": "object"
-          },
-          "executionsByTask": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/RunExecutionAttemptDto"
-              },
-              "type": "array"
-            },
-            "title": "Executionsbytask",
-            "type": "object"
-          },
-          "experimentId": {
-            "title": "Experimentid",
-            "type": "string"
-          },
-          "failedTasks": {
-            "default": 0,
-            "title": "Failedtasks",
-            "type": "integer"
-          },
-          "finalScore": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finalscore"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "resourcesByTask": {
-            "additionalProperties": {
-              "items": {
-                "$ref": "#/components/schemas/RunResourceDto"
-              },
-              "type": "array"
-            },
-            "title": "Resourcesbytask",
-            "type": "object"
-          },
-          "rootTaskId": {
-            "default": "",
-            "title": "Roottaskid",
-            "type": "string"
-          },
-          "runningTasks": {
-            "default": 0,
-            "title": "Runningtasks",
-            "type": "integer"
-          },
-          "sandboxesByTask": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/RunSandboxDto"
-            },
-            "title": "Sandboxesbytask",
-            "type": "object"
-          },
-          "startedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Startedat"
-          },
-          "status": {
-            "$ref": "#/components/schemas/RunStatus"
-          },
-          "tasks": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/RunTaskDto"
-            },
-            "title": "Tasks",
-            "type": "object"
-          },
-          "threads": {
-            "items": {
-              "$ref": "#/components/schemas/RunCommunicationThreadDto"
-            },
-            "title": "Threads",
-            "type": "array"
-          },
-          "totalLeafTasks": {
-            "default": 0,
-            "title": "Totalleaftasks",
-            "type": "integer"
-          },
-          "totalTasks": {
-            "default": 0,
-            "title": "Totaltasks",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "experimentId",
-          "name",
-          "status"
-        ],
-        "title": "RunSnapshotDto",
-        "type": "object"
-      },
-      "RunStatus": {
-        "description": "Run execution status.",
-        "enum": [
-          "pending",
-          "executing",
-          "evaluating",
-          "completed",
-          "failed"
-        ],
-        "title": "RunStatus",
-        "type": "string"
-      },
-      "RunTaskDto": {
-        "additionalProperties": false,
-        "properties": {
-          "assignedWorkerId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assignedworkerid"
-          },
-          "assignedWorkerName": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Assignedworkername"
-          },
-          "childIds": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Childids",
-            "type": "array"
-          },
-          "completedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completedat"
-          },
-          "dependsOnIds": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Dependsonids",
-            "type": "array"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "isLeaf": {
-            "title": "Isleaf",
-            "type": "boolean"
-          },
-          "level": {
-            "title": "Level",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "parentId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parentid"
-          },
-          "startedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Startedat"
-          },
-          "status": {
-            "$ref": "#/components/schemas/TaskStatus"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "description",
-          "status",
-          "isLeaf",
-          "level"
-        ],
-        "title": "RunTaskDto",
-        "type": "object"
-      },
-      "RunTaskEvaluationDto": {
-        "additionalProperties": false,
-        "properties": {
-          "createdAt": {
-            "format": "date-time",
-            "title": "Createdat",
-            "type": "string"
-          },
-          "criterionResults": {
-            "items": {
-              "$ref": "#/components/schemas/RunEvaluationCriterionDto"
-            },
-            "title": "Criterionresults",
-            "type": "array"
-          },
-          "failedGate": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Failedgate"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "maxScore": {
-            "title": "Maxscore",
-            "type": "number"
-          },
-          "normalizedScore": {
-            "title": "Normalizedscore",
-            "type": "number"
-          },
-          "runId": {
-            "title": "Runid",
-            "type": "string"
-          },
-          "stagesEvaluated": {
-            "title": "Stagesevaluated",
-            "type": "integer"
-          },
-          "stagesPassed": {
-            "title": "Stagespassed",
-            "type": "integer"
-          },
-          "taskId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Taskid"
-          },
-          "totalScore": {
-            "title": "Totalscore",
-            "type": "number"
-          }
-        },
-        "required": [
-          "id",
-          "runId",
-          "totalScore",
-          "maxScore",
-          "normalizedScore",
-          "stagesEvaluated",
-          "stagesPassed",
-          "createdAt"
-        ],
-        "title": "RunTaskEvaluationDto",
-        "type": "object"
-      },
-      "SandboxConfigSnapshot": {
-        "description": "Typed snapshot of sandbox configuration relevant to cohort reproducibility.",
-        "properties": {
-          "extras": {
-            "additionalProperties": true,
-            "title": "Extras",
-            "type": "object"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider"
-          },
-          "template_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Template Id"
-          },
-          "timeout_minutes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Timeout Minutes"
-          }
-        },
-        "title": "SandboxConfigSnapshot",
-        "type": "object"
-      },
-      "TaskStatus": {
-        "description": "Task execution status.",
-        "enum": [
-          "pending",
-          "ready",
-          "running",
-          "completed",
-          "failed"
-        ],
-        "title": "TaskStatus",
-        "type": "string"
-      },
-      "UpdateCohortRequest": {
-        "description": "Mutable cohort fields exposed through the operator API.",
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/ExperimentCohortStatus"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "title": "UpdateCohortRequest",
-        "type": "object"
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
+            "patch": {
+                "tags": [
+                    "cohorts"
+                ],
+                "summary": "Update Cohort",
+                "description": "Update one cohort's operator-managed fields.",
+                "operationId": "update_cohort_cohorts__cohort_id__patch",
+                "parameters": [
+                    {
+                        "name": "cohort_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Cohort Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateCohortRequest"
+                            }
+                        }
+                    }
                 },
-                {
-                  "type": "integer"
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CohortSummaryDto"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
                 }
-              ]
-            },
-            "title": "Location",
-            "type": "array"
-          },
-          "msg": {
-            "title": "Message",
-            "type": "string"
-          },
-          "type": {
-            "title": "Error Type",
-            "type": "string"
-          }
+            }
         },
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError",
-        "type": "object"
-      }
+        "/api/inngest": {
+            "get": {
+                "summary": "Get Api Inngest",
+                "operationId": "get_api_inngest_api_inngest_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "summary": "Put Inngest Api",
+                "operationId": "put_inngest_api_api_inngest_put",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "summary": "Post Inngest Api",
+                "operationId": "post_inngest_api_api_inngest_post",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "CohortDetailDto": {
+                "properties": {
+                    "summary": {
+                        "$ref": "#/components/schemas/CohortSummaryDto"
+                    },
+                    "runs": {
+                        "items": {
+                            "$ref": "#/components/schemas/CohortRunRowDto"
+                        },
+                        "type": "array",
+                        "title": "Runs"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "summary"
+                ],
+                "title": "CohortDetailDto",
+                "description": "Full payload for a single cohort detail page."
+            },
+            "CohortRunRowDto": {
+                "properties": {
+                    "run_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "title": "Run Id"
+                    },
+                    "definition_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "title": "Definition Id"
+                    },
+                    "cohort_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "title": "Cohort Id"
+                    },
+                    "cohort_name": {
+                        "type": "string",
+                        "title": "Cohort Name"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "started_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Started At"
+                    },
+                    "completed_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Completed At"
+                    },
+                    "running_time_ms": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Running Time Ms"
+                    },
+                    "final_score": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Final Score"
+                    },
+                    "error_message": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Error Message"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "run_id",
+                    "definition_id",
+                    "cohort_id",
+                    "cohort_name",
+                    "status",
+                    "created_at"
+                ],
+                "title": "CohortRunRowDto",
+                "description": "One run inside a cohort detail view."
+            },
+            "CohortStatusCountsDto": {
+                "properties": {
+                    "pending": {
+                        "type": "integer",
+                        "title": "Pending",
+                        "default": 0
+                    },
+                    "executing": {
+                        "type": "integer",
+                        "title": "Executing",
+                        "default": 0
+                    },
+                    "evaluating": {
+                        "type": "integer",
+                        "title": "Evaluating",
+                        "default": 0
+                    },
+                    "completed": {
+                        "type": "integer",
+                        "title": "Completed",
+                        "default": 0
+                    },
+                    "failed": {
+                        "type": "integer",
+                        "title": "Failed",
+                        "default": 0
+                    }
+                },
+                "type": "object",
+                "title": "CohortStatusCountsDto",
+                "description": "Aggregate run counts by lifecycle status."
+            },
+            "CohortSummaryDto": {
+                "properties": {
+                    "cohort_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "title": "Cohort Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "description": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Description"
+                    },
+                    "created_by": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Created By"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "total_runs": {
+                        "type": "integer",
+                        "title": "Total Runs",
+                        "default": 0
+                    },
+                    "status_counts": {
+                        "$ref": "#/components/schemas/CohortStatusCountsDto"
+                    },
+                    "average_score": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Average Score"
+                    },
+                    "best_score": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Best Score"
+                    },
+                    "worst_score": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Worst Score"
+                    },
+                    "average_duration_ms": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Average Duration Ms"
+                    },
+                    "failure_rate": {
+                        "type": "number",
+                        "title": "Failure Rate",
+                        "default": 0.0
+                    },
+                    "stats_updated_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Stats Updated At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "cohort_id",
+                    "name",
+                    "created_at",
+                    "status"
+                ],
+                "title": "CohortSummaryDto",
+                "description": "Summary row for cohort list and live updates."
+            },
+            "ExperimentCohortStatus": {
+                "type": "string",
+                "enum": [
+                    "active",
+                    "archived"
+                ],
+                "title": "ExperimentCohortStatus"
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "RunActionDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "taskId": {
+                        "type": "string",
+                        "title": "Taskid"
+                    },
+                    "workerId": {
+                        "type": "string",
+                        "title": "Workerid"
+                    },
+                    "workerName": {
+                        "type": "string",
+                        "title": "Workername"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Type"
+                    },
+                    "input": {
+                        "type": "string",
+                        "title": "Input"
+                    },
+                    "output": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Output"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "success": {
+                        "type": "boolean",
+                        "title": "Success"
+                    },
+                    "startedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Startedat"
+                    },
+                    "completedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Completedat"
+                    },
+                    "durationMs": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Durationms"
+                    },
+                    "error": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Error"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "taskId",
+                    "workerId",
+                    "workerName",
+                    "type",
+                    "input",
+                    "status",
+                    "success"
+                ],
+                "title": "RunActionDto"
+            },
+            "RunCommunicationMessageDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "threadId": {
+                        "type": "string",
+                        "title": "Threadid"
+                    },
+                    "threadTopic": {
+                        "type": "string",
+                        "title": "Threadtopic"
+                    },
+                    "runId": {
+                        "type": "string",
+                        "title": "Runid"
+                    },
+                    "taskId": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Taskid"
+                    },
+                    "fromAgentId": {
+                        "type": "string",
+                        "title": "Fromagentid"
+                    },
+                    "toAgentId": {
+                        "type": "string",
+                        "title": "Toagentid"
+                    },
+                    "content": {
+                        "type": "string",
+                        "title": "Content"
+                    },
+                    "sequenceNum": {
+                        "type": "integer",
+                        "title": "Sequencenum"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Createdat"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "threadId",
+                    "threadTopic",
+                    "runId",
+                    "fromAgentId",
+                    "toAgentId",
+                    "content",
+                    "sequenceNum",
+                    "createdAt"
+                ],
+                "title": "RunCommunicationMessageDto"
+            },
+            "RunCommunicationThreadDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "runId": {
+                        "type": "string",
+                        "title": "Runid"
+                    },
+                    "taskId": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Taskid"
+                    },
+                    "topic": {
+                        "type": "string",
+                        "title": "Topic"
+                    },
+                    "agentAId": {
+                        "type": "string",
+                        "title": "Agentaid"
+                    },
+                    "agentBId": {
+                        "type": "string",
+                        "title": "Agentbid"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Createdat"
+                    },
+                    "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Updatedat"
+                    },
+                    "messages": {
+                        "items": {
+                            "$ref": "#/components/schemas/RunCommunicationMessageDto"
+                        },
+                        "type": "array",
+                        "title": "Messages"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "runId",
+                    "topic",
+                    "agentAId",
+                    "agentBId",
+                    "createdAt",
+                    "updatedAt"
+                ],
+                "title": "RunCommunicationThreadDto"
+            },
+            "RunEvaluationCriterionDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "stageNum": {
+                        "type": "integer",
+                        "title": "Stagenum"
+                    },
+                    "stageName": {
+                        "type": "string",
+                        "title": "Stagename"
+                    },
+                    "criterionNum": {
+                        "type": "integer",
+                        "title": "Criterionnum"
+                    },
+                    "criterionType": {
+                        "type": "string",
+                        "title": "Criteriontype"
+                    },
+                    "criterionDescription": {
+                        "type": "string",
+                        "title": "Criteriondescription"
+                    },
+                    "evaluationInput": {
+                        "type": "string",
+                        "title": "Evaluationinput"
+                    },
+                    "score": {
+                        "type": "number",
+                        "title": "Score"
+                    },
+                    "maxScore": {
+                        "type": "number",
+                        "title": "Maxscore"
+                    },
+                    "feedback": {
+                        "type": "string",
+                        "title": "Feedback"
+                    },
+                    "evaluatedActionIds": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Evaluatedactionids"
+                    },
+                    "evaluatedResourceIds": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Evaluatedresourceids"
+                    },
+                    "error": {
+                        "anyOf": [
+                            {
+                                "additionalProperties": true,
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Error"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "stageNum",
+                    "stageName",
+                    "criterionNum",
+                    "criterionType",
+                    "criterionDescription",
+                    "evaluationInput",
+                    "score",
+                    "maxScore",
+                    "feedback"
+                ],
+                "title": "RunEvaluationCriterionDto"
+            },
+            "RunExecutionAttemptDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "taskId": {
+                        "type": "string",
+                        "title": "Taskid"
+                    },
+                    "attemptNumber": {
+                        "type": "integer",
+                        "title": "Attemptnumber"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "startedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Startedat"
+                    },
+                    "completedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Completedat"
+                    },
+                    "outputText": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Outputtext"
+                    },
+                    "errorMessage": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Errormessage"
+                    },
+                    "score": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Score"
+                    },
+                    "agentId": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Agentid"
+                    },
+                    "agentName": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Agentname"
+                    },
+                    "evaluationDetails": {
+                        "anyOf": [
+                            {
+                                "additionalProperties": true,
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Evaluationdetails"
+                    },
+                    "outputResourceIds": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Outputresourceids"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "taskId",
+                    "attemptNumber",
+                    "status"
+                ],
+                "title": "RunExecutionAttemptDto"
+            },
+            "RunResourceDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "taskId": {
+                        "type": "string",
+                        "title": "Taskid"
+                    },
+                    "taskExecutionId": {
+                        "type": "string",
+                        "title": "Taskexecutionid"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "mimeType": {
+                        "type": "string",
+                        "title": "Mimetype"
+                    },
+                    "filePath": {
+                        "type": "string",
+                        "title": "Filepath"
+                    },
+                    "sizeBytes": {
+                        "type": "integer",
+                        "title": "Sizebytes"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Createdat"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "taskId",
+                    "taskExecutionId",
+                    "name",
+                    "mimeType",
+                    "filePath",
+                    "sizeBytes",
+                    "createdAt"
+                ],
+                "title": "RunResourceDto"
+            },
+            "RunSandboxCommandDto": {
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "title": "Command"
+                    },
+                    "stdout": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Stdout"
+                    },
+                    "stderr": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Stderr"
+                    },
+                    "exitCode": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Exitcode"
+                    },
+                    "durationMs": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Durationms"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Timestamp"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "command",
+                    "timestamp"
+                ],
+                "title": "RunSandboxCommandDto"
+            },
+            "RunSandboxDto": {
+                "properties": {
+                    "sandboxId": {
+                        "type": "string",
+                        "title": "Sandboxid"
+                    },
+                    "taskId": {
+                        "type": "string",
+                        "title": "Taskid"
+                    },
+                    "template": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Template"
+                    },
+                    "timeoutMinutes": {
+                        "type": "integer",
+                        "title": "Timeoutminutes"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Createdat"
+                    },
+                    "closedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Closedat"
+                    },
+                    "closeReason": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Closereason"
+                    },
+                    "commands": {
+                        "items": {
+                            "$ref": "#/components/schemas/RunSandboxCommandDto"
+                        },
+                        "type": "array",
+                        "title": "Commands"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "sandboxId",
+                    "taskId",
+                    "timeoutMinutes",
+                    "status",
+                    "createdAt"
+                ],
+                "title": "RunSandboxDto"
+            },
+            "RunSnapshotDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "experimentId": {
+                        "type": "string",
+                        "title": "Experimentid"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "tasks": {
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/RunTaskDto"
+                        },
+                        "type": "object",
+                        "title": "Tasks"
+                    },
+                    "rootTaskId": {
+                        "type": "string",
+                        "title": "Roottaskid",
+                        "default": ""
+                    },
+                    "actionsByTask": {
+                        "additionalProperties": {
+                            "items": {
+                                "$ref": "#/components/schemas/RunActionDto"
+                            },
+                            "type": "array"
+                        },
+                        "type": "object",
+                        "title": "Actionsbytask"
+                    },
+                    "resourcesByTask": {
+                        "additionalProperties": {
+                            "items": {
+                                "$ref": "#/components/schemas/RunResourceDto"
+                            },
+                            "type": "array"
+                        },
+                        "type": "object",
+                        "title": "Resourcesbytask"
+                    },
+                    "executionsByTask": {
+                        "additionalProperties": {
+                            "items": {
+                                "$ref": "#/components/schemas/RunExecutionAttemptDto"
+                            },
+                            "type": "array"
+                        },
+                        "type": "object",
+                        "title": "Executionsbytask"
+                    },
+                    "evaluationsByTask": {
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/RunTaskEvaluationDto"
+                        },
+                        "type": "object",
+                        "title": "Evaluationsbytask"
+                    },
+                    "sandboxesByTask": {
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/RunSandboxDto"
+                        },
+                        "type": "object",
+                        "title": "Sandboxesbytask"
+                    },
+                    "threads": {
+                        "items": {
+                            "$ref": "#/components/schemas/RunCommunicationThreadDto"
+                        },
+                        "type": "array",
+                        "title": "Threads"
+                    },
+                    "startedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Startedat"
+                    },
+                    "completedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Completedat"
+                    },
+                    "durationSeconds": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Durationseconds"
+                    },
+                    "totalTasks": {
+                        "type": "integer",
+                        "title": "Totaltasks",
+                        "default": 0
+                    },
+                    "totalLeafTasks": {
+                        "type": "integer",
+                        "title": "Totalleaftasks",
+                        "default": 0
+                    },
+                    "completedTasks": {
+                        "type": "integer",
+                        "title": "Completedtasks",
+                        "default": 0
+                    },
+                    "failedTasks": {
+                        "type": "integer",
+                        "title": "Failedtasks",
+                        "default": 0
+                    },
+                    "runningTasks": {
+                        "type": "integer",
+                        "title": "Runningtasks",
+                        "default": 0
+                    },
+                    "finalScore": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Finalscore"
+                    },
+                    "error": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Error"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "experimentId",
+                    "name",
+                    "status"
+                ],
+                "title": "RunSnapshotDto"
+            },
+            "RunTaskDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "description": {
+                        "type": "string",
+                        "title": "Description"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "parentId": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Parentid"
+                    },
+                    "childIds": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Childids"
+                    },
+                    "dependsOnIds": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Dependsonids"
+                    },
+                    "isLeaf": {
+                        "type": "boolean",
+                        "title": "Isleaf"
+                    },
+                    "level": {
+                        "type": "integer",
+                        "title": "Level"
+                    },
+                    "assignedWorkerId": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Assignedworkerid"
+                    },
+                    "assignedWorkerName": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Assignedworkername"
+                    },
+                    "startedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Startedat"
+                    },
+                    "completedAt": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Completedat"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "name",
+                    "description",
+                    "status",
+                    "isLeaf",
+                    "level"
+                ],
+                "title": "RunTaskDto"
+            },
+            "RunTaskEvaluationDto": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "runId": {
+                        "type": "string",
+                        "title": "Runid"
+                    },
+                    "taskId": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Taskid"
+                    },
+                    "totalScore": {
+                        "type": "number",
+                        "title": "Totalscore"
+                    },
+                    "maxScore": {
+                        "type": "number",
+                        "title": "Maxscore"
+                    },
+                    "normalizedScore": {
+                        "type": "number",
+                        "title": "Normalizedscore"
+                    },
+                    "stagesEvaluated": {
+                        "type": "integer",
+                        "title": "Stagesevaluated"
+                    },
+                    "stagesPassed": {
+                        "type": "integer",
+                        "title": "Stagespassed"
+                    },
+                    "failedGate": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Failedgate"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Createdat"
+                    },
+                    "criterionResults": {
+                        "items": {
+                            "$ref": "#/components/schemas/RunEvaluationCriterionDto"
+                        },
+                        "type": "array",
+                        "title": "Criterionresults"
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                    "id",
+                    "runId",
+                    "totalScore",
+                    "maxScore",
+                    "normalizedScore",
+                    "stagesEvaluated",
+                    "stagesPassed",
+                    "createdAt"
+                ],
+                "title": "RunTaskEvaluationDto"
+            },
+            "UpdateCohortRequest": {
+                "properties": {
+                    "status": {
+                        "$ref": "#/components/schemas/ExperimentCohortStatus"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "status"
+                ],
+                "title": "UpdateCohortRequest",
+                "description": "Mutable cohort fields exposed through the operator API."
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    },
+                    "input": {
+                        "title": "Input"
+                    },
+                    "ctx": {
+                        "type": "object",
+                        "title": "Context"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        }
     }
-  },
-  "info": {
-    "description": "API for running and managing H-ARCANE experiments",
-    "title": "H-ARCANE Experiments",
-    "version": "0.1.0"
-  },
-  "openapi": "3.1.0",
-  "paths": {
-    "/api/inngest": {
-      "get": {
-        "operationId": "get_api_inngest_api_inngest_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Api Inngest"
-      },
-      "post": {
-        "operationId": "post_inngest_api_api_inngest_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Post Inngest Api"
-      },
-      "put": {
-        "operationId": "put_inngest_api_api_inngest_put",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Put Inngest Api"
-      }
-    },
-    "/cohorts": {
-      "get": {
-        "description": "List all experiment cohorts.",
-        "operationId": "list_cohorts_cohorts_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "include_archived",
-            "required": false,
-            "schema": {
-              "default": false,
-              "title": "Include Archived",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CohortSummaryDto"
-                  },
-                  "title": "Response List Cohorts Cohorts Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Cohorts",
-        "tags": [
-          "cohorts"
-        ]
-      }
-    },
-    "/cohorts/{cohort_id}": {
-      "get": {
-        "description": "Get one cohort detail payload.",
-        "operationId": "get_cohort_cohorts__cohort_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "cohort_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Cohort Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CohortDetailDto"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Cohort",
-        "tags": [
-          "cohorts"
-        ]
-      },
-      "patch": {
-        "description": "Update one cohort's operator-managed fields.",
-        "operationId": "update_cohort_cohorts__cohort_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "cohort_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Cohort Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateCohortRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CohortSummaryDto"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Update Cohort",
-        "tags": [
-          "cohorts"
-        ]
-      }
-    },
-    "/runs/{run_id}": {
-      "get": {
-        "description": "Get a persisted run-detail snapshot suitable for frontend hydration.",
-        "operationId": "get_run_runs__run_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "run_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Run Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RunSnapshotDto"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Run",
-        "tags": [
-          "runs"
-        ]
-      }
-    }
-  }
 }

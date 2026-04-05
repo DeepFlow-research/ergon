@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
 import { useCohortDetail } from "@/hooks/useCohortDetail";
 import { useRunState } from "@/hooks/useRunState";
-import { CohortDetail, SerializedWorkflowRunState } from "@/lib/types";
+import { CohortDetail, RunLifecycleStatus, SerializedWorkflowRunState } from "@/lib/types";
 
 function formatSeconds(value: number | null): string {
   if (value == null) return "—";
@@ -94,14 +94,13 @@ export function RunWorkspacePage({
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
-                  {runRow?.experiment_task_id ?? runState?.name ?? "Run"}
+                  {runState?.name ?? runRow?.run_id ?? "Run"}
                 </h1>
-                <StatusBadge status={status} />
+                <StatusBadge status={status as RunLifecycleStatus} />
               </div>
               <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
-                <span>Benchmark: {runRow?.benchmark_name ?? "—"}</span>
-                <span>Workflow: {runRow?.workflow_name ?? runState?.name ?? "—"}</span>
-                <span>Started: {runState?.startedAt ? new Date(runState.startedAt).toLocaleString() : "—"}</span>
+                <span>Workflow: {runState?.name ?? "—"}</span>
+                <span suppressHydrationWarning>Started: {runState?.startedAt ? new Date(runState.startedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" }) : "—"}</span>
               </div>
             </div>
 

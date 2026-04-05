@@ -108,11 +108,10 @@ export interface CohortSummary
 }
 
 export interface CohortRunRow
-  extends Omit<RawCohortRunRow, "completed_at" | "error_message" | "final_score" | "normalized_score" | "running_time_ms" | "started_at"> {
+  extends Omit<RawCohortRunRow, "completed_at" | "error_message" | "final_score" | "running_time_ms" | "started_at"> {
   completed_at: string | null;
   error_message: string | null;
   final_score: number | null;
-  normalized_score: number | null;
   running_time_ms: number | null;
   started_at: string | null;
 }
@@ -233,6 +232,12 @@ export interface RunSnapshot
 }
 
 function normalizeCohortSummary(summary: RawCohortSummary): CohortSummary {
+  // extras and metadata_summary arrive via .passthrough() on the generated Zod
+  // schema, so KnownKeys strips them. Cast once to access safely.
+  const pt = summary as RawCohortSummary & {
+    extras?: CohortStatsExtras;
+    metadata_summary?: Partial<CohortMetadataSummary>;
+  };
   return {
     ...summary,
     average_duration_ms: summary.average_duration_ms ?? null,
@@ -240,16 +245,16 @@ function normalizeCohortSummary(summary: RawCohortSummary): CohortSummary {
     best_score: summary.best_score ?? null,
     created_by: summary.created_by ?? null,
     description: summary.description ?? null,
-    extras: summary.extras ?? {},
+    extras: pt.extras ?? {},
     metadata_summary: {
-      code_commit_sha: summary.metadata_summary?.code_commit_sha ?? null,
-      repo_dirty: summary.metadata_summary?.repo_dirty ?? null,
-      prompt_version: summary.metadata_summary?.prompt_version ?? null,
-      worker_version: summary.metadata_summary?.worker_version ?? null,
-      model_provider: summary.metadata_summary?.model_provider ?? null,
-      model_name: summary.metadata_summary?.model_name ?? null,
-      sandbox_config: summary.metadata_summary?.sandbox_config ?? {},
-      dispatch_config: summary.metadata_summary?.dispatch_config ?? {},
+      code_commit_sha: pt.metadata_summary?.code_commit_sha ?? null,
+      repo_dirty: pt.metadata_summary?.repo_dirty ?? null,
+      prompt_version: pt.metadata_summary?.prompt_version ?? null,
+      worker_version: pt.metadata_summary?.worker_version ?? null,
+      model_provider: pt.metadata_summary?.model_provider ?? null,
+      model_name: pt.metadata_summary?.model_name ?? null,
+      sandbox_config: pt.metadata_summary?.sandbox_config ?? {},
+      dispatch_config: pt.metadata_summary?.dispatch_config ?? {},
     },
     stats_updated_at: summary.stats_updated_at ?? null,
     status_counts: {
@@ -364,7 +369,6 @@ export function parseCohortDetail(input: unknown): CohortDetail {
       completed_at: run.completed_at ?? null,
       error_message: run.error_message ?? null,
       final_score: run.final_score ?? null,
-      normalized_score: run.normalized_score ?? null,
       running_time_ms: run.running_time_ms ?? null,
       started_at: run.started_at ?? null,
     })),

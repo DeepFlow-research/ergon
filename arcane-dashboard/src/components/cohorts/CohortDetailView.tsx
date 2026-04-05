@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { useCohortDetail } from "@/hooks/useCohortDetail";
-import { CohortRunRow } from "@/lib/types";
+import { CohortRunRow, RunLifecycleStatus } from "@/lib/types";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getCohortDisplayStatus } from "@/lib/cohortStatus";
 import { CohortDetail } from "@/lib/types";
@@ -30,14 +30,12 @@ function CohortRunRowCard({ cohortId, run }: { cohortId: string; run: CohortRunR
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="truncate text-base font-medium text-gray-900 dark:text-white">
-            {run.experiment_task_id}
+            {run.run_id}
           </span>
-          <StatusBadge status={run.status} size="sm" />
+          <StatusBadge status={run.status as RunLifecycleStatus} size="sm" />
         </div>
         <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
-          <span>{run.benchmark_name}</span>
-          <span>•</span>
-          <span>{run.workflow_name}</span>
+          <span>{run.cohort_name}</span>
           <span>•</span>
           <span className="font-mono">{run.run_id.slice(0, 8)}...</span>
         </div>
@@ -48,7 +46,7 @@ function CohortRunRowCard({ cohortId, run }: { cohortId: string; run: CohortRunR
 
       <div>
         <div className="text-xs text-gray-500 dark:text-gray-400">Benchmark</div>
-        <div className="text-sm font-medium text-gray-900 dark:text-white">{run.benchmark_name}</div>
+        <div className="text-sm font-medium text-gray-900 dark:text-white">{run.cohort_name}</div>
       </div>
       <div>
         <div className="text-xs text-gray-500 dark:text-gray-400">Status</div>
@@ -63,16 +61,8 @@ function CohortRunRowCard({ cohortId, run }: { cohortId: string; run: CohortRunR
       <div>
         <div className="text-xs text-gray-500 dark:text-gray-400">Score</div>
         <div className="text-sm font-medium text-gray-900 dark:text-white">
-          {formatScore(run.final_score ?? run.normalized_score)}
+          {formatScore(run.final_score)}
         </div>
-      </div>
-      <div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">Model</div>
-        <div className="text-sm font-medium text-gray-900 dark:text-white">{run.worker_model}</div>
-      </div>
-      <div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">Max questions</div>
-        <div className="text-sm font-medium text-gray-900 dark:text-white">{run.max_questions}</div>
       </div>
     </Link>
   );

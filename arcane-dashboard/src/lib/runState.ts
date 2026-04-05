@@ -1,4 +1,4 @@
-import type { RunSnapshot, TaskStatusValue } from "@/lib/contracts/rest";
+import type { RunSnapshot } from "@/lib/contracts/rest";
 import { parseRunSnapshot } from "@/lib/contracts/rest";
 import type {
   ActionState,
@@ -12,7 +12,7 @@ import type {
   WorkflowRunState,
 } from "@/lib/types";
 
-function toTaskStatus(status: TaskStatusValue): TaskStatus {
+function toTaskStatus(status: string): TaskStatus {
   return status as TaskStatus;
 }
 
@@ -83,7 +83,7 @@ export function deserializeRunState(input: unknown): WorkflowRunState {
     id: data.id,
     experimentId: data.experimentId,
     name: data.name,
-    status: data.status,
+    status: data.status as WorkflowRunState["status"],
     tasks: new Map(
       Object.entries(data.tasks ?? {}).map(([taskId, task]) => [taskId, deserializeTask(task)]),
     ),
