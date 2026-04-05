@@ -1,0 +1,68 @@
+"""Task propagation: resolve DAG dependencies and detect terminal states."""
+
+
+from h_arcane.core.persistence.definitions.models import ExperimentDefinitionTask
+from h_arcane.core.persistence.shared.db import get_session
+from h_arcane.core.runtime.execution.propagation import (
+    is_workflow_complete,
+    is_workflow_failed,
+    on_task_completed,
+)
+from h_arcane.core.runtime.services.orchestration_dto import (
+    PropagateTaskCompletionCommand,
+    PropagationResult,
+    TaskDescriptor,
+    WorkflowTerminalState,
+)
+
+
+class TaskPropagationService:
+
+    def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+        with get_session() as session:
+            newly_ready_ids = on_task_completed(
+                session,
+                command.run_id,
+                command.definition_id,
+                command.task_id,
+                command.execution_id,
+            )
+
+            ready_descriptors: list[TaskDescriptor] = []
+            for tid in newly_ready_ids:
+                task = session.get(ExperimentDefinitionTask, tid)
+                if task is not None:
+                    ready_descriptors.append(
+                        TaskDescriptor(
+                            task_id=task.id,
+                            task_key=task.task_key,
+                            parent_task_id=task.parent_task_id,
+                        )
+                    )
+
+            terminal = WorkflowTerminalState.NONE
+            if is_workflow_complete(session, command.run_id, command.definition_id):
+                terminal = WorkflowTerminalState.COMPLETED
+            elif is_workflow_failed(session, command.run_id, command.definition_id):
+                terminal = WorkflowTerminalState.FAILED
+
+            return PropagationResult(
+                run_id=command.run_id,
+                definition_id=command.definition_id,
+                completed_task_id=command.task_id,
+                ready_tasks=ready_descriptors,
+                workflow_terminal_state=terminal,
+            )
+
+    def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+        with get_session() as session:
+            terminal = WorkflowTerminalState.NONE
+            if is_workflow_failed(session, command.run_id, command.definition_id):
+                terminal = WorkflowTerminalState.FAILED
+
+            return PropagationResult(
+                run_id=command.run_id,
+                definition_id=command.definition_id,
+                completed_task_id=command.task_id,
+                workflow_terminal_state=terminal,
+            )
