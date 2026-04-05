@@ -75,6 +75,7 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
                 evaluator_binding_key=evaluator_payload.evaluator_binding_key,
                 evaluator_type=evaluator_payload.evaluator_type,
                 agent_reasoning=evaluator_payload.agent_reasoning,
+                sandbox_id=payload.sandbox_id,
             ).model_dump(mode="json"),
         )
         scores.append(result.score)

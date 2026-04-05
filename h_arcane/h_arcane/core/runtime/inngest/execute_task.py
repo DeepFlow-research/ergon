@@ -5,6 +5,7 @@ finalizes. Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
 """
 
 import logging
+from datetime import UTC, datetime
 
 import inngest
 from h_arcane.core.runtime.errors import ConfigurationError, ContractViolationError
@@ -30,8 +31,15 @@ from h_arcane.core.runtime.services.orchestration_dto import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
     PrepareTaskExecutionCommand,
+    PreparedTaskExecution,
 )
 from h_arcane.core.runtime.services.task_execution_service import TaskExecutionService
+from h_arcane.core.runtime.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    task_execute_context,
+    truncate_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +58,22 @@ logger = logging.getLogger(__name__)
 async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
     payload = TaskReadyEvent(**ctx.event.data)
     logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
+    span_start = datetime.now(UTC)
 
     svc = TaskExecutionService()
-    prepared = svc.prepare(
-        PrepareTaskExecutionCommand(
-            run_id=payload.run_id,
-            definition_id=payload.definition_id,
-            task_id=payload.task_id,
+
+    def _prepare() -> dict:
+        result = svc.prepare(
+            PrepareTaskExecutionCommand(
+                run_id=payload.run_id,
+                definition_id=payload.definition_id,
+                task_id=payload.task_id,
+            )
         )
-    )
+        return result.model_dump(mode="json")
+
+    prepared_data = await ctx.step.run("prepare-execution", _prepare)
+    prepared = PreparedTaskExecution(**prepared_data)
 
     if prepared.skipped:
         logger.info(
@@ -131,7 +146,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 task_description=prepared.task_description,
                 worker_binding_key=prepared.worker_binding_key or "",
                 worker_type=prepared.worker_type,
-                model_target=prepared.model_target or "",
+                model_target=prepared.model_target,
                 benchmark_type=prepared.benchmark_type,
             ).model_dump(mode="json"),
         )
@@ -173,6 +188,26 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             )
         )
 
+        get_trace_sink().emit_span(CompletedSpan(
+            name="task.execute",
+            context=task_execute_context(payload.run_id, payload.task_id),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            attributes={
+                "run_id": str(payload.run_id),
+                "definition_id": str(payload.definition_id),
+                "task_id": str(payload.task_id),
+                "execution_id": str(prepared.execution_id),
+                "task_key": prepared.task_key,
+                "benchmark_type": prepared.benchmark_type,
+                "worker_type": prepared.worker_type or "",
+                "worker_binding_key": prepared.worker_binding_key or "",
+                "model_target": prepared.model_target or "",
+                "skipped": False,
+                "status": "completed",
+            },
+        ))
+
         return TaskExecuteResult(
             run_id=payload.run_id,
             task_id=payload.task_id,
@@ -208,5 +243,25 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 ).model_dump(mode="json"),
             )
         )
+
+        get_trace_sink().emit_span(CompletedSpan(
+            name="task.execute",
+            context=task_execute_context(payload.run_id, payload.task_id),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            status_code="error",
+            status_message=truncate_text(error_msg),
+            attributes={
+                "run_id": str(payload.run_id),
+                "definition_id": str(payload.definition_id),
+                "task_id": str(payload.task_id),
+                "execution_id": str(prepared.execution_id) if prepared.execution_id else "",
+                "task_key": prepared.task_key,
+                "benchmark_type": prepared.benchmark_type,
+                "skipped": False,
+                "status": "failed",
+                "error": truncate_text(error_msg),
+            },
+        ))
 
         raise inngest.NonRetriableError(message=error_msg) from exc

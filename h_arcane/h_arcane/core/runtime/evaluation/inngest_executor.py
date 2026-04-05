@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from functools import partial
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -16,6 +17,12 @@ from h_arcane.core.runtime.evaluation.evaluation_schemas import (
     CriterionContext,
     CriterionSpec,
     TaskEvaluationContext,
+)
+from h_arcane.core.runtime.tracing import (
+    CompletedSpan,
+    TraceSink,
+    evaluation_criterion_context,
+    get_trace_sink,
 )
 
 if TYPE_CHECKING:
@@ -33,12 +40,14 @@ class InngestCriterionExecutor:
         execution_id: UUID,
         evaluator_id: UUID,
         sandbox_manager: BaseSandboxManager | None = None,
+        trace_sink: TraceSink | None = None,
     ):
         self.ctx = ctx
         self.task_id = task_id
         self.execution_id = execution_id
         self.evaluator_id = evaluator_id
         self.sandbox_manager = sandbox_manager
+        self._sink = trace_sink or get_trace_sink()
 
     async def execute_all(
         self,
@@ -49,6 +58,7 @@ class InngestCriterionExecutor:
 
         def make_step(spec: CriterionSpec):
             async def run_criterion() -> CriterionResult:
+                span_start = datetime.now(UTC)
                 criterion_context = CriterionContext(
                     run_id=task_context.run_id,
                     task_input=task_context.task_input,
@@ -61,6 +71,7 @@ class InngestCriterionExecutor:
                 )
 
                 criterion = spec.criterion
+                cr_result: CriterionResult
 
                 if isinstance(criterion, Criterion):
                     eval_ctx = EvaluationContext(
@@ -73,25 +84,48 @@ class InngestCriterionExecutor:
                         worker_result=WorkerResult(
                             output=task_context.agent_reasoning,
                         ),
-                        sandbox_id=None,
+                        sandbox_id=task_context.sandbox_id or None,
                         metadata={},
                     )
-                    return await criterion.evaluate(eval_ctx)
-
-                if self.sandbox_manager is not None:
+                    cr_result = await criterion.evaluate(eval_ctx)
+                elif self.sandbox_manager is not None:
                     runtime = DefaultCriterionRuntime(
                         context=criterion_context,
                         sandbox_manager=self.sandbox_manager,
                     )
                     try:
-                        return await criterion.evaluate(runtime, criterion_context)
+                        cr_result = await criterion.evaluate(runtime, criterion_context)
                     finally:
                         await runtime.cleanup()
+                else:
+                    raise TypeError(
+                        f"Criterion {type(criterion).__name__} is not a public Criterion ABC "
+                        f"implementation and no sandbox_manager is available for internal criteria"
+                    )
 
-                raise TypeError(
-                    f"Criterion {type(criterion).__name__} is not a public Criterion ABC "
-                    f"implementation and no sandbox_manager is available for internal criteria"
-                )
+                self._sink.emit_span(CompletedSpan(
+                    name="evaluation.criterion",
+                    context=evaluation_criterion_context(
+                        task_context.run_id, self.task_id,
+                        self.execution_id, self.evaluator_id,
+                        spec.stage_idx, spec.criterion_idx,
+                    ),
+                    start_time=span_start,
+                    end_time=datetime.now(UTC),
+                    attributes={
+                        "run_id": str(task_context.run_id),
+                        "task_id": str(self.task_id),
+                        "evaluator_id": str(self.evaluator_id),
+                        "stage_idx": spec.stage_idx,
+                        "criterion_idx": spec.criterion_idx,
+                        "criterion_type": type(criterion).__name__,
+                        "score": cr_result.score,
+                        "max_score": spec.max_score,
+                        "passed": cr_result.passed,
+                    },
+                ))
+
+                return cr_result
 
             step_name = f"criterion-{spec.stage_idx}-{spec.criterion_idx}"
             return partial(

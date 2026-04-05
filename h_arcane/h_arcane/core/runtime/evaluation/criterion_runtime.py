@@ -14,6 +14,8 @@ from h_arcane.core.runtime.evaluation.evaluation_schemas import (
     CriterionContext,
     SandboxResult,
 )
+from openai import AsyncOpenAI
+
 from h_arcane.core.settings import settings
 from pydantic import BaseModel
 
@@ -128,8 +130,6 @@ class DefaultCriterionRuntime:
             raise
 
     async def call_llm_judge(self, messages: list, response_type: type[T]) -> T:
-        from openai import AsyncOpenAI
-
         client = AsyncOpenAI(api_key=settings.openai_api_key)
         response = await client.beta.chat.completions.parse(
             model=self._llm_model,

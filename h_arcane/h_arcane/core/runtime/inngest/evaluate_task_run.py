@@ -4,6 +4,8 @@ Invoked by check_evaluators per evaluator. Creates the criterion executor,
 runs all criteria, aggregates results, persists RunTaskEvaluation.
 """
 
+from datetime import UTC, datetime
+
 import inngest
 from arcane_builtins.registry import EVALUATORS
 from h_arcane.api.task_types import BenchmarkTask
@@ -26,6 +28,11 @@ from h_arcane.core.runtime.services.inngest_function_results import (
 from h_arcane.core.runtime.services.rubric_evaluation_service import (
     EvaluationServiceResult,
     RubricEvaluationService,
+)
+from h_arcane.core.runtime.tracing import (
+    CompletedSpan,
+    evaluation_task_context,
+    get_trace_sink,
 )
 
 
@@ -100,6 +107,7 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
     evaluator_binding_key = payload.evaluator_binding_key
     evaluator_type = payload.evaluator_type
     agent_reasoning = payload.agent_reasoning
+    span_start = datetime.now(UTC)
 
     evaluator_cls = EVALUATORS.get(evaluator_type)
     if evaluator_cls is None:
@@ -121,6 +129,7 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         run_id=run_id,
         task_input="",
         agent_reasoning=agent_reasoning,
+        sandbox_id=payload.sandbox_id,
     )
 
     task = BenchmarkTask(
@@ -155,6 +164,24 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         session.commit()
     finally:
         session.close()
+
+    get_trace_sink().emit_span(CompletedSpan(
+        name="evaluation.task",
+        context=evaluation_task_context(run_id, task_id, execution_id, evaluator_id),
+        start_time=span_start,
+        end_time=datetime.now(UTC),
+        attributes={
+            "run_id": str(run_id),
+            "task_id": str(task_id),
+            "execution_id": str(execution_id),
+            "evaluator_id": str(evaluator_id),
+            "evaluator_type": evaluator_type,
+            "score": result.score,
+            "passed": result.passed,
+            "stages_evaluated": summary.stages_evaluated,
+            "stages_passed": summary.stages_passed,
+        },
+    ))
 
     return EvaluateTaskRunResult(
         score=result.score,

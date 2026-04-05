@@ -18,8 +18,10 @@ if TYPE_CHECKING:
 
 from h_arcane.core.utils import utcnow as _utcnow
 from pydantic import model_validator
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
+
+TZDateTime = DateTime(timezone=True)
 
 # ---------------------------------------------------------------------------
 # Cohort status enum
@@ -48,9 +50,9 @@ class RunRecord(SQLModel, table=True):
     )
     status: str = Field(index=True)
     error_message: str | None = None
-    created_at: datetime = Field(default_factory=_utcnow)
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+    started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
+    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     summary_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
     # -- JSON accessor: summary_json --
@@ -90,8 +92,8 @@ class RunTaskExecution(SQLModel, table=True):
     )
     attempt_number: int = 1
     status: str = Field(index=True)
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
+    started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
+    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     output_text: str | None = None
     output_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     error_json: dict | None = Field(default=None, sa_column=Column(JSON))
@@ -149,8 +151,8 @@ class RunAction(SQLModel, table=True):
     input_text: str
     output_text: str | None = None
     error_json: dict | None = Field(default=None, sa_column=Column(JSON))
-    started_at: datetime = Field(default_factory=_utcnow)
-    completed_at: datetime | None = None
+    started_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
 
     # -- JSON accessor: error_json (nullable) --
 
@@ -190,7 +192,7 @@ class RunResource(SQLModel, table=True):
     file_path: str
     size_bytes: int
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: metadata_json --
 
@@ -230,7 +232,7 @@ class RunTaskStateEvent(SQLModel, table=True):
     old_status: str | None = None
     new_status: str
     event_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: event_metadata --
 
@@ -272,7 +274,7 @@ class RunTaskEvaluation(SQLModel, table=True):
     passed: bool | None = None
     feedback: str | None = None
     summary_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: summary_json --
 
@@ -307,8 +309,8 @@ class ExperimentCohort(SQLModel, table=True):
     created_by: str | None = None
     status: str = Field(default=ExperimentCohortStatus.ACTIVE)
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
-    updated_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+    updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: metadata_json --
 
@@ -346,7 +348,7 @@ class ExperimentCohortStats(SQLModel, table=True):
     worst_score: float | None = None
     average_duration_ms: int | None = None
     failure_rate: float = 0.0
-    updated_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 
 # ---------------------------------------------------------------------------
@@ -361,8 +363,8 @@ class Thread(SQLModel, table=True):
     topic: str
     agent_a_id: str = Field(index=True)
     agent_b_id: str = Field(index=True)
-    created_at: datetime = Field(default_factory=_utcnow)
-    updated_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+    updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 
 # ---------------------------------------------------------------------------
@@ -379,4 +381,4 @@ class ThreadMessage(SQLModel, table=True):
     to_agent_id: str
     content: str
     sequence_num: int
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

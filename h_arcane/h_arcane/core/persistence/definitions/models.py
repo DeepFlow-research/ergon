@@ -11,8 +11,10 @@ from uuid import UUID, uuid4
 
 from h_arcane.core.utils import utcnow as _utcnow
 from pydantic import model_validator
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
+
+TZDateTime = DateTime(timezone=True)
 
 # ---------------------------------------------------------------------------
 # ExperimentDefinition
@@ -24,7 +26,7 @@ class ExperimentDefinition(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     benchmark_type: str = Field(index=True)
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # JSON accessor pattern: parsed_*() returns typed model, _parse_*()
     # classmethod for reuse, @model_validator for fail-fast at row load.
@@ -61,7 +63,7 @@ class ExperimentDefinitionWorker(SQLModel, table=True):
     worker_type: str = Field(index=True)
     model_target: str
     snapshot_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: snapshot_json --
 
@@ -95,7 +97,7 @@ class ExperimentDefinitionEvaluator(SQLModel, table=True):
     binding_key: str = Field(index=True)
     evaluator_type: str = Field(index=True)
     snapshot_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: snapshot_json --
 
@@ -128,7 +130,7 @@ class ExperimentDefinitionInstance(SQLModel, table=True):
     )
     instance_key: str = Field(index=True)
     benchmark_instance_state: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: benchmark_instance_state --
 
@@ -173,7 +175,7 @@ class ExperimentDefinitionTask(SQLModel, table=True):
     task_type: str | None = None
     description: str
     task_payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: task_payload --
 
@@ -212,7 +214,7 @@ class ExperimentDefinitionTaskDependency(SQLModel, table=True):
         foreign_key="experiment_definition_tasks.id",
         index=True,
     )
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +235,7 @@ class ExperimentDefinitionTaskAssignment(SQLModel, table=True):
     )
     worker_binding_key: str = Field(index=True)
     assignment_type: str = Field(default="initial")
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 
 # ---------------------------------------------------------------------------
@@ -253,4 +255,4 @@ class ExperimentDefinitionTaskEvaluator(SQLModel, table=True):
         index=True,
     )
     evaluator_binding_key: str = Field(index=True)
-    created_at: datetime = Field(default_factory=_utcnow)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

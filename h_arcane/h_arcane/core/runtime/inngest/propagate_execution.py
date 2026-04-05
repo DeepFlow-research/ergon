@@ -4,6 +4,7 @@ Resolves DAG dependencies and detects workflow terminal states.
 """
 
 import logging
+from datetime import UTC, datetime
 
 import inngest
 from h_arcane.core.runtime.events.task_events import (
@@ -22,6 +23,11 @@ from h_arcane.core.runtime.services.orchestration_dto import (
 from h_arcane.core.runtime.services.task_propagation_service import (
     TaskPropagationService,
 )
+from h_arcane.core.runtime.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    task_propagate_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +42,7 @@ logger = logging.getLogger(__name__)
 async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
     payload = TaskCompletedEvent(**ctx.event.data)
     logger.info("task-propagate run_id=%s task_id=%s", payload.run_id, payload.task_id)
+    span_start = datetime.now(UTC)
 
     svc = TaskPropagationService()
     propagation = svc.propagate(
@@ -91,6 +98,20 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
         workflow_complete=(propagation.workflow_terminal_state == WorkflowTerminalState.COMPLETED),
         workflow_failed=(propagation.workflow_terminal_state == WorkflowTerminalState.FAILED),
     )
+
+    get_trace_sink().emit_span(CompletedSpan(
+        name="task.propagate",
+        context=task_propagate_context(payload.run_id, payload.task_id),
+        start_time=span_start,
+        end_time=datetime.now(UTC),
+        attributes={
+            "run_id": str(payload.run_id),
+            "task_id": str(payload.task_id),
+            "newly_ready_tasks": len(propagation.ready_tasks),
+            "workflow_terminal": str(propagation.workflow_terminal_state),
+        },
+    ))
+
     return result
 
 

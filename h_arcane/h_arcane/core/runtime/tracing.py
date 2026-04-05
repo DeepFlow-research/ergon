@@ -1,7 +1,37 @@
-"""OTEL-compatible tracing facade.
+"""Tracing facade.
 
-Provides a lightweight tracing abstraction with a NoopTraceSink default.
-When settings.otel_traces_enabled is True, OtelTraceSink exports spans via OTLP.
+Defines the TraceSink protocol and data classes that the runtime uses
+to emit structured spans. The default sink is NoopTraceSink (discards
+everything). When a real backend is wired in (OtelTraceSink), swap the
+singleton returned by get_trace_sink().
+
+Context factories at the bottom produce deterministic TraceContext
+objects from run/task/execution/evaluator UUIDs so span trees are
+reproducible across replays.
+
+Target span hierarchy (one trace per run, keyed by run_id)::
+
+    workflow.execute (synthetic root)
+    │   cohort_id, instance_count
+    ├── workflow.start
+    ├── task.execute (per task)
+    │   instance_key
+    │   ├── sandbox.setup
+    │   ├── worker.execute
+    │   │   └── action (per RunAction)
+    │   │       action_id, action_num, action_type, success, duration_ms
+    │   ├── persist.outputs
+    │   │   resource_ids
+    │   └── evaluation.task (per evaluator)
+    │       └── evaluation.criterion (per criterion)
+    ├── task.propagate (per completion)
+    ├── communication.message (per ThreadMessage, optional)
+    │   thread_id, from_agent_id, to_agent_id, sequence_num
+    └── workflow.complete OR workflow.failed
+
+Every span stores relational IDs (run_id, task_id, execution_id,
+action_id, evaluator_id) for PG lookup — not payload copies.
+See otel_tracing_v2.md for full attribute schemas per span.
 """
 
 from __future__ import annotations
@@ -12,9 +42,23 @@ import random
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from threading import Lock
 from typing import Any, Protocol
 from uuid import UUID
+
+from opentelemetry import trace as otel_trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import (
+    NonRecordingSpan,
+    SpanContext,
+    Status,
+    StatusCode,
+    TraceFlags,
+)
+from opentelemetry.trace.propagation import set_span_in_context
+from opentelemetry.trace.span import TraceState
 
 from h_arcane.core.settings import settings
 from pydantic import BaseModel, Field
@@ -135,7 +179,7 @@ class NoopTraceSink:
 
 
 # ---------------------------------------------------------------------------
-# OTEL attribute helpers
+# Attribute helpers
 # ---------------------------------------------------------------------------
 
 
@@ -172,7 +216,7 @@ def normalize_attributes(attributes: dict[str, Any] | None) -> dict[str, Any]:
     return normalized
 
 
-def datetime_to_otel_nanos(value: datetime) -> int:
+def datetime_to_nanos(value: datetime) -> int:
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
     return int(value.timestamp() * 1_000_000_000)
@@ -210,6 +254,19 @@ class DeterministicIdGenerator:
         return random.getrandbits(64) or 1
 
 
+@contextmanager
+def _id_override(trace_id: int | None = None, span_id: int | None = None):
+    trace_token = _desired_trace_id.set(trace_id) if trace_id is not None else None
+    span_token = _desired_span_id.set(span_id) if span_id is not None else None
+    try:
+        yield
+    finally:
+        if span_token is not None:
+            _desired_span_id.reset(span_token)
+        if trace_token is not None:
+            _desired_trace_id.reset(trace_token)
+
+
 # ---------------------------------------------------------------------------
 # OtelTraceSink
 # ---------------------------------------------------------------------------
@@ -219,9 +276,19 @@ class OtelTraceSink:
     """OTEL-backed sink that exports spans via OTLP/gRPC."""
 
     def __init__(self) -> None:
-        self._provider: Any | None = None
-        self._tracer: Any | None = None
-        self._init_lock = Lock()
+        provider = TracerProvider(
+            resource=Resource.create({"service.name": settings.otel_service_name}),
+            id_generator=DeterministicIdGenerator(),
+        )
+        exporter = OTLPSpanExporter(
+            endpoint=settings.otel_exporter_otlp_endpoint,
+            insecure=settings.otel_exporter_otlp_insecure,
+        )
+        provider.add_span_processor(BatchSpanProcessor(exporter))
+        otel_trace.set_tracer_provider(provider)
+
+        self._provider: TracerProvider = provider
+        self._tracer = otel_trace.get_tracer(settings.otel_service_name)
 
     def child_context(
         self,
@@ -264,173 +331,72 @@ class OtelTraceSink:
         self.emit_span(span)
 
     def emit_span(self, span: CompletedSpan) -> None:
-        tracer = self._get_tracer()
-        if tracer is None:
-            return
+        parent_ctx = None
+        if span.context.parent_span_id not in (None, _EMPTY_SPAN_ID):
+            span_context = SpanContext(
+                trace_id=span.context.trace_id,
+                span_id=span.context.parent_span_id,
+                is_remote=False,
+                trace_flags=TraceFlags(TRACE_FLAGS_SAMPLED),
+                trace_state=TraceState(),
+            )
+            parent_ctx = set_span_in_context(NonRecordingSpan(span_context))
 
-        imports = _otel_imports()
-        parent_context = self._parent_context(
-            span.context.parent_span_id, span.context.trace_id, imports,
-        )
-        start_time = datetime_to_otel_nanos(span.start_time)
-        end_time = datetime_to_otel_nanos(span.end_time)
+        start_time = datetime_to_nanos(span.start_time)
+        end_time = datetime_to_nanos(span.end_time)
         attrs = normalize_attributes({**span.context.attributes, **span.attributes})
 
         with _id_override(
             trace_id=span.context.trace_id if span.context.parent_span_id is None else None,
             span_id=span.context.span_id,
         ):
-            sdk_span = tracer.start_span(
+            sdk_span = self._tracer.start_span(
                 span.name,
-                context=parent_context,
+                context=parent_ctx,
                 attributes=attrs,
                 start_time=start_time,
             )
 
         if str(span.status_code).lower() == "error":
-            sdk_span.set_status(
-                imports["Status"](imports["StatusCode"].ERROR, span.status_message),
-            )
+            sdk_span.set_status(Status(StatusCode.ERROR, span.status_message))
         else:
-            sdk_span.set_status(imports["Status"](imports["StatusCode"].OK))
+            sdk_span.set_status(Status(StatusCode.OK))
 
         for event in span.events:
             sdk_span.add_event(
                 event.name,
                 attributes=normalize_attributes(event.attributes),
-                timestamp=datetime_to_otel_nanos(event.timestamp),
+                timestamp=datetime_to_nanos(event.timestamp),
             )
 
         sdk_span.end(end_time=end_time)
 
-    # ------------------------------------------------------------------
-
-    def _get_tracer(self) -> Any | None:
-        if self._tracer is not None:
-            return self._tracer
-
-        with self._init_lock:
-            if self._tracer is not None:
-                return self._tracer
-            try:
-                imports = _otel_imports()
-            except Exception:
-                return None
-
-            provider = imports["TracerProvider"](
-                resource=imports["Resource"].create(
-                    {"service.name": settings.otel_service_name}
-                ),
-                id_generator=DeterministicIdGenerator(),
-            )
-            exporter = imports["OTLPSpanExporter"](
-                endpoint=settings.otel_exporter_otlp_endpoint,
-                insecure=settings.otel_exporter_otlp_insecure,
-            )
-            provider.add_span_processor(imports["BatchSpanProcessor"](exporter))
-            imports["trace"].set_tracer_provider(provider)
-            self._provider = provider
-            self._tracer = imports["trace"].get_tracer(settings.otel_service_name)
-            return self._tracer
-
-    @staticmethod
-    def _parent_context(
-        parent_span_id: int | None,
-        trace_id: int,
-        imports: dict[str, Any],
-    ) -> Any | None:
-        if parent_span_id in (None, _EMPTY_SPAN_ID):
-            return None
-        span_context = imports["SpanContext"](
-            trace_id=trace_id,
-            span_id=parent_span_id,
-            is_remote=False,
-            trace_flags=imports["TraceFlags"](TRACE_FLAGS_SAMPLED),
-            trace_state=imports["TraceState"](),
-        )
-        return imports["set_span_in_context"](imports["NonRecordingSpan"](span_context))
-
 
 # ---------------------------------------------------------------------------
-# Singleton accessor
+# Process-wide sink
 # ---------------------------------------------------------------------------
 
-_sink_lock = Lock()
-_sink: TraceSink | None = None
+
+def _create_sink() -> TraceSink:
+    if settings.otel_traces_enabled:
+        try:
+            return OtelTraceSink()
+        except Exception:
+            return NoopTraceSink()
+    return NoopTraceSink()
+
+
+_sink: TraceSink = _create_sink()
 
 
 def get_trace_sink() -> TraceSink:
-    """Return the process-wide trace sink (lazy-initialised)."""
-    global _sink  # noqa: PLW0603
+    """Return the process-wide trace sink.
 
-    if _sink is not None:
-        return _sink
-
-    with _sink_lock:
-        if _sink is not None:
-            return _sink
-        if settings.otel_traces_enabled:
-            try:
-                _sink = OtelTraceSink()
-            except Exception:
-                _sink = NoopTraceSink()
-        else:
-            _sink = NoopTraceSink()
-        return _sink
-
-
-# ---------------------------------------------------------------------------
-# OTEL import helper (deferred so packages remain optional)
-# ---------------------------------------------------------------------------
-
-
-def _otel_imports() -> dict[str, Any]:
-    from opentelemetry import trace  # type: ignore[import-not-found]
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-not-found]
-        OTLPSpanExporter,
-    )
-    from opentelemetry.sdk.resources import Resource  # type: ignore[import-not-found]
-    from opentelemetry.sdk.trace import TracerProvider  # type: ignore[import-not-found]
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor  # type: ignore[import-not-found]
-    from opentelemetry.trace import (  # type: ignore[import-not-found]
-        NonRecordingSpan,
-        SpanContext,
-        Status,
-        StatusCode,
-        TraceFlags,
-    )
-    from opentelemetry.trace.propagation import (
-        set_span_in_context,  # type: ignore[import-not-found]
-    )
-    from opentelemetry.trace.span import TraceState  # type: ignore[import-not-found]
-
-    return {
-        "trace": trace,
-        "OTLPSpanExporter": OTLPSpanExporter,
-        "Resource": Resource,
-        "TracerProvider": TracerProvider,
-        "BatchSpanProcessor": BatchSpanProcessor,
-        "NonRecordingSpan": NonRecordingSpan,
-        "SpanContext": SpanContext,
-        "Status": Status,
-        "StatusCode": StatusCode,
-        "TraceFlags": TraceFlags,
-        "TraceState": TraceState,
-        "set_span_in_context": set_span_in_context,
-    }
-
-
-@contextmanager
-def _id_override(trace_id: int | None = None, span_id: int | None = None):
-    trace_token = _desired_trace_id.set(trace_id) if trace_id is not None else None
-    span_token = _desired_span_id.set(span_id) if span_id is not None else None
-    try:
-        yield
-    finally:
-        if span_token is not None:
-            _desired_span_id.reset(span_token)
-        if trace_token is not None:
-            _desired_trace_id.reset(trace_token)
+    Each process (uvicorn worker, CLI invocation, test runner) gets its own
+    sink created at import time. No locking needed — OTEL is stateless
+    per-process and the collector handles fan-in from multiple exporters.
+    """
+    return _sink
 
 
 # ---------------------------------------------------------------------------
@@ -465,6 +431,94 @@ def task_execute_context(run_id: UUID, task_id: UUID) -> TraceContext:
         parent_span_id=root.span_id,
         run_id=run_id,
         task_id=task_id,
+    )
+
+
+def sandbox_setup_context(run_id: UUID, task_id: UUID) -> TraceContext:
+    parent = task_execute_context(run_id, task_id)
+    return TraceContext(
+        trace_id=parent.trace_id,
+        span_id=span_id_from_key("sandbox_setup", str(run_id), str(task_id)),
+        parent_span_id=parent.span_id,
+        run_id=run_id,
+        task_id=task_id,
+    )
+
+
+def worker_execute_context(
+    run_id: UUID, task_id: UUID, execution_id: UUID,
+) -> TraceContext:
+    parent = task_execute_context(run_id, task_id)
+    return TraceContext(
+        trace_id=parent.trace_id,
+        span_id=span_id_from_key(
+            "worker_execute", str(run_id), str(task_id), str(execution_id),
+        ),
+        parent_span_id=parent.span_id,
+        run_id=run_id,
+        task_id=task_id,
+        execution_id=execution_id,
+    )
+
+
+def action_context(
+    run_id: UUID, task_id: UUID, execution_id: UUID, action_id: UUID,
+) -> TraceContext:
+    parent = worker_execute_context(run_id, task_id, execution_id)
+    return TraceContext(
+        trace_id=parent.trace_id,
+        span_id=span_id_from_key("action", str(run_id), str(action_id)),
+        parent_span_id=parent.span_id,
+        run_id=run_id,
+        task_id=task_id,
+        execution_id=execution_id,
+    )
+
+
+def persist_outputs_context(
+    run_id: UUID, task_id: UUID, execution_id: UUID,
+) -> TraceContext:
+    parent = task_execute_context(run_id, task_id)
+    return TraceContext(
+        trace_id=parent.trace_id,
+        span_id=span_id_from_key(
+            "persist_outputs", str(run_id), str(task_id), str(execution_id),
+        ),
+        parent_span_id=parent.span_id,
+        run_id=run_id,
+        task_id=task_id,
+        execution_id=execution_id,
+    )
+
+
+def task_propagate_context(run_id: UUID, task_id: UUID) -> TraceContext:
+    root = workflow_root_context(run_id)
+    return TraceContext(
+        trace_id=root.trace_id,
+        span_id=span_id_from_key("task_propagate", str(run_id), str(task_id)),
+        parent_span_id=root.span_id,
+        run_id=run_id,
+        task_id=task_id,
+    )
+
+
+def workflow_complete_context(run_id: UUID) -> TraceContext:
+    root = workflow_root_context(run_id)
+    return TraceContext(
+        trace_id=root.trace_id,
+        span_id=span_id_from_key("workflow_complete", str(run_id)),
+        parent_span_id=root.span_id,
+        run_id=run_id,
+    )
+
+
+def workflow_failed_context(run_id: UUID) -> TraceContext:
+    root = workflow_root_context(run_id)
+    return TraceContext(
+        trace_id=root.trace_id,
+        span_id=span_id_from_key("workflow_failed", str(run_id)),
+        parent_span_id=root.span_id,
+        run_id=run_id,
     )
 
 

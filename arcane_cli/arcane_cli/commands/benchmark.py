@@ -7,6 +7,7 @@ from argparse import Namespace
 from arcane_cli.composition import build_experiment
 from arcane_cli.discovery import list_benchmarks
 from arcane_cli.rendering import render_run_result, render_table
+from h_arcane.core.runtime.services.cohort_service import experiment_cohort_service
 
 
 def handle_benchmark(args: Namespace) -> int:
@@ -42,8 +43,19 @@ def run_benchmark(args: Namespace) -> int:
     render_run_result(persisted)
     print(f"\nExperiment persisted: {persisted.definition_id}")
 
+
+    cohort_name = args.cohort or f"{args.slug}"
+    cohort = experiment_cohort_service.resolve_or_create(
+        name=cohort_name,
+        description=f"Benchmark: {args.slug} | worker: {args.worker} | evaluator: {args.evaluator}",
+        created_by="arcane-cli",
+    )
+    print(f"\nCohort: {cohort.name} (id={cohort.id})")
+
     print("\nCreating run and dispatching via Inngest...")
-    run_handle = asyncio.run(_create_and_dispatch(persisted, timeout=args.timeout))
+    run_handle = asyncio.run(
+        _create_and_dispatch(persisted, timeout=args.timeout, cohort_id=cohort.id)
+    )
 
     print(f"\nRun completed:")
     print(f"  Run ID:     {run_handle.run_id}")
@@ -52,7 +64,7 @@ def run_benchmark(args: Namespace) -> int:
     return 0 if run_handle.status == "completed" else 1
 
 
-async def _create_and_dispatch(persisted, timeout: int = 600):
+async def _create_and_dispatch(persisted, timeout: int = 600, cohort_id=None):
     import inngest
 
     from h_arcane.core.persistence.shared.db import get_session
@@ -63,7 +75,7 @@ async def _create_and_dispatch(persisted, timeout: int = 600):
     from h_arcane.core.runtime.services.run_service import create_run
     from h_arcane.api.handles import ExperimentRunHandle
 
-    run = create_run(persisted)
+    run = create_run(persisted, cohort_id=cohort_id)
     print(f"  Run ID: {run.id}")
 
     event = WorkflowStartedEvent(

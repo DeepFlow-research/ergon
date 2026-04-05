@@ -57,6 +57,7 @@ class TaskEvaluationContext(BaseModel):
     task_input: str = ""
     agent_reasoning: str = ""
     agent_outputs: list[dict[str, Any]] = Field(default_factory=list)
+    sandbox_id: str = ""
 
 
 class CriterionSpec(BaseModel):

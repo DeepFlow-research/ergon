@@ -39,6 +39,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-questions", type=int, default=10,
         help="Max questions workers can ask",
     )
+    run_parser.add_argument(
+        "--cohort",
+        default=None,
+        help="Cohort name to group this run under (auto-generated from slug if omitted)",
+    )
 
     run = sub.add_parser("run", help="Run management")
     run_sub = run.add_subparsers(dest="run_action")

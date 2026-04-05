@@ -11,8 +11,8 @@ T = TypeVar("T")
 
 
 def utcnow() -> datetime:
-    """Return current UTC time as a naive datetime for Postgres TIMESTAMP columns."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Return current UTC time as a timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 def require_not_none(value: T | None, error_msg: str) -> T:

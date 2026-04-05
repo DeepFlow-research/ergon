@@ -20,6 +20,7 @@ from arcane_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from arcane_builtins.benchmarks.smoke_test.rubric import SmokeTestRubric
 from arcane_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from arcane_builtins.workers.baselines.react_worker import ReActWorker
+from arcane_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
 from arcane_builtins.workers.baselines.stub_worker import StubWorker
 
 
@@ -32,6 +33,7 @@ BENCHMARKS: dict[str, type[Benchmark]] = {
 
 WORKERS: dict[str, type[Worker]] = {
     "stub-worker": StubWorker,
+    "smoke-test-worker": SmokeTestWorker,
     "react-v1": ReActWorker,
 }
 

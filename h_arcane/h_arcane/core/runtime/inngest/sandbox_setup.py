@@ -5,6 +5,7 @@ Resolves the sandbox manager from SANDBOX_MANAGERS registry by benchmark_type.
 """
 
 import logging
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from uuid import UUID
@@ -20,6 +21,11 @@ from h_arcane.core.runtime.errors import ContractViolationError, DataIntegrityEr
 from h_arcane.core.runtime.inngest_client import inngest_client
 from h_arcane.core.runtime.services.child_function_payloads import SandboxSetupRequest
 from h_arcane.core.runtime.services.inngest_function_results import SandboxReadyResult
+from h_arcane.core.runtime.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    sandbox_setup_context,
+)
 from h_arcane.core.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -37,6 +43,7 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
     run_id = payload.run_id
     task_id = payload.task_id
     benchmark_type = payload.benchmark_type
+    span_start = datetime.now(UTC)
 
     logger.info(
         "sandbox-setup run_id=%s task_id=%s benchmark=%s",
@@ -66,6 +73,19 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
     )
 
     if isinstance(result, SandboxReadyResult):
+        get_trace_sink().emit_span(CompletedSpan(
+            name="sandbox.setup",
+            context=sandbox_setup_context(run_id, task_id),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            attributes={
+                "run_id": str(run_id),
+                "task_id": str(task_id),
+                "benchmark_type": benchmark_type,
+                "sandbox_id": result.sandbox_id or "",
+                "input_resource_count": len(payload.input_resource_ids),
+            },
+        ))
         return result
     raise ContractViolationError(
         f"sandbox-setup step returned {type(result).__name__}, expected SandboxReadyResult",

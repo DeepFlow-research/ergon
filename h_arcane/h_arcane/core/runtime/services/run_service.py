@@ -23,10 +23,14 @@ _POLL_INTERVAL_S = 1.0
 _DEFAULT_TIMEOUT_S = 600.0
 
 
-def create_run(definition: PersistedExperimentDefinition) -> RunRecord:
+def create_run(
+    definition: PersistedExperimentDefinition,
+    cohort_id: UUID | None = None,
+) -> RunRecord:
     with get_session() as session:
         run = RunRecord(
             experiment_definition_id=definition.definition_id,
+            cohort_id=cohort_id,
             status=RunStatus.PENDING,
             created_at=utcnow(),
         )

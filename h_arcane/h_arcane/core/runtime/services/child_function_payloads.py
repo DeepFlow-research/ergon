@@ -32,12 +32,12 @@ class WorkerExecuteRequest(InngestEventContract):
     task_id: UUID
     execution_id: UUID
     sandbox_id: str
-    task_key: str = ""
+    task_key: str
     task_description: str = ""
     worker_binding_key: str = ""
-    worker_type: str = ""
-    model_target: str = ""
-    benchmark_type: str = ""
+    worker_type: str
+    model_target: str | None = None
+    benchmark_type: str
 
 
 class PersistOutputsRequest(InngestEventContract):
@@ -50,7 +50,7 @@ class PersistOutputsRequest(InngestEventContract):
     execution_id: UUID
     sandbox_id: str | None = None
     output_dir: str | None = None
-    benchmark_type: str = ""
+    benchmark_type: str
 
 
 class EvaluateTaskRunRequest(InngestEventContract):
@@ -63,5 +63,6 @@ class EvaluateTaskRunRequest(InngestEventContract):
     execution_id: UUID
     evaluator_id: UUID
     evaluator_binding_key: str = ""
-    evaluator_type: str = ""
+    evaluator_type: str
     agent_reasoning: str = ""
+    sandbox_id: str = ""

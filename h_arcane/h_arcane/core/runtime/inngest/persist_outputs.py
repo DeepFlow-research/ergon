@@ -4,6 +4,7 @@ Downloads outputs from sandbox and registers them as RunResource rows.
 """
 
 import logging
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 from uuid import UUID
@@ -12,14 +13,18 @@ import inngest
 from h_arcane.core.persistence.shared.db import get_session
 from h_arcane.core.persistence.shared.ids import new_id
 from h_arcane.core.persistence.telemetry.models import RunResource
-from h_arcane.core.providers.sandbox.manager import BaseSandboxManager, DownloadedFiles
+from h_arcane.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager, DownloadedFiles
 from h_arcane.core.runtime.errors import ContractViolationError
 from h_arcane.core.runtime.inngest_client import inngest_client
 from h_arcane.core.runtime.services.child_function_payloads import PersistOutputsRequest
 from h_arcane.core.runtime.services.inngest_function_results import PersistOutputsResult
+from h_arcane.core.runtime.tracing import (
+    CompletedSpan,
+    get_trace_sink,
+    persist_outputs_context,
+)
 from h_arcane.core.utils import get_mime_type, utcnow
 from arcane_builtins.registry import SANDBOX_MANAGERS
-from h_arcane.core.providers.sandbox.manager import DefaultSandboxManager
 
 logger = logging.getLogger(__name__)
 
@@ -31,16 +36,12 @@ logger = logging.getLogger(__name__)
     output_type=PersistOutputsResult,
 )
 async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
-    """Download outputs from sandbox and register them as resources.
-
-    1. Downloads all outputs from sandbox /workspace/final_output/
-    2. Registers each file as a RunResource row
-    3. Returns list of created resource IDs
-    """
+    """Download outputs from sandbox and register them as resources."""
     payload = PersistOutputsRequest(**ctx.event.data)
     run_id = payload.run_id
     task_id = payload.task_id
     execution_id = payload.execution_id
+    span_start = datetime.now(UTC)
     output_dir = Path(payload.output_dir) if payload.output_dir else None
     sandbox_id = payload.sandbox_id
 
@@ -93,6 +94,20 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
         "persist-outputs registered %d resources for run_id=%s",
         len(resource_ids), run_id,
     )
+
+    get_trace_sink().emit_span(CompletedSpan(
+        name="persist.outputs",
+        context=persist_outputs_context(run_id, task_id, execution_id),
+        start_time=span_start,
+        end_time=datetime.now(UTC),
+        attributes={
+            "run_id": str(run_id),
+            "task_id": str(task_id),
+            "execution_id": str(execution_id),
+            "outputs_count": len(resource_ids),
+            "resource_ids": [str(rid) for rid in resource_ids],
+        },
+    ))
 
     return PersistOutputsResult(
         output_resource_ids=resource_ids,
