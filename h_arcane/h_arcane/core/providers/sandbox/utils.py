@@ -3,7 +3,7 @@
 from typing import Any
 
 
-def coerce_text(value: Any) -> str | None:
+def coerce_text(value: Any) -> str | None:  # slopcop: ignore[no-typing-any]
     """Best-effort conversion of sandbox output values to text."""
     if value is None:
         return None
@@ -14,7 +14,7 @@ def coerce_text(value: Any) -> str | None:
     return str(value)
 
 
-def bytes_length(value: Any) -> int | None:
+def bytes_length(value: Any) -> int | None:  # slopcop: ignore[no-typing-any]
     """Approximate payload size for file operations."""
     if value is None:
         return None

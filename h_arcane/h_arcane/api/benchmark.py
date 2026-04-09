@@ -26,11 +26,11 @@ class Benchmark(ABC):
         *,
         name: str | None = None,
         description: str | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.name = name or self.__class__.__name__
         self.description = description or ""
-        self.metadata: dict[str, Any] = dict(metadata or {})
+        self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
 
     @abstractmethod
     def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:

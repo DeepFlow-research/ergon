@@ -24,6 +24,11 @@ arcane-cli = { workspace = true }
 line-length = 100
 target-version = "py313"
 
+[tool.slopcop.per-file-ignores]
+"tests/**" = ["no-print"]
+"**/arcane_cli/**" = ["no-print"]
+"**/rendering/**" = ["no-print"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

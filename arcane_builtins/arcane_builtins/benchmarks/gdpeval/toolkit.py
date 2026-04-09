@@ -5,8 +5,6 @@ to the sandbox manager for actual execution.  The toolkit also owns the
 stakeholder Q&A channel.
 """
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -29,7 +27,6 @@ from arcane_builtins.benchmarks.gdpeval.task_schemas import (
 if TYPE_CHECKING:
     from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
 
-
 class QAExchange:
     """Record of one worker ↔ stakeholder exchange."""
 
@@ -38,7 +35,6 @@ class QAExchange:
     def __init__(self, question: str, answer: str) -> None:
         self.question = question
         self.answer = answer
-
 
 class GDPEvalToolkit:
     """Tool surface for GDPEval document-processing workers.
@@ -53,7 +49,7 @@ class GDPEvalToolkit:
         task_id: UUID,
         run_id: UUID,
         sandbox_manager: "BaseSandboxManager",
-        stakeholder: Any | None = None,
+        stakeholder: Any | None = None,  # slopcop: ignore[no-typing-any]
         max_questions: int = 10,
     ) -> None:
         self.task_id = task_id

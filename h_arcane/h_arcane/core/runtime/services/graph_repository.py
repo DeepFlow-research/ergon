@@ -9,8 +9,6 @@ The repository does NOT validate status transitions or authorization.
 Those are the experiment layer's responsibility.
 """
 
-from __future__ import annotations
-
 from collections import defaultdict
 from typing import Any
 from uuid import UUID, uuid4
@@ -49,7 +47,6 @@ from h_arcane.core.utils import utcnow
 # Everything experiment-specific (payload, contracts, criteria, budgets)
 # goes in annotations so the core schema stays domain-agnostic.
 _UPDATABLE_NODE_FIELDS = frozenset({"description", "assigned_worker_key"})
-
 
 class WorkflowGraphRepository:
     """Mutable DAG with append-only audit log.
@@ -367,7 +364,7 @@ class WorkflowGraphRepository:
                 f"Allowed: {sorted(_UPDATABLE_NODE_FIELDS)}"
             )
         node = self._get_node_row(session, run_id, node_id)
-        old_value = getattr(node, field)
+        old_value = getattr(node, field)  # slopcop: ignore[no-hasattr-getattr]
 
         setattr(node, field, value)
         node.updated_at = utcnow()
@@ -835,7 +832,6 @@ class WorkflowGraphRepository:
             visited.add(current)
             stack.extend(adj.get(current, []))
 
-
 # ---------------------------------------------------------------------------
 # DTO conversion helpers
 # ---------------------------------------------------------------------------
@@ -852,7 +848,6 @@ def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
         assigned_worker_key=row.assigned_worker_key,
     )
 
-
 def _to_edge_dto(row: RunGraphEdge) -> GraphEdgeDto:
     return GraphEdgeDto(
         id=row.id,
@@ -862,7 +857,6 @@ def _to_edge_dto(row: RunGraphEdge) -> GraphEdgeDto:
         target_node_id=row.target_node_id,
         status=row.status,
     )
-
 
 def _to_annotation_dto(row: RunGraphAnnotation) -> GraphAnnotationDto:
     return GraphAnnotationDto(
@@ -874,7 +868,6 @@ def _to_annotation_dto(row: RunGraphAnnotation) -> GraphAnnotationDto:
         sequence=row.sequence,
         payload=dict(row.payload),
     )
-
 
 def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationDto:
     return GraphMutationDto(
@@ -890,8 +883,7 @@ def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationDto:
         reason=row.reason,
     )
 
-
-def _node_snapshot(node: RunGraphNode) -> dict[str, Any]:
+def _node_snapshot(node: RunGraphNode) -> dict[str, object]:
     return {
         "task_key": node.task_key,
         "instance_key": node.instance_key,
@@ -900,14 +892,12 @@ def _node_snapshot(node: RunGraphNode) -> dict[str, Any]:
         "assigned_worker_key": node.assigned_worker_key,
     }
 
-
-def _edge_snapshot(edge: RunGraphEdge) -> dict[str, Any]:
+def _edge_snapshot(edge: RunGraphEdge) -> dict[str, object]:
     return {
         "source_node_id": str(edge.source_node_id),
         "target_node_id": str(edge.target_node_id),
         "status": edge.status,
     }
-
 
 def _is_acyclic(edges: list[RunGraphEdge]) -> bool:
     """Kahn's algorithm for cycle detection."""

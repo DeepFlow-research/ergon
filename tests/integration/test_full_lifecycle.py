@@ -236,5 +236,5 @@ if __name__ == "__main__":
     try:
         os.remove("test_smoke.db")
     except FileNotFoundError:
-        pass
+        pass  # slopcop: ignore[no-pass-except]
     test_full_lifecycle()

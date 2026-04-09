@@ -4,8 +4,6 @@ Uses deep research tasks with weighted evaluation criteria to study
 whether agents know when and what to ask stakeholders.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
@@ -16,7 +14,6 @@ from arcane_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
     RubricCriterion,
 )
-
 
 class ResearchRubricsBenchmark(Benchmark):
     """Benchmark backed by the ResearchRubrics HuggingFace dataset.
@@ -36,7 +33,7 @@ class ResearchRubricsBenchmark(Benchmark):
         limit: int | None = None,
         name: str | None = None,
         description: str | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         super().__init__(
             name=name or "researchrubrics",
@@ -83,12 +80,14 @@ class ResearchRubricsBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def _load_rows(self) -> list[dict[str, Any]]:
+    def _load_rows(self) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
         """Load dataset rows from HuggingFace.
 
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
+        # Deferred: optional dependency
         from datasets import load_dataset
+        # Deferred: optional dependency
         from huggingface_hub import HfApi
 
         dataset_name = self.dataset_name

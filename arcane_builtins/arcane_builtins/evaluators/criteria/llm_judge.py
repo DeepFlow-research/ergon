@@ -5,14 +5,11 @@ does a simple success check; real LLM calls happen via
 InngestCriterionExecutor + DefaultCriterionRuntime.
 """
 
-from __future__ import annotations
-
 from typing import ClassVar
 
 from h_arcane.api.criterion import Criterion
 from h_arcane.api.evaluation_context import EvaluationContext
 from h_arcane.api.results import CriterionResult
-
 
 class LLMJudgeCriterion(Criterion):
     """LLM-judge evaluation criterion inspired by the ref LLMJudgeRule.
@@ -30,7 +27,7 @@ class LLMJudgeCriterion(Criterion):
         *,
         name: str,
         prompt_template: str,
-        description: str = "",
+        description: str = "",  # slopcop: ignore[no-str-empty-default]
         weight: float = 1.0,
         max_score: float = 1.0,
         model: str = "gpt-4o",

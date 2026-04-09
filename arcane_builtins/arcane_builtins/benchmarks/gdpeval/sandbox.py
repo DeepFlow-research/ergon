@@ -4,8 +4,6 @@ Thin subclass of :class:`BaseSandboxManager` that installs the Python
 packages needed for GDP document-processing evaluation (PDF, OCR, etc.).
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 from uuid import UUID
@@ -16,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 _GDP_PACKAGES = "pdfplumber PyPDF2 reportlab pytesseract"
 
-
 class GDPEvalSandboxManager(BaseSandboxManager):
     """Sandbox manager for the GDPEval benchmark.
 
@@ -24,7 +21,7 @@ class GDPEvalSandboxManager(BaseSandboxManager):
     ``pdfplumber``, ``PyPDF2``, ``reportlab``, ``pytesseract``.
     """
 
-    async def _install_dependencies(self, sandbox: Any, task_id: UUID) -> None:
+    async def _install_dependencies(self, sandbox: Any, task_id: UUID) -> None:  # slopcop: ignore[no-typing-any]
         logger.info("Installing GDPEval packages (task_id=%s) …", task_id)
 
         pip_result = await sandbox.commands.run(
@@ -40,7 +37,7 @@ class GDPEvalSandboxManager(BaseSandboxManager):
 
         logger.info("Successfully installed GDPEval packages (task_id=%s)", task_id)
 
-    async def _verify_setup(self, sandbox: Any, task_id: UUID) -> None:
+    async def _verify_setup(self, sandbox: Any, task_id: UUID) -> None:  # slopcop: ignore[no-typing-any]
         logger.info("Verifying GDPEval package installation (task_id=%s) …", task_id)
 
         verify_code = (

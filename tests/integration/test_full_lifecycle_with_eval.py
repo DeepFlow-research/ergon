@@ -55,7 +55,9 @@ class InProcessCriterionExecutor:
     """Simple in-process executor for testing (no Inngest step.run)."""
 
     async def execute_all(self, task_context, benchmark_name, criteria):
+        # Deferred: avoid circular import
         from h_arcane.api.evaluation_context import EvaluationContext
+        # Deferred: avoid circular import
         from h_arcane.api.results import WorkerResult as WR
 
         results = []
@@ -206,6 +208,7 @@ def test_full_lifecycle_with_evaluation():
                 f"score={eval_result.score}, passed={eval_result.passed}"
             )
 
+            # Deferred: avoid circular import
             from h_arcane.core.runtime.inngest.evaluate_task_run import (
                 _build_evaluation_summary,
             )
@@ -284,5 +287,5 @@ if __name__ == "__main__":
     try:
         os.remove("test_eval_smoke.db")
     except FileNotFoundError:
-        pass
+        pass  # slopcop: ignore[no-pass-except]
     test_full_lifecycle_with_evaluation()

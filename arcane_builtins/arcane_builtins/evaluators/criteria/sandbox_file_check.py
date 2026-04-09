@@ -4,13 +4,10 @@ Used by the smoke-test rubric for CI / E2E testing. Connects to the
 worker's sandbox via sandbox_id and checks for the expected file.
 """
 
-from __future__ import annotations
-
 from h_arcane.api import Criterion, CriterionResult, EvaluationContext
 
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"
-
 
 class SandboxFileCheckCriterion(Criterion):
     type_slug = "sandbox-file-check"
@@ -39,6 +36,7 @@ class SandboxFileCheckCriterion(Criterion):
             )
 
         try:
+            # Deferred: optional dependency
             from e2b_code_interpreter import AsyncSandbox
         except ImportError:
             return CriterionResult(
@@ -69,7 +67,7 @@ class SandboxFileCheckCriterion(Criterion):
                     f"expected '{self.expected_content}', got '{content[:100]}'"
                 ),
             )
-        except Exception as exc:
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
             return CriterionResult(
                 name=self.name,
                 score=0.0,

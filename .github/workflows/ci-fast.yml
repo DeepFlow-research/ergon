@@ -26,6 +26,20 @@ jobs:
       - name: Type check (ty)
         run: uv run ty check h_arcane
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Clone slopcop
+        run: git clone --depth 1 https://github.com/cm2435/slopcop.git /tmp/slopcop
+
+      - name: Cache slopcop build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/slopcop/target
+          key: slopcop-${{ runner.os }}-${{ hashFiles('/tmp/slopcop/Cargo.lock', '/tmp/slopcop/Cargo.toml') }}
+
+      - name: slopcop check
+        run: cargo run --manifest-path /tmp/slopcop/Cargo.toml --release -- h_arcane arcane_builtins arcane_cli
+
   frontend-checks:
     name: "Lint + type-check (Frontend)"
     runs-on: ubuntu-latest

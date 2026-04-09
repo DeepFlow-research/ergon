@@ -6,8 +6,6 @@ opens a session, performs the query, and closes the session; no complex
 transaction management is needed at this layer.
 """
 
-from __future__ import annotations
-
 from typing import Any, Generic, Type, TypeVar
 from uuid import UUID
 
@@ -35,11 +33,9 @@ from sqlmodel import SQLModel, desc, select
 
 T = TypeVar("T", bound=SQLModel)
 
-
 # ---------------------------------------------------------------------------
 # Base
 # ---------------------------------------------------------------------------
-
 
 class BaseQueries(Generic[T]):
     """Base query class with common CRUD operations."""
@@ -81,11 +77,9 @@ class BaseQueries(Generic[T]):
                 stmt = stmt.limit(limit)
             return list(session.exec(stmt).all())
 
-
 # ---------------------------------------------------------------------------
 # Runs
 # ---------------------------------------------------------------------------
-
 
 class RunsQueries(BaseQueries[RunRecord]):
     def __init__(self) -> None:
@@ -114,11 +108,9 @@ class RunsQueries(BaseQueries[RunRecord]):
             )
             return list(session.exec(stmt).all())
 
-
 # ---------------------------------------------------------------------------
 # Definitions
 # ---------------------------------------------------------------------------
-
 
 class DefinitionsQueries(BaseQueries[ExperimentDefinition]):
     def __init__(self) -> None:
@@ -195,11 +187,9 @@ class DefinitionsQueries(BaseQueries[ExperimentDefinition]):
             )
             return list(session.exec(stmt).all())
 
-
 # ---------------------------------------------------------------------------
 # Task Executions
 # ---------------------------------------------------------------------------
-
 
 class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
     def __init__(self) -> None:
@@ -253,7 +243,7 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
         self,
         execution_id: UUID,
         status: TaskExecutionStatus | str,
-        **kwargs: Any,
+        **kwargs: Any,  # slopcop: ignore[no-typing-any]
     ) -> RunTaskExecution:
         with get_session() as session:
             existing = session.get(RunTaskExecution, execution_id)
@@ -267,11 +257,9 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
             session.refresh(existing)
             return existing
 
-
 # ---------------------------------------------------------------------------
 # State Events
 # ---------------------------------------------------------------------------
-
 
 class StateEventsQueries(BaseQueries[RunTaskStateEvent]):
     def __init__(self) -> None:
@@ -322,11 +310,9 @@ class StateEventsQueries(BaseQueries[RunTaskStateEvent]):
             )
             return list(session.exec(stmt).all())
 
-
 # ---------------------------------------------------------------------------
 # Evaluations
 # ---------------------------------------------------------------------------
-
 
 class EvaluationsQueries(BaseQueries[RunTaskEvaluation]):
     def __init__(self) -> None:
@@ -359,11 +345,9 @@ class EvaluationsQueries(BaseQueries[RunTaskEvaluation]):
             )
             return list(session.exec(stmt).all())
 
-
 # ---------------------------------------------------------------------------
 # Actions
 # ---------------------------------------------------------------------------
-
 
 class ActionsQueries(BaseQueries[RunAction]):
     def __init__(self) -> None:
@@ -389,11 +373,9 @@ class ActionsQueries(BaseQueries[RunAction]):
             )
             return list(session.exec(stmt).all())
 
-
 # ---------------------------------------------------------------------------
 # Resources
 # ---------------------------------------------------------------------------
-
 
 class ResourcesQueries(BaseQueries[RunResource]):
     def __init__(self) -> None:
@@ -413,11 +395,9 @@ class ResourcesQueries(BaseQueries[RunResource]):
             )
             return list(session.exec(stmt).all())
 
-
 # ---------------------------------------------------------------------------
 # Namespace Singleton
 # ---------------------------------------------------------------------------
-
 
 class Queries:
     """Namespace singleton providing typed query methods for all tables."""
@@ -438,6 +418,5 @@ class Queries:
         self.evaluations = EvaluationsQueries()
         self.actions = ActionsQueries()
         self.resources = ResourcesQueries()
-
 
 queries = Queries()

@@ -4,7 +4,8 @@
   "scripts": {
     "check:be:lint": "uv run ruff check h_arcane",
     "check:be:type": "uv run ty check h_arcane",
-    "check:be": "pnpm run check:be:lint && pnpm run check:be:type",
+    "check:be:slopcop": "cargo run --manifest-path ../slopcop/Cargo.toml --release -- h_arcane arcane_builtins arcane_cli",
+    "check:be": "pnpm run check:be:lint && pnpm run check:be:type && pnpm run check:be:slopcop",
     "test:be:state": "uv run pytest tests/state -q",
     "test:be:e2e": "uv run pytest tests/e2e -v",
     "check:fe:lint": "pnpm -C arcane-dashboard run lint",

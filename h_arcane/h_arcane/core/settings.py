@@ -18,14 +18,14 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("ARCANE_DATABASE_URL_TEST", "DATABASE_URL_TEST"),
     )
 
-    openai_api_key: str = ""
+    openai_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
     openrouter_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"),
     )
 
-    e2b_api_key: str = ""
-    exa_api_key: str = ""
+    e2b_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
+    exa_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
 
     inngest_event_key: str = "dev"
     inngest_dev: bool = True
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
         return self.database_url
 
     def missing_values(self, names: list[str]) -> list[str]:
-        return [name for name in names if not getattr(self, name, "")]
+        return [name for name in names if not getattr(self, name, "")]  # slopcop: ignore[no-hasattr-getattr]
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent.parent / ".env"),

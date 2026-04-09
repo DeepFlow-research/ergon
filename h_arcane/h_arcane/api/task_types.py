@@ -20,4 +20,4 @@ class BenchmarkTask(BaseModel):
     parent_task_key: str | None = None
     dependency_task_keys: tuple[str, ...] = ()
     evaluator_binding_keys: tuple[str, ...] = ()
-    task_payload: dict[str, Any] = Field(default_factory=dict)
+    task_payload: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]

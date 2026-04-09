@@ -4,8 +4,6 @@ Reads identity fields inline from the live Experiment object graph — no
 BoundExperiment intermediate, no constructor_state() serialisation.
 """
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -27,13 +25,11 @@ from h_arcane.core.utils import utcnow
 if TYPE_CHECKING:
     from h_arcane.api.experiment import Experiment
 
-
 def persist_experiment_definition(
     experiment: Experiment,
 ) -> PersistedExperimentDefinition:
     """Validate, materialise instances, and write immutable definition rows."""
     return ExperimentPersistenceService().persist_definition(experiment)
-
 
 class ExperimentPersistenceService:
     """Writes immutable definition rows directly from an Experiment.
@@ -90,7 +86,7 @@ class ExperimentPersistenceService:
         evaluator_bindings: dict[str, str] = {}
 
         for binding_key, evaluator in experiment.evaluators.items():
-            snapshot: dict[str, Any] = {"name": evaluator.name}
+            snapshot: dict[str, object] = {"name": evaluator.name}
             if isinstance(evaluator, Rubric):
                 snapshot["criteria"] = [c.name for c in evaluator.criteria]
 
@@ -147,10 +143,12 @@ class ExperimentPersistenceService:
         for instance_key, tasks in instances_map.items():
             for task in tasks:
                 task_id = task_rows_by_key[(instance_key, task.task_key)].id
-                assert task_id is not None
+                if task_id is None:
+                    raise ValueError(f"Task {task.task_key!r} has no assigned ID")
                 for dep_key in task.dependency_task_keys:
                     dep_task_id = task_rows_by_key[(instance_key, dep_key)].id
-                    assert dep_task_id is not None
+                    if dep_task_id is None:
+                        raise ValueError(f"Dependency task {dep_key!r} has no assigned ID")
                     dependency_rows.append(
                         ExperimentDefinitionTaskDependency(
                             id=uuid4(),
@@ -167,7 +165,8 @@ class ExperimentPersistenceService:
         if experiment.assignments is None and len(experiment.workers) == 1:
             sole_key = next(iter(experiment.workers))
             for task_row in task_rows:
-                assert task_row.id is not None
+                if task_row.id is None:
+                    raise ValueError("Task row has no assigned ID for assignment")
                 assignment_rows.append(
                     ExperimentDefinitionTaskAssignment(
                         id=uuid4(),
@@ -183,7 +182,8 @@ class ExperimentPersistenceService:
                 for tk in task_keys:
                     for (inst_key, t_key), task_row in task_rows_by_key.items():
                         if t_key == tk:
-                            assert task_row.id is not None
+                            if task_row.id is None:
+                                raise ValueError(f"Task {t_key!r} has no assigned ID for assignment")
                             assignment_rows.append(
                                 ExperimentDefinitionTaskAssignment(
                                     id=uuid4(),
@@ -199,7 +199,8 @@ class ExperimentPersistenceService:
         for instance_key, tasks in instances_map.items():
             for task in tasks:
                 task_id = task_rows_by_key[(instance_key, task.task_key)].id
-                assert task_id is not None
+                if task_id is None:
+                    raise ValueError(f"Task {task.task_key!r} has no assigned ID for evaluator binding")
                 for eval_key in task.evaluator_binding_keys:
                     task_evaluator_rows.append(
                         ExperimentDefinitionTaskEvaluator(
@@ -239,7 +240,7 @@ class ExperimentPersistenceService:
         try:
             session.add_all(all_rows)
             session.commit()
-        except Exception:
+        except Exception:  # slopcop: ignore[no-broad-except]
             session.rollback()
             raise
         finally:

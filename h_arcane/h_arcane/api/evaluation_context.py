@@ -23,4 +23,4 @@ class EvaluationContext(BaseModel):
     task: BenchmarkTask
     worker_result: WorkerResult
     sandbox_id: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]

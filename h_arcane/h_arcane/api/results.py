@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from h_arcane.api.generation import GenerationTurn
+
 
 class WorkerResult(BaseModel):
     """Result of a single Worker.execute() invocation."""
@@ -12,8 +14,9 @@ class WorkerResult(BaseModel):
 
     output: str
     success: bool = True
-    artifacts: dict[str, Any] = Field(default_factory=dict)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    turns: list[GenerationTurn] = Field(default_factory=list)
+    artifacts: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
 
 class CriterionResult(BaseModel):
@@ -26,7 +29,7 @@ class CriterionResult(BaseModel):
     passed: bool
     weight: float = 1.0
     feedback: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
 
 class TaskEvaluationResult(BaseModel):
@@ -40,4 +43,4 @@ class TaskEvaluationResult(BaseModel):
     evaluator_name: str
     criterion_results: list[CriterionResult] = Field(default_factory=list)
     feedback: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]

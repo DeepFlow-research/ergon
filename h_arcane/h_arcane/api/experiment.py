@@ -23,7 +23,7 @@ class Experiment:
         workers: Mapping[str, Worker],
         evaluators: Mapping[str, Evaluator] | None = None,
         assignments: Mapping[str, str | Sequence[str]] | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.benchmark = benchmark
         self.workers: dict[str, Worker] = dict(workers)
@@ -31,7 +31,7 @@ class Experiment:
         self.assignments: dict[str, str | list[str]] | None = (
             _normalise_assignments(assignments) if assignments is not None else None
         )
-        self.metadata: dict[str, Any] = dict(metadata or {})
+        self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
         self._persisted: PersistedExperimentDefinition | None = None
 
     @classmethod
@@ -41,7 +41,7 @@ class Experiment:
         benchmark: Benchmark,
         worker: Worker,
         evaluators: Mapping[str, Evaluator] | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> "Experiment":
         """Convenience constructor for the common single-worker case."""
         binding_key = worker.name
@@ -165,7 +165,8 @@ class Experiment:
         """Ensure a persisted definition exists, create a run, and dispatch execution."""
         if self._persisted is None:
             self.persist()
-        assert self._persisted is not None
+        if self._persisted is None:
+            raise RuntimeError("persist() did not produce a persisted definition")
         return await create_experiment_run(self._persisted)
 
 

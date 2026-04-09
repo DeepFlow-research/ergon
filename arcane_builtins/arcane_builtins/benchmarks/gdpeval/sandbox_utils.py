@@ -5,8 +5,6 @@ the common GDPEval patterns: downloading final output files,
 listing workspace contents, and reading specific output artifacts.
 """
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -23,19 +21,16 @@ FINAL_OUTPUT_DIR = "/workspace/final_output"
 SCRATCHPAD_DIR = "/workspace/scratchpad"
 INPUTS_DIR = "/inputs"
 
-
 # ---------------------------------------------------------------------------
 # Result models
 # ---------------------------------------------------------------------------
-
 
 class SandboxFileInfo(BaseModel):
     """Metadata about a file inside the sandbox."""
 
     sandbox_path: str
     size_bytes: int | None = None
-    extension: str = ""
-
+    extension: str = ""  # slopcop: ignore[no-str-empty-default]
 
 class GDPOutputBundle(BaseModel):
     """Collection of downloaded output files for a GDP task."""
@@ -45,11 +40,9 @@ class GDPOutputBundle(BaseModel):
     local_dir: str | None = None
     error: str | None = None
 
-
 # ---------------------------------------------------------------------------
 # High-level helpers
 # ---------------------------------------------------------------------------
-
 
 async def list_output_files(
     sandbox_manager: "BaseSandboxManager",
@@ -58,10 +51,9 @@ async def list_output_files(
     """List all files in ``/workspace/final_output``."""
     try:
         return await sandbox_manager.list_files(task_id, FINAL_OUTPUT_DIR)
-    except Exception as exc:
+    except Exception as exc:  # slopcop: ignore[no-broad-except]
         logger.warning("Failed to list output files for task %s: %s", task_id, exc)
         return []
-
 
 async def download_output_bundle(
     sandbox_manager: "BaseSandboxManager",
@@ -77,7 +69,7 @@ async def download_output_bundle(
 
     try:
         remote_files = await list_output_files(sandbox_manager, task_id)
-    except Exception as exc:
+    except Exception as exc:  # slopcop: ignore[no-broad-except]
         bundle.error = str(exc)
         return bundle
 
@@ -94,7 +86,7 @@ async def download_output_bundle(
                     extension=Path(filename).suffix,
                 )
             )
-        except Exception as exc:
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
             logger.warning(
                 "Failed to download %s for task %s: %s",
                 remote_path,
@@ -103,7 +95,6 @@ async def download_output_bundle(
             )
 
     return bundle
-
 
 async def read_output_text(
     sandbox_manager: "BaseSandboxManager",
@@ -118,10 +109,9 @@ async def read_output_text(
     try:
         content = await sandbox_manager.download_file(task_id, remote_path)
         return content.decode("utf-8", errors="replace")
-    except Exception as exc:
+    except Exception as exc:  # slopcop: ignore[no-broad-except]
         logger.debug("Could not read %s for task %s: %s", remote_path, task_id, exc)
         return None
-
 
 async def upload_reference_files(
     sandbox_manager: "BaseSandboxManager",
@@ -141,6 +131,6 @@ async def upload_reference_files(
             remote_path = f"{INPUTS_DIR}/{file_path.name}"
             await sandbox_manager.upload_file(task_id, str(file_path), remote_path)
             uploaded += 1
-        except Exception as exc:
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to upload %s: %s", file_path, exc)
     return uploaded

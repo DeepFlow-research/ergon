@@ -107,7 +107,9 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
         # Deferred: child function modules register with Inngest at import
         # time. Eager cross-imports between registered modules cause cycles.
         from h_arcane.core.runtime.inngest.persist_outputs import persist_outputs_fn
+        # Deferred: avoid circular import
         from h_arcane.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
+        # Deferred: avoid circular import
         from h_arcane.core.runtime.inngest.worker_execute import worker_execute_fn
 
         sandbox_result: SandboxReadyResult = await ctx.step.invoke(
@@ -216,7 +218,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             outputs_count=persist_result.outputs_count,
         )
 
-    except Exception as exc:
+    except Exception as exc:  # slopcop: ignore[no-broad-except]
         error_msg = str(exc)
         logger.exception("task-execute failed task_id=%s: %s", payload.task_id, error_msg)
 

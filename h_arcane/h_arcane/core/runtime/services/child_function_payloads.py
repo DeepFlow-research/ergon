@@ -33,8 +33,8 @@ class WorkerExecuteRequest(InngestEventContract):
     execution_id: UUID
     sandbox_id: str
     task_key: str
-    task_description: str = ""
-    worker_binding_key: str = ""
+    task_description: str = ""  # slopcop: ignore[no-str-empty-default]
+    worker_binding_key: str = ""  # slopcop: ignore[no-str-empty-default]
     worker_type: str
     model_target: str | None = None
     benchmark_type: str
@@ -62,7 +62,7 @@ class EvaluateTaskRunRequest(InngestEventContract):
     task_id: UUID
     execution_id: UUID
     evaluator_id: UUID
-    evaluator_binding_key: str = ""
+    evaluator_binding_key: str = ""  # slopcop: ignore[no-str-empty-default]
     evaluator_type: str
-    agent_reasoning: str = ""
-    sandbox_id: str = ""
+    agent_reasoning: str = ""  # slopcop: ignore[no-str-empty-default]
+    sandbox_id: str = ""  # slopcop: ignore[no-str-empty-default]

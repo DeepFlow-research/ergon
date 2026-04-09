@@ -97,7 +97,7 @@ async def _terminate_sandbox(sandbox_id: str) -> None:
     try:
         await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
         logger.info("Terminated sandbox %s after evaluation", sandbox_id)
-    except Exception:
+    except Exception:  # slopcop: ignore[no-broad-except]
         logger.error(
             "Failed to terminate sandbox %s — potential sandbox leak",
             sandbox_id, exc_info=True,

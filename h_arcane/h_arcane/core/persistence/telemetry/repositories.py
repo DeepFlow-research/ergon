@@ -1,13 +1,14 @@
 """Read and write repository for run telemetry tables."""
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from h_arcane.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from h_arcane.core.persistence.shared.ids import new_id
+from h_arcane.core.providers.generation import pydantic_ai_format as pa_format
 from h_arcane.core.persistence.telemetry.models import (
     RunAction,
+    RunGenerationTurn,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -105,8 +106,8 @@ class TelemetryRepository:
         *,
         success: bool,
         output_text: str | None = None,
-        output_json: dict[str, Any] | None = None,
-        error_json: dict[str, Any] | None = None,
+        output_json: dict[str, object] | None = None,
+        error_json: dict[str, object] | None = None,
     ) -> RunTaskExecution:
         execution = session.get(RunTaskExecution, execution_id)
         if execution is None:
@@ -127,7 +128,7 @@ class TelemetryRepository:
         session.flush()
         return execution
 
-    def create_action(
+    def create_action(  # slopcop: ignore[max-function-params]
         self,
         session: Session,
         *,
@@ -137,7 +138,7 @@ class TelemetryRepository:
         action_type: str,
         input_text: str,
         output_text: str | None = None,
-        error_json: dict[str, Any] | None = None,
+        error_json: dict[str, object] | None = None,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
     ) -> RunAction:
@@ -157,7 +158,7 @@ class TelemetryRepository:
         session.flush()
         return action
 
-    def create_resource(
+    def create_resource(  # slopcop: ignore[max-function-params]
         self,
         session: Session,
         *,
@@ -168,7 +169,7 @@ class TelemetryRepository:
         mime_type: str,
         file_path: str,
         size_bytes: int,
-        metadata_json: dict[str, Any] | None = None,
+        metadata_json: dict[str, object] | None = None,
     ) -> RunResource:
         resource = RunResource(
             id=new_id(),
@@ -195,7 +196,7 @@ class TelemetryRepository:
         event_type: str,
         old_status: str | None = None,
         new_status: str,
-        event_metadata: dict[str, Any] | None = None,
+        event_metadata: dict[str, object] | None = None,
     ) -> RunTaskStateEvent:
         event = RunTaskStateEvent(
             id=new_id(),
@@ -221,7 +222,7 @@ class TelemetryRepository:
         score: float | None = None,
         passed: bool | None = None,
         feedback: str | None = None,
-        summary_json: dict[str, Any] | None = None,
+        summary_json: dict[str, object] | None = None,
     ) -> RunTaskEvaluation:
         evaluation = RunTaskEvaluation(
             id=new_id(),
@@ -236,3 +237,80 @@ class TelemetryRepository:
         session.add(evaluation)
         session.flush()
         return evaluation
+
+
+class GenerationTurnRepository:
+    """Read/write operations for lossless per-turn generation records."""
+
+    # ------------------------------------------------------------------
+    # Writes
+    # ------------------------------------------------------------------
+
+    def persist_turns(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        execution_id: UUID,
+        worker_binding_key: str,
+        turns: list,
+    ) -> list[RunGenerationTurn]:
+        """Persist a list of ``GenerationTurn`` objects as DB rows.
+
+        Args:
+            turns: list of ``h_arcane.api.generation.GenerationTurn``.
+        """
+        rows: list[RunGenerationTurn] = []
+        for i, turn in enumerate(turns):
+            row = RunGenerationTurn(
+                id=new_id(),
+                run_id=run_id,
+                task_execution_id=execution_id,
+                worker_binding_key=worker_binding_key,
+                turn_index=i,
+                raw_request={},
+                raw_response=turn.raw_response,
+                response_text=pa_format.extract_text(turn.raw_response),
+                tool_calls_json=pa_format.extract_tool_calls(turn.raw_response),
+                tool_results_json=turn.tool_results or None,
+                token_ids_json=None,  # populated by RL extraction via re-tokenization
+                logprobs_json=(
+                    [lp.model_dump() for lp in turn.logprobs]
+                    if turn.logprobs
+                    else None
+                ),
+                policy_version=turn.policy_version,
+            )
+            session.add(row)
+            rows.append(row)
+        session.flush()
+        return rows
+
+    # ------------------------------------------------------------------
+    # Reads
+    # ------------------------------------------------------------------
+
+    def get_for_execution(
+        self, session: Session, execution_id: UUID
+    ) -> list[RunGenerationTurn]:
+        stmt = (
+            select(RunGenerationTurn)
+            .where(RunGenerationTurn.task_execution_id == execution_id)
+            .order_by(RunGenerationTurn.turn_index)
+        )
+        return list(session.exec(stmt).all())
+
+    def get_for_run(
+        self, session: Session, run_id: UUID
+    ) -> list[RunGenerationTurn]:
+        stmt = (
+            select(RunGenerationTurn)
+            .where(RunGenerationTurn.run_id == run_id)
+            .order_by(
+                RunGenerationTurn.task_execution_id,
+                RunGenerationTurn.turn_index,
+            )
+        )
+        return list(session.exec(stmt).all())
+
+

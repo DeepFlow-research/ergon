@@ -2,9 +2,12 @@
 
 from collections import defaultdict
 from datetime import datetime
+from statistics import mean
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from h_arcane.core.api.schemas import (
     RunActionDto,
     RunCommunicationMessageDto,
@@ -16,6 +19,7 @@ from h_arcane.core.api.schemas import (
     RunSandboxDto,
     RunSnapshotDto,
     RunTaskDto,
+    RunGenerationTurnDto,
     RunTaskEvaluationDto,
 )
 from h_arcane.core.persistence.definitions.models import (
@@ -29,6 +33,7 @@ from h_arcane.core.persistence.shared.db import get_session
 from h_arcane.core.persistence.shared.enums import TaskExecutionStatus
 from h_arcane.core.persistence.telemetry.models import (
     RunAction,
+    RunGenerationTurn,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -522,3 +527,129 @@ def get_run(run_id: UUID) -> RunSnapshotDto:
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return snapshot
+
+
+# ---------------------------------------------------------------------------
+# Generation turns endpoint (RL observability)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{run_id}/generations", response_model=list[RunGenerationTurnDto])
+def get_generations(
+    run_id: UUID,
+    include: str | None = None,
+) -> list[RunGenerationTurnDto]:
+    """Get lossless generation turns for a run.
+
+    Each turn contains the raw model request/response, extracted text,
+    tool calls, tool results, and optionally logprobs.
+
+    Query params:
+        include: comma-separated fields to include.  ``logprobs`` adds
+            ``token_ids`` and ``logprobs`` arrays (can be large).
+    """
+    include_logprobs = include is not None and "logprobs" in include.split(",")
+
+    with get_session() as session:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+        stmt = (
+            select(RunGenerationTurn)
+            .where(RunGenerationTurn.run_id == run_id)
+            .order_by(RunGenerationTurn.task_execution_id, RunGenerationTurn.turn_index)
+        )
+        turns = list(session.exec(stmt).all())
+
+    result: list[RunGenerationTurnDto] = []
+    for turn in turns:
+        dto = RunGenerationTurnDto(
+            id=str(turn.id),
+            task_execution_id=str(turn.task_execution_id),
+            worker_binding_key=turn.worker_binding_key,
+            turn_index=turn.turn_index,
+            raw_request=turn.raw_request,
+            raw_response=turn.raw_response,
+            response_text=turn.response_text,
+            tool_calls=turn.tool_calls_json,
+            tool_results=turn.tool_results_json,
+            policy_version=turn.policy_version,
+            has_logprobs=turn.token_ids_json is not None,
+            created_at=turn.created_at.isoformat() if turn.created_at else None,
+            token_ids=turn.token_ids_json if include_logprobs else None,
+            logprobs=turn.logprobs_json if include_logprobs else None,
+        )
+        result.append(dto)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Training curves endpoint (RL observability)
+# ---------------------------------------------------------------------------
+
+
+class TrainingCurvePoint(BaseModel):
+    run_id: str
+    step: int
+    mean_score: float
+    benchmark_type: str | None = None
+    created_at: str | None = None
+
+
+@router.get("/training/curves", response_model=list[TrainingCurvePoint])
+def get_training_curves(
+    definition_id: UUID | None = None,
+    cohort_id: UUID | None = None,
+) -> list[TrainingCurvePoint]:
+    """Return score-over-step data for checkpoint evaluations.
+
+    Reads ``summary_json`` on ``RunRecord`` for checkpoint metadata
+    (``checkpoint_step``, ``checkpoint_path``) written by the eval
+    watcher, and aggregates ``RunTaskEvaluation.score`` per run.
+
+    Filter by ``definition_id`` or ``cohort_id``.
+    """
+    with get_session() as session:
+        stmt = select(RunRecord)
+        if definition_id:
+            stmt = stmt.where(RunRecord.experiment_definition_id == definition_id)
+        if cohort_id:
+            stmt = stmt.where(RunRecord.cohort_id == cohort_id)
+        stmt = stmt.order_by(RunRecord.created_at)
+        runs = list(session.exec(stmt).all())
+
+        all_run_ids = [r.id for r in runs]
+        evals = list(
+            session.exec(
+                select(RunTaskEvaluation)
+                .where(RunTaskEvaluation.run_id.in_(all_run_ids))  # type: ignore[union-attr]
+            ).all()
+        )
+
+    scores_by_run: dict[UUID, list[float]] = defaultdict(list)
+    for ev in evals:
+        if ev.score is not None:
+            scores_by_run[ev.run_id].append(ev.score)
+
+    points: list[TrainingCurvePoint] = []
+    for run in runs:
+        summary: dict[str, Any] = run.summary_json or {}  # slopcop: ignore[no-typing-any]
+        step = summary.get("checkpoint_step")
+        if step is None:
+            continue
+
+        run_scores = scores_by_run.get(run.id, [])
+        if not run_scores:
+            continue
+
+        points.append(TrainingCurvePoint(
+            run_id=str(run.id),
+            step=int(step),
+            mean_score=mean(run_scores),
+            benchmark_type=summary.get("benchmark_type"),
+            created_at=run.created_at.isoformat() if run.created_at else None,
+        ))
+
+    return points

@@ -21,11 +21,11 @@ class Criterion(ABC):
         *,
         name: str,
         weight: float = 1.0,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.name = name
         self.weight = weight
-        self.metadata: dict[str, Any] = dict(metadata or {})
+        self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
 
     @abstractmethod
     async def evaluate(

@@ -11,6 +11,7 @@ def build_experiment(
     workflow: str = "single",
     limit: int | None = None,
 ) -> Experiment:
+    # Deferred: CLI startup cost
     from arcane_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
 
     benchmark_cls = BENCHMARKS[benchmark_slug]
@@ -38,13 +39,13 @@ def _construct_benchmark(cls, workflow: str, limit: int | None):
     try:
         return cls(workflow=workflow, **kwargs)
     except TypeError:
-        pass
+        pass  # slopcop: ignore[no-pass-except]
 
     # Try with just limit (no workflow)
     try:
         return cls(**kwargs)
     except TypeError:
-        pass
+        pass  # slopcop: ignore[no-pass-except]
 
     # Bare constructor
     return cls()

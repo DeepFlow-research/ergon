@@ -22,11 +22,11 @@ class Worker(ABC):
         *,
         name: str,
         model: str | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.name = name
         self.model = model
-        self.metadata: dict[str, Any] = dict(metadata or {})
+        self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
 
     @abstractmethod
     async def execute(

@@ -4,8 +4,6 @@ Reconstructs the full Experiment object graph server-side, persists it,
 creates a RunRecord, and emits workflow/started to kick off execution.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import ClassVar
 
@@ -23,7 +21,6 @@ from h_arcane.core.runtime.services.run_service import create_run
 
 logger = logging.getLogger(__name__)
 
-
 class BenchmarkRunRequest(InngestEventContract):
     """CLI sends this to request a full benchmark run."""
 
@@ -33,8 +30,7 @@ class BenchmarkRunRequest(InngestEventContract):
     model: str
     worker_slug: str = "stub-worker"
     evaluator_slug: str = "stub-rubric"
-    cohort_name: str = ""
-
+    cohort_name: str = ""  # slopcop: ignore[no-str-empty-default]
 
 @inngest_client.create_function(
     fn_id="benchmark-run-start",

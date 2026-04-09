@@ -5,14 +5,11 @@ does simple template matching; full sandbox execution happens via
 InngestCriterionExecutor + DefaultCriterionRuntime.
 """
 
-from __future__ import annotations
-
 from typing import ClassVar
 
 from h_arcane.api.criterion import Criterion
 from h_arcane.api.evaluation_context import EvaluationContext
 from h_arcane.api.results import CriterionResult
-
 
 class CodeCheckCriterion(Criterion):
     """Code-based evaluation criterion inspired by the ref CodeRule.
@@ -30,7 +27,7 @@ class CodeCheckCriterion(Criterion):
         *,
         name: str,
         code_template: str,
-        description: str = "",
+        description: str = "",  # slopcop: ignore[no-str-empty-default]
         weight: float = 1.0,
         max_score: float = 1.0,
     ) -> None:

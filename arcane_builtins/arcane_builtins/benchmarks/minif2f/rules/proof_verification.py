@@ -5,8 +5,6 @@ artifacts, writes it into the sandbox, and invokes the Lean compiler
 to verify the proof.
 """
 
-from __future__ import annotations
-
 from typing import Any, ClassVar
 
 from h_arcane.api.criterion import Criterion
@@ -19,7 +17,6 @@ LEAN_CMD = (
     "cd /tools/mathlib_project && lean src/verify.lean 2>&1"
 )
 
-
 class ExtractedProof(BaseModel):
     """Typed payload extracted from agent outputs."""
 
@@ -27,14 +24,12 @@ class ExtractedProof(BaseModel):
     source: str
     evaluated_resource_ids: list[str]
 
-
 class ProofVerificationOutcome(BaseModel):
     """Typed result from Lean compiler verification."""
 
     verified: bool
     errors: str | None = None
     output: str | None = None
-
 
 class ProofVerificationCriterion(Criterion):
     """Criterion that verifies Lean formal proofs via sandbox compilation.
@@ -99,7 +94,7 @@ class ProofVerificationCriterion(Criterion):
 
     def _extract_proof(self, context: EvaluationContext) -> ExtractedProof:
         """Extract proof code from worker result artifacts."""
-        artifacts: dict[str, Any] = context.worker_result.artifacts
+        artifacts: dict[str, Any] = context.worker_result.artifacts  # slopcop: ignore[no-typing-any]
 
         proof_code = artifacts.get("final_solution.lean")
         if proof_code is not None:

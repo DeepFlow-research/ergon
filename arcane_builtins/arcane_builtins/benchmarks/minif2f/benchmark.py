@@ -4,11 +4,9 @@ Loads problems from the facebook/miniF2F repository, each containing a Lean
 theorem statement and ground-truth proof.
 """
 
-from __future__ import annotations
-
+import logging
 import re
 import subprocess
-import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
@@ -18,8 +16,9 @@ from h_arcane.api.task_types import BenchmarkTask
 
 from arcane_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
 
-MINIF2F_REPO = "https://github.com/facebookresearch/miniF2F"
+logger = logging.getLogger(__name__)
 
+MINIF2F_REPO = "https://github.com/facebookresearch/miniF2F"
 
 class MiniF2FBenchmark(Benchmark):
     """Benchmark backed by the MiniF2F dataset of formal math problems.
@@ -37,7 +36,7 @@ class MiniF2FBenchmark(Benchmark):
         limit: int | None = None,
         name: str | None = None,
         description: str | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         super().__init__(
             name=name or "minif2f",
@@ -81,7 +80,7 @@ class MiniF2FBenchmark(Benchmark):
         base = self.data_dir or Path.cwd() / "data"
         minif2f_dir = base / "raw" / "minif2f"
         if not minif2f_dir.exists():
-            print(f"Cloning MiniF2F repository to {minif2f_dir}...", file=sys.stderr)
+            logger.info("Cloning MiniF2F repository to %s …", minif2f_dir)
             subprocess.run(
                 ["git", "clone", MINIF2F_REPO, str(minif2f_dir)],
                 check=True,

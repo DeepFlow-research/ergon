@@ -5,19 +5,16 @@ helpers that produce pre-configured CodeCheckCriterion /
 LLMJudgeCriterion instances tuned for document-processing evaluation.
 """
 
-from __future__ import annotations
-
 from arcane_builtins.evaluators.criteria.code_check import CodeCheckCriterion
 from arcane_builtins.evaluators.criteria.llm_judge import LLMJudgeCriterion
 
 GDPEvalCriterion = CodeCheckCriterion | LLMJudgeCriterion
 
-
 def make_code_check(
     name: str,
     code_template: str,
     *,
-    description: str = "",
+    description: str = "",  # slopcop: ignore[no-str-empty-default]
     weight: float = 1.0,
     max_score: float = 1.0,
 ) -> CodeCheckCriterion:
@@ -30,12 +27,11 @@ def make_code_check(
         max_score=max_score,
     )
 
-
 def make_llm_judge(
     name: str,
     prompt_template: str,
     *,
-    description: str = "",
+    description: str = "",  # slopcop: ignore[no-str-empty-default]
     weight: float = 1.0,
     max_score: float = 1.0,
     model: str = "gpt-4o",
@@ -49,7 +45,6 @@ def make_llm_judge(
         max_score=max_score,
         model=model,
     )
-
 
 # ---------------------------------------------------------------------------
 # Common GDP criterion presets
@@ -73,7 +68,6 @@ def output_file_exists(
         weight=weight,
         max_score=max_score,
     )
-
 
 def content_quality_judge(
     aspect: str = "completeness",

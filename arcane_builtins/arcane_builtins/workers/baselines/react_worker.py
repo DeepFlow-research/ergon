@@ -1,29 +1,27 @@
 """ReAct-style worker using pydantic-ai Agent for tool-augmented execution."""
 
-from __future__ import annotations
-
+import dataclasses  # slopcop: ignore[no-dataclass]
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from h_arcane.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
 from pydantic import BaseModel
+from pydantic_ai import Agent
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    ToolReturnPart,
+)
 
-try:
-    from pydantic_ai import Agent
-    from pydantic_ai.messages import (
-        ModelRequest,
-        ModelResponse,
-        RetryPromptPart,
-        TextPart,
-        ThinkingPart,
-        ToolCallPart,
-        ToolReturnPart,
-    )
+from h_arcane.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
+from h_arcane.api.generation import GenerationTurn
+from h_arcane.core.providers.generation.pydantic_ai_format import extract_logprobs
+from h_arcane.core.providers.generation.vllm_model import resolve_model_target
+from h_arcane.core.rl import VLLM_LOGPROB_SETTINGS
 
-    _HAS_PYDANTIC_AI = True
-except ImportError:
-    _HAS_PYDANTIC_AI = False
+logger = logging.getLogger(__name__)
 
 
 class _AgentOutput(BaseModel):
@@ -36,8 +34,8 @@ class _AgentOutput(BaseModel):
 class ReActWorker(Worker):
     """ReAct-style worker that delegates to a pydantic-ai Agent.
 
-    The agent iterates over tool calls (Reasoning → Action → Observation) until
-    it produces a final answer or hits *max_iterations*.
+    Produces ``GenerationTurn`` records from PydanticAI's native message
+    history — no format conversion.
     """
 
     type_slug = "react-v1"
@@ -47,13 +45,13 @@ class ReActWorker(Worker):
         *,
         name: str,
         model: str | None = None,
-        tools: list[Any] | None = None,
-        system_prompt: str = "",
+        tools: list[Any] | None = None,  # slopcop: ignore[no-typing-any]
+        system_prompt: str | None = None,
         max_iterations: int = 10,
     ) -> None:
         super().__init__(name=name, model=model)
-        self.tools: list[Any] = tools or []
-        self.system_prompt = system_prompt
+        self.tools: list[Any] = tools or []  # slopcop: ignore[no-typing-any]
+        self.system_prompt: str | None = system_prompt
         self.max_iterations = max_iterations
 
     async def execute(
@@ -62,27 +60,26 @@ class ReActWorker(Worker):
         *,
         context: WorkerContext,
     ) -> WorkerResult:
-        if not _HAS_PYDANTIC_AI:
-            return WorkerResult(
-                output="pydantic-ai is not installed",
-                success=False,
-                metadata={"error": "missing_dependency"},
-            )
+        resolved = resolve_model_target(self.model)
+        is_vllm = self.model is not None and self.model.startswith("vllm:")
+
+        model_settings: dict[str, object] | None = None
+        if is_vllm:
+            model_settings = VLLM_LOGPROB_SETTINGS
 
         agent: Agent[None, _AgentOutput] = Agent(
-            model=self.model or "openai:gpt-4o",
+            model=resolved.model,
             instructions=self.system_prompt or None,
             tools=self.tools,
             output_type=_AgentOutput,
         )
 
-        task_prompt = self._format_task(task)
-        actions: list[dict[str, Any]] = []
+        task_prompt = _format_task(task)
         started_at = datetime.now(timezone.utc)
 
         try:
             node_count = 0
-            async with agent.iter(task_prompt) as run:
+            async with agent.iter(task_prompt, model_settings=model_settings) as run:
                 async for _node in run:
                     node_count += 1
                     if node_count >= self.max_iterations:
@@ -97,103 +94,109 @@ class ReActWorker(Worker):
                 )
 
             messages = result.new_messages()
-            actions = self._extract_actions(messages)
+            turns = _build_turns(messages)
             output_text = (
                 result.output.output_text
                 if isinstance(result.output, _AgentOutput)
                 else str(result.output)
             )
-            reasoning = result.output.reasoning if isinstance(result.output, _AgentOutput) else None
+            reasoning = (
+                result.output.reasoning
+                if isinstance(result.output, _AgentOutput)
+                else None
+            )
 
-        except Exception as exc:
-            elapsed_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
+            elapsed_ms = int(
+                (datetime.now(timezone.utc) - started_at).total_seconds() * 1000
+            )
             return WorkerResult(
                 output=f"Agent execution failed: {exc}",
                 success=False,
-                artifacts={"actions": actions},
                 metadata={"error": str(exc), "elapsed_ms": elapsed_ms},
             )
 
-        elapsed_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
+        elapsed_ms = int(
+            (datetime.now(timezone.utc) - started_at).total_seconds() * 1000
+        )
+
         return WorkerResult(
             output=output_text,
             success=True,
-            artifacts={"actions": actions, "reasoning": reasoning},
+            turns=turns,
+            artifacts={"reasoning": reasoning},
             metadata={
                 "model": self.model,
                 "node_count": node_count,
-                "action_count": len(actions),
+                "turn_count": len(turns),
                 "elapsed_ms": elapsed_ms,
+                "policy_version": resolved.policy_version,
             },
         )
 
-    def _format_task(self, task: BenchmarkTask) -> str:
-        lines = [f"Task: {task.description}"]
-        if task.task_payload:
-            lines.append("")
-            lines.append(f"Payload: {json.dumps(task.task_payload, default=str)}")
-        return "\n".join(lines)
 
-    def _extract_actions(self, messages: list[Any]) -> list[dict[str, Any]]:
-        """Walk pydantic-ai messages and extract a flat action log."""
-        if not _HAS_PYDANTIC_AI:
-            return []
+# ---------------------------------------------------------------------------
+# PydanticAI message → GenerationTurn
+# ---------------------------------------------------------------------------
 
-        actions: list[dict[str, Any]] = []
-        pending: dict[str, dict[str, Any]] = {}
 
-        for message in messages:
-            ts = getattr(message, "timestamp", None) or datetime.now(timezone.utc)
-            ts_iso = ts.isoformat() if isinstance(ts, datetime) else str(ts)
+def _format_task(task: BenchmarkTask) -> str:
+    lines = [f"Task: {task.description}"]
+    if task.task_payload:
+        lines.append("")
+        lines.append(f"Payload: {json.dumps(task.task_payload, default=str)}")
+    return "\n".join(lines)
 
-            if isinstance(message, ModelResponse):
-                for part in message.parts:
-                    if isinstance(part, ToolCallPart):
-                        pending[part.tool_call_id] = {
-                            "tool_name": part.tool_name,
-                            "input": self._safe_serialize(part.args),
-                            "started_at": ts_iso,
-                        }
-                    elif isinstance(part, TextPart):
-                        actions.append({
-                            "action_type": "message",
-                            "output": part.content,
-                            "timestamp": ts_iso,
-                        })
-                    elif isinstance(part, ThinkingPart):
-                        actions.append({
-                            "action_type": "reasoning",
-                            "output": part.content,
-                            "timestamp": ts_iso,
-                        })
 
-            elif isinstance(message, ModelRequest):
-                for req_part in message.parts:
-                    if isinstance(req_part, ToolReturnPart):
-                        call_info = pending.pop(req_part.tool_call_id, {})
-                        actions.append({
-                            "action_type": call_info.get("tool_name", req_part.tool_name),
-                            "input": call_info.get("input", ""),
-                            "output": self._safe_serialize(req_part.content),
-                            "started_at": call_info.get("started_at", ts_iso),
-                            "completed_at": ts_iso,
-                        })
-                    elif isinstance(req_part, RetryPromptPart):
-                        actions.append({
-                            "action_type": "retry_prompt",
-                            "output": self._safe_serialize(req_part.content),
-                            "timestamp": ts_iso,
-                        })
+def _build_turns(messages: list[ModelMessage]) -> list[GenerationTurn]:
+    """Build ``GenerationTurn`` objects from PydanticAI message history."""
+    turns: list[GenerationTurn] = []
+    pending: ModelResponse | None = None
+    pending_request: ModelRequest | None = None
 
-        return actions
+    for message in messages:
+        if isinstance(message, ModelResponse):
+            if pending is not None:
+                turns.append(_to_turn(pending, pending_request, []))
+            pending = message
+            pending_request = None
+        elif isinstance(message, ModelRequest):
+            if pending is not None:
+                tool_results = _extract_tool_results(message)
+                turns.append(_to_turn(pending, pending_request, tool_results))
+                pending = None
+            pending_request = message
 
-    @staticmethod
-    def _safe_serialize(value: Any) -> str:
-        if isinstance(value, str):
-            return value
-        if isinstance(value, BaseModel):
-            return json.dumps(value.model_dump(), default=str)
-        try:
-            return json.dumps(value, default=str)
-        except (TypeError, ValueError):
-            return str(value)
+    if pending is not None:
+        turns.append(_to_turn(pending, pending_request, []))
+
+    return turns
+
+
+def _to_turn(
+    response: ModelResponse,
+    request: ModelRequest | None,
+    tool_results: list[dict[str, Any]],  # slopcop: ignore[no-typing-any]
+) -> GenerationTurn:
+    raw_resp = dataclasses.asdict(response)
+    raw_req = dataclasses.asdict(request) if request is not None else None
+    return GenerationTurn(
+        raw_request=raw_req,
+        raw_response=raw_resp,
+        tool_results=tool_results,
+        logprobs=extract_logprobs(raw_resp),
+    )
+
+
+def _extract_tool_results(request: ModelRequest) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
+    results: list[dict[str, Any]] = []  # slopcop: ignore[no-typing-any]
+    for part in request.parts:
+        if isinstance(part, ToolReturnPart):
+            content = part.content
+            serialized = content if isinstance(content, str) else json.dumps(content, default=str)
+            results.append({
+                "tool_call_id": part.tool_call_id,
+                "tool_name": part.tool_name,
+                "result": serialized,
+            })
+    return results

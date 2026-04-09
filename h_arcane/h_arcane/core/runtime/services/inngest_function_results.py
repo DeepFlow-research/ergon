@@ -93,7 +93,7 @@ class EvaluateTaskRunResult(BaseModel):
 
     score: float | None = None
     passed: bool | None = None
-    evaluator_name: str = ""
+    evaluator_name: str = ""  # slopcop: ignore[no-str-empty-default]
     error: str | None = None
 
 
@@ -102,14 +102,14 @@ class BenchmarkRunStartResult(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    benchmark: str = ""
+    benchmark: str = ""  # slopcop: ignore[no-str-empty-default]
 
 
 class RunCleanupResult(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    status: str = ""
+    status: str = ""  # slopcop: ignore[no-str-empty-default]
     sandbox_terminated: bool = False
     sandbox_id: str | None = None
     error: str | None = None

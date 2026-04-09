@@ -24,7 +24,7 @@ class PersistedExperimentDefinition(BaseModel):
     instance_count: int = 0
     task_count: int = 0
     created_at: datetime = Field(default_factory=utcnow)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
 
 class ExperimentRunHandle(BaseModel):
@@ -43,4 +43,4 @@ class ExperimentRunHandle(BaseModel):
     worker_bindings: dict[str, str] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utcnow)
     started_at: datetime | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]

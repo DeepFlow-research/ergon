@@ -81,7 +81,7 @@ class RunExecutionAttemptDto(CamelModel):
     score: float | None = None
     agent_id: str | None = None
     agent_name: str | None = None
-    evaluation_details: dict[str, Any] | None = None
+    evaluation_details: dict[str, Any] | None = None  # slopcop: ignore[no-typing-any]
     output_resource_ids: list[str] = Field(default_factory=list)
 
 
@@ -98,7 +98,7 @@ class RunEvaluationCriterionDto(CamelModel):
     feedback: str
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
-    error: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None  # slopcop: ignore[no-typing-any]
 
 
 class RunTaskEvaluationDto(CamelModel):
@@ -167,7 +167,7 @@ class RunSnapshotDto(CamelModel):
     name: str
     status: str
     tasks: dict[str, RunTaskDto] = Field(default_factory=dict)
-    root_task_id: str = ""
+    root_task_id: str = ""  # slopcop: ignore[no-str-empty-default]
     actions_by_task: dict[str, list[RunActionDto]] = Field(default_factory=dict)
     resources_by_task: dict[str, list[RunResourceDto]] = Field(default_factory=dict)
     executions_by_task: dict[str, list[RunExecutionAttemptDto]] = Field(default_factory=dict)
@@ -184,3 +184,27 @@ class RunSnapshotDto(CamelModel):
     running_tasks: int = 0
     final_score: float | None = None
     error: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Generation turn DTO (RL observability)
+# ---------------------------------------------------------------------------
+
+
+class RunGenerationTurnDto(CamelModel):
+    """One model generation turn in a task execution."""
+
+    id: str
+    task_execution_id: str
+    worker_binding_key: str
+    turn_index: int
+    raw_request: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    raw_response: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    response_text: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None  # slopcop: ignore[no-typing-any]
+    tool_results: list[dict[str, Any]] | None = None  # slopcop: ignore[no-typing-any]
+    policy_version: str | None = None
+    has_logprobs: bool = False
+    created_at: str | None = None
+    token_ids: list[int] | None = None
+    logprobs: list[float] | None = None

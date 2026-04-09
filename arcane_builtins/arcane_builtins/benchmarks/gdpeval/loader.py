@@ -4,8 +4,6 @@ Reads the GDP parquet dataset and staged rubric JSONL to produce task
 descriptions, reference file lists, and rubric payloads.
 """
 
-from __future__ import annotations
-
 import functools
 import json
 from pathlib import Path
@@ -15,11 +13,11 @@ from typing import Any
 # Parquet helpers
 # ---------------------------------------------------------------------------
 
-
 @functools.lru_cache(maxsize=4)
-def _load_parquet(parquet_path: str) -> Any:
+def _load_parquet(parquet_path: str) -> Any:  # slopcop: ignore[no-typing-any]
     """Load and cache a parquet file.  Returns a ``pandas.DataFrame``."""
-    import pandas as pd  # deferred so the module can be imported w/o pandas
+    # Deferred: optional dependency
+    import pandas as pd
 
     path = Path(parquet_path)
     if not path.exists():
@@ -28,7 +26,6 @@ def _load_parquet(parquet_path: str) -> Any:
             "Copy data from the curation pipeline into your data directory."
         )
     return pd.read_parquet(path)
-
 
 def extract_task_description(
     task_id: str,
@@ -44,11 +41,9 @@ def extract_task_description(
         raise ValueError(f"Task {task_id!r} not found in {parquet_path}")
     return str(row.iloc[0]["prompt"])
 
-
 # ---------------------------------------------------------------------------
 # Reference files
 # ---------------------------------------------------------------------------
-
 
 def find_reference_files(task_id: str, reference_dir: Path) -> list[Path]:
     """Locate reference / input files for *task_id*.
@@ -72,11 +67,9 @@ def find_reference_files(task_id: str, reference_dir: Path) -> list[Path]:
 
     return sorted(files)
 
-
 # ---------------------------------------------------------------------------
 # Rubric JSONL helpers
 # ---------------------------------------------------------------------------
-
 
 def load_task_ids(
     rubric_file: Path,
@@ -102,7 +95,6 @@ def load_task_ids(
             ids.append(data["task_id"])
     return ids
 
-
 def load_rubric_data(
     rubric_file: Path,
 ) -> dict[str, dict]:
@@ -116,7 +108,6 @@ def load_rubric_data(
             data = json.loads(line)
             rubrics[data["task_id"]] = data
     return rubrics
-
 
 def load_single_rubric(
     task_id: str,

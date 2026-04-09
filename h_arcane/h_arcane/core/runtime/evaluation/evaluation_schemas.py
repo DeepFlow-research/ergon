@@ -39,9 +39,9 @@ class CriterionContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     run_id: UUID
-    task_input: str = ""
-    agent_reasoning: str = ""
-    agent_outputs: list[dict[str, Any]] = Field(default_factory=list)
+    task_input: str = ""  # slopcop: ignore[no-str-empty-default]
+    agent_reasoning: str = ""  # slopcop: ignore[no-str-empty-default]
+    agent_outputs: list[dict[str, object]] = Field(default_factory=list)
     stage_idx: int = 0
     stage_name: str = "default"
     criterion_idx: int = 0
@@ -54,10 +54,10 @@ class TaskEvaluationContext(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     run_id: UUID
-    task_input: str = ""
-    agent_reasoning: str = ""
-    agent_outputs: list[dict[str, Any]] = Field(default_factory=list)
-    sandbox_id: str = ""
+    task_input: str = ""  # slopcop: ignore[no-str-empty-default]
+    agent_reasoning: str = ""  # slopcop: ignore[no-str-empty-default]
+    agent_outputs: list[dict[str, object]] = Field(default_factory=list)
+    sandbox_id: str = ""  # slopcop: ignore[no-str-empty-default]
 
 
 class CriterionSpec(BaseModel):

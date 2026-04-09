@@ -4,8 +4,6 @@ Thin wrapper around OpenAI structured output (beta.chat.completions.parse)
 used by the criterion runtime when evaluating LLMJudgeCriterion instances.
 """
 
-from __future__ import annotations
-
 from typing import Any, TypeVar
 
 from openai import AsyncOpenAI
@@ -15,16 +13,14 @@ from pydantic import BaseModel, Field
 
 T = TypeVar("T", bound=BaseModel)
 
-
 class LLMJudgeResponse(BaseModel):
     """Default structured response from an LLM judge call."""
 
     reasoning: str = Field(description="Detailed reasoning for the verdict")
     final_verdict: bool = Field(description="Pass/fail determination")
 
-
 async def call_llm_judge(
-    messages: list[dict[str, Any]],
+    messages: list[dict[str, Any]],  # slopcop: ignore[no-typing-any]
     model: str = "gpt-4o",
     response_type: type[T] = LLMJudgeResponse,  # type: ignore[assignment]
 ) -> T:

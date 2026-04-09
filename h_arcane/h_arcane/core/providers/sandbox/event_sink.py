@@ -72,7 +72,7 @@ class NoopSandboxEventSink:
 class DashboardEmitterSandboxEventSink:
     """Adapter that forwards sandbox events to the dashboard emitter."""
 
-    def __init__(self, emitter: Any):
+    def __init__(self, emitter: Any):  # slopcop: ignore[no-typing-any]
         self._emitter = emitter
 
     async def sandbox_created(

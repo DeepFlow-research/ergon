@@ -1,7 +1,5 @@
 """CRUD repository for saved-spec tables."""
 
-from __future__ import annotations
-
 from typing import Any, TypeVar
 from uuid import UUID
 
@@ -16,7 +14,6 @@ from h_arcane.core.utils import utcnow
 from sqlmodel import SQLModel, select
 
 T = TypeVar("T", bound=SQLModel)
-
 
 class SavedSpecsRepository:
     """Unified CRUD for all saved-spec tables."""
@@ -33,10 +30,10 @@ class SavedSpecsRepository:
         with get_session() as session:
             return list(session.exec(select(SavedBenchmarkSpec)).all())
 
-    def create_benchmark_spec(self, **kwargs: Any) -> SavedBenchmarkSpec:
+    def create_benchmark_spec(self, **kwargs: Any) -> SavedBenchmarkSpec:  # slopcop: ignore[no-typing-any]
         return self._create(SavedBenchmarkSpec, **kwargs)
 
-    def update_benchmark_spec(self, spec_id: UUID, **kwargs: Any) -> SavedBenchmarkSpec | None:
+    def update_benchmark_spec(self, spec_id: UUID, **kwargs: Any) -> SavedBenchmarkSpec | None:  # slopcop: ignore[no-typing-any]
         return self._update(SavedBenchmarkSpec, spec_id, **kwargs)
 
     # ------------------------------------------------------------------
@@ -51,10 +48,10 @@ class SavedSpecsRepository:
         with get_session() as session:
             return list(session.exec(select(SavedWorkerSpec)).all())
 
-    def create_worker_spec(self, **kwargs: Any) -> SavedWorkerSpec:
+    def create_worker_spec(self, **kwargs: Any) -> SavedWorkerSpec:  # slopcop: ignore[no-typing-any]
         return self._create(SavedWorkerSpec, **kwargs)
 
-    def update_worker_spec(self, spec_id: UUID, **kwargs: Any) -> SavedWorkerSpec | None:
+    def update_worker_spec(self, spec_id: UUID, **kwargs: Any) -> SavedWorkerSpec | None:  # slopcop: ignore[no-typing-any]
         return self._update(SavedWorkerSpec, spec_id, **kwargs)
 
     # ------------------------------------------------------------------
@@ -69,10 +66,10 @@ class SavedSpecsRepository:
         with get_session() as session:
             return list(session.exec(select(SavedEvaluatorSpec)).all())
 
-    def create_evaluator_spec(self, **kwargs: Any) -> SavedEvaluatorSpec:
+    def create_evaluator_spec(self, **kwargs: Any) -> SavedEvaluatorSpec:  # slopcop: ignore[no-typing-any]
         return self._create(SavedEvaluatorSpec, **kwargs)
 
-    def update_evaluator_spec(self, spec_id: UUID, **kwargs: Any) -> SavedEvaluatorSpec | None:
+    def update_evaluator_spec(self, spec_id: UUID, **kwargs: Any) -> SavedEvaluatorSpec | None:  # slopcop: ignore[no-typing-any]
         return self._update(SavedEvaluatorSpec, spec_id, **kwargs)
 
     # ------------------------------------------------------------------
@@ -87,11 +84,11 @@ class SavedSpecsRepository:
         with get_session() as session:
             return list(session.exec(select(SavedExperimentTemplate)).all())
 
-    def create_experiment_template(self, **kwargs: Any) -> SavedExperimentTemplate:
+    def create_experiment_template(self, **kwargs: Any) -> SavedExperimentTemplate:  # slopcop: ignore[no-typing-any]
         return self._create(SavedExperimentTemplate, **kwargs)
 
     def update_experiment_template(
-        self, template_id: UUID, **kwargs: Any
+        self, template_id: UUID, **kwargs: Any  # slopcop: ignore[no-typing-any]
     ) -> SavedExperimentTemplate | None:
         return self._update(SavedExperimentTemplate, template_id, **kwargs)
 
@@ -100,7 +97,7 @@ class SavedSpecsRepository:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _create(model_class: type[T], **kwargs: Any) -> T:
+    def _create(model_class: type[T], **kwargs: Any) -> T:  # slopcop: ignore[no-typing-any]
         with get_session() as session:
             row = model_class(**kwargs)
             session.add(row)
@@ -109,19 +106,18 @@ class SavedSpecsRepository:
             return row
 
     @staticmethod
-    def _update(model_class: type[T], row_id: UUID, **kwargs: Any) -> T | None:
+    def _update(model_class: type[T], row_id: UUID, **kwargs: Any) -> T | None:  # slopcop: ignore[no-typing-any]
         with get_session() as session:
             row = session.get(model_class, row_id)
             if row is None:
                 return None
             for key, value in kwargs.items():
                 setattr(row, key, value)
-            if hasattr(row, "updated_at"):
+            if hasattr(row, "updated_at"):  # slopcop: ignore[no-hasattr-getattr]
                 row.updated_at = utcnow()
             session.add(row)
             session.commit()
             session.refresh(row)
             return row
-
 
 saved_specs_repository = SavedSpecsRepository()

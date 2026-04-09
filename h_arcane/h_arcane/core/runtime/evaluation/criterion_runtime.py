@@ -4,8 +4,6 @@ CriterionRuntime is a protocol. DefaultCriterionRuntime is the real
 implementation backed by E2B sandbox + OpenAI LLM judge.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
@@ -25,7 +23,6 @@ if TYPE_CHECKING:
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
-
 class CriterionRuntime(Protocol):
     """Execution helper passed into a single criterion."""
 
@@ -36,7 +33,6 @@ class CriterionRuntime(Protocol):
     async def execute_code(self, code: str) -> SandboxResult: ...
     async def call_llm_judge(self, messages: list, response_type: type[T]) -> T: ...
     async def cleanup(self) -> None: ...
-
 
 class DefaultCriterionRuntime:
     """Real criterion runtime backed by sandbox manager + OpenAI.
@@ -83,7 +79,7 @@ class DefaultCriterionRuntime:
                 content = content.encode("utf-8")
             try:
                 await sandbox.files.write(sandbox_path, content)
-            except Exception as exc:
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 logger.warning("Failed to upload %s: %s", name, exc)
 
     async def write_file(self, path: str, content: bytes) -> None:
@@ -103,7 +99,7 @@ class DefaultCriterionRuntime:
                 stderr=result.stderr,
                 exit_code=result.exit_code,
             )
-        except Exception as exc:
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
             return CommandResult(
                 stdout="",
                 stderr=str(exc),
@@ -120,7 +116,7 @@ class DefaultCriterionRuntime:
                 stdout=list(execution.logs.stdout),
                 stderr=list(execution.logs.stderr),
             )
-        except Exception as exc:
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
             error_msg = str(exc)
             if "timeout" in error_msg.lower() or "sandbox was not found" in error_msg.lower():
                 raise RuntimeError(

@@ -19,4 +19,4 @@ class WorkerContext(BaseModel):
     task_id: UUID
     execution_id: UUID
     sandbox_id: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]

@@ -22,10 +22,10 @@ class Evaluator(ABC):
         self,
         *,
         name: str,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.name = name
-        self.metadata: dict[str, Any] = dict(metadata or {})
+        self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
 
     @abstractmethod
     def criteria_for(self, task: BenchmarkTask) -> Iterable[Criterion]:
@@ -56,7 +56,7 @@ class Rubric(Evaluator):
         *,
         name: str,
         criteria: Iterable[Criterion],
-        metadata: Mapping[str, Any] | None = None,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         super().__init__(name=name, metadata=metadata)
         self.criteria: tuple[Criterion, ...] = tuple(criteria)

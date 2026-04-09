@@ -12,9 +12,9 @@ class PreparedSingleEvaluator(BaseModel):
     evaluator_id: UUID
     evaluator_binding_key: str
     evaluator_type: str
-    task_input: str = ""
-    agent_reasoning: str = ""
-    agent_outputs: list[dict[str, Any]] = Field(default_factory=list)
+    task_input: str = ""  # slopcop: ignore[no-str-empty-default]
+    agent_reasoning: str = ""  # slopcop: ignore[no-str-empty-default]
+    agent_outputs: list[dict[str, object]] = Field(default_factory=list)
 
 
 class PreparedEvaluatorDispatch(BaseModel):
