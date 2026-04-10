@@ -1,0 +1,75 @@
+# Training + eval watcher as a SkyPilot JobGroup.
+#
+#   sky jobs launch infrastructure/skypilot/train-with-eval.yaml -y \
+#     --env DEFINITION_ID=<uuid> \
+#     --env MODEL=Qwen/Qwen2.5-7B \
+#     --env ARCANE_INNGEST_URL=http://<macbook>:8288 \
+#     --env DATABASE_URL=postgresql://...
+
+name: arcane-rl-full
+execution: parallel
+
+---
+name: trainer
+resources:
+  accelerators: ${GPU_TYPE:-A100}:${GPU_COUNT:-4}
+  infra: shadeform
+
+file_mounts:
+  /checkpoints:
+    source: ${CHECKPOINT_BUCKET:-s3://my-arcane-checkpoints}
+    mode: MOUNT_CACHED
+
+envs:
+  DEFINITION_ID:
+  MODEL:
+  ARCANE_INNGEST_URL:
+  DATABASE_URL:
+  INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY:-dev}
+
+setup: |
+  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
+  cd /tmp/arcane
+  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli -e ./arcane_infra
+  pip install "trl[vllm]>=1.0.0,<2.0.0" datasets transformers
+
+run: |
+  cd /tmp/arcane
+  python scripts/train_trl_grpo.py \
+    --definition-id "$DEFINITION_ID" \
+    --model "$MODEL" \
+    --vllm-mode server \
+    --inngest-url "$ARCANE_INNGEST_URL" \
+    --inngest-event-key "$INNGEST_EVENT_KEY" \
+    --db-url "$DATABASE_URL" \
+    --output-dir /checkpoints \
+    --save-steps "${SAVE_STEPS:-50}"
+
+---
+name: eval-watcher
+resources:
+  cpus: 8
+  infra: shadeform
+
+file_mounts:
+  /checkpoints:
+    source: ${CHECKPOINT_BUCKET:-s3://my-arcane-checkpoints}
+    mode: MOUNT
+
+envs:
+  BENCHMARK:
+  EVALUATOR: ${EVALUATOR:-stub-rubric}
+
+setup: |
+  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
+  cd /tmp/arcane
+  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli -e ./arcane_infra
+  pip install "skypilot-nightly[shadeform]"
+
+run: |
+  arcane eval watch \
+    --checkpoint-dir /checkpoints \
+    --benchmark "$BENCHMARK" \
+    --evaluator "$EVALUATOR" \
+    --poll-interval "${POLL_INTERVAL:-120}" \
+    --on-checkpoint "sky launch infrastructure/skypilot/eval-only.yaml -y --env CHECKPOINT={path} --env BENCHMARK=$BENCHMARK"

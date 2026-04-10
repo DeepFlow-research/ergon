@@ -1,0 +1,43 @@
+# On-demand checkpoint evaluation.
+#
+# Spawned by the eval watcher per checkpoint.
+#
+#   sky launch infrastructure/skypilot/eval-only.yaml -y \
+#     --env CHECKPOINT=s3://bucket/checkpoint-500 \
+#     --env BENCHMARK=gdpeval
+
+name: arcane-eval
+
+resources:
+  accelerators: ${GPU_TYPE:-A100}:1
+  infra: shadeform
+
+envs:
+  CHECKPOINT:
+  BENCHMARK:
+  EVALUATOR: ${EVALUATOR:-stub-rubric}
+  EVAL_LIMIT: ${EVAL_LIMIT:-50}
+
+setup: |
+  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
+  cd /tmp/arcane
+  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli
+  pip install vllm
+
+run: |
+  python -m vllm.entrypoints.openai.api_server \
+    --model "$CHECKPOINT" \
+    --port 8000 &
+
+  for i in $(seq 1 60); do
+    if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+      echo "vLLM ready after ${i}s"
+      break
+    fi
+    sleep 1
+  done
+
+  arcane benchmark run "$BENCHMARK" \
+    --model "vllm:http://localhost:8000" \
+    --evaluator "$EVALUATOR" \
+    --limit "$EVAL_LIMIT"

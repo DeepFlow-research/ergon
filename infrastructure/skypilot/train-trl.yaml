@@ -1,0 +1,53 @@
+# Single-node TRL GRPO training with Arcane environments.
+#
+# All configuration via environment variables — set at launch time:
+#
+#   sky launch infrastructure/skypilot/train-trl.yaml -y \
+#     --env DEFINITION_ID=<uuid> \
+#     --env MODEL=Qwen/Qwen2.5-7B \
+#     --env ARCANE_INNGEST_URL=http://<macbook-tailscale-ip>:8288 \
+#     --env DATABASE_URL=postgresql://...
+
+name: arcane-training
+
+resources:
+  accelerators: ${GPU_TYPE:-A100}:${GPU_COUNT:-4}
+  infra: shadeform
+
+file_mounts:
+  /checkpoints:
+    source: ${CHECKPOINT_BUCKET:-s3://my-arcane-checkpoints}
+    mode: MOUNT_CACHED
+
+envs:
+  DEFINITION_ID:
+  MODEL:
+  ARCANE_INNGEST_URL:
+  DATABASE_URL:
+  INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY:-dev}
+  VLLM_MODE: ${VLLM_MODE:-server}
+  NUM_GENERATIONS: ${NUM_GENERATIONS:-8}
+  LEARNING_RATE: ${LEARNING_RATE:-1e-5}
+  SAVE_STEPS: ${SAVE_STEPS:-50}
+  TIMEOUT: ${TIMEOUT:-300}
+
+setup: |
+  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
+  cd /tmp/arcane
+  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli -e ./arcane_infra
+  pip install "trl[vllm]>=1.0.0,<2.0.0" datasets transformers
+
+run: |
+  cd /tmp/arcane
+  python scripts/train_trl_grpo.py \
+    --definition-id "$DEFINITION_ID" \
+    --model "$MODEL" \
+    --vllm-mode "$VLLM_MODE" \
+    --inngest-url "$ARCANE_INNGEST_URL" \
+    --inngest-event-key "$INNGEST_EVENT_KEY" \
+    --db-url "$DATABASE_URL" \
+    --output-dir /checkpoints \
+    --save-steps "$SAVE_STEPS" \
+    --num-generations "$NUM_GENERATIONS" \
+    --learning-rate "$LEARNING_RATE" \
+    --timeout "$TIMEOUT"
