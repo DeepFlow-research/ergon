@@ -13,16 +13,20 @@ build-backend = "setuptools.build_meta"
 include = []
 
 [tool.uv.workspace]
-members = ["h_arcane", "arcane_builtins", "arcane_cli"]
+members = ["h_arcane", "arcane_builtins", "arcane_cli", "arcane_infra"]
 
 [tool.uv.sources]
 h-arcane = { workspace = true }
 arcane-builtins = { workspace = true }
 arcane-cli = { workspace = true }
+arcane-infra = { workspace = true }
 
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+
+[tool.slopcop]
+exclude = ["no-print"]
 
 [tool.slopcop.per-file-ignores]
 "tests/**" = ["no-print"]

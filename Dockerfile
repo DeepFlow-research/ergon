@@ -14,7 +14,7 @@ RUN pip install uv
 # Install h_arcane package
 COPY h_arcane/pyproject.toml h_arcane/
 COPY h_arcane/h_arcane/ h_arcane/h_arcane/
-RUN cd h_arcane && uv pip install --system -e .
+RUN cd h_arcane && uv pip install --system -e ".[dev]"
 
 # Install arcane_builtins package
 COPY arcane_builtins/pyproject.toml arcane_builtins/
