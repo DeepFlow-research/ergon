@@ -1,50 +1,72 @@
-"""Explicit registries: slug -> class.
+"""Composed registry: merges sub-registries based on installed capabilities.
 
-No decorators, no scanning. Adding a built-in = one import + one dict entry.
-Keeps registration discoverable and prevents action-at-a-distance.
+No decorators, no scanning.  Sub-registries use eager, fully-typed imports.
+The only conditionality is at this composition boundary.
 """
 
-from __future__ import annotations
+import structlog
 
 from h_arcane.api import Benchmark, Evaluator, Worker
-from h_arcane.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from h_arcane.core.providers.generation.model_resolution import register_model_backend
+from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
 
-from arcane_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
-from arcane_builtins.benchmarks.gdpeval.rubric import StagedRubric
-from arcane_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
-from arcane_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
-from arcane_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
-from arcane_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
-from arcane_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
-from arcane_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
-from arcane_builtins.benchmarks.smoke_test.rubric import SmokeTestRubric
-from arcane_builtins.evaluators.rubrics.stub_rubric import StubRubric
-from arcane_builtins.workers.baselines.react_worker import ReActWorker
-from arcane_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
-from arcane_builtins.workers.baselines.stub_worker import StubWorker
+from arcane_builtins.registry_core import (
+    BENCHMARKS as _core_benchmarks,
+    EVALUATORS as _core_evaluators,
+    MODEL_BACKENDS as _core_model_backends,
+    SANDBOX_MANAGERS as _core_sandbox_managers,
+    WORKERS as _core_workers,
+)
 
+log = structlog.get_logger()
 
-BENCHMARKS: dict[str, type[Benchmark]] = {
-    "smoke-test": SmokeTestBenchmark,
-    "gdpeval": GDPEvalBenchmark,
-    "researchrubrics": ResearchRubricsBenchmark,
-    "minif2f": MiniF2FBenchmark,
-}
+# -- Start from core (always available) ------------------------------------
 
-WORKERS: dict[str, type[Worker]] = {
-    "stub-worker": StubWorker,
-    "smoke-test-worker": SmokeTestWorker,
-    "react-v1": ReActWorker,
-}
+WORKERS: dict[str, type[Worker]] = {**_core_workers}
+BENCHMARKS: dict[str, type[Benchmark]] = {**_core_benchmarks}
+EVALUATORS: dict[str, type[Evaluator]] = {**_core_evaluators}
+SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {**_core_sandbox_managers}
 
-EVALUATORS: dict[str, type[Evaluator]] = {
-    "stub-rubric": StubRubric,
-    "smoke-test-rubric": SmokeTestRubric,
-    "staged-rubric": StagedRubric,
-    "research-rubric": ResearchRubricsRubric,
-    "minif2f-rubric": MiniF2FRubric,
-}
+_model_backends: dict[str, object] = {**_core_model_backends}
 
-SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
-    "gdpeval": GDPEvalSandboxManager,
+# -- Capability: local-models ----------------------------------------------
+
+try:
+    from arcane_builtins.registry_local_models import (
+        MODEL_BACKENDS as _local_model_backends,
+    )
+    _model_backends.update(_local_model_backends)
+except ImportError:
+    log.info(
+        "arcane-builtins[local-models] not installed; "
+        "local transformers inference unavailable"
+    )
+
+# -- Capability: data ------------------------------------------------------
+
+try:
+    from arcane_builtins.registry_data import (
+        BENCHMARKS as _data_benchmarks,
+        EVALUATORS as _data_evaluators,
+    )
+    BENCHMARKS.update(_data_benchmarks)
+    EVALUATORS.update(_data_evaluators)
+except ImportError:
+    log.info(
+        "arcane-builtins[data] not installed; "
+        "gdpeval and researchrubrics benchmarks unavailable"
+    )
+
+# -- Register model backends -----------------------------------------------
+
+for prefix, resolver in _model_backends.items():
+    register_model_backend(prefix, resolver)
+
+# -- Install hints for slugs that require optional capabilities -------------
+
+INSTALL_HINTS: dict[str, str] = {
+    "transformers": "pip install 'arcane-builtins[local-models]'",
+    "gdpeval": "pip install 'arcane-builtins[data]'",
+    "researchrubrics": "pip install 'arcane-builtins[data]'",
+    "research-rubric": "pip install 'arcane-builtins[data]'",
 }

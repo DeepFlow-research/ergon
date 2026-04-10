@@ -3,7 +3,24 @@ name = "arcane-builtins"
 version = "0.1.0"
 description = "Built-in benchmarks, workers, evaluators, and criteria for Arcane"
 requires-python = ">=3.13"
-dependencies = ["h-arcane"]
+dependencies = [
+    "h-arcane",
+]
+
+[project.optional-dependencies]
+local-models = [
+    "torch>=2.0",
+    "transformers>=4.40.0",
+    "outlines",
+]
+data = [
+    "pandas",
+    "datasets",
+    "huggingface_hub",
+]
+all = [
+    "arcane-builtins[local-models,data]",
+]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

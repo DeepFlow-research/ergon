@@ -4,8 +4,6 @@ Loads GDP document-processing tasks from a parquet dataset + staged
 rubric file and exposes them via the :class:`Benchmark` interface.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import ClassVar
@@ -19,7 +17,6 @@ from arcane_builtins.benchmarks.gdpeval.loader import (
     load_task_ids,
 )
 
-
 class GDPEvalBenchmark(Benchmark):
     """Benchmark for GDP document-processing evaluation tasks.
 
@@ -29,6 +26,8 @@ class GDPEvalBenchmark(Benchmark):
     """
 
     type_slug: ClassVar[str] = "gdpeval"
+    required_packages: ClassVar[list[str]] = ["pandas"]
+    install_hint: ClassVar[str] = "pip install 'arcane-builtins[data]'"
 
     def __init__(
         self,

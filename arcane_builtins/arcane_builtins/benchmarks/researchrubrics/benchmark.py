@@ -25,6 +25,8 @@ class ResearchRubricsBenchmark(Benchmark):
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
+    required_packages: ClassVar[list[str]] = ["datasets", "huggingface_hub"]
+    install_hint: ClassVar[str] = "pip install 'arcane-builtins[data]'"
 
     def __init__(
         self,
