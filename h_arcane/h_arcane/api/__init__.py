@@ -2,6 +2,7 @@
 
 from h_arcane.api.benchmark import Benchmark
 from h_arcane.api.criterion import Criterion
+from h_arcane.api.errors import DependencyError
 from h_arcane.api.evaluation_context import EvaluationContext
 from h_arcane.api.evaluator import Evaluator, Rubric
 from h_arcane.api.experiment import Experiment
@@ -16,6 +17,7 @@ __all__ = [
     "BenchmarkTask",
     "Criterion",
     "CriterionResult",
+    "DependencyError",
     "EvaluationContext",
     "Evaluator",
     "Experiment",
