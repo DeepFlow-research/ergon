@@ -31,4 +31,7 @@ data/
 
 # OS
 .DS_Store
+
+# Training artifacts
+.arcane/
 checkpoints/

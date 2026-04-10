@@ -249,6 +249,25 @@ version = "0.1.0"
 source = { editable = "arcane_builtins" }
 dependencies = [
     { name = "h-arcane" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "datasets" },
+    { name = "huggingface-hub" },
+    { name = "outlines" },
+    { name = "pandas" },
+    { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
+    { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
+    { name = "transformers" },
+]
+data = [
+    { name = "datasets" },
+    { name = "huggingface-hub" },
+    { name = "pandas" },
+]
+local-models = [
+    { name = "outlines" },
     { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
     { name = "transformers" },
@@ -256,17 +275,23 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "arcane-builtins", extras = ["local-models", "data"], marker = "extra == 'all'", editable = "arcane_builtins" },
+    { name = "datasets", marker = "extra == 'data'" },
     { name = "h-arcane", editable = "h_arcane" },
-    { name = "torch", specifier = ">=2.0" },
-    { name = "transformers", specifier = ">=4.40.0" },
+    { name = "huggingface-hub", marker = "extra == 'data'" },
+    { name = "outlines", marker = "extra == 'local-models'" },
+    { name = "pandas", marker = "extra == 'data'" },
+    { name = "torch", marker = "extra == 'local-models'", specifier = ">=2.0" },
+    { name = "transformers", marker = "extra == 'local-models'", specifier = ">=4.40.0" },
 ]
+provides-extras = ["local-models", "data", "all"]
 
 [[package]]
 name = "arcane-cli"
 version = "0.1.0"
 source = { editable = "arcane_cli" }
 dependencies = [
-    { name = "arcane-builtins" },
+    { name = "arcane-builtins", extra = ["all"] },
     { name = "h-arcane" },
 ]
 
@@ -277,7 +302,7 @@ training = [
 
 [package.metadata]
 requires-dist = [
-    { name = "arcane-builtins", editable = "arcane_builtins" },
+    { name = "arcane-builtins", extras = ["all"], editable = "arcane_builtins" },
     { name = "arcane-infra", extras = ["all"], marker = "extra == 'training'", editable = "arcane_infra" },
     { name = "h-arcane", editable = "h_arcane" },
 ]
@@ -287,6 +312,16 @@ provides-extras = ["training"]
 name = "arcane-extension"
 version = "0.1.0"
 source = { editable = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "slopcop" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "slopcop", specifier = ">=0.1.0" }]
 
 [[package]]
 name = "arcane-infra"
@@ -677,14 +712,14 @@ name = "cohere"
 version = "5.21.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fastavro" },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "pydantic-core" },
-    { name = "requests" },
-    { name = "tokenizers" },
-    { name = "types-requests" },
-    { name = "typing-extensions" },
+    { name = "fastavro", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
+    { name = "httpx", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
+    { name = "pydantic", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
+    { name = "pydantic-core", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
+    { name = "requests", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
+    { name = "tokenizers", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
+    { name = "types-requests", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d2/75/4c346f6e2322e545f8452692304bd4eca15a2a0209ab9af6a0d1a7810b67/cohere-5.21.1.tar.gz", hash = "sha256:e5ade4423b928b01ff2038980e1b62b2a5bb412c8ab83e30882753b810a5509f", size = 191272, upload-time = "2026-03-26T15:09:27.857Z" }
 wheels = [
@@ -1309,6 +1344,15 @@ wheels = [
 ]
 
 [[package]]
+name = "genson"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c5/cf/2303c8ad276dcf5ee2ad6cf69c4338fd86ef0f471a5207b069adf7a393cf/genson-1.3.0.tar.gz", hash = "sha256:e02db9ac2e3fd29e65b5286f7135762e2cd8a986537c075b06fc5f1517308e37", size = 34919, upload-time = "2024-05-15T22:08:49.123Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f8/5c/e226de133afd8bb267ec27eead9ae3d784b95b39a287ed404caab39a5f50/genson-1.3.0-py3-none-any.whl", hash = "sha256:468feccd00274cc7e4c09e84b08704270ba8d95232aa280f65b986139cec67f7", size = 21470, upload-time = "2024-05-15T22:08:47.056Z" },
+]
+
+[[package]]
 name = "gguf"
 version = "0.18.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1533,6 +1577,7 @@ name = "h-arcane"
 version = "0.1.0"
 source = { editable = "h_arcane" }
 dependencies = [
+    { name = "alembic" },
     { name = "e2b-code-interpreter" },
     { name = "fastapi" },
     { name = "inngest" },
@@ -1552,6 +1597,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "outlines" },
     { name = "torch", version = "2.10.0", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'darwin'" },
     { name = "torch", version = "2.10.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
     { name = "transformers" },
@@ -1559,6 +1605,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", specifier = ">=1.13.0" },
     { name = "e2b-code-interpreter" },
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "inngest", specifier = ">=0.3.0" },
@@ -1567,6 +1614,7 @@ requires-dist = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
     { name = "opentelemetry-sdk" },
+    { name = "outlines", marker = "extra == 'dev'" },
     { name = "psycopg2-binary", specifier = ">=2.9.9" },
     { name = "pydantic", specifier = ">=2.5.0" },
     { name = "pydantic-ai" },
@@ -1888,6 +1936,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d3/59/322338183ecda247fb5d1763a6cbe46eff7222eaeebafd9fa65d4bf5cb11/jmespath-1.1.0.tar.gz", hash = "sha256:472c87d80f36026ae83c6ddd0f1d05d4e510134ed462851fd5f754c8c3cbb88d", size = 27377, upload-time = "2026-01-22T16:35:26.279Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/14/2f/967ba146e6d58cf6a652da73885f52fc68001525b4197effc174321d70b4/jmespath-1.1.0-py3-none-any.whl", hash = "sha256:a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64", size = 20419, upload-time = "2026-01-22T16:35:24.919Z" },
+]
+
+[[package]]
+name = "jsonpath-ng"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/32/58/250751940d75c8019659e15482d548a4aa3b6ce122c515102a4bfdac50e3/jsonpath_ng-1.8.0.tar.gz", hash = "sha256:54252968134b5e549ea5b872f1df1168bd7defe1a52fed5a358c194e1943ddc3", size = 74513, upload-time = "2026-02-24T14:42:06.182Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/03/99/33c7d78a3fb70d545fd5411ac67a651c81602cc09c9cf0df383733f068c5/jsonpath_ng-1.8.0-py3-none-any.whl", hash = "sha256:b8dde192f8af58d646fc031fac9c99fe4d00326afc4148f1f043c601a8cfe138", size = 67844, upload-time = "2026-02-28T00:53:19.637Z" },
 ]
 
 [[package]]
@@ -2855,6 +2912,27 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/24/dd/3590348818f58f837a75fb969b04cdf187ae197e14d60b5e5a794a38b79d/orjson-3.11.8-cp314-cp314-win32.whl", hash = "sha256:0b57f67710a8cd459e4e54eb96d5f77f3624eba0c661ba19a525807e42eccade", size = 131983, upload-time = "2026-03-31T16:16:21.823Z" },
     { url = "https://files.pythonhosted.org/packages/3f/0f/b6cb692116e05d058f31ceee819c70f097fa9167c82f67fabe7516289abc/orjson-3.11.8-cp314-cp314-win_amd64.whl", hash = "sha256:735e2262363dcbe05c35e3a8869898022af78f89dde9e256924dc02e99fe69ca", size = 127396, upload-time = "2026-03-31T16:16:23.685Z" },
     { url = "https://files.pythonhosted.org/packages/c0/d1/facb5b5051fabb0ef9d26c6544d87ef19a939a9a001198655d0d891062dd/orjson-3.11.8-cp314-cp314-win_arm64.whl", hash = "sha256:6ccdea2c213cf9f3d9490cbd5d427693c870753df41e6cb375bd79bcbafc8817", size = 127330, upload-time = "2026-03-31T16:16:25.496Z" },
+]
+
+[[package]]
+name = "outlines"
+version = "1.2.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cloudpickle" },
+    { name = "diskcache" },
+    { name = "genson" },
+    { name = "jinja2" },
+    { name = "jsonpath-ng" },
+    { name = "jsonschema" },
+    { name = "outlines-core" },
+    { name = "pillow" },
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b7/15/b378d55a5a44253462adb6e5ab9deade92a5960ab2eab47e9fe8c728c6ea/outlines-1.2.9.tar.gz", hash = "sha256:dcd0b08b4cb173fec01c7cacc09efebf4b16f4710adcaaf94ecbdb70d0f82f2e", size = 2866022, upload-time = "2025-11-24T12:49:03.231Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/15/efb96450da2292088c51e516f705b41b7ea94436e21ee5c23f30b8154487/outlines-1.2.9-py3-none-any.whl", hash = "sha256:0448eb5747e9c4ef1a061bd8881816ac5abd9ad7135294471c0753efa8cfafdb", size = 98380, upload-time = "2025-11-24T12:49:01.677Z" },
 ]
 
 [[package]]
@@ -4404,6 +4482,19 @@ shadeform = [
 ]
 
 [[package]]
+name = "slopcop"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/44/b5/996fdfffdffff41b06e24e1d8d1189f2fc728aab38a9b79a964b8a385f6b/slopcop-0.1.0.tar.gz", hash = "sha256:9160cbfbb597b64e6c1c50e9a598a22f135595ea830843ddb71313b89bd809bf", size = 28545, upload-time = "2026-04-09T13:04:12.764Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bf/54/c90116a4726577a92e34a6b043952664f736b896465f8f970dc1151f7260/slopcop-0.1.0-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:d8fc41506e2e01ef0f467ff20821dc24bf8a9423c76724c187939857e534f14a", size = 1634011, upload-time = "2026-04-09T13:04:05.424Z" },
+    { url = "https://files.pythonhosted.org/packages/20/33/44206ac4211ef4105d07c8304ba0d995580198be70dd45c1516c6722b483/slopcop-0.1.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:df04024429806bbeb8409f08f8b49f7afce7577f71e78b4cf76af900fa0ec550", size = 1570150, upload-time = "2026-04-09T13:04:07.327Z" },
+    { url = "https://files.pythonhosted.org/packages/58/eb/f1c08a4014d122b44de69cd09e1d259505598ba2c04b3c3217e0b5b107ed/slopcop-0.1.0-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:00c6ed4052ae6372d06e9481485600ffe8875443300483953bcc2659fdc132be", size = 1699518, upload-time = "2026-04-09T13:04:08.804Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/54/67b37719185426f9e5387a8c0d374cd58ea8103a767345a7edc45c106d4f/slopcop-0.1.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:236bcbb35f62fdf701d36255d2b2d5924cc2f8d0dc200dd7dd01dab12537be45", size = 1749970, upload-time = "2026-04-09T13:04:10.16Z" },
+    { url = "https://files.pythonhosted.org/packages/19/22/e3590d68ad9476e6003e6cf8deb9f94f6c2d33e69a4ec880f248bd5ef586/slopcop-0.1.0-py3-none-win_amd64.whl", hash = "sha256:270cfd966ccf1ee97d8abbb1901a4db08461f83e7c54c776e86258bd59c7acd5", size = 1408742, upload-time = "2026-04-09T13:04:11.457Z" },
+]
+
+[[package]]
 name = "smmap"
 version = "5.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -4900,7 +4991,7 @@ name = "types-requests"
 version = "2.33.0.20260402"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "urllib3" },
+    { name = "urllib3", marker = "python_full_version < '3.14' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c1/7b/a06527d20af1441d813360b8e0ce152a75b7d8e4aab7c7d0a156f405d7ec/types_requests-2.33.0.20260402.tar.gz", hash = "sha256:1bdd3ada9b869741c5c4b887d2c8b4e38284a1449751823b5ebbccba3eefd9da", size = 23851, upload-time = "2026-04-02T04:19:55.942Z" }
 wheels = [

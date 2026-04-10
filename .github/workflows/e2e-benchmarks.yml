@@ -6,6 +6,7 @@ on:
       - "h_arcane/**"
       - "arcane_builtins/**"
       - "arcane_cli/**"
+      - "arcane_infra/**"
       - "tests/e2e/**"
       - "docker-compose.ci.yml"
       - "Dockerfile"
@@ -37,7 +38,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
       - name: Install project
-        run: uv sync --frozen
+        run: uv sync --frozen --all-packages
 
       - name: Run stubbed E2E tests
         env:
@@ -79,7 +80,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v4
       - name: Install project
-        run: uv sync --frozen
+        run: uv sync --frozen --all-packages
 
       - name: Run sandbox E2E tests
         env:

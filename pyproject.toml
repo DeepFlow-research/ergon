@@ -5,6 +5,11 @@ description = "Arcane experiment orchestration platform"
 requires-python = ">=3.13"
 dependencies = []
 
+[dependency-groups]
+dev = [
+    "slopcop>=0.1.0",
+]
+
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -26,12 +31,115 @@ line-length = 100
 target-version = "py313"
 
 [tool.slopcop]
-exclude = ["no-print"]
+# Per-rule excludes only when a rule is wrong for the whole repo (do not disable no-print / no-typing-any globally).
 
 [tool.slopcop.per-file-ignores]
+# Print is acceptable in standalone scripts and tests; library code under h_arcane (especially core/) should use logging.
+"scripts/**" = ["no-print"]
 "tests/**" = ["no-print"]
+# User-facing CLI output and dashboard render helpers.
 "**/arcane_cli/**" = ["no-print"]
 "**/rendering/**" = ["no-print"]
+
+[tool.ty.rules]
+# try/except ImportError fallback assignments (Tool = None, AsyncSandbox = None, etc.)
+# are correct at runtime but ty can't narrow through except branches.
+invalid-assignment = "warn"
+
+# SQLModel Field(sa_type=DateTime(...)) — ty misreads the overloaded __init__.
+[[tool.ty.overrides]]
+include = ["**/persistence/**/models.py", "**/persistence/graph/**"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+
+# Inngest step functions: ctx.event.data is typed as JSON, not the unpacked model;
+# ctx.step.run accepts sync or async but stubs only declare async.
+[[tool.ty.overrides]]
+include = ["**/runtime/inngest/**"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+
+# pydantic-ai Tool(function=...) — ToolFuncEither union doesn't resolve async callables.
+[[tool.ty.overrides]]
+include = ["**/benchmarks/**/toolkit.py"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+unresolved-attribute = "warn"
+
+# E2B sandbox SDK — untyped package; proxy wrappers forward *args/**kwargs to typed methods.
+[[tool.ty.overrides]]
+include = ["**/providers/sandbox/**"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+unresolved-attribute = "warn"
+call-non-callable = "warn"
+no-matching-overload = "warn"
+
+# Transformers/torch optional deps — Unknown types cascade from conditional imports.
+[[tool.ty.overrides]]
+include = ["**/models/transformers_backend.py"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+unresolved-attribute = "warn"
+call-non-callable = "warn"
+invalid-return-type = "warn"
+
+# pydantic-ai message formatting — complex generic dict unions ty can't resolve.
+[[tool.ty.overrides]]
+include = ["**/providers/generation/pydantic_ai_format.py"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+unresolved-attribute = "warn"
+no-matching-overload = "warn"
+
+# RL adapter — inngest send, tokenizer, and mixed optional-dep types.
+[[tool.ty.overrides]]
+include = ["**/core/rl/**"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+unresolved-attribute = "warn"
+
+# SQLModel .where() / .order_by() column expressions — ty can't resolve SQLAlchemy operator overloads.
+[[tool.ty.overrides]]
+include = ["**/persistence/queries.py", "**/persistence/telemetry/repositories.py"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+
+# Remaining files with isolated third-party type issues (inngest JSON, pydantic-ai, SQLModel select).
+[[tool.ty.overrides]]
+include = [
+    "**/core/api/runs.py",
+    "**/runtime/tracing.py",
+    "**/runtime/services/**",
+    "**/runtime/execution/**",
+    "**/providers/judges/**",
+    "**/benchmarks/smoke_test/**",
+    "arcane_cli/**",
+    "arcane_infra/**",
+]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+unresolved-attribute = "warn"
+no-matching-overload = "warn"
+not-iterable = "warn"
+invalid-parameter-default = "warn"
+
+[tool.ty.environment]
+extra-paths = ["h_arcane", "arcane_builtins", "arcane_cli", "arcane_infra"]
+
+[tool.ty.analysis]
+allowed-unresolved-imports = [
+    "trl", "trl.**",
+    "outlines", "outlines.**",
+    "torch", "torch.**",
+    "transformers", "transformers.**",
+    "e2b", "e2b.**",
+    "e2b_code_interpreter", "e2b_code_interpreter.**",
+    "vllm", "vllm.**",
+    "datasets", "datasets.**",
+    "skypilot", "skypilot.**",
+    "sky", "sky.**",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

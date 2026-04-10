@@ -1,0 +1,25 @@
+---
+description: Project check commands for Python and frontend
+globs: ["**/*.py", "**/*.ts", "**/*.tsx"]
+---
+
+# Checks
+
+One-time environment (slopcop from PyPI via lockfile):
+
+```bash
+uv sync --all-packages --group dev
+```
+
+Backend: `pnpm run check:be` (Ruff lint, Ruff format, ty, slopcop via `uv run slopcop`).
+
+Frontend: `pnpm run check:fe`.
+
+Combined: `pnpm run check:fast`.
+
+Ruff autofix:
+
+```bash
+uv run ruff check --fix h_arcane arcane_builtins arcane_cli arcane_infra tests scripts
+uv run ruff format h_arcane arcane_builtins arcane_cli arcane_infra tests scripts
+```
