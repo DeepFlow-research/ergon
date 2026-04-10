@@ -25,11 +25,14 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-from arcane_infra.training.config import training_config_from_args
-from arcane_infra.training.trl_runner import run_trl_training
+from h_arcane.core.persistence.shared.db import ensure_db  # noqa: E402
+
+from arcane_infra.training.config import training_config_from_args  # noqa: E402
+from arcane_infra.training.trl_runner import run_trl_training  # noqa: E402
 
 
 def main() -> int:
+    ensure_db()
     config = training_config_from_args()
     return run_trl_training(config)
 

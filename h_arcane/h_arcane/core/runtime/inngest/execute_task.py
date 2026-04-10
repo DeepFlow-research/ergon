@@ -56,24 +56,27 @@ logger = logging.getLogger(__name__)
     output_type=TaskExecuteResult,
 )
 async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
-    payload = TaskReadyEvent(**ctx.event.data)
+    payload = TaskReadyEvent.model_validate(ctx.event.data)
     logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)
 
     svc = TaskExecutionService()
 
-    def _prepare() -> dict:
-        result = svc.prepare(
+    def _prepare() -> PreparedTaskExecution:
+        return svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=payload.task_id,
             )
         )
-        return result.model_dump(mode="json")
 
-    prepared_data = await ctx.step.run("prepare-execution", _prepare)
-    prepared = PreparedTaskExecution(**prepared_data)
+    prepared = await ctx.step.run(
+        "prepare-execution", _prepare, output_type=PreparedTaskExecution
+    )
+
+    if prepared.execution_id is None and not prepared.skipped:
+        raise RuntimeError(f"prepare returned no execution_id for task {payload.task_id}")
 
     if prepared.skipped:
         logger.info(
@@ -107,8 +110,10 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
         # Deferred: child function modules register with Inngest at import
         # time. Eager cross-imports between registered modules cause cycles.
         from h_arcane.core.runtime.inngest.persist_outputs import persist_outputs_fn
+
         # Deferred: avoid circular import
         from h_arcane.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
+
         # Deferred: avoid circular import
         from h_arcane.core.runtime.inngest.worker_execute import worker_execute_fn
 
@@ -120,19 +125,21 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 definition_id=payload.definition_id,
                 task_id=payload.task_id,
                 benchmark_type=prepared.benchmark_type,
-            ).model_dump(mode="json"),
+            ).model_dump(),
         )
         if not sandbox_result.sandbox_id:
             raise ContractViolationError(
                 "sandbox-setup returned empty sandbox_id",
-                run_id=payload.run_id, task_id=payload.task_id,
+                run_id=payload.run_id,
+                task_id=payload.task_id,
             )
         task_sandbox_id = sandbox_result.sandbox_id
 
         if not prepared.worker_type:
             raise ConfigurationError(
                 "Task has no worker_type configured",
-                run_id=payload.run_id, task_id=payload.task_id,
+                run_id=payload.run_id,
+                task_id=payload.task_id,
             )
 
         worker_result: WorkerExecuteResult = await ctx.step.invoke(
@@ -150,7 +157,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 worker_type=prepared.worker_type,
                 model_target=prepared.model_target,
                 benchmark_type=prepared.benchmark_type,
-            ).model_dump(mode="json"),
+            ).model_dump(),
         )
 
         if not worker_result.success:
@@ -167,7 +174,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 sandbox_id=sandbox_result.sandbox_id,
                 output_dir=sandbox_result.output_dir,
                 benchmark_type=prepared.benchmark_type,
-            ).model_dump(mode="json"),
+            ).model_dump(),
         )
 
         svc.finalize_success(
@@ -190,25 +197,27 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             )
         )
 
-        get_trace_sink().emit_span(CompletedSpan(
-            name="task.execute",
-            context=task_execute_context(payload.run_id, payload.task_id),
-            start_time=span_start,
-            end_time=datetime.now(UTC),
-            attributes={
-                "run_id": str(payload.run_id),
-                "definition_id": str(payload.definition_id),
-                "task_id": str(payload.task_id),
-                "execution_id": str(prepared.execution_id),
-                "task_key": prepared.task_key,
-                "benchmark_type": prepared.benchmark_type,
-                "worker_type": prepared.worker_type or "",
-                "worker_binding_key": prepared.worker_binding_key or "",
-                "model_target": prepared.model_target or "",
-                "skipped": False,
-                "status": "completed",
-            },
-        ))
+        get_trace_sink().emit_span(
+            CompletedSpan(
+                name="task.execute",
+                context=task_execute_context(payload.run_id, payload.task_id),
+                start_time=span_start,
+                end_time=datetime.now(UTC),
+                attributes={
+                    "run_id": str(payload.run_id),
+                    "definition_id": str(payload.definition_id),
+                    "task_id": str(payload.task_id),
+                    "execution_id": str(prepared.execution_id),
+                    "task_key": prepared.task_key,
+                    "benchmark_type": prepared.benchmark_type,
+                    "worker_type": prepared.worker_type or "",
+                    "worker_binding_key": prepared.worker_binding_key or "",
+                    "model_target": prepared.model_target or "",
+                    "skipped": False,
+                    "status": "completed",
+                },
+            )
+        )
 
         return TaskExecuteResult(
             run_id=payload.run_id,
@@ -246,24 +255,26 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             )
         )
 
-        get_trace_sink().emit_span(CompletedSpan(
-            name="task.execute",
-            context=task_execute_context(payload.run_id, payload.task_id),
-            start_time=span_start,
-            end_time=datetime.now(UTC),
-            status_code="error",
-            status_message=truncate_text(error_msg),
-            attributes={
-                "run_id": str(payload.run_id),
-                "definition_id": str(payload.definition_id),
-                "task_id": str(payload.task_id),
-                "execution_id": str(prepared.execution_id) if prepared.execution_id else "",
-                "task_key": prepared.task_key,
-                "benchmark_type": prepared.benchmark_type,
-                "skipped": False,
-                "status": "failed",
-                "error": truncate_text(error_msg),
-            },
-        ))
+        get_trace_sink().emit_span(
+            CompletedSpan(
+                name="task.execute",
+                context=task_execute_context(payload.run_id, payload.task_id),
+                start_time=span_start,
+                end_time=datetime.now(UTC),
+                status_code="error",
+                status_message=truncate_text(error_msg),
+                attributes={
+                    "run_id": str(payload.run_id),
+                    "definition_id": str(payload.definition_id),
+                    "task_id": str(payload.task_id),
+                    "execution_id": str(prepared.execution_id) if prepared.execution_id else "",
+                    "task_key": prepared.task_key,
+                    "benchmark_type": prepared.benchmark_type,
+                    "skipped": False,
+                    "status": "failed",
+                    "error": truncate_text(error_msg),
+                },
+            )
+        )
 
         raise inngest.NonRetriableError(message=error_msg) from exc

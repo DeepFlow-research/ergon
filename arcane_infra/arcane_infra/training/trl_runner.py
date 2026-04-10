@@ -6,7 +6,7 @@ Takes a ``TrainingConfig``, resolves all dependencies, and runs
 """
 
 import logging
-from typing import Any
+from typing import cast
 from uuid import UUID
 
 from datasets import Dataset
@@ -16,8 +16,7 @@ from trl import GRPOConfig, GRPOTrainer
 from arcane_infra.training.callback import ArcaneTrainingCallback
 from arcane_infra.training.config import TrainingConfig
 from arcane_infra.training.device import resolve_device_mode
-import h_arcane.core.persistence.definitions.models as _def_models  # noqa: F401 — registers FK targets
-from h_arcane.core.persistence.shared.db import create_all_tables, get_session
+from h_arcane.core.persistence.shared.db import get_session
 from h_arcane.core.persistence.telemetry.models import TrainingSession
 from h_arcane.core.rl.trl_adapter import make_arcane_rollout_func
 from h_arcane.core.runtime.inngest_client import inngest_client
@@ -30,10 +29,11 @@ def run_trl_training(config: TrainingConfig) -> int:
     """Run TRL GRPO training with Arcane environments.
 
     Returns exit code (0 = success).
+    Callers are responsible for DB setup (ensure_db).
     """
-    create_all_tables()
-
-    definition_id = UUID(config.definition_id) if config.definition_id else _auto_create_definition(config)
+    definition_id = (
+        UUID(config.definition_id) if config.definition_id else _auto_create_definition(config)
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(config.model)
     if tokenizer.pad_token is None:
@@ -51,13 +51,14 @@ def run_trl_training(config: TrainingConfig) -> int:
     # the prompts are ignored — Arcane's ExperimentDefinition drives task
     # selection, not the dataset.  This is a dummy iterator that controls
     # how many batches TRL runs (dataset_size / batch_size = num batches).
-    dataset = Dataset.from_dict({
-        "prompt": [
-            [{"role": "user", "content": "Complete the benchmark task."}]
-        ] * config.dataset_size,
-    })
+    dataset = Dataset.from_dict(
+        {
+            "prompt": [[{"role": "user", "content": "Complete the benchmark task."}]]
+            * config.dataset_size,
+        }
+    )
 
-    def reward_fn(completions: list[str], **kwargs: Any) -> list[float]:  # noqa: ANN401
+    def reward_fn(completions: list[str], **kwargs: object) -> list[float]:
         """Passthrough: rewards are computed by Arcane's evaluation pipeline
         during the rollout and returned via the ``completion_reward`` key.
         """
@@ -67,7 +68,7 @@ def run_trl_training(config: TrainingConfig) -> int:
                 "rollout_func did not return 'completion_reward' — "
                 "the Arcane evaluation pipeline may have failed"
             )
-        return rewards
+        return cast(list[float], rewards)
 
     device_kwargs = resolve_device_mode(config)
 
@@ -123,7 +124,7 @@ def run_trl_training(config: TrainingConfig) -> int:
     try:
         trainer.train()
         logger.info("Training complete. Checkpoints in %s", config.output_dir)
-    except Exception:
+    except Exception:  # slopcop: ignore[no-broad-except]
         with get_session() as session:
             ts = session.get(TrainingSession, session_id)
             if ts is not None:

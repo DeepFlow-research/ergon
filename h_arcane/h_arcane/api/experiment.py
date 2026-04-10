@@ -7,7 +7,6 @@ from h_arcane.api.benchmark import Benchmark
 from h_arcane.api.evaluator import Evaluator
 from h_arcane.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
 from h_arcane.api.worker import Worker
-from h_arcane.core.runtime.services.run_service import create_experiment_run
 
 
 class Experiment:
@@ -120,14 +119,10 @@ class Experiment:
             all_task_keys_by_instance[instance_key] = task_keys
 
         if self.assignments is not None:
-            all_task_keys_flat = {
-                tk for keys in all_task_keys_by_instance.values() for tk in keys
-            }
+            all_task_keys_flat = {tk for keys in all_task_keys_by_instance.values() for tk in keys}
             for worker_key, task_ref in self.assignments.items():
                 if worker_key not in self.workers:
-                    raise ValueError(
-                        f"Assignment references unknown worker key {worker_key!r}"
-                    )
+                    raise ValueError(f"Assignment references unknown worker key {worker_key!r}")
                 task_keys_list = [task_ref] if isinstance(task_ref, str) else task_ref
                 for tk in task_keys_list:
                     if tk not in all_task_keys_flat:
@@ -163,6 +158,9 @@ class Experiment:
 
     async def run(self) -> ExperimentRunHandle:
         """Ensure a persisted definition exists, create a run, and dispatch execution."""
+        # Deferred: api/ should not depend on core/ at module level (same as persist).
+        from h_arcane.core.runtime.services.run_service import create_experiment_run
+
         if self._persisted is None:
             self.persist()
         if self._persisted is None:

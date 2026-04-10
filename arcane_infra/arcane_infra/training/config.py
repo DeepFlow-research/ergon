@@ -39,7 +39,7 @@ class TrainingConfig(BaseModel):
     max_steps: int | None = None
 
     # -- Output ---------------------------------------------------------------
-    output_dir: str = "./checkpoints"
+    output_dir: str = ".arcane/training/checkpoints"
 
     # -- Rollout ---------------------------------------------------------------
     timeout_s: float = Field(default=300.0, gt=0)
@@ -54,14 +54,25 @@ def _build_training_parser() -> argparse.ArgumentParser:
     p.add_argument("--benchmark", type=str, required=True, help="Benchmark slug")
     p.add_argument("--evaluator", type=str, default="stub-rubric", help="Evaluator slug")
     p.add_argument("--limit", type=int, default=None, help="Max tasks per episode")
-    p.add_argument("--definition-id", type=str, default=None, help="Existing ExperimentDefinition UUID")
+    p.add_argument(
+        "--definition-id", type=str, default=None, help="Existing ExperimentDefinition UUID"
+    )
 
     p.add_argument("--model", type=str, default="Qwen/Qwen2.5-1.5B", help="HuggingFace model ID")
 
-    p.add_argument("--device", type=str, default="cuda", choices=["cpu", "cuda"], help="Device type")
-    p.add_argument("--vllm-mode", type=str, default="colocate", choices=["colocate", "server"],
-                   help="vLLM mode (ignored if --device cpu)")
-    p.add_argument("--vllm-server-url", type=str, default=None, help="vLLM server URL (server mode)")
+    p.add_argument(
+        "--device", type=str, default="cuda", choices=["cpu", "cuda"], help="Device type"
+    )
+    p.add_argument(
+        "--vllm-mode",
+        type=str,
+        default="colocate",
+        choices=["colocate", "server"],
+        help="vLLM mode (ignored if --device cpu)",
+    )
+    p.add_argument(
+        "--vllm-server-url", type=str, default=None, help="vLLM server URL (server mode)"
+    )
 
     p.add_argument("--num-generations", type=int, default=4, help="GRPO group size")
     p.add_argument("--max-completion-length", type=int, default=2048)
@@ -72,7 +83,12 @@ def _build_training_parser() -> argparse.ArgumentParser:
     p.add_argument("--save-steps", type=int, default=50)
     p.add_argument("--max-steps", type=int, default=None)
 
-    p.add_argument("--output-dir", type=str, default="./checkpoints")
+    p.add_argument(
+        "--output-dir",
+        type=str,
+        default=".arcane/training/checkpoints",
+        help="Where to write checkpoints (default: .arcane/training/checkpoints)",
+    )
 
     p.add_argument("--timeout", type=float, default=300.0, help="Seconds to wait per episode batch")
     p.add_argument("--dataset-size", type=int, default=100, help="Synthetic dataset size")

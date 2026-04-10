@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 
 import inngest
 from arcane_builtins.registry import WORKERS
-from h_arcane.api.generation import GenerationTurn
 from h_arcane.api.results import WorkerResult
 from h_arcane.api.task_types import BenchmarkTask
 from h_arcane.api.worker_context import WorkerContext
@@ -41,7 +40,7 @@ logger = logging.getLogger(__name__)
     output_type=WorkerExecuteResult,
 )
 async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
-    payload = WorkerExecuteRequest(**ctx.event.data)
+    payload = WorkerExecuteRequest.model_validate(ctx.event.data)
     logger.info(
         "worker-execute run_id=%s task_id=%s worker_type=%s",
         payload.run_id,
@@ -85,25 +84,29 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     await _emit_generation_turn_events(payload, result)
 
     sink = get_trace_sink()
-    sink.emit_span(CompletedSpan(
-        name="worker.execute",
-        context=worker_execute_context(
-            payload.run_id, payload.task_id, payload.execution_id,
-        ),
-        start_time=span_start,
-        end_time=datetime.now(UTC),
-        attributes={
-            "run_id": str(payload.run_id),
-            "task_id": str(payload.task_id),
-            "execution_id": str(payload.execution_id),
-            "sandbox_id": payload.sandbox_id,
-            "worker_type": payload.worker_type,
-            "model_target": payload.model_target,
-            "success": result.success,
-            "output_length": len(result.output),
-            "turn_count": len(result.turns),
-        },
-    ))
+    sink.emit_span(
+        CompletedSpan(
+            name="worker.execute",
+            context=worker_execute_context(
+                payload.run_id,
+                payload.task_id,
+                payload.execution_id,
+            ),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            attributes={
+                "run_id": str(payload.run_id),
+                "task_id": str(payload.task_id),
+                "execution_id": str(payload.execution_id),
+                "sandbox_id": payload.sandbox_id,
+                "worker_type": payload.worker_type,
+                "model_target": payload.model_target,
+                "success": result.success,
+                "output_length": len(result.output),
+                "turn_count": len(result.turns),
+            },
+        )
+    )
 
     _emit_action_spans(sink, payload)
 
@@ -132,32 +135,34 @@ def _emit_action_spans(sink, payload: WorkerExecuteRequest) -> None:
                 if a.started_at and a.completed_at:
                     duration_ms = int((a.completed_at - a.started_at).total_seconds() * 1000)
 
-                sink.emit_span(CompletedSpan(
-                    name=f"action.{a.action_type}",
-                    context=action_context(
-                        payload.run_id, payload.task_id,
-                        payload.execution_id, a.id,
-                    ),
-                    start_time=a.started_at or datetime.now(UTC),
-                    end_time=a.completed_at or datetime.now(UTC),
-                    attributes={
-                        "run_id": str(payload.run_id),
-                        "task_id": str(payload.task_id),
-                        "execution_id": str(payload.execution_id),
-                        "action_id": str(a.id),
-                        "action_num": a.action_num,
-                        "action_type": a.action_type,
-                        "success": a.error_json is None,
-                        "duration_ms": duration_ms,
-                    },
-                ))
+                sink.emit_span(
+                    CompletedSpan(
+                        name=f"action.{a.action_type}",
+                        context=action_context(
+                            payload.run_id,
+                            payload.task_id,
+                            payload.execution_id,
+                            a.id,
+                        ),
+                        start_time=a.started_at or datetime.now(UTC),
+                        end_time=a.completed_at or datetime.now(UTC),
+                        attributes={
+                            "run_id": str(payload.run_id),
+                            "task_id": str(payload.task_id),
+                            "execution_id": str(payload.execution_id),
+                            "action_id": str(a.id),
+                            "action_num": a.action_num,
+                            "action_type": a.action_type,
+                            "success": a.error_json is None,
+                            "duration_ms": duration_ms,
+                        },
+                    )
+                )
     except Exception:  # slopcop: ignore[no-broad-except]
         logger.debug("Could not emit action spans", exc_info=True)
 
 
-def _persist_generation_turns(
-    payload: WorkerExecuteRequest, result: WorkerResult
-) -> None:
+def _persist_generation_turns(payload: WorkerExecuteRequest, result: WorkerResult) -> None:
     """Persist ``WorkerResult.turns`` as ``RunGenerationTurn`` rows."""
     if not result.turns:
         return
@@ -182,9 +187,7 @@ def _persist_generation_turns(
         logger.warning("Failed to persist generation turns", exc_info=True)
 
 
-async def _emit_generation_turn_events(
-    payload: WorkerExecuteRequest, result: WorkerResult
-) -> None:
+async def _emit_generation_turn_events(payload: WorkerExecuteRequest, result: WorkerResult) -> None:
     """Emit dashboard events for each generation turn (live streaming)."""
     if not result.turns:
         return

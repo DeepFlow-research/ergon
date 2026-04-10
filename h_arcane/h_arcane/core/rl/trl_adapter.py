@@ -50,6 +50,7 @@ from h_arcane.core.rl.extraction import Tokenizer, extract_agent_trajectories
 from h_arcane.core.rl.polling import poll_until_all_complete
 from h_arcane.core.rl.rewards import IndependentTaskReward, RewardStrategy
 from h_arcane.core.runtime.events.task_events import WorkflowStartedEvent
+from h_arcane.core.persistence.telemetry.models import RunTaskExecution
 
 logger = logging.getLogger(__name__)
 
@@ -162,8 +163,7 @@ def make_arcane_rollout_func(
             )
             all_evals = list(
                 session.exec(
-                    select(RunTaskEvaluation)
-                    .where(RunTaskEvaluation.run_id.in_(run_ids))  # type: ignore[union-attr]
+                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id.in_(run_ids))  # type: ignore[union-attr]
                 ).all()
             )
 
@@ -177,12 +177,33 @@ def make_arcane_rollout_func(
             if ev.score is not None:
                 evals_by_run[ev.run_id][str(ev.definition_task_id)] = ev.score
 
+        # Build a mapping from task_execution_id -> definition_task_id so the
+        # reward strategy can look up eval scores by execution ID.
+        exec_to_def_task: dict[str, str] = {}
+        with session_factory() as session:
+            execs = list(
+                session.exec(
+                    select(RunTaskExecution).where(RunTaskExecution.run_id.in_(run_ids))  # type: ignore[union-attr]
+                ).all()
+            )
+            for ex in execs:
+                exec_to_def_task[str(ex.id)] = str(ex.definition_task_id)
+
+        # Remap eval scores so they're keyed by task_execution_id
+        # (what the generation turns and reward strategy use).
+        evals_by_run_remapped: dict[UUID, dict[str, float]] = defaultdict(dict)
+        for run_id_key, scores in evals_by_run.items():
+            for def_task_id, score in scores.items():
+                for exec_id, mapped_def_id in exec_to_def_task.items():
+                    if mapped_def_id == def_task_id:
+                        evals_by_run_remapped[run_id_key][exec_id] = score
+
         for i, run_id in enumerate(run_ids):
             prompt_ids = prompt_ids_per_prompt[i] if i < len(prompt_ids_per_prompt) else []
 
             trajectories = extract_agent_trajectories(
                 turns_by_run.get(run_id, []),
-                evals_by_run.get(run_id, {}),
+                evals_by_run_remapped.get(run_id, {}),
                 tokenizer,
                 prompt_text="",
                 reward_strategy=reward_strategy,

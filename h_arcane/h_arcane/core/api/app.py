@@ -1,17 +1,28 @@
 """FastAPI application with Inngest webhook registration."""
 
+from contextlib import asynccontextmanager
+
 import inngest.fast_api
 from fastapi import FastAPI
 
 from h_arcane.core.api.cohorts import router as cohorts_router
 from h_arcane.core.api.runs import router as runs_router
+from h_arcane.core.persistence.shared.db import ensure_db
 from h_arcane.core.runtime.inngest_client import inngest_client
 from h_arcane.core.runtime.inngest_registry import ALL_FUNCTIONS
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ensure_db()
+    yield
+
 
 app = FastAPI(
     title="H-Arcane",
     description="Arcane experiment orchestration API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.include_router(runs_router)

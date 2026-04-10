@@ -19,7 +19,7 @@ from h_arcane.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
 )
-from h_arcane.core.persistence.shared.db import create_all_tables, get_session
+from h_arcane.core.persistence.shared.db import ensure_db, get_session
 from h_arcane.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from h_arcane.core.persistence.telemetry.models import (
     RunRecord,
@@ -48,8 +48,7 @@ from sqlmodel import select
 def test_full_lifecycle():
     """Prove: construct -> validate -> persist -> run -> execute -> complete."""
 
-    # Ensure all tables exist (fresh SQLite)
-    create_all_tables()
+    ensure_db()
 
     # ── Phase A: Construct + Validate + Persist ─────────────────────
     benchmark = SmokeTestBenchmark(workflow="flat", task_count=2)
@@ -204,9 +203,7 @@ def test_full_lifecycle():
 
     # Task executions exist and are COMPLETED
     executions = list(
-        session.exec(
-            select(RunTaskExecution).where(RunTaskExecution.run_id == run.id)
-        ).all()
+        session.exec(select(RunTaskExecution).where(RunTaskExecution.run_id == run.id)).all()
     )
     assert len(executions) == 2
     for ex in executions:
@@ -216,9 +213,7 @@ def test_full_lifecycle():
 
     # State events exist
     events = list(
-        session.exec(
-            select(RunTaskStateEvent).where(RunTaskStateEvent.run_id == run.id)
-        ).all()
+        session.exec(select(RunTaskStateEvent).where(RunTaskStateEvent.run_id == run.id)).all()
     )
     assert len(events) > 0
     statuses = {e.new_status for e in events}
@@ -232,9 +227,9 @@ def test_full_lifecycle():
 
 if __name__ == "__main__":
     import os
-    os.environ["ARCANE_DATABASE_URL"] = "sqlite:///test_smoke.db"
-    try:
-        os.remove("test_smoke.db")
-    except FileNotFoundError:
-        pass  # slopcop: ignore[no-pass-except]
+
+    os.environ.setdefault(
+        "ARCANE_DATABASE_URL",
+        "postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test",
+    )
     test_full_lifecycle()

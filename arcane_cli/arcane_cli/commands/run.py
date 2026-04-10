@@ -2,8 +2,11 @@
 
 from argparse import Namespace
 from uuid import UUID
-
+from sqlmodel import select
 from arcane_cli.rendering import render_table
+from h_arcane.core.persistence.shared.db import ensure_db, get_session
+from h_arcane.core.runtime.services.run_service import cancel_run as do_cancel
+from h_arcane.core.persistence.telemetry.models import RunRecord
 
 
 def handle_run(args: Namespace) -> int:
@@ -17,20 +20,7 @@ def handle_run(args: Namespace) -> int:
 
 
 def list_runs(args: Namespace) -> int:
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.definitions.models  # noqa: F401
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.saved_specs.models  # noqa: F401
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.telemetry.models  # noqa: F401
-    # Deferred: CLI startup cost
-    from h_arcane.core.persistence.shared.db import create_all_tables, get_session
-    # Deferred: CLI startup cost
-    from h_arcane.core.persistence.telemetry.models import RunRecord
-    # Deferred: CLI startup cost
-    from sqlmodel import select
-
-    create_all_tables()
+    ensure_db()
 
     with get_session() as session:
         stmt = select(RunRecord).order_by(RunRecord.created_at.desc())  # type: ignore[attr-defined]
@@ -58,19 +48,7 @@ def list_runs(args: Namespace) -> int:
 
 
 def cancel_run(args: Namespace) -> int:
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.definitions.models  # noqa: F401
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.saved_specs.models  # noqa: F401
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.telemetry.models  # noqa: F401
-    # Deferred: CLI startup cost
-    from h_arcane.core.persistence.shared.db import create_all_tables
-    # Deferred: CLI startup cost
-    from h_arcane.core.runtime.services.run_service import cancel_run as do_cancel
-
-    create_all_tables()
-
+    ensure_db()
     try:
         run_id = UUID(args.run_id)
     except ValueError:
@@ -85,6 +63,6 @@ def cancel_run(args: Namespace) -> int:
 
     print(f"Run {run.id} cancelled.")
     print(f"  Status:  {run.status}")
-    print(f"  Inngest: run/cancelled event sent (in-flight functions will be killed)")
-    print(f"  Cleanup: run/cleanup event sent (sandbox teardown scheduled)")
+    print("  Inngest: run/cancelled event sent (in-flight functions will be killed)")
+    print("  Cleanup: run/cleanup event sent (sandbox teardown scheduled)")
     return 0

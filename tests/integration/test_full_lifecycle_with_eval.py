@@ -16,7 +16,7 @@ from arcane_builtins.workers.baselines.stub_worker import StubWorker
 from h_arcane.api import Experiment
 from h_arcane.api.task_types import BenchmarkTask
 from h_arcane.api.worker_context import WorkerContext
-from h_arcane.core.persistence.shared.db import create_all_tables, get_session
+from h_arcane.core.persistence.shared.db import ensure_db, get_session
 from h_arcane.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from h_arcane.core.persistence.telemetry.models import (
     RunRecord,
@@ -57,6 +57,7 @@ class InProcessCriterionExecutor:
     async def execute_all(self, task_context, benchmark_name, criteria):
         # Deferred: avoid circular import
         from h_arcane.api.evaluation_context import EvaluationContext
+
         # Deferred: avoid circular import
         from h_arcane.api.results import WorkerResult as WR
 
@@ -78,7 +79,7 @@ class InProcessCriterionExecutor:
 def test_full_lifecycle_with_evaluation():
     """Prove: construct -> validate -> persist -> run -> execute -> evaluate -> score."""
 
-    create_all_tables()
+    ensure_db()
 
     # ── Construct + Validate + Persist ──────────────────────────────
     benchmark = SmokeTestBenchmark(workflow="flat", task_count=2)
@@ -212,6 +213,7 @@ def test_full_lifecycle_with_evaluation():
             from h_arcane.core.runtime.inngest.evaluate_task_run import (
                 _build_evaluation_summary,
             )
+
             summary = _build_evaluation_summary(service_result, evaluation_input="")
 
             session = get_session()
@@ -283,9 +285,8 @@ def test_full_lifecycle_with_evaluation():
 if __name__ == "__main__":
     import os
 
-    os.environ["ARCANE_DATABASE_URL"] = "sqlite:///test_eval_smoke.db"
-    try:
-        os.remove("test_eval_smoke.db")
-    except FileNotFoundError:
-        pass  # slopcop: ignore[no-pass-except]
+    os.environ.setdefault(
+        "ARCANE_DATABASE_URL",
+        "postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test",
+    )
     test_full_lifecycle_with_evaluation()

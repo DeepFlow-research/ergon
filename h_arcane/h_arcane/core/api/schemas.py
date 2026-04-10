@@ -208,3 +208,41 @@ class RunGenerationTurnDto(CamelModel):
     created_at: str | None = None
     token_ids: list[int] | None = None
     logprobs: list[float] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Training DTOs (RL observability)
+# ---------------------------------------------------------------------------
+
+
+class TrainingCurvePointDto(CamelModel):
+    run_id: str
+    step: int
+    mean_score: float
+    benchmark_type: str | None = None
+    created_at: str | None = None
+
+
+class TrainingSessionDto(CamelModel):
+    id: str
+    experiment_definition_id: str
+    model_name: str
+    status: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    output_dir: str | None = None
+    total_steps: int | None = None
+    final_loss: float | None = None
+
+
+class TrainingMetricDto(CamelModel):
+    step: int
+    epoch: float | None = None
+    loss: float | None = None
+    grad_norm: float | None = None
+    learning_rate: float | None = None
+    reward_mean: float | None = None
+    reward_std: float | None = None
+    entropy: float | None = None
+    completion_mean_length: float | None = None
+    step_time_s: float | None = None

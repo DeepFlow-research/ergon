@@ -7,7 +7,6 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 from h_arcane.core.api.schemas import (
     RunActionDto,
     RunCommunicationMessageDto,
@@ -21,6 +20,9 @@ from h_arcane.core.api.schemas import (
     RunTaskDto,
     RunGenerationTurnDto,
     RunTaskEvaluationDto,
+    TrainingCurvePointDto,
+    TrainingMetricDto,
+    TrainingSessionDto,
 )
 from h_arcane.core.persistence.definitions.models import (
     ExperimentDefinition,
@@ -41,6 +43,8 @@ from h_arcane.core.persistence.telemetry.models import (
     RunTaskStateEvent,
     Thread,
     ThreadMessage,
+    TrainingMetric,
+    TrainingSession,
 )
 from sqlmodel import Session, select
 
@@ -50,6 +54,7 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 # ---------------------------------------------------------------------------
 # Task tree helpers
 # ---------------------------------------------------------------------------
+
 
 def _build_task_tree(
     tasks: list[ExperimentDefinitionTask],
@@ -137,6 +142,7 @@ def _build_task_tree(
 # ---------------------------------------------------------------------------
 # Per-task keyed helpers
 # ---------------------------------------------------------------------------
+
 
 def _task_keyed_executions(
     executions: list[RunTaskExecution],
@@ -323,6 +329,7 @@ def _task_keyed_sandboxes(
 # Current task statuses from state events
 # ---------------------------------------------------------------------------
 
+
 def _build_communication_threads(
     threads: list[Thread],
     messages: list[ThreadMessage],
@@ -389,6 +396,7 @@ def _task_timestamps(
 # ---------------------------------------------------------------------------
 # Snapshot builder
 # ---------------------------------------------------------------------------
+
 
 def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
     run = session.get(RunRecord, run_id)
@@ -458,13 +466,17 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
     # Derived maps
     current_statuses = _current_task_statuses(state_events)
     timestamps = _task_timestamps(executions)
-    task_map, root_task_id, total_tasks, total_leaf, completed_tasks, failed_tasks, running_tasks = (
-        _build_task_tree(def_tasks, def_deps, current_statuses, worker_assignments, timestamps)
-    )
+    (
+        task_map,
+        root_task_id,
+        total_tasks,
+        total_leaf,
+        completed_tasks,
+        failed_tasks,
+        running_tasks,
+    ) = _build_task_tree(def_tasks, def_deps, current_statuses, worker_assignments, timestamps)
 
-    execution_task_map: dict[UUID, UUID] = {
-        ex.id: ex.definition_task_id for ex in executions
-    }
+    execution_task_map: dict[UUID, UUID] = {ex.id: ex.definition_task_id for ex in executions}
     execution_worker_map: dict[UUID, ExperimentDefinitionWorker | None] = {
         ex.id: worker_by_id.get(ex.definition_worker_id) if ex.definition_worker_id else None
         for ex in executions
@@ -487,7 +499,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
 
     # Build run name from definition metadata
     meta = definition.parsed_metadata()
-    run_name = meta.get("name", definition.benchmark_type)
+    run_name = str(meta.get("name", definition.benchmark_type))
 
     return RunSnapshotDto(
         id=run_id_str,
@@ -518,6 +530,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
 # ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{run_id}", response_model=RunSnapshotDto)
 def get_run(run_id: UUID) -> RunSnapshotDto:
@@ -590,19 +603,11 @@ def get_generations(
 # ---------------------------------------------------------------------------
 
 
-class TrainingCurvePoint(BaseModel):
-    run_id: str
-    step: int
-    mean_score: float
-    benchmark_type: str | None = None
-    created_at: str | None = None
-
-
-@router.get("/training/curves", response_model=list[TrainingCurvePoint])
+@router.get("/training/curves", response_model=list[TrainingCurvePointDto])
 def get_training_curves(
     definition_id: UUID | None = None,
     cohort_id: UUID | None = None,
-) -> list[TrainingCurvePoint]:
+) -> list[TrainingCurvePointDto]:
     """Return score-over-step data for checkpoint evaluations.
 
     Reads ``summary_json`` on ``RunRecord`` for checkpoint metadata
@@ -623,8 +628,7 @@ def get_training_curves(
         all_run_ids = [r.id for r in runs]
         evals = list(
             session.exec(
-                select(RunTaskEvaluation)
-                .where(RunTaskEvaluation.run_id.in_(all_run_ids))  # type: ignore[union-attr]
+                select(RunTaskEvaluation).where(RunTaskEvaluation.run_id.in_(all_run_ids))  # type: ignore[union-attr]
             ).all()
         )
 
@@ -633,7 +637,7 @@ def get_training_curves(
         if ev.score is not None:
             scores_by_run[ev.run_id].append(ev.score)
 
-    points: list[TrainingCurvePoint] = []
+    points: list[TrainingCurvePointDto] = []
     for run in runs:
         summary: dict[str, Any] = run.summary_json or {}  # slopcop: ignore[no-typing-any]
         step = summary.get("checkpoint_step")
@@ -644,13 +648,15 @@ def get_training_curves(
         if not run_scores:
             continue
 
-        points.append(TrainingCurvePoint(
-            run_id=str(run.id),
-            step=int(step),
-            mean_score=mean(run_scores),
-            benchmark_type=summary.get("benchmark_type"),
-            created_at=run.created_at.isoformat() if run.created_at else None,
-        ))
+        points.append(
+            TrainingCurvePointDto(
+                run_id=str(run.id),
+                step=int(step),
+                mean_score=mean(run_scores),
+                benchmark_type=summary.get("benchmark_type"),
+                created_at=run.created_at.isoformat() if run.created_at else None,
+            )
+        )
 
     return points
 
@@ -660,38 +666,11 @@ def get_training_curves(
 # ---------------------------------------------------------------------------
 
 
-class TrainingSessionDto(BaseModel):
-    id: str
-    experiment_definition_id: str
-    model_name: str
-    status: str
-    started_at: str | None = None
-    completed_at: str | None = None
-    output_dir: str | None = None
-    total_steps: int | None = None
-    final_loss: float | None = None
-
-
-class TrainingMetricDto(BaseModel):
-    step: int
-    epoch: float | None = None
-    loss: float | None = None
-    grad_norm: float | None = None
-    learning_rate: float | None = None
-    reward_mean: float | None = None
-    reward_std: float | None = None
-    entropy: float | None = None
-    completion_mean_length: float | None = None
-    step_time_s: float | None = None
-
-
 @router.get("/training/sessions", response_model=list[TrainingSessionDto])
 def get_training_sessions(
     definition_id: UUID | None = None,
 ) -> list[TrainingSessionDto]:
     """List training sessions, optionally filtered by definition."""
-    from h_arcane.core.persistence.telemetry.models import TrainingSession
-
     with get_session() as session:
         stmt = select(TrainingSession).order_by(TrainingSession.started_at.desc())
         if definition_id:
@@ -717,8 +696,6 @@ def get_training_sessions(
 @router.get("/training/sessions/{session_id}/metrics", response_model=list[TrainingMetricDto])
 def get_training_metrics(session_id: UUID) -> list[TrainingMetricDto]:
     """Get per-step training metrics for a session."""
-    from h_arcane.core.persistence.telemetry.models import TrainingMetric
-
     with get_session() as session:
         metrics = list(
             session.exec(

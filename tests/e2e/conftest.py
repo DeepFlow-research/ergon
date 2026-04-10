@@ -8,7 +8,6 @@ import os
 import subprocess
 
 import pytest
-from sqlalchemy import text
 from sqlmodel import Session
 
 from h_arcane.core.persistence.shared.db import get_engine
@@ -16,8 +15,8 @@ from h_arcane.core.persistence.shared.db import get_engine
 
 @pytest.fixture(scope="session", autouse=True)
 def _require_database_url():
-    url = os.environ.get("ARCANE_DATABASE_URL", "")
-    if not url or url.startswith("sqlite"):
+    url = os.environ.get("ARCANE_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+    if not url:
         pytest.skip(
             "E2E tests require ARCANE_DATABASE_URL pointing at a live Postgres. "
             "Run with docker-compose.ci.yml."
@@ -44,12 +43,20 @@ def run_benchmark(
 ) -> subprocess.CompletedProcess:
     """Run a benchmark via the arcane CLI and return the process result."""
     cmd = [
-        "arcane", "benchmark", "run", slug,
-        "--worker", worker,
-        "--evaluator", evaluator,
-        "--limit", str(limit),
-        "--cohort", cohort,
-        "--timeout", str(timeout),
+        "arcane",
+        "benchmark",
+        "run",
+        slug,
+        "--worker",
+        worker,
+        "--evaluator",
+        evaluator,
+        "--limit",
+        str(limit),
+        "--cohort",
+        cohort,
+        "--timeout",
+        str(timeout),
     ]
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     return subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=timeout + 30)

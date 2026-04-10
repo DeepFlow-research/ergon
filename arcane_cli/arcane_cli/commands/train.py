@@ -4,6 +4,8 @@ import importlib.util
 import logging
 from argparse import Namespace
 
+from h_arcane.core.persistence.shared.db import ensure_db
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,8 +24,15 @@ def handle_train(args: Namespace) -> int:
 
 
 def _train_local(args: Namespace) -> int:
+    # arcane_infra is an optional dependency — these imports must stay after the
+    # find_spec guard in handle_train so the module loads even when not installed.
+    # reason: optional arcane_infra; imported only when user runs `arcane train local`.
     from arcane_infra.training.config import TrainingConfig
+
+    # reason: (same optional dep as above)
     from arcane_infra.training.trl_runner import run_trl_training
+
+    ensure_db()
 
     vllm_mode = None if args.device == "cpu" else args.vllm_mode
 

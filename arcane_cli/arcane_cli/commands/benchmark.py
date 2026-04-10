@@ -4,10 +4,19 @@ import asyncio
 import time
 from argparse import Namespace
 
+import inngest
+
 from arcane_cli.composition import build_experiment
 from arcane_cli.discovery import list_benchmarks
 from arcane_cli.rendering import render_run_result, render_table
+from h_arcane.api.handles import ExperimentRunHandle
+from h_arcane.core.persistence.shared.db import ensure_db, get_session
+from h_arcane.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
+from h_arcane.core.persistence.telemetry.models import RunRecord
+from h_arcane.core.runtime.events.task_events import WorkflowStartedEvent
+from h_arcane.core.runtime.inngest_client import inngest_client
 from h_arcane.core.runtime.services.cohort_service import experiment_cohort_service
+from h_arcane.core.runtime.services.run_service import create_run
 
 
 def handle_benchmark(args: Namespace) -> int:
@@ -23,16 +32,7 @@ def handle_benchmark(args: Namespace) -> int:
 
 
 def run_benchmark(args: Namespace) -> int:
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.definitions.models  # noqa: F401
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.saved_specs.models  # noqa: F401
-    # Deferred: side-effect import
-    import h_arcane.core.persistence.telemetry.models  # noqa: F401
-    # Deferred: CLI startup cost
-    from h_arcane.core.persistence.shared.db import create_all_tables
-
-    create_all_tables()
+    ensure_db()
 
     experiment = build_experiment(
         benchmark_slug=args.slug,
@@ -47,7 +47,6 @@ def run_benchmark(args: Namespace) -> int:
     render_run_result(persisted)
     print(f"\nExperiment persisted: {persisted.definition_id}")
 
-
     cohort_name = args.cohort or f"{args.slug}"
     cohort = experiment_cohort_service.resolve_or_create(
         name=cohort_name,
@@ -61,7 +60,7 @@ def run_benchmark(args: Namespace) -> int:
         _create_and_dispatch(persisted, timeout=args.timeout, cohort_id=cohort.id)
     )
 
-    print(f"\nRun completed:")
+    print("\nRun completed:")
     print(f"  Run ID:     {run_handle.run_id}")
     print(f"  Status:     {run_handle.status}")
     print(f"  Benchmark:  {run_handle.benchmark_type}")
@@ -69,23 +68,6 @@ def run_benchmark(args: Namespace) -> int:
 
 
 async def _create_and_dispatch(persisted, timeout: int = 600, cohort_id=None):
-    # Deferred: CLI startup cost
-    import inngest
-    # Deferred: CLI startup cost
-    from h_arcane.core.persistence.shared.db import get_session
-    # Deferred: CLI startup cost
-    from h_arcane.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
-    # Deferred: CLI startup cost
-    from h_arcane.core.persistence.telemetry.models import RunRecord
-    # Deferred: CLI startup cost
-    from h_arcane.core.runtime.events.task_events import WorkflowStartedEvent
-    # Deferred: CLI startup cost
-    from h_arcane.core.runtime.inngest_client import inngest_client
-    # Deferred: CLI startup cost
-    from h_arcane.core.runtime.services.run_service import create_run
-    # Deferred: CLI startup cost
-    from h_arcane.api.handles import ExperimentRunHandle
-
     run = create_run(persisted, cohort_id=cohort_id)
     print(f"  Run ID: {run.id}")
 

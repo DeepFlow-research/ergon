@@ -5,9 +5,7 @@ import sys
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="arcane", description="Arcane experiment orchestration"
-    )
+    parser = argparse.ArgumentParser(prog="arcane", description="Arcane experiment orchestration")
     sub = parser.add_subparsers(dest="command")
 
     bench = sub.add_parser("benchmark", help="Benchmark operations")
@@ -15,28 +13,26 @@ def build_parser() -> argparse.ArgumentParser:
     bench_sub.add_parser("list", help="List available benchmarks")
     run_parser = bench_sub.add_parser("run", help="Run a benchmark")
     run_parser.add_argument("slug", help="Benchmark slug")
+    run_parser.add_argument("--model", default="openai:gpt-4o", help="Model to use")
+    run_parser.add_argument("--worker", default="stub-worker", help="Worker slug")
+    run_parser.add_argument("--evaluator", default="stub-rubric", help="Evaluator slug")
+    run_parser.add_argument("--workflow", default="single", help="Workflow variant")
     run_parser.add_argument(
-        "--model", default="openai:gpt-4o", help="Model to use"
-    )
-    run_parser.add_argument(
-        "--worker", default="stub-worker", help="Worker slug"
-    )
-    run_parser.add_argument(
-        "--evaluator", default="stub-rubric", help="Evaluator slug"
-    )
-    run_parser.add_argument(
-        "--workflow", default="single", help="Workflow variant"
-    )
-    run_parser.add_argument(
-        "--limit", type=int, default=None,
+        "--limit",
+        type=int,
+        default=None,
         help="Number of samples/tasks to run (benchmark-specific)",
     )
     run_parser.add_argument(
-        "--timeout", type=int, default=600,
+        "--timeout",
+        type=int,
+        default=600,
         help="Timeout in seconds per run",
     )
     run_parser.add_argument(
-        "--max-questions", type=int, default=10,
+        "--max-questions",
+        type=int,
+        default=10,
         help="Max questions workers can ask",
     )
     run_parser.add_argument(
@@ -48,11 +44,10 @@ def build_parser() -> argparse.ArgumentParser:
     run = sub.add_parser("run", help="Run management")
     run_sub = run.add_subparsers(dest="run_action")
     run_list_parser = run_sub.add_parser("list", help="List recent runs")
+    run_list_parser.add_argument("--limit", type=int, default=20, help="Number of runs to show")
     run_list_parser.add_argument(
-        "--limit", type=int, default=20, help="Number of runs to show"
-    )
-    run_list_parser.add_argument(
-        "--status", default=None,
+        "--status",
+        default=None,
         help="Filter by status (pending, executing, completed, failed, cancelled)",
     )
     run_cancel_parser = run_sub.add_parser("cancel", help="Cancel a running experiment")
@@ -100,10 +95,18 @@ def build_parser() -> argparse.ArgumentParser:
     train_local.add_argument("--limit", type=int, default=None, help="Max tasks per episode")
     train_local.add_argument("--definition-id", default=None, help="ExperimentDefinition UUID")
     train_local.add_argument("--model", default="Qwen/Qwen2.5-1.5B", help="HuggingFace model ID")
-    train_local.add_argument("--device", default="cuda", choices=["cpu", "cuda"], help="Device type")
-    train_local.add_argument("--vllm-mode", default="colocate", choices=["colocate", "server"],
-                             help="vLLM mode (ignored with --device cpu)")
-    train_local.add_argument("--vllm-server-url", default=None, help="vLLM server URL (server mode)")
+    train_local.add_argument(
+        "--device", default="cuda", choices=["cpu", "cuda"], help="Device type"
+    )
+    train_local.add_argument(
+        "--vllm-mode",
+        default="colocate",
+        choices=["colocate", "server"],
+        help="vLLM mode (ignored with --device cpu)",
+    )
+    train_local.add_argument(
+        "--vllm-server-url", default=None, help="vLLM server URL (server mode)"
+    )
     train_local.add_argument("--num-generations", type=int, default=4, help="GRPO group size")
     train_local.add_argument("--max-completion-length", type=int, default=2048)
     train_local.add_argument("--learning-rate", type=float, default=1e-5)
@@ -112,8 +115,12 @@ def build_parser() -> argparse.ArgumentParser:
     train_local.add_argument("--num-train-epochs", type=int, default=1)
     train_local.add_argument("--save-steps", type=int, default=50)
     train_local.add_argument("--max-steps", type=int, default=None)
-    train_local.add_argument("--output-dir", default="./checkpoints", help="Checkpoint output dir")
-    train_local.add_argument("--timeout", type=float, default=300.0, help="Seconds per episode batch")
+    train_local.add_argument(
+        "--output-dir", default=".arcane/training/checkpoints", help="Checkpoint output dir"
+    )
+    train_local.add_argument(
+        "--timeout", type=float, default=300.0, help="Seconds per episode batch"
+    )
     train_local.add_argument("--dataset-size", type=int, default=100, help="Synthetic dataset size")
 
     return parser
