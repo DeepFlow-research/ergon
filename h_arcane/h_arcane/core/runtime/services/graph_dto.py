@@ -56,7 +56,7 @@ class GraphAnnotationDto(BaseModel):
     target_id: UUID
     namespace: str
     sequence: int
-    payload: dict[str, Any]
+    payload: dict[str, object]
 
 
 class GraphMutationDto(BaseModel):
@@ -69,8 +69,8 @@ class GraphMutationDto(BaseModel):
     target_type: str
     target_id: UUID
     actor: str
-    old_value: dict[str, Any] | None
-    new_value: dict[str, Any]
+    old_value: dict[str, object] | None
+    new_value: dict[str, object]
     reason: str | None
 
 

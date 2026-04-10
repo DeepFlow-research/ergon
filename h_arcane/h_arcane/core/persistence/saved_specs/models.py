@@ -3,7 +3,6 @@ user-facing configuration — not serialized Python objects.
 """
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID, uuid4
 
 from h_arcane.core.utils import utcnow as _utcnow
@@ -29,11 +28,11 @@ class SavedBenchmarkSpec(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, Any]:
+    def parsed_metadata(self) -> dict[str, object]:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, Any]:
+    def _parse_metadata(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -63,11 +62,11 @@ class SavedWorkerSpec(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, Any]:
+    def parsed_metadata(self) -> dict[str, object]:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, Any]:
+    def _parse_metadata(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -96,11 +95,11 @@ class SavedEvaluatorSpec(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, Any]:
+    def parsed_metadata(self) -> dict[str, object]:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, Any]:
+    def _parse_metadata(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -128,11 +127,11 @@ class SavedExperimentTemplate(SQLModel, table=True):
 
     # -- JSON accessor: template_json --
 
-    def parsed_template(self) -> dict[str, Any]:
+    def parsed_template(self) -> dict[str, object]:
         return self.__class__._parse_template(self.template_json)
 
     @classmethod
-    def _parse_template(cls, data: dict) -> dict[str, Any]:
+    def _parse_template(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"template_json must be a dict, got {type(data).__name__}")
         return data

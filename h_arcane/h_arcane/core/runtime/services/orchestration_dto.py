@@ -134,4 +134,4 @@ class RunCompletionData(BaseModel):
     normalized_score: float | None = None
     total_cost_usd: float = 0.0
     output_text: str | None = None
-    execution_result: dict[str, Any] = Field(default_factory=dict)
+    execution_result: dict[str, object] = Field(default_factory=dict)

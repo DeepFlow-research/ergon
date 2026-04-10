@@ -6,7 +6,6 @@ registry using these identity fields.
 """
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID, uuid4
 
 from h_arcane.core.utils import utcnow as _utcnow
@@ -32,11 +31,11 @@ class ExperimentDefinition(SQLModel, table=True):
     # classmethod for reuse, @model_validator for fail-fast at row load.
     # Core code never reads raw dict from a JSON column.
 
-    def parsed_metadata(self) -> dict[str, Any]:
+    def parsed_metadata(self) -> dict[str, object]:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, Any]:
+    def _parse_metadata(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -67,11 +66,11 @@ class ExperimentDefinitionWorker(SQLModel, table=True):
 
     # -- JSON accessor: snapshot_json --
 
-    def parsed_snapshot(self) -> dict[str, Any]:
+    def parsed_snapshot(self) -> dict[str, object]:
         return self.__class__._parse_snapshot(self.snapshot_json)
 
     @classmethod
-    def _parse_snapshot(cls, data: dict) -> dict[str, Any]:
+    def _parse_snapshot(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"snapshot_json must be a dict, got {type(data).__name__}")
         return data
@@ -101,11 +100,11 @@ class ExperimentDefinitionEvaluator(SQLModel, table=True):
 
     # -- JSON accessor: snapshot_json --
 
-    def parsed_snapshot(self) -> dict[str, Any]:
+    def parsed_snapshot(self) -> dict[str, object]:
         return self.__class__._parse_snapshot(self.snapshot_json)
 
     @classmethod
-    def _parse_snapshot(cls, data: dict) -> dict[str, Any]:
+    def _parse_snapshot(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"snapshot_json must be a dict, got {type(data).__name__}")
         return data
@@ -134,11 +133,11 @@ class ExperimentDefinitionInstance(SQLModel, table=True):
 
     # -- JSON accessor: benchmark_instance_state --
 
-    def parsed_instance_state(self) -> dict[str, Any]:
+    def parsed_instance_state(self) -> dict[str, object]:
         return self.__class__._parse_instance_state(self.benchmark_instance_state)
 
     @classmethod
-    def _parse_instance_state(cls, data: dict) -> dict[str, Any]:
+    def _parse_instance_state(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(
                 f"benchmark_instance_state must be a dict, got {type(data).__name__}"
@@ -179,11 +178,11 @@ class ExperimentDefinitionTask(SQLModel, table=True):
 
     # -- JSON accessor: task_payload --
 
-    def parsed_task_payload(self) -> dict[str, Any]:
+    def parsed_task_payload(self) -> dict[str, object]:
         return self.__class__._parse_task_payload(self.task_payload)
 
     @classmethod
-    def _parse_task_payload(cls, data: dict) -> dict[str, Any]:
+    def _parse_task_payload(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"task_payload must be a dict, got {type(data).__name__}")
         return data

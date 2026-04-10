@@ -29,7 +29,7 @@ def _record_state_event(
     *,
     old_status: str | None = None,
     execution_id: UUID | None = None,
-    event_metadata: dict[str, Any] | None = None,
+    event_metadata: dict[str, object] | None = None,
 ) -> RunTaskStateEvent:
     evt = RunTaskStateEvent(
         run_id=run_id,
