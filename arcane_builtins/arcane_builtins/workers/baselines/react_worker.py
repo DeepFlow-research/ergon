@@ -18,8 +18,8 @@ from pydantic_ai.messages import (
 from h_arcane.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
 from h_arcane.api.generation import GenerationTurn
 from h_arcane.core.providers.generation.pydantic_ai_format import extract_logprobs
-from h_arcane.core.providers.generation.vllm_model import resolve_model_target
-from h_arcane.core.rl import VLLM_LOGPROB_SETTINGS
+from h_arcane.core.providers.generation.model_resolution import resolve_model_target
+from h_arcane.core.rl import LOGPROB_SETTINGS
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +61,10 @@ class ReActWorker(Worker):
         context: WorkerContext,
     ) -> WorkerResult:
         resolved = resolve_model_target(self.model)
-        is_vllm = self.model is not None and self.model.startswith("vllm:")
 
         model_settings: dict[str, object] | None = None
-        if is_vllm:
-            model_settings = VLLM_LOGPROB_SETTINGS
+        if resolved.supports_logprobs and self.model and self.model.startswith("vllm:"):
+            model_settings = LOGPROB_SETTINGS
 
         agent: Agent[None, _AgentOutput] = Agent(
             model=resolved.model,
@@ -178,14 +177,27 @@ def _to_turn(
     request: ModelRequest | None,
     tool_results: list[dict[str, Any]],  # slopcop: ignore[no-typing-any]
 ) -> GenerationTurn:
-    raw_resp = dataclasses.asdict(response)
-    raw_req = dataclasses.asdict(request) if request is not None else None
+    raw_resp = _make_json_safe(dataclasses.asdict(response))
+    raw_req = _make_json_safe(dataclasses.asdict(request)) if request is not None else None
     return GenerationTurn(
         raw_request=raw_req,
         raw_response=raw_resp,
         tool_results=tool_results,
         logprobs=extract_logprobs(raw_resp),
     )
+
+
+def _make_json_safe(obj: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    """Recursively convert non-JSON-serializable types (datetime, bytes, etc.) to strings."""
+    if isinstance(obj, dict):
+        return {k: _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_make_json_safe(v) for v in obj]
+    if isinstance(obj, (datetime,)):
+        return obj.isoformat()
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
+    return obj
 
 
 def _extract_tool_results(request: ModelRequest) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
