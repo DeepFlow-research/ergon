@@ -17,6 +17,7 @@ import {
   DashboardCohortUpdatedData,
   DashboardTaskEvaluationUpdatedData,
   DashboardThreadMessageCreatedData,
+  GenerationTurnState,
   ResourceState,
   SandboxState,
   SandboxCommandState,
@@ -285,4 +286,12 @@ export function broadcastTaskEvaluation(
 ): void {
   const io = getIO();
   io?.to(`run:${data.run_id}`).emit("task:evaluation", data);
+}
+
+export function broadcastGenerationTurn(
+  runId: string,
+  turn: GenerationTurnState
+): void {
+  const io = getIO();
+  io?.to(`run:${runId}`).emit("generation:turn", { runId, turn });
 }

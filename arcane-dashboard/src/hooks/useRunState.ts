@@ -26,6 +26,7 @@ import {
 import type { RunAction, RunSandbox, RunSandboxCommand } from "@/lib/contracts/rest";
 import {
   ExecutionAttemptState,
+  GenerationTurnState,
   TaskStatus,
   TaskState,
   ActionState,
@@ -456,6 +457,21 @@ export function useRunState(
     [runId]
   );
 
+  const handleGenerationTurn = useCallback(
+    (payload: { runId: string; turn: GenerationTurnState }) => {
+      if (payload.runId !== runId) return;
+
+      setRunState((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          generationTurns: [...prev.generationTurns, payload.turn],
+        };
+      });
+    },
+    [runId]
+  );
+
   const handleTaskEvaluation = useCallback(
     (payload: unknown) => {
       const data = parseDashboardTaskEvaluationUpdatedData(payload);
@@ -548,6 +564,7 @@ export function useRunState(
     socket.on("run:completed", handleRunCompleted);
     socket.on("thread:message", handleThreadMessage);
     socket.on("task:evaluation", handleTaskEvaluation);
+    socket.on("generation:turn", handleGenerationTurn);
 
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
@@ -562,6 +579,7 @@ export function useRunState(
       socket.off("run:completed", handleRunCompleted);
       socket.off("thread:message", handleThreadMessage);
       socket.off("task:evaluation", handleTaskEvaluation);
+      socket.off("generation:turn", handleGenerationTurn);
     };
   }, [
     socket,
@@ -580,6 +598,7 @@ export function useRunState(
     handleRunCompleted,
     handleThreadMessage,
     handleTaskEvaluation,
+    handleGenerationTurn,
   ]);
 
   // Unsubscribe on unmount

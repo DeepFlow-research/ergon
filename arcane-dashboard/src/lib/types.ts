@@ -76,6 +76,7 @@ export const DashboardEventNames = {
   SANDBOX_CLOSED: "dashboard/sandbox.closed",
   THREAD_MESSAGE_CREATED: "dashboard/thread.message_created",
   TASK_EVALUATION_UPDATED: "dashboard/task.evaluation_updated",
+  GENERATION_TURN_COMPLETED: "dashboard/generation.turn_completed",
 } as const;
 
 export type DashboardEventName =
@@ -105,6 +106,9 @@ export type TaskEvaluationState = RestRunTaskEvaluation;
 export type DashboardThreadMessageCreatedData = GeneratedDashboardThreadMessageCreatedData;
 export type DashboardTaskEvaluationUpdatedData = GeneratedDashboardTaskEvaluationUpdatedData;
 
+import type { DashboardGenerationTurnCompletedData as _GeneratedDashboardGenerationTurnCompletedData } from "@/lib/contracts/events";
+export type DashboardGenerationTurnCompletedData = _GeneratedDashboardGenerationTurnCompletedData;
+
 // =============================================================================
 // Union Types for Inngest Event Handling
 // =============================================================================
@@ -121,7 +125,8 @@ export type DashboardEventData =
   | DashboardSandboxCommandData
   | DashboardSandboxClosedData
   | DashboardThreadMessageCreatedData
-  | DashboardTaskEvaluationUpdatedData;
+  | DashboardTaskEvaluationUpdatedData
+  | DashboardGenerationTurnCompletedData;
 
 // =============================================================================
 // Inngest Event Types (for type-safe event handling)
@@ -142,6 +147,7 @@ export type DashboardEvents = {
   "dashboard/sandbox.closed": { data: DashboardSandboxClosedData };
   "dashboard/thread.message_created": { data: DashboardThreadMessageCreatedData };
   "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
+  "dashboard/generation.turn_completed": { data: DashboardGenerationTurnCompletedData };
 };
 
 // =============================================================================
@@ -247,6 +253,16 @@ export interface SandboxCommandState {
   timestamp: string;
 }
 
+export interface GenerationTurnState {
+  taskExecutionId: string;
+  workerBindingKey: string;
+  workerName: string;
+  turnIndex: number;
+  responseText: string | null;
+  toolCalls: Array<{ tool_call_id: string; tool_name: string; args: unknown }> | null;
+  policyVersion: string | null;
+}
+
 /**
  * Complete workflow run state.
  * This is the top-level state object held in the DashboardStore.
@@ -278,6 +294,9 @@ export interface WorkflowRunState {
 
   // Task evaluation snapshots keyed by task ID or "__run__" for run-scoped judgments
   evaluationsByTask: Map<string, TaskEvaluationState>;
+
+  // Generation turns (RL observability) — append-only, keyed by task execution
+  generationTurns: GenerationTurnState[];
 
   // Timing
   startedAt: string;
@@ -316,6 +335,7 @@ export interface ServerToClientEvents {
   "sandbox:closed": (data: SandboxClosedSocketData) => void;
   "thread:message": (data: DashboardThreadMessageCreatedData) => void;
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
+  "generation:turn": (data: { runId: string; turn: GenerationTurnState }) => void;
   // Sync event - sends all current runs to a client on request
   "sync:runs": (runs: RunListEntry[]) => void;
   // Sync event - sends full state for a specific run

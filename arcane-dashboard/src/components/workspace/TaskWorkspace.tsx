@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { ActionStreamPanel } from "@/components/panels/ActionStreamPanel";
 import { CommunicationPanel } from "@/components/panels/CommunicationPanel";
 import { EvaluationPanel } from "@/components/panels/EvaluationPanel";
+import { GenerationTracePanel } from "@/components/panels/GenerationTracePanel";
 import { ResourcePanel } from "@/components/panels/ResourcePanel";
 import { SandboxPanel } from "@/components/panels/SandboxPanel";
 import { TaskStatus, type WorkflowRunState } from "@/lib/types";
@@ -48,6 +49,8 @@ export function TaskWorkspace({
 }) {
   const { task, actions, resources, executions, sandbox, threads, evaluation, dependencies, isLoading } =
     useTaskDetails(runState, taskId);
+
+  const generationTurns = runState?.generationTurns ?? [];
 
   if (!taskId) {
     return (
@@ -282,6 +285,10 @@ export function TaskWorkspace({
               <SandboxPanel sandbox={sandbox} />
             </WorkspaceSection>
           )}
+
+          <WorkspaceSection testId="workspace-generations" title="Generations">
+            <GenerationTracePanel turns={generationTurns} runId={runState?.id} />
+          </WorkspaceSection>
         </div>
       </div>
     </div>

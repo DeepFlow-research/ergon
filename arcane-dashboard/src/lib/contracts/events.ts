@@ -210,6 +210,17 @@ export const DashboardTaskEvaluationUpdatedDataSchema = z.object({
   evaluation: RunTaskEvaluationSchema,
 });
 
+export const DashboardGenerationTurnCompletedDataSchema = z.object({
+  run_id: z.string().uuid(),
+  task_execution_id: z.string().uuid(),
+  worker_binding_key: z.string(),
+  worker_name: z.string(),
+  turn_index: z.number().int(),
+  response_text: z.string().nullable().optional(),
+  tool_calls: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
+  policy_version: z.string().nullable().optional(),
+});
+
 export const RunListEntrySchema = z.object({
   runId: z.string(),
   name: z.string(),
@@ -287,6 +298,9 @@ export interface DashboardTaskEvaluationUpdatedData {
   task_id: string | null;
   evaluation: RunTaskEvaluation;
 }
+export type DashboardGenerationTurnCompletedData = z.infer<
+  typeof DashboardGenerationTurnCompletedDataSchema
+>;
 export type RunListEntry = z.infer<typeof RunListEntrySchema>;
 export type RunCompletedSocketData = z.infer<typeof RunCompletedSocketDataSchema>;
 export type TaskStatusSocketData = z.infer<typeof TaskStatusSocketDataSchema>;
@@ -432,4 +446,10 @@ export function parseSandboxCommandSocketData(input: unknown): SandboxCommandSoc
 
 export function parseSandboxClosedSocketData(input: unknown): SandboxClosedSocketData {
   return SandboxClosedSocketDataSchema.parse(input);
+}
+
+export function parseDashboardGenerationTurnCompletedData(
+  input: unknown,
+): DashboardGenerationTurnCompletedData {
+  return DashboardGenerationTurnCompletedDataSchema.parse(input);
 }

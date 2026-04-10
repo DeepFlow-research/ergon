@@ -14,6 +14,7 @@
 import { config } from "../config";
 import {
   ExecutionAttemptState,
+  GenerationTurnState,
   TaskStatus,
   TaskTreeNode,
   TaskState,
@@ -124,6 +125,7 @@ class DashboardStore {
       sandboxesByTask: new Map(),
       threads: [],
       evaluationsByTask: new Map(),
+      generationTurns: [],
       startedAt,
       completedAt: null,
       durationSeconds: null,
@@ -285,6 +287,12 @@ class DashboardStore {
     } else {
       run.threads.push(thread);
     }
+  }
+
+  addGenerationTurn(runId: string, turn: GenerationTurnState): void {
+    const run = this.runs.get(runId);
+    if (!run) return;
+    run.generationTurns.push(turn);
   }
 
   upsertEvaluation(runId: string, taskId: string | null, evaluation: TaskEvaluationState): void {
