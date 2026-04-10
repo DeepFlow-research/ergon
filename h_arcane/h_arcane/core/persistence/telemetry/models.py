@@ -4,11 +4,9 @@ Telemetry rows reference bound definition rows — they never become the source
 of truth for the definition itself.
 """
 
-from __future__ import annotations
-
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
@@ -57,11 +55,11 @@ class RunRecord(SQLModel, table=True):
 
     # -- JSON accessor: summary_json --
 
-    def parsed_summary(self) -> dict[str, Any]:
+    def parsed_summary(self) -> dict[str, object]:
         return self.__class__._parse_summary(self.summary_json)
 
     @classmethod
-    def _parse_summary(cls, data: dict) -> dict[str, Any]:
+    def _parse_summary(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"summary_json must be a dict, got {type(data).__name__}")
         return data
@@ -70,7 +68,6 @@ class RunRecord(SQLModel, table=True):
     def _validate_summary_json(self) -> "RunRecord":
         self.__class__._parse_summary(self.summary_json)
         return self
-
 
 # ---------------------------------------------------------------------------
 # RunTaskExecution
@@ -100,11 +97,11 @@ class RunTaskExecution(SQLModel, table=True):
 
     # -- JSON accessor: output_json --
 
-    def parsed_output(self) -> dict[str, Any]:
+    def parsed_output(self) -> dict[str, object]:
         return self.__class__._parse_output(self.output_json)
 
     @classmethod
-    def _parse_output(cls, data: dict) -> dict[str, Any]:
+    def _parse_output(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"output_json must be a dict, got {type(data).__name__}")
         return data
@@ -116,11 +113,11 @@ class RunTaskExecution(SQLModel, table=True):
 
     # -- JSON accessor: error_json (nullable) --
 
-    def parsed_error(self) -> dict[str, Any] | None:
+    def parsed_error(self) -> dict[str, object] | None:
         return self.__class__._parse_error(self.error_json)
 
     @classmethod
-    def _parse_error(cls, data: dict | None) -> dict[str, Any] | None:
+    def _parse_error(cls, data: dict | None) -> dict[str, object] | None:
         if data is None:
             return None
         if not isinstance(data, dict):
@@ -131,7 +128,6 @@ class RunTaskExecution(SQLModel, table=True):
     def _validate_error_json(self) -> "RunTaskExecution":
         self.__class__._parse_error(self.error_json)
         return self
-
 
 # ---------------------------------------------------------------------------
 # RunAction
@@ -156,11 +152,11 @@ class RunAction(SQLModel, table=True):
 
     # -- JSON accessor: error_json (nullable) --
 
-    def parsed_error(self) -> dict[str, Any] | None:
+    def parsed_error(self) -> dict[str, object] | None:
         return self.__class__._parse_error(self.error_json)
 
     @classmethod
-    def _parse_error(cls, data: dict | None) -> dict[str, Any] | None:
+    def _parse_error(cls, data: dict | None) -> dict[str, object] | None:
         if data is None:
             return None
         if not isinstance(data, dict):
@@ -171,7 +167,6 @@ class RunAction(SQLModel, table=True):
     def _validate_error_json(self) -> "RunAction":
         self.__class__._parse_error(self.error_json)
         return self
-
 
 # ---------------------------------------------------------------------------
 # RunResource
@@ -196,11 +191,11 @@ class RunResource(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, Any]:
+    def parsed_metadata(self) -> dict[str, object]:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, Any]:
+    def _parse_metadata(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -209,7 +204,6 @@ class RunResource(SQLModel, table=True):
     def _validate_metadata_json(self) -> "RunResource":
         self.__class__._parse_metadata(self.metadata_json)
         return self
-
 
 # ---------------------------------------------------------------------------
 # RunTaskStateEvent
@@ -236,11 +230,11 @@ class RunTaskStateEvent(SQLModel, table=True):
 
     # -- JSON accessor: event_metadata --
 
-    def parsed_event_metadata(self) -> dict[str, Any]:
+    def parsed_event_metadata(self) -> dict[str, object]:
         return self.__class__._parse_event_metadata(self.event_metadata)
 
     @classmethod
-    def _parse_event_metadata(cls, data: dict) -> dict[str, Any]:
+    def _parse_event_metadata(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(
                 f"event_metadata must be a dict, got {type(data).__name__}"
@@ -251,7 +245,6 @@ class RunTaskStateEvent(SQLModel, table=True):
     def _validate_event_metadata(self) -> "RunTaskStateEvent":
         self.__class__._parse_event_metadata(self.event_metadata)
         return self
-
 
 # ---------------------------------------------------------------------------
 # RunTaskEvaluation
@@ -279,6 +272,7 @@ class RunTaskEvaluation(SQLModel, table=True):
     # -- JSON accessor: summary_json --
 
     def parsed_summary(self) -> "EvaluationSummary":
+        # Deferred: avoid circular import
         from h_arcane.core.persistence.telemetry.evaluation_summary import (
             EvaluationSummary,
         )
@@ -292,7 +286,6 @@ class RunTaskEvaluation(SQLModel, table=True):
                 f"summary_json must be a dict, got {type(self.summary_json).__name__}"
             )
         return self
-
 
 # ---------------------------------------------------------------------------
 # ExperimentCohort
@@ -314,11 +307,11 @@ class ExperimentCohort(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, Any]:
+    def parsed_metadata(self) -> dict[str, object]:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, Any]:
+    def _parse_metadata(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -327,7 +320,6 @@ class ExperimentCohort(SQLModel, table=True):
     def _validate_metadata_json(self) -> "ExperimentCohort":
         self.__class__._parse_metadata(self.metadata_json)
         return self
-
 
 # ---------------------------------------------------------------------------
 # ExperimentCohortStats
@@ -350,7 +342,6 @@ class ExperimentCohortStats(SQLModel, table=True):
     failure_rate: float = 0.0
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
-
 # ---------------------------------------------------------------------------
 # Thread (inter-agent communication)
 # ---------------------------------------------------------------------------
@@ -366,7 +357,6 @@ class Thread(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
-
 # ---------------------------------------------------------------------------
 # ThreadMessage
 # ---------------------------------------------------------------------------
@@ -381,4 +371,132 @@ class ThreadMessage(SQLModel, table=True):
     to_agent_id: str
     content: str
     sequence_num: int
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+# ---------------------------------------------------------------------------
+# RunGenerationTurn — lossless per-turn generation record
+# ---------------------------------------------------------------------------
+
+class RunGenerationTurn(SQLModel, table=True):
+    """Lossless per-turn record of one model generation within an episode.
+
+    Stores the exact provider exchange (raw_request/raw_response) plus
+    convenience extractions and optional RL fields.  One row per model
+    call per task execution.
+    """
+
+    __tablename__ = "run_generation_turns"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    task_execution_id: UUID = Field(
+        foreign_key="run_task_executions.id",
+        index=True,
+    )
+    worker_binding_key: str = Field(index=True)
+    turn_index: int
+
+    # Lossless provider exchange
+    raw_request: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    raw_response: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+    # Convenience extractions
+    response_text: str | None = None
+    tool_calls_json: list | None = Field(default=None, sa_column=Column(JSON))
+    tool_results_json: list | None = Field(default=None, sa_column=Column(JSON))
+
+    # RL fields (None for cloud APIs, populated for vLLM)
+    token_ids_json: list | None = Field(default=None, sa_column=Column(JSON))
+    logprobs_json: list | None = Field(default=None, sa_column=Column(JSON))
+    policy_version: str | None = None
+
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+    # -- JSON accessors --
+
+    def parsed_tool_calls(self) -> list[dict[str, object]]:
+        return self._parse_optional_list("tool_calls_json", self.tool_calls_json) or []
+
+    def parsed_tool_results(self) -> list[dict[str, object]]:
+        return self._parse_optional_list("tool_results_json", self.tool_results_json) or []
+
+    def parsed_token_ids(self) -> list[int] | None:
+        return self._parse_optional_list("token_ids_json", self.token_ids_json)
+
+    def parsed_logprobs(self) -> list[float] | None:
+        return self._parse_optional_list("logprobs_json", self.logprobs_json)
+
+    # -- shared helpers --
+
+    @classmethod
+    def _parse_optional_list(cls, field_name: str, data: list | None) -> list | None:
+        if data is None:
+            return None
+        if not isinstance(data, list):
+            raise ValueError(f"{field_name} must be a list, got {type(data).__name__}")
+        return data
+
+    @model_validator(mode="after")
+    def _validate_json_columns(self) -> "RunGenerationTurn":
+        if not isinstance(self.raw_request, dict):
+            raise ValueError(f"raw_request must be a dict, got {type(self.raw_request).__name__}")
+        if not isinstance(self.raw_response, dict):
+            raise ValueError(f"raw_response must be a dict, got {type(self.raw_response).__name__}")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# TrainingSession — tracks an RL training run
+# ---------------------------------------------------------------------------
+
+
+class TrainingSession(SQLModel, table=True):
+    """One invocation of ``arcane train`` (local or launched).
+
+    Links a training run to the ExperimentDefinition it trains against,
+    stores the training config, and anchors per-step metrics.
+    """
+
+    __tablename__ = "training_sessions"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    experiment_definition_id: UUID = Field(
+        foreign_key="experiment_definitions.id", index=True,
+    )
+    model_name: str
+    config_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    status: str = Field(default="running", index=True)
+    started_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
+    output_dir: str | None = None
+    total_steps: int | None = None
+    final_loss: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# TrainingMetric — per-step training metrics
+# ---------------------------------------------------------------------------
+
+
+class TrainingMetric(SQLModel, table=True):
+    """One row per logged training step.
+
+    Written by ``ArcaneTrainingCallback.on_log()`` during training.
+    """
+
+    __tablename__ = "training_metrics"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    session_id: UUID = Field(foreign_key="training_sessions.id", index=True)
+    step: int
+    epoch: float | None = None
+    loss: float | None = None
+    grad_norm: float | None = None
+    learning_rate: float | None = None
+    reward_mean: float | None = None
+    reward_std: float | None = None
+    entropy: float | None = None
+    completion_mean_length: float | None = None
+    step_time_s: float | None = None
+    extra_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
