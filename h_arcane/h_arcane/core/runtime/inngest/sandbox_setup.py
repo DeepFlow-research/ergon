@@ -17,7 +17,7 @@ from arcane_builtins.registry import SANDBOX_MANAGERS
 from h_arcane.core.persistence.shared.db import get_session
 from h_arcane.core.persistence.telemetry.models import RunResource
 from h_arcane.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
-from h_arcane.core.runtime.errors import ContractViolationError, DataIntegrityError
+from h_arcane.core.runtime.errors import DataIntegrityError
 from h_arcane.core.runtime.inngest_client import inngest_client
 from h_arcane.core.runtime.services.child_function_payloads import SandboxSetupRequest
 from h_arcane.core.runtime.services.inngest_function_results import SandboxReadyResult
@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 )
 async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
     """Create and configure a sandbox for task execution."""
-    payload = SandboxSetupRequest(**ctx.event.data)
+    payload = SandboxSetupRequest.model_validate(ctx.event.data)
     run_id = payload.run_id
     task_id = payload.task_id
     benchmark_type = payload.benchmark_type
@@ -47,7 +47,9 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
 
     logger.info(
         "sandbox-setup run_id=%s task_id=%s benchmark=%s",
-        run_id, task_id, benchmark_type,
+        run_id,
+        task_id,
+        benchmark_type,
     )
 
     # Resolved on demand by benchmark_type (already in payload and
@@ -72,8 +74,8 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
         output_type=SandboxReadyResult,
     )
 
-    if isinstance(result, SandboxReadyResult):
-        get_trace_sink().emit_span(CompletedSpan(
+    get_trace_sink().emit_span(
+        CompletedSpan(
             name="sandbox.setup",
             context=sandbox_setup_context(run_id, task_id),
             start_time=span_start,
@@ -85,12 +87,9 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
                 "sandbox_id": result.sandbox_id or "",
                 "input_resource_count": len(payload.input_resource_ids),
             },
-        ))
-        return result
-    raise ContractViolationError(
-        f"sandbox-setup step returned {type(result).__name__}, expected SandboxReadyResult",
-        run_id=run_id, task_id=task_id,
+        )
     )
+    return result
 
 
 async def _create_sandbox(
@@ -114,7 +113,7 @@ async def _create_sandbox(
         session = get_session()
         try:
             stmt = select(RunResource).where(
-                RunResource.id.in_(input_resource_ids)  # type: ignore[union-attr]
+                RunResource.id.in_(input_resource_ids)  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]
             )
             resources = list(session.exec(stmt).all())
         finally:
@@ -126,7 +125,8 @@ async def _create_sandbox(
             raise DataIntegrityError(
                 "RunResource",
                 f"[{', '.join(missing)}]",
-                run_id=run_id, task_id=task_id,
+                run_id=run_id,
+                task_id=task_id,
             )
 
         await sandbox_manager.upload_inputs(task_id, resources)

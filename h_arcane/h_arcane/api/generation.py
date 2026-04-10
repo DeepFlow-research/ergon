@@ -12,8 +12,6 @@ the strings to recover IDs — TODO: verify this round-trip is lossless
 for all tokenizers.
 """
 
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 
@@ -24,7 +22,7 @@ class TokenLogprob(BaseModel):
 
     token: str
     logprob: float
-    top_logprobs: list[dict[str, Any]] = Field(default_factory=list)  # slopcop: ignore[no-typing-any]
+    top_logprobs: list[dict[str, object]] = Field(default_factory=list)
 
 
 class GenerationTurn(BaseModel):
@@ -46,9 +44,9 @@ class GenerationTurn(BaseModel):
 
     model_config = {"frozen": True}
 
-    raw_request: dict[str, Any] | None = None  # slopcop: ignore[no-typing-any]
-    raw_response: dict[str, Any]  # slopcop: ignore[no-typing-any]
-    tool_results: list[dict[str, Any]] = Field(default_factory=list)  # slopcop: ignore[no-typing-any]
+    raw_request: dict[str, object] | None = None
+    raw_response: dict[str, object]
+    tool_results: list[dict[str, object]] = Field(default_factory=list)
 
     logprobs: list[TokenLogprob] | None = None
     policy_version: str | None = None

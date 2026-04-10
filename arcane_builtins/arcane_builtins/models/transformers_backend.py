@@ -51,7 +51,10 @@ class TransformersModel(_models.Model):
         if self._hf_model is not None:
             return
 
+        # reason: defer heavy deps until first use so importing this module does not load torch/transformers.
         import torch
+
+        # reason: (same as torch above)
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         dtypes = {"float32": torch.float32, "float16": torch.float16, "bfloat16": torch.bfloat16}
@@ -60,15 +63,19 @@ class TransformersModel(_models.Model):
         dtype = dtypes.get(self._torch_dtype, torch.float32)
         self._hf_tokenizer = AutoTokenizer.from_pretrained(self._model_id)
         self._hf_model = AutoModelForCausalLM.from_pretrained(
-            self._model_id, torch_dtype=dtype,
+            self._model_id,
+            torch_dtype=dtype,
         ).to(self._device)
         self._hf_model.eval()
 
         if self._hf_tokenizer.pad_token is None:
             self._hf_tokenizer.pad_token = self._hf_tokenizer.eos_token
 
-        logger.info("Model loaded: %s (%d parameters)", self._model_id,
-                     sum(p.numel() for p in self._hf_model.parameters()))
+        logger.info(
+            "Model loaded: %s (%d parameters)",
+            self._model_id,
+            sum(p.numel() for p in self._hf_model.parameters()),
+        )
 
     @property
     def model_name(self) -> str:
@@ -97,11 +104,13 @@ class TransformersModel(_models.Model):
             response_text = self._generate_constrained(prompt_text, tool_schema)
             logprobs_list = self._compute_logprobs(prompt_text, response_text)
             return _models.ModelResponse(
-                parts=[_messages.ToolCallPart(
-                    tool_name=output_tool.name,
-                    args=_json.loads(response_text),
-                    tool_call_id=f"call_{id(self)}",
-                )],
+                parts=[
+                    _messages.ToolCallPart(
+                        tool_name=output_tool.name,
+                        args=_json.loads(response_text),
+                        tool_call_id=f"call_{id(self)}",
+                    )
+                ],
                 model_name=self.model_name,
                 provider_details={"logprobs": logprobs_list},
             )
@@ -141,7 +150,8 @@ class TransformersModel(_models.Model):
         try:
             if self._outlines_model is None:
                 self._outlines_model = outlines.from_transformers(
-                    self._hf_model, self._hf_tokenizer,
+                    self._hf_model,
+                    self._hf_tokenizer,
                 )
 
             gen = outlines.Generator(self._outlines_model, outlines.json_schema(json_schema))
@@ -151,12 +161,13 @@ class TransformersModel(_models.Model):
         except ImportError:
             logger.warning("outlines not installed — falling back to unconstrained generation")
             return self._generate_unconstrained(prompt_text)
-        except Exception as exc:
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
             logger.warning("Constrained generation failed, falling back: %s", exc)
             return self._generate_unconstrained(prompt_text)
 
     def _compute_logprobs(self, prompt_text: str, response_text: str) -> list[dict]:
         """Compute per-token logprobs via a forward pass on the full sequence."""
+        # reason: local import keeps torch import out of module load path for tests that mock the model.
         import torch
 
         full_text = prompt_text + response_text
@@ -171,15 +182,18 @@ class TransformersModel(_models.Model):
         for i in range(prompt_len, input_ids.shape[1]):
             token_id = input_ids[0, i].item()
             lp = torch.log_softmax(logits[i - 1], dim=-1)
-            logprobs_list.append({
-                "token": self._hf_tokenizer.decode([token_id]),
-                "logprob": lp[token_id].item(),
-            })
+            logprobs_list.append(
+                {
+                    "token": self._hf_tokenizer.decode([token_id]),
+                    "logprob": lp[token_id].item(),
+                }
+            )
 
         return logprobs_list
 
     def _extract_output_tool(
-        self, params: _models.ModelRequestParameters | None,
+        self,
+        params: _models.ModelRequestParameters | None,
     ) -> _models.ToolDefinition | None:
         """Extract the output tool definition if PydanticAI is using tool mode for structured output."""
         if params is None:
@@ -189,7 +203,8 @@ class TransformersModel(_models.Model):
         return None
 
     def _extract_output_schema(
-        self, params: _models.ModelRequestParameters | None,
+        self,
+        params: _models.ModelRequestParameters | None,
     ) -> str | None:
         """Extract JSON schema from PydanticAI request parameters if structured output is requested."""
         if params is None:
@@ -214,9 +229,12 @@ class TransformersModel(_models.Model):
                     elif isinstance(part, _messages.UserPromptPart):
                         chat_messages.append({"role": "user", "content": part.content})
                     elif isinstance(part, _messages.ToolReturnPart):
-                        content = part.content if isinstance(part.content, str) else str(part.content)
-                        chat_messages.append({"role": "tool", "content": content,
-                                              "tool_call_id": part.tool_call_id})
+                        content = (
+                            part.content if isinstance(part.content, str) else str(part.content)
+                        )
+                        chat_messages.append(
+                            {"role": "tool", "content": content, "tool_call_id": part.tool_call_id}
+                        )
             elif isinstance(msg, _messages.ModelResponse):
                 for part in msg.parts:
                     if isinstance(part, _messages.TextPart):
@@ -227,7 +245,9 @@ class TransformersModel(_models.Model):
 
         try:
             return self._hf_tokenizer.apply_chat_template(
-                chat_messages, tokenize=False, add_generation_prompt=True,
+                chat_messages,
+                tokenize=False,
+                add_generation_prompt=True,
             )
         except (AttributeError, TypeError, ValueError, RuntimeError) as exc:
             logger.debug("apply_chat_template failed, using fallback: %s", exc)
@@ -243,7 +263,7 @@ def resolve_transformers(
     api_key: str | None = None,
 ) -> ResolvedModel:
     """Resolve a ``transformers:model-id`` target to a local model."""
-    model_id = target[len("transformers:"):]
+    model_id = target[len("transformers:") :]
     model = TransformersModel(
         model_id=model_id,
         policy_version=policy_version,

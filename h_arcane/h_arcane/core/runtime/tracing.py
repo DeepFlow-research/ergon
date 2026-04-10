@@ -40,7 +40,7 @@ import random
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Protocol
 from uuid import UUID
 
 from opentelemetry import trace as otel_trace
@@ -77,6 +77,7 @@ _desired_span_id: ContextVar[int | None] = ContextVar("desired_span_id", default
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 class TraceContext(BaseModel):
     model_config = {"frozen": True}
 
@@ -89,12 +90,14 @@ class TraceContext(BaseModel):
     evaluator_id: UUID | None = None
     attributes: dict[str, object] = Field(default_factory=dict)
 
+
 class SpanEvent(BaseModel):
     model_config = {"frozen": True}
 
     name: str
     timestamp: datetime
     attributes: dict[str, object] = Field(default_factory=dict)
+
 
 class CompletedSpan(BaseModel):
     model_config = {"frozen": True}
@@ -108,9 +111,11 @@ class CompletedSpan(BaseModel):
     status_message: str | None = None
     events: list[SpanEvent] = Field(default_factory=list)
 
+
 # ---------------------------------------------------------------------------
 # TraceSink protocol + noop implementation
 # ---------------------------------------------------------------------------
+
 
 class TraceSink(Protocol):
     def emit_span(self, span: CompletedSpan) -> None: ...
@@ -134,6 +139,7 @@ class TraceSink(Protocol):
         evaluator_id: UUID | None = None,
         attributes: dict[str, object] | None = None,
     ) -> TraceContext: ...
+
 
 class NoopTraceSink:
     """Default sink that discards everything. Zero overhead."""
@@ -173,9 +179,11 @@ class NoopTraceSink:
             attributes=attributes or {},
         )
 
+
 # ---------------------------------------------------------------------------
 # Attribute helpers
 # ---------------------------------------------------------------------------
+
 
 def truncate_text(value: str | None, max_length: int | None = None) -> str | None:
     if value is None:
@@ -185,12 +193,14 @@ def truncate_text(value: str | None, max_length: int | None = None) -> str | Non
         return value
     return f"{value[:limit]}...[truncated]"
 
-def safe_json_attribute(value: Any, max_length: int | None = None) -> str:  # slopcop: ignore[no-typing-any]
+
+def safe_json_attribute(value: object, max_length: int | None = None) -> str:
     try:
         serialized = json.dumps(value, default=str, separators=(",", ":"))
     except (TypeError, ValueError):
         serialized = str(value)
     return truncate_text(serialized, max_length=max_length) or ""
+
 
 def normalize_attributes(attributes: dict[str, object] | None) -> dict[str, object]:
     if not attributes:
@@ -207,23 +217,28 @@ def normalize_attributes(attributes: dict[str, object] | None) -> dict[str, obje
             normalized[key] = safe_json_attribute(value)
     return normalized
 
+
 def datetime_to_nanos(value: datetime) -> int:
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
     return int(value.timestamp() * 1_000_000_000)
 
+
 # ---------------------------------------------------------------------------
 # Deterministic ID helpers
 # ---------------------------------------------------------------------------
+
 
 def trace_id_from_run_id(run_id: UUID) -> int:
     """Derive a deterministic 128-bit trace ID from a run UUID."""
     return int(run_id.hex, 16) & _MAX_TRACE_ID
 
+
 def span_id_from_key(*parts: str) -> int:
     """Derive a deterministic 64-bit span ID from arbitrary string parts."""
     digest = hashlib.sha256(":".join(parts).encode()).digest()[:8]
     return int.from_bytes(digest, "big") & _MAX_SPAN_ID or 1
+
 
 class DeterministicIdGenerator:
     """OTEL ID generator that supports one-shot deterministic overrides."""
@@ -240,6 +255,7 @@ class DeterministicIdGenerator:
             return override
         return random.getrandbits(64) or 1
 
+
 @contextmanager
 def _id_override(trace_id: int | None = None, span_id: int | None = None):
     trace_token = _desired_trace_id.set(trace_id) if trace_id is not None else None
@@ -252,9 +268,11 @@ def _id_override(trace_id: int | None = None, span_id: int | None = None):
         if trace_token is not None:
             _desired_trace_id.reset(trace_token)
 
+
 # ---------------------------------------------------------------------------
 # OtelTraceSink
 # ---------------------------------------------------------------------------
+
 
 class OtelTraceSink:
     """OTEL-backed sink that exports spans via OTLP/gRPC."""
@@ -355,9 +373,11 @@ class OtelTraceSink:
 
         sdk_span.end(end_time=end_time)
 
+
 # ---------------------------------------------------------------------------
 # Process-wide sink
 # ---------------------------------------------------------------------------
+
 
 def _create_sink() -> TraceSink:
     if settings.otel_traces_enabled:
@@ -367,7 +387,9 @@ def _create_sink() -> TraceSink:
             return NoopTraceSink()
     return NoopTraceSink()
 
+
 _sink: TraceSink = _create_sink()
+
 
 def get_trace_sink() -> TraceSink:
     """Return the process-wide trace sink.
@@ -378,9 +400,11 @@ def get_trace_sink() -> TraceSink:
     """
     return _sink
 
+
 # ---------------------------------------------------------------------------
 # Context factories
 # ---------------------------------------------------------------------------
+
 
 def workflow_root_context(run_id: UUID) -> TraceContext:
     tid = trace_id_from_run_id(run_id)
@@ -390,6 +414,7 @@ def workflow_root_context(run_id: UUID) -> TraceContext:
         run_id=run_id,
     )
 
+
 def workflow_start_context(run_id: UUID) -> TraceContext:
     root = workflow_root_context(run_id)
     return TraceContext(
@@ -398,6 +423,7 @@ def workflow_start_context(run_id: UUID) -> TraceContext:
         parent_span_id=root.span_id,
         run_id=run_id,
     )
+
 
 def task_execute_context(run_id: UUID, task_id: UUID) -> TraceContext:
     root = workflow_root_context(run_id)
@@ -409,6 +435,7 @@ def task_execute_context(run_id: UUID, task_id: UUID) -> TraceContext:
         task_id=task_id,
     )
 
+
 def sandbox_setup_context(run_id: UUID, task_id: UUID) -> TraceContext:
     parent = task_execute_context(run_id, task_id)
     return TraceContext(
@@ -419,14 +446,20 @@ def sandbox_setup_context(run_id: UUID, task_id: UUID) -> TraceContext:
         task_id=task_id,
     )
 
+
 def worker_execute_context(
-    run_id: UUID, task_id: UUID, execution_id: UUID,
+    run_id: UUID,
+    task_id: UUID,
+    execution_id: UUID,
 ) -> TraceContext:
     parent = task_execute_context(run_id, task_id)
     return TraceContext(
         trace_id=parent.trace_id,
         span_id=span_id_from_key(
-            "worker_execute", str(run_id), str(task_id), str(execution_id),
+            "worker_execute",
+            str(run_id),
+            str(task_id),
+            str(execution_id),
         ),
         parent_span_id=parent.span_id,
         run_id=run_id,
@@ -434,8 +467,12 @@ def worker_execute_context(
         execution_id=execution_id,
     )
 
+
 def action_context(
-    run_id: UUID, task_id: UUID, execution_id: UUID, action_id: UUID,
+    run_id: UUID,
+    task_id: UUID,
+    execution_id: UUID,
+    action_id: UUID,
 ) -> TraceContext:
     parent = worker_execute_context(run_id, task_id, execution_id)
     return TraceContext(
@@ -447,20 +484,27 @@ def action_context(
         execution_id=execution_id,
     )
 
+
 def persist_outputs_context(
-    run_id: UUID, task_id: UUID, execution_id: UUID,
+    run_id: UUID,
+    task_id: UUID,
+    execution_id: UUID,
 ) -> TraceContext:
     parent = task_execute_context(run_id, task_id)
     return TraceContext(
         trace_id=parent.trace_id,
         span_id=span_id_from_key(
-            "persist_outputs", str(run_id), str(task_id), str(execution_id),
+            "persist_outputs",
+            str(run_id),
+            str(task_id),
+            str(execution_id),
         ),
         parent_span_id=parent.span_id,
         run_id=run_id,
         task_id=task_id,
         execution_id=execution_id,
     )
+
 
 def task_propagate_context(run_id: UUID, task_id: UUID) -> TraceContext:
     root = workflow_root_context(run_id)
@@ -472,6 +516,7 @@ def task_propagate_context(run_id: UUID, task_id: UUID) -> TraceContext:
         task_id=task_id,
     )
 
+
 def workflow_complete_context(run_id: UUID) -> TraceContext:
     root = workflow_root_context(run_id)
     return TraceContext(
@@ -481,6 +526,7 @@ def workflow_complete_context(run_id: UUID) -> TraceContext:
         run_id=run_id,
     )
 
+
 def workflow_failed_context(run_id: UUID) -> TraceContext:
     root = workflow_root_context(run_id)
     return TraceContext(
@@ -489,6 +535,7 @@ def workflow_failed_context(run_id: UUID) -> TraceContext:
         parent_span_id=root.span_id,
         run_id=run_id,
     )
+
 
 def evaluation_task_context(
     run_id: UUID,
@@ -500,8 +547,11 @@ def evaluation_task_context(
     return TraceContext(
         trace_id=parent.trace_id,
         span_id=span_id_from_key(
-            "evaluation_task", str(run_id), str(task_id),
-            str(execution_id), str(evaluator_id),
+            "evaluation_task",
+            str(run_id),
+            str(task_id),
+            str(execution_id),
+            str(evaluator_id),
         ),
         parent_span_id=parent.span_id,
         run_id=run_id,
@@ -509,6 +559,7 @@ def evaluation_task_context(
         execution_id=execution_id,
         evaluator_id=evaluator_id,
     )
+
 
 def evaluation_criterion_context(
     run_id: UUID,
@@ -522,9 +573,13 @@ def evaluation_criterion_context(
     return TraceContext(
         trace_id=parent.trace_id,
         span_id=span_id_from_key(
-            "evaluation_criterion", str(run_id), str(task_id),
-            str(execution_id), str(evaluator_id),
-            str(stage_idx), str(criterion_idx),
+            "evaluation_criterion",
+            str(run_id),
+            str(task_id),
+            str(execution_id),
+            str(evaluator_id),
+            str(stage_idx),
+            str(criterion_idx),
         ),
         parent_span_id=parent.span_id,
         run_id=run_id,

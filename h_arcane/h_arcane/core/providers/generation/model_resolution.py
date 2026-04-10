@@ -8,7 +8,7 @@ This module owns the contract (``ResolvedModel``) and the dispatch logic.
 """
 
 import logging
-from typing import Any, Callable
+from typing import Callable
 
 import pydantic_ai.models
 from pydantic import BaseModel

@@ -4,7 +4,10 @@ All imports are eager and fully typed.  This module is always safe to import
 regardless of which optional extras are installed.
 """
 
+from collections.abc import Callable
+
 from h_arcane.api import Benchmark, Evaluator, Worker
+from h_arcane.core.providers.generation.model_resolution import ResolvedModel
 from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
 
 from arcane_builtins.benchmarks.gdpeval.rubric import StagedRubric
@@ -46,7 +49,7 @@ SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
     "gdpeval": GDPEvalSandboxManager,
 }
 
-MODEL_BACKENDS: dict[str, object] = {
+MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
     "vllm": resolve_vllm,
     "openai": resolve_cloud,
     "anthropic": resolve_cloud,

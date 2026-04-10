@@ -5,8 +5,11 @@ transformers/outlines are not installed — that's by design.  The composition
 layer in registry.py handles the ImportError gracefully.
 """
 
-from arcane_builtins.models.transformers_backend import resolve_transformers
+from collections.abc import Callable
 
-MODEL_BACKENDS: dict[str, object] = {
+from arcane_builtins.models.transformers_backend import resolve_transformers
+from h_arcane.core.providers.generation.model_resolution import ResolvedModel
+
+MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
     "transformers": resolve_transformers,
 }

@@ -1,6 +1,5 @@
 """Core schemas for the evaluation engine."""
 
-from typing import Any
 from uuid import UUID
 
 from h_arcane.api.criterion import Criterion

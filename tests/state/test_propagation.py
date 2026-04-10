@@ -8,7 +8,6 @@ from uuid import uuid4
 
 from sqlmodel import Session
 
-from h_arcane.core.persistence.shared.enums import TaskExecutionStatus
 from h_arcane.core.runtime.execution.propagation import (
     get_initial_ready_tasks,
     is_workflow_complete,
@@ -26,7 +25,6 @@ from tests.state.factories import (
 
 
 class TestDiamondFanIn:
-
     def test_diamond_fan_in_waits_for_all_deps(self, session: Session):
         """D should only become ready when BOTH B and C are completed."""
         def_id, _, task_ids, _ = seed_diamond(session)
@@ -47,7 +45,6 @@ class TestDiamondFanIn:
 
 
 class TestChainPropagation:
-
     def test_chain_propagation_step_by_step(self, session: Session):
         def_id, _, task_ids, _ = seed_chain(session, 3)
         a, b, c = task_ids
@@ -69,7 +66,6 @@ class TestChainPropagation:
 
 
 class TestFlatTasks:
-
     def test_flat_tasks_all_initially_ready(self, session: Session):
         def_id, _, task_ids = seed_flat_tasks(session, 3)
         run_id = seed_run(session, def_id)
@@ -79,7 +75,6 @@ class TestFlatTasks:
 
 
 class TestFailureDetection:
-
     def test_is_workflow_failed_when_any_task_fails(self, session: Session):
         def_id, _, task_ids = seed_flat_tasks(session, 3)
         run_id = seed_run(session, def_id)
@@ -93,7 +88,6 @@ class TestFailureDetection:
 
 
 class TestCompletionRequiresAll:
-
     def test_is_workflow_complete_requires_all_tasks(self, session: Session):
         def_id, _, task_ids = seed_flat_tasks(session, 3)
         run_id = seed_run(session, def_id)

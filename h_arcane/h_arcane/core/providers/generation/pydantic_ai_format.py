@@ -15,12 +15,10 @@ All code that needs to read these dumps should call into this module
 rather than re-implementing the parsing.
 """
 
-from typing import Any
-
 from h_arcane.api.generation import TokenLogprob
 
 
-def extract_text(raw: dict[str, Any]) -> str | None:  # slopcop: ignore[no-typing-any]
+def extract_text(raw: dict[str, object]) -> str | None:
     """Extract the first text content from a PydanticAI response dump."""
     parts = raw.get("parts")
     if not isinstance(parts, list):
@@ -33,23 +31,29 @@ def extract_text(raw: dict[str, Any]) -> str | None:  # slopcop: ignore[no-typin
     return None
 
 
-def extract_tool_calls(raw: dict[str, Any]) -> list[dict[str, Any]] | None:  # slopcop: ignore[no-typing-any]
+def extract_tool_calls(
+    raw: dict[str, object],
+) -> list[dict[str, object]] | None:
     """Extract tool call dicts from a PydanticAI response dump."""
     parts = raw.get("parts")
     if not isinstance(parts, list):
         return None
-    calls: list[dict[str, Any]] = []  # slopcop: ignore[no-typing-any]
+    calls: list[dict[str, object]] = []
     for part in parts:
         if isinstance(part, dict) and part.get("part_kind") == "tool-call":
-            calls.append({
-                "tool_call_id": part.get("tool_call_id", ""),
-                "tool_name": part.get("tool_name", ""),
-                "args": part.get("args"),
-            })
+            calls.append(
+                {
+                    "tool_call_id": part.get("tool_call_id", ""),
+                    "tool_name": part.get("tool_name", ""),
+                    "args": part.get("args"),
+                }
+            )
     return calls or None
 
 
-def extract_logprobs(raw: dict[str, Any]) -> list[TokenLogprob] | None:  # slopcop: ignore[no-typing-any]
+def extract_logprobs(
+    raw: dict[str, object],
+) -> list[TokenLogprob] | None:
     """Extract per-token logprobs from a PydanticAI response dump.
 
     PydanticAI stores vLLM logprobs in ``provider_details["logprobs"]``.

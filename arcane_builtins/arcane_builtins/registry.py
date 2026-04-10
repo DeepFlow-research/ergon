@@ -4,10 +4,15 @@ No decorators, no scanning.  Sub-registries use eager, fully-typed imports.
 The only conditionality is at this composition boundary.
 """
 
+from collections.abc import Callable
+
 import structlog
 
 from h_arcane.api import Benchmark, Evaluator, Worker
-from h_arcane.core.providers.generation.model_resolution import register_model_backend
+from h_arcane.core.providers.generation.model_resolution import (
+    ResolvedModel,
+    register_model_backend,
+)
 from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
 
 from arcane_builtins.registry_core import (
@@ -27,7 +32,7 @@ BENCHMARKS: dict[str, type[Benchmark]] = {**_core_benchmarks}
 EVALUATORS: dict[str, type[Evaluator]] = {**_core_evaluators}
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {**_core_sandbox_managers}
 
-_model_backends: dict[str, object] = {**_core_model_backends}
+_model_backends: dict[str, Callable[..., ResolvedModel]] = {**_core_model_backends}
 
 # -- Capability: local-models ----------------------------------------------
 
@@ -35,11 +40,11 @@ try:
     from arcane_builtins.registry_local_models import (
         MODEL_BACKENDS as _local_model_backends,
     )
+
     _model_backends.update(_local_model_backends)
 except ImportError:
     log.info(
-        "arcane-builtins[local-models] not installed; "
-        "local transformers inference unavailable"
+        "arcane-builtins[local-models] not installed; local transformers inference unavailable"
     )
 
 # -- Capability: data ------------------------------------------------------
@@ -49,12 +54,12 @@ try:
         BENCHMARKS as _data_benchmarks,
         EVALUATORS as _data_evaluators,
     )
+
     BENCHMARKS.update(_data_benchmarks)
     EVALUATORS.update(_data_evaluators)
 except ImportError:
     log.info(
-        "arcane-builtins[data] not installed; "
-        "gdpeval and researchrubrics benchmarks unavailable"
+        "arcane-builtins[data] not installed; gdpeval and researchrubrics benchmarks unavailable"
     )
 
 # -- Register model backends -----------------------------------------------

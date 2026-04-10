@@ -21,11 +21,13 @@ LEAN_CMD_PREFIX = "export PATH=$HOME/.elan/bin:$PATH && cd /tools/mathlib_projec
 
 # ── Response models ───────────────────────────────────────────────────
 
+
 class WriteLeanResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
     error: str | None = Field(default=None, description="Error message if operation failed")
     filename: str | None = Field(default=None, description="Path to the written file")
     bytes_written: int | None = Field(default=None, description="Number of bytes written")
+
 
 class LeanCheckResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
@@ -37,6 +39,7 @@ class LeanCheckResponse(BaseModel):
     )
     warnings: list[str] | None = Field(default=None, description="Compiler warnings")
 
+
 class LeanVerificationResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
     error: str | None = Field(default=None, description="Error message if operation failed")
@@ -47,13 +50,16 @@ class LeanVerificationResponse(BaseModel):
     message: str | None = Field(default=None, description="Verification result message")
     output: str | None = Field(default=None, description="Lean compiler output")
 
+
 class SearchLemmasResponse(BaseModel):
     success: bool = Field(description="Whether the search completed successfully")
     error: str | None = Field(default=None, description="Error message if the search failed")
     query: str | None = Field(default=None, description="The Lean query that was executed")
     output: str | None = Field(default=None, description="Lean output for the query")
 
+
 # ── Helpers ───────────────────────────────────────────────────────────
+
 
 def parse_lean_output(output: str) -> tuple[list[str], list[str]]:
     """Parse Lean compiler output to extract errors and unsolved goals.
@@ -99,7 +105,9 @@ def parse_lean_output(output: str) -> tuple[list[str], list[str]]:
 
     return errors, goals
 
+
 # ── Toolkit ───────────────────────────────────────────────────────────
+
 
 class MiniF2FToolkit:
     """Produces ``pydantic_ai.tools.Tool`` instances for Lean proof development.
@@ -183,9 +191,11 @@ class MiniF2FToolkit:
                     output = (result.stdout or "") + (result.stderr or "")
                     exit_code = result.exit_code
                 except Exception as cmd_err:  # slopcop: ignore[no-broad-except]
-                    output = getattr(cmd_err, "stdout", "") or ""  # slopcop: ignore[no-hasattr-getattr]
-                    output += getattr(cmd_err, "stderr", "") or ""  # slopcop: ignore[no-hasattr-getattr]
-                    exit_code = getattr(cmd_err, "exit_code", 1)  # slopcop: ignore[no-hasattr-getattr]
+                    e = cmd_err
+                    _out = getattr(e, "stdout", "")  # slopcop: ignore[no-hasattr-getattr]
+                    _err = getattr(e, "stderr", "")  # slopcop: ignore[no-hasattr-getattr]
+                    output = (_out or "") + (_err or "")
+                    exit_code = getattr(e, "exit_code", 1)  # slopcop: ignore[no-hasattr-getattr]
 
                 errors, goals = parse_lean_output(output)
                 compiled = exit_code == 0 or "sorry" in output
@@ -225,8 +235,7 @@ class MiniF2FToolkit:
                         success=True,
                         verified=False,
                         message=(
-                            "Proof contains 'sorry' — incomplete proof not "
-                            "allowed for verification"
+                            "Proof contains 'sorry' — incomplete proof not allowed for verification"
                         ),
                     )
 
@@ -236,9 +245,11 @@ class MiniF2FToolkit:
                     output = (result.stdout or "") + (result.stderr or "")
                     exit_code = result.exit_code
                 except Exception as cmd_err:  # slopcop: ignore[no-broad-except]
-                    output = getattr(cmd_err, "stdout", "") or ""  # slopcop: ignore[no-hasattr-getattr]
-                    output += getattr(cmd_err, "stderr", "") or ""  # slopcop: ignore[no-hasattr-getattr]
-                    exit_code = getattr(cmd_err, "exit_code", 1)  # slopcop: ignore[no-hasattr-getattr]
+                    e = cmd_err
+                    _out = getattr(e, "stdout", "")  # slopcop: ignore[no-hasattr-getattr]
+                    _err = getattr(e, "stderr", "")  # slopcop: ignore[no-hasattr-getattr]
+                    output = (_out or "") + (_err or "")
+                    exit_code = getattr(e, "exit_code", 1)  # slopcop: ignore[no-hasattr-getattr]
 
                 verified = exit_code == 0
 
@@ -306,8 +317,9 @@ class MiniF2FToolkit:
                     result = await sandbox.commands.run(cmd, timeout=30)
                     output = (result.stdout or "") + (result.stderr or "")
                 except Exception as cmd_err:  # slopcop: ignore[no-broad-except]
-                    output = getattr(cmd_err, "stdout", "") or ""  # slopcop: ignore[no-hasattr-getattr]
-                    output += getattr(cmd_err, "stderr", "") or ""  # slopcop: ignore[no-hasattr-getattr]
+                    _stdout = getattr(cmd_err, "stdout", "")  # slopcop: ignore[no-hasattr-getattr]
+                    _stderr = getattr(cmd_err, "stderr", "")  # slopcop: ignore[no-hasattr-getattr]
+                    output = (_stdout or "") + (_stderr or "")
 
                 cleaned_lines: list[str] = []
                 for line in output.strip().split("\n"):

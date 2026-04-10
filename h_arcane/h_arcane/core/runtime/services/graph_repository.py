@@ -10,7 +10,6 @@ Those are the experiment layer's responsibility.
 """
 
 from collections import defaultdict
-from typing import Any
 from uuid import UUID, uuid4
 
 from sqlmodel import Session, col, select
@@ -47,6 +46,7 @@ from h_arcane.core.utils import utcnow
 # Everything experiment-specific (payload, contracts, criteria, budgets)
 # goes in annotations so the core schema stays domain-agnostic.
 _UPDATABLE_NODE_FIELDS = frozenset({"description", "assigned_worker_key"})
+
 
 class WorkflowGraphRepository:
     """Mutable DAG with append-only audit log.
@@ -90,8 +90,7 @@ class WorkflowGraphRepository:
         instances = list(
             session.exec(
                 select(ExperimentDefinitionInstance).where(
-                    ExperimentDefinitionInstance.experiment_definition_id
-                    == definition_id,
+                    ExperimentDefinitionInstance.experiment_definition_id == definition_id,
                 )
             ).all()
         )
@@ -116,8 +115,7 @@ class WorkflowGraphRepository:
         deps = list(
             session.exec(
                 select(ExperimentDefinitionTaskDependency).where(
-                    ExperimentDefinitionTaskDependency.experiment_definition_id
-                    == definition_id,
+                    ExperimentDefinitionTaskDependency.experiment_definition_id == definition_id,
                 )
             ).all()
         )
@@ -268,7 +266,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="node.added",
             target_type="node",
             target_id=node.id,
@@ -301,8 +300,11 @@ class WorkflowGraphRepository:
         )
         for edge in connected:
             self.remove_edge(
-                session, run_id, edge.id,
-                terminal_status=terminal_status, meta=meta,
+                session,
+                run_id,
+                edge.id,
+                terminal_status=terminal_status,
+                meta=meta,
             )
 
         node.status = terminal_status
@@ -311,7 +313,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="node.removed",
             target_type="node",
             target_id=node_id,
@@ -338,7 +341,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="node.status_changed",
             target_type="node",
             target_id=node_id,
@@ -360,8 +364,7 @@ class WorkflowGraphRepository:
     ) -> GraphNodeDto:
         if field not in _UPDATABLE_NODE_FIELDS:
             raise ValueError(
-                f"Field {field!r} is not updatable. "
-                f"Allowed: {sorted(_UPDATABLE_NODE_FIELDS)}"
+                f"Field {field!r} is not updatable. Allowed: {sorted(_UPDATABLE_NODE_FIELDS)}"
             )
         node = self._get_node_row(session, run_id, node_id)
         old_value = getattr(node, field)  # slopcop: ignore[no-hasattr-getattr]
@@ -372,7 +375,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="node.field_changed",
             target_type="node",
             target_id=node_id,
@@ -411,7 +415,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="edge.added",
             target_type="edge",
             target_id=edge.id,
@@ -439,7 +444,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="edge.removed",
             target_type="edge",
             target_id=edge_id,
@@ -466,7 +472,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="edge.status_changed",
             target_type="edge",
             target_id=edge_id,
@@ -505,7 +512,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="annotation.set",
             target_type=target_type,
             target_id=target_id,
@@ -615,7 +623,8 @@ class WorkflowGraphRepository:
         session.flush()
 
         self._log_mutation(
-            session, run_id,
+            session,
+            run_id,
             mutation_type="annotation.deleted",
             target_type=target_type,
             target_id=target_id,
@@ -627,18 +636,12 @@ class WorkflowGraphRepository:
     # ── Query operations ────────────────────────────────────
 
     def get_graph(
-        self, session: Session, run_id: UUID,
+        self,
+        session: Session,
+        run_id: UUID,
     ) -> WorkflowGraphDto:
-        nodes = list(
-            session.exec(
-                select(RunGraphNode).where(RunGraphNode.run_id == run_id)
-            ).all()
-        )
-        edges = list(
-            session.exec(
-                select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
-            ).all()
-        )
+        nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
+        edges = list(session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all())
         return WorkflowGraphDto(
             run_id=run_id,
             nodes=[_to_node_dto(n) for n in nodes],
@@ -646,17 +649,26 @@ class WorkflowGraphRepository:
         )
 
     def get_node(
-        self, session: Session, run_id: UUID, node_id: UUID,
+        self,
+        session: Session,
+        run_id: UUID,
+        node_id: UUID,
     ) -> GraphNodeDto:
         return _to_node_dto(self._get_node_row(session, run_id, node_id))
 
     def get_edge(
-        self, session: Session, run_id: UUID, edge_id: UUID,
+        self,
+        session: Session,
+        run_id: UUID,
+        edge_id: UUID,
     ) -> GraphEdgeDto:
         return _to_edge_dto(self._get_edge_row(session, run_id, edge_id))
 
     def get_incoming_edges(
-        self, session: Session, run_id: UUID, node_id: UUID,
+        self,
+        session: Session,
+        run_id: UUID,
+        node_id: UUID,
     ) -> list[GraphEdgeDto]:
         rows = list(
             session.exec(
@@ -669,7 +681,10 @@ class WorkflowGraphRepository:
         return [_to_edge_dto(e) for e in rows]
 
     def get_outgoing_edges(
-        self, session: Session, run_id: UUID, node_id: UUID,
+        self,
+        session: Session,
+        run_id: UUID,
+        node_id: UUID,
     ) -> list[GraphEdgeDto]:
         rows = list(
             session.exec(
@@ -682,7 +697,10 @@ class WorkflowGraphRepository:
         return [_to_edge_dto(e) for e in rows]
 
     def get_nodes_by_status(
-        self, session: Session, run_id: UUID, status: str,
+        self,
+        session: Session,
+        run_id: UUID,
+        status: str,
     ) -> list[GraphNodeDto]:
         rows = list(
             session.exec(
@@ -716,17 +734,16 @@ class WorkflowGraphRepository:
     # ── Structural validation ───────────────────────────────
 
     def validate_acyclic(self, session: Session, run_id: UUID) -> bool:
-        edges = list(
-            session.exec(
-                select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
-            ).all()
-        )
+        edges = list(session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all())
         return _is_acyclic(edges)
 
     # ── Internal helpers ────────────────────────────────────
 
     def _get_node_row(
-        self, session: Session, run_id: UUID, node_id: UUID,
+        self,
+        session: Session,
+        run_id: UUID,
+        node_id: UUID,
     ) -> RunGraphNode:
         row = session.exec(
             select(RunGraphNode).where(
@@ -739,7 +756,10 @@ class WorkflowGraphRepository:
         return row
 
     def _get_edge_row(
-        self, session: Session, run_id: UUID, edge_id: UUID,
+        self,
+        session: Session,
+        run_id: UUID,
+        edge_id: UUID,
     ) -> RunGraphEdge:
         row = session.exec(
             select(RunGraphEdge).where(
@@ -752,7 +772,10 @@ class WorkflowGraphRepository:
         return row
 
     def _require_node_exists(
-        self, session: Session, run_id: UUID, node_id: UUID,
+        self,
+        session: Session,
+        run_id: UUID,
+        node_id: UUID,
     ) -> None:
         exists = session.exec(
             select(RunGraphNode.id).where(
@@ -762,7 +785,9 @@ class WorkflowGraphRepository:
         ).first()
         if exists is None:
             raise DanglingEdgeError(
-                edge_id=uuid4(), missing_node_id=node_id, run_id=run_id,
+                edge_id=uuid4(),
+                missing_node_id=node_id,
+                run_id=run_id,
             )
 
     def _next_sequence(self, session: Session, run_id: UUID) -> int:
@@ -812,11 +837,7 @@ class WorkflowGraphRepository:
     ) -> None:
         """DFS from target_id following outgoing edges. If we reach
         source_id, adding source→target would create a cycle."""
-        edges = list(
-            session.exec(
-                select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
-            ).all()
-        )
+        edges = list(session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all())
         adj: dict[UUID, list[UUID]] = defaultdict(list)
         for e in edges:
             adj[e.source_node_id].append(e.target_node_id)
@@ -832,9 +853,11 @@ class WorkflowGraphRepository:
             visited.add(current)
             stack.extend(adj.get(current, []))
 
+
 # ---------------------------------------------------------------------------
 # DTO conversion helpers
 # ---------------------------------------------------------------------------
+
 
 def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
     return GraphNodeDto(
@@ -848,6 +871,7 @@ def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
         assigned_worker_key=row.assigned_worker_key,
     )
 
+
 def _to_edge_dto(row: RunGraphEdge) -> GraphEdgeDto:
     return GraphEdgeDto(
         id=row.id,
@@ -857,6 +881,7 @@ def _to_edge_dto(row: RunGraphEdge) -> GraphEdgeDto:
         target_node_id=row.target_node_id,
         status=row.status,
     )
+
 
 def _to_annotation_dto(row: RunGraphAnnotation) -> GraphAnnotationDto:
     return GraphAnnotationDto(
@@ -868,6 +893,7 @@ def _to_annotation_dto(row: RunGraphAnnotation) -> GraphAnnotationDto:
         sequence=row.sequence,
         payload=dict(row.payload),
     )
+
 
 def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationDto:
     return GraphMutationDto(
@@ -883,6 +909,7 @@ def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationDto:
         reason=row.reason,
     )
 
+
 def _node_snapshot(node: RunGraphNode) -> dict[str, object]:
     return {
         "task_key": node.task_key,
@@ -892,12 +919,14 @@ def _node_snapshot(node: RunGraphNode) -> dict[str, object]:
         "assigned_worker_key": node.assigned_worker_key,
     }
 
+
 def _edge_snapshot(edge: RunGraphEdge) -> dict[str, object]:
     return {
         "source_node_id": str(edge.source_node_id),
         "target_node_id": str(edge.target_node_id),
         "status": edge.status,
     }
+
 
 def _is_acyclic(edges: list[RunGraphEdge]) -> bool:
     """Kahn's algorithm for cycle detection."""

@@ -5,7 +5,6 @@ and writes RunTaskStateEvent to track state transitions. No process-local
 state — everything goes through the database.
 """
 
-from typing import Any
 from uuid import UUID
 
 from h_arcane.core.persistence.definitions.models import (
@@ -20,6 +19,7 @@ from sqlmodel import Session, select
 # ---------------------------------------------------------------------------
 # State-event helpers
 # ---------------------------------------------------------------------------
+
 
 def _record_state_event(
     session: Session,
@@ -50,28 +50,33 @@ def _record_state_event(
 # Mark helpers
 # ---------------------------------------------------------------------------
 
+
 def mark_task_ready(session: Session, run_id: UUID, task_id: UUID) -> None:
     old = get_current_task_status(session, run_id, task_id)
     _record_state_event(session, run_id, task_id, TaskExecutionStatus.PENDING, old_status=old)
 
 
-def mark_task_running(
-    session: Session, run_id: UUID, task_id: UUID, execution_id: UUID
-) -> None:
+def mark_task_running(session: Session, run_id: UUID, task_id: UUID, execution_id: UUID) -> None:
     old = get_current_task_status(session, run_id, task_id)
     _record_state_event(
-        session, run_id, task_id, TaskExecutionStatus.RUNNING,
-        old_status=old, execution_id=execution_id,
+        session,
+        run_id,
+        task_id,
+        TaskExecutionStatus.RUNNING,
+        old_status=old,
+        execution_id=execution_id,
     )
 
 
-def mark_task_completed(
-    session: Session, run_id: UUID, task_id: UUID, execution_id: UUID
-) -> None:
+def mark_task_completed(session: Session, run_id: UUID, task_id: UUID, execution_id: UUID) -> None:
     old = get_current_task_status(session, run_id, task_id)
     _record_state_event(
-        session, run_id, task_id, TaskExecutionStatus.COMPLETED,
-        old_status=old, execution_id=execution_id,
+        session,
+        run_id,
+        task_id,
+        TaskExecutionStatus.COMPLETED,
+        old_status=old,
+        execution_id=execution_id,
     )
 
 
@@ -84,8 +89,12 @@ def mark_task_failed(
 ) -> None:
     old = get_current_task_status(session, run_id, task_id)
     _record_state_event(
-        session, run_id, task_id, TaskExecutionStatus.FAILED,
-        old_status=old, execution_id=execution_id,
+        session,
+        run_id,
+        task_id,
+        TaskExecutionStatus.FAILED,
+        old_status=old,
+        execution_id=execution_id,
         event_metadata={"error": error},
     )
 
@@ -93,6 +102,7 @@ def mark_task_failed(
 # ---------------------------------------------------------------------------
 # Query helpers
 # ---------------------------------------------------------------------------
+
 
 def get_current_task_status(session: Session, run_id: UUID, task_id: UUID) -> str | None:
     """Return the most recent status for *task_id* in this run, or None."""
@@ -108,9 +118,7 @@ def get_current_task_status(session: Session, run_id: UUID, task_id: UUID) -> st
     return session.exec(stmt).first()
 
 
-def get_initial_ready_tasks(
-    session: Session, run_id: UUID, definition_id: UUID
-) -> list[UUID]:
+def get_initial_ready_tasks(session: Session, run_id: UUID, definition_id: UUID) -> list[UUID]:
     """Return task IDs that have zero dependencies (leaf/root tasks)."""
     all_tasks_stmt = select(ExperimentDefinitionTask.id).where(
         ExperimentDefinitionTask.experiment_definition_id == definition_id,
@@ -134,6 +142,7 @@ def get_initial_ready_tasks(
 # ---------------------------------------------------------------------------
 # Propagation
 # ---------------------------------------------------------------------------
+
 
 def on_task_completed(
     session: Session,
@@ -181,6 +190,7 @@ def on_task_completed(
 # ---------------------------------------------------------------------------
 # Terminal-state checks
 # ---------------------------------------------------------------------------
+
 
 def _get_all_leaf_task_ids(session: Session, definition_id: UUID) -> list[UUID]:
     """Leaf tasks = tasks that have no dependencies pointing to them as depends_on.

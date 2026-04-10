@@ -16,11 +16,19 @@ from h_arcane.core.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
-_KNOWN_METRIC_KEYS = frozenset({
-    "epoch", "loss", "grad_norm", "learning_rate",
-    "reward", "reward_std", "entropy",
-    "completions/mean_length", "step_time",
-})
+_KNOWN_METRIC_KEYS = frozenset(
+    {
+        "epoch",
+        "loss",
+        "grad_norm",
+        "learning_rate",
+        "reward",
+        "reward_std",
+        "entropy",
+        "completions/mean_length",
+        "step_time",
+    }
+)
 
 
 class ArcaneTrainingCallback(TrainerCallback):
@@ -55,9 +63,7 @@ class ArcaneTrainingCallback(TrainerCallback):
                 entropy=logs.get("entropy"),
                 completion_mean_length=logs.get("completions/mean_length"),
                 step_time_s=logs.get("step_time"),
-                extra_json={
-                    k: v for k, v in logs.items() if k not in _KNOWN_METRIC_KEYS
-                },
+                extra_json={k: v for k, v in logs.items() if k not in _KNOWN_METRIC_KEYS},
             )
 
             with self.session_factory() as session:
@@ -65,7 +71,7 @@ class ArcaneTrainingCallback(TrainerCallback):
                 session.commit()
 
             logger.debug("Persisted training metric for step %d", state.global_step)
-        except Exception:
+        except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning(
                 "Failed to persist training metric for step %d",
                 state.global_step,
@@ -96,5 +102,5 @@ class ArcaneTrainingCallback(TrainerCallback):
                 self.session_id,
                 state.global_step,
             )
-        except Exception:
+        except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to mark training session completed", exc_info=True)

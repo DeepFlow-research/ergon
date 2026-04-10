@@ -5,7 +5,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 from h_arcane.core.providers.sandbox.event_sink import (
@@ -23,6 +23,7 @@ class UploadableResource(Protocol):
 
     name: str
     file_path: str
+
 
 try:
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
@@ -50,7 +51,7 @@ class BaseSandboxManager(ABC):
     """Abstract base class for E2B sandbox management."""
 
     _instance: "BaseSandboxManager | None" = None
-    _sandboxes: dict[UUID, Any] = {}  # slopcop: ignore[no-typing-any]
+    _sandboxes: dict[UUID, "AsyncSandbox"] = {}
     _file_registries: dict[UUID, dict[str, str]] = {}
     _created_files_registry: dict[UUID, set[str]] = {}
     _run_ids: dict[UUID, UUID] = {}
@@ -58,7 +59,7 @@ class BaseSandboxManager(ABC):
     _creation_locks: dict[UUID, asyncio.Lock] = {}
     _event_sink: SandboxEventSink
 
-    def __new__(cls, *args: Any, **kwargs: Any):  # slopcop: ignore[no-typing-any]
+    def __new__(cls, *args: object, **kwargs: object):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -69,7 +70,7 @@ class BaseSandboxManager(ABC):
         if event_sink is not None:
             self._event_sink = event_sink
 
-    def _get_raw_sandbox(self, task_id: UUID) -> Any:  # slopcop: ignore[no-typing-any]
+    def _get_raw_sandbox(self, task_id: UUID) -> "AsyncSandbox":
         if task_id not in self._sandboxes:
             raise RuntimeError(
                 f"Sandbox not created for task_id={task_id}. Call create(task_id) first."
@@ -92,9 +93,7 @@ class BaseSandboxManager(ABC):
         task_id: UUID | None = None,
     ) -> None:
         raw_sandbox = self._sandboxes.get(sandbox_key)
-        resolved_sandbox_id = sandbox_id or (
-            raw_sandbox.sandbox_id if raw_sandbox else None
-        )
+        resolved_sandbox_id = sandbox_id or (raw_sandbox.sandbox_id if raw_sandbox else None)
         if resolved_sandbox_id is None:
             return
 
@@ -119,7 +118,7 @@ class BaseSandboxManager(ABC):
         if task_id not in self._created_files_registry:
             self._created_files_registry[task_id] = set()
 
-    async def _create_directory_structure(self, sandbox: Any, sandbox_key: UUID) -> None:  # slopcop: ignore[no-typing-any]
+    async def _create_directory_structure(self, sandbox: AsyncSandbox, sandbox_key: UUID) -> None:
         create_dirs_code = """
 import os
 import stat
@@ -181,7 +180,10 @@ if created:
             )
 
     async def _upload_directory(
-        self, sandbox: Any, local_dir: Path, remote_dir: str  # slopcop: ignore[no-typing-any]
+        self,
+        sandbox: AsyncSandbox,
+        local_dir: Path,
+        remote_dir: str,
     ) -> None:
         await sandbox.commands.run(f"mkdir -p {remote_dir}")
         for py_file in local_dir.rglob("*.py"):
@@ -193,10 +195,9 @@ if created:
             await sandbox.files.write(remote_path, content)
 
     @abstractmethod
-    async def _install_dependencies(self, sandbox: Any, task_id: UUID) -> None:  # slopcop: ignore[no-typing-any]
-        ...
+    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None: ...
 
-    async def _verify_setup(self, sandbox: Any, task_id: UUID) -> None:  # slopcop: ignore[no-typing-any]
+    async def _verify_setup(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         pass
 
     async def create(
@@ -228,7 +229,7 @@ if created:
 
             try:
                 timeout_seconds = timeout_minutes * 60
-                create_kwargs: dict[str, Any] = {  # slopcop: ignore[no-typing-any]
+                create_kwargs: dict[str, str | int] = {
                     "api_key": settings.e2b_api_key,
                     "timeout": timeout_seconds,
                 }
@@ -268,9 +269,7 @@ if created:
 
             return sandbox.sandbox_id
 
-    async def upload_inputs(
-        self, task_id: UUID, resources: list[UploadableResource]
-    ) -> None:
+    async def upload_inputs(self, task_id: UUID, resources: list[UploadableResource]) -> None:
         """Upload input resources to /inputs/ in the sandbox.
 
         Each resource must satisfy :class:`UploadableResource` (has ``name``
@@ -288,9 +287,7 @@ if created:
             await sandbox.files.write(sandbox_path, content)
             self._file_registries[task_id][resource.file_path] = sandbox_path
 
-    async def upload_file(
-        self, task_id: UUID, local_path: str, sandbox_path: str
-    ) -> None:
+    async def upload_file(self, task_id: UUID, local_path: str, sandbox_path: str) -> None:
         sandbox = self._get_raw_sandbox(task_id)
         self._ensure_registries(task_id)
         content = Path(local_path).read_bytes()
@@ -309,7 +306,9 @@ if created:
             if "timeout" in error_msg or "sandbox was not found" in error_msg:
                 logger.warning(
                     "Sandbox timeout/not found downloading %s for task_id=%s: %s",
-                    sandbox_path, task_id, e,
+                    sandbox_path,
+                    task_id,
+                    e,
                 )
                 raise RuntimeError(
                     f"Sandbox timed out or was not found when downloading {sandbox_path}. "
@@ -317,14 +316,10 @@ if created:
                 ) from e
             raise
 
-    async def list_files(
-        self, task_id: UUID, sandbox_dir: str = "/workspace"
-    ) -> list[str]:
+    async def list_files(self, task_id: UUID, sandbox_dir: str = "/workspace") -> list[str]:
         sandbox = self._get_raw_sandbox(task_id)
         try:
-            result = await sandbox.commands.run(
-                f"find {sandbox_dir} -type f 2>/dev/null || true"
-            )
+            result = await sandbox.commands.run(f"find {sandbox_dir} -type f 2>/dev/null || true")
             if result.exit_code != 0:
                 return []
             return [line.strip() for line in result.stdout.split("\n") if line.strip()]
@@ -333,14 +328,13 @@ if created:
             if "timeout" in error_msg or "sandbox was not found" in error_msg:
                 logger.warning(
                     "Sandbox timeout/not found listing files for task_id=%s: %s",
-                    task_id, e,
+                    task_id,
+                    e,
                 )
                 return []
             raise
 
-    async def download_all_outputs(
-        self, task_id: UUID, output_dir: Path
-    ) -> DownloadedFiles:
+    async def download_all_outputs(self, task_id: UUID, output_dir: Path) -> DownloadedFiles:
         """Download all files from /workspace/final_output to a local directory."""
         try:
             files = await self.list_files(task_id, "/workspace/final_output")
@@ -366,17 +360,17 @@ if created:
 
         except Exception as e:  # slopcop: ignore[no-broad-except]
             logger.error(
-                "Error downloading outputs for task_id=%s: %s", task_id, e,
+                "Error downloading outputs for task_id=%s: %s",
+                task_id,
+                e,
             )
             return DownloadedFiles(files=[])
 
-    def get_sandbox(self, task_id: UUID) -> Any | None:  # slopcop: ignore[no-typing-any]
+    def get_sandbox(self, task_id: UUID) -> "AsyncSandbox | None":
         """Return the raw AsyncSandbox for the given task_id, or None."""
         return self._sandboxes.get(task_id)
 
-    def get_sandbox_path(
-        self, task_id: UUID, local_path: str
-    ) -> str | None:
+    def get_sandbox_path(self, task_id: UUID, local_path: str) -> str | None:
         if task_id not in self._file_registries:
             return None
         return self._file_registries[task_id].get(local_path)
@@ -385,9 +379,7 @@ if created:
         self._ensure_registries(task_id)
         self._created_files_registry[task_id].add(sandbox_path)
 
-    async def reset_timeout(
-        self, task_id: UUID, timeout_minutes: int = 30
-    ) -> bool:
+    async def reset_timeout(self, task_id: UUID, timeout_minutes: int = 30) -> bool:
         sandbox = self._sandboxes.get(task_id)
         if sandbox is None:
             logger.warning("Cannot reset timeout: sandbox not found for task_id=%s", task_id)
@@ -472,7 +464,5 @@ if created:
 class DefaultSandboxManager(BaseSandboxManager):
     """No custom dependencies. Used by benchmarks without specific sandbox setup."""
 
-    async def _install_dependencies(self, sandbox: Any, task_id: UUID) -> None:  # slopcop: ignore[no-typing-any]
+    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         pass
-
-

@@ -10,7 +10,6 @@ Requires:
 """
 
 import pytest
-from sqlalchemy import text
 from sqlmodel import Session, select
 
 from h_arcane.core.persistence.shared.db import get_engine
@@ -27,18 +26,27 @@ from tests.e2e.conftest import run_benchmark
 
 STUB_CONFIGS = [
     pytest.param(
-        "smoke-test", "stub-worker", "stub-rubric", "ci-stub",
+        "smoke-test",
+        "stub-worker",
+        "stub-rubric",
+        "ci-stub",
         id="smoke-test/stub/stub",
     ),
     pytest.param(
-        "minif2f", "stub-worker", "stub-rubric", "ci-stub",
+        "minif2f",
+        "stub-worker",
+        "stub-rubric",
+        "ci-stub",
         id="minif2f/stub/stub",
     ),
 ]
 
 E2B_CONFIGS = [
     pytest.param(
-        "smoke-test", "smoke-test-worker", "smoke-test-rubric", "ci-e2b",
+        "smoke-test",
+        "smoke-test-worker",
+        "smoke-test-rubric",
+        "ci-e2b",
         id="smoke-test/e2b-worker/sandbox-rubric",
     ),
 ]
@@ -74,9 +82,7 @@ class TestStubbedBenchmarks:
 
             executions = list(
                 session.exec(
-                    select(RunTaskExecution).where(
-                        RunTaskExecution.run_id == latest_run.id
-                    )
+                    select(RunTaskExecution).where(RunTaskExecution.run_id == latest_run.id)
                 ).all()
             )
 
@@ -102,9 +108,7 @@ class TestStubbedBenchmarks:
 
             evaluations = list(
                 session.exec(
-                    select(RunTaskEvaluation).where(
-                        RunTaskEvaluation.run_id == latest_run.id
-                    )
+                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == latest_run.id)
                 ).all()
             )
             assert len(evaluations) > 0, "Expected at least one evaluation"
@@ -129,7 +133,9 @@ class TestStubbedBenchmarks:
 
     def test_cohort_created(self):
         """At least one cohort should exist after running benchmarks."""
-        run_benchmark("smoke-test", worker="stub-worker", evaluator="stub-rubric", cohort="ci-cohort-check")
+        run_benchmark(
+            "smoke-test", worker="stub-worker", evaluator="stub-rubric", cohort="ci-cohort-check"
+        )
 
         with _get_session() as session:
             cohort = session.exec(
@@ -145,6 +151,7 @@ class TestE2BSandboxBenchmarks:
     def _require_e2b(self):
         # Deferred: runtime-only dependency
         import os
+
         if not os.environ.get("E2B_API_KEY"):
             pytest.skip("E2B_API_KEY not set — skipping sandbox I/O tests")
 
@@ -167,9 +174,7 @@ class TestE2BSandboxBenchmarks:
 
             evaluations = list(
                 session.exec(
-                    select(RunTaskEvaluation).where(
-                        RunTaskEvaluation.run_id == latest_run.id
-                    )
+                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == latest_run.id)
                 ).all()
             )
             assert len(evaluations) > 0

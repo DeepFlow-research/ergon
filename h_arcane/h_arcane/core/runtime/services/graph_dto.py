@@ -3,7 +3,6 @@
 Frozen Pydantic models. Callers never receive raw SQLModel rows.
 """
 
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field

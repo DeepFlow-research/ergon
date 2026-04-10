@@ -1,8 +1,15 @@
 """Instrumented sandbox proxy that emits events via SandboxEventSink."""
 
+from __future__ import annotations  # slopcop: ignore[no-future-annotations]
+
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+    from e2b.sandbox_async.commands.command import Commands  # type: ignore[import-untyped]
+    from e2b.sandbox_async.filesystem.filesystem import Filesystem  # type: ignore[import-untyped]
 
 try:
     from e2b.sandbox.commands.command_handle import (
@@ -28,7 +35,7 @@ class InstrumentedSandboxCommands:
         sink: SandboxEventSink,
         task_id: UUID,
         sandbox_id: str,
-        commands: Any,  # slopcop: ignore[no-typing-any]
+        commands: Commands,
         max_output_len: int = 4000,
     ):
         self._sink = sink
@@ -56,15 +63,19 @@ class InstrumentedSandboxCommands:
             duration_ms=duration_ms,
         )
 
-    async def run(self, command: str, *args: Any, **kwargs: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    async def run(self, command: str, *args: object, **kwargs: object) -> object:
         started_at = time.time()
         try:
             result = await self._commands.run(command, *args, **kwargs)
             await self._emit(
                 command,
                 started_at,
-                stdout=coerce_text(getattr(result, "stdout", None)),  # slopcop: ignore[no-hasattr-getattr]
-                stderr=coerce_text(getattr(result, "stderr", None)),  # slopcop: ignore[no-hasattr-getattr]
+                stdout=coerce_text(
+                    getattr(result, "stdout", None)  # slopcop: ignore[no-hasattr-getattr]
+                ),
+                stderr=coerce_text(
+                    getattr(result, "stderr", None)  # slopcop: ignore[no-hasattr-getattr]
+                ),
                 exit_code=getattr(result, "exit_code", 0),  # slopcop: ignore[no-hasattr-getattr]
             )
             return result
@@ -81,7 +92,7 @@ class InstrumentedSandboxCommands:
             await self._emit(command, started_at, stderr=str(exc), exit_code=1)
             raise
 
-    def __getattr__(self, name: str) -> Any:  # slopcop: ignore[no-typing-any]
+    def __getattr__(self, name: str) -> object:
         return getattr(self._commands, name)  # slopcop: ignore[no-hasattr-getattr]
 
 
@@ -93,7 +104,7 @@ class InstrumentedSandboxFiles:
         sink: SandboxEventSink,
         task_id: UUID,
         sandbox_id: str,
-        files: Any,  # slopcop: ignore[no-typing-any]
+        files: Filesystem,
         max_output_len: int = 4000,
     ):
         self._sink = sink
@@ -121,7 +132,7 @@ class InstrumentedSandboxFiles:
             duration_ms=duration_ms,
         )
 
-    async def write(self, path: str, content: Any, *args: Any, **kwargs: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    async def write(self, path: str, content: object, *args: object, **kwargs: object) -> object:
         started_at = time.time()
         size_bytes = bytes_length(content)
         try:
@@ -130,12 +141,10 @@ class InstrumentedSandboxFiles:
             await self._emit(f"file.write: {path}", started_at, stdout=stdout)
             return result
         except Exception as exc:  # slopcop: ignore[no-broad-except]
-            await self._emit(
-                f"file.write: {path}", started_at, stderr=str(exc), exit_code=1
-            )
+            await self._emit(f"file.write: {path}", started_at, stderr=str(exc), exit_code=1)
             raise
 
-    async def read(self, path: str, *args: Any, **kwargs: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    async def read(self, path: str, *args: object, **kwargs: object) -> object:
         started_at = time.time()
         try:
             result = await self._files.read(path, *args, **kwargs)
@@ -144,36 +153,30 @@ class InstrumentedSandboxFiles:
             await self._emit(f"file.read: {path}", started_at, stdout=stdout)
             return result
         except Exception as exc:  # slopcop: ignore[no-broad-except]
-            await self._emit(
-                f"file.read: {path}", started_at, stderr=str(exc), exit_code=1
-            )
+            await self._emit(f"file.read: {path}", started_at, stderr=str(exc), exit_code=1)
             raise
 
-    async def remove(self, path: str, *args: Any, **kwargs: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    async def remove(self, path: str, *args: object, **kwargs: object) -> object:
         started_at = time.time()
         try:
             result = await self._files.remove(path, *args, **kwargs)
             await self._emit(f"file.delete: {path}", started_at)
             return result
         except Exception as exc:  # slopcop: ignore[no-broad-except]
-            await self._emit(
-                f"file.delete: {path}", started_at, stderr=str(exc), exit_code=1
-            )
+            await self._emit(f"file.delete: {path}", started_at, stderr=str(exc), exit_code=1)
             raise
 
-    async def delete(self, path: str, *args: Any, **kwargs: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    async def delete(self, path: str, *args: object, **kwargs: object) -> object:
         started_at = time.time()
         try:
             result = await self._files.delete(path, *args, **kwargs)
             await self._emit(f"file.delete: {path}", started_at)
             return result
         except Exception as exc:  # slopcop: ignore[no-broad-except]
-            await self._emit(
-                f"file.delete: {path}", started_at, stderr=str(exc), exit_code=1
-            )
+            await self._emit(f"file.delete: {path}", started_at, stderr=str(exc), exit_code=1)
             raise
 
-    def __getattr__(self, name: str) -> Any:  # slopcop: ignore[no-typing-any]
+    def __getattr__(self, name: str) -> object:
         return getattr(self._files, name)  # slopcop: ignore[no-hasattr-getattr]
 
 
@@ -187,7 +190,7 @@ class InstrumentedSandbox:
 
     def __init__(
         self,
-        sandbox: Any,  # slopcop: ignore[no-typing-any]
+        sandbox: AsyncSandbox,
         sink: SandboxEventSink,
         task_id: UUID,
         max_output_len: int = 4000,
@@ -201,9 +204,7 @@ class InstrumentedSandbox:
         self.commands = InstrumentedSandboxCommands(
             sink, task_id, sid, sandbox.commands, max_output_len
         )
-        self.files = InstrumentedSandboxFiles(
-            sink, task_id, sid, sandbox.files, max_output_len
-        )
+        self.files = InstrumentedSandboxFiles(sink, task_id, sid, sandbox.files, max_output_len)
 
     async def _emit(
         self,
@@ -224,16 +225,20 @@ class InstrumentedSandbox:
             duration_ms=duration_ms,
         )
 
-    async def run_code(self, code: str, *args: Any, **kwargs: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    async def run_code(self, code: str, *args: object, **kwargs: object) -> object:
         started_at = time.time()
         command = f"python: {preview_python_code(code)}"
         try:
-            execution = await self._sandbox.run_code(code, *args, **kwargs)
+            execution = await self._sandbox.run_code(code, *args, **kwargs)  # ty: ignore[no-matching-overload]
             stdout = None
             stderr = None
             if getattr(execution, "logs", None):  # slopcop: ignore[no-hasattr-getattr]
-                stdout = coerce_text(getattr(execution.logs, "stdout", None))  # slopcop: ignore[no-hasattr-getattr]
-                stderr = coerce_text(getattr(execution.logs, "stderr", None))  # slopcop: ignore[no-hasattr-getattr]
+                stdout = coerce_text(
+                    getattr(execution.logs, "stdout", None)  # slopcop: ignore[no-hasattr-getattr]
+                )
+                stderr = coerce_text(
+                    getattr(execution.logs, "stderr", None)  # slopcop: ignore[no-hasattr-getattr]
+                )
             error = getattr(execution, "error", None)  # slopcop: ignore[no-hasattr-getattr]
             if error is not None:
                 stderr = "\n".join(part for part in [stderr, str(error)] if part)
@@ -249,7 +254,7 @@ class InstrumentedSandbox:
             await self._emit(command, started_at, stderr=str(exc), exit_code=1)
             raise
 
-    async def set_timeout(self, *args: Any, **kwargs: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    async def set_timeout(self, *args: object, **kwargs: object) -> object:
         started_at = time.time()
         timeout = kwargs.get("timeout")
         if timeout is None and args:
@@ -267,12 +272,12 @@ class InstrumentedSandbox:
             )
             raise
 
-    async def kill(self, *args: Any, **kwargs: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    async def kill(self, *args: object, **kwargs: object) -> object:
         return await self._sandbox.kill(*args, **kwargs)
 
     @property
     def sandbox_id(self) -> str:
         return self._sandbox.sandbox_id
 
-    def __getattr__(self, name: str) -> Any:  # slopcop: ignore[no-typing-any]
+    def __getattr__(self, name: str) -> object:
         return getattr(self._sandbox, name)  # slopcop: ignore[no-hasattr-getattr]

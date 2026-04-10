@@ -4,7 +4,7 @@ Reads identity fields inline from the live Experiment object graph — no
 BoundExperiment intermediate, no constructor_state() serialisation.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from h_arcane.api.evaluator import Rubric
@@ -25,11 +25,13 @@ from h_arcane.core.utils import utcnow
 if TYPE_CHECKING:
     from h_arcane.api.experiment import Experiment
 
+
 def persist_experiment_definition(
     experiment: "Experiment",
 ) -> PersistedExperimentDefinition:
     """Validate, materialise instances, and write immutable definition rows."""
     return ExperimentPersistenceService().persist_definition(experiment)
+
 
 class ExperimentPersistenceService:
     """Writes immutable definition rows directly from an Experiment.
@@ -183,7 +185,9 @@ class ExperimentPersistenceService:
                     for (inst_key, t_key), task_row in task_rows_by_key.items():
                         if t_key == tk:
                             if task_row.id is None:
-                                raise ValueError(f"Task {t_key!r} has no assigned ID for assignment")
+                                raise ValueError(
+                                    f"Task {t_key!r} has no assigned ID for assignment"
+                                )
                             assignment_rows.append(
                                 ExperimentDefinitionTaskAssignment(
                                     id=uuid4(),
@@ -200,7 +204,9 @@ class ExperimentPersistenceService:
             for task in tasks:
                 task_id = task_rows_by_key[(instance_key, task.task_key)].id
                 if task_id is None:
-                    raise ValueError(f"Task {task.task_key!r} has no assigned ID for evaluator binding")
+                    raise ValueError(
+                        f"Task {task.task_key!r} has no assigned ID for evaluator binding"
+                    )
                 for eval_key in task.evaluator_binding_keys:
                     task_evaluator_rows.append(
                         ExperimentDefinitionTaskEvaluator(

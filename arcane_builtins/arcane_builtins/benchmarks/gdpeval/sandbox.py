@@ -5,14 +5,19 @@ packages needed for GDP document-processing evaluation (PDF, OCR, etc.).
 """
 
 import logging
-from typing import Any
 from uuid import UUID
 
 from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
 
+try:
+    from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+except ImportError:
+    AsyncSandbox = object  # type: ignore[assignment,misc]
+
 logger = logging.getLogger(__name__)
 
 _GDP_PACKAGES = "pdfplumber PyPDF2 reportlab pytesseract"
+
 
 class GDPEvalSandboxManager(BaseSandboxManager):
     """Sandbox manager for the GDPEval benchmark.
@@ -21,12 +26,10 @@ class GDPEvalSandboxManager(BaseSandboxManager):
     ``pdfplumber``, ``PyPDF2``, ``reportlab``, ``pytesseract``.
     """
 
-    async def _install_dependencies(self, sandbox: Any, task_id: UUID) -> None:  # slopcop: ignore[no-typing-any]
+    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         logger.info("Installing GDPEval packages (task_id=%s) …", task_id)
 
-        pip_result = await sandbox.commands.run(
-            f"pip install -q {_GDP_PACKAGES}"
-        )
+        pip_result = await sandbox.commands.run(f"pip install -q {_GDP_PACKAGES}")
         if pip_result.exit_code != 0:
             stderr = pip_result.stderr if pip_result.stderr else "N/A"
             raise RuntimeError(
@@ -37,7 +40,7 @@ class GDPEvalSandboxManager(BaseSandboxManager):
 
         logger.info("Successfully installed GDPEval packages (task_id=%s)", task_id)
 
-    async def _verify_setup(self, sandbox: Any, task_id: UUID) -> None:  # slopcop: ignore[no-typing-any]
+    async def _verify_setup(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         logger.info("Verifying GDPEval package installation (task_id=%s) …", task_id)
 
         verify_code = (

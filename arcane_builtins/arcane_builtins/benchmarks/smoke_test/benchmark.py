@@ -17,6 +17,7 @@ from arcane_builtins.benchmarks.smoke_test.tasks import (
     single_task,
 )
 
+
 class SmokeTestBenchmark(Benchmark):
     type_slug: ClassVar[str] = "smoke-test"
 
@@ -43,7 +44,7 @@ class SmokeTestBenchmark(Benchmark):
         }
         factory = _factories.get(self.workflow)
         if factory is not None:
-            return {"default": factory()}  # type: ignore[operator]
+            return {"default": factory()}  # type: ignore[operator]  # ty: ignore[call-non-callable]
 
         tasks = [
             BenchmarkTask(

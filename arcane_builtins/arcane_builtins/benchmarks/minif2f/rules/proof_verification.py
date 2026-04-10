@@ -5,7 +5,7 @@ artifacts, writes it into the sandbox, and invokes the Lean compiler
 to verify the proof.
 """
 
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from h_arcane.api.criterion import Criterion
 from h_arcane.api.evaluation_context import EvaluationContext
@@ -13,9 +13,9 @@ from h_arcane.api.results import CriterionResult
 from pydantic import BaseModel
 
 LEAN_CMD = (
-    "export PATH=$HOME/.elan/bin:$PATH && "
-    "cd /tools/mathlib_project && lean src/verify.lean 2>&1"
+    "export PATH=$HOME/.elan/bin:$PATH && cd /tools/mathlib_project && lean src/verify.lean 2>&1"
 )
+
 
 class ExtractedProof(BaseModel):
     """Typed payload extracted from agent outputs."""
@@ -24,12 +24,14 @@ class ExtractedProof(BaseModel):
     source: str
     evaluated_resource_ids: list[str]
 
+
 class ProofVerificationOutcome(BaseModel):
     """Typed result from Lean compiler verification."""
 
     verified: bool
     errors: str | None = None
     output: str | None = None
+
 
 class ProofVerificationCriterion(Criterion):
     """Criterion that verifies Lean formal proofs via sandbox compilation.
@@ -94,7 +96,7 @@ class ProofVerificationCriterion(Criterion):
 
     def _extract_proof(self, context: EvaluationContext) -> ExtractedProof:
         """Extract proof code from worker result artifacts."""
-        artifacts: dict[str, Any] = context.worker_result.artifacts  # slopcop: ignore[no-typing-any]
+        artifacts: dict[str, object] = context.worker_result.artifacts
 
         proof_code = artifacts.get("final_solution.lean")
         if proof_code is not None:
@@ -121,8 +123,7 @@ class ProofVerificationCriterion(Criterion):
             )
 
         raise ValueError(
-            "No 'final_solution.lean' found in worker artifacts and no "
-            "proof code in worker output."
+            "No 'final_solution.lean' found in worker artifacts and no proof code in worker output."
         )
 
     async def _verify_proof(

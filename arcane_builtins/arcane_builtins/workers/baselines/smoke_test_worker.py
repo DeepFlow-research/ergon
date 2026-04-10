@@ -5,12 +5,11 @@ round-trip works by writing a known file that the SandboxFileCheckCriterion
 can later verify.
 """
 
-import asyncio
-
 from h_arcane.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
 
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"
+
 
 class SmokeTestWorker(Worker):
     type_slug = "smoke-test-worker"
