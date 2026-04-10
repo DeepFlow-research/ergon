@@ -1,0 +1,27 @@
+[project]
+name = "arcane-infra"
+version = "0.1.0"
+description = "Infrastructure and training orchestration for Arcane"
+requires-python = ">=3.13"
+dependencies = ["h-arcane", "pydantic>=2"]
+
+[project.optional-dependencies]
+training = [
+    "trl[vllm]>=1.0.0,<2.0.0",
+    "datasets",
+    "transformers",
+]
+skypilot = [
+    "skypilot-nightly[shadeform]",
+]
+all = [
+    "arcane-infra[training,skypilot]",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["arcane_infra*"]
