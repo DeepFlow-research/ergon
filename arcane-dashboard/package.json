@@ -26,6 +26,7 @@
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18",
+    "recharts": "^3.8.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "zod": "4.3.6"
