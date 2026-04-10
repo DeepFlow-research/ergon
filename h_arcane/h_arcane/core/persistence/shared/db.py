@@ -1,24 +1,38 @@
-"""Database connection and session management."""
+"""Database connection and session management.
 
+Schema is managed by Alembic — see ``h_arcane/migrations/``.
+Call ``ensure_db()`` once per process to apply pending migrations.
+"""
+
+import logging
 from functools import lru_cache
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import Engine
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, create_engine
 
 from h_arcane.core.settings import Settings
+
+logger = logging.getLogger(__name__)
+
+_H_ARCANE_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+_ALEMBIC_INI = _H_ARCANE_ROOT / "alembic.ini"
 
 
 @lru_cache(maxsize=1)
 def get_engine() -> Engine:
-    # Instantiate Settings here (not the module singleton) so the URL reflects env
-    # vars set after import (e.g. integration tests' __main__ blocks).
     url = Settings().database_url
-    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    return create_engine(url, connect_args=connect_args)
+    return create_engine(url)
 
 
-def create_all_tables() -> None:
-    SQLModel.metadata.create_all(get_engine())
+def ensure_db() -> None:
+    """Run Alembic migrations to head (idempotent)."""
+    cfg = Config(str(_ALEMBIC_INI))
+    cfg.set_main_option("script_location", str(_H_ARCANE_ROOT / "migrations"))
+    command.upgrade(cfg, "head")
+    logger.debug("Database migrated to head")
 
 
 def get_session() -> Session:

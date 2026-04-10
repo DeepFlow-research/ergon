@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-from typing import Literal
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,12 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = Field(
-        default="sqlite:///arcane.db",
+        default="postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane",
         validation_alias=AliasChoices("ARCANE_DATABASE_URL", "DATABASE_URL"),
-    )
-    database_url_test: str = Field(
-        default="postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test",
-        validation_alias=AliasChoices("ARCANE_DATABASE_URL_TEST", "DATABASE_URL_TEST"),
     )
 
     openai_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
@@ -57,13 +52,12 @@ class Settings(BaseSettings):
     def runs_dir(self) -> Path:
         return self.data_dir / "runs"
 
-    def get_database_url(self, target: Literal["main", "test"] = "main") -> str:
-        if target == "test":
-            return self.database_url_test
-        return self.database_url
-
     def missing_values(self, names: list[str]) -> list[str]:
-        return [name for name in names if not getattr(self, name, "")]  # slopcop: ignore[no-hasattr-getattr]
+        return [
+            name
+            for name in names
+            if not getattr(self, name, "")  # slopcop: ignore[no-hasattr-getattr]
+        ]
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent.parent.parent / ".env"),
