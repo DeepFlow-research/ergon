@@ -14,6 +14,7 @@ from h_arcane.core.runtime.events.base import InngestEventContract
 # Nested models used inside workflow.started
 # ---------------------------------------------------------------------------
 
+
 class TaskTreeNode(InngestEventContract):
     """Recursive task tree node embedded in workflow.started."""
 
@@ -39,6 +40,7 @@ TaskTreeNode.model_rebuild()
 # Workflow-level events
 # ---------------------------------------------------------------------------
 
+
 class DashboardWorkflowStartedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/workflow.started"
 
@@ -50,6 +52,7 @@ class DashboardWorkflowStartedEvent(InngestEventContract):
     total_tasks: int
     total_leaf_tasks: int
 
+
 class DashboardWorkflowCompletedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/workflow.completed"
 
@@ -60,9 +63,11 @@ class DashboardWorkflowCompletedEvent(InngestEventContract):
     final_score: float | None = None
     error: str | None = None
 
+
 # ---------------------------------------------------------------------------
 # Task-level events
 # ---------------------------------------------------------------------------
+
 
 class DashboardTaskStatusChangedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/task.status_changed"
@@ -78,6 +83,7 @@ class DashboardTaskStatusChangedEvent(InngestEventContract):
     assigned_worker_id: UUID | None = None
     assigned_worker_name: str | None = None
 
+
 class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
     """Embeds the full RunTaskEvaluationDto (camelCase) as `evaluation`."""
 
@@ -87,9 +93,11 @@ class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
     task_id: UUID | None = None
     evaluation: dict[str, Any]  # slopcop: ignore[no-typing-any]
 
+
 # ---------------------------------------------------------------------------
 # Agent action events
 # ---------------------------------------------------------------------------
+
 
 class DashboardAgentActionStartedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/agent.action_started"
@@ -102,6 +110,7 @@ class DashboardAgentActionStartedEvent(InngestEventContract):
     action_type: str
     action_input: str
     timestamp: datetime
+
 
 class DashboardAgentActionCompletedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/agent.action_completed"
@@ -117,9 +126,11 @@ class DashboardAgentActionCompletedEvent(InngestEventContract):
     error: str | None = None
     timestamp: datetime
 
+
 # ---------------------------------------------------------------------------
 # Resource events
 # ---------------------------------------------------------------------------
+
 
 class DashboardResourcePublishedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/resource.published"
@@ -134,9 +145,11 @@ class DashboardResourcePublishedEvent(InngestEventContract):
     file_path: str
     timestamp: datetime
 
+
 # ---------------------------------------------------------------------------
 # Sandbox events
 # ---------------------------------------------------------------------------
+
 
 class DashboardSandboxCreatedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/sandbox.created"
@@ -147,6 +160,7 @@ class DashboardSandboxCreatedEvent(InngestEventContract):
     template: str | None = None
     timeout_minutes: int
     timestamp: datetime
+
 
 class DashboardSandboxCommandEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/sandbox.command"
@@ -160,6 +174,7 @@ class DashboardSandboxCommandEvent(InngestEventContract):
     duration_ms: int | None = None
     timestamp: datetime
 
+
 class DashboardSandboxClosedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/sandbox.closed"
 
@@ -168,9 +183,11 @@ class DashboardSandboxClosedEvent(InngestEventContract):
     reason: str
     timestamp: datetime
 
+
 # ---------------------------------------------------------------------------
 # Thread / messaging events
 # ---------------------------------------------------------------------------
+
 
 class DashboardThreadMessageCreatedEvent(InngestEventContract):
     """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto (camelCase)."""
@@ -181,9 +198,11 @@ class DashboardThreadMessageCreatedEvent(InngestEventContract):
     thread: dict[str, Any]  # slopcop: ignore[no-typing-any]
     message: dict[str, Any]  # slopcop: ignore[no-typing-any]
 
+
 # ---------------------------------------------------------------------------
 # Cohort events
 # ---------------------------------------------------------------------------
+
 
 class CohortUpdatedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/cohort.updated"
@@ -191,9 +210,11 @@ class CohortUpdatedEvent(InngestEventContract):
     cohort_id: UUID
     summary: dict[str, Any]  # slopcop: ignore[no-typing-any]
 
+
 # ---------------------------------------------------------------------------
 # Generation turn events (RL observability)
 # ---------------------------------------------------------------------------
+
 
 class DashboardGenerationTurnEvent(InngestEventContract):
     """Emitted after each model generation turn for live dashboard streaming.

@@ -12,6 +12,7 @@ from h_arcane.core.persistence.telemetry.models import (
 from h_arcane.core.utils import utcnow
 from sqlmodel import select
 
+
 class ExperimentCohortStatsService:
     """Recompute denormalized cohort stats from cohort-scoped runs."""
 
@@ -19,15 +20,12 @@ class ExperimentCohortStatsService:
         """Recompute and persist aggregate stats for one cohort."""
         with get_session() as session:
             runs = list(
-                session.exec(
-                    select(RunRecord).where(RunRecord.cohort_id == cohort_id)
-                ).all()
+                session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort_id)).all()
             )
             status_counts = Counter(run.status for run in runs)
 
             scored_values: list[float] = [
-                s for s in (self._score_value(run) for run in runs)
-                if s is not None
+                s for s in (self._score_value(run) for run in runs) if s is not None
             ]
 
             durations_ms = [
@@ -40,9 +38,7 @@ class ExperimentCohortStatsService:
             failed_runs = status_counts.get(RunStatus.FAILED, 0)
 
             existing = session.exec(
-                select(ExperimentCohortStats).where(
-                    ExperimentCohortStats.cohort_id == cohort_id
-                )
+                select(ExperimentCohortStats).where(ExperimentCohortStats.cohort_id == cohort_id)
             ).first()
 
             now = utcnow()
@@ -95,5 +91,6 @@ class ExperimentCohortStatsService:
         if final is not None:
             return float(final)
         return None
+
 
 experiment_cohort_stats_service = ExperimentCohortStatsService()

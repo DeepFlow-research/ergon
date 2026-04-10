@@ -16,6 +16,7 @@ from h_arcane.api.task_types import BenchmarkTask
 
 from arcane_builtins.benchmarks.minif2f.criteria import build_proof_criterion
 
+
 class MiniF2FRubric(Rubric):
     """Rubric for formal proof verification with partial-credit for valid syntax."""
 

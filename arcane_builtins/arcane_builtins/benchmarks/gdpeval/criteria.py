@@ -10,6 +10,7 @@ from arcane_builtins.evaluators.criteria.llm_judge import LLMJudgeCriterion
 
 GDPEvalCriterion = CodeCheckCriterion | LLMJudgeCriterion
 
+
 def make_code_check(
     name: str,
     code_template: str,
@@ -26,6 +27,7 @@ def make_code_check(
         weight=weight,
         max_score=max_score,
     )
+
 
 def make_llm_judge(
     name: str,
@@ -46,9 +48,11 @@ def make_llm_judge(
         model=model,
     )
 
+
 # ---------------------------------------------------------------------------
 # Common GDP criterion presets
 # ---------------------------------------------------------------------------
+
 
 def output_file_exists(
     file_pattern: str = "*.docx",
@@ -68,6 +72,7 @@ def output_file_exists(
         weight=weight,
         max_score=max_score,
     )
+
 
 def content_quality_judge(
     aspect: str = "completeness",

@@ -19,6 +19,7 @@ from h_arcane.api.task_types import BenchmarkTask
 from arcane_builtins.benchmarks.researchrubrics.criteria import build_criteria_from_rubrics
 from arcane_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
 
+
 class ResearchRubricsRubric(Rubric):
     """Rubric for weighted criteria evaluation with positive and negative weights.
 
@@ -72,9 +73,7 @@ class ResearchRubricsRubric(Rubric):
                 min_possible += weight
 
         score_range = max_possible - min_possible
-        normalized_score = (
-            (total_score - min_possible) / score_range if score_range > 0 else 0.0
-        )
+        normalized_score = (total_score - min_possible) / score_range if score_range > 0 else 0.0
 
         return TaskEvaluationResult(
             task_key=task.task_key,

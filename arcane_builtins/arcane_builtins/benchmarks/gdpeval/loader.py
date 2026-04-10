@@ -13,6 +13,7 @@ from typing import Any
 # Parquet helpers
 # ---------------------------------------------------------------------------
 
+
 @functools.lru_cache(maxsize=4)
 def _load_parquet(parquet_path: str) -> Any:  # slopcop: ignore[no-typing-any]
     """Load and cache a parquet file.  Returns a ``pandas.DataFrame``."""
@@ -26,6 +27,7 @@ def _load_parquet(parquet_path: str) -> Any:  # slopcop: ignore[no-typing-any]
             "Copy data from the curation pipeline into your data directory."
         )
     return pd.read_parquet(path)
+
 
 def extract_task_description(
     task_id: str,
@@ -41,9 +43,11 @@ def extract_task_description(
         raise ValueError(f"Task {task_id!r} not found in {parquet_path}")
     return str(row.iloc[0]["prompt"])
 
+
 # ---------------------------------------------------------------------------
 # Reference files
 # ---------------------------------------------------------------------------
+
 
 def find_reference_files(task_id: str, reference_dir: Path) -> list[Path]:
     """Locate reference / input files for *task_id*.
@@ -67,9 +71,11 @@ def find_reference_files(task_id: str, reference_dir: Path) -> list[Path]:
 
     return sorted(files)
 
+
 # ---------------------------------------------------------------------------
 # Rubric JSONL helpers
 # ---------------------------------------------------------------------------
+
 
 def load_task_ids(
     rubric_file: Path,
@@ -95,6 +101,7 @@ def load_task_ids(
             ids.append(data["task_id"])
     return ids
 
+
 def load_rubric_data(
     rubric_file: Path,
 ) -> dict[str, dict]:
@@ -108,6 +115,7 @@ def load_rubric_data(
             data = json.loads(line)
             rubrics[data["task_id"]] = data
     return rubrics
+
 
 def load_single_rubric(
     task_id: str,

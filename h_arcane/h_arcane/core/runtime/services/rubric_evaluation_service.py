@@ -49,12 +49,10 @@ class RubricEvaluationService:
             for i, c in enumerate(criteria)
         ]
 
-        criterion_results: list[CriterionResult] = (
-            await self.criterion_executor.execute_all(
-                task_context=task_context,
-                benchmark_name=benchmark_name,
-                criteria=specs,
-            )
+        criterion_results: list[CriterionResult] = await self.criterion_executor.execute_all(
+            task_context=task_context,
+            benchmark_name=benchmark_name,
+            criteria=specs,
         )
 
         task_result = evaluator.aggregate_task(task, criterion_results)

@@ -166,9 +166,7 @@ class DashboardEmitter:
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
             )
         except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning(
-                "Failed to emit dashboard/task.evaluation_updated", exc_info=True
-            )
+            logger.warning("Failed to emit dashboard/task.evaluation_updated", exc_info=True)
 
     # ------------------------------------------------------------------
     # Agent actions
@@ -201,9 +199,7 @@ class DashboardEmitter:
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
             )
         except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning(
-                "Failed to emit dashboard/agent.action_started", exc_info=True
-            )
+            logger.warning("Failed to emit dashboard/agent.action_started", exc_info=True)
 
     async def agent_action_completed(  # slopcop: ignore[max-function-params]
         self,
@@ -236,9 +232,7 @@ class DashboardEmitter:
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
             )
         except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning(
-                "Failed to emit dashboard/agent.action_completed", exc_info=True
-            )
+            logger.warning("Failed to emit dashboard/agent.action_completed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Resources
@@ -273,9 +267,7 @@ class DashboardEmitter:
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
             )
         except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning(
-                "Failed to emit dashboard/resource.published", exc_info=True
-            )
+            logger.warning("Failed to emit dashboard/resource.published", exc_info=True)
 
     # ------------------------------------------------------------------
     # Sandbox
@@ -379,9 +371,7 @@ class DashboardEmitter:
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
             )
         except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning(
-                "Failed to emit dashboard/thread.message_created", exc_info=True
-            )
+            logger.warning("Failed to emit dashboard/thread.message_created", exc_info=True)
 
     # ------------------------------------------------------------------
     # Cohort

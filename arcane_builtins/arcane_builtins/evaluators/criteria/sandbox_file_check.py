@@ -9,6 +9,7 @@ from h_arcane.api import Criterion, CriterionResult, EvaluationContext
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"
 
+
 class SandboxFileCheckCriterion(Criterion):
     type_slug = "sandbox-file-check"
 

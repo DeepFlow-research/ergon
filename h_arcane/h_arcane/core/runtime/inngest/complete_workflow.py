@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
     output_type=WorkflowCompleteResult,
 )
 async def complete_workflow_fn(ctx: inngest.Context) -> WorkflowCompleteResult:
-    payload = WorkflowCompletedEvent(**ctx.event.data)
+    payload = WorkflowCompletedEvent.model_validate(ctx.event.data)
     logger.info("workflow-complete run_id=%s", payload.run_id)
     span_start = datetime.now(UTC)
 
@@ -66,37 +66,41 @@ async def complete_workflow_fn(ctx: inngest.Context) -> WorkflowCompleteResult:
     )
 
     sink = get_trace_sink()
-    sink.emit_span(CompletedSpan(
-        name="workflow.complete",
-        context=workflow_complete_context(payload.run_id),
-        start_time=span_start,
-        end_time=datetime.now(UTC),
-        attributes={
-            "run_id": str(payload.run_id),
-            "definition_id": str(payload.definition_id),
-            "final_score": finalized.final_score,
-            "normalized_score": finalized.normalized_score,
-            "evaluators_count": finalized.evaluators_count,
-        },
-    ))
+    sink.emit_span(
+        CompletedSpan(
+            name="workflow.complete",
+            context=workflow_complete_context(payload.run_id),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            attributes={
+                "run_id": str(payload.run_id),
+                "definition_id": str(payload.definition_id),
+                "final_score": finalized.final_score,
+                "normalized_score": finalized.normalized_score,
+                "evaluators_count": finalized.evaluators_count,
+            },
+        )
+    )
 
     with get_session() as session:
         run = session.get(RunRecord, payload.run_id)
         if run and run.started_at and run.completed_at:
-            sink.emit_span(CompletedSpan(
-                name="workflow.execute",
-                context=workflow_root_context(payload.run_id),
-                start_time=run.started_at,
-                end_time=run.completed_at,
-                attributes={
-                    "run_id": str(payload.run_id),
-                    "definition_id": str(payload.definition_id),
-                    "cohort_id": str(run.cohort_id) if run.cohort_id else "",
-                    "status": run.status,
-                    "final_score": finalized.final_score,
-                    "normalized_score": finalized.normalized_score,
-                },
-            ))
+            sink.emit_span(
+                CompletedSpan(
+                    name="workflow.execute",
+                    context=workflow_root_context(payload.run_id),
+                    start_time=run.started_at,
+                    end_time=run.completed_at,
+                    attributes={
+                        "run_id": str(payload.run_id),
+                        "definition_id": str(payload.definition_id),
+                        "cohort_id": str(run.cohort_id) if run.cohort_id else "",
+                        "status": run.status,
+                        "final_score": finalized.final_score,
+                        "normalized_score": finalized.normalized_score,
+                    },
+                )
+            )
 
     logger.info(
         "workflow-complete done: score=%s normalized=%s evaluators=%d",

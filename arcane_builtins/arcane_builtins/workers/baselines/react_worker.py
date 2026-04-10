@@ -99,25 +99,17 @@ class ReActWorker(Worker):
                 if isinstance(result.output, _AgentOutput)
                 else str(result.output)
             )
-            reasoning = (
-                result.output.reasoning
-                if isinstance(result.output, _AgentOutput)
-                else None
-            )
+            reasoning = result.output.reasoning if isinstance(result.output, _AgentOutput) else None
 
         except Exception as exc:  # slopcop: ignore[no-broad-except]
-            elapsed_ms = int(
-                (datetime.now(timezone.utc) - started_at).total_seconds() * 1000
-            )
+            elapsed_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
             return WorkerResult(
                 output=f"Agent execution failed: {exc}",
                 success=False,
                 metadata={"error": str(exc), "elapsed_ms": elapsed_ms},
             )
 
-        elapsed_ms = int(
-            (datetime.now(timezone.utc) - started_at).total_seconds() * 1000
-        )
+        elapsed_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
 
         return WorkerResult(
             output=output_text,
@@ -200,15 +192,19 @@ def _make_json_safe(obj: Any) -> Any:  # slopcop: ignore[no-typing-any]
     return obj
 
 
-def _extract_tool_results(request: ModelRequest) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
+def _extract_tool_results(
+    request: ModelRequest,
+) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
     results: list[dict[str, Any]] = []  # slopcop: ignore[no-typing-any]
     for part in request.parts:
         if isinstance(part, ToolReturnPart):
             content = part.content
             serialized = content if isinstance(content, str) else json.dumps(content, default=str)
-            results.append({
-                "tool_call_id": part.tool_call_id,
-                "tool_name": part.tool_name,
-                "result": serialized,
-            })
+            results.append(
+                {
+                    "tool_call_id": part.tool_call_id,
+                    "tool_name": part.tool_name,
+                    "result": serialized,
+                }
+            )
     return results

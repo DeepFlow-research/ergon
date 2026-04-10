@@ -7,6 +7,7 @@ from h_arcane.api import Rubric
 
 from arcane_builtins.evaluators.criteria.stub_criterion import StubCriterion
 
+
 class StubRubric(Rubric):
     type_slug = "stub-rubric"
 

@@ -23,9 +23,7 @@ class PollTimeoutError(Exception):
     def __init__(self, run_ids: list[UUID], elapsed_s: float):
         self.run_ids = run_ids
         self.elapsed_s = elapsed_s
-        super().__init__(
-            f"Timed out waiting for {len(run_ids)} run(s) after {elapsed_s:.1f}s"
-        )
+        super().__init__(f"Timed out waiting for {len(run_ids)} run(s) after {elapsed_s:.1f}s")
 
 
 def poll_until_all_complete(
@@ -62,8 +60,7 @@ def poll_until_all_complete(
         with session_factory() as session:
             rows = list(
                 session.exec(
-                    select(RunRecord)
-                    .where(RunRecord.id.in_(list(remaining)))  # type: ignore[union-attr]
+                    select(RunRecord).where(RunRecord.id.in_(list(remaining)))  # type: ignore[union-attr]
                 ).all()
             )
             for run in rows:

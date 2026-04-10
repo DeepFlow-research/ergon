@@ -13,11 +13,13 @@ from pydantic import BaseModel, Field
 
 T = TypeVar("T", bound=BaseModel)
 
+
 class LLMJudgeResponse(BaseModel):
     """Default structured response from an LLM judge call."""
 
     reasoning: str = Field(description="Detailed reasoning for the verdict")
     final_verdict: bool = Field(description="Pass/fail determination")
+
 
 async def call_llm_judge(
     messages: list[dict[str, Any]],  # slopcop: ignore[no-typing-any]

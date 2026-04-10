@@ -29,21 +29,15 @@ class TelemetryRepository:
     def get_run(self, session: Session, run_id: UUID) -> RunRecord | None:
         return session.get(RunRecord, run_id)
 
-    def get_task_executions(
-        self, session: Session, run_id: UUID
-    ) -> list[RunTaskExecution]:
+    def get_task_executions(self, session: Session, run_id: UUID) -> list[RunTaskExecution]:
         stmt = select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
         return list(session.exec(stmt).all())
 
-    def get_task_evaluations(
-        self, session: Session, run_id: UUID
-    ) -> list[RunTaskEvaluation]:
+    def get_task_evaluations(self, session: Session, run_id: UUID) -> list[RunTaskEvaluation]:
         stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
         return list(session.exec(stmt).all())
 
-    def get_state_events(
-        self, session: Session, run_id: UUID
-    ) -> list[RunTaskStateEvent]:
+    def get_state_events(self, session: Session, run_id: UUID) -> list[RunTaskStateEvent]:
         stmt = select(RunTaskStateEvent).where(RunTaskStateEvent.run_id == run_id)
         return list(session.exec(stmt).all())
 
@@ -113,9 +107,7 @@ class TelemetryRepository:
         if execution is None:
             raise ValueError(f"RunTaskExecution {execution_id} not found")
 
-        execution.status = (
-            TaskExecutionStatus.COMPLETED if success else TaskExecutionStatus.FAILED
-        )
+        execution.status = TaskExecutionStatus.COMPLETED if success else TaskExecutionStatus.FAILED
         execution.completed_at = _utcnow()
         if output_text is not None:
             execution.output_text = output_text
@@ -275,9 +267,7 @@ class GenerationTurnRepository:
                 tool_results_json=turn.tool_results or None,
                 token_ids_json=None,  # populated by RL extraction via re-tokenization
                 logprobs_json=(
-                    [lp.model_dump() for lp in turn.logprobs]
-                    if turn.logprobs
-                    else None
+                    [lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None
                 ),
                 policy_version=turn.policy_version,
             )
@@ -290,9 +280,7 @@ class GenerationTurnRepository:
     # Reads
     # ------------------------------------------------------------------
 
-    def get_for_execution(
-        self, session: Session, execution_id: UUID
-    ) -> list[RunGenerationTurn]:
+    def get_for_execution(self, session: Session, execution_id: UUID) -> list[RunGenerationTurn]:
         stmt = (
             select(RunGenerationTurn)
             .where(RunGenerationTurn.task_execution_id == execution_id)
@@ -300,9 +288,7 @@ class GenerationTurnRepository:
         )
         return list(session.exec(stmt).all())
 
-    def get_for_run(
-        self, session: Session, run_id: UUID
-    ) -> list[RunGenerationTurn]:
+    def get_for_run(self, session: Session, run_id: UUID) -> list[RunGenerationTurn]:
         stmt = (
             select(RunGenerationTurn)
             .where(RunGenerationTurn.run_id == run_id)
@@ -312,5 +298,3 @@ class GenerationTurnRepository:
             )
         )
         return list(session.exec(stmt).all())
-
-

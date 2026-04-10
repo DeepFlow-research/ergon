@@ -15,6 +15,7 @@ from arcane_builtins.benchmarks.researchrubrics.task_schemas import (
     RubricCriterion,
 )
 
+
 class ResearchRubricsBenchmark(Benchmark):
     """Benchmark backed by the ResearchRubrics HuggingFace dataset.
 
@@ -89,6 +90,7 @@ class ResearchRubricsBenchmark(Benchmark):
         """
         # Deferred: optional dependency
         from datasets import load_dataset
+
         # Deferred: optional dependency
         from huggingface_hub import HfApi
 

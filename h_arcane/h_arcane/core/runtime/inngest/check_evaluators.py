@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
     output_type=EvaluatorsResult,
 )
 async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
-    payload = TaskCompletedEvent(**ctx.event.data)
+    payload = TaskCompletedEvent.model_validate(ctx.event.data)
 
     dispatch_service = EvaluatorDispatchService()
     dispatch = dispatch_service.prepare_dispatch(
@@ -76,7 +76,7 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
                 evaluator_type=evaluator_payload.evaluator_type,
                 agent_reasoning=evaluator_payload.agent_reasoning,
                 sandbox_id=payload.sandbox_id,
-            ).model_dump(mode="json"),
+            ).model_dump(),
         )
         scores.append(result.score)
 
@@ -100,5 +100,6 @@ async def _terminate_sandbox(sandbox_id: str) -> None:
     except Exception:  # slopcop: ignore[no-broad-except]
         logger.error(
             "Failed to terminate sandbox %s — potential sandbox leak",
-            sandbox_id, exc_info=True,
+            sandbox_id,
+            exc_info=True,
         )

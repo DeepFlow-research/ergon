@@ -9,6 +9,7 @@ from h_arcane.api.criterion import Criterion
 from h_arcane.api.evaluation_context import EvaluationContext
 from h_arcane.api.results import CriterionResult, WorkerResult
 
+
 class TraceCheckCriterion(Criterion):
     """Checks that expected action types appear in the worker's execution trace.
 

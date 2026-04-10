@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 # Stage model
 # ---------------------------------------------------------------------------
 
+
 class EvaluationStage(BaseModel):
     """Sequential stage in the evaluation pipeline.
 
@@ -86,9 +87,11 @@ class EvaluationStage(BaseModel):
             )
         return self
 
+
 # ---------------------------------------------------------------------------
 # Staged rubric
 # ---------------------------------------------------------------------------
+
 
 class StagedRubric(Rubric):
     """Rubric with sequential evaluation stages and gating logic.
@@ -209,9 +212,7 @@ class StagedRubric(Rubric):
 
     # -- internal helpers ---------------------------------------------------
 
-    def _rebuild_stage_results(
-        self, criterion_results: list[CriterionResult]
-    ) -> list[dict]:
+    def _rebuild_stage_results(self, criterion_results: list[CriterionResult]) -> list[dict]:
         stage_results: list[dict] = []
         for stage_idx, stage in enumerate(self.stages):
             stage_criteria = [

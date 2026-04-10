@@ -10,6 +10,7 @@ from h_arcane.api.evaluator import Rubric
 
 from arcane_builtins.evaluators.criteria.sandbox_file_check import SandboxFileCheckCriterion
 
+
 class SmokeTestRubric(Rubric):
     """Rubric that checks the smoke-test worker wrote its marker file."""
 

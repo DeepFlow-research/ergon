@@ -55,21 +55,25 @@ def _build_synthetic_turns(task_key: str) -> list[GenerationTurn]:
 
         tool_results: list[dict] = []
         if i < num_turns - 1:
-            tool_results = [{
-                "tool_call_id": f"call_{i}",
-                "tool_name": "stub_tool",
-                "result": f"Tool result for turn {i} of {task_key}",
-            }]
+            tool_results = [
+                {
+                    "tool_call_id": f"call_{i}",
+                    "tool_name": "stub_tool",
+                    "result": f"Tool result for turn {i} of {task_key}",
+                }
+            ]
 
-        turns.append(GenerationTurn(
-            raw_request={"messages": [{"role": "user", "content": f"Turn {i} prompt"}]},
-            raw_response={
-                "parts": [{"part_kind": "text", "content": f"Synthetic response turn {i}"}],
-                "provider_details": {"logprobs": [lp.model_dump() for lp in logprobs]},
-            },
-            tool_results=tool_results,
-            logprobs=logprobs,
-            policy_version="synthetic-v0",
-        ))
+        turns.append(
+            GenerationTurn(
+                raw_request={"messages": [{"role": "user", "content": f"Turn {i} prompt"}]},
+                raw_response={
+                    "parts": [{"part_kind": "text", "content": f"Synthetic response turn {i}"}],
+                    "provider_details": {"logprobs": [lp.model_dump() for lp in logprobs]},
+                },
+                tool_results=tool_results,
+                logprobs=logprobs,
+                policy_version="synthetic-v0",
+            )
+        )
 
     return turns

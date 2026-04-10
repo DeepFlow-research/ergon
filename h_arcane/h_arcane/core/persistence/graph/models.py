@@ -25,6 +25,7 @@ TZDateTime = DateTime(timezone=True)
 # RunGraphNode
 # ---------------------------------------------------------------------------
 
+
 class RunGraphNode(SQLModel, table=True):
     __tablename__ = "run_graph_nodes"
 
@@ -56,6 +57,7 @@ class RunGraphNode(SQLModel, table=True):
 # RunGraphEdge
 # ---------------------------------------------------------------------------
 
+
 class RunGraphEdge(SQLModel, table=True):
     __tablename__ = "run_graph_edges"
 
@@ -66,10 +68,12 @@ class RunGraphEdge(SQLModel, table=True):
         foreign_key="experiment_definition_task_dependencies.id",
     )
     source_node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id", index=True,
+        foreign_key="run_graph_nodes.id",
+        index=True,
     )
     target_node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id", index=True,
+        foreign_key="run_graph_nodes.id",
+        index=True,
     )
     status: str = Field(index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
@@ -79,6 +83,7 @@ class RunGraphEdge(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 # RunGraphAnnotation
 # ---------------------------------------------------------------------------
+
 
 class RunGraphAnnotation(SQLModel, table=True):
     """Append-only annotation WAL. Each set_annotation() inserts a new row.
@@ -92,7 +97,11 @@ class RunGraphAnnotation(SQLModel, table=True):
     __table_args__ = (
         Index(
             "ix_annotation_lookup",
-            "run_id", "target_type", "target_id", "namespace", "sequence",
+            "run_id",
+            "target_type",
+            "target_id",
+            "namespace",
+            "sequence",
         ),
     )
 
@@ -123,6 +132,7 @@ class RunGraphAnnotation(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 # RunGraphMutation
 # ---------------------------------------------------------------------------
+
 
 class RunGraphMutation(SQLModel, table=True):
     __tablename__ = "run_graph_mutations"

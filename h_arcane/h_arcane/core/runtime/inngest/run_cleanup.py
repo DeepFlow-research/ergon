@@ -34,7 +34,7 @@ _STATUS_MAP: dict[str, RunStatus] = {
 )
 async def run_cleanup_fn(ctx: inngest.Context) -> RunCleanupResult:
     """Cleanup: terminate sandbox, ensure run status is correct."""
-    payload = RunCleanupEvent(**ctx.event.data)
+    payload = RunCleanupEvent.model_validate(ctx.event.data)
     run_id = payload.run_id
     status = payload.status
     error_message = payload.error_message
@@ -48,9 +48,7 @@ async def run_cleanup_fn(ctx: inngest.Context) -> RunCleanupResult:
     )
 
 
-async def _cleanup_run(
-    run_id: UUID, status: str, error_message: str | None
-) -> RunCleanupResult:
+async def _cleanup_run(run_id: UUID, status: str, error_message: str | None) -> RunCleanupResult:
     """Terminate sandbox and update run status."""
     expected = _STATUS_MAP.get(status)
     if expected is None:
@@ -69,13 +67,12 @@ async def _cleanup_run(
         sandbox_terminated = False
 
         if sandbox_id and isinstance(sandbox_id, str):
-            sandbox_terminated = (
-                await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
-            )
+            sandbox_terminated = await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
         elif sandbox_id is not None:
             logger.warning(
                 "run-cleanup run_id=%s: sandbox_id has unexpected type %s, skipping termination",
-                run_id, type(sandbox_id).__name__,
+                run_id,
+                type(sandbox_id).__name__,
             )
 
         if run.status != expected:

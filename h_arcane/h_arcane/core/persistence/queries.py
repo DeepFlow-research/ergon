@@ -37,6 +37,7 @@ T = TypeVar("T", bound=SQLModel)
 # Base
 # ---------------------------------------------------------------------------
 
+
 class BaseQueries(Generic[T]):
     """Base query class with common CRUD operations."""
 
@@ -77,9 +78,11 @@ class BaseQueries(Generic[T]):
                 stmt = stmt.limit(limit)
             return list(session.exec(stmt).all())
 
+
 # ---------------------------------------------------------------------------
 # Runs
 # ---------------------------------------------------------------------------
+
 
 class RunsQueries(BaseQueries[RunRecord]):
     def __init__(self) -> None:
@@ -101,24 +104,20 @@ class RunsQueries(BaseQueries[RunRecord]):
 
     def get_recent(self, limit: int = 10) -> list[RunRecord]:
         with get_session() as session:
-            stmt = (
-                select(RunRecord)
-                .order_by(desc(RunRecord.created_at))
-                .limit(limit)
-            )
+            stmt = select(RunRecord).order_by(desc(RunRecord.created_at)).limit(limit)
             return list(session.exec(stmt).all())
+
 
 # ---------------------------------------------------------------------------
 # Definitions
 # ---------------------------------------------------------------------------
 
+
 class DefinitionsQueries(BaseQueries[ExperimentDefinition]):
     def __init__(self) -> None:
         super().__init__(ExperimentDefinition)
 
-    def get_by_benchmark_type(
-        self, benchmark_type: str
-    ) -> list[ExperimentDefinition]:
+    def get_by_benchmark_type(self, benchmark_type: str) -> list[ExperimentDefinition]:
         with get_session() as session:
             stmt = select(ExperimentDefinition).where(
                 ExperimentDefinition.benchmark_type == benchmark_type
@@ -132,18 +131,14 @@ class DefinitionsQueries(BaseQueries[ExperimentDefinition]):
             )
             return list(session.exec(stmt).all())
 
-    def get_evaluators(
-        self, definition_id: UUID
-    ) -> list[ExperimentDefinitionEvaluator]:
+    def get_evaluators(self, definition_id: UUID) -> list[ExperimentDefinitionEvaluator]:
         with get_session() as session:
             stmt = select(ExperimentDefinitionEvaluator).where(
                 ExperimentDefinitionEvaluator.experiment_definition_id == definition_id
             )
             return list(session.exec(stmt).all())
 
-    def get_instances(
-        self, definition_id: UUID
-    ) -> list[ExperimentDefinitionInstance]:
+    def get_instances(self, definition_id: UUID) -> list[ExperimentDefinitionInstance]:
         with get_session() as session:
             stmt = select(ExperimentDefinitionInstance).where(
                 ExperimentDefinitionInstance.experiment_definition_id == definition_id
@@ -162,34 +157,29 @@ class DefinitionsQueries(BaseQueries[ExperimentDefinition]):
     ) -> list[ExperimentDefinitionTaskDependency]:
         with get_session() as session:
             stmt = select(ExperimentDefinitionTaskDependency).where(
-                ExperimentDefinitionTaskDependency.experiment_definition_id
-                == definition_id
+                ExperimentDefinitionTaskDependency.experiment_definition_id == definition_id
             )
             return list(session.exec(stmt).all())
 
-    def get_task_assignments(
-        self, definition_id: UUID
-    ) -> list[ExperimentDefinitionTaskAssignment]:
+    def get_task_assignments(self, definition_id: UUID) -> list[ExperimentDefinitionTaskAssignment]:
         with get_session() as session:
             stmt = select(ExperimentDefinitionTaskAssignment).where(
-                ExperimentDefinitionTaskAssignment.experiment_definition_id
-                == definition_id
+                ExperimentDefinitionTaskAssignment.experiment_definition_id == definition_id
             )
             return list(session.exec(stmt).all())
 
-    def get_task_evaluators(
-        self, definition_id: UUID
-    ) -> list[ExperimentDefinitionTaskEvaluator]:
+    def get_task_evaluators(self, definition_id: UUID) -> list[ExperimentDefinitionTaskEvaluator]:
         with get_session() as session:
             stmt = select(ExperimentDefinitionTaskEvaluator).where(
-                ExperimentDefinitionTaskEvaluator.experiment_definition_id
-                == definition_id
+                ExperimentDefinitionTaskEvaluator.experiment_definition_id == definition_id
             )
             return list(session.exec(stmt).all())
+
 
 # ---------------------------------------------------------------------------
 # Task Executions
 # ---------------------------------------------------------------------------
+
 
 class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
     def __init__(self) -> None:
@@ -197,14 +187,10 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
 
     def list_by_run(self, run_id: UUID) -> list[RunTaskExecution]:
         with get_session() as session:
-            stmt = select(RunTaskExecution).where(
-                RunTaskExecution.run_id == run_id
-            )
+            stmt = select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
             return list(session.exec(stmt).all())
 
-    def get_by_task(
-        self, run_id: UUID, definition_task_id: UUID
-    ) -> list[RunTaskExecution]:
+    def get_by_task(self, run_id: UUID, definition_task_id: UUID) -> list[RunTaskExecution]:
         with get_session() as session:
             stmt = (
                 select(RunTaskExecution)
@@ -216,9 +202,7 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
             )
             return list(session.exec(stmt).all())
 
-    def get_latest_by_task(
-        self, run_id: UUID, definition_task_id: UUID
-    ) -> RunTaskExecution | None:
+    def get_latest_by_task(self, run_id: UUID, definition_task_id: UUID) -> RunTaskExecution | None:
         with get_session() as session:
             stmt = (
                 select(RunTaskExecution)
@@ -230,13 +214,9 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
             )
             return session.exec(stmt).first()
 
-    def get_by_status(
-        self, status: TaskExecutionStatus | str
-    ) -> list[RunTaskExecution]:
+    def get_by_status(self, status: TaskExecutionStatus | str) -> list[RunTaskExecution]:
         with get_session() as session:
-            stmt = select(RunTaskExecution).where(
-                RunTaskExecution.status == status
-            )
+            stmt = select(RunTaskExecution).where(RunTaskExecution.status == status)
             return list(session.exec(stmt).all())
 
     def update_status(
@@ -257,9 +237,11 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
             session.refresh(existing)
             return existing
 
+
 # ---------------------------------------------------------------------------
 # State Events
 # ---------------------------------------------------------------------------
+
 
 class StateEventsQueries(BaseQueries[RunTaskStateEvent]):
     def __init__(self) -> None:
@@ -274,9 +256,7 @@ class StateEventsQueries(BaseQueries[RunTaskStateEvent]):
             )
             return list(session.exec(stmt).all())
 
-    def get_by_task(
-        self, run_id: UUID, definition_task_id: UUID
-    ) -> list[RunTaskStateEvent]:
+    def get_by_task(self, run_id: UUID, definition_task_id: UUID) -> list[RunTaskStateEvent]:
         with get_session() as session:
             stmt = (
                 select(RunTaskStateEvent)
@@ -288,17 +268,13 @@ class StateEventsQueries(BaseQueries[RunTaskStateEvent]):
             )
             return list(session.exec(stmt).all())
 
-    def get_latest_status(
-        self, run_id: UUID, definition_task_id: UUID
-    ) -> str | None:
+    def get_latest_status(self, run_id: UUID, definition_task_id: UUID) -> str | None:
         events = self.get_by_task(run_id, definition_task_id)
         if not events:
             return None
         return events[-1].new_status
 
-    def get_by_event_type(
-        self, run_id: UUID, event_type: str
-    ) -> list[RunTaskStateEvent]:
+    def get_by_event_type(self, run_id: UUID, event_type: str) -> list[RunTaskStateEvent]:
         with get_session() as session:
             stmt = (
                 select(RunTaskStateEvent)
@@ -310,9 +286,11 @@ class StateEventsQueries(BaseQueries[RunTaskStateEvent]):
             )
             return list(session.exec(stmt).all())
 
+
 # ---------------------------------------------------------------------------
 # Evaluations
 # ---------------------------------------------------------------------------
+
 
 class EvaluationsQueries(BaseQueries[RunTaskEvaluation]):
     def __init__(self) -> None:
@@ -320,14 +298,10 @@ class EvaluationsQueries(BaseQueries[RunTaskEvaluation]):
 
     def list_by_run(self, run_id: UUID) -> list[RunTaskEvaluation]:
         with get_session() as session:
-            stmt = select(RunTaskEvaluation).where(
-                RunTaskEvaluation.run_id == run_id
-            )
+            stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
             return list(session.exec(stmt).all())
 
-    def get_by_task(
-        self, run_id: UUID, definition_task_id: UUID
-    ) -> list[RunTaskEvaluation]:
+    def get_by_task(self, run_id: UUID, definition_task_id: UUID) -> list[RunTaskEvaluation]:
         with get_session() as session:
             stmt = select(RunTaskEvaluation).where(
                 RunTaskEvaluation.run_id == run_id,
@@ -345,9 +319,11 @@ class EvaluationsQueries(BaseQueries[RunTaskEvaluation]):
             )
             return list(session.exec(stmt).all())
 
+
 # ---------------------------------------------------------------------------
 # Actions
 # ---------------------------------------------------------------------------
+
 
 class ActionsQueries(BaseQueries[RunAction]):
     def __init__(self) -> None:
@@ -356,15 +332,11 @@ class ActionsQueries(BaseQueries[RunAction]):
     def list_by_run(self, run_id: UUID) -> list[RunAction]:
         with get_session() as session:
             stmt = (
-                select(RunAction)
-                .where(RunAction.run_id == run_id)
-                .order_by(RunAction.action_num)
+                select(RunAction).where(RunAction.run_id == run_id).order_by(RunAction.action_num)
             )
             return list(session.exec(stmt).all())
 
-    def list_by_execution(
-        self, task_execution_id: UUID
-    ) -> list[RunAction]:
+    def list_by_execution(self, task_execution_id: UUID) -> list[RunAction]:
         with get_session() as session:
             stmt = (
                 select(RunAction)
@@ -373,9 +345,11 @@ class ActionsQueries(BaseQueries[RunAction]):
             )
             return list(session.exec(stmt).all())
 
+
 # ---------------------------------------------------------------------------
 # Resources
 # ---------------------------------------------------------------------------
+
 
 class ResourcesQueries(BaseQueries[RunResource]):
     def __init__(self) -> None:
@@ -386,18 +360,16 @@ class ResourcesQueries(BaseQueries[RunResource]):
             stmt = select(RunResource).where(RunResource.run_id == run_id)
             return list(session.exec(stmt).all())
 
-    def list_by_execution(
-        self, task_execution_id: UUID
-    ) -> list[RunResource]:
+    def list_by_execution(self, task_execution_id: UUID) -> list[RunResource]:
         with get_session() as session:
-            stmt = select(RunResource).where(
-                RunResource.task_execution_id == task_execution_id
-            )
+            stmt = select(RunResource).where(RunResource.task_execution_id == task_execution_id)
             return list(session.exec(stmt).all())
+
 
 # ---------------------------------------------------------------------------
 # Namespace Singleton
 # ---------------------------------------------------------------------------
+
 
 class Queries:
     """Namespace singleton providing typed query methods for all tables."""
@@ -418,5 +390,6 @@ class Queries:
         self.evaluations = EvaluationsQueries()
         self.actions = ActionsQueries()
         self.resources = ResourcesQueries()
+
 
 queries = Queries()

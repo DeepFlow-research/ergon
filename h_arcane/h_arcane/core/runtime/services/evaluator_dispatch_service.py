@@ -4,7 +4,6 @@ Reads evaluator bindings from definition tables and task execution
 outputs to build PreparedSingleEvaluator payloads.
 """
 
-
 from h_arcane.core.persistence.definitions.models import (
     ExperimentDefinitionEvaluator,
     ExperimentDefinitionTaskEvaluator,
@@ -22,9 +21,7 @@ from sqlmodel import select
 class EvaluatorDispatchService:
     """Prepare evaluation payloads from definition rows + task execution outputs."""
 
-    def prepare_dispatch(
-        self, command: DispatchEvaluatorsCommand
-    ) -> PreparedEvaluatorDispatch:
+    def prepare_dispatch(self, command: DispatchEvaluatorsCommand) -> PreparedEvaluatorDispatch:
         session = get_session()
         try:
             task_evals = list(
@@ -52,8 +49,7 @@ class EvaluatorDispatchService:
                     select(ExperimentDefinitionEvaluator).where(
                         ExperimentDefinitionEvaluator.experiment_definition_id
                         == command.definition_id,
-                        ExperimentDefinitionEvaluator.binding_key
-                        == te.evaluator_binding_key,
+                        ExperimentDefinitionEvaluator.binding_key == te.evaluator_binding_key,
                     )
                 ).first()
 

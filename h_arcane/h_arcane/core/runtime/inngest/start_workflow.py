@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
     output_type=WorkflowStartResult,
 )
 async def start_workflow_fn(ctx: inngest.Context) -> WorkflowStartResult:
-    payload = WorkflowStartedEvent(**ctx.event.data)
+    payload = WorkflowStartedEvent.model_validate(ctx.event.data)
     logger.info("workflow-start run_id=%s definition_id=%s", payload.run_id, payload.definition_id)
     span_start = datetime.now(UTC)
 
@@ -64,18 +64,20 @@ async def start_workflow_fn(ctx: inngest.Context) -> WorkflowStartResult:
         total_tasks=initialized.total_tasks,
     )
 
-    get_trace_sink().emit_span(CompletedSpan(
-        name="workflow.start",
-        context=workflow_start_context(payload.run_id),
-        start_time=span_start,
-        end_time=datetime.now(UTC),
-        attributes={
-            "run_id": str(payload.run_id),
-            "definition_id": str(payload.definition_id),
-            "total_tasks": initialized.total_tasks,
-            "initial_ready_tasks": len(initialized.initial_ready_tasks),
-        },
-    ))
+    get_trace_sink().emit_span(
+        CompletedSpan(
+            name="workflow.start",
+            context=workflow_start_context(payload.run_id),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            attributes={
+                "run_id": str(payload.run_id),
+                "definition_id": str(payload.definition_id),
+                "total_tasks": initialized.total_tasks,
+                "initial_ready_tasks": len(initialized.initial_ready_tasks),
+            },
+        )
+    )
 
     logger.info(
         "workflow-start completed: %d initial tasks of %d total",

@@ -36,9 +36,7 @@ def check_training_connectivity(
     try:
         resp = urllib.request.urlopen(f"{inngest_url}/health", timeout=5)
         if resp.status != 200:
-            warnings.append(
-                f"Inngest health check returned HTTP {resp.status}"
-            )
+            warnings.append(f"Inngest health check returned HTTP {resp.status}")
     except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as e:
         warnings.append(f"Cannot reach Inngest at {inngest_url}: {e}")
 

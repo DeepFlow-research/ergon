@@ -21,6 +21,7 @@ from h_arcane.core.runtime.services.run_service import create_run
 
 logger = logging.getLogger(__name__)
 
+
 class BenchmarkRunRequest(InngestEventContract):
     """CLI sends this to request a full benchmark run."""
 
@@ -31,6 +32,7 @@ class BenchmarkRunRequest(InngestEventContract):
     worker_slug: str = "stub-worker"
     evaluator_slug: str = "stub-rubric"
     cohort_name: str = ""  # slopcop: ignore[no-str-empty-default]
+
 
 @inngest_client.create_function(
     fn_id="benchmark-run-start",
@@ -48,7 +50,7 @@ async def benchmark_run_start_fn(ctx: inngest.Context) -> BenchmarkRunStartResul
     3. Build an ``Experiment``, persist it, create a ``RunRecord``.
     4. Emit ``workflow/started`` so the orchestration pipeline takes over.
     """
-    payload = BenchmarkRunRequest(**ctx.event.data)
+    payload = BenchmarkRunRequest.model_validate(ctx.event.data)
     logger.info(
         "benchmark-run-start: slug=%s model=%s worker=%s evaluator=%s",
         payload.benchmark_slug,

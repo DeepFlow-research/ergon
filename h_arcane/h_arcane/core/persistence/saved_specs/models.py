@@ -14,6 +14,7 @@ from sqlmodel import Field, SQLModel
 # SavedBenchmarkSpec
 # ---------------------------------------------------------------------------
 
+
 class SavedBenchmarkSpec(SQLModel, table=True):
     __tablename__ = "saved_benchmark_specs"
 
@@ -46,6 +47,7 @@ class SavedBenchmarkSpec(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 # SavedWorkerSpec
 # ---------------------------------------------------------------------------
+
 
 class SavedWorkerSpec(SQLModel, table=True):
     __tablename__ = "saved_worker_specs"
@@ -81,6 +83,7 @@ class SavedWorkerSpec(SQLModel, table=True):
 # SavedEvaluatorSpec
 # ---------------------------------------------------------------------------
 
+
 class SavedEvaluatorSpec(SQLModel, table=True):
     __tablename__ = "saved_evaluator_specs"
 
@@ -113,6 +116,7 @@ class SavedEvaluatorSpec(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 # SavedExperimentTemplate
 # ---------------------------------------------------------------------------
+
 
 class SavedExperimentTemplate(SQLModel, table=True):
     __tablename__ = "saved_experiment_templates"

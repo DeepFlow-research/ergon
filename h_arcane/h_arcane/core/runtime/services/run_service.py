@@ -111,9 +111,7 @@ def cancel_run(run_id: UUID) -> RunRecord:
         if run is None:
             raise ValueError(f"Run {run_id} not found")
         if run.status in TERMINAL_RUN_STATUSES:
-            raise ValueError(
-                f"Run {run_id} is already in terminal state: {run.status}"
-            )
+            raise ValueError(f"Run {run_id} is already in terminal state: {run.status}")
 
         run.status = RunStatus.CANCELLED
         run.completed_at = utcnow()

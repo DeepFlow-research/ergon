@@ -19,6 +19,7 @@ TZDateTime = DateTime(timezone=True)
 # ExperimentDefinition
 # ---------------------------------------------------------------------------
 
+
 class ExperimentDefinition(SQLModel, table=True):
     __tablename__ = "experiment_definitions"
 
@@ -49,6 +50,7 @@ class ExperimentDefinition(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 # ExperimentDefinitionWorker
 # ---------------------------------------------------------------------------
+
 
 class ExperimentDefinitionWorker(SQLModel, table=True):
     __tablename__ = "experiment_definition_workers"
@@ -85,6 +87,7 @@ class ExperimentDefinitionWorker(SQLModel, table=True):
 # ExperimentDefinitionEvaluator
 # ---------------------------------------------------------------------------
 
+
 class ExperimentDefinitionEvaluator(SQLModel, table=True):
     __tablename__ = "experiment_definition_evaluators"
 
@@ -119,6 +122,7 @@ class ExperimentDefinitionEvaluator(SQLModel, table=True):
 # ExperimentDefinitionInstance
 # ---------------------------------------------------------------------------
 
+
 class ExperimentDefinitionInstance(SQLModel, table=True):
     __tablename__ = "experiment_definition_instances"
 
@@ -139,9 +143,7 @@ class ExperimentDefinitionInstance(SQLModel, table=True):
     @classmethod
     def _parse_instance_state(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
-            raise ValueError(
-                f"benchmark_instance_state must be a dict, got {type(data).__name__}"
-            )
+            raise ValueError(f"benchmark_instance_state must be a dict, got {type(data).__name__}")
         return data
 
     @model_validator(mode="after")
@@ -153,6 +155,7 @@ class ExperimentDefinitionInstance(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 # ExperimentDefinitionTask
 # ---------------------------------------------------------------------------
+
 
 class ExperimentDefinitionTask(SQLModel, table=True):
     __tablename__ = "experiment_definition_tasks"
@@ -197,6 +200,7 @@ class ExperimentDefinitionTask(SQLModel, table=True):
 # ExperimentDefinitionTaskDependency
 # ---------------------------------------------------------------------------
 
+
 class ExperimentDefinitionTaskDependency(SQLModel, table=True):
     __tablename__ = "experiment_definition_task_dependencies"
 
@@ -220,6 +224,7 @@ class ExperimentDefinitionTaskDependency(SQLModel, table=True):
 # ExperimentDefinitionTaskAssignment
 # ---------------------------------------------------------------------------
 
+
 class ExperimentDefinitionTaskAssignment(SQLModel, table=True):
     __tablename__ = "experiment_definition_task_assignments"
 
@@ -240,6 +245,7 @@ class ExperimentDefinitionTaskAssignment(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 # ExperimentDefinitionTaskEvaluator
 # ---------------------------------------------------------------------------
+
 
 class ExperimentDefinitionTaskEvaluator(SQLModel, table=True):
     __tablename__ = "experiment_definition_task_evaluators"

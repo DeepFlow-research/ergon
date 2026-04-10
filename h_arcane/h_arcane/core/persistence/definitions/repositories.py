@@ -22,9 +22,7 @@ class DefinitionRepository:
     multi-table inserts in a single transaction.
     """
 
-    def get_definition(
-        self, session: Session, definition_id: UUID
-    ) -> ExperimentDefinition | None:
+    def get_definition(self, session: Session, definition_id: UUID) -> ExperimentDefinition | None:
         return session.get(ExperimentDefinition, definition_id)
 
     def get_workers(
@@ -51,9 +49,7 @@ class DefinitionRepository:
         )
         return list(session.exec(stmt).all())
 
-    def get_tasks(
-        self, session: Session, definition_id: UUID
-    ) -> list[ExperimentDefinitionTask]:
+    def get_tasks(self, session: Session, definition_id: UUID) -> list[ExperimentDefinitionTask]:
         stmt = select(ExperimentDefinitionTask).where(
             ExperimentDefinitionTask.experiment_definition_id == definition_id
         )

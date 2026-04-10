@@ -19,39 +19,48 @@ from h_arcane.core.persistence.telemetry.models import RunRecord
 
 
 def seed_flat_tasks(
-    session: Session, n: int = 3,
+    session: Session,
+    n: int = 3,
 ) -> tuple[UUID, UUID, list[UUID]]:
     """n independent tasks, no dependencies."""
     def_id = uuid4()
     inst_id = uuid4()
 
-    session.add(ExperimentDefinition(
-        id=def_id, benchmark_type="test",
-    ))
-    session.add(ExperimentDefinitionInstance(
-        id=inst_id,
-        experiment_definition_id=def_id,
-        instance_key="inst-0",
-    ))
+    session.add(
+        ExperimentDefinition(
+            id=def_id,
+            benchmark_type="test",
+        )
+    )
+    session.add(
+        ExperimentDefinitionInstance(
+            id=inst_id,
+            experiment_definition_id=def_id,
+            instance_key="inst-0",
+        )
+    )
 
     task_ids: list[UUID] = []
     for i in range(n):
         tid = uuid4()
         task_ids.append(tid)
-        session.add(ExperimentDefinitionTask(
-            id=tid,
-            experiment_definition_id=def_id,
-            instance_id=inst_id,
-            task_key=f"task-{i}",
-            description=f"Test task {i}",
-        ))
+        session.add(
+            ExperimentDefinitionTask(
+                id=tid,
+                experiment_definition_id=def_id,
+                instance_id=inst_id,
+                task_key=f"task-{i}",
+                description=f"Test task {i}",
+            )
+        )
 
     session.flush()
     return def_id, inst_id, task_ids
 
 
 def seed_chain(
-    session: Session, n: int = 3,
+    session: Session,
+    n: int = 3,
 ) -> tuple[UUID, UUID, list[UUID], list[UUID]]:
     """Linear chain: task-0 -> task-1 -> ... -> task-(n-1).
 
@@ -64,12 +73,14 @@ def seed_chain(
     for i in range(1, n):
         dep_id = uuid4()
         dep_ids.append(dep_id)
-        session.add(ExperimentDefinitionTaskDependency(
-            id=dep_id,
-            experiment_definition_id=def_id,
-            task_id=task_ids[i],
-            depends_on_task_id=task_ids[i - 1],
-        ))
+        session.add(
+            ExperimentDefinitionTaskDependency(
+                id=dep_id,
+                experiment_definition_id=def_id,
+                task_id=task_ids[i],
+                depends_on_task_id=task_ids[i - 1],
+            )
+        )
 
     session.flush()
     return def_id, inst_id, task_ids, dep_ids
@@ -89,12 +100,14 @@ def seed_diamond(
     for target, source in [(b, a), (c, a), (d, b), (d, c)]:
         dep_id = uuid4()
         dep_ids.append(dep_id)
-        session.add(ExperimentDefinitionTaskDependency(
-            id=dep_id,
-            experiment_definition_id=def_id,
-            task_id=target,
-            depends_on_task_id=source,
-        ))
+        session.add(
+            ExperimentDefinitionTaskDependency(
+                id=dep_id,
+                experiment_definition_id=def_id,
+                task_id=target,
+                depends_on_task_id=source,
+            )
+        )
 
     session.flush()
     return def_id, inst_id, task_ids, dep_ids
@@ -103,10 +116,12 @@ def seed_diamond(
 def seed_run(session: Session, definition_id: UUID) -> UUID:
     """Create a RunRecord in PENDING status."""
     run_id = uuid4()
-    session.add(RunRecord(
-        id=run_id,
-        experiment_definition_id=definition_id,
-        status=RunStatus.PENDING,
-    ))
+    session.add(
+        RunRecord(
+            id=run_id,
+            experiment_definition_id=definition_id,
+            status=RunStatus.PENDING,
+        )
+    )
     session.flush()
     return run_id

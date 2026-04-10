@@ -19,6 +19,7 @@ from h_arcane.core.runtime.services.cohort_schemas import (
 from h_arcane.core.utils import utcnow
 from sqlmodel import select
 
+
 class ExperimentCohortService:
     """Resolve cohorts and assemble frontend-facing cohort DTOs."""
 
@@ -50,9 +51,7 @@ class ExperimentCohortService:
         with get_session() as session:
             stmt = select(ExperimentCohort)
             if not include_archived:
-                stmt = stmt.where(
-                    ExperimentCohort.status != ExperimentCohortStatus.ARCHIVED
-                )
+                stmt = stmt.where(ExperimentCohort.status != ExperimentCohortStatus.ARCHIVED)
             cohorts = list(session.exec(stmt).all())
 
             results: list[CohortSummaryDto] = []
@@ -73,16 +72,12 @@ class ExperimentCohortService:
                 return None
 
             stats = session.exec(
-                select(ExperimentCohortStats).where(
-                    ExperimentCohortStats.cohort_id == cohort_id
-                )
+                select(ExperimentCohortStats).where(ExperimentCohortStats.cohort_id == cohort_id)
             ).first()
             summary = self._build_summary(cohort, stats)
 
             runs = list(
-                session.exec(
-                    select(RunRecord).where(RunRecord.cohort_id == cohort_id)
-                ).all()
+                session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort_id)).all()
             )
             run_rows = [self._build_run_row(cohort, run) for run in runs]
             return CohortDetailDto(summary=summary, runs=run_rows)
@@ -94,9 +89,7 @@ class ExperimentCohortService:
             if cohort is None:
                 return None
             stats = session.exec(
-                select(ExperimentCohortStats).where(
-                    ExperimentCohortStats.cohort_id == cohort_id
-                )
+                select(ExperimentCohortStats).where(ExperimentCohortStats.cohort_id == cohort_id)
             ).first()
             return self._build_summary(cohort, stats)
 
@@ -116,9 +109,7 @@ class ExperimentCohortService:
             session.refresh(cohort)
 
             stats = session.exec(
-                select(ExperimentCohortStats).where(
-                    ExperimentCohortStats.cohort_id == cohort_id
-                )
+                select(ExperimentCohortStats).where(ExperimentCohortStats.cohort_id == cohort_id)
             ).first()
             return self._build_summary(cohort, stats)
 
@@ -156,9 +147,7 @@ class ExperimentCohortService:
         running_time_ms: int | None = None
         if run.started_at is not None:
             end_time = run.completed_at or utcnow()
-            running_time_ms = max(
-                int((end_time - run.started_at).total_seconds() * 1000), 0
-            )
+            running_time_ms = max(int((end_time - run.started_at).total_seconds() * 1000), 0)
 
         score: float | None = None
         summary = run.parsed_summary()
@@ -178,5 +167,6 @@ class ExperimentCohortService:
             final_score=score,
             error_message=run.error_message,
         )
+
 
 experiment_cohort_service = ExperimentCohortService()

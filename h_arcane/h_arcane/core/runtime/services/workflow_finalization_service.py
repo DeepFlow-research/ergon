@@ -13,7 +13,6 @@ from sqlmodel import select
 
 
 class WorkflowFinalizationService:
-
     def finalize(self, command: FinalizeWorkflowCommand) -> FinalizedWorkflowResult:
         with get_session() as session:
             evals_stmt = select(RunTaskEvaluation).where(

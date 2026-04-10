@@ -75,6 +75,7 @@ def _discover_vllm_model_name(endpoint: str) -> str:
     """
     # Deferred: runtime-only dependency
     import urllib.request
+
     # Deferred: runtime-only dependency
     import json as _json
 
@@ -88,7 +89,5 @@ def _discover_vllm_model_name(endpoint: str) -> str:
             logger.info("Discovered vLLM model name: %s", name)
             return name
     except Exception:  # slopcop: ignore[no-broad-except]
-        logger.warning(
-            "Could not discover vLLM model name from %s, using 'default'", url
-        )
+        logger.warning("Could not discover vLLM model name from %s, using 'default'", url)
     return "default"

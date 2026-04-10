@@ -26,6 +26,7 @@ from h_arcane.core.runtime.tracing import (
 if TYPE_CHECKING:
     from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
 
+
 class InngestCriterionExecutor:
     """Executes criteria in parallel using Inngest step.run boundaries."""
 
@@ -100,33 +101,40 @@ class InngestCriterionExecutor:
                         f"implementation and no sandbox_manager is available for internal criteria"
                     )
 
-                self._sink.emit_span(CompletedSpan(
-                    name="evaluation.criterion",
-                    context=evaluation_criterion_context(
-                        task_context.run_id, self.task_id,
-                        self.execution_id, self.evaluator_id,
-                        spec.stage_idx, spec.criterion_idx,
-                    ),
-                    start_time=span_start,
-                    end_time=datetime.now(UTC),
-                    attributes={
-                        "run_id": str(task_context.run_id),
-                        "task_id": str(self.task_id),
-                        "evaluator_id": str(self.evaluator_id),
-                        "stage_idx": spec.stage_idx,
-                        "criterion_idx": spec.criterion_idx,
-                        "criterion_type": type(criterion).__name__,
-                        "score": cr_result.score,
-                        "max_score": spec.max_score,
-                        "passed": cr_result.passed,
-                    },
-                ))
+                self._sink.emit_span(
+                    CompletedSpan(
+                        name="evaluation.criterion",
+                        context=evaluation_criterion_context(
+                            task_context.run_id,
+                            self.task_id,
+                            self.execution_id,
+                            self.evaluator_id,
+                            spec.stage_idx,
+                            spec.criterion_idx,
+                        ),
+                        start_time=span_start,
+                        end_time=datetime.now(UTC),
+                        attributes={
+                            "run_id": str(task_context.run_id),
+                            "task_id": str(self.task_id),
+                            "evaluator_id": str(self.evaluator_id),
+                            "stage_idx": spec.stage_idx,
+                            "criterion_idx": spec.criterion_idx,
+                            "criterion_type": type(criterion).__name__,
+                            "score": cr_result.score,
+                            "max_score": spec.max_score,
+                            "passed": cr_result.passed,
+                        },
+                    )
+                )
 
                 return cr_result
 
             step_name = f"criterion-{spec.stage_idx}-{spec.criterion_idx}"
             return partial(
-                self.ctx.step.run, step_name, run_criterion,
+                self.ctx.step.run,
+                step_name,
+                run_criterion,
                 output_type=CriterionResult,
             )
 

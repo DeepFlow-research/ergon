@@ -97,7 +97,8 @@ def extract_agent_trajectories(
                         logger.warning(
                             "Token %r re-tokenized to %d IDs (expected 1) — "
                             "logprob alignment may be wrong",
-                            token_str, len(ids),
+                            token_str,
+                            len(ids),
                         )
                     completion_ids.extend(ids)
                     logprobs.extend([lp.get("logprob", 0.0)] * len(ids))
@@ -120,14 +121,16 @@ def extract_agent_trajectories(
 
         reward = reward_strategy.assign(agent_id, agent_turns, eval_scores)
 
-        trajectories.append(AgentTrajectory(
-            agent_id=agent_id,
-            prompt_ids=prompt_ids,
-            completion_ids=completion_ids,
-            logprobs=logprobs,
-            env_mask=env_mask,
-            reward=reward,
-            turns=turn_count,
-        ))
+        trajectories.append(
+            AgentTrajectory(
+                agent_id=agent_id,
+                prompt_ids=prompt_ids,
+                completion_ids=completion_ids,
+                logprobs=logprobs,
+                env_mask=env_mask,
+                reward=reward,
+                turns=turn_count,
+            )
+        )
 
     return trajectories

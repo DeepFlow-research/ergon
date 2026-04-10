@@ -29,7 +29,9 @@ def _try_tailscale() -> str | None:
     try:
         result = subprocess.run(
             ["tailscale", "ip", "-4"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             ip = result.stdout.strip()

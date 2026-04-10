@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
+
 class CriterionRuntime(Protocol):
     """Execution helper passed into a single criterion."""
 
@@ -33,6 +34,7 @@ class CriterionRuntime(Protocol):
     async def execute_code(self, code: str) -> SandboxResult: ...
     async def call_llm_judge(self, messages: list, response_type: type[T]) -> T: ...
     async def cleanup(self) -> None: ...
+
 
 class DefaultCriterionRuntime:
     """Real criterion runtime backed by sandbox manager + OpenAI.

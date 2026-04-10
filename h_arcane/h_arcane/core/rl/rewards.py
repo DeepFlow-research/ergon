@@ -36,10 +36,7 @@ class IndependentTaskReward:
         eval_scores: dict[str, float],
     ) -> float:
         agent_execution_ids = {str(t.task_execution_id) for t in turns}
-        agent_scores = [
-            score for key, score in eval_scores.items()
-            if key in agent_execution_ids
-        ]
+        agent_scores = [score for key, score in eval_scores.items() if key in agent_execution_ids]
         return mean(agent_scores) if agent_scores else 0.0
 
 

@@ -54,9 +54,7 @@ async def watch_and_evaluate(
             logger.info("New checkpoint: %s (step %d)", ckpt.path, ckpt.step)
 
             if on_checkpoint_cmd:
-                _run_external_eval(
-                    ckpt, on_checkpoint_cmd, timeout_s=external_cmd_timeout_s
-                )
+                _run_external_eval(ckpt, on_checkpoint_cmd, timeout_s=external_cmd_timeout_s)
             else:
                 await _run_local_eval(
                     ckpt,
@@ -71,9 +69,7 @@ async def watch_and_evaluate(
         await asyncio.sleep(poll_interval_s)
 
 
-def _run_external_eval(
-    ckpt: CheckpointInfo, cmd_template: str, *, timeout_s: int = 600
-) -> None:
+def _run_external_eval(ckpt: CheckpointInfo, cmd_template: str, *, timeout_s: int = 600) -> None:
     """Spawn an external command (e.g. SkyPilot) for checkpoint evaluation."""
     rendered = cmd_template.replace("{path}", ckpt.path).replace("{step}", str(ckpt.step))
     cmd = shlex.split(rendered)
@@ -82,11 +78,15 @@ def _run_external_eval(
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
         if result.returncode != 0:
-            logger.warning("External eval failed (exit %d): %s", result.returncode, result.stderr[:500])
+            logger.warning(
+                "External eval failed (exit %d): %s", result.returncode, result.stderr[:500]
+            )
         else:
             logger.info("External eval launched for step %d", ckpt.step)
     except subprocess.TimeoutExpired:
-        logger.warning("External eval command timed out after %ds for step %d", timeout_s, ckpt.step)
+        logger.warning(
+            "External eval command timed out after %ds for step %d", timeout_s, ckpt.step
+        )
 
 
 async def _run_local_eval(
@@ -105,10 +105,15 @@ async def _run_local_eval(
     model_target = f"vllm:{ckpt.path}" if model_base else "stub-worker"
 
     cmd = [
-        "arcane", "benchmark", "run",
-        "--benchmark", benchmark_type,
-        "--evaluator", evaluator_type,
-        "--model", model_target,
+        "arcane",
+        "benchmark",
+        "run",
+        "--benchmark",
+        benchmark_type,
+        "--evaluator",
+        evaluator_type,
+        "--model",
+        model_target,
     ]
 
     if eval_limit:

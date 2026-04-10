@@ -77,8 +77,7 @@ def _build_evaluation_summary(
 
     stage_names = {s.stage_name for s in specs}
     stages_passed = sum(
-        1 for sn in stage_names
-        if all(e.passed for e in entries if e.stage_name == sn)
+        1 for sn in stage_names if all(e.passed for e in entries if e.stage_name == sn)
     )
 
     return EvaluationSummary(
@@ -99,7 +98,7 @@ def _build_evaluation_summary(
     output_type=EvaluateTaskRunResult,
 )
 async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
-    payload = EvaluateTaskRunRequest(**ctx.event.data)
+    payload = EvaluateTaskRunRequest.model_validate(ctx.event.data)
     run_id = payload.run_id
     task_id = payload.task_id
     execution_id = payload.execution_id
@@ -112,8 +111,10 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
     evaluator_cls = EVALUATORS.get(evaluator_type)
     if evaluator_cls is None:
         raise RegistryLookupError(
-            "evaluator", evaluator_type,
-            run_id=run_id, task_id=task_id,
+            "evaluator",
+            evaluator_type,
+            run_id=run_id,
+            task_id=task_id,
         )
 
     evaluator = evaluator_cls(name=evaluator_binding_key)
@@ -165,23 +166,25 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
     finally:
         session.close()
 
-    get_trace_sink().emit_span(CompletedSpan(
-        name="evaluation.task",
-        context=evaluation_task_context(run_id, task_id, execution_id, evaluator_id),
-        start_time=span_start,
-        end_time=datetime.now(UTC),
-        attributes={
-            "run_id": str(run_id),
-            "task_id": str(task_id),
-            "execution_id": str(execution_id),
-            "evaluator_id": str(evaluator_id),
-            "evaluator_type": evaluator_type,
-            "score": result.score,
-            "passed": result.passed,
-            "stages_evaluated": summary.stages_evaluated,
-            "stages_passed": summary.stages_passed,
-        },
-    ))
+    get_trace_sink().emit_span(
+        CompletedSpan(
+            name="evaluation.task",
+            context=evaluation_task_context(run_id, task_id, execution_id, evaluator_id),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            attributes={
+                "run_id": str(run_id),
+                "task_id": str(task_id),
+                "execution_id": str(execution_id),
+                "evaluator_id": str(evaluator_id),
+                "evaluator_type": evaluator_type,
+                "score": result.score,
+                "passed": result.passed,
+                "stages_evaluated": summary.stages_evaluated,
+                "stages_passed": summary.stages_passed,
+            },
+        )
+    )
 
     return EvaluateTaskRunResult(
         score=result.score,

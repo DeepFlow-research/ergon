@@ -26,7 +26,6 @@ from sqlmodel import select
 
 
 class TaskExecutionService:
-
     def prepare(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
         with get_session() as session:
             task = require_not_none(
@@ -102,9 +101,7 @@ class TaskExecutionService:
             execution.output_text = command.output_text
             if command.output_resource_ids:
                 execution.output_json = {
-                    "resource_ids": [
-                        str(rid) for rid in command.output_resource_ids
-                    ],
+                    "resource_ids": [str(rid) for rid in command.output_resource_ids],
                 }
             session.add(execution)
             session.commit()
@@ -121,7 +118,10 @@ class TaskExecutionService:
             session.add(execution)
 
             mark_task_failed(
-                session, command.run_id, command.task_id,
-                command.error_message, execution_id=command.execution_id,
+                session,
+                command.run_id,
+                command.task_id,
+                command.error_message,
+                execution_id=command.execution_id,
             )
             session.commit()

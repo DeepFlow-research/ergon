@@ -13,7 +13,11 @@ import inngest
 from h_arcane.core.persistence.shared.db import get_session
 from h_arcane.core.persistence.shared.ids import new_id
 from h_arcane.core.persistence.telemetry.models import RunResource
-from h_arcane.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager, DownloadedFiles
+from h_arcane.core.providers.sandbox.manager import (
+    BaseSandboxManager,
+    DefaultSandboxManager,
+    DownloadedFiles,
+)
 from h_arcane.core.runtime.errors import ContractViolationError
 from h_arcane.core.runtime.inngest_client import inngest_client
 from h_arcane.core.runtime.services.child_function_payloads import PersistOutputsRequest
@@ -37,7 +41,7 @@ logger = logging.getLogger(__name__)
 )
 async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     """Download outputs from sandbox and register them as resources."""
-    payload = PersistOutputsRequest(**ctx.event.data)
+    payload = PersistOutputsRequest.model_validate(ctx.event.data)
     run_id = payload.run_id
     task_id = payload.task_id
     execution_id = payload.execution_id
@@ -47,14 +51,18 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
 
     logger.info(
         "persist-outputs run_id=%s task_id=%s sandbox_id=%s",
-        run_id, task_id, sandbox_id,
+        run_id,
+        task_id,
+        sandbox_id,
     )
 
     if not sandbox_id or not output_dir:
         raise ContractViolationError(
             "persist-outputs invoked without sandbox_id or output_dir",
-            run_id=run_id, task_id=task_id,
-            sandbox_id=sandbox_id, output_dir=str(output_dir),
+            run_id=run_id,
+            task_id=task_id,
+            sandbox_id=sandbox_id,
+            output_dir=str(output_dir),
         )
 
     manager_cls = SANDBOX_MANAGERS.get(payload.benchmark_type, DefaultSandboxManager)
@@ -92,22 +100,25 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
 
     logger.info(
         "persist-outputs registered %d resources for run_id=%s",
-        len(resource_ids), run_id,
+        len(resource_ids),
+        run_id,
     )
 
-    get_trace_sink().emit_span(CompletedSpan(
-        name="persist.outputs",
-        context=persist_outputs_context(run_id, task_id, execution_id),
-        start_time=span_start,
-        end_time=datetime.now(UTC),
-        attributes={
-            "run_id": str(run_id),
-            "task_id": str(task_id),
-            "execution_id": str(execution_id),
-            "outputs_count": len(resource_ids),
-            "resource_ids": [str(rid) for rid in resource_ids],
-        },
-    ))
+    get_trace_sink().emit_span(
+        CompletedSpan(
+            name="persist.outputs",
+            context=persist_outputs_context(run_id, task_id, execution_id),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            attributes={
+                "run_id": str(run_id),
+                "task_id": str(task_id),
+                "execution_id": str(execution_id),
+                "outputs_count": len(resource_ids),
+                "resource_ids": [str(rid) for rid in resource_ids],
+            },
+        )
+    )
 
     return PersistOutputsResult(
         output_resource_ids=resource_ids,

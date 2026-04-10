@@ -27,6 +27,7 @@ from arcane_builtins.benchmarks.gdpeval.task_schemas import (
 if TYPE_CHECKING:
     from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
 
+
 class QAExchange:
     """Record of one worker ↔ stakeholder exchange."""
 
@@ -35,6 +36,7 @@ class QAExchange:
     def __init__(self, question: str, answer: str) -> None:
         self.question = question
         self.answer = answer
+
 
 class GDPEvalToolkit:
     """Tool surface for GDPEval document-processing workers.
@@ -106,14 +108,18 @@ class GDPEvalToolkit:
                 file_path: Path to the PDF (e.g. "/inputs/document.pdf")
             """
             return await self.sandbox_manager.run_skill(
-                self.run_id, "read_pdf", ReadPDFResponse, file_path=file_path,
+                self.run_id,
+                "read_pdf",
+                ReadPDFResponse,
+                file_path=file_path,
             )
 
         return Tool(function=read_pdf, takes_ctx=False)
 
     def _read_csv(self) -> Tool:
         async def read_csv(
-            file_path: str, max_rows: int | None = None,
+            file_path: str,
+            max_rows: int | None = None,
         ) -> ReadCsvResponse:
             """Read a CSV file and return its contents.
 
@@ -133,7 +139,8 @@ class GDPEvalToolkit:
 
     def _read_excel(self) -> Tool:
         async def read_excel(
-            file_path: str, sheet_name: str | None = None,
+            file_path: str,
+            sheet_name: str | None = None,
         ) -> ReadExcelResponse:
             """Read an Excel file and return data from the specified sheet.
 
@@ -204,7 +211,8 @@ class GDPEvalToolkit:
 
     def _create_csv(self) -> Tool:
         async def create_csv(
-            data: list[list[str]], output_path: str,
+            data: list[list[str]],
+            output_path: str,
         ) -> CreateCsvResponse:
             """Create a CSV file with the given data.
 
@@ -224,7 +232,8 @@ class GDPEvalToolkit:
 
     def _ocr_image(self) -> Tool:
         async def ocr_image(
-            file_path: str, language: str = "eng",
+            file_path: str,
+            language: str = "eng",
         ) -> OcrImageResponse:
             """Extract text from an image using OCR.
 

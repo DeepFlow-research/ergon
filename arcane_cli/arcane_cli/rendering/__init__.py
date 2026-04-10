@@ -12,9 +12,7 @@ def render_table(headers: list[str], rows: list[list[str]]) -> None:
             if i < len(col_widths):
                 col_widths[i] = max(col_widths[i], len(str(cell)))
 
-    header_line = "  ".join(
-        h.ljust(col_widths[i]) for i, h in enumerate(headers)
-    )
+    header_line = "  ".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
     separator = "  ".join("-" * w for w in col_widths)
     print(header_line)
     print(separator)

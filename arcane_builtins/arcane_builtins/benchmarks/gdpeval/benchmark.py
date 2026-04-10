@@ -17,6 +17,7 @@ from arcane_builtins.benchmarks.gdpeval.loader import (
     load_task_ids,
 )
 
+
 class GDPEvalBenchmark(Benchmark):
     """Benchmark for GDP document-processing evaluation tasks.
 

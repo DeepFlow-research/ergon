@@ -25,13 +25,16 @@ TZDateTime = DateTime(timezone=True)
 # Cohort status enum
 # ---------------------------------------------------------------------------
 
+
 class ExperimentCohortStatus(StrEnum):
     ACTIVE = "active"
     ARCHIVED = "archived"
 
+
 # ---------------------------------------------------------------------------
 # RunRecord
 # ---------------------------------------------------------------------------
+
 
 class RunRecord(SQLModel, table=True):
     __tablename__ = "runs"
@@ -69,9 +72,11 @@ class RunRecord(SQLModel, table=True):
         self.__class__._parse_summary(self.summary_json)
         return self
 
+
 # ---------------------------------------------------------------------------
 # RunTaskExecution
 # ---------------------------------------------------------------------------
+
 
 class RunTaskExecution(SQLModel, table=True):
     __tablename__ = "run_task_executions"
@@ -129,9 +134,11 @@ class RunTaskExecution(SQLModel, table=True):
         self.__class__._parse_error(self.error_json)
         return self
 
+
 # ---------------------------------------------------------------------------
 # RunAction
 # ---------------------------------------------------------------------------
+
 
 class RunAction(SQLModel, table=True):
     __tablename__ = "run_actions"
@@ -168,9 +175,11 @@ class RunAction(SQLModel, table=True):
         self.__class__._parse_error(self.error_json)
         return self
 
+
 # ---------------------------------------------------------------------------
 # RunResource
 # ---------------------------------------------------------------------------
+
 
 class RunResource(SQLModel, table=True):
     __tablename__ = "run_resources"
@@ -205,9 +214,11 @@ class RunResource(SQLModel, table=True):
         self.__class__._parse_metadata(self.metadata_json)
         return self
 
+
 # ---------------------------------------------------------------------------
 # RunTaskStateEvent
 # ---------------------------------------------------------------------------
+
 
 class RunTaskStateEvent(SQLModel, table=True):
     __tablename__ = "run_task_state_events"
@@ -236,9 +247,7 @@ class RunTaskStateEvent(SQLModel, table=True):
     @classmethod
     def _parse_event_metadata(cls, data: dict) -> dict[str, object]:
         if not isinstance(data, dict):
-            raise ValueError(
-                f"event_metadata must be a dict, got {type(data).__name__}"
-            )
+            raise ValueError(f"event_metadata must be a dict, got {type(data).__name__}")
         return data
 
     @model_validator(mode="after")
@@ -246,9 +255,11 @@ class RunTaskStateEvent(SQLModel, table=True):
         self.__class__._parse_event_metadata(self.event_metadata)
         return self
 
+
 # ---------------------------------------------------------------------------
 # RunTaskEvaluation
 # ---------------------------------------------------------------------------
+
 
 class RunTaskEvaluation(SQLModel, table=True):
     __tablename__ = "run_task_evaluations"
@@ -282,14 +293,14 @@ class RunTaskEvaluation(SQLModel, table=True):
     @model_validator(mode="after")
     def _validate_summary_json(self) -> "RunTaskEvaluation":
         if not isinstance(self.summary_json, dict):
-            raise ValueError(
-                f"summary_json must be a dict, got {type(self.summary_json).__name__}"
-            )
+            raise ValueError(f"summary_json must be a dict, got {type(self.summary_json).__name__}")
         return self
+
 
 # ---------------------------------------------------------------------------
 # ExperimentCohort
 # ---------------------------------------------------------------------------
+
 
 class ExperimentCohort(SQLModel, table=True):
     """A named grouping of runs that the operator monitors as one unit."""
@@ -321,9 +332,11 @@ class ExperimentCohort(SQLModel, table=True):
         self.__class__._parse_metadata(self.metadata_json)
         return self
 
+
 # ---------------------------------------------------------------------------
 # ExperimentCohortStats
 # ---------------------------------------------------------------------------
+
 
 class ExperimentCohortStats(SQLModel, table=True):
     """Denormalized aggregate snapshot for a cohort."""
@@ -342,9 +355,11 @@ class ExperimentCohortStats(SQLModel, table=True):
     failure_rate: float = 0.0
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
+
 # ---------------------------------------------------------------------------
 # Thread (inter-agent communication)
 # ---------------------------------------------------------------------------
+
 
 class Thread(SQLModel, table=True):
     __tablename__ = "threads"
@@ -357,9 +372,11 @@ class Thread(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
+
 # ---------------------------------------------------------------------------
 # ThreadMessage
 # ---------------------------------------------------------------------------
+
 
 class ThreadMessage(SQLModel, table=True):
     __tablename__ = "thread_messages"
@@ -373,9 +390,11 @@ class ThreadMessage(SQLModel, table=True):
     sequence_num: int
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
+
 # ---------------------------------------------------------------------------
 # RunGenerationTurn — lossless per-turn generation record
 # ---------------------------------------------------------------------------
+
 
 class RunGenerationTurn(SQLModel, table=True):
     """Lossless per-turn record of one model generation within an episode.
@@ -461,7 +480,8 @@ class TrainingSession(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     experiment_definition_id: UUID = Field(
-        foreign_key="experiment_definitions.id", index=True,
+        foreign_key="experiment_definitions.id",
+        index=True,
     )
     model_name: str
     config_json: dict = Field(default_factory=dict, sa_column=Column(JSON))

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 MINIF2F_REPO = "https://github.com/facebookresearch/miniF2F"
 
+
 class MiniF2FBenchmark(Benchmark):
     """Benchmark backed by the MiniF2F dataset of formal math problems.
 

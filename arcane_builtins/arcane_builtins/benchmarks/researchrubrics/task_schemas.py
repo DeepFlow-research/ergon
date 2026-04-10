@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, Field
 
+
 class RubricCriterion(BaseModel):
     """A single criterion from the ResearchRubrics dataset.
 
@@ -19,6 +20,7 @@ class RubricCriterion(BaseModel):
         ),
     )
     weight: float = Field(description="Criterion weight (can be negative)")
+
 
 class ResearchRubricsTaskPayload(BaseModel):
     """Structured payload carried inside ``BenchmarkTask.task_payload``."""

@@ -5,6 +5,7 @@ Passes when worker reports success. For smoke tests only.
 
 from h_arcane.api import Criterion, CriterionResult, EvaluationContext
 
+
 class StubCriterion(Criterion):
     type_slug = "stub-criterion"
 

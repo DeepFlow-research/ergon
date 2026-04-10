@@ -11,6 +11,7 @@ from h_arcane.api.criterion import Criterion
 from h_arcane.api.evaluation_context import EvaluationContext
 from h_arcane.api.results import CriterionResult
 
+
 class LLMJudgeCriterion(Criterion):
     """LLM-judge evaluation criterion inspired by the ref LLMJudgeRule.
 

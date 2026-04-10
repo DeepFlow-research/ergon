@@ -13,6 +13,7 @@ from h_arcane.core.runtime.services.communication_schemas import (
 from h_arcane.core.utils import utcnow
 from sqlmodel import func, select
 
+
 class CommunicationService:
     """Service for managing agent-to-agent communication."""
 
@@ -96,18 +97,12 @@ class CommunicationService:
     def get_all_threads_for_run(self, run_id: UUID) -> list[ThreadSummary]:
         """Return summaries for every thread belonging to a run."""
         with get_session() as session:
-            threads = list(
-                session.exec(
-                    select(Thread).where(Thread.run_id == run_id)
-                ).all()
-            )
+            threads = list(session.exec(select(Thread).where(Thread.run_id == run_id)).all())
 
             summaries: list[ThreadSummary] = []
             for thread in threads:
                 count = session.exec(
-                    select(func.count(ThreadMessage.id)).where(
-                        ThreadMessage.thread_id == thread.id
-                    )
+                    select(func.count(ThreadMessage.id)).where(ThreadMessage.thread_id == thread.id)
                 ).one()
                 summaries.append(
                     ThreadSummary(
@@ -176,5 +171,6 @@ class CommunicationService:
         session.add(thread)
         session.flush()
         return thread
+
 
 communication_service = CommunicationService()

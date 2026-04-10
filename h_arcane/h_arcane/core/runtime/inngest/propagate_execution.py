@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
     output_type=TaskPropagateResult,
 )
 async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
-    payload = TaskCompletedEvent(**ctx.event.data)
+    payload = TaskCompletedEvent.model_validate(ctx.event.data)
     logger.info("task-propagate run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)
 
@@ -99,18 +99,20 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
         workflow_failed=(propagation.workflow_terminal_state == WorkflowTerminalState.FAILED),
     )
 
-    get_trace_sink().emit_span(CompletedSpan(
-        name="task.propagate",
-        context=task_propagate_context(payload.run_id, payload.task_id),
-        start_time=span_start,
-        end_time=datetime.now(UTC),
-        attributes={
-            "run_id": str(payload.run_id),
-            "task_id": str(payload.task_id),
-            "newly_ready_tasks": len(propagation.ready_tasks),
-            "workflow_terminal": str(propagation.workflow_terminal_state),
-        },
-    ))
+    get_trace_sink().emit_span(
+        CompletedSpan(
+            name="task.propagate",
+            context=task_propagate_context(payload.run_id, payload.task_id),
+            start_time=span_start,
+            end_time=datetime.now(UTC),
+            attributes={
+                "run_id": str(payload.run_id),
+                "task_id": str(payload.task_id),
+                "newly_ready_tasks": len(propagation.ready_tasks),
+                "workflow_terminal": str(propagation.workflow_terminal_state),
+            },
+        )
+    )
 
     return result
 
@@ -123,7 +125,7 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
     output_type=TaskPropagateResult,
 )
 async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult:
-    payload = TaskFailedEvent(**ctx.event.data)
+    payload = TaskFailedEvent.model_validate(ctx.event.data)
     logger.info(
         "task-failure-propagate run_id=%s task_id=%s error=%s",
         payload.run_id,

@@ -7,6 +7,7 @@ use this model — no untyped dict access.
 
 from pydantic import BaseModel, Field
 
+
 class CriterionResultEntry(BaseModel):
     """One criterion result as stored in the evaluation summary."""
 
@@ -25,6 +26,7 @@ class CriterionResultEntry(BaseModel):
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
     error: dict | None = None
+
 
 class EvaluationSummary(BaseModel):
     """Typed schema for RunTaskEvaluation.summary_json."""

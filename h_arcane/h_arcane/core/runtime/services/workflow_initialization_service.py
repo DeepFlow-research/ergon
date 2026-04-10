@@ -1,6 +1,5 @@
 """Workflow initialization: load definitions, seed state, find initial tasks."""
 
-
 from h_arcane.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -22,7 +21,6 @@ from sqlmodel import select
 
 
 class WorkflowInitializationService:
-
     def initialize(self, command: InitializeWorkflowCommand) -> InitializedWorkflow:
         with get_session() as session:
             definition = require_not_none(
@@ -46,7 +44,9 @@ class WorkflowInitializationService:
 
             for t in all_tasks:
                 _record_state_event(
-                    session, command.run_id, t.id,
+                    session,
+                    command.run_id,
+                    t.id,
                     TaskExecutionStatus.PENDING,
                 )
             session.commit()
@@ -63,9 +63,7 @@ class WorkflowInitializationService:
 
             ready_ids = get_initial_ready_tasks(session, command.run_id, command.definition_id)
 
-            ready_descriptors = [
-                td for td in task_descriptors if td.task_id in set(ready_ids)
-            ]
+            ready_descriptors = [td for td in task_descriptors if td.task_id in set(ready_ids)]
 
             root_count = sum(1 for t in all_tasks if t.parent_task_id is None)
 

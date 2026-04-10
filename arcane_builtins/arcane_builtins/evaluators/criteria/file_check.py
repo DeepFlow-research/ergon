@@ -10,6 +10,7 @@ from h_arcane.api.criterion import Criterion
 from h_arcane.api.evaluation_context import EvaluationContext
 from h_arcane.api.results import CriterionResult, WorkerResult
 
+
 class FileCheckCriterion(Criterion):
     """Checks that expected files are referenced in the worker result.
 

@@ -25,12 +25,14 @@ INPUTS_DIR = "/inputs"
 # Result models
 # ---------------------------------------------------------------------------
 
+
 class SandboxFileInfo(BaseModel):
     """Metadata about a file inside the sandbox."""
 
     sandbox_path: str
     size_bytes: int | None = None
     extension: str = ""  # slopcop: ignore[no-str-empty-default]
+
 
 class GDPOutputBundle(BaseModel):
     """Collection of downloaded output files for a GDP task."""
@@ -40,9 +42,11 @@ class GDPOutputBundle(BaseModel):
     local_dir: str | None = None
     error: str | None = None
 
+
 # ---------------------------------------------------------------------------
 # High-level helpers
 # ---------------------------------------------------------------------------
+
 
 async def list_output_files(
     sandbox_manager: "BaseSandboxManager",
@@ -54,6 +58,7 @@ async def list_output_files(
     except Exception as exc:  # slopcop: ignore[no-broad-except]
         logger.warning("Failed to list output files for task %s: %s", task_id, exc)
         return []
+
 
 async def download_output_bundle(
     sandbox_manager: "BaseSandboxManager",
@@ -96,6 +101,7 @@ async def download_output_bundle(
 
     return bundle
 
+
 async def read_output_text(
     sandbox_manager: "BaseSandboxManager",
     task_id: UUID,
@@ -112,6 +118,7 @@ async def read_output_text(
     except Exception as exc:  # slopcop: ignore[no-broad-except]
         logger.debug("Could not read %s for task %s: %s", remote_path, task_id, exc)
         return None
+
 
 async def upload_reference_files(
     sandbox_manager: "BaseSandboxManager",

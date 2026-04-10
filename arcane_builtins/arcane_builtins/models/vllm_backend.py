@@ -30,7 +30,9 @@ def resolve_vllm(
     model = OpenAIChatModel(model_name=resolved_name, provider=provider)
     logger.info(
         "Resolved vLLM model: endpoint=%s model_name=%s policy_version=%s",
-        endpoint, resolved_name, policy_version,
+        endpoint,
+        resolved_name,
+        policy_version,
     )
     return ResolvedModel(model=model, policy_version=policy_version, supports_logprobs=True)
 

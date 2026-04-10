@@ -1,6 +1,5 @@
 """Task propagation: resolve DAG dependencies and detect terminal states."""
 
-
 from h_arcane.core.persistence.definitions.models import ExperimentDefinitionTask
 from h_arcane.core.persistence.shared.db import get_session
 from h_arcane.core.runtime.execution.propagation import (
@@ -17,7 +16,6 @@ from h_arcane.core.runtime.services.orchestration_dto import (
 
 
 class TaskPropagationService:
-
     def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
         with get_session() as session:
             newly_ready_ids = on_task_completed(

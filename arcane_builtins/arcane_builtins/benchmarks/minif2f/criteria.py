@@ -8,6 +8,7 @@ from arcane_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
 
+
 def build_proof_criterion(
     *,
     max_score: float = 1.0,

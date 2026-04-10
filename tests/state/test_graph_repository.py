@@ -18,15 +18,17 @@ META = MutationMeta(actor="test", reason="state-test")
 
 def _add_node(repo: WorkflowGraphRepository, session: Session, run_id, key: str):
     return repo.add_node(
-        session, run_id,
-        task_key=key, instance_key="inst-0",
-        description=f"node {key}", status="pending",
+        session,
+        run_id,
+        task_key=key,
+        instance_key="inst-0",
+        description=f"node {key}",
+        status="pending",
         meta=META,
     )
 
 
 class TestCycleDetection:
-
     def test_add_edge_creating_cycle_raises(self, session: Session):
         repo = WorkflowGraphRepository()
         run_id = uuid4()
@@ -35,11 +37,22 @@ class TestCycleDetection:
         b = _add_node(repo, session, run_id, "B")
         c = _add_node(repo, session, run_id, "C")
 
-        repo.add_edge(session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META)
-        repo.add_edge(session, run_id, source_node_id=b.id, target_node_id=c.id, status="active", meta=META)
+        repo.add_edge(
+            session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META
+        )
+        repo.add_edge(
+            session, run_id, source_node_id=b.id, target_node_id=c.id, status="active", meta=META
+        )
 
         with pytest.raises(CycleError):
-            repo.add_edge(session, run_id, source_node_id=c.id, target_node_id=a.id, status="active", meta=META)
+            repo.add_edge(
+                session,
+                run_id,
+                source_node_id=c.id,
+                target_node_id=a.id,
+                status="active",
+                meta=META,
+            )
 
     def test_self_loop_raises_cycle_error(self, session: Session):
         repo = WorkflowGraphRepository()
@@ -48,11 +61,17 @@ class TestCycleDetection:
         a = _add_node(repo, session, run_id, "A")
 
         with pytest.raises(CycleError):
-            repo.add_edge(session, run_id, source_node_id=a.id, target_node_id=a.id, status="active", meta=META)
+            repo.add_edge(
+                session,
+                run_id,
+                source_node_id=a.id,
+                target_node_id=a.id,
+                status="active",
+                meta=META,
+            )
 
 
 class TestNodeRemoval:
-
     def test_remove_node_cleans_connected_edges(self, session: Session):
         repo = WorkflowGraphRepository()
         run_id = uuid4()
@@ -61,8 +80,12 @@ class TestNodeRemoval:
         b = _add_node(repo, session, run_id, "B")
         c = _add_node(repo, session, run_id, "C")
 
-        repo.add_edge(session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META)
-        repo.add_edge(session, run_id, source_node_id=b.id, target_node_id=c.id, status="active", meta=META)
+        repo.add_edge(
+            session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META
+        )
+        repo.add_edge(
+            session, run_id, source_node_id=b.id, target_node_id=c.id, status="active", meta=META
+        )
 
         repo.remove_node(session, run_id, b.id, terminal_status="removed", meta=META)
 
@@ -82,14 +105,15 @@ class TestNodeRemoval:
 
 
 class TestMutationLog:
-
     def test_mutation_log_records_every_change(self, session: Session):
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
         a = _add_node(repo, session, run_id, "A")
         b = _add_node(repo, session, run_id, "B")
-        repo.add_edge(session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META)
+        repo.add_edge(
+            session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META
+        )
         repo.update_node_status(session, run_id, a.id, "running", meta=META)
 
         mutations = repo.get_mutations(session, run_id)
@@ -104,7 +128,6 @@ class TestMutationLog:
 
 
 class TestAnnotationWAL:
-
     def test_annotation_wal_point_in_time(self, session: Session):
         repo = WorkflowGraphRepository()
         run_id = uuid4()
@@ -112,18 +135,33 @@ class TestAnnotationWAL:
         node = _add_node(repo, session, run_id, "A")
 
         ann1 = repo.set_annotation(
-            session, run_id, "node", node.id, "config",
-            payload={"v": 1}, meta=META,
+            session,
+            run_id,
+            "node",
+            node.id,
+            "config",
+            payload={"v": 1},
+            meta=META,
         )
         s1 = ann1.sequence
 
-        ann2 = repo.set_annotation(
-            session, run_id, "node", node.id, "config",
-            payload={"v": 2}, meta=META,
+        repo.set_annotation(
+            session,
+            run_id,
+            "node",
+            node.id,
+            "config",
+            payload={"v": 2},
+            meta=META,
         )
 
         historical = repo.get_annotation_at(
-            session, run_id, "node", node.id, "config", sequence=s1,
+            session,
+            run_id,
+            "node",
+            node.id,
+            "config",
+            sequence=s1,
         )
         assert historical == {"v": 1}
 
@@ -132,7 +170,6 @@ class TestAnnotationWAL:
 
 
 class TestReferentialIntegrity:
-
     def test_add_edge_to_nonexistent_node_raises(self, session: Session):
         repo = WorkflowGraphRepository()
         run_id = uuid4()
@@ -141,7 +178,10 @@ class TestReferentialIntegrity:
 
         with pytest.raises(DanglingEdgeError):
             repo.add_edge(
-                session, run_id,
-                source_node_id=a.id, target_node_id=uuid4(),
-                status="active", meta=META,
+                session,
+                run_id,
+                source_node_id=a.id,
+                target_node_id=uuid4(),
+                status="active",
+                meta=META,
             )

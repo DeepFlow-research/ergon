@@ -12,12 +12,14 @@ from h_arcane.core.runtime.services.cohort_service import experiment_cohort_serv
 
 router = APIRouter(prefix="/cohorts", tags=["cohorts"])
 
+
 @router.get("", response_model=list[CohortSummaryDto])
 def list_cohorts(
     include_archived: bool = Query(default=False),
 ) -> list[CohortSummaryDto]:
     """List all experiment cohorts."""
     return experiment_cohort_service.list_summaries(include_archived=include_archived)
+
 
 @router.get("/{cohort_id}", response_model=CohortDetailDto)
 def get_cohort(cohort_id: UUID) -> CohortDetailDto:
@@ -26,6 +28,7 @@ def get_cohort(cohort_id: UUID) -> CohortDetailDto:
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Cohort {cohort_id} not found")
     return detail
+
 
 @router.patch("/{cohort_id}", response_model=CohortSummaryDto)
 def update_cohort(cohort_id: UUID, request: UpdateCohortRequest) -> CohortSummaryDto:
