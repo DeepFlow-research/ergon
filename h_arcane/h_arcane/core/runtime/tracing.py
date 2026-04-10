@@ -44,10 +44,14 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from opentelemetry import trace as otel_trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+try:
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+except ImportError:
+    OTLPSpanExporter = None  # type: ignore[assignment,misc]
 from opentelemetry.trace import (
     NonRecordingSpan,
     SpanContext,
