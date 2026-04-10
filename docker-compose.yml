@@ -46,7 +46,7 @@ services:
       context: ./arcane-dashboard
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - NODE_ENV=development
       - ARCANE_API_BASE_URL=http://api:9000
@@ -83,13 +83,13 @@ services:
     volumes:
       - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
     ports:
-      - "4317:4317"
+      - "4319:4317"
 
   jaeger:
     image: jaegertracing/all-in-one:latest
     ports:
-      - "16686:16686"
-      - "4318:4318"
+      - "16687:16686"
+      - "4320:4318"
     environment:
       - COLLECTOR_OTLP_ENABLED=true
 
