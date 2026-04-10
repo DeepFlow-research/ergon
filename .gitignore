@@ -20,7 +20,7 @@ build/
 # Node / Next.js
 node_modules/
 .next/
-arcane-dashboard/tsconfig.tsbuildinfo
+ergon-dashboard/tsconfig.tsbuildinfo
 
 # Data (vendored third-party corpora)
 data/
@@ -33,5 +33,5 @@ data/
 .DS_Store
 
 # Training artifacts
-.arcane/
+.ergon/
 checkpoints/

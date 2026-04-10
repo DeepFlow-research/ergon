@@ -1,12 +1,16 @@
 [project]
-name = "arcane-extension"
+name = "ergon"
 version = "0.1.0"
-description = "Arcane experiment orchestration platform"
+description = "Ergon — a research runtime for agentic reinforcement learning"
+license = "Apache-2.0"
+authors = [{name = "Charlie Masters", email = "cm2435@users.noreply.github.com"}]
 requires-python = ">=3.13"
 dependencies = []
 
 [dependency-groups]
 dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
     "slopcop>=0.1.0",
 ]
 
@@ -18,13 +22,13 @@ build-backend = "setuptools.build_meta"
 include = []
 
 [tool.uv.workspace]
-members = ["h_arcane", "arcane_builtins", "arcane_cli", "arcane_infra"]
+members = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra"]
 
 [tool.uv.sources]
-h-arcane = { workspace = true }
-arcane-builtins = { workspace = true }
-arcane-cli = { workspace = true }
-arcane-infra = { workspace = true }
+ergon-core = { workspace = true }
+ergon-builtins = { workspace = true }
+ergon-cli = { workspace = true }
+ergon-infra = { workspace = true }
 
 [tool.ruff]
 line-length = 100
@@ -34,11 +38,11 @@ target-version = "py313"
 # Per-rule excludes only when a rule is wrong for the whole repo (do not disable no-print / no-typing-any globally).
 
 [tool.slopcop.per-file-ignores]
-# Print is acceptable in standalone scripts and tests; library code under h_arcane (especially core/) should use logging.
+# Print is acceptable in standalone scripts and tests; library code under ergon_core (especially core/) should use logging.
 "scripts/**" = ["no-print"]
 "tests/**" = ["no-print"]
 # User-facing CLI output and dashboard render helpers.
-"**/arcane_cli/**" = ["no-print"]
+"**/ergon_cli/**" = ["no-print"]
 "**/rendering/**" = ["no-print"]
 
 [tool.ty.rules]
@@ -114,8 +118,8 @@ include = [
     "**/runtime/execution/**",
     "**/providers/judges/**",
     "**/benchmarks/smoke_test/**",
-    "arcane_cli/**",
-    "arcane_infra/**",
+    "ergon_cli/**",
+    "ergon_infra/**",
 ]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
@@ -125,7 +129,7 @@ not-iterable = "warn"
 invalid-parameter-default = "warn"
 
 [tool.ty.environment]
-extra-paths = ["h_arcane", "arcane_builtins", "arcane_cli", "arcane_infra"]
+extra-paths = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra"]
 
 [tool.ty.analysis]
 allowed-unresolved-imports = [

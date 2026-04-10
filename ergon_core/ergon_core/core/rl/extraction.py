@@ -15,8 +15,8 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
-from h_arcane.core.persistence.telemetry.models import RunGenerationTurn
-from h_arcane.core.rl.rewards import IndependentTaskReward, RewardStrategy
+from ergon_core.core.persistence.telemetry.models import RunGenerationTurn
+from ergon_core.core.rl.rewards import IndependentTaskReward, RewardStrategy
 
 logger = logging.getLogger(__name__)
 

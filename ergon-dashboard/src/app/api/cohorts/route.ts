@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { config } from "@/lib/config";
 import { parseCohortSummaryList } from "@/lib/contracts/rest";
-import { fetchArcaneApi } from "@/lib/serverApi";
+import { fetchErgonApi } from "@/lib/serverApi";
 import { listHarnessCohorts } from "@/lib/testing/dashboardHarness";
 
 export async function GET(request: Request) {
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetchArcaneApi(backendPath);
+    const response = await fetchErgonApi(backendPath);
     const body = await response.json();
     if (response.ok) {
       return NextResponse.json(parseCohortSummaryList(body), { status: response.status });
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json(
       {
-        detail: "Arcane API is unavailable while loading cohorts.",
+        detail: "Ergon API is unavailable while loading cohorts.",
         error: error instanceof Error ? error.message : "Unknown backend fetch failure",
       },
       { status: 503 },

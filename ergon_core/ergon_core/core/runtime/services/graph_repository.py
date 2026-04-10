@@ -14,25 +14,25 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Session, col, select
 
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionTaskDependency,
 )
-from h_arcane.core.persistence.graph.models import (
+from ergon_core.core.persistence.graph.models import (
     RunGraphAnnotation,
     RunGraphEdge,
     RunGraphMutation,
     RunGraphNode,
 )
-from h_arcane.core.runtime.errors.graph_errors import (
+from ergon_core.core.runtime.errors.graph_errors import (
     CycleError,
     DanglingEdgeError,
     EdgeNotFoundError,
     NodeNotFoundError,
 )
-from h_arcane.core.runtime.services.graph_dto import (
+from ergon_core.core.runtime.services.graph_dto import (
     GraphAnnotationDto,
     GraphEdgeDto,
     GraphMutationDto,
@@ -40,7 +40,7 @@ from h_arcane.core.runtime.services.graph_dto import (
     MutationMeta,
     WorkflowGraphDto,
 )
-from h_arcane.core.utils import utcnow
+from ergon_core.core.utils import utcnow
 
 # Only fields the execution runtime needs for dispatch live on the core row.
 # Everything experiment-specific (payload, contracts, criteria, budgets)

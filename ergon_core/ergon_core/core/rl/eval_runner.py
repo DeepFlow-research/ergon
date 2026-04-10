@@ -1,7 +1,7 @@
-"""Eval watcher: score checkpoints on Arcane benchmarks.
+"""Eval watcher: score checkpoints on Ergon benchmarks.
 
 Watches a checkpoint directory, detects new checkpoints, runs
-``arcane benchmark run`` against each, and optionally reports results.
+``ergon benchmark run`` against each, and optionally reports results.
 
 The watcher runs on CPU.  For vLLM-based evaluation, use
 ``--on-checkpoint`` to spawn a SkyPilot GPU job per checkpoint.
@@ -12,7 +12,7 @@ import logging
 import shlex
 import subprocess
 
-from h_arcane.core.rl.checkpoint import CheckpointInfo, discover_checkpoints
+from ergon_core.core.rl.checkpoint import CheckpointInfo, discover_checkpoints
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ async def watch_and_evaluate(
 
     Args:
         checkpoint_dir: directory to watch for ``checkpoint-NNN/`` dirs.
-        benchmark_type: Arcane benchmark slug.
+        benchmark_type: Ergon benchmark slug.
         evaluator_type: evaluator slug.
         model_base: base model for local evaluation (when not using ``on_checkpoint_cmd``).
         poll_interval_s: seconds between directory scans.
@@ -105,7 +105,7 @@ async def _run_local_eval(
     model_target = f"vllm:{ckpt.path}" if model_base else "stub-worker"
 
     cmd = [
-        "arcane",
+        "ergon",
         "benchmark",
         "run",
         "--benchmark",
@@ -122,8 +122,8 @@ async def _run_local_eval(
     logger.info("Running local eval for step %d: %s", ckpt.step, " ".join(cmd))
 
     env = dict(__import__("os").environ)
-    env["ARCANE_CHECKPOINT_STEP"] = str(ckpt.step)
-    env["ARCANE_CHECKPOINT_PATH"] = ckpt.path
+    env["ERGON_CHECKPOINT_STEP"] = str(ckpt.step)
+    env["ERGON_CHECKPOINT_PATH"] = ckpt.path
 
     try:
         proc = await asyncio.create_subprocess_exec(

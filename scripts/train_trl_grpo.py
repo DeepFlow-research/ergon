@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""On-VM entry point for TRL GRPO training with Arcane environments.
+"""On-VM entry point for TRL GRPO training with Ergon environments.
 
-Parses CLI args into a TrainingConfig and delegates to arcane_infra.
+Parses CLI args into a TrainingConfig and delegates to ergon_infra.
 This is the script that SkyPilot YAMLs call on the GPU node.
 
-For local development, prefer ``arcane train local`` which handles
+For local development, prefer ``ergon train local`` which handles
 definition creation and service checks automatically.
 
 Example::
@@ -25,10 +25,10 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-from h_arcane.core.persistence.shared.db import ensure_db  # noqa: E402
+from ergon_core.core.persistence.shared.db import ensure_db  # noqa: E402
 
-from arcane_infra.training.config import training_config_from_args  # noqa: E402
-from arcane_infra.training.trl_runner import run_trl_training  # noqa: E402
+from ergon_infra.training.config import training_config_from_args  # noqa: E402
+from ergon_infra.training.trl_runner import run_trl_training  # noqa: E402
 
 
 def main() -> int:

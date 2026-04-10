@@ -16,7 +16,7 @@ import pydantic_ai.models as _models
 from pydantic_ai.settings import ModelSettings
 import torch
 import outlines
-from h_arcane.core.providers.generation.model_resolution import ResolvedModel
+from ergon_core.core.providers.generation.model_resolution import ResolvedModel
 
 logger = logging.getLogger(__name__)
 

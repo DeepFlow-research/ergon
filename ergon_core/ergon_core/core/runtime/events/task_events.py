@@ -6,7 +6,7 @@ These mirror the ref codebase events but use definition_id instead of experiment
 from typing import ClassVar, Literal
 from uuid import UUID
 
-from h_arcane.core.runtime.events.base import InngestEventContract
+from ergon_core.core.runtime.events.base import InngestEventContract
 
 SANDBOX_SKIPPED: Literal["skipped"] = "skipped"
 SandboxId = str | Literal["skipped"]

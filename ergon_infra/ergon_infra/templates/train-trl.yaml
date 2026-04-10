@@ -1,11 +1,13 @@
-# Single-node TRL GRPO training with Arcane environments.
+# Single-node TRL GRPO training with Ergon environments.
+# TODO: git clone below requires the repo to be public. Until then, use
+#       file_mounts to sync local source (see /tmp/ac2-gpu-test.yaml pattern).
 #
-#   sky launch arcane_infra/arcane_infra/templates/train-trl.yaml -y \
+#   sky launch ergon_infra/ergon_infra/templates/train-trl.yaml -y \
 #     --env DEFINITION_ID=<uuid> \
 #     --env MODEL=Qwen/Qwen2.5-7B \
 #     --env BENCHMARK=smoke-test
 
-name: arcane-training
+name: ergon-training
 
 resources:
   accelerators: ${GPU_TYPE:-A100}:${GPU_COUNT:-4}
@@ -13,7 +15,7 @@ resources:
 
 file_mounts:
   /checkpoints:
-    source: ${CHECKPOINT_BUCKET:-s3://my-arcane-checkpoints}
+    source: ${CHECKPOINT_BUCKET:-s3://my-ergon-checkpoints}
     mode: MOUNT_CACHED
 
 envs:
@@ -21,25 +23,49 @@ envs:
   MODEL:
   BENCHMARK: ${BENCHMARK:-smoke-test}
   VLLM_MODE: ${VLLM_MODE:-server}
+  VLLM_PORT: ${VLLM_PORT:-8000}
+  VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-4096}
+  VLLM_GPU_MEM_UTIL: ${VLLM_GPU_MEM_UTIL:-0.3}
   NUM_GENERATIONS: ${NUM_GENERATIONS:-8}
   LEARNING_RATE: ${LEARNING_RATE:-1e-5}
   SAVE_STEPS: ${SAVE_STEPS:-50}
   TIMEOUT: ${TIMEOUT:-300}
 
 setup: |
-  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
-  cd /tmp/arcane
-  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli -e ./arcane_infra
+  git clone https://github.com/DeepFlow-research/ergon.git /tmp/ergon
+  cd /tmp/ergon
+  pip install -e ./ergon_core -e ./ergon_builtins -e ./ergon_cli -e ./ergon_infra
   pip install "trl[vllm]>=1.0.0,<2.0.0" datasets transformers
 
 run: |
-  arcane train local \
+  # Start vLLM HTTP server in the background so MacBook workers can
+  # reach it for generation. TRL syncs weights to this server via NCCL.
+  if [ "$VLLM_MODE" = "server" ]; then
+    trl vllm-serve \
+      --model "$MODEL" \
+      --port "$VLLM_PORT" \
+      --max-model-len "$VLLM_MAX_MODEL_LEN" \
+      --gpu-memory-utilization "$VLLM_GPU_MEM_UTIL" &
+    VLLM_PID=$!
+    echo "Waiting for vLLM server on port $VLLM_PORT..."
+    for i in $(seq 1 60); do
+      curl -sf "http://localhost:$VLLM_PORT/health" && break
+      sleep 5
+    done
+  fi
+
+  ergon train local \
     --benchmark "$BENCHMARK" \
     --definition-id "$DEFINITION_ID" \
     --model "$MODEL" \
     --vllm-mode "$VLLM_MODE" \
+    --vllm-server-url "http://localhost:$VLLM_PORT" \
+    --vllm-max-model-length "$VLLM_MAX_MODEL_LEN" \
+    --vllm-gpu-memory-utilization "$VLLM_GPU_MEM_UTIL" \
     --output-dir /checkpoints \
     --save-steps "$SAVE_STEPS" \
     --num-generations "$NUM_GENERATIONS" \
     --learning-rate "$LEARNING_RATE" \
     --timeout "$TIMEOUT"
+
+  [ -n "${VLLM_PID:-}" ] && kill $VLLM_PID 2>/dev/null

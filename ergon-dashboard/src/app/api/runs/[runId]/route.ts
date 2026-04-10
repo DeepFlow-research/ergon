@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { config } from "@/lib/config";
 import { parseRunSnapshot } from "@/lib/contracts/rest";
-import { fetchArcaneApi } from "@/lib/serverApi";
+import { fetchErgonApi } from "@/lib/serverApi";
 import { getHarnessRun } from "@/lib/testing/dashboardHarness";
 
 interface RouteContext {
@@ -23,7 +23,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   try {
-    const response = await fetchArcaneApi(`/runs/${runId}`);
+    const response = await fetchErgonApi(`/runs/${runId}`);
     const body = await response.json();
     if (response.ok) {
       return NextResponse.json(parseRunSnapshot(body), { status: response.status });
@@ -32,7 +32,7 @@ export async function GET(_request: Request, context: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       {
-        detail: `Arcane API is unavailable while loading run ${runId}.`,
+        detail: `Ergon API is unavailable while loading run ${runId}.`,
         error: error instanceof Error ? error.message : "Unknown backend fetch failure",
       },
       { status: 503 },

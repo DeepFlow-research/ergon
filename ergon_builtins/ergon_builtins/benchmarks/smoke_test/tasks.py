@@ -11,7 +11,7 @@ Patterns
 - diamond:  start -> [left, right] -> join  (fan-out / fan-in)
 """
 
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.task_types import BenchmarkTask
 
 
 def single_task(instance_key: str = "default") -> list[BenchmarkTask]:

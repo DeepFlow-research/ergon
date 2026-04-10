@@ -1,6 +1,6 @@
 """Cloud passthrough: resolves ``openai:``, ``anthropic:``, etc. by passing through to PydanticAI."""
 
-from h_arcane.core.providers.generation.model_resolution import ResolvedModel
+from ergon_core.core.providers.generation.model_resolution import ResolvedModel
 
 
 def resolve_cloud(

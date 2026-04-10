@@ -6,7 +6,7 @@ import {
   parseCohortSummary,
   parseUpdateCohortRequest,
 } from "@/lib/contracts/rest";
-import { fetchArcaneApi } from "@/lib/serverApi";
+import { fetchErgonApi } from "@/lib/serverApi";
 import { getHarnessCohort, updateHarnessCohortStatus } from "@/lib/testing/dashboardHarness";
 
 interface RouteContext {
@@ -27,7 +27,7 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   try {
-    const response = await fetchArcaneApi(`/cohorts/${cohortId}`);
+    const response = await fetchErgonApi(`/cohorts/${cohortId}`);
     const body = await response.json();
     if (response.ok) {
       return NextResponse.json(parseCohortDetail(body), { status: response.status });
@@ -36,7 +36,7 @@ export async function GET(_request: Request, context: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       {
-        detail: `Arcane API is unavailable while loading cohort ${cohortId}.`,
+        detail: `Ergon API is unavailable while loading cohort ${cohortId}.`,
         error: error instanceof Error ? error.message : "Unknown backend fetch failure",
       },
       { status: 503 },
@@ -66,7 +66,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
-    const response = await fetchArcaneApi(`/cohorts/${cohortId}`, {
+    const response = await fetchErgonApi(`/cohorts/${cohortId}`, {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
@@ -81,7 +81,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   } catch (error) {
     return NextResponse.json(
       {
-        detail: `Arcane API is unavailable while updating cohort ${cohortId}.`,
+        detail: `Ergon API is unavailable while updating cohort ${cohortId}.`,
         error: error instanceof Error ? error.message : "Unknown backend fetch failure",
       },
       { status: 503 },

@@ -3,10 +3,10 @@
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from h_arcane.api.benchmark import Benchmark
-from h_arcane.api.evaluator import Evaluator
-from h_arcane.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
-from h_arcane.api.worker import Worker
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.evaluator import Evaluator
+from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
+from ergon_core.api.worker import Worker
 
 
 class Experiment:
@@ -143,7 +143,7 @@ class Experiment:
         # Deferred: api/ should not depend on core/ at module level.
         # These are the only api->core imports. Extracting to a composition
         # layer is flagged for v2.
-        from h_arcane.core.runtime.services.experiment_persistence_service import (
+        from ergon_core.core.runtime.services.experiment_persistence_service import (
             persist_experiment_definition,
         )
 
@@ -159,7 +159,7 @@ class Experiment:
     async def run(self) -> ExperimentRunHandle:
         """Ensure a persisted definition exists, create a run, and dispatch execution."""
         # Deferred: api/ should not depend on core/ at module level (same as persist).
-        from h_arcane.core.runtime.services.run_service import create_experiment_run
+        from ergon_core.core.runtime.services.run_service import create_experiment_run
 
         if self._persisted is None:
             self.persist()

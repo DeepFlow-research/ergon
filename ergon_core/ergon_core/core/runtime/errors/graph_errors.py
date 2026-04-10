@@ -10,7 +10,7 @@ NonRetriableError at the function boundary if needed.
 import logging
 from uuid import UUID
 
-logger = logging.getLogger("arcane.graph")
+logger = logging.getLogger("ergon.graph")
 
 
 class GraphError(Exception):

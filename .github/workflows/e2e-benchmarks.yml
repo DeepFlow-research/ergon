@@ -3,10 +3,10 @@ name: E2E Benchmarks
 on:
   pull_request:
     paths:
-      - "h_arcane/**"
-      - "arcane_builtins/**"
-      - "arcane_cli/**"
-      - "arcane_infra/**"
+      - "ergon_core/**"
+      - "ergon_builtins/**"
+      - "ergon_cli/**"
+      - "ergon_infra/**"
       - "tests/e2e/**"
       - "docker-compose.ci.yml"
       - "Dockerfile"
@@ -42,7 +42,7 @@ jobs:
 
       - name: Run stubbed E2E tests
         env:
-          ARCANE_DATABASE_URL: postgresql://h_arcane:ci_test@localhost:5433/h_arcane
+          ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
@@ -84,7 +84,7 @@ jobs:
 
       - name: Run sandbox E2E tests
         env:
-          ARCANE_DATABASE_URL: postgresql://h_arcane:ci_test@localhost:5433/h_arcane
+          ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev

@@ -62,7 +62,7 @@ from opentelemetry.trace import (
 from opentelemetry.trace.propagation import set_span_in_context
 from opentelemetry.trace.span import TraceState
 
-from h_arcane.core.settings import settings
+from ergon_core.core.settings import settings
 from pydantic import BaseModel, Field
 
 TRACE_FLAGS_SAMPLED = 0x01

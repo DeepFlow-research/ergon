@@ -1,6 +1,6 @@
 """TrainingConfig: Pydantic model carrying all training parameters.
 
-Used by both ``arcane train local`` and ``arcane train launch``.
+Used by both ``ergon train local`` and ``ergon train launch``.
 Also usable directly from notebooks or CI scripts.
 """
 
@@ -14,7 +14,7 @@ class TrainingConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    # -- Arcane ---------------------------------------------------------------
+    # -- Ergon ----------------------------------------------------------------
     benchmark: str
     evaluator: str = "stub-rubric"
     limit: int | None = None
@@ -25,8 +25,14 @@ class TrainingConfig(BaseModel):
 
     # -- Device ---------------------------------------------------------------
     device: str = "cuda"
-    vllm_mode: str | None = "colocate"
+    # "server" is correct for Ergon: MacBook workers need an HTTP endpoint
+    # to call vLLM for generation. "colocate" runs vLLM in-process (no HTTP
+    # server), which is unreachable from the environment plane.
+    vllm_mode: str | None = "server"
     vllm_server_url: str | None = None
+    vllm_max_model_length: int = 4096
+    vllm_gpu_memory_utilization: float = 0.3
+    gradient_checkpointing: bool = True
 
     # -- GRPO -----------------------------------------------------------------
     num_generations: int = 4
@@ -39,7 +45,7 @@ class TrainingConfig(BaseModel):
     max_steps: int | None = None
 
     # -- Output ---------------------------------------------------------------
-    output_dir: str = ".arcane/training/checkpoints"
+    output_dir: str = ".ergon/training/checkpoints"
 
     # -- Rollout ---------------------------------------------------------------
     timeout_s: float = Field(default=300.0, gt=0)
@@ -49,7 +55,7 @@ class TrainingConfig(BaseModel):
 
 
 def _build_training_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Arcane training configuration")
+    p = argparse.ArgumentParser(description="Ergon training configuration")
 
     p.add_argument("--benchmark", type=str, required=True, help="Benchmark slug")
     p.add_argument("--evaluator", type=str, default="stub-rubric", help="Evaluator slug")
@@ -66,12 +72,26 @@ def _build_training_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--vllm-mode",
         type=str,
-        default="colocate",
+        default="server",
         choices=["colocate", "server"],
-        help="vLLM mode (ignored if --device cpu)",
+        help="vLLM mode: 'server' (default, required for remote env plane) or 'colocate' (in-process)",
     )
     p.add_argument(
         "--vllm-server-url", type=str, default=None, help="vLLM server URL (server mode)"
+    )
+    p.add_argument(
+        "--vllm-max-model-length", type=int, default=4096, help="Max sequence length for vLLM"
+    )
+    p.add_argument(
+        "--vllm-gpu-memory-utilization",
+        type=float,
+        default=0.3,
+        help="Fraction of GPU memory for vLLM KV cache (0.0-1.0)",
+    )
+    p.add_argument(
+        "--no-gradient-checkpointing",
+        action="store_true",
+        help="Disable gradient checkpointing (uses more memory but faster)",
     )
 
     p.add_argument("--num-generations", type=int, default=4, help="GRPO group size")
@@ -86,8 +106,8 @@ def _build_training_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--output-dir",
         type=str,
-        default=".arcane/training/checkpoints",
-        help="Where to write checkpoints (default: .arcane/training/checkpoints)",
+        default=".ergon/training/checkpoints",
+        help="Where to write checkpoints (default: .ergon/training/checkpoints)",
     )
 
     p.add_argument("--timeout", type=float, default=300.0, help="Seconds to wait per episode batch")
@@ -111,6 +131,9 @@ def training_config_from_args(argv: list[str] | None = None) -> TrainingConfig:
         device=args.device,
         vllm_mode=vllm_mode,
         vllm_server_url=args.vllm_server_url,
+        vllm_max_model_length=args.vllm_max_model_length,
+        vllm_gpu_memory_utilization=args.vllm_gpu_memory_utilization,
+        gradient_checkpointing=not args.no_gradient_checkpointing,
         num_generations=args.num_generations,
         max_completion_length=args.max_completion_length,
         learning_rate=args.learning_rate,

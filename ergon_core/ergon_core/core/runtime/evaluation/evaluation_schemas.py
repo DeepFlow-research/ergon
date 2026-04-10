@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from h_arcane.api.criterion import Criterion
+from ergon_core.api.criterion import Criterion
 from pydantic import BaseModel, ConfigDict, Field
 
 

@@ -1,4 +1,4 @@
-"""Non-retryable Inngest errors for the Arcane runtime.
+"""Non-retryable Inngest errors for the Ergon runtime.
 
 Each subclass represents a distinct failure category. All auto-log at
 ERROR level on construction so the failure is always visible in stdout,
@@ -16,11 +16,11 @@ from uuid import UUID
 
 import inngest
 
-logger = logging.getLogger("arcane.runtime.errors")
+logger = logging.getLogger("ergon.runtime.errors")
 
 
-class ArcaneNonRetriableError(inngest.NonRetriableError):
-    """Base for all Arcane non-retryable errors. Logs on construction."""
+class ErgonNonRetriableError(inngest.NonRetriableError):
+    """Base for all Ergon non-retryable errors. Logs on construction."""
 
     def __init__(self, message: str, **context: object) -> None:
         ctx_str = " ".join(f"{k}={v}" for k, v in context.items()) if context else ""
@@ -29,7 +29,7 @@ class ArcaneNonRetriableError(inngest.NonRetriableError):
         super().__init__(message=full)
 
 
-class RegistryLookupError(ArcaneNonRetriableError):
+class RegistryLookupError(ErgonNonRetriableError):
     """A slug was not found in the builtins registry.
 
     This is a definition-level problem: the experiment references a
@@ -44,7 +44,7 @@ class RegistryLookupError(ArcaneNonRetriableError):
         )
 
 
-class DataIntegrityError(ArcaneNonRetriableError):
+class DataIntegrityError(ErgonNonRetriableError):
     """A required DB row is missing or corrupt.
 
     The row should have been created by a prior step in the pipeline.
@@ -59,7 +59,7 @@ class DataIntegrityError(ArcaneNonRetriableError):
         )
 
 
-class ConfigurationError(ArcaneNonRetriableError):
+class ConfigurationError(ErgonNonRetriableError):
     """An experiment definition has invalid or missing configuration.
 
     Examples: worker_type not set on a task assignment, unknown status
@@ -70,7 +70,7 @@ class ConfigurationError(ArcaneNonRetriableError):
         super().__init__(detail, **context)
 
 
-class ContractViolationError(ArcaneNonRetriableError):
+class ContractViolationError(ErgonNonRetriableError):
     """A runtime contract or invariant was broken.
 
     Examples: an Inngest step returned an unexpected type, a spec/result

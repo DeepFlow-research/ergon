@@ -1,11 +1,11 @@
-"""Arcane CLI entry point."""
+"""Ergon CLI entry point."""
 
 import argparse
 import sys
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="arcane", description="Arcane experiment orchestration")
+    parser = argparse.ArgumentParser(prog="ergon", description="Ergon experiment orchestration")
     sub = parser.add_subparsers(dest="command")
 
     bench = sub.add_parser("benchmark", help="Benchmark operations")
@@ -86,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_ckpt.add_argument("--eval-limit", type=int, default=None, help="Max tasks")
 
     # -- train (RL training) --------------------------------------------------
-    train_cmd = sub.add_parser("train", help="RL training with Arcane environments")
+    train_cmd = sub.add_parser("train", help="RL training with Ergon environments")
     train_sub = train_cmd.add_subparsers(dest="train_action")
 
     train_local = train_sub.add_parser("local", help="Run training on current hardware")
@@ -100,12 +100,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     train_local.add_argument(
         "--vllm-mode",
-        default="colocate",
+        default="server",
         choices=["colocate", "server"],
-        help="vLLM mode (ignored with --device cpu)",
+        help="vLLM mode: 'server' (default, required for remote env plane) or 'colocate' (in-process)",
     )
     train_local.add_argument(
         "--vllm-server-url", default=None, help="vLLM server URL (server mode)"
+    )
+    train_local.add_argument(
+        "--vllm-max-model-length", type=int, default=4096, help="Max sequence length for vLLM"
+    )
+    train_local.add_argument(
+        "--vllm-gpu-memory-utilization",
+        type=float,
+        default=0.3,
+        help="Fraction of GPU memory for vLLM KV cache (0.0-1.0)",
+    )
+    train_local.add_argument(
+        "--no-gradient-checkpointing",
+        action="store_true",
+        help="Disable gradient checkpointing (uses more memory but faster)",
     )
     train_local.add_argument("--num-generations", type=int, default=4, help="GRPO group size")
     train_local.add_argument("--max-completion-length", type=int, default=2048)
@@ -116,7 +130,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_local.add_argument("--save-steps", type=int, default=50)
     train_local.add_argument("--max-steps", type=int, default=None)
     train_local.add_argument(
-        "--output-dir", default=".arcane/training/checkpoints", help="Checkpoint output dir"
+        "--output-dir", default=".ergon/training/checkpoints", help="Checkpoint output dir"
     )
     train_local.add_argument(
         "--timeout", type=float, default=300.0, help="Seconds per episode batch"
@@ -132,32 +146,32 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "benchmark":
         # Deferred: CLI startup cost
-        from arcane_cli.commands.benchmark import handle_benchmark
+        from ergon_cli.commands.benchmark import handle_benchmark
 
         return handle_benchmark(args)
     elif args.command == "run":
         # Deferred: CLI startup cost
-        from arcane_cli.commands.run import handle_run
+        from ergon_cli.commands.run import handle_run
 
         return handle_run(args)
     elif args.command == "worker":
         # Deferred: CLI startup cost
-        from arcane_cli.commands.worker import handle_worker
+        from ergon_cli.commands.worker import handle_worker
 
         return handle_worker(args)
     elif args.command == "evaluator":
         # Deferred: CLI startup cost
-        from arcane_cli.commands.evaluator import handle_evaluator
+        from ergon_cli.commands.evaluator import handle_evaluator
 
         return handle_evaluator(args)
     elif args.command == "eval":
         # Deferred: CLI startup cost
-        from arcane_cli.commands.eval import handle_eval
+        from ergon_cli.commands.eval import handle_eval
 
         return handle_eval(args)
     elif args.command == "train":
         # Deferred: heavy optional deps (TRL, vLLM, etc.)
-        from arcane_cli.commands.train import handle_train
+        from ergon_cli.commands.train import handle_train
 
         return handle_train(args)
     else:

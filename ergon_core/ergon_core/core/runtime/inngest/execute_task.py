@@ -8,33 +8,33 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from h_arcane.core.runtime.errors import ConfigurationError, ContractViolationError
-from h_arcane.core.runtime.events.task_events import (
+from ergon_core.core.runtime.errors import ConfigurationError, ContractViolationError
+from ergon_core.core.runtime.events.task_events import (
     SANDBOX_SKIPPED,
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,
 )
-from h_arcane.core.runtime.inngest_client import RUN_CANCEL, inngest_client
-from h_arcane.core.runtime.services.child_function_payloads import (
+from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.services.child_function_payloads import (
     PersistOutputsRequest,
     SandboxSetupRequest,
     WorkerExecuteRequest,
 )
-from h_arcane.core.runtime.services.inngest_function_results import (
+from ergon_core.core.runtime.services.inngest_function_results import (
     PersistOutputsResult,
     SandboxReadyResult,
     TaskExecuteResult,
     WorkerExecuteResult,
 )
-from h_arcane.core.runtime.services.orchestration_dto import (
+from ergon_core.core.runtime.services.orchestration_dto import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
     PrepareTaskExecutionCommand,
     PreparedTaskExecution,
 )
-from h_arcane.core.runtime.services.task_execution_service import TaskExecutionService
-from h_arcane.core.runtime.tracing import (
+from ergon_core.core.runtime.services.task_execution_service import TaskExecutionService
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     get_trace_sink,
     task_execute_context,
@@ -71,9 +71,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             )
         )
 
-    prepared = await ctx.step.run(
-        "prepare-execution", _prepare, output_type=PreparedTaskExecution
-    )
+    prepared = await ctx.step.run("prepare-execution", _prepare, output_type=PreparedTaskExecution)
 
     if prepared.execution_id is None and not prepared.skipped:
         raise RuntimeError(f"prepare returned no execution_id for task {payload.task_id}")
@@ -109,13 +107,13 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
     try:
         # Deferred: child function modules register with Inngest at import
         # time. Eager cross-imports between registered modules cause cycles.
-        from h_arcane.core.runtime.inngest.persist_outputs import persist_outputs_fn
+        from ergon_core.core.runtime.inngest.persist_outputs import persist_outputs_fn
 
         # Deferred: avoid circular import
-        from h_arcane.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
+        from ergon_core.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
 
         # Deferred: avoid circular import
-        from h_arcane.core.runtime.inngest.worker_execute import worker_execute_fn
+        from ergon_core.core.runtime.inngest.worker_execute import worker_execute_fn
 
         sandbox_result: SandboxReadyResult = await ctx.step.invoke(
             "sandbox-setup",

@@ -1,6 +1,6 @@
-# Arcane Extension
+# Ergon
 
-Monorepo for the Arcane experiment orchestration platform.
+Monorepo for the Ergon research runtime for agentic reinforcement learning.
 
 ## Environment setup
 
@@ -18,11 +18,11 @@ Do not rely on a sibling `../slopcop` checkout or `cargo build` for slopcop; CI 
 
 UV workspace with four Python packages and a Next.js dashboard:
 
-- `h_arcane/` — Core library: public API types, FastAPI app, persistence, Inngest runtime, RL adapters, providers
-- `arcane_builtins/` — Built-in benchmarks, workers, evaluators, criteria, rubrics, registries
-- `arcane_cli/` — CLI (`arcane` command): benchmark, train, run, eval commands
-- `arcane_infra/` — Infrastructure: TRL training runner, SkyPilot provisioning, deployment templates
-- `arcane-dashboard/` — Next.js frontend dashboard (pnpm)
+- `ergon_core/` — Core library: public API types, FastAPI app, persistence, Inngest runtime, RL adapters, providers
+- `ergon_builtins/` — Built-in benchmarks, workers, evaluators, criteria, rubrics, registries
+- `ergon_cli/` — CLI (`ergon` command): benchmark, train, run, eval commands
+- `ergon_infra/` — Infrastructure: TRL training runner, SkyPilot provisioning, deployment templates
+- `ergon-dashboard/` — Next.js frontend dashboard (pnpm)
 - `tests/` — Integration, e2e, and state tests
 - `scripts/` — Standalone entrypoints (e.g. TRL GRPO training)
 
@@ -32,7 +32,7 @@ Commands wired at the repo root:
 
 ```bash
 pnpm run check:be    # ruff lint + format + ty + slopcop
-pnpm run check:fe    # eslint + tsc (arcane-dashboard)
+pnpm run check:fe    # eslint + tsc (ergon-dashboard)
 pnpm run check:fast  # check:be then check:fe
 ```
 
@@ -43,8 +43,8 @@ Individual backend scripts: `check:be:lint`, `check:be:fmt`, `check:be:type`, `c
 Ruff autofix:
 
 ```bash
-uv run ruff check --fix h_arcane arcane_builtins arcane_cli arcane_infra tests scripts
-uv run ruff format h_arcane arcane_builtins arcane_cli arcane_infra tests scripts
+uv run ruff check --fix ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
+uv run ruff format ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
 ```
 
 ## Tests

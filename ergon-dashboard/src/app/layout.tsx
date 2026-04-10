@@ -16,7 +16,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Arcane Dashboard",
+  title: "Ergon Dashboard",
   description: "Real-time workflow monitoring and visualization",
 };
 

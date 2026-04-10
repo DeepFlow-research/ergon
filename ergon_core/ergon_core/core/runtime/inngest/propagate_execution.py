@@ -7,23 +7,23 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from h_arcane.core.runtime.events.task_events import (
+from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,
     WorkflowCompletedEvent,
     WorkflowFailedEvent,
 )
-from h_arcane.core.runtime.inngest_client import RUN_CANCEL, inngest_client
-from h_arcane.core.runtime.services.inngest_function_results import TaskPropagateResult
-from h_arcane.core.runtime.services.orchestration_dto import (
+from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.services.inngest_function_results import TaskPropagateResult
+from ergon_core.core.runtime.services.orchestration_dto import (
     PropagateTaskCompletionCommand,
     WorkflowTerminalState,
 )
-from h_arcane.core.runtime.services.task_propagation_service import (
+from ergon_core.core.runtime.services.task_propagation_service import (
     TaskPropagationService,
 )
-from h_arcane.core.runtime.tracing import (
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     get_trace_sink,
     task_propagate_context,

@@ -95,7 +95,7 @@ export default function TrainingPage() {
       {!isLoading && sessions.length === 0 && (
         <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-700 dark:bg-gray-900">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            No training sessions found. Run <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">arcane train local</code> to start one.
+            No training sessions found. Run <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">ergon train local</code> to start one.
           </p>
         </div>
       )}

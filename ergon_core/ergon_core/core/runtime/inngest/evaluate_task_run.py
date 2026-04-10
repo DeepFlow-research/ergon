@@ -7,29 +7,29 @@ runs all criteria, aggregates results, persists RunTaskEvaluation.
 from datetime import UTC, datetime
 
 import inngest
-from arcane_builtins.registry import EVALUATORS
-from h_arcane.api.task_types import BenchmarkTask
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.telemetry.evaluation_summary import (
+from ergon_builtins.registry import EVALUATORS
+from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.evaluation_summary import (
     CriterionResultEntry,
     EvaluationSummary,
 )
-from h_arcane.core.persistence.telemetry.models import RunTaskEvaluation
-from h_arcane.core.runtime.errors import ContractViolationError, RegistryLookupError
-from h_arcane.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
-from h_arcane.core.runtime.evaluation.inngest_executor import InngestCriterionExecutor
-from h_arcane.core.runtime.inngest_client import RUN_CANCEL, inngest_client
-from h_arcane.core.runtime.services.child_function_payloads import (
+from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
+from ergon_core.core.runtime.errors import ContractViolationError, RegistryLookupError
+from ergon_core.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
+from ergon_core.core.runtime.evaluation.inngest_executor import InngestCriterionExecutor
+from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.services.child_function_payloads import (
     EvaluateTaskRunRequest,
 )
-from h_arcane.core.runtime.services.inngest_function_results import (
+from ergon_core.core.runtime.services.inngest_function_results import (
     EvaluateTaskRunResult,
 )
-from h_arcane.core.runtime.services.rubric_evaluation_service import (
+from ergon_core.core.runtime.services.rubric_evaluation_service import (
     EvaluationServiceResult,
     RubricEvaluationService,
 )
-from h_arcane.core.runtime.tracing import (
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     evaluation_task_context,
     get_trace_sink,

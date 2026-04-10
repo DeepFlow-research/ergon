@@ -3,13 +3,13 @@
 from collections import Counter
 from uuid import UUID
 
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.shared.enums import RunStatus
-from h_arcane.core.persistence.telemetry.models import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohortStats,
     RunRecord,
 )
-from h_arcane.core.utils import utcnow
+from ergon_core.core.utils import utcnow
 from sqlmodel import select
 
 

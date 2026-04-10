@@ -11,18 +11,16 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install uv
 
-# Install h_arcane package
-COPY h_arcane/pyproject.toml h_arcane/
-COPY h_arcane/h_arcane/ h_arcane/h_arcane/
-RUN cd h_arcane && uv pip install --system -e ".[dev]"
+# Install ergon_core package
+COPY ergon_core/pyproject.toml ergon_core/
+COPY ergon_core/ergon_core/ ergon_core/ergon_core/
+RUN cd ergon_core && uv pip install --system -e ".[dev]"
 
-# Install arcane_builtins package
-COPY arcane_builtins/pyproject.toml arcane_builtins/
-COPY arcane_builtins/arcane_builtins/ arcane_builtins/arcane_builtins/
-RUN cd arcane_builtins && uv pip install --system -e .
-
-COPY .env ./
+# Install ergon_builtins package
+COPY ergon_builtins/pyproject.toml ergon_builtins/
+COPY ergon_builtins/ergon_builtins/ ergon_builtins/ergon_builtins/
+RUN cd ergon_builtins && uv pip install --system -e .
 
 EXPOSE 9000
 
-CMD ["uvicorn", "h_arcane.core.api.app:app", "--host", "0.0.0.0", "--port", "9000"]
+CMD ["uvicorn", "ergon_core.core.api.app:app", "--host", "0.0.0.0", "--port", "9000"]

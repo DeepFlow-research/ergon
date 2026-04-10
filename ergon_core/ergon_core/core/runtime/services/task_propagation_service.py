@@ -1,13 +1,13 @@
 """Task propagation: resolve DAG dependencies and detect terminal states."""
 
-from h_arcane.core.persistence.definitions.models import ExperimentDefinitionTask
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.runtime.execution.propagation import (
+from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.runtime.execution.propagation import (
     is_workflow_complete,
     is_workflow_failed,
     on_task_completed,
 )
-from h_arcane.core.runtime.services.orchestration_dto import (
+from ergon_core.core.runtime.services.orchestration_dto import (
     PropagateTaskCompletionCommand,
     PropagationResult,
     TaskDescriptor,

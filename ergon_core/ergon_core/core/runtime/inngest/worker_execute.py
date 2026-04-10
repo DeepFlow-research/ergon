@@ -9,20 +9,20 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from arcane_builtins.registry import WORKERS
-from h_arcane.api.results import WorkerResult
-from h_arcane.api.task_types import BenchmarkTask
-from h_arcane.api.worker_context import WorkerContext
-from h_arcane.core.dashboard.event_contracts import DashboardGenerationTurnEvent
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.telemetry.models import RunAction
-from h_arcane.core.persistence.telemetry.repositories import GenerationTurnRepository
-from h_arcane.core.providers.generation.pydantic_ai_format import extract_text, extract_tool_calls
-from h_arcane.core.runtime.errors import RegistryLookupError
-from h_arcane.core.runtime.inngest_client import inngest_client
-from h_arcane.core.runtime.services.child_function_payloads import WorkerExecuteRequest
-from h_arcane.core.runtime.services.inngest_function_results import WorkerExecuteResult
-from h_arcane.core.runtime.tracing import (
+from ergon_builtins.registry import WORKERS
+from ergon_core.api.results import WorkerResult
+from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.worker_context import WorkerContext
+from ergon_core.core.dashboard.event_contracts import DashboardGenerationTurnEvent
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import RunAction
+from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
+from ergon_core.core.providers.generation.pydantic_ai_format import extract_text, extract_tool_calls
+from ergon_core.core.runtime.errors import RegistryLookupError
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.child_function_payloads import WorkerExecuteRequest
+from ergon_core.core.runtime.services.inngest_function_results import WorkerExecuteResult
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     action_context,
     get_trace_sink,

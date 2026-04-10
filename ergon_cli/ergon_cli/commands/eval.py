@@ -3,7 +3,7 @@
 import asyncio
 from argparse import Namespace
 
-from h_arcane.core.rl.eval_runner import evaluate_checkpoint, watch_and_evaluate
+from ergon_core.core.rl.eval_runner import evaluate_checkpoint, watch_and_evaluate
 
 
 def handle_eval(args: Namespace) -> int:
@@ -12,7 +12,7 @@ def handle_eval(args: Namespace) -> int:
     elif args.eval_action == "checkpoint":
         return _checkpoint(args)
     else:
-        print("Usage: arcane eval {watch|checkpoint}")
+        print("Usage: ergon eval {watch|checkpoint}")
         return 1
 
 

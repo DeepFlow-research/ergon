@@ -1,1 +1,1 @@
-"""Arcane CLI for local benchmark workflows."""
+"""Ergon CLI for local benchmark workflows."""

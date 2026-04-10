@@ -5,11 +5,11 @@ from contextlib import asynccontextmanager
 import inngest.fast_api
 from fastapi import FastAPI
 
-from h_arcane.core.api.cohorts import router as cohorts_router
-from h_arcane.core.api.runs import router as runs_router
-from h_arcane.core.persistence.shared.db import ensure_db
-from h_arcane.core.runtime.inngest_client import inngest_client
-from h_arcane.core.runtime.inngest_registry import ALL_FUNCTIONS
+from ergon_core.core.api.cohorts import router as cohorts_router
+from ergon_core.core.api.runs import router as runs_router
+from ergon_core.core.persistence.shared.db import ensure_db
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest_registry import ALL_FUNCTIONS
 
 
 @asynccontextmanager
@@ -19,8 +19,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="H-Arcane",
-    description="Arcane experiment orchestration API",
+    title="Ergon Core",
+    description="Ergon experiment orchestration API",
     version="0.1.0",
     lifespan=lifespan,
 )

@@ -3,10 +3,10 @@
 from argparse import Namespace
 from uuid import UUID
 from sqlmodel import select
-from arcane_cli.rendering import render_table
-from h_arcane.core.persistence.shared.db import ensure_db, get_session
-from h_arcane.core.runtime.services.run_service import cancel_run as do_cancel
-from h_arcane.core.persistence.telemetry.models import RunRecord
+from ergon_cli.rendering import render_table
+from ergon_core.core.persistence.shared.db import ensure_db, get_session
+from ergon_core.core.runtime.services.run_service import cancel_run as do_cancel
+from ergon_core.core.persistence.telemetry.models import RunRecord
 
 
 def handle_run(args: Namespace) -> int:
@@ -15,7 +15,7 @@ def handle_run(args: Namespace) -> int:
     elif args.run_action == "cancel":
         return cancel_run(args)
     else:
-        print("Usage: arcane run {list|cancel}")
+        print("Usage: ergon run {list|cancel}")
         return 1
 
 

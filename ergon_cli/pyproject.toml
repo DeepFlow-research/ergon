@@ -1,12 +1,13 @@
 [project]
-name = "arcane-cli"
+name = "ergon-cli"
 version = "0.1.0"
-description = "CLI for Arcane experiment orchestration"
+description = "CLI for Ergon experiment orchestration"
+license = "Apache-2.0"
 requires-python = ">=3.13"
-dependencies = ["h-arcane", "arcane-builtins[all]"]
+dependencies = ["ergon-core", "ergon-builtins[all]"]
 
 [project.optional-dependencies]
-training = ["arcane-infra[all]"]
+training = ["ergon-infra[all]"]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -14,7 +15,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["arcane_cli*"]
+include = ["ergon_cli*"]
 
 [project.scripts]
-arcane = "arcane_cli.main:main"
+ergon = "ergon_cli.main:main"

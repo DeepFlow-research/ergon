@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
-from h_arcane.core.api.schemas import (
+from ergon_core.core.api.schemas import (
     RunActionDto,
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
@@ -24,16 +24,16 @@ from h_arcane.core.api.schemas import (
     TrainingMetricDto,
     TrainingSessionDto,
 )
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionTaskDependency,
     ExperimentDefinitionWorker,
 )
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.shared.enums import TaskExecutionStatus
-from h_arcane.core.persistence.telemetry.models import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import (
     RunAction,
     RunGenerationTurn,
     RunRecord,

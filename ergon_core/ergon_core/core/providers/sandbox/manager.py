@@ -8,12 +8,12 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
-from h_arcane.core.providers.sandbox.event_sink import (
+from ergon_core.core.providers.sandbox.event_sink import (
     NoopSandboxEventSink,
     SandboxEventSink,
 )
-from h_arcane.core.providers.sandbox.utils import _truncate, coerce_text
-from h_arcane.core.settings import settings
+from ergon_core.core.providers.sandbox.utils import _truncate, coerce_text
+from ergon_core.core.settings import settings
 from pydantic import BaseModel
 
 

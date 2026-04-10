@@ -4,11 +4,11 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from h_arcane.api.dependencies import check_packages
-from h_arcane.api.errors import DependencyError
-from h_arcane.api.results import WorkerResult
-from h_arcane.api.task_types import BenchmarkTask
-from h_arcane.api.worker_context import WorkerContext
+from ergon_core.api.dependencies import check_packages
+from ergon_core.api.errors import DependencyError
+from ergon_core.api.results import WorkerResult
+from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.worker_context import WorkerContext
 
 
 class Worker(ABC):

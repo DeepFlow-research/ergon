@@ -17,7 +17,7 @@ export const config = {
   inngestApiBaseUrl: process.env.INNGEST_API_BASE_URL,
 
   // Backend API
-  arcaneApiBaseUrl: process.env.ARCANE_API_BASE_URL || "http://localhost:9000",
+  ergonApiBaseUrl: process.env.ERGON_API_BASE_URL || "http://localhost:9000",
 
   // Socket.io
   socketCorsOrigin: process.env.SOCKET_CORS_ORIGIN || "*",

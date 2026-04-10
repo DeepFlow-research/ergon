@@ -4,7 +4,7 @@ Provides a factory for the default proof-verification criterion used
 by the MiniF2F rubric.
 """
 
-from arcane_builtins.benchmarks.minif2f.rules.proof_verification import (
+from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
 

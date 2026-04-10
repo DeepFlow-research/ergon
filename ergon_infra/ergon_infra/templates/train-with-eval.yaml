@@ -1,11 +1,13 @@
 # Training + eval watcher as a SkyPilot JobGroup.
+# TODO: git clone below requires the repo to be public. Until then, use
+#       file_mounts to sync local source (see /tmp/ac2-gpu-test.yaml pattern).
 #
-#   sky jobs launch arcane_infra/arcane_infra/templates/train-with-eval.yaml -y \
+#   sky jobs launch ergon_infra/ergon_infra/templates/train-with-eval.yaml -y \
 #     --env DEFINITION_ID=<uuid> \
 #     --env MODEL=Qwen/Qwen2.5-7B \
 #     --env BENCHMARK=gdpeval
 
-name: arcane-rl-full
+name: ergon-rl-full
 execution: parallel
 
 ---
@@ -16,7 +18,7 @@ resources:
 
 file_mounts:
   /checkpoints:
-    source: ${CHECKPOINT_BUCKET:-s3://my-arcane-checkpoints}
+    source: ${CHECKPOINT_BUCKET:-s3://my-ergon-checkpoints}
     mode: MOUNT_CACHED
 
 envs:
@@ -25,13 +27,13 @@ envs:
   BENCHMARK: ${BENCHMARK:-smoke-test}
 
 setup: |
-  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
-  cd /tmp/arcane
-  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli -e ./arcane_infra
+  git clone https://github.com/DeepFlow-research/ergon.git /tmp/ergon
+  cd /tmp/ergon
+  pip install -e ./ergon_core -e ./ergon_builtins -e ./ergon_cli -e ./ergon_infra
   pip install "trl[vllm]>=1.0.0,<2.0.0" datasets transformers
 
 run: |
-  arcane train local \
+  ergon train local \
     --benchmark "$BENCHMARK" \
     --definition-id "$DEFINITION_ID" \
     --model "$MODEL" \
@@ -47,7 +49,7 @@ resources:
 
 file_mounts:
   /checkpoints:
-    source: ${CHECKPOINT_BUCKET:-s3://my-arcane-checkpoints}
+    source: ${CHECKPOINT_BUCKET:-s3://my-ergon-checkpoints}
     mode: MOUNT
 
 envs:
@@ -55,15 +57,15 @@ envs:
   EVALUATOR: ${EVALUATOR:-stub-rubric}
 
 setup: |
-  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
-  cd /tmp/arcane
-  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli
+  git clone https://github.com/DeepFlow-research/ergon.git /tmp/ergon
+  cd /tmp/ergon
+  pip install -e ./ergon_core -e ./ergon_builtins -e ./ergon_cli
   pip install "skypilot-nightly[shadeform]"
 
 run: |
-  arcane eval watch \
+  ergon eval watch \
     --checkpoint-dir /checkpoints \
     --benchmark "$BENCHMARK" \
     --evaluator "$EVALUATOR" \
     --poll-interval "${POLL_INTERVAL:-120}" \
-    --on-checkpoint "sky launch arcane_infra/arcane_infra/templates/eval-only.yaml -y --env CHECKPOINT={path} --env BENCHMARK=$BENCHMARK"
+    --on-checkpoint "sky launch ergon_infra/ergon_infra/templates/eval-only.yaml -y --env CHECKPOINT={path} --env BENCHMARK=$BENCHMARK"

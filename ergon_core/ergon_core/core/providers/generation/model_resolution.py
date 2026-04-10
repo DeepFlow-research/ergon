@@ -3,7 +3,7 @@
 Dispatches ``model_target`` strings to the appropriate backend based on
 their prefix (``vllm:``, ``transformers:``, ``openai:``, etc.).
 
-Concrete backend implementations live in ``arcane_builtins.models``.
+Concrete backend implementations live in ``ergon_builtins.models``.
 This module owns the contract (``ResolvedModel``) and the dispatch logic.
 """
 
@@ -33,7 +33,7 @@ class ResolvedModel(BaseModel):
 
 
 # Backend resolver registry: prefix -> callable
-# Populated by arcane_builtins.registry at import time.
+# Populated by ergon_builtins.registry at import time.
 _BACKEND_REGISTRY: dict[str, Callable[..., ResolvedModel]] = {}
 
 

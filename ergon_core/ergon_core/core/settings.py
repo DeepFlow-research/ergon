@@ -9,8 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = Field(
-        default="postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane",
-        validation_alias=AliasChoices("ARCANE_DATABASE_URL", "DATABASE_URL"),
+        default="postgresql://ergon:ergon_dev@localhost:5433/ergon",
+        validation_alias=AliasChoices("ERGON_DATABASE_URL", "DATABASE_URL"),
     )
 
     openai_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     inngest_api_base_url: str = "http://localhost:8289"
 
     otel_traces_enabled: bool = False
-    otel_service_name: str = "h-arcane"
+    otel_service_name: str = "ergon-core"
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
     otel_exporter_otlp_insecure: bool = True
     otel_max_attribute_length: int = 4000
@@ -37,11 +37,11 @@ class Settings(BaseSettings):
     # Set by eval watcher / checkpoint subprocess (see `eval_runner.py`); optional in `.env`.
     checkpoint_step: int | None = Field(
         default=None,
-        validation_alias=AliasChoices("ARCANE_CHECKPOINT_STEP"),
+        validation_alias=AliasChoices("ERGON_CHECKPOINT_STEP"),
     )
     checkpoint_path: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("ARCANE_CHECKPOINT_PATH"),
+        validation_alias=AliasChoices("ERGON_CHECKPOINT_PATH"),
     )
 
     @property

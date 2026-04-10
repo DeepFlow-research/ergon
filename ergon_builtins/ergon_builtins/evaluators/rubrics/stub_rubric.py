@@ -3,9 +3,9 @@
 Bundles a single StubCriterion. For smoke tests only.
 """
 
-from h_arcane.api import Rubric
+from ergon_core.api import Rubric
 
-from arcane_builtins.evaluators.criteria.stub_criterion import StubCriterion
+from ergon_builtins.evaluators.criteria.stub_criterion import StubCriterion
 
 
 class StubRubric(Rubric):

@@ -1,6 +1,6 @@
 """Device resolution: map TrainingConfig to TRL GRPOConfig kwargs."""
 
-from arcane_infra.training.config import TrainingConfig
+from ergon_infra.training.config import TrainingConfig
 
 
 def resolve_device_mode(config: TrainingConfig) -> dict:

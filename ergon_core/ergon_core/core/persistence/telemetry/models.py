@@ -5,16 +5,26 @@ of truth for the definition itself.
 """
 
 from datetime import datetime
-from enum import StrEnum
+import sys
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        pass
+
+
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
-    from h_arcane.core.persistence.telemetry.evaluation_summary import (
+    from ergon_core.core.persistence.telemetry.evaluation_summary import (
         EvaluationSummary,
     )
 
-from h_arcane.core.utils import utcnow as _utcnow
+from ergon_core.core.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
@@ -284,7 +294,7 @@ class RunTaskEvaluation(SQLModel, table=True):
 
     def parsed_summary(self) -> "EvaluationSummary":
         # Deferred: avoid circular import
-        from h_arcane.core.persistence.telemetry.evaluation_summary import (
+        from ergon_core.core.persistence.telemetry.evaluation_summary import (
             EvaluationSummary,
         )
 
@@ -470,7 +480,7 @@ class RunGenerationTurn(SQLModel, table=True):
 
 
 class TrainingSession(SQLModel, table=True):
-    """One invocation of ``arcane train`` (local or launched).
+    """One invocation of ``ergon train`` (local or launched).
 
     Links a training run to the ExperimentDefinition it trains against,
     stores the training config, and anchors per-step metrics.
@@ -501,7 +511,7 @@ class TrainingSession(SQLModel, table=True):
 class TrainingMetric(SQLModel, table=True):
     """One row per logged training step.
 
-    Written by ``ArcaneTrainingCallback.on_log()`` during training.
+    Written by ``ErgonTrainingCallback.on_log()`` during training.
     """
 
     __tablename__ = "training_metrics"

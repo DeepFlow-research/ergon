@@ -5,7 +5,17 @@ Adapted from ref: definition_id replaces experiment_id.
 """
 
 from datetime import datetime
-from enum import StrEnum
+import sys
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        pass
+
+
 from uuid import UUID
 
 from pydantic import BaseModel, Field

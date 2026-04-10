@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_USER: h_arcane
-      POSTGRES_PASSWORD: h_arcane_dev
-      POSTGRES_DB: h_arcane
+      POSTGRES_USER: ergon
+      POSTGRES_PASSWORD: ergon_dev
+      POSTGRES_DB: ergon
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U h_arcane"]
+      test: ["CMD-SHELL", "pg_isready -U ergon"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,32 +24,32 @@ services:
     env_file:
       - .env
     environment:
-      - ARCANE_DATABASE_URL=postgresql://h_arcane:h_arcane_dev@postgres:5432/h_arcane
+      - ERGON_DATABASE_URL=postgresql://ergon:ergon_dev@postgres:5432/ergon
       - INNGEST_DEV=1
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
       - OTEL_TRACES_ENABLED=false
-      - OTEL_SERVICE_NAME=h-arcane
+      - OTEL_SERVICE_NAME=ergon-core
     depends_on:
       postgres:
         condition: service_healthy
     command: >
-      sh -c "uvicorn h_arcane.core.api.app:app --host 0.0.0.0 --port 9000 --reload
-      --reload-dir /app/h_arcane --reload-dir /app/arcane_builtins"
+      sh -c "uvicorn ergon_core.core.api.app:app --host 0.0.0.0 --port 9000 --reload
+      --reload-dir /app/ergon_core --reload-dir /app/ergon_builtins"
     volumes:
-      - ./h_arcane:/app/h_arcane
-      - ./arcane_builtins:/app/arcane_builtins
+      - ./ergon_core:/app/ergon_core
+      - ./ergon_builtins:/app/ergon_builtins
       - ./data:/app/data
 
   dashboard:
     build:
-      context: ./arcane-dashboard
+      context: ./ergon-dashboard
       dockerfile: Dockerfile
     ports:
       - "3001:3000"
     environment:
       - NODE_ENV=development
-      - ARCANE_API_BASE_URL=http://api:9000
+      - ERGON_API_BASE_URL=http://api:9000
       - INNGEST_DEV=1
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
@@ -59,7 +59,7 @@ services:
       - api
     command: pnpm dev
     volumes:
-      - ./arcane-dashboard:/app
+      - ./ergon-dashboard:/app
       - /app/node_modules
       - /app/.next
 

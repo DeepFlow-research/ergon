@@ -2,8 +2,11 @@
 
 from typing import Protocol
 
-from h_arcane.api.results import CriterionResult
-from h_arcane.core.runtime.evaluation.evaluation_schemas import CriterionSpec, TaskEvaluationContext
+from ergon_core.api.results import CriterionResult
+from ergon_core.core.runtime.evaluation.evaluation_schemas import (
+    CriterionSpec,
+    TaskEvaluationContext,
+)
 
 
 class CriterionExecutor(Protocol):

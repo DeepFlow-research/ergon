@@ -1,11 +1,11 @@
 """Sandbox management: provisioning, file I/O, lifecycle."""
 
-from h_arcane.core.providers.sandbox.event_sink import (
+from ergon_core.core.providers.sandbox.event_sink import (
     DashboardEmitterSandboxEventSink,
     NoopSandboxEventSink,
     SandboxEventSink,
 )
-from h_arcane.core.providers.sandbox.manager import (
+from ergon_core.core.providers.sandbox.manager import (
     BaseSandboxManager,
     DefaultSandboxManager,
     DownloadedFile,

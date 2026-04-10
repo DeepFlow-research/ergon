@@ -15,7 +15,7 @@ All code that needs to read these dumps should call into this module
 rather than re-implementing the parsing.
 """
 
-from h_arcane.api.generation import TokenLogprob
+from ergon_core.api.generation import TokenLogprob
 
 
 def extract_text(raw: dict[str, object]) -> str | None:

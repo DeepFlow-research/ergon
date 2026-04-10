@@ -1,11 +1,11 @@
 """TRL ``rollout_func`` adapter for GRPOTrainer.
 
-Bridges Arcane's Inngest-orchestrated environment plane to TRL's training
+Bridges Ergon's Inngest-orchestrated environment plane to TRL's training
 loop.  The rollout_func:
 
 1. Creates RunRecord rows for a batch of episodes
-2. Fires ``workflow/started`` Inngest events
-3. Polls the DB until all episodes complete
+2. Fires ``workflow/started`` Inngest events to the Inngest server
+3. Polls Postgres until all episodes complete
 4. Reads ``RunGenerationTurn`` rows (with logprobs) and ``RunTaskEvaluation`` scores
 5. Extracts per-agent trajectories
 6. Returns ``{prompt_ids, completion_ids, logprobs, completion_reward, env_mask}``
@@ -13,11 +13,41 @@ loop.  The rollout_func:
 The entire Inngest pipeline (DAG orchestration, sandbox execution, rubric
 evaluation) runs unchanged.  This adapter is the thin bridge.
 
+IMPORTANT — network topology: this function runs IN-PROCESS on whatever
+machine TRL is running on (typically the GPU node). It makes outbound
+HTTP calls to Inngest and TCP connections to Postgres, which may be on
+a different machine (e.g. your MacBook via Tailscale). The Inngest
+workers that execute episodes also run on that other machine, and they
+call back to vLLM on the GPU node's public IP for model generation.
+
+This cross-machine round-trip is a consequence of TRL's in-process
+rollout_func API. A cleaner architecture would have the environment
+orchestrator (MacBook) drive the loop and send trajectories to the
+GPU for gradient computation — see veRL's Ray-based AgentLoopBase
+for that pattern.
+
+The abstraction that would fix this in TRL: a RolloutService protocol
+with submit/poll semantics instead of a synchronous callback::
+
+    class RolloutService(Protocol):
+        def submit(self, prompts, policy_version) -> batch_id: ...
+        def poll(self, batch_id) -> RolloutResult | None: ...
+
+The environment writes completed trajectories to an external buffer
+(Redis, Postgres, HTTP). The trainer reads from it. Neither side
+needs to reach the other's internal services. This also enables async
+GRPO for free — the trainer submits batch N+1 while computing
+gradients for batch N, using policy_version for importance sampling.
+
+TRL's planned async GRPO uses an in-process buffer which does NOT
+fix the co-location requirement. Externalising the buffer is the
+key change that would decouple environment from trainer.
+
 Usage::
 
-    from h_arcane.core.rl.trl_adapter import make_arcane_rollout_func
+    from ergon_core.core.rl.trl_adapter import make_ergon_rollout_func
 
-    rollout_func = make_arcane_rollout_func(
+    rollout_func = make_ergon_rollout_func(
         definition_id=def_id,
         inngest_send=inngest_client.send_sync,
         session_factory=get_session,
@@ -39,18 +69,18 @@ from uuid import UUID
 import inngest as inngest_lib
 from sqlmodel import Session, select
 
-from h_arcane.core.persistence.shared.enums import RunStatus
-from h_arcane.core.persistence.shared.ids import new_id
-from h_arcane.core.persistence.telemetry.models import (
+from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.shared.ids import new_id
+from ergon_core.core.persistence.telemetry.models import (
     RunGenerationTurn,
     RunRecord,
     RunTaskEvaluation,
 )
-from h_arcane.core.rl.extraction import Tokenizer, extract_agent_trajectories
-from h_arcane.core.rl.polling import poll_until_all_complete
-from h_arcane.core.rl.rewards import IndependentTaskReward, RewardStrategy
-from h_arcane.core.runtime.events.task_events import WorkflowStartedEvent
-from h_arcane.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.rl.extraction import Tokenizer, extract_agent_trajectories
+from ergon_core.core.rl.polling import poll_until_all_complete
+from ergon_core.core.rl.rewards import IndependentTaskReward, RewardStrategy
+from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +90,7 @@ SessionFactory = Callable[[], Session]
 PromptInput = str | list[dict[str, object]]
 
 
-def make_arcane_rollout_func(
+def make_ergon_rollout_func(
     *,
     definition_id: UUID,
     inngest_send: InngestSend,
@@ -71,6 +101,12 @@ def make_arcane_rollout_func(
     poll_interval_s: float = 1.0,
 ) -> Callable[[list[PromptInput], object], dict[str, object]]:
     """Create a TRL-compatible ``rollout_func``.
+
+    Network requirements: ``inngest_send`` and ``session_factory`` must
+    be able to reach the Inngest server and Postgres respectively. When
+    training runs on a remote GPU node, this typically means Tailscale
+    or a cloud-hosted stack. The returned function is called in-process
+    by TRL on whatever machine the trainer runs on.
 
     Args:
         definition_id: the persisted ``ExperimentDefinition.id`` to run episodes against.

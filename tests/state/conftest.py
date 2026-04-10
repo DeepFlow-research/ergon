@@ -8,6 +8,10 @@ import pytest
 from sqlalchemy import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
+import ergon_core.core.persistence.definitions.models as _def_models  # noqa: F401
+import ergon_core.core.persistence.graph.models as _graph_models  # noqa: F401
+import ergon_core.core.persistence.telemetry.models as _telemetry_models  # noqa: F401
+
 
 @pytest.fixture(scope="module")
 def engine() -> Engine:

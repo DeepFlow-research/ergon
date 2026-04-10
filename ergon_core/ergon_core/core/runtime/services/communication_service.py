@@ -2,15 +2,15 @@
 
 from uuid import UUID
 
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.telemetry.models import Thread, ThreadMessage
-from h_arcane.core.runtime.services.communication_schemas import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
+from ergon_core.core.runtime.services.communication_schemas import (
     CreateMessageRequest,
     MessageResponse,
     ThreadSummary,
     ThreadWithMessages,
 )
-from h_arcane.core.utils import utcnow
+from ergon_core.core.utils import utcnow
 from sqlmodel import func, select
 
 

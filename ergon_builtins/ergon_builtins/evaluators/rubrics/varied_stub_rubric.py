@@ -1,8 +1,8 @@
 """Test fixture: rubric with random scores for GRPO gradient testing."""
 
-from h_arcane.api import Rubric
+from ergon_core.api import Rubric
 
-from arcane_builtins.evaluators.criteria.varied_stub_criterion import VariedStubCriterion
+from ergon_builtins.evaluators.criteria.varied_stub_criterion import VariedStubCriterion
 
 
 class VariedStubRubric(Rubric):

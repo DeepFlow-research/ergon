@@ -1,9 +1,9 @@
 import { config } from "@/lib/config";
 
-export async function fetchArcaneApi(path: string, init?: RequestInit): Promise<Response> {
+export async function fetchErgonApi(path: string, init?: RequestInit): Promise<Response> {
   const url = new URL(
     path,
-    config.arcaneApiBaseUrl.endsWith("/") ? config.arcaneApiBaseUrl : `${config.arcaneApiBaseUrl}/`,
+    config.ergonApiBaseUrl.endsWith("/") ? config.ergonApiBaseUrl : `${config.ergonApiBaseUrl}/`,
   );
   return fetch(url, {
     ...init,

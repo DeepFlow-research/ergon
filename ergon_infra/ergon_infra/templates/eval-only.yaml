@@ -1,12 +1,14 @@
 # On-demand checkpoint evaluation.
+# TODO: git clone below requires the repo to be public. Until then, use
+#       file_mounts to sync local source (see /tmp/ac2-gpu-test.yaml pattern).
 #
 # Spawned by the eval watcher per checkpoint.
 #
-#   sky launch arcane_infra/arcane_infra/templates/eval-only.yaml -y \
+#   sky launch ergon_infra/ergon_infra/templates/eval-only.yaml -y \
 #     --env CHECKPOINT=s3://bucket/checkpoint-500 \
 #     --env BENCHMARK=gdpeval
 
-name: arcane-eval
+name: ergon-eval
 
 resources:
   accelerators: ${GPU_TYPE:-A100}:1
@@ -19,9 +21,9 @@ envs:
   EVAL_LIMIT: ${EVAL_LIMIT:-50}
 
 setup: |
-  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
-  cd /tmp/arcane
-  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli
+  git clone https://github.com/DeepFlow-research/ergon.git /tmp/ergon
+  cd /tmp/ergon
+  pip install -e ./ergon_core -e ./ergon_builtins -e ./ergon_cli
   pip install vllm
 
 run: |
@@ -37,7 +39,7 @@ run: |
     sleep 1
   done
 
-  arcane benchmark run "$BENCHMARK" \
+  ergon benchmark run "$BENCHMARK" \
     --model "vllm:http://localhost:8000" \
     --evaluator "$EVALUATOR" \
     --limit "$EVAL_LIMIT"

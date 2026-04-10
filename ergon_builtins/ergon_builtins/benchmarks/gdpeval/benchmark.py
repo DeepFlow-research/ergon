@@ -8,10 +8,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import ClassVar
 
-from h_arcane.api.benchmark import Benchmark
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.task_types import BenchmarkTask
 
-from arcane_builtins.benchmarks.gdpeval.loader import (
+from ergon_builtins.benchmarks.gdpeval.loader import (
     extract_task_description,
     find_reference_files,
     load_task_ids,
@@ -28,7 +28,7 @@ class GDPEvalBenchmark(Benchmark):
 
     type_slug: ClassVar[str] = "gdpeval"
     required_packages: ClassVar[list[str]] = ["pandas"]
-    install_hint: ClassVar[str] = "pip install 'arcane-builtins[data]'"
+    install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 
     def __init__(
         self,

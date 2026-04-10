@@ -27,7 +27,7 @@ export default defineConfig({
           NODE_ENV: "development",
           PORT: port,
           ENABLE_TEST_HARNESS: "1",
-          ARCANE_API_BASE_URL: process.env.ARCANE_API_BASE_URL ?? "http://127.0.0.1:9000",
+          ERGON_API_BASE_URL: process.env.ERGON_API_BASE_URL ?? "http://127.0.0.1:9000",
         },
       },
 });

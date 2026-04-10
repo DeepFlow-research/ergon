@@ -1,7 +1,7 @@
 import { RunWorkspacePage } from "@/components/run/RunWorkspacePage";
 import { config } from "@/lib/config";
 import { parseCohortDetail, parseRunSnapshot } from "@/lib/contracts/rest";
-import { fetchArcaneApi } from "@/lib/serverApi";
+import { fetchErgonApi } from "@/lib/serverApi";
 import { getHarnessCohort, getHarnessRun } from "@/lib/testing/dashboardHarness";
 import type { CohortDetail, SerializedWorkflowRunState } from "@/lib/types";
 
@@ -23,8 +23,8 @@ export default async function CohortRunPage({ params }: CohortRunPageProps) {
   } else {
     try {
       const [runResponse, cohortResponse] = await Promise.all([
-        fetchArcaneApi(`/runs/${runId}`),
-        fetchArcaneApi(`/cohorts/${cohortId}`),
+        fetchErgonApi(`/runs/${runId}`),
+        fetchErgonApi(`/cohorts/${cohortId}`),
       ]);
       if (runResponse.ok) {
         initialRunState = parseRunSnapshot(await runResponse.json());

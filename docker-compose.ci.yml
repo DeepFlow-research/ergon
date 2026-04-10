@@ -2,13 +2,13 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_USER: h_arcane
+      POSTGRES_USER: ergon
       POSTGRES_PASSWORD: ci_test
-      POSTGRES_DB: h_arcane
+      POSTGRES_DB: ergon
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U h_arcane"]
+      test: ["CMD-SHELL", "pg_isready -U ergon"]
       interval: 2s
       timeout: 3s
       retries: 10
@@ -20,7 +20,7 @@ services:
     ports:
       - "9000:9000"
     environment:
-      - ARCANE_DATABASE_URL=postgresql://h_arcane:ci_test@postgres:5432/h_arcane
+      - ERGON_DATABASE_URL=postgresql://ergon:ci_test@postgres:5432/ergon
       - INNGEST_DEV=1
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
@@ -29,7 +29,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: uvicorn h_arcane.core.api.app:app --host 0.0.0.0 --port 9000
+    command: uvicorn ergon_core.core.api.app:app --host 0.0.0.0 --port 9000
 
   inngest-dev:
     image: inngest/inngest:latest

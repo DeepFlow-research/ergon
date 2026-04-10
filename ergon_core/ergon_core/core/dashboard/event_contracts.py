@@ -1,14 +1,14 @@
 """Dashboard event contracts for real-time UI updates via Inngest.
 
 Every contract here must match the corresponding Zod schema in
-arcane-dashboard/src/lib/contracts/events.ts exactly.
+ergon-dashboard/src/lib/contracts/events.ts exactly.
 """
 
 from datetime import datetime
 from typing import Any, ClassVar
 from uuid import UUID
 
-from h_arcane.core.runtime.events.base import InngestEventContract
+from ergon_core.core.runtime.events.base import InngestEventContract
 
 # ---------------------------------------------------------------------------
 # Nested models used inside workflow.started

@@ -1,6 +1,6 @@
-"""Registry discovery: reads BENCHMARKS/WORKERS/EVALUATORS from arcane_builtins.registry."""
+"""Registry discovery: reads BENCHMARKS/WORKERS/EVALUATORS from ergon_builtins.registry."""
 
-from arcane_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
+from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
 
 
 def list_benchmarks() -> list[list[str]]:

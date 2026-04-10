@@ -11,10 +11,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from h_arcane.api.benchmark import Benchmark
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.task_types import BenchmarkTask
 
-from arcane_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
+from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
 
 logger = logging.getLogger(__name__)
 

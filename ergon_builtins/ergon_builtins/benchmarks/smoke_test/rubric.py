@@ -6,9 +6,9 @@ connects to the same E2B sandbox and checks the file round-tripped.
 
 from typing import ClassVar
 
-from h_arcane.api.evaluator import Rubric
+from ergon_core.api.evaluator import Rubric
 
-from arcane_builtins.evaluators.criteria.sandbox_file_check import SandboxFileCheckCriterion
+from ergon_builtins.evaluators.criteria.sandbox_file_check import SandboxFileCheckCriterion
 
 
 class SmokeTestRubric(Rubric):

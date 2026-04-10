@@ -3,11 +3,11 @@
 Eager, fully-typed imports.
 """
 
-from h_arcane.api import Benchmark, Evaluator
+from ergon_core.api import Benchmark, Evaluator
 
-from arcane_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
-from arcane_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
-from arcane_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
+from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
+from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 
 BENCHMARKS: dict[str, type[Benchmark]] = {
     "gdpeval": GDPEvalBenchmark,

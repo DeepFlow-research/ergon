@@ -7,18 +7,18 @@ implementation backed by E2B sandbox + OpenAI LLM judge.
 import logging
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
-from h_arcane.core.runtime.evaluation.evaluation_schemas import (
+from ergon_core.core.runtime.evaluation.evaluation_schemas import (
     CommandResult,
     CriterionContext,
     SandboxResult,
 )
 from openai import AsyncOpenAI
 
-from h_arcane.core.settings import settings
+from ergon_core.core.settings import settings
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
+    from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)

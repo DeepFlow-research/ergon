@@ -6,17 +6,17 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 import inngest
-from h_arcane.api.criterion import Criterion
-from h_arcane.api.evaluation_context import EvaluationContext
-from h_arcane.api.results import CriterionResult, WorkerResult
-from h_arcane.api.task_types import BenchmarkTask
-from h_arcane.core.runtime.evaluation.criterion_runtime import DefaultCriterionRuntime
-from h_arcane.core.runtime.evaluation.evaluation_schemas import (
+from ergon_core.api.criterion import Criterion
+from ergon_core.api.evaluation_context import EvaluationContext
+from ergon_core.api.results import CriterionResult, WorkerResult
+from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.core.runtime.evaluation.criterion_runtime import DefaultCriterionRuntime
+from ergon_core.core.runtime.evaluation.evaluation_schemas import (
     CriterionContext,
     CriterionSpec,
     TaskEvaluationContext,
 )
-from h_arcane.core.runtime.tracing import (
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     TraceSink,
     evaluation_criterion_context,
@@ -24,7 +24,7 @@ from h_arcane.core.runtime.tracing import (
 )
 
 if TYPE_CHECKING:
-    from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
+    from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 
 class InngestCriterionExecutor:

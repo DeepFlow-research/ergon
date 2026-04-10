@@ -1,9 +1,10 @@
 [project]
-name = "arcane-infra"
+name = "ergon-infra"
 version = "0.1.0"
-description = "Infrastructure and training orchestration for Arcane"
+description = "Infrastructure and training orchestration for Ergon"
+license = "Apache-2.0"
 requires-python = ">=3.13"
-dependencies = ["h-arcane", "pydantic>=2"]
+dependencies = ["ergon-core", "pydantic>=2"]
 
 [project.optional-dependencies]
 training = [
@@ -15,7 +16,7 @@ skypilot = [
     "skypilot-nightly[shadeform]",
 ]
 all = [
-    "arcane-infra[training,skypilot]",
+    "ergon-infra[training,skypilot]",
 ]
 
 [build-system]
@@ -24,4 +25,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["arcane_infra*"]
+include = ["ergon_infra*"]

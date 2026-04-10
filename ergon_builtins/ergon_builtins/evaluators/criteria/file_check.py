@@ -6,9 +6,9 @@ Checks that specific file patterns appear in the worker's output or artifacts.
 import fnmatch
 from typing import ClassVar
 
-from h_arcane.api.criterion import Criterion
-from h_arcane.api.evaluation_context import EvaluationContext
-from h_arcane.api.results import CriterionResult, WorkerResult
+from ergon_core.api.criterion import Criterion
+from ergon_core.api.evaluation_context import EvaluationContext
+from ergon_core.api.results import CriterionResult, WorkerResult
 
 
 class FileCheckCriterion(Criterion):

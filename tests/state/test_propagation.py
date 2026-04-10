@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from sqlmodel import Session
 
-from h_arcane.core.runtime.execution.propagation import (
+from ergon_core.core.runtime.execution.propagation import (
     get_initial_ready_tasks,
     is_workflow_complete,
     is_workflow_failed,

@@ -1,6 +1,6 @@
 """Build Experiment from CLI args using registry lookups."""
 
-from h_arcane.api.experiment import Experiment
+from ergon_core.api.experiment import Experiment
 
 
 def build_experiment(
@@ -12,7 +12,7 @@ def build_experiment(
     limit: int | None = None,
 ) -> Experiment:
     # Deferred: CLI startup cost
-    from arcane_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
+    from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
 
     benchmark_cls = BENCHMARKS[benchmark_slug]
     worker_cls = WORKERS[worker_slug]

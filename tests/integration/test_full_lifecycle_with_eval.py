@@ -9,43 +9,43 @@ Calls the same services the Inngest functions call, without requiring a live ser
 
 import asyncio
 
-from arcane_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
-from arcane_builtins.evaluators.rubrics.stub_rubric import StubRubric
-from arcane_builtins.registry import EVALUATORS, WORKERS
-from arcane_builtins.workers.baselines.stub_worker import StubWorker
-from h_arcane.api import Experiment
-from h_arcane.api.task_types import BenchmarkTask
-from h_arcane.api.worker_context import WorkerContext
-from h_arcane.core.persistence.shared.db import ensure_db, get_session
-from h_arcane.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from h_arcane.core.persistence.telemetry.models import (
+from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
+from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
+from ergon_builtins.registry import EVALUATORS, WORKERS
+from ergon_builtins.workers.baselines.stub_worker import StubWorker
+from ergon_core.api import Experiment
+from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.worker_context import WorkerContext
+from ergon_core.core.persistence.shared.db import ensure_db, get_session
+from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunTaskEvaluation,
     RunTaskExecution,
     RunTaskStateEvent,
 )
-from h_arcane.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
-from h_arcane.core.runtime.services.evaluation_dto import DispatchEvaluatorsCommand
-from h_arcane.core.runtime.services.evaluator_dispatch_service import (
+from ergon_core.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
+from ergon_core.core.runtime.services.evaluation_dto import DispatchEvaluatorsCommand
+from ergon_core.core.runtime.services.evaluator_dispatch_service import (
     EvaluatorDispatchService,
 )
-from h_arcane.core.runtime.services.orchestration_dto import (
+from ergon_core.core.runtime.services.orchestration_dto import (
     FinalizeTaskExecutionCommand,
     FinalizeWorkflowCommand,
     InitializeWorkflowCommand,
     PrepareTaskExecutionCommand,
     PropagateTaskCompletionCommand,
 )
-from h_arcane.core.runtime.services.rubric_evaluation_service import (
+from ergon_core.core.runtime.services.rubric_evaluation_service import (
     RubricEvaluationService,
 )
-from h_arcane.core.runtime.services.run_service import create_run
-from h_arcane.core.runtime.services.task_execution_service import TaskExecutionService
-from h_arcane.core.runtime.services.task_propagation_service import TaskPropagationService
-from h_arcane.core.runtime.services.workflow_finalization_service import (
+from ergon_core.core.runtime.services.run_service import create_run
+from ergon_core.core.runtime.services.task_execution_service import TaskExecutionService
+from ergon_core.core.runtime.services.task_propagation_service import TaskPropagationService
+from ergon_core.core.runtime.services.workflow_finalization_service import (
     WorkflowFinalizationService,
 )
-from h_arcane.core.runtime.services.workflow_initialization_service import (
+from ergon_core.core.runtime.services.workflow_initialization_service import (
     WorkflowInitializationService,
 )
 from sqlmodel import select
@@ -56,10 +56,10 @@ class InProcessCriterionExecutor:
 
     async def execute_all(self, task_context, benchmark_name, criteria):
         # Deferred: avoid circular import
-        from h_arcane.api.evaluation_context import EvaluationContext
+        from ergon_core.api.evaluation_context import EvaluationContext
 
         # Deferred: avoid circular import
-        from h_arcane.api.results import WorkerResult as WR
+        from ergon_core.api.results import WorkerResult as WR
 
         results = []
         for spec in criteria:
@@ -210,7 +210,7 @@ def test_full_lifecycle_with_evaluation():
             )
 
             # Deferred: avoid circular import
-            from h_arcane.core.runtime.inngest.evaluate_task_run import (
+            from ergon_core.core.runtime.inngest.evaluate_task_run import (
                 _build_evaluation_summary,
             )
 
@@ -286,7 +286,7 @@ if __name__ == "__main__":
     import os
 
     os.environ.setdefault(
-        "ARCANE_DATABASE_URL",
-        "postgresql://h_arcane:h_arcane_dev@localhost:5433/h_arcane_test",
+        "ERGON_DATABASE_URL",
+        "postgresql://ergon_core:ergon_core_dev@localhost:5433/ergon_core_test",
     )
     test_full_lifecycle_with_evaluation()

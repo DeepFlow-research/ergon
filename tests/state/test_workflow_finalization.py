@@ -10,10 +10,10 @@ from uuid import uuid4
 import pytest
 from sqlmodel import Session
 
-from h_arcane.core.persistence.shared.enums import RunStatus
-from h_arcane.core.persistence.telemetry.models import RunRecord, RunTaskEvaluation
-from h_arcane.core.runtime.services.orchestration_dto import FinalizeWorkflowCommand
-from h_arcane.core.runtime.services.workflow_finalization_service import (
+from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskEvaluation
+from ergon_core.core.runtime.services.orchestration_dto import FinalizeWorkflowCommand
+from ergon_core.core.runtime.services.workflow_finalization_service import (
     WorkflowFinalizationService,
 )
 from tests.state.factories import seed_flat_tasks
@@ -58,7 +58,7 @@ class TestScoreAggregation:
         svc = WorkflowFinalizationService()
 
         with patch(
-            "h_arcane.core.runtime.services.workflow_finalization_service.get_session",
+            "ergon_core.core.runtime.services.workflow_finalization_service.get_session",
             return_value=_fake_get_session(session),
         ):
             result = svc.finalize(

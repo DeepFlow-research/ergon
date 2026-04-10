@@ -8,7 +8,7 @@ from typing import Any, TypeVar
 
 from openai import AsyncOpenAI
 
-from h_arcane.core.settings import settings
+from ergon_core.core.settings import settings
 from pydantic import BaseModel, Field
 
 T = TypeVar("T", bound=BaseModel)

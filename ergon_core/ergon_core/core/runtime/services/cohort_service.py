@@ -2,21 +2,21 @@
 
 from uuid import UUID
 
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.telemetry.models import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStats,
     ExperimentCohortStatus,
     RunRecord,
 )
-from h_arcane.core.runtime.services.cohort_schemas import (
+from ergon_core.core.runtime.services.cohort_schemas import (
     CohortDetailDto,
     CohortRunRowDto,
     CohortStatusCountsDto,
     CohortSummaryDto,
     UpdateCohortRequest,
 )
-from h_arcane.core.utils import utcnow
+from ergon_core.core.utils import utcnow
 from sqlmodel import select
 
 

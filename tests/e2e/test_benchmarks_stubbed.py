@@ -5,16 +5,16 @@ persist-outputs -> evaluate -> finalize) and asserts correct DB state.
 
 Requires:
   - docker-compose.ci.yml running (postgres + inngest + api)
-  - ARCANE_DATABASE_URL set to the Postgres instance
+  - ERGON_DATABASE_URL set to the Postgres instance
   - E2B_API_KEY set for smoke-test-worker/smoke-test-rubric tests
 """
 
 import pytest
 from sqlmodel import Session, select
 
-from h_arcane.core.persistence.shared.db import get_engine
-from h_arcane.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from h_arcane.core.persistence.telemetry.models import (
+from ergon_core.core.persistence.shared.db import get_engine
+from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     RunRecord,
     RunTaskEvaluation,

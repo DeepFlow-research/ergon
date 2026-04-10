@@ -7,11 +7,14 @@ Returns both the public TaskEvaluationResult and the CriterionSpecs
 so the persistence layer can build a fully-typed EvaluationSummary.
 """
 
-from h_arcane.api.evaluator import Evaluator
-from h_arcane.api.results import CriterionResult, TaskEvaluationResult
-from h_arcane.api.task_types import BenchmarkTask
-from h_arcane.core.runtime.evaluation.evaluation_schemas import CriterionSpec, TaskEvaluationContext
-from h_arcane.core.runtime.evaluation.executors import CriterionExecutor
+from ergon_core.api.evaluator import Evaluator
+from ergon_core.api.results import CriterionResult, TaskEvaluationResult
+from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.core.runtime.evaluation.evaluation_schemas import (
+    CriterionSpec,
+    TaskEvaluationContext,
+)
+from ergon_core.core.runtime.evaluation.executors import CriterionExecutor
 from pydantic import BaseModel
 
 

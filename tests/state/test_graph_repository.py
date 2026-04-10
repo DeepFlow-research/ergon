@@ -9,9 +9,9 @@ from uuid import uuid4
 import pytest
 from sqlmodel import Session
 
-from h_arcane.core.runtime.errors.graph_errors import CycleError, DanglingEdgeError
-from h_arcane.core.runtime.services.graph_dto import MutationMeta
-from h_arcane.core.runtime.services.graph_repository import WorkflowGraphRepository
+from ergon_core.core.runtime.errors.graph_errors import CycleError, DanglingEdgeError
+from ergon_core.core.runtime.services.graph_dto import MutationMeta
+from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 
 META = MutationMeta(actor="test", reason="state-test")
 

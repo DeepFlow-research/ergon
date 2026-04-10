@@ -10,23 +10,23 @@ import logging
 
 import inngest
 
-from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
-from h_arcane.core.runtime.events.task_events import (
+from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.runtime.events.task_events import (
     SANDBOX_SKIPPED,
     TaskCompletedEvent,
 )
-from h_arcane.core.runtime.inngest.evaluate_task_run import evaluate_task_run
-from h_arcane.core.runtime.inngest_client import inngest_client
-from h_arcane.core.runtime.services.child_function_payloads import (
+from ergon_core.core.runtime.inngest.evaluate_task_run import evaluate_task_run
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.child_function_payloads import (
     EvaluateTaskRunRequest,
 )
-from h_arcane.core.runtime.services.evaluation_dto import (
+from ergon_core.core.runtime.services.evaluation_dto import (
     DispatchEvaluatorsCommand,
 )
-from h_arcane.core.runtime.services.evaluator_dispatch_service import (
+from ergon_core.core.runtime.services.evaluator_dispatch_service import (
     EvaluatorDispatchService,
 )
-from h_arcane.core.runtime.services.inngest_function_results import (
+from ergon_core.core.runtime.services.inngest_function_results import (
     EvaluateTaskRunResult,
     EvaluatorsResult,
 )

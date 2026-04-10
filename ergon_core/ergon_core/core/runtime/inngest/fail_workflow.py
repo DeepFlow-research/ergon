@@ -4,22 +4,22 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.shared.enums import RunStatus
-from h_arcane.core.persistence.telemetry.models import RunRecord
-from h_arcane.core.runtime.events.infrastructure_events import RunCleanupEvent
-from h_arcane.core.runtime.events.task_events import WorkflowFailedEvent
-from h_arcane.core.runtime.inngest_client import RUN_CANCEL, inngest_client
-from h_arcane.core.runtime.errors import DataIntegrityError
-from h_arcane.core.runtime.services.inngest_function_results import WorkflowFailedResult
-from h_arcane.core.runtime.tracing import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
+from ergon_core.core.runtime.events.task_events import WorkflowFailedEvent
+from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.errors import DataIntegrityError
+from ergon_core.core.runtime.services.inngest_function_results import WorkflowFailedResult
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     get_trace_sink,
     truncate_text,
     workflow_failed_context,
     workflow_root_context,
 )
-from h_arcane.core.utils import utcnow
+from ergon_core.core.utils import utcnow
 
 logger = logging.getLogger(__name__)
 

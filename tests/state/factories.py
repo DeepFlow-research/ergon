@@ -8,14 +8,14 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Session
 
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
 )
-from h_arcane.core.persistence.shared.enums import RunStatus
-from h_arcane.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.telemetry.models import RunRecord
 
 
 def seed_flat_tasks(

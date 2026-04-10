@@ -1,36 +1,36 @@
-"""Train subcommand: run RL training with Arcane environments."""
+"""Train subcommand: run RL training with Ergon environments."""
 
 import importlib.util
 import logging
 from argparse import Namespace
 
-from h_arcane.core.persistence.shared.db import ensure_db
+from ergon_core.core.persistence.shared.db import ensure_db
 
 logger = logging.getLogger(__name__)
 
 
 def handle_train(args: Namespace) -> int:
-    if importlib.util.find_spec("arcane_infra") is None:
+    if importlib.util.find_spec("ergon_infra") is None:
         logger.warning(
             "Training requires additional dependencies.\n"
-            "Install with: pip install arcane-cli[training]"
+            "Install with: pip install ergon-cli[training]"
         )
         return 1
 
     if args.train_action == "local":
         return _train_local(args)
-    logger.warning("Usage: arcane train {local}")
+    logger.warning("Usage: ergon train {local}")
     return 1
 
 
 def _train_local(args: Namespace) -> int:
-    # arcane_infra is an optional dependency — these imports must stay after the
+    # ergon_infra is an optional dependency — these imports must stay after the
     # find_spec guard in handle_train so the module loads even when not installed.
-    # reason: optional arcane_infra; imported only when user runs `arcane train local`.
-    from arcane_infra.training.config import TrainingConfig
+    # reason: optional ergon_infra; imported only when user runs `ergon train local`.
+    from ergon_infra.training.config import TrainingConfig
 
     # reason: (same optional dep as above)
-    from arcane_infra.training.trl_runner import run_trl_training
+    from ergon_infra.training.trl_runner import run_trl_training
 
     ensure_db()
 
@@ -45,6 +45,9 @@ def _train_local(args: Namespace) -> int:
         device=args.device,
         vllm_mode=vllm_mode,
         vllm_server_url=args.vllm_server_url,
+        vllm_max_model_length=args.vllm_max_model_length,
+        vllm_gpu_memory_utilization=args.vllm_gpu_memory_utilization,
+        gradient_checkpointing=not args.no_gradient_checkpointing,
         num_generations=args.num_generations,
         max_completion_length=args.max_completion_length,
         learning_rate=args.learning_rate,

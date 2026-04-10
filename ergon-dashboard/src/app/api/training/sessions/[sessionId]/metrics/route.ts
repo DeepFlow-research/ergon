@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchArcaneApi } from "@/lib/serverApi";
+import { fetchErgonApi } from "@/lib/serverApi";
 
 export async function GET(
   _request: NextRequest,
@@ -8,7 +8,7 @@ export async function GET(
   const { sessionId } = await params;
 
   try {
-    const res = await fetchArcaneApi(`/runs/training/sessions/${sessionId}/metrics`);
+    const res = await fetchErgonApi(`/runs/training/sessions/${sessionId}/metrics`);
     if (!res.ok) {
       return NextResponse.json({ error: `Backend returned ${res.status}` }, { status: res.status });
     }

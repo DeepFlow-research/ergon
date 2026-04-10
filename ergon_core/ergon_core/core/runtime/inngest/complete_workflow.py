@@ -4,23 +4,23 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.telemetry.models import RunRecord
-from h_arcane.core.runtime.events.infrastructure_events import RunCleanupEvent
-from h_arcane.core.runtime.events.task_events import WorkflowCompletedEvent
-from h_arcane.core.runtime.inngest_client import RUN_CANCEL, inngest_client
-from h_arcane.core.runtime.services.inngest_function_results import WorkflowCompleteResult
-from h_arcane.core.runtime.services.orchestration_dto import FinalizeWorkflowCommand
-from h_arcane.core.runtime.services.workflow_finalization_service import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
+from ergon_core.core.runtime.events.task_events import WorkflowCompletedEvent
+from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.services.inngest_function_results import WorkflowCompleteResult
+from ergon_core.core.runtime.services.orchestration_dto import FinalizeWorkflowCommand
+from ergon_core.core.runtime.services.workflow_finalization_service import (
     WorkflowFinalizationService,
 )
-from h_arcane.core.runtime.tracing import (
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     get_trace_sink,
     workflow_complete_context,
     workflow_root_context,
 )
-from h_arcane.core.dashboard import emit_cohort_updated_for_run
+from ergon_core.core.dashboard import emit_cohort_updated_for_run
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from h_arcane.core.persistence.telemetry.models import ExperimentCohortStatus
+from ergon_core.core.persistence.telemetry.models import ExperimentCohortStatus
 from pydantic import BaseModel, Field
 
 

@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from h_arcane.api.generation import GenerationTurn
+from ergon_core.api.generation import GenerationTurn
 
 
 class WorkerResult(BaseModel):

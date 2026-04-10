@@ -8,14 +8,14 @@ from collections.abc import Callable
 
 import structlog
 
-from h_arcane.api import Benchmark, Evaluator, Worker
-from h_arcane.core.providers.generation.model_resolution import (
+from ergon_core.api import Benchmark, Evaluator, Worker
+from ergon_core.core.providers.generation.model_resolution import (
     ResolvedModel,
     register_model_backend,
 )
-from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
-from arcane_builtins.registry_core import (
+from ergon_builtins.registry_core import (
     BENCHMARKS as _core_benchmarks,
     EVALUATORS as _core_evaluators,
     MODEL_BACKENDS as _core_model_backends,
@@ -37,20 +37,18 @@ _model_backends: dict[str, Callable[..., ResolvedModel]] = {**_core_model_backen
 # -- Capability: local-models ----------------------------------------------
 
 try:
-    from arcane_builtins.registry_local_models import (
+    from ergon_builtins.registry_local_models import (
         MODEL_BACKENDS as _local_model_backends,
     )
 
     _model_backends.update(_local_model_backends)
 except ImportError:
-    log.info(
-        "arcane-builtins[local-models] not installed; local transformers inference unavailable"
-    )
+    log.info("ergon-builtins[local-models] not installed; local transformers inference unavailable")
 
 # -- Capability: data ------------------------------------------------------
 
 try:
-    from arcane_builtins.registry_data import (
+    from ergon_builtins.registry_data import (
         BENCHMARKS as _data_benchmarks,
         EVALUATORS as _data_evaluators,
     )
@@ -59,7 +57,7 @@ try:
     EVALUATORS.update(_data_evaluators)
 except ImportError:
     log.info(
-        "arcane-builtins[data] not installed; gdpeval and researchrubrics benchmarks unavailable"
+        "ergon-builtins[data] not installed; gdpeval and researchrubrics benchmarks unavailable"
     )
 
 # -- Register model backends -----------------------------------------------
@@ -70,8 +68,8 @@ for prefix, resolver in _model_backends.items():
 # -- Install hints for slugs that require optional capabilities -------------
 
 INSTALL_HINTS: dict[str, str] = {
-    "transformers": "pip install 'arcane-builtins[local-models]'",
-    "gdpeval": "pip install 'arcane-builtins[data]'",
-    "researchrubrics": "pip install 'arcane-builtins[data]'",
-    "research-rubric": "pip install 'arcane-builtins[data]'",
+    "transformers": "pip install 'ergon-builtins[local-models]'",
+    "gdpeval": "pip install 'ergon-builtins[data]'",
+    "researchrubrics": "pip install 'ergon-builtins[data]'",
+    "research-rubric": "pip install 'ergon-builtins[data]'",
 }

@@ -1,7 +1,7 @@
 """Shared fixtures for E2E benchmark tests.
 
 These tests run against a live docker-compose stack (postgres + inngest + api)
-and require ARCANE_DATABASE_URL to point at the shared Postgres instance.
+and require ERGON_DATABASE_URL to point at the shared Postgres instance.
 """
 
 import os
@@ -10,15 +10,15 @@ import subprocess
 import pytest
 from sqlmodel import Session
 
-from h_arcane.core.persistence.shared.db import get_engine
+from ergon_core.core.persistence.shared.db import get_engine
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _require_database_url():
-    url = os.environ.get("ARCANE_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+    url = os.environ.get("ERGON_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
     if not url:
         pytest.skip(
-            "E2E tests require ARCANE_DATABASE_URL pointing at a live Postgres. "
+            "E2E tests require ERGON_DATABASE_URL pointing at a live Postgres. "
             "Run with docker-compose.ci.yml."
         )
 
@@ -41,9 +41,9 @@ def run_benchmark(
     cohort: str = "ci",
     timeout: int = 120,
 ) -> subprocess.CompletedProcess:
-    """Run a benchmark via the arcane CLI and return the process result."""
+    """Run a benchmark via the ergon CLI and return the process result."""
     cmd = [
-        "arcane",
+        "ergon",
         "benchmark",
         "run",
         slug,

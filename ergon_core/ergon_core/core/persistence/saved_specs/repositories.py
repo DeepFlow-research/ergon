@@ -3,14 +3,14 @@
 from typing import TypeVar
 from uuid import UUID
 
-from h_arcane.core.persistence.saved_specs.models import (
+from ergon_core.core.persistence.saved_specs.models import (
     SavedBenchmarkSpec,
     SavedEvaluatorSpec,
     SavedExperimentTemplate,
     SavedWorkerSpec,
 )
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.utils import utcnow
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.utils import utcnow
 from sqlmodel import SQLModel, select
 
 T = TypeVar("T", bound=SQLModel)

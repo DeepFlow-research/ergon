@@ -2,8 +2,8 @@
 
 from argparse import Namespace
 
-from arcane_cli.discovery import list_evaluators
-from arcane_cli.rendering import render_table
+from ergon_cli.discovery import list_evaluators
+from ergon_cli.rendering import render_table
 
 
 def handle_evaluator(args: Namespace) -> int:
@@ -11,5 +11,5 @@ def handle_evaluator(args: Namespace) -> int:
         evaluators = list_evaluators()
         render_table(["Slug", "Name"], evaluators)
         return 0
-    print("Usage: arcane evaluator list")
+    print("Usage: ergon evaluator list")
     return 1

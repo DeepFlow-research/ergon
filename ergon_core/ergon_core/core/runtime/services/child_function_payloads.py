@@ -8,7 +8,7 @@ injects `_inngest` metadata into event data.
 from typing import ClassVar
 from uuid import UUID
 
-from h_arcane.core.runtime.events.base import InngestEventContract
+from ergon_core.core.runtime.events.base import InngestEventContract
 
 
 class SandboxSetupRequest(InngestEventContract):

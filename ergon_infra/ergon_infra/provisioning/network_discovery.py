@@ -1,6 +1,6 @@
 """Network discovery: find a reachable IP for the local machine.
 
-Used by ``arcane train launch`` to auto-populate Inngest and DB URLs
+Used by ``ergon train launch`` to auto-populate Inngest and DB URLs
 that remote VMs can reach.
 """
 

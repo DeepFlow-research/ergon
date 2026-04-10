@@ -4,11 +4,11 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping
 from typing import Any, ClassVar
 
-from h_arcane.api.criterion import Criterion
-from h_arcane.api.dependencies import check_packages
-from h_arcane.api.errors import DependencyError
-from h_arcane.api.results import CriterionResult, TaskEvaluationResult
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.criterion import Criterion
+from ergon_core.api.dependencies import check_packages
+from ergon_core.api.errors import DependencyError
+from ergon_core.api.results import CriterionResult, TaskEvaluationResult
+from ergon_core.api.task_types import BenchmarkTask
 
 
 class Evaluator(ABC):

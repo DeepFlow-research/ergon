@@ -5,7 +5,7 @@ round-trip works by writing a known file that the SandboxFileCheckCriterion
 can later verify.
 """
 
-from h_arcane.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
 
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"

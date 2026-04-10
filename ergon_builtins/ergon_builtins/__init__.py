@@ -1,1 +1,1 @@
-"""Arcane built-in benchmarks, workers, and evaluators."""
+"""Ergon built-in benchmarks, workers, and evaluators."""

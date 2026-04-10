@@ -11,8 +11,8 @@ the RL training loop.
 
 import random
 
-from h_arcane.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
-from h_arcane.api.generation import GenerationTurn, TokenLogprob
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
+from ergon_core.api.generation import GenerationTurn, TokenLogprob
 
 
 class TrainingStubWorker(Worker):

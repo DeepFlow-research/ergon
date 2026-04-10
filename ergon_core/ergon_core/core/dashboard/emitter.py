@@ -10,14 +10,14 @@ from typing import Any
 from uuid import UUID
 
 import inngest
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.telemetry.models import RunRecord
-from h_arcane.core.runtime.inngest_client import inngest_client
-from h_arcane.core.runtime.services.cohort_service import experiment_cohort_service
-from h_arcane.core.runtime.services.cohort_stats_service import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
+from ergon_core.core.runtime.services.cohort_stats_service import (
     experiment_cohort_stats_service,
 )
-from h_arcane.core.utils import utcnow
+from ergon_core.core.utils import utcnow
 
 from .event_contracts import (
     CohortUpdatedEvent,

@@ -1,6 +1,6 @@
 """GDPEval staged rubric with sequential gating aggregation.
 
-The ``StagedRubric`` extends :class:`h_arcane.api.evaluator.Rubric` to
+The ``StagedRubric`` extends :class:`ergon_core.api.evaluator.Rubric` to
 support multi-stage evaluation where each stage can gate subsequent
 stages.  Stages are evaluated in order; a required stage whose score
 falls below ``min_score_to_pass`` triggers the configured failure action
@@ -11,10 +11,10 @@ import logging
 from collections.abc import Iterable
 from typing import ClassVar, Literal
 
-from h_arcane.api.criterion import Criterion
-from h_arcane.api.evaluator import Rubric
-from h_arcane.api.results import CriterionResult, TaskEvaluationResult
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.criterion import Criterion
+from ergon_core.api.evaluator import Rubric
+from ergon_core.api.results import CriterionResult, TaskEvaluationResult
+from ergon_core.api.task_types import BenchmarkTask
 from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)

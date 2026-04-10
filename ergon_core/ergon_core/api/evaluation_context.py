@@ -3,8 +3,8 @@
 from typing import Any
 from uuid import UUID
 
-from h_arcane.api.results import WorkerResult
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.results import WorkerResult
+from ergon_core.api.task_types import BenchmarkTask
 from pydantic import BaseModel, Field
 
 

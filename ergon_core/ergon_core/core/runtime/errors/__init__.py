@@ -1,4 +1,4 @@
-"""Custom errors for Arcane runtime.
+"""Custom errors for Ergon runtime.
 
 Inngest errors auto-log at ERROR level on construction so failures
 are always visible in stdout regardless of how the caller handles them.
@@ -6,7 +6,7 @@ are always visible in stdout regardless of how the caller handles them.
 Graph errors are runtime-agnostic (no Inngest dependency).
 """
 
-from h_arcane.core.runtime.errors.graph_errors import (
+from ergon_core.core.runtime.errors.graph_errors import (
     AnnotationNotFoundError,
     CycleError,
     DanglingEdgeError,
@@ -14,8 +14,8 @@ from h_arcane.core.runtime.errors.graph_errors import (
     GraphError,
     NodeNotFoundError,
 )
-from h_arcane.core.runtime.errors.inngest_errors import (
-    ArcaneNonRetriableError,
+from ergon_core.core.runtime.errors.inngest_errors import (
+    ErgonNonRetriableError,
     ConfigurationError,
     ContractViolationError,
     DataIntegrityError,
@@ -23,7 +23,7 @@ from h_arcane.core.runtime.errors.inngest_errors import (
 )
 
 __all__ = [
-    "ArcaneNonRetriableError",
+    "ErgonNonRetriableError",
     "AnnotationNotFoundError",
     "ConfigurationError",
     "ContractViolationError",

@@ -13,20 +13,20 @@ from uuid import UUID
 import inngest
 from sqlmodel import select
 
-from arcane_builtins.registry import SANDBOX_MANAGERS
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.telemetry.models import RunResource
-from h_arcane.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
-from h_arcane.core.runtime.errors import DataIntegrityError
-from h_arcane.core.runtime.inngest_client import inngest_client
-from h_arcane.core.runtime.services.child_function_payloads import SandboxSetupRequest
-from h_arcane.core.runtime.services.inngest_function_results import SandboxReadyResult
-from h_arcane.core.runtime.tracing import (
+from ergon_builtins.registry import SANDBOX_MANAGERS
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import RunResource
+from ergon_core.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from ergon_core.core.runtime.errors import DataIntegrityError
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.child_function_payloads import SandboxSetupRequest
+from ergon_core.core.runtime.services.inngest_function_results import SandboxReadyResult
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     get_trace_sink,
     sandbox_setup_context,
 )
-from h_arcane.core.settings import settings
+from ergon_core.core.settings import settings
 
 logger = logging.getLogger(__name__)
 

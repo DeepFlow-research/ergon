@@ -1,16 +1,16 @@
-"""Object-first Arcane public API surface."""
+"""Object-first Ergon public API surface."""
 
-from h_arcane.api.benchmark import Benchmark
-from h_arcane.api.criterion import Criterion
-from h_arcane.api.errors import DependencyError
-from h_arcane.api.evaluation_context import EvaluationContext
-from h_arcane.api.evaluator import Evaluator, Rubric
-from h_arcane.api.experiment import Experiment
-from h_arcane.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
-from h_arcane.api.results import CriterionResult, TaskEvaluationResult, WorkerResult
-from h_arcane.api.task_types import BenchmarkTask
-from h_arcane.api.worker import Worker
-from h_arcane.api.worker_context import WorkerContext
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.criterion import Criterion
+from ergon_core.api.errors import DependencyError
+from ergon_core.api.evaluation_context import EvaluationContext
+from ergon_core.api.evaluator import Evaluator, Rubric
+from ergon_core.api.experiment import Experiment
+from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
+from ergon_core.api.results import CriterionResult, TaskEvaluationResult, WorkerResult
+from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.worker import Worker
+from ergon_core.api.worker_context import WorkerContext
 
 __all__ = [
     "Benchmark",

@@ -1,22 +1,22 @@
 """Workflow initialization: load definitions, seed state, find initial tasks."""
 
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
 )
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from h_arcane.core.persistence.telemetry.models import RunRecord
-from h_arcane.core.runtime.execution.propagation import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.runtime.execution.propagation import (
     _record_state_event,
     get_initial_ready_tasks,
 )
-from h_arcane.core.runtime.services.orchestration_dto import (
+from ergon_core.core.runtime.services.orchestration_dto import (
     InitializedWorkflow,
     InitializeWorkflowCommand,
     TaskDescriptor,
 )
-from h_arcane.core.utils import require_not_none, utcnow
+from ergon_core.core.utils import require_not_none, utcnow
 from sqlmodel import select
 
 

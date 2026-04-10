@@ -2,26 +2,26 @@
 
 from uuid import UUID
 
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionWorker,
 )
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.shared.enums import TaskExecutionStatus
-from h_arcane.core.persistence.telemetry.models import RunTaskExecution
-from h_arcane.core.runtime.execution.propagation import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.runtime.execution.propagation import (
     mark_task_failed,
     mark_task_running,
 )
-from h_arcane.core.runtime.services.orchestration_dto import (
+from ergon_core.core.runtime.services.orchestration_dto import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
 )
-from h_arcane.core.utils import require_not_none, utcnow
+from ergon_core.core.utils import require_not_none, utcnow
 from sqlmodel import select
 
 

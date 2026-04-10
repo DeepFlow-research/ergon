@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from h_arcane.core.utils import utcnow
+from ergon_core.core.utils import utcnow
 from pydantic import BaseModel, Field
 
 

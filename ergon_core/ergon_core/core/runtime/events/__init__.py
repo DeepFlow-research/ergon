@@ -1,12 +1,12 @@
 """Inngest event contracts."""
 
-from h_arcane.core.runtime.events.base import InngestEventContract
-from h_arcane.core.runtime.events.evaluation_events import (
+from ergon_core.core.runtime.events.base import InngestEventContract
+from ergon_core.core.runtime.events.evaluation_events import (
     CriterionEvaluationEvent,
     TaskEvaluationEvent,
 )
-from h_arcane.core.runtime.events.infrastructure_events import RunCleanupEvent
-from h_arcane.core.runtime.events.task_events import (
+from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
+from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,

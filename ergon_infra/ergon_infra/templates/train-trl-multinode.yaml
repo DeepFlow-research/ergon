@@ -1,14 +1,16 @@
-# Multi-node TRL GRPO training with Arcane environments.
+# Multi-node TRL GRPO training with Ergon environments.
+# TODO: git clone below requires the repo to be public. Until then, use
+#       file_mounts to sync local source (see /tmp/ac2-gpu-test.yaml pattern).
 #
 # Node 0 runs `trl vllm-serve` (inference).
-# Node 1+ runs `arcane train local` (training with DeepSpeed ZeRO-3).
+# Node 1+ runs `ergon train local` (training with DeepSpeed ZeRO-3).
 # Weight sync between training and vLLM happens via NCCL automatically.
 #
-#   sky launch arcane_infra/arcane_infra/templates/train-trl-multinode.yaml -y \
+#   sky launch ergon_infra/ergon_infra/templates/train-trl-multinode.yaml -y \
 #     --env DEFINITION_ID=<uuid> \
 #     --env MODEL=Qwen/Qwen2.5-1.5B
 
-name: arcane-training-multinode
+name: ergon-training-multinode
 
 resources:
   accelerators: ${GPU_TYPE:-A10G}:${GPU_COUNT:-1}
@@ -17,7 +19,7 @@ num_nodes: ${NUM_NODES:-2}
 
 file_mounts:
   /checkpoints:
-    source: ${CHECKPOINT_BUCKET:-s3://my-arcane-checkpoints}
+    source: ${CHECKPOINT_BUCKET:-s3://my-ergon-checkpoints}
     mode: MOUNT_CACHED
 
 envs:
@@ -31,9 +33,9 @@ envs:
   TIMEOUT: ${TIMEOUT:-300}
 
 setup: |
-  git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
-  cd /tmp/arcane
-  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli -e ./arcane_infra
+  git clone https://github.com/DeepFlow-research/ergon.git /tmp/ergon
+  cd /tmp/ergon
+  pip install -e ./ergon_core -e ./ergon_builtins -e ./ergon_cli -e ./ergon_infra
   pip install "trl[vllm]>=1.0.0,<2.0.0" datasets transformers
 
 run: |
@@ -56,7 +58,7 @@ run: |
       sleep 1
     done
 
-    arcane train local \
+    ergon train local \
       --benchmark "$BENCHMARK" \
       --definition-id "$DEFINITION_ID" \
       --model "$MODEL" \

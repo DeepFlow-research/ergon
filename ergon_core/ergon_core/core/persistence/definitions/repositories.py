@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,
     ExperimentDefinitionInstance,

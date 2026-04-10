@@ -4,7 +4,7 @@ Used by the smoke-test rubric for CI / E2E testing. Connects to the
 worker's sandbox via sandbox_id and checks for the expected file.
 """
 
-from h_arcane.api import Criterion, CriterionResult, EvaluationContext
+from ergon_core.api import Criterion, CriterionResult, EvaluationContext
 
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"

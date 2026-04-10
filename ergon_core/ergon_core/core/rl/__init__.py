@@ -1,6 +1,6 @@
 """RL integration layer.
 
-Provides the bridge between Arcane's Inngest-orchestrated environment
+Provides the bridge between Ergon's Inngest-orchestrated environment
 plane and external training frameworks (TRL, veRL).
 
 Core components:

@@ -7,10 +7,10 @@ whether agents know when and what to ask stakeholders.
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
-from h_arcane.api.benchmark import Benchmark
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.task_types import BenchmarkTask
 
-from arcane_builtins.benchmarks.researchrubrics.task_schemas import (
+from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
     RubricCriterion,
 )
@@ -27,7 +27,7 @@ class ResearchRubricsBenchmark(Benchmark):
 
     type_slug: ClassVar[str] = "researchrubrics"
     required_packages: ClassVar[list[str]] = ["datasets", "huggingface_hub"]
-    install_hint: ClassVar[str] = "pip install 'arcane-builtins[data]'"
+    install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 
     def __init__(
         self,

@@ -4,8 +4,8 @@ Each ``RubricCriterion`` from the dataset is converted into a lightweight
 ``LLMJudgeCriterion`` whose prompt encodes the evaluation axis and weight.
 """
 
-from arcane_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
-from arcane_builtins.evaluators.criteria.llm_judge import LLMJudgeCriterion
+from ergon_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
+from ergon_builtins.evaluators.criteria.llm_judge import LLMJudgeCriterion
 
 
 def _build_judge_prompt(criterion: RubricCriterion) -> str:

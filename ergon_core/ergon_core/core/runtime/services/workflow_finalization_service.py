@@ -1,14 +1,14 @@
 """Workflow finalization: aggregate evaluations and close the run."""
 
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.shared.enums import RunStatus
-from h_arcane.core.persistence.telemetry.models import RunRecord, RunTaskEvaluation
-from h_arcane.core.runtime.services.orchestration_dto import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskEvaluation
+from ergon_core.core.runtime.services.orchestration_dto import (
     FinalizedWorkflowResult,
     FinalizeWorkflowCommand,
     RunCompletionData,
 )
-from h_arcane.core.utils import require_not_none, utcnow
+from ergon_core.core.utils import require_not_none, utcnow
 from sqlmodel import select
 
 

@@ -20,6 +20,6 @@ Combined: `pnpm run check:fast`.
 Ruff autofix:
 
 ```bash
-uv run ruff check --fix h_arcane arcane_builtins arcane_cli arcane_infra tests scripts
-uv run ruff format h_arcane arcane_builtins arcane_cli arcane_infra tests scripts
+uv run ruff check --fix ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
+uv run ruff format ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
 ```

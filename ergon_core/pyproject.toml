@@ -1,7 +1,8 @@
 [project]
-name = "h-arcane"
+name = "ergon-core"
 version = "0.1.0"
-description = "Core Arcane library: public API, runtime, and persistence"
+description = "Core Ergon library: public API, runtime, and persistence"
+license = "Apache-2.0"
 requires-python = ">=3.13"
 dependencies = [
     "inngest>=0.3.0",
@@ -43,4 +44,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["h_arcane*"]
+include = ["ergon_core*"]

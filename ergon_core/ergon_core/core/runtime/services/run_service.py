@@ -5,18 +5,18 @@ import logging
 from uuid import UUID
 
 import inngest
-from h_arcane.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
-from h_arcane.core.persistence.telemetry.models import RunRecord
-from h_arcane.core.runtime.events.infrastructure_events import (
+from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.runtime.events.infrastructure_events import (
     RunCancelledEvent,
     RunCleanupEvent,
 )
-from h_arcane.core.runtime.events.task_events import WorkflowStartedEvent
-from h_arcane.core.runtime.inngest_client import inngest_client
-from h_arcane.core.settings import settings
-from h_arcane.core.utils import utcnow
+from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.settings import settings
+from ergon_core.core.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ _DEFAULT_TIMEOUT_S = 600.0
 def _checkpoint_metadata() -> dict[str, object]:
     """Checkpoint context for ``RunRecord.summary_json`` (eval watcher / checkpoint subprocess).
 
-    Values come from ``Settings`` (``.env`` + process env), including ``ARCANE_CHECKPOINT_*``
+    Values come from ``Settings`` (``.env`` + process env), including ``ERGON_CHECKPOINT_*``
     set by the eval runner when spawning evaluation.
     """
     if settings.checkpoint_step is None:

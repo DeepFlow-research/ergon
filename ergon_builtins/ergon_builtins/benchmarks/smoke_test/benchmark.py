@@ -7,10 +7,10 @@ the full execution pipeline.
 from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
-from h_arcane.api.benchmark import Benchmark
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.task_types import BenchmarkTask
 
-from arcane_builtins.benchmarks.smoke_test.tasks import (
+from ergon_builtins.benchmarks.smoke_test.tasks import (
     diamond_tasks,
     linear_tasks,
     parallel_tasks,

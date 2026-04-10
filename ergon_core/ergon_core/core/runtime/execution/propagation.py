@@ -7,13 +7,13 @@ state — everything goes through the database.
 
 from uuid import UUID
 
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
 )
-from h_arcane.core.persistence.shared.enums import TaskExecutionStatus
-from h_arcane.core.persistence.telemetry.models import RunTaskStateEvent
-from h_arcane.core.utils import utcnow
+from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import RunTaskStateEvent
+from ergon_core.core.utils import utcnow
 from sqlmodel import Session, select
 
 # ---------------------------------------------------------------------------

@@ -11,8 +11,8 @@ from uuid import UUID
 from sqlmodel import Session
 from transformers import TrainerCallback, TrainerControl, TrainerState, TrainingArguments
 
-from h_arcane.core.persistence.telemetry.models import TrainingMetric, TrainingSession
-from h_arcane.core.utils import utcnow
+from ergon_core.core.persistence.telemetry.models import TrainingMetric, TrainingSession
+from ergon_core.core.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +31,8 @@ _KNOWN_METRIC_KEYS = frozenset(
 )
 
 
-class ArcaneTrainingCallback(TrainerCallback):
-    """Persists per-step training metrics to the Arcane DB."""
+class ErgonTrainingCallback(TrainerCallback):
+    """Persists per-step training metrics to the Ergon DB."""
 
     def __init__(self, session_id: UUID, session_factory: Callable[[], Session]) -> None:
         super().__init__()

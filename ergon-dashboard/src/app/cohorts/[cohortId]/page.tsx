@@ -1,6 +1,6 @@
 import { CohortDetailView } from "@/components/cohorts/CohortDetailView";
 import { parseCohortDetail } from "@/lib/contracts/rest";
-import { fetchArcaneApi } from "@/lib/serverApi";
+import { fetchErgonApi } from "@/lib/serverApi";
 import type { CohortDetail } from "@/lib/types";
 
 interface CohortPageProps {
@@ -14,7 +14,7 @@ export default async function CohortPage({ params }: CohortPageProps) {
   let initialDetail: CohortDetail | null = null;
 
   try {
-    const response = await fetchArcaneApi(`/cohorts/${cohortId}`);
+    const response = await fetchErgonApi(`/cohorts/${cohortId}`);
     if (response.ok) {
       initialDetail = parseCohortDetail(await response.json());
     }

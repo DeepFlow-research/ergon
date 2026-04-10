@@ -1,10 +1,11 @@
 [project]
-name = "arcane-builtins"
+name = "ergon-builtins"
 version = "0.1.0"
-description = "Built-in benchmarks, workers, evaluators, and criteria for Arcane"
+description = "Built-in benchmarks, workers, evaluators, and criteria for Ergon"
+license = "Apache-2.0"
 requires-python = ">=3.13"
 dependencies = [
-    "h-arcane",
+    "ergon-core",
 ]
 
 [project.optional-dependencies]
@@ -19,7 +20,7 @@ data = [
     "huggingface_hub",
 ]
 all = [
-    "arcane-builtins[local-models,data]",
+    "ergon-builtins[local-models,data]",
 ]
 
 [build-system]
@@ -28,4 +29,4 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["arcane_builtins*"]
+include = ["ergon_builtins*"]

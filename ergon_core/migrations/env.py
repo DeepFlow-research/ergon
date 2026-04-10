@@ -10,11 +10,11 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
-import h_arcane.core.persistence.definitions.models  # noqa: F401
-import h_arcane.core.persistence.graph.models  # noqa: F401
-import h_arcane.core.persistence.saved_specs.models  # noqa: F401
-import h_arcane.core.persistence.telemetry.models  # noqa: F401
-from h_arcane.core.settings import Settings
+import ergon_core.core.persistence.definitions.models  # noqa: F401
+import ergon_core.core.persistence.graph.models  # noqa: F401
+import ergon_core.core.persistence.saved_specs.models  # noqa: F401
+import ergon_core.core.persistence.telemetry.models  # noqa: F401
+from ergon_core.core.settings import Settings
 
 config = context.config
 

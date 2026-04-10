@@ -4,13 +4,13 @@ Reads evaluator bindings from definition tables and task execution
 outputs to build PreparedSingleEvaluator payloads.
 """
 
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionEvaluator,
     ExperimentDefinitionTaskEvaluator,
 )
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.telemetry.models import RunTaskExecution
-from h_arcane.core.runtime.services.evaluation_dto import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.runtime.services.evaluation_dto import (
     DispatchEvaluatorsCommand,
     PreparedEvaluatorDispatch,
     PreparedSingleEvaluator,

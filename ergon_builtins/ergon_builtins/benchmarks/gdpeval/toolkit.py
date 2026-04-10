@@ -13,7 +13,7 @@ try:
 except ImportError:
     Tool = None  # type: ignore[assignment,misc]
 
-from arcane_builtins.benchmarks.gdpeval.task_schemas import (
+from ergon_builtins.benchmarks.gdpeval.task_schemas import (
     CreateCsvResponse,
     CreateDocxResponse,
     CreateExcelResponse,
@@ -25,7 +25,7 @@ from arcane_builtins.benchmarks.gdpeval.task_schemas import (
 )
 
 if TYPE_CHECKING:
-    from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
+    from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 
 class QAExchange:

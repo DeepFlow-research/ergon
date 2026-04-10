@@ -9,7 +9,7 @@ transaction management is needed at this layer.
 from typing import Any, Generic, Type, TypeVar
 from uuid import UUID
 
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,
     ExperimentDefinitionInstance,
@@ -19,9 +19,9 @@ from h_arcane.core.persistence.definitions.models import (
     ExperimentDefinitionTaskEvaluator,
     ExperimentDefinitionWorker,
 )
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from h_arcane.core.persistence.telemetry.models import (
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import (
     RunAction,
     RunRecord,
     RunResource,

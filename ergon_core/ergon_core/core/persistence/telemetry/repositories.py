@@ -3,10 +3,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from h_arcane.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from h_arcane.core.persistence.shared.ids import new_id
-from h_arcane.core.providers.generation import pydantic_ai_format as pa_format
-from h_arcane.core.persistence.telemetry.models import (
+from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.shared.ids import new_id
+from ergon_core.core.providers.generation import pydantic_ai_format as pa_format
+from ergon_core.core.persistence.telemetry.models import (
     RunAction,
     RunGenerationTurn,
     RunRecord,
@@ -15,7 +15,7 @@ from h_arcane.core.persistence.telemetry.models import (
     RunTaskExecution,
     RunTaskStateEvent,
 )
-from h_arcane.core.utils import utcnow as _utcnow
+from ergon_core.core.utils import utcnow as _utcnow
 from sqlmodel import Session, select
 
 
@@ -250,7 +250,7 @@ class GenerationTurnRepository:
         """Persist a list of ``GenerationTurn`` objects as DB rows.
 
         Args:
-            turns: list of ``h_arcane.api.generation.GenerationTurn``.
+            turns: list of ``ergon_core.api.generation.GenerationTurn``.
         """
         rows: list[RunGenerationTurn] = []
         for i, turn in enumerate(turns):

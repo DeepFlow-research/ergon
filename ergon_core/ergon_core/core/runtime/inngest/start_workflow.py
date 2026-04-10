@@ -4,17 +4,17 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from h_arcane.core.runtime.events.task_events import (
+from ergon_core.core.runtime.events.task_events import (
     TaskReadyEvent,
     WorkflowStartedEvent,
 )
-from h_arcane.core.runtime.inngest_client import RUN_CANCEL, inngest_client
-from h_arcane.core.runtime.services.inngest_function_results import WorkflowStartResult
-from h_arcane.core.runtime.services.orchestration_dto import InitializeWorkflowCommand
-from h_arcane.core.runtime.services.workflow_initialization_service import (
+from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.services.inngest_function_results import WorkflowStartResult
+from ergon_core.core.runtime.services.orchestration_dto import InitializeWorkflowCommand
+from ergon_core.core.runtime.services.workflow_initialization_service import (
     WorkflowInitializationService,
 )
-from h_arcane.core.runtime.tracing import (
+from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     get_trace_sink,
     workflow_start_context,

@@ -6,17 +6,17 @@ from argparse import Namespace
 
 import inngest
 
-from arcane_cli.composition import build_experiment
-from arcane_cli.discovery import list_benchmarks
-from arcane_cli.rendering import render_run_result, render_table
-from h_arcane.api.handles import ExperimentRunHandle
-from h_arcane.core.persistence.shared.db import ensure_db, get_session
-from h_arcane.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
-from h_arcane.core.persistence.telemetry.models import RunRecord
-from h_arcane.core.runtime.events.task_events import WorkflowStartedEvent
-from h_arcane.core.runtime.inngest_client import inngest_client
-from h_arcane.core.runtime.services.cohort_service import experiment_cohort_service
-from h_arcane.core.runtime.services.run_service import create_run
+from ergon_cli.composition import build_experiment
+from ergon_cli.discovery import list_benchmarks
+from ergon_cli.rendering import render_run_result, render_table
+from ergon_core.api.handles import ExperimentRunHandle
+from ergon_core.core.persistence.shared.db import ensure_db, get_session
+from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
+from ergon_core.core.runtime.services.run_service import create_run
 
 
 def handle_benchmark(args: Namespace) -> int:
@@ -27,7 +27,7 @@ def handle_benchmark(args: Namespace) -> int:
     elif args.bench_action == "run":
         return run_benchmark(args)
     else:
-        print("Usage: arcane benchmark {list|run}")
+        print("Usage: ergon benchmark {list|run}")
         return 1
 
 
@@ -51,7 +51,7 @@ def run_benchmark(args: Namespace) -> int:
     cohort = experiment_cohort_service.resolve_or_create(
         name=cohort_name,
         description=f"Benchmark: {args.slug} | worker: {args.worker} | evaluator: {args.evaluator}",
-        created_by="arcane-cli",
+        created_by="ergon-cli",
     )
     print(f"\nCohort: {cohort.name} (id={cohort.id})")
 

@@ -1,10 +1,10 @@
 """Inngest client singleton and shared configuration."""
 
 import inngest
-from h_arcane.core.settings import settings
+from ergon_core.core.settings import settings
 
 inngest_client = inngest.Inngest(
-    app_id="h-arcane",
+    app_id="ergon-core",
     event_key=settings.inngest_event_key or "local-dev",
     is_production=not settings.inngest_dev,
     api_base_url=settings.inngest_api_base_url,

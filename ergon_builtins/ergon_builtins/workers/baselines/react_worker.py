@@ -15,11 +15,11 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 
-from h_arcane.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
-from h_arcane.api.generation import GenerationTurn
-from h_arcane.core.providers.generation.pydantic_ai_format import extract_logprobs
-from h_arcane.core.providers.generation.model_resolution import resolve_model_target
-from h_arcane.core.rl import LOGPROB_SETTINGS
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
+from ergon_core.api.generation import GenerationTurn
+from ergon_core.core.providers.generation.pydantic_ai_format import extract_logprobs
+from ergon_core.core.providers.generation.model_resolution import resolve_model_target
+from ergon_core.core.rl import LOGPROB_SETTINGS
 
 logger = logging.getLogger(__name__)
 

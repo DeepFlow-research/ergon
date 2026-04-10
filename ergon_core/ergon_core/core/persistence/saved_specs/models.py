@@ -5,7 +5,7 @@ user-facing configuration — not serialized Python objects.
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from h_arcane.core.utils import utcnow as _utcnow
+from ergon_core.core.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel

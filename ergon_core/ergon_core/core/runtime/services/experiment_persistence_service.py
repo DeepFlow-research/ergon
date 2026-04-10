@@ -7,9 +7,9 @@ BoundExperiment intermediate, no constructor_state() serialisation.
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from h_arcane.api.evaluator import Rubric
-from h_arcane.api.handles import PersistedExperimentDefinition
-from h_arcane.core.persistence.definitions.models import (
+from ergon_core.api.evaluator import Rubric
+from ergon_core.api.handles import PersistedExperimentDefinition
+from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,
     ExperimentDefinitionInstance,
@@ -19,11 +19,11 @@ from h_arcane.core.persistence.definitions.models import (
     ExperimentDefinitionTaskEvaluator,
     ExperimentDefinitionWorker,
 )
-from h_arcane.core.persistence.shared.db import get_session
-from h_arcane.core.utils import utcnow
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.utils import utcnow
 
 if TYPE_CHECKING:
-    from h_arcane.api.experiment import Experiment
+    from ergon_core.api.experiment import Experiment
 
 
 def persist_experiment_definition(

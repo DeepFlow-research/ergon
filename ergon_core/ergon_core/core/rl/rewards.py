@@ -8,7 +8,7 @@ decomposition works.
 from statistics import mean
 from typing import Protocol
 
-from h_arcane.core.persistence.telemetry.models import RunGenerationTurn
+from ergon_core.core.persistence.telemetry.models import RunGenerationTurn
 
 
 class RewardStrategy(Protocol):

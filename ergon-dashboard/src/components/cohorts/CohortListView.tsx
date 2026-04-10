@@ -296,7 +296,7 @@ export function CohortListView() {
         <div className="mx-auto flex max-w-7xl items-end justify-between gap-4 px-6 py-6">
           <div>
             <p className="text-sm uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
-              Arcane Dashboard
+              Ergon Dashboard
             </p>
             <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
               Experiment Cohorts

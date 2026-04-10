@@ -12,12 +12,12 @@ negative weights.
 from collections.abc import Iterable
 from typing import ClassVar
 
-from h_arcane.api.evaluator import Rubric
-from h_arcane.api.results import CriterionResult, TaskEvaluationResult
-from h_arcane.api.task_types import BenchmarkTask
+from ergon_core.api.evaluator import Rubric
+from ergon_core.api.results import CriterionResult, TaskEvaluationResult
+from ergon_core.api.task_types import BenchmarkTask
 
-from arcane_builtins.benchmarks.researchrubrics.criteria import build_criteria_from_rubrics
-from arcane_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
+from ergon_builtins.benchmarks.researchrubrics.criteria import build_criteria_from_rubrics
+from ergon_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
 
 
 class ResearchRubricsRubric(Rubric):

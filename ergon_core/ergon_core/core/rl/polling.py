@@ -11,8 +11,8 @@ from uuid import UUID
 
 from sqlmodel import Session, select
 
-from h_arcane.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
-from h_arcane.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
+from ergon_core.core.persistence.telemetry.models import RunRecord
 
 logger = logging.getLogger(__name__)
 

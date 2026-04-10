@@ -6,7 +6,7 @@ Not meaningful for real evaluation.
 
 import random
 
-from h_arcane.api import Criterion, CriterionResult, EvaluationContext
+from ergon_core.api import Criterion, CriterionResult, EvaluationContext
 
 
 class VariedStubCriterion(Criterion):

@@ -3,12 +3,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-from h_arcane.core.runtime.services.cohort_schemas import (
+from ergon_core.core.runtime.services.cohort_schemas import (
     CohortDetailDto,
     CohortSummaryDto,
     UpdateCohortRequest,
 )
-from h_arcane.core.runtime.services.cohort_service import experiment_cohort_service
+from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
 
 router = APIRouter(prefix="/cohorts", tags=["cohorts"])
 

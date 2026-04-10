@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchArcaneApi } from "@/lib/serverApi";
+import { fetchErgonApi } from "@/lib/serverApi";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const path = `/runs/training/curves?${params.toString()}`;
 
   try {
-    const res = await fetchArcaneApi(path);
+    const res = await fetchErgonApi(path);
     if (!res.ok) {
       return NextResponse.json(
         { error: `Backend returned ${res.status}` },
