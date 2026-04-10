@@ -1,12 +1,9 @@
 # Single-node TRL GRPO training with Arcane environments.
 #
-# All configuration via environment variables — set at launch time:
-#
-#   sky launch infrastructure/skypilot/train-trl.yaml -y \
+#   sky launch arcane_infra/arcane_infra/templates/train-trl.yaml -y \
 #     --env DEFINITION_ID=<uuid> \
 #     --env MODEL=Qwen/Qwen2.5-7B \
-#     --env ARCANE_INNGEST_URL=http://<macbook-tailscale-ip>:8288 \
-#     --env DATABASE_URL=postgresql://...
+#     --env BENCHMARK=smoke-test
 
 name: arcane-training
 
@@ -22,9 +19,7 @@ file_mounts:
 envs:
   DEFINITION_ID:
   MODEL:
-  ARCANE_INNGEST_URL:
-  DATABASE_URL:
-  INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY:-dev}
+  BENCHMARK: ${BENCHMARK:-smoke-test}
   VLLM_MODE: ${VLLM_MODE:-server}
   NUM_GENERATIONS: ${NUM_GENERATIONS:-8}
   LEARNING_RATE: ${LEARNING_RATE:-1e-5}
@@ -38,14 +33,11 @@ setup: |
   pip install "trl[vllm]>=1.0.0,<2.0.0" datasets transformers
 
 run: |
-  cd /tmp/arcane
-  python scripts/train_trl_grpo.py \
+  arcane train local \
+    --benchmark "$BENCHMARK" \
     --definition-id "$DEFINITION_ID" \
     --model "$MODEL" \
     --vllm-mode "$VLLM_MODE" \
-    --inngest-url "$ARCANE_INNGEST_URL" \
-    --inngest-event-key "$INNGEST_EVENT_KEY" \
-    --db-url "$DATABASE_URL" \
     --output-dir /checkpoints \
     --save-steps "$SAVE_STEPS" \
     --num-generations "$NUM_GENERATIONS" \

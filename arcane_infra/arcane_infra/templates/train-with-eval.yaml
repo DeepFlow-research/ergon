@@ -1,10 +1,9 @@
 # Training + eval watcher as a SkyPilot JobGroup.
 #
-#   sky jobs launch infrastructure/skypilot/train-with-eval.yaml -y \
+#   sky jobs launch arcane_infra/arcane_infra/templates/train-with-eval.yaml -y \
 #     --env DEFINITION_ID=<uuid> \
 #     --env MODEL=Qwen/Qwen2.5-7B \
-#     --env ARCANE_INNGEST_URL=http://<macbook>:8288 \
-#     --env DATABASE_URL=postgresql://...
+#     --env BENCHMARK=gdpeval
 
 name: arcane-rl-full
 execution: parallel
@@ -23,9 +22,7 @@ file_mounts:
 envs:
   DEFINITION_ID:
   MODEL:
-  ARCANE_INNGEST_URL:
-  DATABASE_URL:
-  INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY:-dev}
+  BENCHMARK: ${BENCHMARK:-smoke-test}
 
 setup: |
   git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
@@ -34,14 +31,11 @@ setup: |
   pip install "trl[vllm]>=1.0.0,<2.0.0" datasets transformers
 
 run: |
-  cd /tmp/arcane
-  python scripts/train_trl_grpo.py \
+  arcane train local \
+    --benchmark "$BENCHMARK" \
     --definition-id "$DEFINITION_ID" \
     --model "$MODEL" \
     --vllm-mode server \
-    --inngest-url "$ARCANE_INNGEST_URL" \
-    --inngest-event-key "$INNGEST_EVENT_KEY" \
-    --db-url "$DATABASE_URL" \
     --output-dir /checkpoints \
     --save-steps "${SAVE_STEPS:-50}"
 
@@ -63,7 +57,7 @@ envs:
 setup: |
   git clone https://github.com/DeepFlow-research/arcane-extension.git /tmp/arcane
   cd /tmp/arcane
-  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli -e ./arcane_infra
+  pip install -e ./h_arcane -e ./arcane_builtins -e ./arcane_cli
   pip install "skypilot-nightly[shadeform]"
 
 run: |
@@ -72,4 +66,4 @@ run: |
     --benchmark "$BENCHMARK" \
     --evaluator "$EVALUATOR" \
     --poll-interval "${POLL_INTERVAL:-120}" \
-    --on-checkpoint "sky launch infrastructure/skypilot/eval-only.yaml -y --env CHECKPOINT={path} --env BENCHMARK=$BENCHMARK"
+    --on-checkpoint "sky launch arcane_infra/arcane_infra/templates/eval-only.yaml -y --env CHECKPOINT={path} --env BENCHMARK=$BENCHMARK"

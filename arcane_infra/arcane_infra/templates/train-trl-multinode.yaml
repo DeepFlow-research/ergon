@@ -1,25 +1,12 @@
 # Multi-node TRL GRPO training with Arcane environments.
 #
 # Node 0 runs `trl vllm-serve` (inference).
-# Node 1+ runs `accelerate launch` (training with DeepSpeed ZeRO-3).
+# Node 1+ runs `arcane train local` (training with DeepSpeed ZeRO-3).
 # Weight sync between training and vLLM happens via NCCL automatically.
 #
-# Example (2 nodes, 1 GPU each — cheap topology test):
-#
-#   sky launch infrastructure/skypilot/train-trl-multinode.yaml -y \
+#   sky launch arcane_infra/arcane_infra/templates/train-trl-multinode.yaml -y \
 #     --env DEFINITION_ID=<uuid> \
-#     --env MODEL=Qwen/Qwen2.5-1.5B \
-#     --env ARCANE_INNGEST_URL=http://<tailscale-ip>:8288 \
-#     --env DATABASE_URL=postgresql://...
-#
-# Example (2 nodes, 8 GPUs each — production):
-#
-#   sky launch infrastructure/skypilot/train-trl-multinode.yaml -y \
-#     --env DEFINITION_ID=<uuid> \
-#     --env MODEL=Qwen/Qwen2.5-72B \
-#     --env GPU_TYPE=H100 --env GPU_COUNT=8 \
-#     --env ARCANE_INNGEST_URL=http://<tailscale-ip>:8288 \
-#     --env DATABASE_URL=postgresql://...
+#     --env MODEL=Qwen/Qwen2.5-1.5B
 
 name: arcane-training-multinode
 
@@ -36,9 +23,7 @@ file_mounts:
 envs:
   DEFINITION_ID:
   MODEL:
-  ARCANE_INNGEST_URL:
-  DATABASE_URL:
-  INNGEST_EVENT_KEY: ${INNGEST_EVENT_KEY:-dev}
+  BENCHMARK: ${BENCHMARK:-smoke-test}
   VLLM_TP_SIZE: ${VLLM_TP_SIZE:-1}
   SAVE_STEPS: ${SAVE_STEPS:-50}
   NUM_GENERATIONS: ${NUM_GENERATIONS:-4}
@@ -71,15 +56,12 @@ run: |
       sleep 1
     done
 
-    cd /tmp/arcane
-    python scripts/train_trl_grpo.py \
+    arcane train local \
+      --benchmark "$BENCHMARK" \
       --definition-id "$DEFINITION_ID" \
       --model "$MODEL" \
       --vllm-mode server \
       --vllm-server-url "http://$HEAD_IP:8000" \
-      --inngest-url "$ARCANE_INNGEST_URL" \
-      --inngest-event-key "$INNGEST_EVENT_KEY" \
-      --db-url "$DATABASE_URL" \
       --output-dir /checkpoints \
       --save-steps "$SAVE_STEPS" \
       --num-generations "$NUM_GENERATIONS" \

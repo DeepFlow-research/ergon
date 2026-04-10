@@ -2,7 +2,7 @@
 #
 # Spawned by the eval watcher per checkpoint.
 #
-#   sky launch infrastructure/skypilot/eval-only.yaml -y \
+#   sky launch arcane_infra/arcane_infra/templates/eval-only.yaml -y \
 #     --env CHECKPOINT=s3://bucket/checkpoint-500 \
 #     --env BENCHMARK=gdpeval
 
