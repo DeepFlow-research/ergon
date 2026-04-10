@@ -7,7 +7,7 @@ from arcane_cli.rendering import render_table
 
 
 def handle_evaluator(args: Namespace) -> int:
-    if args.eval_action == "list":
+    if args.evaluator_action == "list":
         evaluators = list_evaluators()
         render_table(["Slug", "Name"], evaluators)
         return 0
