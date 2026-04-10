@@ -12,11 +12,11 @@ import {
 
 interface TrainingSessionSummary {
   id: string;
-  model_name: string;
+  modelName: string;
   status: string;
-  started_at: string | null;
-  total_steps: number | null;
-  final_loss: number | null;
+  startedAt: string | null;
+  totalSteps: number | null;
+  finalLoss: number | null;
 }
 
 export default function TrainingPage() {
@@ -35,8 +35,8 @@ export default function TrainingPage() {
       })
       .then((data: TrainingSessionSummary[]) => {
         setSessions(data);
-        if (data.length > 0 && !selectedSessionId) {
-          setSelectedSessionId(data[0].id);
+        if (data.length > 0) {
+          setSelectedSessionId((prev) => prev || data[0].id);
         }
         setIsLoading(false);
       })
@@ -118,8 +118,8 @@ export default function TrainingPage() {
               >
                 {sessions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.model_name} ({s.status}) — {s.total_steps ?? "?"} steps
-                    {s.started_at ? ` — ${new Date(s.started_at).toLocaleString()}` : ""}
+                    {s.modelName} ({s.status}) — {s.totalSteps ?? "?"} steps
+                    {s.startedAt ? ` — ${new Date(s.startedAt).toLocaleString()}` : ""}
                   </option>
                 ))}
               </select>
@@ -135,8 +135,8 @@ export default function TrainingPage() {
                 }`}>
                   {selectedSession.status}
                 </span>
-                {selectedSession.final_loss != null && (
-                  <span>Loss: {selectedSession.final_loss.toFixed(6)}</span>
+                {selectedSession.finalLoss != null && (
+                  <span>Loss: {selectedSession.finalLoss.toFixed(6)}</span>
                 )}
               </div>
             )}

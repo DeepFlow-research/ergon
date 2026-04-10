@@ -14,13 +14,13 @@ import {
 export interface MetricPoint {
   step: number;
   loss: number | null;
-  grad_norm: number | null;
-  learning_rate: number | null;
-  reward_mean: number | null;
-  reward_std: number | null;
+  gradNorm: number | null;
+  learningRate: number | null;
+  rewardMean: number | null;
+  rewardStd: number | null;
   entropy: number | null;
-  completion_mean_length: number | null;
-  step_time_s: number | null;
+  completionMeanLength: number | null;
+  stepTimeS: number | null;
 }
 
 interface TrainingMetricsChartProps {
@@ -30,9 +30,9 @@ interface TrainingMetricsChartProps {
 
 const METRICS = [
   { key: "loss", label: "Loss", color: "#ef4444" },
-  { key: "reward_mean", label: "Reward", color: "#10b981" },
+  { key: "rewardMean", label: "Reward", color: "#10b981" },
   { key: "entropy", label: "Entropy", color: "#6366f1" },
-  { key: "grad_norm", label: "Grad Norm", color: "#f59e0b" },
+  { key: "gradNorm", label: "Grad Norm", color: "#f59e0b" },
 ] as const;
 
 export function TrainingMetricsChart({ data, height = 360 }: TrainingMetricsChartProps) {

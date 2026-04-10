@@ -13,10 +13,10 @@ import {
 
 export interface CurveDataPoint {
   step: number;
-  mean_score: number;
-  benchmark_type: string | null;
-  created_at: string | null;
-  run_id: string;
+  meanScore: number;
+  benchmarkType: string | null;
+  createdAt: string | null;
+  runId: string;
 }
 
 interface TrainingCurveChartProps {
@@ -42,7 +42,7 @@ export function TrainingCurveChart({ data, height = 360 }: TrainingCurveChartPro
     );
   }
 
-  const benchmarks = Array.from(new Set(data.map((d) => d.benchmark_type ?? "unknown")));
+  const benchmarks = Array.from(new Set(data.map((d) => d.benchmarkType ?? "unknown")));
   const isSingleBenchmark = benchmarks.length === 1;
 
   if (isSingleBenchmark) {
@@ -68,7 +68,7 @@ export function TrainingCurveChart({ data, height = 360 }: TrainingCurveChartPro
           />
           <Line
             type="monotone"
-            dataKey="mean_score"
+            dataKey="meanScore"
             stroke={COLORS[0]}
             strokeWidth={2}
             dot={{ r: 3 }}
@@ -82,9 +82,9 @@ export function TrainingCurveChart({ data, height = 360 }: TrainingCurveChartPro
 
   const pivoted = new Map<number, Record<string, number>>();
   for (const d of data) {
-    const key = d.benchmark_type ?? "unknown";
+    const key = d.benchmarkType ?? "unknown";
     const existing = pivoted.get(d.step) ?? { step: d.step };
-    existing[key] = d.mean_score;
+    existing[key] = d.meanScore;
     pivoted.set(d.step, existing);
   }
   const chartData = Array.from(pivoted.values()).sort(
