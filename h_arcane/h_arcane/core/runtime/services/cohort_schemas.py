@@ -1,14 +1,11 @@
 """Pydantic DTOs for cohort-facing backend services and APIs."""
 
-from __future__ import annotations
-
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from h_arcane.core.persistence.telemetry.models import ExperimentCohortStatus
 from pydantic import BaseModel, Field
-
 
 class CohortStatusCountsDto(BaseModel):
     """Aggregate run counts by lifecycle status."""
@@ -18,7 +15,6 @@ class CohortStatusCountsDto(BaseModel):
     evaluating: int = 0
     completed: int = 0
     failed: int = 0
-
 
 class CohortSummaryDto(BaseModel):
     """Summary row for cohort list and live updates."""
@@ -38,7 +34,6 @@ class CohortSummaryDto(BaseModel):
     failure_rate: float = 0.0
     stats_updated_at: datetime | None = None
 
-
 class CohortRunRowDto(BaseModel):
     """One run inside a cohort detail view."""
 
@@ -54,19 +49,16 @@ class CohortRunRowDto(BaseModel):
     final_score: float | None = None
     error_message: str | None = None
 
-
 class CohortDetailDto(BaseModel):
     """Full payload for a single cohort detail page."""
 
     summary: CohortSummaryDto
     runs: list[CohortRunRowDto] = Field(default_factory=list)
 
-
 class UpdateCohortRequest(BaseModel):
     """Mutable cohort fields exposed through the operator API."""
 
     status: ExperimentCohortStatus
-
 
 class ResolveCohortRequest(BaseModel):
     """Request to resolve or create a cohort by name."""
@@ -74,4 +66,4 @@ class ResolveCohortRequest(BaseModel):
     name: str
     description: str | None = None
     created_by: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)

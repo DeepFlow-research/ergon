@@ -1,7 +1,5 @@
 """Application service for experiment cohort queries and resolution."""
 
-from __future__ import annotations
-
 from uuid import UUID
 
 from h_arcane.core.persistence.shared.db import get_session
@@ -20,7 +18,6 @@ from h_arcane.core.runtime.services.cohort_schemas import (
 )
 from h_arcane.core.utils import utcnow
 from sqlmodel import select
-
 
 class ExperimentCohortService:
     """Resolve cohorts and assemble frontend-facing cohort DTOs."""
@@ -181,6 +178,5 @@ class ExperimentCohortService:
             final_score=score,
             error_message=run.error_message,
         )
-
 
 experiment_cohort_service = ExperimentCohortService()

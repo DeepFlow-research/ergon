@@ -7,8 +7,6 @@ falls below ``min_score_to_pass`` triggers the configured failure action
 (skip remaining stages, zero the category, or continue).
 """
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Iterable
 from typing import ClassVar, Literal
@@ -21,11 +19,9 @@ from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)
 
-
 # ---------------------------------------------------------------------------
 # Stage model
 # ---------------------------------------------------------------------------
-
 
 class EvaluationStage(BaseModel):
     """Sequential stage in the evaluation pipeline.
@@ -90,11 +86,9 @@ class EvaluationStage(BaseModel):
             )
         return self
 
-
 # ---------------------------------------------------------------------------
 # Staged rubric
 # ---------------------------------------------------------------------------
-
 
 class StagedRubric(Rubric):
     """Rubric with sequential evaluation stages and gating logic.

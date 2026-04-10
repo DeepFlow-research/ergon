@@ -4,11 +4,8 @@ Each ``RubricCriterion`` from the dataset is converted into a lightweight
 ``LLMJudgeCriterion`` whose prompt encodes the evaluation axis and weight.
 """
 
-from __future__ import annotations
-
 from arcane_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
 from arcane_builtins.evaluators.criteria.llm_judge import LLMJudgeCriterion
-
 
 def _build_judge_prompt(criterion: RubricCriterion) -> str:
     """Build a system prompt for the LLM judge evaluating a single criterion."""
@@ -33,7 +30,6 @@ def _build_judge_prompt(criterion: RubricCriterion) -> str:
         "or not satisfied (False).\n"
         "Be thorough but fair in your evaluation."
     )
-
 
 def build_criteria_from_rubrics(
     rubric_criteria: list[RubricCriterion],

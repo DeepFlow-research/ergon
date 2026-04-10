@@ -143,6 +143,7 @@ class TestE2BSandboxBenchmarks:
 
     @pytest.fixture(autouse=True)
     def _require_e2b(self):
+        # Deferred: runtime-only dependency
         import os
         if not os.environ.get("E2B_API_KEY"):
             pytest.skip("E2B_API_KEY not set — skipping sandbox I/O tests")

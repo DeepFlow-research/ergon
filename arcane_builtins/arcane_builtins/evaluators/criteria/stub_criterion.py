@@ -3,10 +3,7 @@
 Passes when worker reports success. For smoke tests only.
 """
 
-from __future__ import annotations
-
 from h_arcane.api import Criterion, CriterionResult, EvaluationContext
-
 
 class StubCriterion(Criterion):
     type_slug = "stub-criterion"

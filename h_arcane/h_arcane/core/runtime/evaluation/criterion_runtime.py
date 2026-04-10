@@ -43,7 +43,7 @@ class DefaultCriterionRuntime:
     def __init__(
         self,
         context: CriterionContext,
-        sandbox_manager: BaseSandboxManager,
+        sandbox_manager: "BaseSandboxManager",
         llm_model: str = "gpt-4o",
         llm_max_tokens: int = 1024,
         llm_temperature: float = 0.0,

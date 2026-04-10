@@ -3,10 +3,7 @@
 Returns fixed output without calling any model. For smoke tests only.
 """
 
-from __future__ import annotations
-
 from h_arcane.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
-
 
 class StubWorker(Worker):
     type_slug = "stub-worker"

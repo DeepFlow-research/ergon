@@ -3,14 +3,11 @@
 Checks that the worker's execution trace contains expected action types.
 """
 
-from __future__ import annotations
-
 from typing import ClassVar
 
 from h_arcane.api.criterion import Criterion
 from h_arcane.api.evaluation_context import EvaluationContext
 from h_arcane.api.results import CriterionResult, WorkerResult
-
 
 class TraceCheckCriterion(Criterion):
     """Checks that expected action types appear in the worker's execution trace.

@@ -9,8 +9,6 @@ is the sum of all positive weights, and *min_possible* is the sum of all
 negative weights.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from typing import ClassVar
 
@@ -20,7 +18,6 @@ from h_arcane.api.task_types import BenchmarkTask
 
 from arcane_builtins.benchmarks.researchrubrics.criteria import build_criteria_from_rubrics
 from arcane_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
-
 
 class ResearchRubricsRubric(Rubric):
     """Rubric for weighted criteria evaluation with positive and negative weights.

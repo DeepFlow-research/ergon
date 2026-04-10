@@ -7,8 +7,6 @@ Scoring logic::
     else                   -> 0
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from typing import ClassVar
 
@@ -17,7 +15,6 @@ from h_arcane.api.results import CriterionResult, TaskEvaluationResult
 from h_arcane.api.task_types import BenchmarkTask
 
 from arcane_builtins.benchmarks.minif2f.criteria import build_proof_criterion
-
 
 class MiniF2FRubric(Rubric):
     """Rubric for formal proof verification with partial-credit for valid syntax."""

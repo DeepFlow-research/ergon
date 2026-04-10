@@ -4,14 +4,11 @@ Pairs with SmokeTestWorker for CI / E2E integration tests. The criterion
 connects to the same E2B sandbox and checks the file round-tripped.
 """
 
-from __future__ import annotations
-
 from typing import ClassVar
 
 from h_arcane.api.evaluator import Rubric
 
 from arcane_builtins.evaluators.criteria.sandbox_file_check import SandboxFileCheckCriterion
-
 
 class SmokeTestRubric(Rubric):
     """Rubric that checks the smoke-test worker wrote its marker file."""

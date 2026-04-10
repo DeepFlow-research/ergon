@@ -11,10 +11,7 @@ Patterns
 - diamond:  start -> [left, right] -> join  (fan-out / fan-in)
 """
 
-from __future__ import annotations
-
 from h_arcane.api.task_types import BenchmarkTask
-
 
 def single_task(instance_key: str = "default") -> list[BenchmarkTask]:
     return [
@@ -25,7 +22,6 @@ def single_task(instance_key: str = "default") -> list[BenchmarkTask]:
             evaluator_binding_keys=("default",),
         ),
     ]
-
 
 def linear_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
     return [
@@ -51,7 +47,6 @@ def linear_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
         ),
     ]
 
-
 def parallel_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
     return [
         BenchmarkTask(
@@ -73,7 +68,6 @@ def parallel_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
             evaluator_binding_keys=("default",),
         ),
     ]
-
 
 def diamond_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
     return [

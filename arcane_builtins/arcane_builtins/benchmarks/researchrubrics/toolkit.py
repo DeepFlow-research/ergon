@@ -8,8 +8,6 @@ produces ``pydantic_ai.tools.Tool`` wrappers for:
 - Stakeholder interaction
 """
 
-from __future__ import annotations
-
 from pydantic import BaseModel, Field
 
 try:
@@ -17,9 +15,7 @@ try:
 except ImportError:
     Tool = None  # type: ignore[assignment,misc]
 
-
 # ── Exa response models ──────────────────────────────────────────────
-
 
 class ExaSearchResult(BaseModel):
     title: str = Field(description="Page title")
@@ -30,7 +26,6 @@ class ExaSearchResult(BaseModel):
     )
     published_date: str | None = Field(default=None, description="Publication date if available")
 
-
 class ExaSearchResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
     error: str | None = Field(default=None, description="Error message if operation failed")
@@ -38,7 +33,6 @@ class ExaSearchResponse(BaseModel):
     results: list[ExaSearchResult] | None = Field(
         default=None, description="List of search results"
     )
-
 
 class ExaQAResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
@@ -49,7 +43,6 @@ class ExaQAResponse(BaseModel):
         default=None, description="List of source dicts with 'url' and 'title' keys"
     )
 
-
 class ExaGetContentResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
     error: str | None = Field(default=None, description="Error message if operation failed")
@@ -58,9 +51,7 @@ class ExaGetContentResponse(BaseModel):
     content: str | None = Field(default=None, description="Full extracted text content")
     published_date: str | None = Field(default=None, description="Publication date if available")
 
-
 # ── Report-draft response models ─────────────────────────────────────
-
 
 class WriteReportDraftResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
@@ -68,13 +59,11 @@ class WriteReportDraftResponse(BaseModel):
     file_path: str | None = Field(default=None, description="Path to the written file")
     bytes_written: int | None = Field(default=None, description="Number of bytes written")
 
-
 class EditReportDraftResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
     error: str | None = Field(default=None, description="Error message if operation failed")
     file_path: str | None = Field(default=None, description="Path to the edited file")
     replacements_made: int | None = Field(default=None, description="Number of replacements made")
-
 
 class ReadReportDraftResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
@@ -83,9 +72,7 @@ class ReadReportDraftResponse(BaseModel):
     content: str | None = Field(default=None, description="Content of the file")
     bytes_read: int | None = Field(default=None, description="Number of bytes read")
 
-
 # ── Toolkit ───────────────────────────────────────────────────────────
-
 
 class ResearchRubricsToolkit:
     """Produces ``pydantic_ai.tools.Tool`` instances for web research and report drafting.

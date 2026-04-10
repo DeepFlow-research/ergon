@@ -1,11 +1,8 @@
 """MiniF2F task shapes — problem_id, statement, proof_type."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from pydantic import BaseModel, Field
-
 
 class MiniF2FProblem(BaseModel):
     """A MiniF2F problem with its ground-truth proof."""
@@ -18,7 +15,6 @@ class MiniF2FProblem(BaseModel):
     lean_file_path: Path | None = Field(
         default=None, description="Source .lean file path (if loaded from disk)"
     )
-
 
 class MiniF2FTaskPayload(BaseModel):
     """Structured payload carried inside ``BenchmarkTask.task_payload``."""

@@ -1,7 +1,5 @@
 """Inngest-backed criterion executor: runs criteria in parallel via step.run."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from functools import partial
 from typing import TYPE_CHECKING
@@ -28,7 +26,6 @@ from h_arcane.core.runtime.tracing import (
 if TYPE_CHECKING:
     from h_arcane.core.providers.sandbox.manager import BaseSandboxManager
 
-
 class InngestCriterionExecutor:
     """Executes criteria in parallel using Inngest step.run boundaries."""
 
@@ -39,7 +36,7 @@ class InngestCriterionExecutor:
         task_id: UUID,
         execution_id: UUID,
         evaluator_id: UUID,
-        sandbox_manager: BaseSandboxManager | None = None,
+        sandbox_manager: "BaseSandboxManager | None" = None,
         trace_sink: TraceSink | None = None,
     ):
         self.ctx = ctx

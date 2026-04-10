@@ -23,7 +23,7 @@ class TaskTreeNode(InngestEventContract):
     name_field: str  # serialized as "name" via alias below
     status: str
     is_leaf: bool
-    children: list[TaskTreeNode] = []
+    children: list["TaskTreeNode"] = []
 
     model_config = {"extra": "allow", "populate_by_name": True}
 
@@ -31,6 +31,9 @@ class TaskTreeNode(InngestEventContract):
         d = super().model_dump(**kwargs)
         d["name"] = d.pop("name_field", "")
         return d
+
+
+TaskTreeNode.model_rebuild()
 
 # ---------------------------------------------------------------------------
 # Workflow-level events

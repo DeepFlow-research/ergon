@@ -23,9 +23,13 @@ def handle_benchmark(args: Namespace) -> int:
 
 
 def run_benchmark(args: Namespace) -> int:
+    # Deferred: side-effect import
     import h_arcane.core.persistence.definitions.models  # noqa: F401
+    # Deferred: side-effect import
     import h_arcane.core.persistence.saved_specs.models  # noqa: F401
+    # Deferred: side-effect import
     import h_arcane.core.persistence.telemetry.models  # noqa: F401
+    # Deferred: CLI startup cost
     from h_arcane.core.persistence.shared.db import create_all_tables
 
     create_all_tables()
@@ -65,14 +69,21 @@ def run_benchmark(args: Namespace) -> int:
 
 
 async def _create_and_dispatch(persisted, timeout: int = 600, cohort_id=None):
+    # Deferred: CLI startup cost
     import inngest
-
+    # Deferred: CLI startup cost
     from h_arcane.core.persistence.shared.db import get_session
+    # Deferred: CLI startup cost
     from h_arcane.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
+    # Deferred: CLI startup cost
     from h_arcane.core.persistence.telemetry.models import RunRecord
+    # Deferred: CLI startup cost
     from h_arcane.core.runtime.events.task_events import WorkflowStartedEvent
+    # Deferred: CLI startup cost
     from h_arcane.core.runtime.inngest_client import inngest_client
+    # Deferred: CLI startup cost
     from h_arcane.core.runtime.services.run_service import create_run
+    # Deferred: CLI startup cost
     from h_arcane.api.handles import ExperimentRunHandle
 
     run = create_run(persisted, cohort_id=cohort_id)

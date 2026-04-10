@@ -4,12 +4,9 @@ Provides a factory for the default proof-verification criterion used
 by the MiniF2F rubric.
 """
 
-from __future__ import annotations
-
 from arcane_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
-
 
 def build_proof_criterion(
     *,

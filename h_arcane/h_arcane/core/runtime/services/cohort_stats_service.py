@@ -1,7 +1,5 @@
 """Aggregate stats recomputation for experiment cohorts."""
 
-from __future__ import annotations
-
 from collections import Counter
 from uuid import UUID
 
@@ -13,7 +11,6 @@ from h_arcane.core.persistence.telemetry.models import (
 )
 from h_arcane.core.utils import utcnow
 from sqlmodel import select
-
 
 class ExperimentCohortStatsService:
     """Recompute denormalized cohort stats from cohort-scoped runs."""
@@ -98,6 +95,5 @@ class ExperimentCohortStatsService:
         if final is not None:
             return float(final)
         return None
-
 
 experiment_cohort_stats_service = ExperimentCohortStatsService()

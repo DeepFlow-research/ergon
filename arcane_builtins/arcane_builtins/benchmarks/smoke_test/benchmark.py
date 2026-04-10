@@ -4,8 +4,6 @@ Supports single, linear, parallel, and diamond DAG shapes to exercise
 the full execution pipeline.
 """
 
-from __future__ import annotations
-
 from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
@@ -18,7 +16,6 @@ from arcane_builtins.benchmarks.smoke_test.tasks import (
     parallel_tasks,
     single_task,
 )
-
 
 class SmokeTestBenchmark(Benchmark):
     type_slug: ClassVar[str] = "smoke-test"

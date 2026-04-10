@@ -1,7 +1,5 @@
 """Communication service — manages inter-agent messaging threads."""
 
-from __future__ import annotations
-
 from uuid import UUID
 
 from h_arcane.core.persistence.shared.db import get_session
@@ -14,7 +12,6 @@ from h_arcane.core.runtime.services.communication_schemas import (
 )
 from h_arcane.core.utils import utcnow
 from sqlmodel import func, select
-
 
 class CommunicationService:
     """Service for managing agent-to-agent communication."""
@@ -179,6 +176,5 @@ class CommunicationService:
         session.add(thread)
         session.flush()
         return thread
-
 
 communication_service = CommunicationService()

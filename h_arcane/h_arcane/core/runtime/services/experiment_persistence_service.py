@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from h_arcane.api.experiment import Experiment
 
 def persist_experiment_definition(
-    experiment: Experiment,
+    experiment: "Experiment",
 ) -> PersistedExperimentDefinition:
     """Validate, materialise instances, and write immutable definition rows."""
     return ExperimentPersistenceService().persist_definition(experiment)
@@ -42,7 +42,7 @@ class ExperimentPersistenceService:
 
     def persist_definition(
         self,
-        experiment: Experiment,
+        experiment: "Experiment",
     ) -> PersistedExperimentDefinition:
         # ---- 1. Validate ------------------------------------------------
         experiment.validate()
