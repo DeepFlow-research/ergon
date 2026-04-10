@@ -3,7 +3,10 @@ name = "arcane-cli"
 version = "0.1.0"
 description = "CLI for Arcane experiment orchestration"
 requires-python = ">=3.13"
-dependencies = ["h-arcane", "arcane-builtins"]
+dependencies = ["h-arcane", "arcane-builtins[all]"]
+
+[project.optional-dependencies]
+training = ["arcane-infra[all]"]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]

@@ -63,8 +63,58 @@ def build_parser() -> argparse.ArgumentParser:
     worker_sub.add_parser("list", help="List available workers")
 
     evaluator = sub.add_parser("evaluator", help="Evaluator operations")
-    eval_sub = evaluator.add_subparsers(dest="eval_action")
-    eval_sub.add_parser("list", help="List available evaluators")
+    evaluator_sub = evaluator.add_subparsers(dest="evaluator_action")
+    evaluator_sub.add_parser("list", help="List available evaluators")
+
+    # -- eval (checkpoint watcher) ------------------------------------------
+    eval_cmd = sub.add_parser("eval", help="Checkpoint evaluation and training curves")
+    eval_sub = eval_cmd.add_subparsers(dest="eval_action")
+
+    eval_watch = eval_sub.add_parser("watch", help="Watch for new checkpoints and evaluate")
+    eval_watch.add_argument("--checkpoint-dir", required=True, help="Directory to watch")
+    eval_watch.add_argument("--benchmark", required=True, help="Benchmark slug")
+    eval_watch.add_argument("--evaluator", default=None, help="Evaluator slug")
+    eval_watch.add_argument("--model-base", default=None, help="Base model for local eval")
+    eval_watch.add_argument("--poll-interval", type=int, default=60, help="Seconds between scans")
+    eval_watch.add_argument("--eval-limit", type=int, default=None, help="Max tasks per eval")
+    eval_watch.add_argument(
+        "--on-checkpoint",
+        default=None,
+        help="Shell command per checkpoint ({path} and {step} are replaced)",
+    )
+
+    eval_ckpt = eval_sub.add_parser("checkpoint", help="Evaluate a single checkpoint")
+    eval_ckpt.add_argument("--checkpoint", required=True, help="Checkpoint path")
+    eval_ckpt.add_argument("--benchmark", required=True, help="Benchmark slug")
+    eval_ckpt.add_argument("--evaluator", default=None, help="Evaluator slug")
+    eval_ckpt.add_argument("--model-base", default=None, help="Base model for local eval")
+    eval_ckpt.add_argument("--eval-limit", type=int, default=None, help="Max tasks")
+
+    # -- train (RL training) --------------------------------------------------
+    train_cmd = sub.add_parser("train", help="RL training with Arcane environments")
+    train_sub = train_cmd.add_subparsers(dest="train_action")
+
+    train_local = train_sub.add_parser("local", help="Run training on current hardware")
+    train_local.add_argument("--benchmark", required=True, help="Benchmark slug")
+    train_local.add_argument("--evaluator", default="stub-rubric", help="Evaluator slug")
+    train_local.add_argument("--limit", type=int, default=None, help="Max tasks per episode")
+    train_local.add_argument("--definition-id", default=None, help="ExperimentDefinition UUID")
+    train_local.add_argument("--model", default="Qwen/Qwen2.5-1.5B", help="HuggingFace model ID")
+    train_local.add_argument("--device", default="cuda", choices=["cpu", "cuda"], help="Device type")
+    train_local.add_argument("--vllm-mode", default="colocate", choices=["colocate", "server"],
+                             help="vLLM mode (ignored with --device cpu)")
+    train_local.add_argument("--vllm-server-url", default=None, help="vLLM server URL (server mode)")
+    train_local.add_argument("--num-generations", type=int, default=4, help="GRPO group size")
+    train_local.add_argument("--max-completion-length", type=int, default=2048)
+    train_local.add_argument("--learning-rate", type=float, default=1e-5)
+    train_local.add_argument("--per-device-batch-size", type=int, default=1)
+    train_local.add_argument("--gradient-accumulation-steps", type=int, default=4)
+    train_local.add_argument("--num-train-epochs", type=int, default=1)
+    train_local.add_argument("--save-steps", type=int, default=50)
+    train_local.add_argument("--max-steps", type=int, default=None)
+    train_local.add_argument("--output-dir", default="./checkpoints", help="Checkpoint output dir")
+    train_local.add_argument("--timeout", type=float, default=300.0, help="Seconds per episode batch")
+    train_local.add_argument("--dataset-size", type=int, default=100, help="Synthetic dataset size")
 
     return parser
 
@@ -74,21 +124,35 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "benchmark":
+        # Deferred: CLI startup cost
         from arcane_cli.commands.benchmark import handle_benchmark
 
         return handle_benchmark(args)
     elif args.command == "run":
+        # Deferred: CLI startup cost
         from arcane_cli.commands.run import handle_run
 
         return handle_run(args)
     elif args.command == "worker":
+        # Deferred: CLI startup cost
         from arcane_cli.commands.worker import handle_worker
 
         return handle_worker(args)
     elif args.command == "evaluator":
+        # Deferred: CLI startup cost
         from arcane_cli.commands.evaluator import handle_evaluator
 
         return handle_evaluator(args)
+    elif args.command == "eval":
+        # Deferred: CLI startup cost
+        from arcane_cli.commands.eval import handle_eval
+
+        return handle_eval(args)
+    elif args.command == "train":
+        # Deferred: heavy optional deps (TRL, vLLM, etc.)
+        from arcane_cli.commands.train import handle_train
+
+        return handle_train(args)
     else:
         parser.print_help()
         return 0
