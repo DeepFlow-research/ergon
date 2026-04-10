@@ -15,12 +15,27 @@ from h_arcane.core.runtime.events.infrastructure_events import (
 )
 from h_arcane.core.runtime.events.task_events import WorkflowStartedEvent
 from h_arcane.core.runtime.inngest_client import inngest_client
+from h_arcane.core.settings import settings
 from h_arcane.core.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL_S = 1.0
 _DEFAULT_TIMEOUT_S = 600.0
+
+
+def _checkpoint_metadata() -> dict[str, object]:
+    """Checkpoint context for ``RunRecord.summary_json`` (eval watcher / checkpoint subprocess).
+
+    Values come from ``Settings`` (``.env`` + process env), including ``ARCANE_CHECKPOINT_*``
+    set by the eval runner when spawning evaluation.
+    """
+    if settings.checkpoint_step is None:
+        return {}
+    return {
+        "checkpoint_step": settings.checkpoint_step,
+        "checkpoint_path": settings.checkpoint_path or "",
+    }
 
 
 def create_run(
@@ -33,6 +48,7 @@ def create_run(
             cohort_id=cohort_id,
             status=RunStatus.PENDING,
             created_at=utcnow(),
+            summary_json=_checkpoint_metadata(),
         )
         session.add(run)
         session.commit()

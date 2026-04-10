@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     otel_stdout_stderr_max_length: int = 4000
     otel_tool_payload_max_length: int = 4000
 
+    # Set by eval watcher / checkpoint subprocess (see `eval_runner.py`); optional in `.env`.
+    checkpoint_step: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ARCANE_CHECKPOINT_STEP"),
+    )
+    checkpoint_path: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ARCANE_CHECKPOINT_PATH"),
+    )
+
     @property
     def data_dir(self) -> Path:
         return Path(__file__).parent.parent / "data"
@@ -56,7 +66,7 @@ class Settings(BaseSettings):
         return [name for name in names if not getattr(self, name, "")]  # slopcop: ignore[no-hasattr-getattr]
 
     model_config = SettingsConfigDict(
-        env_file=str(Path(__file__).parent.parent.parent / ".env"),
+        env_file=str(Path(__file__).parent.parent.parent.parent / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

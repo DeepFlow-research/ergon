@@ -653,3 +653,93 @@ def get_training_curves(
         ))
 
     return points
+
+
+# ---------------------------------------------------------------------------
+# Training sessions endpoints
+# ---------------------------------------------------------------------------
+
+
+class TrainingSessionDto(BaseModel):
+    id: str
+    experiment_definition_id: str
+    model_name: str
+    status: str
+    started_at: str | None = None
+    completed_at: str | None = None
+    output_dir: str | None = None
+    total_steps: int | None = None
+    final_loss: float | None = None
+
+
+class TrainingMetricDto(BaseModel):
+    step: int
+    epoch: float | None = None
+    loss: float | None = None
+    grad_norm: float | None = None
+    learning_rate: float | None = None
+    reward_mean: float | None = None
+    reward_std: float | None = None
+    entropy: float | None = None
+    completion_mean_length: float | None = None
+    step_time_s: float | None = None
+
+
+@router.get("/training/sessions", response_model=list[TrainingSessionDto])
+def get_training_sessions(
+    definition_id: UUID | None = None,
+) -> list[TrainingSessionDto]:
+    """List training sessions, optionally filtered by definition."""
+    from h_arcane.core.persistence.telemetry.models import TrainingSession
+
+    with get_session() as session:
+        stmt = select(TrainingSession).order_by(TrainingSession.started_at.desc())
+        if definition_id:
+            stmt = stmt.where(TrainingSession.experiment_definition_id == definition_id)
+        sessions = list(session.exec(stmt).all())
+
+    return [
+        TrainingSessionDto(
+            id=str(s.id),
+            experiment_definition_id=str(s.experiment_definition_id),
+            model_name=s.model_name,
+            status=s.status,
+            started_at=s.started_at.isoformat() if s.started_at else None,
+            completed_at=s.completed_at.isoformat() if s.completed_at else None,
+            output_dir=s.output_dir,
+            total_steps=s.total_steps,
+            final_loss=s.final_loss,
+        )
+        for s in sessions
+    ]
+
+
+@router.get("/training/sessions/{session_id}/metrics", response_model=list[TrainingMetricDto])
+def get_training_metrics(session_id: UUID) -> list[TrainingMetricDto]:
+    """Get per-step training metrics for a session."""
+    from h_arcane.core.persistence.telemetry.models import TrainingMetric
+
+    with get_session() as session:
+        metrics = list(
+            session.exec(
+                select(TrainingMetric)
+                .where(TrainingMetric.session_id == session_id)
+                .order_by(TrainingMetric.step)
+            ).all()
+        )
+
+    return [
+        TrainingMetricDto(
+            step=m.step,
+            epoch=m.epoch,
+            loss=m.loss,
+            grad_norm=m.grad_norm,
+            learning_rate=m.learning_rate,
+            reward_mean=m.reward_mean,
+            reward_std=m.reward_std,
+            entropy=m.entropy,
+            completion_mean_length=m.completion_mean_length,
+            step_time_s=m.step_time_s,
+        )
+        for m in metrics
+    ]
