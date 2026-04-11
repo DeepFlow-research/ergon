@@ -4,8 +4,6 @@ import importlib.util
 import logging
 from argparse import Namespace
 
-from ergon_core.core.persistence.shared.db import ensure_db
-
 logger = logging.getLogger(__name__)
 
 
@@ -32,11 +30,10 @@ def _train_local(args: Namespace) -> int:
     # reason: (same optional dep as above)
     from ergon_infra.training.trl_runner import run_trl_training
 
-    ensure_db()
-
     vllm_mode = None if args.device == "cpu" else args.vllm_mode
 
     config = TrainingConfig(
+        ergon_url=args.ergon_url,
         benchmark=args.benchmark,
         evaluator=args.evaluator,
         limit=args.limit,

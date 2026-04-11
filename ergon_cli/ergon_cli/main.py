@@ -90,6 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
     train_sub = train_cmd.add_subparsers(dest="train_action")
 
     train_local = train_sub.add_parser("local", help="Run training on current hardware")
+    train_local.add_argument(
+        "--ergon-url",
+        default="http://localhost:9000/api",
+        help="Ergon API URL (default: http://localhost:9000/api)",
+    )
     train_local.add_argument("--benchmark", required=True, help="Benchmark slug")
     train_local.add_argument("--evaluator", default="stub-rubric", help="Evaluator slug")
     train_local.add_argument("--limit", type=int, default=None, help="Max tasks per episode")

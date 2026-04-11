@@ -5,7 +5,7 @@ import logging
 import urllib.error
 import urllib.request
 
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIModel as OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from ergon_core.core.providers.generation.model_resolution import ResolvedModel

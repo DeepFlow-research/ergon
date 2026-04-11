@@ -15,6 +15,7 @@ class TrainingConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     # -- Ergon ----------------------------------------------------------------
+    ergon_url: str = "http://localhost:9000/api"
     benchmark: str
     evaluator: str = "stub-rubric"
     limit: int | None = None
@@ -57,6 +58,12 @@ class TrainingConfig(BaseModel):
 def _build_training_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Ergon training configuration")
 
+    p.add_argument(
+        "--ergon-url",
+        type=str,
+        default="http://localhost:9000/api",
+        help="Ergon API URL (default: http://localhost:9000/api)",
+    )
     p.add_argument("--benchmark", type=str, required=True, help="Benchmark slug")
     p.add_argument("--evaluator", type=str, default="stub-rubric", help="Evaluator slug")
     p.add_argument("--limit", type=int, default=None, help="Max tasks per episode")
@@ -123,6 +130,7 @@ def training_config_from_args(argv: list[str] | None = None) -> TrainingConfig:
     vllm_mode = None if args.device == "cpu" else args.vllm_mode
 
     return TrainingConfig(
+        ergon_url=args.ergon_url,
         benchmark=args.benchmark,
         evaluator=args.evaluator,
         limit=args.limit,
