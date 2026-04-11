@@ -1,0 +1,266 @@
+"""Rollout-as-a-Service: orchestrate episode batches for RL trainers.
+
+Encapsulates all logic previously inline in trl_adapter.py. Both the
+HTTP endpoint (/rollouts/) and any in-process callers delegate here.
+
+See 11_ROLLOUT_SERVICE_API.md for the full design spec.
+"""
+
+import logging
+from collections import defaultdict
+from collections.abc import Callable
+from uuid import UUID, uuid4
+
+import inngest
+from sqlmodel import Session, select
+from transformers import AutoTokenizer
+
+from ergon_core.core.persistence.shared.enums import (
+    TERMINAL_RUN_STATUSES,
+    RunStatus,
+)
+from ergon_core.core.persistence.shared.ids import new_id
+from ergon_core.core.persistence.telemetry.models import (
+    RunGenerationTurn,
+    RunRecord,
+    RunTaskEvaluation,
+    RunTaskExecution,
+)
+from ergon_core.core.rl.extraction import (
+    Tokenizer,
+    extract_agent_trajectories,
+)
+from ergon_core.core.rl.rewards import IndependentTaskReward, RewardStrategy
+from ergon_core.core.rl.rollout_types import (
+    BatchStatus,
+    EpisodeFailure,
+    PollResponse,
+    SubmitRequest,
+    SubmitResponse,
+    Trajectory,
+)
+from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+
+logger = logging.getLogger(__name__)
+
+
+class RolloutService:
+    """Orchestrate rollout batches: create runs, fire events, poll, extract.
+
+    Lifecycle:
+      1. Trainer calls ``submit()`` → RunRecords created, Inngest events fired
+      2. Trainer polls ``poll()`` → returns RUNNING until all episodes finish
+      3. When all terminal → ``poll()`` extracts trajectories and returns COMPLETE
+
+    State: ``_batches`` maps batch_id → run_ids in-memory. Acceptable because
+    the API container doesn't restart mid-training; if it does the trainer
+    gets a 404 and the training step fails explicitly.
+    """
+
+    def __init__(
+        self,
+        session_factory: Callable[[], Session],
+        inngest_send: Callable[[inngest.Event], None],
+        tokenizer_name: str,
+        reward_strategy: RewardStrategy | None = None,
+    ) -> None:
+        self._session_factory = session_factory
+        self._inngest_send = inngest_send
+        self._tokenizer_name = tokenizer_name
+        self._tokenizer: Tokenizer | None = None
+        self._reward_strategy = reward_strategy or IndependentTaskReward()
+        self._batches: dict[UUID, _BatchState] = {}
+
+    def _get_tokenizer(self) -> Tokenizer:
+        if self._tokenizer is None:
+            logger.info("Loading tokenizer: %s", self._tokenizer_name)
+            self._tokenizer = AutoTokenizer.from_pretrained(self._tokenizer_name)
+        return self._tokenizer
+
+    def submit(self, request: SubmitRequest) -> SubmitResponse:
+        """Create RunRecords and fire Inngest workflow/started events."""
+        batch_id = uuid4()
+        run_ids: list[UUID] = []
+
+        for _ in range(request.num_episodes):
+            run_id = new_id()
+            with self._session_factory() as session:
+                session.add(RunRecord(
+                    id=run_id,
+                    experiment_definition_id=request.definition_id,
+                    status=RunStatus.PENDING,
+                ))
+                session.commit()
+
+            self._inngest_send(inngest.Event(
+                name=WorkflowStartedEvent.name,
+                data=WorkflowStartedEvent(
+                    run_id=run_id,
+                    definition_id=request.definition_id,
+                ).model_dump(mode="json"),
+            ))
+            run_ids.append(run_id)
+
+        self._batches[batch_id] = _BatchState(
+            run_ids=run_ids,
+            definition_id=request.definition_id,
+        )
+        logger.info(
+            "Submitted batch %s: %d episodes for definition %s",
+            batch_id, request.num_episodes, request.definition_id,
+        )
+        return SubmitResponse(
+            batch_id=batch_id,
+            run_ids=run_ids,
+            status=BatchStatus.PENDING,
+        )
+
+    def poll(self, batch_id: UUID) -> PollResponse | None:
+        """Non-blocking status check. Extracts trajectories when all done."""
+        batch = self._batches.get(batch_id)
+        if batch is None:
+            return None
+
+        terminal = set(TERMINAL_RUN_STATUSES)
+        completed_ids: list[UUID] = []
+        failed_ids: list[UUID] = []
+
+        with self._session_factory() as session:
+            runs = list(session.exec(
+                select(RunRecord).where(
+                    RunRecord.id.in_(batch.run_ids)  # type: ignore[union-attr]
+                )
+            ).all())
+
+        for run in runs:
+            if run.status not in terminal:
+                continue
+            if run.status == RunStatus.COMPLETED:
+                completed_ids.append(run.id)
+            else:
+                failed_ids.append(run.id)
+
+        total_terminal = len(completed_ids) + len(failed_ids)
+        if total_terminal < len(batch.run_ids):
+            return PollResponse(
+                batch_id=batch_id,
+                status=BatchStatus.RUNNING,
+                completed=len(completed_ids),
+                total=len(batch.run_ids),
+            )
+
+        trajectories = self._extract_trajectories(completed_ids)
+        failures = [
+            EpisodeFailure(run_id=rid, error="episode failed or timed out")
+            for rid in failed_ids
+        ]
+        del self._batches[batch_id]
+
+        logger.info(
+            "Batch %s complete: %d trajectories, %d failures",
+            batch_id, len(trajectories), len(failures),
+        )
+        return PollResponse(
+            batch_id=batch_id,
+            status=BatchStatus.COMPLETE,
+            completed=len(completed_ids),
+            total=len(batch.run_ids),
+            trajectories=trajectories,
+            failures=failures,
+        )
+
+    def cancel(self, batch_id: UUID) -> None:
+        """Mark all non-terminal runs in the batch as cancelled."""
+        batch = self._batches.pop(batch_id, None)
+        if batch is None:
+            return
+        with self._session_factory() as session:
+            runs = list(session.exec(
+                select(RunRecord).where(
+                    RunRecord.id.in_(batch.run_ids)  # type: ignore[union-attr]
+                )
+            ).all())
+            for run in runs:
+                if run.status not in set(TERMINAL_RUN_STATUSES):
+                    run.status = RunStatus.CANCELLED
+                    session.add(run)
+            session.commit()
+
+    def _extract_trajectories(self, run_ids: list[UUID]) -> list[Trajectory]:
+        """Load turns + evals from DB, run extraction, build Trajectory list."""
+        with self._session_factory() as session:
+            all_turns = list(session.exec(
+                select(RunGenerationTurn)
+                .where(RunGenerationTurn.run_id.in_(run_ids))  # type: ignore[union-attr]
+                .order_by(
+                    RunGenerationTurn.run_id,
+                    RunGenerationTurn.task_execution_id,
+                    RunGenerationTurn.turn_index,
+                )
+            ).all())
+            all_evals = list(session.exec(
+                select(RunTaskEvaluation)
+                .where(RunTaskEvaluation.run_id.in_(run_ids))  # type: ignore[union-attr]
+            ).all())
+            all_execs = list(session.exec(
+                select(RunTaskExecution)
+                .where(RunTaskExecution.run_id.in_(run_ids))  # type: ignore[union-attr]
+            ).all())
+
+        turns_by_run: dict[UUID, list[RunGenerationTurn]] = defaultdict(list)
+        for turn in all_turns:
+            turns_by_run[turn.run_id].append(turn)
+
+        evals_by_run: dict[UUID, dict[str, float]] = defaultdict(dict)
+        for ev in all_evals:
+            if ev.score is not None:
+                evals_by_run[ev.run_id][str(ev.definition_task_id)] = ev.score
+
+        exec_to_def_task: dict[str, str] = {}
+        for ex in all_execs:
+            exec_to_def_task[str(ex.id)] = str(ex.definition_task_id)
+
+        evals_remapped: dict[UUID, dict[str, float]] = defaultdict(dict)
+        for run_id, scores in evals_by_run.items():
+            for def_task_id, score in scores.items():
+                for exec_id, mapped_def_id in exec_to_def_task.items():
+                    if mapped_def_id == def_task_id:
+                        evals_remapped[run_id][exec_id] = score
+
+        result: list[Trajectory] = []
+        for run_id in run_ids:
+            tokenizer = self._get_tokenizer()
+            prompt_text = tokenizer.apply_chat_template(
+                [{"role": "user", "content": "Complete the benchmark task."}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            agent_trajs = extract_agent_trajectories(
+                turns_by_run.get(run_id, []),
+                evals_remapped.get(run_id, {}),
+                tokenizer,
+                prompt_text=prompt_text,
+                reward_strategy=self._reward_strategy,
+            )
+            for traj in agent_trajs:
+                result.append(Trajectory(
+                    run_id=run_id,
+                    agent_id=traj.agent_id,
+                    prompt_ids=traj.prompt_ids,
+                    completion_ids=traj.completion_ids,
+                    logprobs=traj.logprobs,
+                    env_mask=traj.env_mask,
+                    reward=traj.reward,
+                    num_turns=traj.turns,
+                ))
+        return result
+
+
+class _BatchState:
+    """Internal bookkeeping for an in-flight batch."""
+
+    __slots__ = ("run_ids", "definition_id")
+
+    def __init__(self, run_ids: list[UUID], definition_id: UUID) -> None:
+        self.run_ids = run_ids
+        self.definition_id = definition_id

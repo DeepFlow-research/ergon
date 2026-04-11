@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     inngest_dev: bool = True
     inngest_api_base_url: str = "http://localhost:8289"
 
+    default_tokenizer: str = "HuggingFaceTB/SmolLM2-135M-Instruct"
+
     otel_traces_enabled: bool = False
     otel_service_name: str = "ergon-core"
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
