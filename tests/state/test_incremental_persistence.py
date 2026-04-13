@@ -74,9 +74,9 @@ async def test_persist_single_writes_row(session: Session):
         turn_index=0,
     )
 
-    rows = list(session.exec(
-        select(RunGenerationTurn).where(RunGenerationTurn.run_id == run_id)
-    ).all())
+    rows = list(
+        session.exec(select(RunGenerationTurn).where(RunGenerationTurn.run_id == run_id)).all()
+    )
     assert len(rows) == 1
     assert rows[0].turn_index == 0
     assert rows[0].execution_outcome == "success"
@@ -196,16 +196,18 @@ def test_get_output_reads_last_turn(session: Session):
     execution = _make_execution(session, run_id, task_ids[0])
 
     for i in range(3):
-        session.add(RunGenerationTurn(
-            id=uuid4(),
-            run_id=run_id,
-            task_execution_id=execution.id,
-            worker_binding_key="test",
-            turn_index=i,
-            raw_request={},
-            raw_response={},
-            response_text=f"response {i}",
-        ))
+        session.add(
+            RunGenerationTurn(
+                id=uuid4(),
+                run_id=run_id,
+                task_execution_id=execution.id,
+                worker_binding_key="test",
+                turn_index=i,
+                raw_request={},
+                raw_response={},
+                response_text=f"response {i}",
+            )
+        )
     session.commit()
 
     class _TestWorker(Worker):
@@ -224,6 +226,7 @@ def test_get_output_reads_last_turn(session: Session):
 
     # Monkey-patch get_session for this test
     import ergon_core.api.worker as worker_mod
+
     original_get_session = worker_mod.get_session
 
     from contextlib import contextmanager

@@ -18,7 +18,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunResource,
     RunTaskEvaluation,
     RunTaskExecution,
-    RunTaskStateEvent,
 )
 from ergon_core.core.providers.generation import pydantic_ai_format as pa_format
 from ergon_core.core.utils import utcnow as _utcnow
@@ -43,10 +42,6 @@ class TelemetryRepository:
 
     def get_task_evaluations(self, session: Session, run_id: UUID) -> list[RunTaskEvaluation]:
         stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
-        return list(session.exec(stmt).all())
-
-    def get_state_events(self, session: Session, run_id: UUID) -> list[RunTaskStateEvent]:
-        stmt = select(RunTaskStateEvent).where(RunTaskStateEvent.run_id == run_id)
         return list(session.exec(stmt).all())
 
     def get_actions(self, session: Session, run_id: UUID) -> list[RunAction]:
@@ -186,32 +181,6 @@ class TelemetryRepository:
         session.flush()
         return resource
 
-    def record_state_event(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        definition_task_id: UUID,
-        task_execution_id: UUID | None = None,
-        event_type: str,
-        old_status: str | None = None,
-        new_status: str,
-        event_metadata: dict[str, object] | None = None,
-    ) -> RunTaskStateEvent:
-        event = RunTaskStateEvent(
-            id=new_id(),
-            run_id=run_id,
-            definition_task_id=definition_task_id,
-            task_execution_id=task_execution_id,
-            event_type=event_type,
-            old_status=old_status,
-            new_status=new_status,
-            event_metadata=event_metadata or {},
-        )
-        session.add(event)
-        session.flush()
-        return event
-
     def create_task_evaluation(
         self,
         session: Session,
@@ -245,9 +214,7 @@ class GenerationTurnRepository:
     def __init__(self) -> None:
         self._listeners: list[Callable[[RunGenerationTurn], Awaitable[None]]] = []
 
-    def add_listener(
-        self, listener: Callable[[RunGenerationTurn], Awaitable[None]]
-    ) -> None:
+    def add_listener(self, listener: Callable[[RunGenerationTurn], Awaitable[None]]) -> None:
         """Register a callback invoked after each persist_single() commit."""
         self._listeners.append(listener)
 
@@ -279,9 +246,7 @@ class GenerationTurnRepository:
             tool_calls_json=pa_format.extract_tool_calls(turn.raw_response),
             tool_results_json=turn.tool_results or None,
             token_ids_json=None,
-            logprobs_json=(
-                [lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None
-            ),
+            logprobs_json=([lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None),
             policy_version=turn.policy_version,
             execution_outcome=execution_outcome,
             created_at=_utcnow(),

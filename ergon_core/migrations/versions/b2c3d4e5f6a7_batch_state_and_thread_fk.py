@@ -63,7 +63,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_thread_messages_task_execution_id", table_name="thread_messages")
-    op.drop_constraint("fk_thread_messages_task_execution_id", "thread_messages", type_="foreignkey")
+    op.drop_constraint(
+        "fk_thread_messages_task_execution_id", "thread_messages", type_="foreignkey"
+    )
     op.drop_column("thread_messages", "task_execution_id")
 
     op.drop_index("ix_rollout_batch_runs_run_id", table_name="rollout_batch_runs")

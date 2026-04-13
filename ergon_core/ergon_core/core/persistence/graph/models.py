@@ -122,7 +122,7 @@ class RunGraphAnnotation(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    target_type: GraphTargetType
+    target_type: str  # GraphTargetType ("node" | "edge") — str for SQLModel compat
     target_id: UUID
     namespace: str
     sequence: int = Field(index=True)
@@ -155,8 +155,8 @@ class RunGraphMutation(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
     sequence: int = Field(index=True)
-    mutation_type: MutationType = Field(index=True)
-    target_type: GraphTargetType
+    mutation_type: str = Field(index=True)  # MutationType Literal — str for SQLModel compat
+    target_type: str  # GraphTargetType ("node" | "edge") — str for SQLModel compat
     target_id: UUID = Field(index=True)
     actor: str
     old_value: dict | None = Field(default=None, sa_column=Column(JSON))

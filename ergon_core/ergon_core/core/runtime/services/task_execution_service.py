@@ -15,6 +15,8 @@ from ergon_core.core.runtime.execution.propagation import (
     mark_task_failed,
     mark_task_running,
 )
+from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
+from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.orchestration_dto import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
@@ -38,7 +40,6 @@ class TaskExecutionService:
                 f"Definition {command.definition_id} not found",
             )
 
-            # Look up the task assignment to find the worker binding
             assignment_stmt = select(ExperimentDefinitionTaskAssignment).where(
                 ExperimentDefinitionTaskAssignment.experiment_definition_id
                 == command.definition_id,
@@ -74,7 +75,16 @@ class TaskExecutionService:
             session.add(execution)
             session.flush()
 
-            mark_task_running(session, command.run_id, command.task_id, execution.id)
+            graph_repo = WorkflowGraphRepository()
+            graph_lookup = GraphNodeLookup(session, command.run_id)
+            mark_task_running(
+                session,
+                command.run_id,
+                command.task_id,
+                execution.id,
+                graph_repo=graph_repo,
+                graph_lookup=graph_lookup,
+            )
             session.commit()
 
             return PreparedTaskExecution(
@@ -117,11 +127,15 @@ class TaskExecutionService:
             execution.error_json = {"message": command.error_message}
             session.add(execution)
 
+            graph_repo = WorkflowGraphRepository()
+            graph_lookup = GraphNodeLookup(session, command.run_id)
             mark_task_failed(
                 session,
                 command.run_id,
                 command.task_id,
                 command.error_message,
                 execution_id=command.execution_id,
+                graph_repo=graph_repo,
+                graph_lookup=graph_lookup,
             )
             session.commit()

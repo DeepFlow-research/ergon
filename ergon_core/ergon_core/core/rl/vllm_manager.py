@@ -53,12 +53,19 @@ class VLLMManager:
             return
 
         cmd = [
-            "python", "-m", "vllm.entrypoints.openai.api_server",
-            "--model", self._model,
-            "--host", self._host,
-            "--port", str(self._port),
-            "--max-model-len", str(self._max_model_len),
-            "--gpu-memory-utilization", str(self._gpu_memory_utilization),
+            "python",
+            "-m",
+            "vllm.entrypoints.openai.api_server",
+            "--model",
+            self._model,
+            "--host",
+            self._host,
+            "--port",
+            str(self._port),
+            "--max-model-len",
+            str(self._max_model_len),
+            "--gpu-memory-utilization",
+            str(self._gpu_memory_utilization),
             *self._extra_args,
         ]
         logger.info("Starting vLLM: %s", " ".join(cmd))
@@ -106,8 +113,6 @@ class VLLMManager:
             if self.health():
                 return
             if self._process is not None and self._process.poll() is not None:
-                raise RuntimeError(
-                    f"vLLM process exited with code {self._process.returncode}"
-                )
+                raise RuntimeError(f"vLLM process exited with code {self._process.returncode}")
             time.sleep(2.0)
         raise TimeoutError(f"vLLM server didn't become healthy within {timeout_s}s")

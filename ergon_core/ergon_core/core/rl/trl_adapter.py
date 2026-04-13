@@ -52,10 +52,12 @@ def make_ergon_rollout_func(
         prompts: list[PromptInput],
         trainer: object,
     ) -> dict[str, object]:
-        batch = service.submit(SubmitRequest(
-            definition_id=definition_id,
-            num_episodes=len(prompts),
-        ))
+        batch = service.submit(
+            SubmitRequest(
+                definition_id=definition_id,
+                num_episodes=len(prompts),
+            )
+        )
 
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
@@ -73,15 +75,11 @@ def make_ergon_rollout_func(
                 }
 
             if result.status == BatchStatus.FAILED:
-                raise RuntimeError(
-                    f"Rollout batch {batch.batch_id} failed: {result.failures}"
-                )
+                raise RuntimeError(f"Rollout batch {batch.batch_id} failed: {result.failures}")
 
             time.sleep(poll_interval_s)
 
         service.cancel(batch.batch_id)
-        raise TimeoutError(
-            f"Rollout batch {batch.batch_id} timed out after {timeout_s}s"
-        )
+        raise TimeoutError(f"Rollout batch {batch.batch_id} timed out after {timeout_s}s")
 
     return rollout_func

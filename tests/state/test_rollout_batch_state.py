@@ -27,31 +27,37 @@ def test_batch_and_runs_created(session: Session):
     batch_id = uuid4()
     run_ids = [uuid4(), uuid4(), uuid4()]
 
-    session.add(RolloutBatch(
-        id=batch_id,
-        definition_id=def_id,
-        status=BatchStatus.PENDING,
-    ))
+    session.add(
+        RolloutBatch(
+            id=batch_id,
+            definition_id=def_id,
+            status=BatchStatus.PENDING,
+        )
+    )
     for rid in run_ids:
-        session.add(RunRecord(
-            id=rid,
-            experiment_definition_id=def_id,
-            status=RunStatus.PENDING,
-        ))
-        session.add(RolloutBatchRun(
-            id=uuid4(),
-            batch_id=batch_id,
-            run_id=rid,
-        ))
+        session.add(
+            RunRecord(
+                id=rid,
+                experiment_definition_id=def_id,
+                status=RunStatus.PENDING,
+            )
+        )
+        session.add(
+            RolloutBatchRun(
+                id=uuid4(),
+                batch_id=batch_id,
+                run_id=rid,
+            )
+        )
     session.commit()
 
     batch = session.get(RolloutBatch, batch_id)
     assert batch is not None
     assert batch.status == BatchStatus.PENDING
 
-    batch_runs = list(session.exec(
-        select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)
-    ).all())
+    batch_runs = list(
+        session.exec(select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)).all()
+    )
     assert len(batch_runs) == 3
     assert {br.run_id for br in batch_runs} == set(run_ids)
 
@@ -71,9 +77,9 @@ def test_poll_reads_from_pg(session: Session):
     batch = session.get(RolloutBatch, batch_id)
     assert batch is not None
 
-    batch_runs = list(session.exec(
-        select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)
-    ).all())
+    batch_runs = list(
+        session.exec(select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)).all()
+    )
     assert len(batch_runs) == 1
     assert batch_runs[0].run_id == run_id
 
@@ -109,13 +115,11 @@ def test_batch_survives_session_reset(session: Session):
     session.add(RolloutBatchRun(id=uuid4(), batch_id=batch_id, run_id=run_id))
     session.commit()
 
-    found_batch = session.exec(
-        select(RolloutBatch).where(RolloutBatch.id == batch_id)
-    ).first()
+    found_batch = session.exec(select(RolloutBatch).where(RolloutBatch.id == batch_id)).first()
     assert found_batch is not None
     assert found_batch.definition_id == def_id
 
-    found_runs = list(session.exec(
-        select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)
-    ).all())
+    found_runs = list(
+        session.exec(select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)).all()
+    )
     assert len(found_runs) == 1

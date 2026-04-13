@@ -212,7 +212,7 @@ class RunResource(SQLModel, table=True):
         default=None,
         foreign_key="run_task_executions.id",
     )
-    kind: Literal["output"] = "output"
+    kind: str = "output"  # Literal["output"] — str for SQLModel compat
     name: str
     mime_type: str
     file_path: str
@@ -255,7 +255,9 @@ class RunTaskStateEvent(SQLModel, table=True):
         default=None,
         foreign_key="run_task_executions.id",
     )
-    event_type: Literal["state_change"] = Field(default="state_change", index=True)
+    event_type: str = Field(
+        default="state_change", index=True
+    )  # Literal["state_change"] — str for SQLModel compat
     old_status: TaskExecutionStatus | None = None
     new_status: TaskExecutionStatus
     event_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
@@ -458,7 +460,9 @@ class RunGenerationTurn(SQLModel, table=True):
     policy_version: str | None = None
 
     # Execution outcome at time of persist
-    execution_outcome: ExecutionOutcome | None = Field(default=None, index=True)
+    execution_outcome: str | None = Field(
+        default=None, index=True
+    )  # ExecutionOutcome Literal — str for SQLModel compat
 
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 

@@ -101,29 +101,37 @@ def test_query_messages_by_execution_id(session: Session):
     exec_b = _make_execution(session, run_id, task_ids[1])
 
     for i, exec_id in enumerate([exec_a.id, exec_a.id, exec_b.id, None]):
-        session.add(ThreadMessage(
-            id=uuid4(),
-            thread_id=thread.id,
-            run_id=run_id,
-            task_execution_id=exec_id,
-            from_agent_id="agent-a",
-            to_agent_id="agent-b",
-            content=f"message {i}",
-            sequence_num=i,
-        ))
+        session.add(
+            ThreadMessage(
+                id=uuid4(),
+                thread_id=thread.id,
+                run_id=run_id,
+                task_execution_id=exec_id,
+                from_agent_id="agent-a",
+                to_agent_id="agent-b",
+                content=f"message {i}",
+                sequence_num=i,
+            )
+        )
     session.commit()
 
-    msgs_exec_a = list(session.exec(
-        select(ThreadMessage).where(ThreadMessage.task_execution_id == exec_a.id)
-    ).all())
+    msgs_exec_a = list(
+        session.exec(
+            select(ThreadMessage).where(ThreadMessage.task_execution_id == exec_a.id)
+        ).all()
+    )
     assert len(msgs_exec_a) == 2
 
-    msgs_exec_b = list(session.exec(
-        select(ThreadMessage).where(ThreadMessage.task_execution_id == exec_b.id)
-    ).all())
+    msgs_exec_b = list(
+        session.exec(
+            select(ThreadMessage).where(ThreadMessage.task_execution_id == exec_b.id)
+        ).all()
+    )
     assert len(msgs_exec_b) == 1
 
-    msgs_no_exec = list(session.exec(
-        select(ThreadMessage).where(ThreadMessage.task_execution_id.is_(None))  # type: ignore[union-attr]
-    ).all())
+    msgs_no_exec = list(
+        session.exec(
+            select(ThreadMessage).where(ThreadMessage.task_execution_id.is_(None))  # type: ignore[union-attr]
+        ).all()
+    )
     assert len(msgs_no_exec) == 1

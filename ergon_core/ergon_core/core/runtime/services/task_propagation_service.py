@@ -7,6 +7,8 @@ from ergon_core.core.runtime.execution.propagation import (
     is_workflow_failed,
     on_task_completed,
 )
+from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
+from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.orchestration_dto import (
     PropagateTaskCompletionCommand,
     PropagationResult,
@@ -18,12 +20,17 @@ from ergon_core.core.runtime.services.orchestration_dto import (
 class TaskPropagationService:
     def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
         with get_session() as session:
+            graph_repo = WorkflowGraphRepository()
+            graph_lookup = GraphNodeLookup(session, command.run_id)
+
             newly_ready_ids = on_task_completed(
                 session,
                 command.run_id,
                 command.definition_id,
                 command.task_id,
                 command.execution_id,
+                graph_repo=graph_repo,
+                graph_lookup=graph_lookup,
             )
 
             ready_descriptors: list[TaskDescriptor] = []

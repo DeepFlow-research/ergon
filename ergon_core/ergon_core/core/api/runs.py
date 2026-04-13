@@ -33,6 +33,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.telemetry.models import (
     RunAction,
     RunGenerationTurn,
@@ -40,7 +41,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunResource,
     RunTaskEvaluation,
     RunTaskExecution,
-    RunTaskStateEvent,
     Thread,
     ThreadMessage,
     TrainingMetric,
@@ -368,13 +368,14 @@ def _build_communication_threads(
     return result
 
 
-def _current_task_statuses(events: list[RunTaskStateEvent]) -> dict[UUID, str]:
-    latest: dict[UUID, RunTaskStateEvent] = {}
-    for ev in events:
-        existing = latest.get(ev.definition_task_id)
-        if existing is None or ev.created_at >= existing.created_at:
-            latest[ev.definition_task_id] = ev
-    return {tid: ev.new_status for tid, ev in latest.items()}
+def _current_task_statuses(session: Session, run_id: UUID) -> dict[UUID, str]:
+    """Read current task statuses from RunGraphNode (single source of truth)."""
+    nodes = session.exec(
+        select(RunGraphNode.definition_task_id, RunGraphNode.status).where(
+            RunGraphNode.run_id == run_id
+        )
+    ).all()
+    return {defn_id: status for defn_id, status in nodes if defn_id is not None}
 
 
 def _task_timestamps(
@@ -445,9 +446,6 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
     exec_stmt = select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
     executions = list(session.exec(exec_stmt).all())
 
-    events_stmt = select(RunTaskStateEvent).where(RunTaskStateEvent.run_id == run_id)
-    state_events = list(session.exec(events_stmt).all())
-
     actions_stmt = select(RunAction).where(RunAction.run_id == run_id)
     actions = list(session.exec(actions_stmt).all())
 
@@ -464,7 +462,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
     thread_messages = list(session.exec(thread_msgs_stmt).all())
 
     # Derived maps
-    current_statuses = _current_task_statuses(state_events)
+    current_statuses = _current_task_statuses(session, run_id)
     timestamps = _task_timestamps(executions)
     (
         task_map,

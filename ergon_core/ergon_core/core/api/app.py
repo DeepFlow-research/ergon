@@ -22,11 +22,13 @@ async def lifespan(app: FastAPI):
     ensure_db()
     print("[LIFESPAN] ensure_db done, initializing RolloutService...", flush=True)
     settings = Settings()
-    init_rollout_service(RolloutService(
-        session_factory=get_session,
-        inngest_send=inngest_client.send_sync,
-        tokenizer_name=settings.default_tokenizer,
-    ))
+    init_rollout_service(
+        RolloutService(
+            session_factory=get_session,
+            inngest_send=inngest_client.send_sync,
+            tokenizer_name=settings.default_tokenizer,
+        )
+    )
     print("[LIFESPAN] ready", flush=True)
     yield
 

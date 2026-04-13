@@ -1,8 +1,10 @@
 """Pure DAG state functions for task propagation.
 
-Reads ExperimentDefinitionTaskDependency to determine which tasks are ready
-and writes RunTaskStateEvent to track state transitions. No process-local
-state — everything goes through the database.
+All state is stored in the graph layer (RunGraphNode, RunGraphEdge,
+RunGraphMutation). The graph mutation WAL is the single source of truth
+for DAG execution state.
+
+RunTaskStateEvent is no longer written or read by this module.
 """
 
 from uuid import UUID
@@ -11,72 +13,100 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
 )
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunTaskStateEvent
-from ergon_core.core.utils import utcnow
+from ergon_core.core.runtime.services.graph_dto import MutationMeta
+from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
+from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from sqlmodel import Session, select
 
+
+_PROPAGATION_META = MutationMeta(actor="system:propagation")
+
+
 # ---------------------------------------------------------------------------
-# State-event helpers
+# Write helpers — all writes go through the graph repo
 # ---------------------------------------------------------------------------
 
 
-def _record_state_event(
+def _update_task_status(
     session: Session,
     run_id: UUID,
     task_id: UUID,
     new_status: str,
     *,
-    old_status: str | None = None,
-    execution_id: UUID | None = None,
+    graph_repo: WorkflowGraphRepository,
+    graph_lookup: GraphNodeLookup,
     event_metadata: dict[str, object] | None = None,
-) -> RunTaskStateEvent:
-    evt = RunTaskStateEvent(
-        run_id=run_id,
-        definition_task_id=task_id,
-        task_execution_id=execution_id,
-        event_type="state_change",
-        old_status=old_status,
-        new_status=new_status,
-        event_metadata=event_metadata or {},
-        created_at=utcnow(),
+) -> None:
+    node_id = graph_lookup.node_id(task_id)
+    if node_id is None:
+        return
+    reason = None
+    if event_metadata and "error" in event_metadata:
+        reason = str(event_metadata["error"])
+    graph_repo.update_node_status(
+        session,
+        run_id,
+        node_id,
+        new_status,
+        meta=MutationMeta(actor="system:propagation", reason=reason),
     )
-    session.add(evt)
-    session.flush()
-    return evt
 
 
-# ---------------------------------------------------------------------------
-# Mark helpers
-# ---------------------------------------------------------------------------
+def mark_task_ready(
+    session: Session,
+    run_id: UUID,
+    task_id: UUID,
+    *,
+    graph_repo: WorkflowGraphRepository,
+    graph_lookup: GraphNodeLookup,
+) -> None:
+    _update_task_status(
+        session,
+        run_id,
+        task_id,
+        TaskExecutionStatus.PENDING,
+        graph_repo=graph_repo,
+        graph_lookup=graph_lookup,
+    )
 
 
-def mark_task_ready(session: Session, run_id: UUID, task_id: UUID) -> None:
-    old = get_current_task_status(session, run_id, task_id)
-    _record_state_event(session, run_id, task_id, TaskExecutionStatus.PENDING, old_status=old)
-
-
-def mark_task_running(session: Session, run_id: UUID, task_id: UUID, execution_id: UUID) -> None:
-    old = get_current_task_status(session, run_id, task_id)
-    _record_state_event(
+def mark_task_running(
+    session: Session,
+    run_id: UUID,
+    task_id: UUID,
+    execution_id: UUID,
+    *,
+    graph_repo: WorkflowGraphRepository,
+    graph_lookup: GraphNodeLookup,
+) -> None:
+    _update_task_status(
         session,
         run_id,
         task_id,
         TaskExecutionStatus.RUNNING,
-        old_status=old,
-        execution_id=execution_id,
+        graph_repo=graph_repo,
+        graph_lookup=graph_lookup,
     )
 
 
-def mark_task_completed(session: Session, run_id: UUID, task_id: UUID, execution_id: UUID) -> None:
-    old = get_current_task_status(session, run_id, task_id)
-    _record_state_event(
+def mark_task_completed(
+    session: Session,
+    run_id: UUID,
+    task_id: UUID,
+    execution_id: UUID,
+    *,
+    graph_repo: WorkflowGraphRepository,
+    graph_lookup: GraphNodeLookup,
+) -> None:
+    _update_task_status(
         session,
         run_id,
         task_id,
         TaskExecutionStatus.COMPLETED,
-        old_status=old,
-        execution_id=execution_id,
+        graph_repo=graph_repo,
+        graph_lookup=graph_lookup,
     )
 
 
@@ -85,41 +115,56 @@ def mark_task_failed(
     run_id: UUID,
     task_id: UUID,
     error: str,
+    *,
     execution_id: UUID | None = None,
+    graph_repo: WorkflowGraphRepository,
+    graph_lookup: GraphNodeLookup,
 ) -> None:
-    old = get_current_task_status(session, run_id, task_id)
-    _record_state_event(
+    _update_task_status(
         session,
         run_id,
         task_id,
         TaskExecutionStatus.FAILED,
-        old_status=old,
-        execution_id=execution_id,
+        graph_repo=graph_repo,
+        graph_lookup=graph_lookup,
         event_metadata={"error": error},
     )
 
 
 # ---------------------------------------------------------------------------
-# Query helpers
+# Read helpers — all reads go through RunGraphNode
 # ---------------------------------------------------------------------------
 
 
-def get_current_task_status(session: Session, run_id: UUID, task_id: UUID) -> str | None:
-    """Return the most recent status for *task_id* in this run, or None."""
-    stmt = (
-        select(RunTaskStateEvent.new_status)
-        .where(
-            RunTaskStateEvent.run_id == run_id,
-            RunTaskStateEvent.definition_task_id == task_id,
+def get_current_task_status(
+    session: Session,
+    run_id: UUID,
+    task_id: UUID,
+    *,
+    graph_lookup: GraphNodeLookup,
+) -> str | None:
+    """Return the current status for a task in this run."""
+    node_id = graph_lookup.node_id(task_id)
+    if node_id is None:
+        return None
+    row = session.exec(
+        select(RunGraphNode.status).where(
+            RunGraphNode.id == node_id,
+            RunGraphNode.run_id == run_id,
         )
-        .order_by(RunTaskStateEvent.created_at.desc())
-        .limit(1)
-    )
-    return session.exec(stmt).first()
+    ).first()
+    return row
 
 
-def get_initial_ready_tasks(session: Session, run_id: UUID, definition_id: UUID) -> list[UUID]:
-    """Return task IDs that have zero dependencies (leaf/root tasks)."""
+def get_initial_ready_tasks(
+    session: Session,
+    run_id: UUID,
+    definition_id: UUID,
+    *,
+    graph_repo: WorkflowGraphRepository,
+    graph_lookup: GraphNodeLookup,
+) -> list[UUID]:
+    """Return task IDs that have zero dependencies (root tasks)."""
     all_tasks_stmt = select(ExperimentDefinitionTask.id).where(
         ExperimentDefinitionTask.experiment_definition_id == definition_id,
     )
@@ -133,7 +178,13 @@ def get_initial_ready_tasks(session: Session, run_id: UUID, definition_id: UUID)
     ready_ids = list(all_task_ids - tasks_with_deps)
 
     for tid in ready_ids:
-        mark_task_ready(session, run_id, tid)
+        mark_task_ready(
+            session,
+            run_id,
+            tid,
+            graph_repo=graph_repo,
+            graph_lookup=graph_lookup,
+        )
 
     session.commit()
     return ready_ids
@@ -150,15 +201,19 @@ def on_task_completed(
     definition_id: UUID,
     task_id: UUID,
     execution_id: UUID,
+    *,
+    graph_repo: WorkflowGraphRepository,
+    graph_lookup: GraphNodeLookup,
 ) -> list[UUID]:
-    """Mark *task_id* completed, then find and mark newly-ready dependents.
-
-    For each task that lists *task_id* as a dependency
-    (ExperimentDefinitionTaskDependency.depends_on_task_id == task_id),
-    check whether ALL of its dependencies are now COMPLETED.
-    If yes, mark it PENDING (ready) and include it in the return list.
-    """
-    mark_task_completed(session, run_id, task_id, execution_id)
+    """Mark task completed, resolve edges, find and mark newly-ready dependents."""
+    mark_task_completed(
+        session,
+        run_id,
+        task_id,
+        execution_id,
+        graph_repo=graph_repo,
+        graph_lookup=graph_lookup,
+    )
 
     dependent_edges_stmt = select(ExperimentDefinitionTaskDependency).where(
         ExperimentDefinitionTaskDependency.experiment_definition_id == definition_id,
@@ -177,10 +232,34 @@ def on_task_completed(
         dep_task_ids = list(session.exec(all_deps_stmt).all())
 
         if all(
-            get_current_task_status(session, run_id, dep_id) == TaskExecutionStatus.COMPLETED
+            get_current_task_status(
+                session,
+                run_id,
+                dep_id,
+                graph_lookup=graph_lookup,
+            )
+            == TaskExecutionStatus.COMPLETED
             for dep_id in dep_task_ids
         ):
-            mark_task_ready(session, run_id, candidate_id)
+            # Update resolved edges to "satisfied"
+            for dep_id in dep_task_ids:
+                edge_id = graph_lookup.edge_id(dep_id, candidate_id)
+                if edge_id:
+                    graph_repo.update_edge_status(
+                        session,
+                        run_id,
+                        edge_id,
+                        "satisfied",
+                        meta=_PROPAGATION_META,
+                    )
+
+            mark_task_ready(
+                session,
+                run_id,
+                candidate_id,
+                graph_repo=graph_repo,
+                graph_lookup=graph_lookup,
+            )
             newly_ready.append(candidate_id)
 
     session.commit()
@@ -192,46 +271,19 @@ def on_task_completed(
 # ---------------------------------------------------------------------------
 
 
-def _get_all_leaf_task_ids(session: Session, definition_id: UUID) -> list[UUID]:
-    """Leaf tasks = tasks that have no dependencies pointing to them as depends_on.
-    Actually, we want tasks with no *dependents* — i.e. nothing depends on them.
-    These are the terminal/sink tasks in the DAG."""
-    all_tasks_stmt = select(ExperimentDefinitionTask.id).where(
-        ExperimentDefinitionTask.experiment_definition_id == definition_id,
-    )
-    all_task_ids = set(session.exec(all_tasks_stmt).all())
-
-    depended_on_stmt = select(ExperimentDefinitionTaskDependency.depends_on_task_id).where(
-        ExperimentDefinitionTaskDependency.experiment_definition_id == definition_id,
-    )
-    depended_on_ids = set(session.exec(depended_on_stmt).all())
-
-    return list(all_task_ids - depended_on_ids)
-
-
 def is_workflow_complete(session: Session, run_id: UUID, definition_id: UUID) -> bool:
-    """True when every task in the definition has reached COMPLETED."""
-    all_tasks_stmt = select(ExperimentDefinitionTask.id).where(
-        ExperimentDefinitionTask.experiment_definition_id == definition_id,
+    """True when every graph node for this run has reached COMPLETED."""
+    statuses = list(
+        session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
     )
-    all_task_ids = list(session.exec(all_tasks_stmt).all())
-    if not all_task_ids:
+    if not statuses:
         return True
-
-    return all(
-        get_current_task_status(session, run_id, tid) == TaskExecutionStatus.COMPLETED
-        for tid in all_task_ids
-    )
+    return all(s == TaskExecutionStatus.COMPLETED for s in statuses)
 
 
 def is_workflow_failed(session: Session, run_id: UUID, definition_id: UUID) -> bool:
-    """True when any task in the definition has reached FAILED."""
-    all_tasks_stmt = select(ExperimentDefinitionTask.id).where(
-        ExperimentDefinitionTask.experiment_definition_id == definition_id,
+    """True when any graph node for this run has reached FAILED."""
+    statuses = list(
+        session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
     )
-    all_task_ids = list(session.exec(all_tasks_stmt).all())
-
-    return any(
-        get_current_task_status(session, run_id, tid) == TaskExecutionStatus.FAILED
-        for tid in all_task_ids
-    )
+    return any(s == TaskExecutionStatus.FAILED for s in statuses)

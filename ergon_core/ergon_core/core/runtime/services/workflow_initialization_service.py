@@ -1,4 +1,4 @@
-"""Workflow initialization: load definitions, seed state, find initial tasks."""
+"""Workflow initialization: load definitions, seed graph state, find initial tasks."""
 
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
@@ -7,10 +7,10 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.runtime.execution.propagation import (
-    _record_state_event,
-    get_initial_ready_tasks,
-)
+from ergon_core.core.runtime.execution.propagation import get_initial_ready_tasks
+from ergon_core.core.runtime.services.graph_dto import MutationMeta
+from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
+from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.orchestration_dto import (
     InitializedWorkflow,
     InitializeWorkflowCommand,
@@ -42,16 +42,19 @@ class WorkflowInitializationService:
                 for t in all_tasks
             ]
 
-            for t in all_tasks:
-                _record_state_event(
-                    session,
-                    command.run_id,
-                    t.id,
-                    TaskExecutionStatus.PENDING,
-                )
+            graph_repo = WorkflowGraphRepository()
+            graph_repo.initialize_from_definition(
+                session,
+                command.run_id,
+                command.definition_id,
+                initial_node_status=TaskExecutionStatus.PENDING,
+                initial_edge_status="pending",
+                meta=MutationMeta(actor="system:workflow_init"),
+            )
             session.commit()
 
-            # Mark run as EXECUTING
+            graph_lookup = GraphNodeLookup(session, command.run_id)
+
             run_record = require_not_none(
                 session.get(RunRecord, command.run_id),
                 f"RunRecord {command.run_id} not found",
@@ -61,7 +64,13 @@ class WorkflowInitializationService:
             session.add(run_record)
             session.commit()
 
-            ready_ids = get_initial_ready_tasks(session, command.run_id, command.definition_id)
+            ready_ids = get_initial_ready_tasks(
+                session,
+                command.run_id,
+                command.definition_id,
+                graph_repo=graph_repo,
+                graph_lookup=graph_lookup,
+            )
 
             ready_descriptors = [td for td in task_descriptors if td.task_id in set(ready_ids)]
 
