@@ -19,10 +19,13 @@ from ergon_core.core.runtime.services.cohort_stats_service import (
 )
 from ergon_core.core.utils import utcnow
 
+from ergon_core.core.persistence.telemetry.models import RunGenerationTurn
+
 from .event_contracts import (
     CohortUpdatedEvent,
     DashboardAgentActionCompletedEvent,
     DashboardAgentActionStartedEvent,
+    DashboardGenerationTurnEvent,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
     DashboardSandboxCommandEvent,
@@ -372,6 +375,31 @@ class DashboardEmitter:
             )
         except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to emit dashboard/thread.message_created", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Generation turns (repository listener)
+    # ------------------------------------------------------------------
+
+    async def on_turn_persisted(self, row: RunGenerationTurn) -> None:
+        """Called by GenerationTurnRepository after a turn is committed to PG."""
+        if not self._enabled:
+            return
+        try:
+            evt = DashboardGenerationTurnEvent(
+                run_id=row.run_id,
+                task_execution_id=row.task_execution_id,
+                worker_binding_key=row.worker_binding_key,
+                worker_name=row.worker_binding_key,
+                turn_index=row.turn_index,
+                response_text=row.response_text,
+                tool_calls=row.tool_calls_json,
+                policy_version=row.policy_version,
+            )
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:  # slopcop: ignore[no-broad-except]
+            logger.warning("Failed to emit dashboard/generation.turn_completed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Cohort

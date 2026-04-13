@@ -1,10 +1,13 @@
 """ReAct-style worker using pydantic-ai Agent for tool-augmented execution."""
 
+from __future__ import annotations
+
 import dataclasses  # slopcop: ignore[no-dataclass]
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Any
+from collections.abc import AsyncGenerator
+from datetime import datetime
+from typing import Any, Self
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
@@ -15,8 +18,9 @@ from pydantic_ai.messages import (
     ToolReturnPart,
 )
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerOutput
 from ergon_core.api.generation import GenerationTurn
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.providers.generation.pydantic_ai_format import extract_logprobs
 from ergon_core.core.providers.generation.model_resolution import resolve_model_target
 from ergon_core.core.rl import LOGPROB_SETTINGS
@@ -34,8 +38,8 @@ class _AgentOutput(BaseModel):
 class ReActWorker(Worker):
     """ReAct-style worker that delegates to a pydantic-ai Agent.
 
-    Produces ``GenerationTurn`` records from PydanticAI's native message
-    history — no format conversion.
+    Yields ``GenerationTurn`` objects incrementally during execution.
+    Each yielded turn is persisted to PG immediately by the runtime.
     """
 
     type_slug = "react-v1"
@@ -53,13 +57,14 @@ class ReActWorker(Worker):
         self.tools: list[Any] = tools or []  # slopcop: ignore[no-typing-any]
         self.system_prompt: str | None = system_prompt
         self.max_iterations = max_iterations
+        self._seed_messages: list[ModelMessage] | None = None
 
     async def execute(
         self,
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> WorkerResult:
+    ) -> AsyncGenerator[GenerationTurn, None]:
         resolved = resolve_model_target(self.model)
 
         model_settings: dict[str, object] | None = None
@@ -74,56 +79,52 @@ class ReActWorker(Worker):
         )
 
         task_prompt = _format_task(task)
-        started_at = datetime.now(timezone.utc)
+        node_count = 0
+        prev_message_count = 0
 
-        try:
-            node_count = 0
-            async with agent.iter(task_prompt, model_settings=model_settings) as run:
-                async for _node in run:
-                    node_count += 1
-                    if node_count >= self.max_iterations:
-                        break
-                result = run.result
+        async with agent.iter(task_prompt, model_settings=model_settings) as run:
+            async for _node in run:
+                node_count += 1
 
-            if result is None:
-                return WorkerResult(
-                    output="Agent run ended without producing a result",
-                    success=False,
-                    metadata={"node_count": node_count},
-                )
+                current_messages = run.result.new_messages() if run.result else []
+                if len(current_messages) > prev_message_count:
+                    new_turns = _build_turns(current_messages[prev_message_count:])
+                    for turn in new_turns:
+                        yield turn
+                    prev_message_count = len(current_messages)
 
-            messages = result.new_messages()
-            turns = _build_turns(messages)
-            output_text = (
-                result.output.output_text
-                if isinstance(result.output, _AgentOutput)
-                else str(result.output)
-            )
-            reasoning = result.output.reasoning if isinstance(result.output, _AgentOutput) else None
+                if node_count >= self.max_iterations:
+                    break
 
-        except Exception as exc:  # slopcop: ignore[no-broad-except]
-            elapsed_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
-            return WorkerResult(
-                output=f"Agent execution failed: {exc}",
-                success=False,
-                metadata={"error": str(exc), "elapsed_ms": elapsed_ms},
-            )
-
-        elapsed_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
-
-        return WorkerResult(
+    def get_output(self, context: WorkerContext) -> WorkerOutput:
+        """Extract structured _AgentOutput from the last turn's raw_response."""
+        with get_session() as session:
+            turns = self._turn_repo.get_for_execution(session, context.execution_id)
+        if not turns:
+            return WorkerOutput(output="", success=False)
+        last_turn = turns[-1]
+        output_text = _extract_agent_output_text(last_turn.raw_response)
+        return WorkerOutput(
             output=output_text,
             success=True,
-            turns=turns,
-            artifacts={"reasoning": reasoning},
-            metadata={
-                "model": self.model,
-                "node_count": node_count,
-                "turn_count": len(turns),
-                "elapsed_ms": elapsed_ms,
-                "policy_version": resolved.policy_version,
-            },
+            metadata={"turn_count": len(turns), "model": self.model},
         )
+
+    @classmethod
+    def from_buffer(
+        cls,
+        turns: list[GenerationTurn],
+        task: BenchmarkTask,
+        **kwargs: Any,  # slopcop: ignore[no-typing-any]
+    ) -> Self | None:
+        """Return a ReActWorker pre-seeded with PydanticAI message history."""
+        worker = cls(**kwargs)
+        worker._seed_messages = []
+        for turn in turns:
+            if turn.raw_request:
+                worker._seed_messages.append(_reconstruct_request(turn.raw_request))
+            worker._seed_messages.append(_reconstruct_response(turn.raw_response))
+        return worker
 
 
 # ---------------------------------------------------------------------------
@@ -208,3 +209,22 @@ def _extract_tool_results(
                 }
             )
     return results
+
+
+def _extract_agent_output_text(raw_response: dict) -> str:
+    """Extract the output_text from PydanticAI's structured _AgentOutput response."""
+    parts = raw_response.get("parts", [])
+    for part in parts:
+        if isinstance(part, dict) and part.get("part_kind") == "text":
+            return part.get("content", "")
+    return str(raw_response)
+
+
+def _reconstruct_response(raw: dict[str, object]) -> ModelResponse:
+    """Reconstruct PydanticAI ModelResponse from serialized dict."""
+    return ModelResponse(**raw)
+
+
+def _reconstruct_request(raw: dict[str, object]) -> ModelRequest:
+    """Reconstruct PydanticAI ModelRequest from serialized dict."""
+    return ModelRequest(**raw)

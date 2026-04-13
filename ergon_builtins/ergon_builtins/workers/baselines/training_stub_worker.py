@@ -10,8 +10,9 @@ the RL training loop.
 """
 
 import random
+from collections.abc import AsyncGenerator
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TokenLogprob
 
 
@@ -19,23 +20,16 @@ class TrainingStubWorker(Worker):
     type_slug = "training-stub"
 
     def __init__(self, *, name: str = "training-stub", model: str | None = None) -> None:
-        self.name = name
-        self.model = model
+        super().__init__(name=name, model=model)
 
     async def execute(
         self,
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> WorkerResult:
-        turns = _build_synthetic_turns(task.task_key)
-
-        return WorkerResult(
-            output=f"Training stub output for {task.task_key}",
-            success=True,
-            turns=turns,
-            metadata={"task_key": task.task_key, "model": self.model, "synthetic": True},
-        )
+    ) -> AsyncGenerator[GenerationTurn, None]:
+        for turn in _build_synthetic_turns(task.task_key):
+            yield turn
 
 
 def _build_synthetic_turns(task_key: str) -> list[GenerationTurn]:

@@ -59,7 +59,7 @@ class InProcessCriterionExecutor:
         from ergon_core.api.evaluation_context import EvaluationContext
 
         # Deferred: avoid circular import
-        from ergon_core.api.results import WorkerResult as WR
+        from ergon_core.api.results import WorkerOutput as WR
 
         results = []
         for spec in criteria:

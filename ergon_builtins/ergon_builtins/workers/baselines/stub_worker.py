@@ -3,24 +3,26 @@
 Returns fixed output without calling any model. For smoke tests only.
 """
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerResult
+from collections.abc import AsyncGenerator
+
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext
+from ergon_core.api.generation import GenerationTurn
 
 
 class StubWorker(Worker):
     type_slug = "stub-worker"
 
     def __init__(self, *, name: str = "stub", model: str | None = None) -> None:
-        self.name = name
-        self.model = model
+        super().__init__(name=name, model=model)
 
     async def execute(
         self,
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> WorkerResult:
-        return WorkerResult(
-            output=f"Stub output for {task.task_key}",
-            success=True,
-            metadata={"task_key": task.task_key, "model": self.model},
+    ) -> AsyncGenerator[GenerationTurn, None]:
+        yield GenerationTurn(
+            raw_response={
+                "parts": [{"part_kind": "text", "content": f"Stub output for {task.task_key}"}],
+            },
         )
