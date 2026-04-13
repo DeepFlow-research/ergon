@@ -287,15 +287,12 @@ class RolloutService:
                         evals_remapped[run_id][exec_id] = score
 
         result: list[Trajectory] = []
+        tokenizer = self._get_tokenizer()
         for run_id in run_ids:
-            tokenizer = self._get_tokenizer()
-            prompt_text = tokenizer.apply_chat_template(
-                [{"role": "user", "content": "Complete the benchmark task."}],
-                tokenize=False,
-                add_generation_prompt=True,
-            )
+            run_turns = turns_by_run.get(run_id, [])
+            prompt_text = _extract_prompt_from_turns(run_turns, tokenizer)
             agent_trajs = extract_agent_trajectories(
-                turns_by_run.get(run_id, []),
+                run_turns,
                 evals_remapped.get(run_id, {}),
                 tokenizer,
                 prompt_text=prompt_text,
@@ -315,3 +312,51 @@ class RolloutService:
                     )
                 )
         return result
+
+
+def _extract_prompt_from_turns(
+    turns: list[RunGenerationTurn],
+    tokenizer: Tokenizer,
+) -> str:
+    """Extract the actual prompt from the first turn's raw_request.
+
+    The worker persists the exact message history it sent to the model in
+    raw_request. We read it back here so the prompt_ids in the trajectory
+    match what the model actually generated against. No reconstruction,
+    no duplicate formatting logic — just read what was persisted.
+
+    Falls back to a generic prompt if raw_request is empty (legacy data
+    from before raw_request was populated).
+    """
+    if turns:
+        first_turn = turns[0]
+        raw_req = first_turn.raw_request
+        if raw_req:
+            user_content = _extract_user_content(raw_req)
+            if user_content:
+                return tokenizer.apply_chat_template(
+                    [{"role": "user", "content": user_content}],
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+
+    return tokenizer.apply_chat_template(
+        [{"role": "user", "content": "Complete the benchmark task."}],
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+
+
+def _extract_user_content(raw_request: dict) -> str | None:
+    """Pull the user message content from a serialized PydanticAI ModelRequest.
+
+    PydanticAI serializes ModelRequest via dataclasses.asdict(). The structure is:
+    {"parts": [{"part_kind": "user-prompt", "content": "Task: ...", ...}, ...]}
+    """
+    parts = raw_request.get("parts", [])
+    for part in parts:
+        if isinstance(part, dict) and part.get("part_kind") == "user-prompt":
+            content = part.get("content")
+            if isinstance(content, str):
+                return content
+    return None
