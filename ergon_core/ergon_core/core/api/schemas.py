@@ -198,7 +198,7 @@ class RunGenerationTurnDto(CamelModel):
     task_execution_id: str
     worker_binding_key: str
     turn_index: int
-    raw_request: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    prompt_text: str | None = None
     raw_response: dict[str, Any]  # slopcop: ignore[no-typing-any]
     response_text: str | None = None
     tool_calls: list[dict[str, Any]] | None = None  # slopcop: ignore[no-typing-any]

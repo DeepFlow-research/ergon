@@ -26,13 +26,6 @@ if TYPE_CHECKING:
     from ergon_core.api.experiment import Experiment
 
 
-def persist_experiment_definition(
-    experiment: "Experiment",
-) -> PersistedExperimentDefinition:
-    """Validate, materialise instances, and write immutable definition rows."""
-    return ExperimentPersistenceService().persist_definition(experiment)
-
-
 class ExperimentPersistenceService:
     """Writes immutable definition rows directly from an Experiment.
 

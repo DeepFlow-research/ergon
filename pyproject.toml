@@ -80,6 +80,7 @@ call-non-callable = "warn"
 no-matching-overload = "warn"
 
 # Transformers/torch optional deps — Unknown types cascade from conditional imports.
+# unknown-argument: pydantic AliasChoices on ModelResponse.provider_details.
 [[tool.ty.overrides]]
 include = ["**/models/transformers_backend.py"]
 [tool.ty.overrides.rules]
@@ -87,6 +88,7 @@ invalid-argument-type = "warn"
 unresolved-attribute = "warn"
 call-non-callable = "warn"
 invalid-return-type = "warn"
+unknown-argument = "warn"
 
 # pydantic-ai message formatting — complex generic dict unions ty can't resolve.
 [[tool.ty.overrides]]
@@ -97,11 +99,13 @@ unresolved-attribute = "warn"
 no-matching-overload = "warn"
 
 # RL adapter — inngest send, tokenizer, and mixed optional-dep types.
+# invalid-return-type: AutoTokenizer.from_pretrained → Unknown can't verify Tokenizer protocol.
 [[tool.ty.overrides]]
 include = ["**/core/rl/**"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"
+invalid-return-type = "warn"
 
 # SQLModel .where() / .order_by() column expressions — ty can't resolve SQLAlchemy operator overloads.
 [[tool.ty.overrides]]
@@ -128,6 +132,26 @@ no-matching-overload = "warn"
 not-iterable = "warn"
 invalid-parameter-default = "warn"
 
+# Worker ABC: abstract async generator yield + Unknown response_text.
+[[tool.ty.overrides]]
+include = ["ergon_core/ergon_core/api/worker.py"]
+[tool.ty.overrides.rules]
+invalid-yield = "warn"
+invalid-argument-type = "warn"
+
+# inngest_client.send_sync signature vs Callable[[Event], None] — harmless mismatch.
+[[tool.ty.overrides]]
+include = ["**/core/api/app.py"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+
+# Tests: SQLModel column expressions (.desc(), .is_()) and asyncio.run with AsyncGenerator.
+[[tool.ty.overrides]]
+include = ["tests/**"]
+[tool.ty.overrides.rules]
+unresolved-attribute = "warn"
+invalid-argument-type = "warn"
+
 [tool.ty.environment]
 extra-paths = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra"]
 
@@ -143,6 +167,7 @@ allowed-unresolved-imports = [
     "datasets", "datasets.**",
     "skypilot", "skypilot.**",
     "sky", "sky.**",
+    "verl", "verl.**",
 ]
 
 [tool.pytest.ini_options]

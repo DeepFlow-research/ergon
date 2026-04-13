@@ -5,7 +5,6 @@ client. Errors are caught and logged so callers are never blocked.
 """
 
 import logging
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -54,9 +53,6 @@ class DashboardEmitter:
     def enabled(self, value: bool) -> None:
         self._enabled = value
 
-    def _now(self) -> datetime:
-        return utcnow()
-
     # ------------------------------------------------------------------
     # Workflow
     # ------------------------------------------------------------------
@@ -78,7 +74,7 @@ class DashboardEmitter:
                 experiment_id=experiment_id,
                 workflow_name=workflow_name,
                 task_tree=task_tree,
-                started_at=self._now(),
+                started_at=utcnow(),
                 total_tasks=total_tasks,
                 total_leaf_tasks=total_leaf_tasks,
             )
@@ -102,7 +98,7 @@ class DashboardEmitter:
             evt = DashboardWorkflowCompletedEvent(
                 run_id=run_id,
                 status=status,
-                completed_at=self._now(),
+                completed_at=utcnow(),
                 duration_seconds=duration_seconds,
                 final_score=final_score,
                 error=error,
@@ -140,7 +136,7 @@ class DashboardEmitter:
                 old_status=old_status,
                 new_status=new_status,
                 triggered_by=triggered_by,
-                timestamp=self._now(),
+                timestamp=utcnow(),
                 assigned_worker_id=assigned_worker_id,
                 assigned_worker_name=assigned_worker_name,
             )
@@ -153,7 +149,7 @@ class DashboardEmitter:
     async def task_evaluation_updated(
         self,
         run_id: UUID,
-        task_id: UUID | None,
+        task_id: UUID,
         evaluation: dict[str, Any],  # slopcop: ignore[no-typing-any]
     ) -> None:
         """Send evaluation update. `evaluation` must be a camelCase RunTaskEvaluationDto dict."""
@@ -196,7 +192,7 @@ class DashboardEmitter:
                 worker_name=worker_name,
                 action_type=action_type,
                 action_input=action_input,
-                timestamp=self._now(),
+                timestamp=utcnow(),
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
@@ -229,7 +225,7 @@ class DashboardEmitter:
                 duration_ms=duration_ms,
                 success=success,
                 error=error,
-                timestamp=self._now(),
+                timestamp=utcnow(),
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
@@ -264,7 +260,7 @@ class DashboardEmitter:
                 mime_type=mime_type,
                 size_bytes=size_bytes,
                 file_path=file_path,
-                timestamp=self._now(),
+                timestamp=utcnow(),
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
@@ -293,7 +289,7 @@ class DashboardEmitter:
                 sandbox_id=sandbox_id,
                 template=template,
                 timeout_minutes=timeout_minutes,
-                timestamp=self._now(),
+                timestamp=utcnow(),
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
@@ -303,6 +299,7 @@ class DashboardEmitter:
 
     async def sandbox_command(
         self,
+        run_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -315,6 +312,7 @@ class DashboardEmitter:
             return
         try:
             evt = DashboardSandboxCommandEvent(
+                run_id=run_id,
                 task_id=task_id,
                 sandbox_id=sandbox_id,
                 command=command,
@@ -322,7 +320,7 @@ class DashboardEmitter:
                 stderr=stderr,
                 exit_code=exit_code,
                 duration_ms=duration_ms,
-                timestamp=self._now(),
+                timestamp=utcnow(),
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
@@ -343,7 +341,7 @@ class DashboardEmitter:
                 task_id=task_id,
                 sandbox_id=sandbox_id,
                 reason=reason,
-                timestamp=self._now(),
+                timestamp=utcnow(),
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))

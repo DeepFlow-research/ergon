@@ -144,11 +144,11 @@ class Experiment:
         # These are the only api->core imports. Extracting to a composition
         # layer is flagged for v2.
         from ergon_core.core.runtime.services.experiment_persistence_service import (
-            persist_experiment_definition,
+            ExperimentPersistenceService,
         )
 
         self.validate()
-        persisted = persist_experiment_definition(self)
+        persisted = ExperimentPersistenceService().persist_definition(self)
         self._persisted = persisted
         return persisted
 

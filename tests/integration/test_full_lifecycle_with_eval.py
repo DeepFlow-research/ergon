@@ -117,6 +117,7 @@ def test_full_lifecycle_with_evaluation():
                 task_id=task_desc.task_id,
             )
         )
+        assert prepared.worker_type is not None
         worker_cls = WORKERS[prepared.worker_type]
         live_worker = worker_cls(
             name=prepared.worker_binding_key or "w",
@@ -245,6 +246,7 @@ def test_full_lifecycle_with_evaluation():
     session = get_session()
 
     final_run = session.get(RunRecord, run.id)
+    assert final_run is not None
     assert final_run.status == RunStatus.COMPLETED, f"Expected COMPLETED, got {final_run.status}"
     print(f"[VERIFY] Run status: {final_run.status}")
 

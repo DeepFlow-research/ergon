@@ -73,9 +73,6 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
 
     prepared = await ctx.step.run("prepare-execution", _prepare, output_type=PreparedTaskExecution)
 
-    if prepared.execution_id is None and not prepared.skipped:
-        raise RuntimeError(f"prepare returned no execution_id for task {payload.task_id}")
-
     if prepared.skipped:
         logger.info(
             "task-execute skipped task_id=%s reason=%s",
@@ -229,15 +226,14 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
         error_msg = str(exc)
         logger.exception("task-execute failed task_id=%s: %s", payload.task_id, error_msg)
 
-        if prepared.execution_id is not None:
-            svc.finalize_failure(
-                FailTaskExecutionCommand(
-                    execution_id=prepared.execution_id,
-                    run_id=payload.run_id,
-                    task_id=payload.task_id,
-                    error_message=error_msg,
-                )
+        svc.finalize_failure(
+            FailTaskExecutionCommand(
+                execution_id=prepared.execution_id,
+                run_id=payload.run_id,
+                task_id=payload.task_id,
+                error_message=error_msg,
             )
+        )
 
         await inngest_client.send(
             inngest.Event(
@@ -265,7 +261,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                     "run_id": str(payload.run_id),
                     "definition_id": str(payload.definition_id),
                     "task_id": str(payload.task_id),
-                    "execution_id": str(prepared.execution_id) if prepared.execution_id else "",
+                    "execution_id": str(prepared.execution_id),
                     "task_key": prepared.task_key,
                     "benchmark_type": prepared.benchmark_type,
                     "skipped": False,

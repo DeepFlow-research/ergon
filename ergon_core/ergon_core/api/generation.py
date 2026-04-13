@@ -5,6 +5,11 @@ Workers populate these from whatever model framework they use.
 ``dataclasses.asdict()`` on PydanticAI's ``ModelResponse``).  No
 normalisation, no format conversion.
 
+``prompt_text`` is the formatted prompt string the model saw for this
+turn.  Set by the worker on the first turn — used by the RL extraction
+pipeline for TRL's ``prompt_ids``.  Workers own the formatting; core
+reads the string without interpreting it.
+
 Logprobs are extracted from PydanticAI's ``provider_details`` when
 the backend is vLLM.  PydanticAI preserves token strings and logprob
 floats but drops ``token_id`` (int).  For RL training we re-tokenize
@@ -28,23 +33,23 @@ class TokenLogprob(BaseModel):
 class GenerationTurn(BaseModel):
     """One model generation turn within a worker episode.
 
-    ``raw_request`` is the message history that was sent to the model
-    for this turn (for replay / debugging).  ``raw_response`` is the
-    framework-native serialisation of the model response.  Neither is
-    normalised — they carry whatever the framework produces.
+    ``prompt_text`` is the formatted user-facing prompt for this turn.
+    Set by the worker on the first yielded turn so the RL extraction
+    pipeline can build ``prompt_ids`` without parsing SDK-specific payloads.
+
+    ``raw_response`` is the framework-native serialisation of the model
+    response. Not normalised — carries whatever the framework produces.
 
     ``tool_results`` carries the tool execution outputs that were fed
     back to the model before the next turn.
 
     ``logprobs`` is populated when the serving backend provides them
-    (vLLM with ``openai_logprobs=True``).  Contains token strings +
-    logprob floats.  For RL training, token strings are re-tokenized
-    to recover integer IDs.
+    (vLLM with ``openai_logprobs=True``).
     """
 
     model_config = {"frozen": True}
 
-    raw_request: dict[str, object] | None = None
+    prompt_text: str | None = None
     raw_response: dict[str, object]
     tool_results: list[dict[str, object]] = Field(default_factory=list)
 

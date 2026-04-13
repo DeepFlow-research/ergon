@@ -102,7 +102,7 @@ class SavedSpecsRepository:
     @staticmethod
     def _create(model_class: type[T], **kwargs: object) -> T:
         with get_session() as session:
-            row = model_class(**kwargs)
+            row = model_class.model_validate(kwargs)
             session.add(row)
             session.commit()
             session.refresh(row)

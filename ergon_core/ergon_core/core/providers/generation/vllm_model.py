@@ -9,7 +9,7 @@ import logging
 
 import pydantic_ai.models
 from pydantic import BaseModel
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.models.openai import OpenAIChatModel  # ty: ignore[unresolved-import]
 from pydantic_ai.providers.openai import OpenAIProvider
 
 logger = logging.getLogger(__name__)

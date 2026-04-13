@@ -100,7 +100,6 @@ class TestRunGenerationTurnOutcome:
             task_execution_id=uuid4(),
             worker_binding_key="test",
             turn_index=0,
-            raw_request={},
             raw_response={},
             execution_outcome="success",
         )
@@ -112,7 +111,6 @@ class TestRunGenerationTurnOutcome:
             task_execution_id=uuid4(),
             worker_binding_key="test",
             turn_index=0,
-            raw_request={},
             raw_response={},
             execution_outcome="failure",
         )
@@ -124,7 +122,6 @@ class TestRunGenerationTurnOutcome:
             task_execution_id=uuid4(),
             worker_binding_key="test",
             turn_index=0,
-            raw_request={},
             raw_response={},
         )
         assert turn.execution_outcome is None
@@ -136,7 +133,6 @@ class TestRunGenerationTurnOutcome:
             task_execution_id=uuid4(),
             worker_binding_key="test",
             turn_index=0,
-            raw_request={},
             raw_response={},
             tool_calls_json=[{"name": "search", "args": {}}],
             tool_results_json=[{"tool_call_id": "1", "result": "ok"}],

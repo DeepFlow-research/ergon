@@ -22,7 +22,7 @@ class TaskExecuteResult(BaseModel):
 
     run_id: UUID
     task_id: UUID
-    execution_id: UUID | None = None
+    execution_id: UUID
     success: bool = False
     skipped: bool = False
     skip_reason: str | None = None

@@ -428,10 +428,14 @@ class ThreadMessage(SQLModel, table=True):
 class RunGenerationTurn(SQLModel, table=True):
     """Lossless per-turn record of one model generation within an episode.
 
-    Stores the exact provider exchange (raw_request/raw_response) plus
-    convenience extractions and optional RL fields.  One row per model
-    call per task execution.  Persisted incrementally — one commit per
-    yield from the worker's async generator.
+    Stores the model response (raw_response) plus convenience extractions
+    and optional RL fields.  One row per model call per task execution.
+    Persisted incrementally — one commit per yield from the worker's
+    async generator.
+
+    ``prompt_text`` is set by the worker on the first turn — the formatted
+    prompt string the model saw.  Used by the RL extraction pipeline for
+    TRL's ``prompt_ids``.
     """
 
     __tablename__ = "run_generation_turns"
@@ -445,8 +449,7 @@ class RunGenerationTurn(SQLModel, table=True):
     worker_binding_key: str = Field(index=True)
     turn_index: int
 
-    # Lossless provider exchange
-    raw_request: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    prompt_text: str | None = None
     raw_response: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
     # Convenience extractions
@@ -492,8 +495,6 @@ class RunGenerationTurn(SQLModel, table=True):
 
     @model_validator(mode="after")
     def _validate_json_columns(self) -> "RunGenerationTurn":
-        if not isinstance(self.raw_request, dict):
-            raise ValueError(f"raw_request must be a dict, got {type(self.raw_request).__name__}")
         if not isinstance(self.raw_response, dict):
             raise ValueError(f"raw_response must be a dict, got {type(self.raw_response).__name__}")
         return self

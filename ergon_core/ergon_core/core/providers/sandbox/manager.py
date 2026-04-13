@@ -102,7 +102,9 @@ class BaseSandboxManager(ABC):
             resolved_duration_ms = int((time.time() - started_at) * 1000)
 
         max_len = settings.otel_stdout_stderr_max_length
+        resolved_run_id = self._run_ids.get(sandbox_key, sandbox_key)
         await self._event_sink.sandbox_command(
+            run_id=resolved_run_id,
             task_id=task_id or self._get_display_task_id(sandbox_key),
             sandbox_id=resolved_sandbox_id,
             command=_truncate(command, 512) or command,

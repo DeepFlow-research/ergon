@@ -580,7 +580,7 @@ def get_generations(
             task_execution_id=str(turn.task_execution_id),
             worker_binding_key=turn.worker_binding_key,
             turn_index=turn.turn_index,
-            raw_request=turn.raw_request,
+            prompt_text=turn.prompt_text,
             raw_response=turn.raw_response,
             response_text=turn.response_text,
             tool_calls=turn.tool_calls_json,

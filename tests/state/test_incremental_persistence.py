@@ -30,7 +30,7 @@ from tests.state.factories import seed_flat_tasks, seed_run
 
 def _make_turn(index: int, text: str = "response") -> GenerationTurn:
     return GenerationTurn(
-        raw_request={"messages": [{"role": "user", "content": f"prompt {index}"}]},
+        prompt_text=f"Task: prompt {index}" if index == 0 else None,
         raw_response={
             "parts": [{"part_kind": "text", "content": f"{text} {index}"}],
         },
@@ -80,7 +80,7 @@ async def test_persist_single_writes_row(session: Session):
     assert len(rows) == 1
     assert rows[0].turn_index == 0
     assert rows[0].execution_outcome == "success"
-    assert rows[0].raw_request == {"messages": [{"role": "user", "content": "prompt 0"}]}
+    assert rows[0].prompt_text == "Task: prompt 0"
 
 
 @pytest.mark.asyncio
@@ -131,15 +131,15 @@ async def test_mark_execution_outcome(session: Session):
 
 
 @pytest.mark.asyncio
-async def test_persist_single_populates_raw_request(session: Session):
-    """persist_single() stores raw_request from the GenerationTurn."""
+async def test_persist_single_populates_prompt_text(session: Session):
+    """persist_single() stores prompt_text from the GenerationTurn."""
     def_id, _, task_ids = seed_flat_tasks(session, 1)
     run_id = seed_run(session, def_id)
     execution = _make_execution(session, run_id, task_ids[0])
 
     repo = GenerationTurnRepository()
     turn = GenerationTurn(
-        raw_request={"system": "you are helpful", "messages": [{"role": "user", "content": "hi"}]},
+        prompt_text="Task: Research quantum computing",
         raw_response={"parts": [{"part_kind": "text", "content": "hello"}]},
     )
 
@@ -153,7 +153,7 @@ async def test_persist_single_populates_raw_request(session: Session):
     )
 
     rows = repo.get_for_execution(session, execution.id)
-    assert rows[0].raw_request["system"] == "you are helpful"
+    assert rows[0].prompt_text == "Task: Research quantum computing"
 
 
 @pytest.mark.asyncio
@@ -203,7 +203,6 @@ def test_get_output_reads_last_turn(session: Session):
                 task_execution_id=execution.id,
                 worker_binding_key="test",
                 turn_index=i,
-                raw_request={},
                 raw_response={},
                 response_text=f"response {i}",
             )

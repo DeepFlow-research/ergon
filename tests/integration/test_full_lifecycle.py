@@ -106,6 +106,7 @@ def test_full_lifecycle():
     # Verify run is now EXECUTING
     session = get_session()
     run_row = session.get(RunRecord, run.id)
+    assert run_row is not None
     assert run_row.status == RunStatus.EXECUTING
     session.close()
 
@@ -198,6 +199,7 @@ def test_full_lifecycle():
 
     # Run is COMPLETED
     final_run = session.get(RunRecord, run.id)
+    assert final_run is not None
     assert final_run.status == RunStatus.COMPLETED
     print(f"[VERIFY] Run status: {final_run.status}")
 

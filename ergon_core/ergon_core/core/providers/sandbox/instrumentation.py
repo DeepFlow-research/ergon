@@ -33,12 +33,14 @@ class InstrumentedSandboxCommands:
     def __init__(
         self,
         sink: SandboxEventSink,
+        run_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         commands: Commands,
         max_output_len: int = 4000,
     ):
         self._sink = sink
+        self._run_id = run_id
         self._task_id = task_id
         self._sandbox_id = sandbox_id
         self._commands = commands
@@ -54,6 +56,7 @@ class InstrumentedSandboxCommands:
     ) -> None:
         duration_ms = int((time.time() - started_at) * 1000)
         await self._sink.sandbox_command(
+            run_id=self._run_id,
             task_id=self._task_id,
             sandbox_id=self._sandbox_id,
             command=_truncate(command, 512) or command,
@@ -102,12 +105,14 @@ class InstrumentedSandboxFiles:
     def __init__(
         self,
         sink: SandboxEventSink,
+        run_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         files: Filesystem,
         max_output_len: int = 4000,
     ):
         self._sink = sink
+        self._run_id = run_id
         self._task_id = task_id
         self._sandbox_id = sandbox_id
         self._files = files
@@ -123,6 +128,7 @@ class InstrumentedSandboxFiles:
     ) -> None:
         duration_ms = int((time.time() - started_at) * 1000)
         await self._sink.sandbox_command(
+            run_id=self._run_id,
             task_id=self._task_id,
             sandbox_id=self._sandbox_id,
             command=command,
@@ -192,19 +198,23 @@ class InstrumentedSandbox:
         self,
         sandbox: AsyncSandbox,
         sink: SandboxEventSink,
+        run_id: UUID,
         task_id: UUID,
         max_output_len: int = 4000,
     ):
         self._sandbox = sandbox
         self._sink = sink
+        self._run_id = run_id
         self._task_id = task_id
         self._max_output_len = max_output_len
 
         sid = sandbox.sandbox_id
         self.commands = InstrumentedSandboxCommands(
-            sink, task_id, sid, sandbox.commands, max_output_len
+            sink, run_id, task_id, sid, sandbox.commands, max_output_len
         )
-        self.files = InstrumentedSandboxFiles(sink, task_id, sid, sandbox.files, max_output_len)
+        self.files = InstrumentedSandboxFiles(
+            sink, run_id, task_id, sid, sandbox.files, max_output_len
+        )
 
     async def _emit(
         self,
@@ -216,6 +226,7 @@ class InstrumentedSandbox:
     ) -> None:
         duration_ms = int((time.time() - started_at) * 1000)
         await self._sink.sandbox_command(
+            run_id=self._run_id,
             task_id=self._task_id,
             sandbox_id=self._sandbox.sandbox_id,
             command=_truncate(command, 512) or command,

@@ -59,7 +59,7 @@ def _build_synthetic_turns(task_key: str) -> list[GenerationTurn]:
 
         turns.append(
             GenerationTurn(
-                raw_request={"messages": [{"role": "user", "content": f"Turn {i} prompt"}]},
+                prompt_text=f"Task: Synthetic task {task_key}" if i == 0 else None,
                 raw_response={
                     "parts": [{"part_kind": "text", "content": f"Synthetic response turn {i}"}],
                     "provider_details": {"logprobs": [lp.model_dump() for lp in logprobs]},

@@ -70,7 +70,7 @@ class PreparedTaskExecution(BaseModel):
     worker_binding_key: str | None = None
     worker_type: str | None = None
     model_target: str | None = None
-    execution_id: UUID | None = None
+    execution_id: UUID
     skipped: bool = False
     skip_reason: str | None = None
 

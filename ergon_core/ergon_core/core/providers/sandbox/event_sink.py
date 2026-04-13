@@ -18,6 +18,7 @@ class SandboxEventSink(Protocol):
 
     async def sandbox_command(
         self,
+        run_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -50,6 +51,7 @@ class NoopSandboxEventSink:
 
     async def sandbox_command(
         self,
+        run_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -93,6 +95,7 @@ class DashboardEmitterSandboxEventSink:
 
     async def sandbox_command(
         self,
+        run_id: UUID,
         task_id: UUID,
         sandbox_id: str,
         command: str,
@@ -102,6 +105,7 @@ class DashboardEmitterSandboxEventSink:
         duration_ms: int | None = None,
     ) -> None:
         await self._emitter.sandbox_command(
+            run_id=run_id,
             task_id=task_id,
             sandbox_id=sandbox_id,
             command=command,

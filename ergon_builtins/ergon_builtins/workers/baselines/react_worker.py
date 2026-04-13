@@ -80,6 +80,7 @@ class ReActWorker(Worker):
 
         task_prompt = _format_task(task)
         node_count = 0
+        turn_count = 0
         prev_message_count = 0
 
         async with agent.iter(task_prompt, model_settings=model_settings) as run:
@@ -90,7 +91,10 @@ class ReActWorker(Worker):
                 if len(current_messages) > prev_message_count:
                     new_turns = _build_turns(current_messages[prev_message_count:])
                     for turn in new_turns:
+                        if turn_count == 0:
+                            turn = turn.model_copy(update={"prompt_text": task_prompt})
                         yield turn
+                        turn_count += 1
                     prev_message_count = len(current_messages)
 
                 if node_count >= self.max_iterations:
@@ -121,9 +125,7 @@ class ReActWorker(Worker):
         worker = cls(**kwargs)
         worker._seed_messages = []
         for turn in turns:
-            if turn.raw_request:
-                worker._seed_messages.append(_reconstruct_request(turn.raw_request))
-            worker._seed_messages.append(_reconstruct_response(turn.raw_response))
+            worker._seed_messages.append(ModelResponse(**turn.raw_response))  # ty: ignore[invalid-argument-type]
         return worker
 
 
@@ -144,36 +146,30 @@ def _build_turns(messages: list[ModelMessage]) -> list[GenerationTurn]:
     """Build ``GenerationTurn`` objects from PydanticAI message history."""
     turns: list[GenerationTurn] = []
     pending: ModelResponse | None = None
-    pending_request: ModelRequest | None = None
 
     for message in messages:
         if isinstance(message, ModelResponse):
             if pending is not None:
-                turns.append(_to_turn(pending, pending_request, []))
+                turns.append(_to_turn(pending, []))
             pending = message
-            pending_request = None
         elif isinstance(message, ModelRequest):
             if pending is not None:
                 tool_results = _extract_tool_results(message)
-                turns.append(_to_turn(pending, pending_request, tool_results))
+                turns.append(_to_turn(pending, tool_results))
                 pending = None
-            pending_request = message
 
     if pending is not None:
-        turns.append(_to_turn(pending, pending_request, []))
+        turns.append(_to_turn(pending, []))
 
     return turns
 
 
 def _to_turn(
     response: ModelResponse,
-    request: ModelRequest | None,
     tool_results: list[dict[str, Any]],  # slopcop: ignore[no-typing-any]
 ) -> GenerationTurn:
     raw_resp = _make_json_safe(dataclasses.asdict(response))
-    raw_req = _make_json_safe(dataclasses.asdict(request)) if request is not None else None
     return GenerationTurn(
-        raw_request=raw_req,
         raw_response=raw_resp,
         tool_results=tool_results,
         logprobs=extract_logprobs(raw_resp),
@@ -218,13 +214,3 @@ def _extract_agent_output_text(raw_response: dict) -> str:
         if isinstance(part, dict) and part.get("part_kind") == "text":
             return part.get("content", "")
     return str(raw_response)
-
-
-def _reconstruct_response(raw: dict[str, object]) -> ModelResponse:
-    """Reconstruct PydanticAI ModelResponse from serialized dict."""
-    return ModelResponse(**raw)
-
-
-def _reconstruct_request(raw: dict[str, object]) -> ModelRequest:
-    """Reconstruct PydanticAI ModelRequest from serialized dict."""
-    return ModelRequest(**raw)
