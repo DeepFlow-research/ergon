@@ -7,7 +7,7 @@ from typing import ClassVar
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, WorkerResult
+from ergon_core.api.results import CriterionResult, WorkerOutput
 
 
 class TraceCheckCriterion(Criterion):
@@ -81,7 +81,7 @@ class TraceCheckCriterion(Criterion):
         return matched, missing
 
     @staticmethod
-    def _extract_action_types(result: WorkerResult) -> list[str]:
+    def _extract_action_types(result: WorkerOutput) -> list[str]:
         """Pull action_type strings from the worker result artifacts."""
         actions = result.artifacts.get("actions")
         if not isinstance(actions, list):

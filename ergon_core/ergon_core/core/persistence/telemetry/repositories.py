@@ -1,12 +1,17 @@
 """Read and write repository for run telemetry tables."""
 
+from __future__ import annotations
+
+import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from uuid import UUID
 
+from ergon_core.api.generation import GenerationTurn
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.shared.ids import new_id
-from ergon_core.core.providers.generation import pydantic_ai_format as pa_format
 from ergon_core.core.persistence.telemetry.models import (
+    ExecutionOutcome,
     RunAction,
     RunGenerationTurn,
     RunRecord,
@@ -15,8 +20,11 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
     RunTaskStateEvent,
 )
+from ergon_core.core.providers.generation import pydantic_ai_format as pa_format
 from ergon_core.core.utils import utcnow as _utcnow
 from sqlmodel import Session, select
+
+logger = logging.getLogger(__name__)
 
 
 class TelemetryRepository:
@@ -234,9 +242,60 @@ class TelemetryRepository:
 class GenerationTurnRepository:
     """Read/write operations for lossless per-turn generation records."""
 
+    def __init__(self) -> None:
+        self._listeners: list[Callable[[RunGenerationTurn], Awaitable[None]]] = []
+
+    def add_listener(
+        self, listener: Callable[[RunGenerationTurn], Awaitable[None]]
+    ) -> None:
+        """Register a callback invoked after each persist_single() commit."""
+        self._listeners.append(listener)
+
     # ------------------------------------------------------------------
     # Writes
     # ------------------------------------------------------------------
+
+    async def persist_single(  # slopcop: ignore[max-function-params]
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        execution_id: UUID,
+        worker_binding_key: str,
+        turn: GenerationTurn,
+        turn_index: int,
+        execution_outcome: ExecutionOutcome = "success",
+    ) -> RunGenerationTurn:
+        """Persist one turn and commit. Notifies listeners after commit."""
+        row = RunGenerationTurn(
+            id=new_id(),
+            run_id=run_id,
+            task_execution_id=execution_id,
+            worker_binding_key=worker_binding_key,
+            turn_index=turn_index,
+            raw_request=turn.raw_request or {},
+            raw_response=turn.raw_response,
+            response_text=pa_format.extract_text(turn.raw_response),
+            tool_calls_json=pa_format.extract_tool_calls(turn.raw_response),
+            tool_results_json=turn.tool_results or None,
+            token_ids_json=None,
+            logprobs_json=(
+                [lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None
+            ),
+            policy_version=turn.policy_version,
+            execution_outcome=execution_outcome,
+            created_at=_utcnow(),
+        )
+        session.add(row)
+        session.commit()
+
+        for listener in self._listeners:
+            try:
+                await listener(row)
+            except Exception:  # slopcop: ignore[no-broad-except]
+                logger.warning("Turn listener failed", exc_info=True)
+
+        return row
 
     def persist_turns(
         self,
@@ -245,13 +304,9 @@ class GenerationTurnRepository:
         run_id: UUID,
         execution_id: UUID,
         worker_binding_key: str,
-        turns: list,
+        turns: list[GenerationTurn],
     ) -> list[RunGenerationTurn]:
-        """Persist a list of ``GenerationTurn`` objects as DB rows.
-
-        Args:
-            turns: list of ``ergon_core.api.generation.GenerationTurn``.
-        """
+        """Batch persist (legacy path used by RL extraction). Does not notify listeners."""
         rows: list[RunGenerationTurn] = []
         for i, turn in enumerate(turns):
             row = RunGenerationTurn(
@@ -260,12 +315,12 @@ class GenerationTurnRepository:
                 task_execution_id=execution_id,
                 worker_binding_key=worker_binding_key,
                 turn_index=i,
-                raw_request={},
+                raw_request=turn.raw_request or {},
                 raw_response=turn.raw_response,
                 response_text=pa_format.extract_text(turn.raw_response),
                 tool_calls_json=pa_format.extract_tool_calls(turn.raw_response),
                 tool_results_json=turn.tool_results or None,
-                token_ids_json=None,  # populated by RL extraction via re-tokenization
+                token_ids_json=None,
                 logprobs_json=(
                     [lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None
                 ),
@@ -298,3 +353,16 @@ class GenerationTurnRepository:
             )
         )
         return list(session.exec(stmt).all())
+
+    def mark_execution_outcome(
+        self,
+        session: Session,
+        execution_id: UUID,
+        outcome: ExecutionOutcome,
+    ) -> None:
+        """Update execution_outcome on all turns for an execution."""
+        turns = self.get_for_execution(session, execution_id)
+        for turn in turns:
+            turn.execution_outcome = outcome
+            session.add(turn)
+        session.commit()

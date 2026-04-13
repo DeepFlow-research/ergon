@@ -3,7 +3,7 @@
 from typing import Any
 from uuid import UUID
 
-from ergon_core.api.results import WorkerResult
+from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from pydantic import BaseModel, Field
 
@@ -21,6 +21,6 @@ class EvaluationContext(BaseModel):
 
     run_id: UUID
     task: BenchmarkTask
-    worker_result: WorkerResult
+    worker_result: WorkerOutput
     sandbox_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]

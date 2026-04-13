@@ -4,17 +4,19 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api.generation import GenerationTurn
 
+class WorkerOutput(BaseModel):
+    """Final output of a worker execution.
 
-class WorkerResult(BaseModel):
-    """Result of a single Worker.execute() invocation."""
+    The worker's ``execute()`` async generator yields ``GenerationTurn``
+    objects (persisted individually to PG). After the generator exhausts,
+    ``Worker.get_output()`` returns this model with the execution summary.
+    """
 
     model_config = {"frozen": True}
 
     output: str
     success: bool = True
-    turns: list[GenerationTurn] = Field(default_factory=list)
     artifacts: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 

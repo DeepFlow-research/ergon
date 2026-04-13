@@ -19,7 +19,7 @@ class ResolvedModel(BaseModel):
     """A resolved model target with optional policy provenance metadata.
 
     Workers pass ``.model`` to ``Agent(model=...)``, and read
-    ``.policy_version`` for metadata on the WorkerResult.
+    ``.policy_version`` for metadata on the WorkerOutput.
     """
 
     model_config = {"frozen": True, "arbitrary_types_allowed": True}

@@ -8,7 +8,7 @@ from uuid import UUID
 import inngest
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, WorkerResult
+from ergon_core.api.results import CriterionResult, WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.core.runtime.evaluation.criterion_runtime import DefaultCriterionRuntime
 from ergon_core.core.runtime.evaluation.evaluation_schemas import (
@@ -79,7 +79,7 @@ class InngestCriterionExecutor:
                             instance_key="",
                             description=task_context.task_input,
                         ),
-                        worker_result=WorkerResult(
+                        worker_result=WorkerOutput(
                             output=task_context.agent_reasoning,
                         ),
                         sandbox_id=task_context.sandbox_id or None,

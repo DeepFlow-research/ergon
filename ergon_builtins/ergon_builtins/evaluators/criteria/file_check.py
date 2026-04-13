@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, WorkerResult
+from ergon_core.api.results import CriterionResult, WorkerOutput
 
 
 class FileCheckCriterion(Criterion):
@@ -61,7 +61,7 @@ class FileCheckCriterion(Criterion):
         )
 
     @staticmethod
-    def _collect_file_evidence(result: WorkerResult) -> set[str]:
+    def _collect_file_evidence(result: WorkerOutput) -> set[str]:
         """Gather file-path-like strings from the worker result."""
         paths: set[str] = set()
 
