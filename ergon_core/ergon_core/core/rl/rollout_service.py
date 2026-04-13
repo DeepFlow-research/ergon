@@ -3,7 +3,7 @@
 Encapsulates all logic previously inline in trl_adapter.py. Both the
 HTTP endpoint (/rollouts/) and any in-process callers delegate here.
 
-See 11_ROLLOUT_SERVICE_API.md for the full design spec.
+Batch state is durable in PG — survives API restarts.
 """
 
 import logging
@@ -21,6 +21,8 @@ from ergon_core.core.persistence.shared.enums import (
 )
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
+    RolloutBatch,
+    RolloutBatchRun,
     RunGenerationTurn,
     RunRecord,
     RunTaskEvaluation,
@@ -48,13 +50,12 @@ class RolloutService:
     """Orchestrate rollout batches: create runs, fire events, poll, extract.
 
     Lifecycle:
-      1. Trainer calls ``submit()`` → RunRecords created, Inngest events fired
+      1. Trainer calls ``submit()`` → RunRecords + RolloutBatch created, Inngest events fired
       2. Trainer polls ``poll()`` → returns RUNNING until all episodes finish
       3. When all terminal → ``poll()`` extracts trajectories and returns COMPLETE
 
-    State: ``_batches`` maps batch_id → run_ids in-memory. Acceptable because
-    the API container doesn't restart mid-training; if it does the trainer
-    gets a 404 and the training step fails explicitly.
+    Batch state is durable in PG via RolloutBatch/RolloutBatchRun tables.
+    API restarts do not lose batch mappings.
     """
 
     def __init__(
@@ -69,7 +70,6 @@ class RolloutService:
         self._tokenizer_name = tokenizer_name
         self._tokenizer: Tokenizer | None = None
         self._reward_strategy = reward_strategy or IndependentTaskReward()
-        self._batches: dict[UUID, _BatchState] = {}
 
     def _get_tokenizer(self) -> Tokenizer:
         if self._tokenizer is None:
@@ -78,20 +78,34 @@ class RolloutService:
         return self._tokenizer
 
     def submit(self, request: SubmitRequest) -> SubmitResponse:
-        """Create RunRecords and fire Inngest workflow/started events."""
+        """Create RunRecords, RolloutBatch, and fire Inngest workflow/started events."""
         batch_id = uuid4()
         run_ids: list[UUID] = []
 
-        for _ in range(request.num_episodes):
-            run_id = new_id()
-            with self._session_factory() as session:
+        with self._session_factory() as session:
+            session.add(RolloutBatch(
+                id=batch_id,
+                definition_id=request.definition_id,
+                status=BatchStatus.PENDING,
+            ))
+
+            for _ in range(request.num_episodes):
+                run_id = new_id()
                 session.add(RunRecord(
                     id=run_id,
                     experiment_definition_id=request.definition_id,
                     status=RunStatus.PENDING,
                 ))
-                session.commit()
+                session.add(RolloutBatchRun(
+                    id=new_id(),
+                    batch_id=batch_id,
+                    run_id=run_id,
+                ))
+                run_ids.append(run_id)
 
+            session.commit()
+
+        for run_id in run_ids:
             self._inngest_send(inngest.Event(
                 name=WorkflowStartedEvent.name,
                 data=WorkflowStartedEvent(
@@ -99,12 +113,7 @@ class RolloutService:
                     definition_id=request.definition_id,
                 ).model_dump(mode="json"),
             ))
-            run_ids.append(run_id)
 
-        self._batches[batch_id] = _BatchState(
-            run_ids=run_ids,
-            definition_id=request.definition_id,
-        )
         logger.info(
             "Submitted batch %s: %d episodes for definition %s",
             batch_id, request.num_episodes, request.definition_id,
@@ -117,20 +126,31 @@ class RolloutService:
 
     def poll(self, batch_id: UUID) -> PollResponse | None:
         """Non-blocking status check. Extracts trajectories when all done."""
-        batch = self._batches.get(batch_id)
-        if batch is None:
-            return None
+        with self._session_factory() as session:
+            batch = session.get(RolloutBatch, batch_id)
+            if batch is None:
+                return None
+
+            batch_runs = list(session.exec(
+                select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)
+            ).all())
+            run_ids = [br.run_id for br in batch_runs]
+
+            if not run_ids:
+                return PollResponse(
+                    batch_id=batch_id,
+                    status=BatchStatus.COMPLETE,
+                )
+
+            runs = list(session.exec(
+                select(RunRecord).where(
+                    RunRecord.id.in_(run_ids)  # type: ignore[union-attr]
+                )
+            ).all())
 
         terminal = set(TERMINAL_RUN_STATUSES)
         completed_ids: list[UUID] = []
         failed_ids: list[UUID] = []
-
-        with self._session_factory() as session:
-            runs = list(session.exec(
-                select(RunRecord).where(
-                    RunRecord.id.in_(batch.run_ids)  # type: ignore[union-attr]
-                )
-            ).all())
 
         for run in runs:
             if run.status not in terminal:
@@ -141,12 +161,12 @@ class RolloutService:
                 failed_ids.append(run.id)
 
         total_terminal = len(completed_ids) + len(failed_ids)
-        if total_terminal < len(batch.run_ids):
+        if total_terminal < len(run_ids):
             return PollResponse(
                 batch_id=batch_id,
                 status=BatchStatus.RUNNING,
                 completed=len(completed_ids),
-                total=len(batch.run_ids),
+                total=len(run_ids),
             )
 
         trajectories = self._extract_trajectories(completed_ids)
@@ -154,7 +174,13 @@ class RolloutService:
             EpisodeFailure(run_id=rid, error="episode failed or timed out")
             for rid in failed_ids
         ]
-        del self._batches[batch_id]
+
+        with self._session_factory() as session:
+            batch = session.get(RolloutBatch, batch_id)
+            if batch is not None:
+                batch.status = BatchStatus.COMPLETE
+                session.add(batch)
+                session.commit()
 
         logger.info(
             "Batch %s complete: %d trajectories, %d failures",
@@ -164,26 +190,36 @@ class RolloutService:
             batch_id=batch_id,
             status=BatchStatus.COMPLETE,
             completed=len(completed_ids),
-            total=len(batch.run_ids),
+            total=len(run_ids),
             trajectories=trajectories,
             failures=failures,
         )
 
     def cancel(self, batch_id: UUID) -> None:
         """Mark all non-terminal runs in the batch as cancelled."""
-        batch = self._batches.pop(batch_id, None)
-        if batch is None:
-            return
         with self._session_factory() as session:
-            runs = list(session.exec(
-                select(RunRecord).where(
-                    RunRecord.id.in_(batch.run_ids)  # type: ignore[union-attr]
-                )
+            batch = session.get(RolloutBatch, batch_id)
+            if batch is None:
+                return
+
+            batch_runs = list(session.exec(
+                select(RolloutBatchRun).where(RolloutBatchRun.batch_id == batch_id)
             ).all())
-            for run in runs:
-                if run.status not in set(TERMINAL_RUN_STATUSES):
-                    run.status = RunStatus.CANCELLED
-                    session.add(run)
+            run_ids = [br.run_id for br in batch_runs]
+
+            if run_ids:
+                runs = list(session.exec(
+                    select(RunRecord).where(
+                        RunRecord.id.in_(run_ids)  # type: ignore[union-attr]
+                    )
+                ).all())
+                for run in runs:
+                    if run.status not in set(TERMINAL_RUN_STATUSES):
+                        run.status = RunStatus.CANCELLED
+                        session.add(run)
+
+            batch.status = BatchStatus.CANCELLED
+            session.add(batch)
             session.commit()
 
     def _extract_trajectories(self, run_ids: list[UUID]) -> list[Trajectory]:
@@ -254,13 +290,3 @@ class RolloutService:
                     num_turns=traj.turns,
                 ))
         return result
-
-
-class _BatchState:
-    """Internal bookkeeping for an in-flight batch."""
-
-    __slots__ = ("run_ids", "definition_id")
-
-    def __init__(self, run_ids: list[UUID], definition_id: UUID) -> None:
-        self.run_ids = run_ids
-        self.definition_id = definition_id

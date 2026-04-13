@@ -40,6 +40,7 @@ class CommunicationService:
             message = ThreadMessage(
                 thread_id=thread.id,
                 run_id=request.run_id,
+                task_execution_id=request.task_execution_id,
                 from_agent_id=request.from_agent_id,
                 to_agent_id=request.to_agent_id,
                 content=request.content,
@@ -62,6 +63,7 @@ class CommunicationService:
                 to_agent_id=message.to_agent_id,
                 content=message.content,
                 sequence_num=message.sequence_num,
+                task_execution_id=message.task_execution_id,
                 created_at=message.created_at,
             )
 
@@ -89,6 +91,7 @@ class CommunicationService:
                     to_agent_id=m.to_agent_id,
                     content=m.content,
                     sequence_num=m.sequence_num,
+                    task_execution_id=m.task_execution_id,
                     created_at=m.created_at,
                 )
                 for m in messages

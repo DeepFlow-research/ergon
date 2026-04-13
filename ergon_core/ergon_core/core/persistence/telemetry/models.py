@@ -406,6 +406,11 @@ class ThreadMessage(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     thread_id: UUID = Field(foreign_key="threads.id", index=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
+    task_execution_id: UUID | None = Field(
+        default=None,
+        foreign_key="run_task_executions.id",
+        index=True,
+    )
     from_agent_id: str
     to_agent_id: str
     content: str
@@ -546,3 +551,33 @@ class TrainingMetric(SQLModel, table=True):
     step_time_s: float | None = None
     extra_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+
+# ---------------------------------------------------------------------------
+# RolloutBatch — durable batch state for the rollout service
+# ---------------------------------------------------------------------------
+
+
+class RolloutBatch(SQLModel, table=True):
+    """One rollout batch submitted by the RL trainer.
+
+    Replaces the in-memory ``_batches`` dict on ``RolloutService``.
+    Survives API restarts — the trainer can reconnect and poll.
+    """
+
+    __tablename__ = "rollout_batches"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    definition_id: UUID = Field(foreign_key="experiment_definitions.id", index=True)
+    status: str = Field(default="pending", index=True)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+
+class RolloutBatchRun(SQLModel, table=True):
+    """Join table: which runs belong to which batch."""
+
+    __tablename__ = "rollout_batch_runs"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    batch_id: UUID = Field(foreign_key="rollout_batches.id", index=True)
+    run_id: UUID = Field(foreign_key="runs.id", index=True)

@@ -20,6 +20,7 @@ class CreateMessageRequest(BaseModel):
     )
     thread_topic: str
     content: str
+    task_execution_id: UUID | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ class MessageResponse(BaseModel):
     to_agent_id: str
     content: str
     sequence_num: int
+    task_execution_id: UUID | None = None
     created_at: datetime
 
 
