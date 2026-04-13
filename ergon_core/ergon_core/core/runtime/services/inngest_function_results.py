@@ -3,6 +3,7 @@
 Each Inngest function has an output_type for structured returns.
 """
 
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -43,7 +44,7 @@ class WorkflowCompleteResult(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    status: str = "completed"
+    status: Literal["completed"] = "completed"
     final_score: float | None = None
     normalized_score: float | None = None
     evaluators_count: int = 0
@@ -53,7 +54,7 @@ class WorkflowFailedResult(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    status: str = "failed"
+    status: Literal["failed"] = "failed"
     error: str | None = None
 
 
@@ -109,7 +110,7 @@ class RunCleanupResult(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    status: str = ""  # slopcop: ignore[no-str-empty-default]
+    status: str | None = None
     sandbox_terminated: bool = False
     sandbox_id: str | None = None
     error: str | None = None

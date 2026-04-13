@@ -11,12 +11,27 @@ Tables:
 """
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID, uuid4
 
 from ergon_core.core.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime, Index
 from sqlmodel import Field, SQLModel
+
+GraphTargetType = Literal["node", "edge"]
+
+MutationType = Literal[
+    "node.added",
+    "node.removed",
+    "node.status_changed",
+    "node.field_changed",
+    "edge.added",
+    "edge.removed",
+    "edge.status_changed",
+    "annotation.set",
+    "annotation.deleted",
+]
 
 TZDateTime = DateTime(timezone=True)
 
@@ -107,7 +122,7 @@ class RunGraphAnnotation(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    target_type: str
+    target_type: GraphTargetType
     target_id: UUID
     namespace: str
     sequence: int = Field(index=True)
@@ -140,8 +155,8 @@ class RunGraphMutation(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
     sequence: int = Field(index=True)
-    mutation_type: str = Field(index=True)
-    target_type: str
+    mutation_type: MutationType = Field(index=True)
+    target_type: GraphTargetType
     target_id: UUID = Field(index=True)
     actor: str
     old_value: dict | None = Field(default=None, sa_column=Column(JSON))

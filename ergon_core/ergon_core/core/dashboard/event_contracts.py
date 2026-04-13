@@ -90,7 +90,7 @@ class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/task.evaluation_updated"
 
     run_id: UUID
-    task_id: UUID | None = None
+    task_id: UUID
     evaluation: dict[str, Any]  # slopcop: ignore[no-typing-any]
 
 
@@ -165,6 +165,7 @@ class DashboardSandboxCreatedEvent(InngestEventContract):
 class DashboardSandboxCommandEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/sandbox.command"
 
+    run_id: UUID
     task_id: UUID
     sandbox_id: str
     command: str

@@ -6,6 +6,7 @@ of truth for the definition itself.
 
 from datetime import datetime
 import sys
+from typing import Literal
 
 if sys.version_info >= (3, 11):
     from enum import StrEnum
@@ -24,12 +25,23 @@ if TYPE_CHECKING:
         EvaluationSummary,
     )
 
+from ergon_core.core.persistence.shared.enums import (
+    RunStatus,
+    TaskExecutionStatus,
+    TrainingStatus,
+)
 from ergon_core.core.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
 
 TZDateTime = DateTime(timezone=True)
+
+# ---------------------------------------------------------------------------
+# Type aliases
+# ---------------------------------------------------------------------------
+
+ExecutionOutcome = Literal["success", "failure"]
 
 # ---------------------------------------------------------------------------
 # Cohort status enum
@@ -59,7 +71,7 @@ class RunRecord(SQLModel, table=True):
         foreign_key="experiment_cohorts.id",
         index=True,
     )
-    status: str = Field(index=True)
+    status: RunStatus = Field(index=True)
     error_message: str | None = None
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
@@ -103,7 +115,7 @@ class RunTaskExecution(SQLModel, table=True):
         index=True,
     )
     attempt_number: int = 1
-    status: str = Field(index=True)
+    status: TaskExecutionStatus = Field(index=True)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     output_text: str | None = None
@@ -200,7 +212,7 @@ class RunResource(SQLModel, table=True):
         default=None,
         foreign_key="run_task_executions.id",
     )
-    kind: str
+    kind: Literal["output"] = "output"
     name: str
     mime_type: str
     file_path: str
@@ -243,9 +255,9 @@ class RunTaskStateEvent(SQLModel, table=True):
         default=None,
         foreign_key="run_task_executions.id",
     )
-    event_type: str = Field(index=True)
-    old_status: str | None = None
-    new_status: str
+    event_type: Literal["state_change"] = Field(default="state_change", index=True)
+    old_status: TaskExecutionStatus | None = None
+    new_status: TaskExecutionStatus
     event_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
@@ -321,7 +333,7 @@ class ExperimentCohort(SQLModel, table=True):
     name: str = Field(index=True, unique=True)
     description: str | None = None
     created_by: str | None = None
-    status: str = Field(default=ExperimentCohortStatus.ACTIVE)
+    status: ExperimentCohortStatus = Field(default=ExperimentCohortStatus.ACTIVE)
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
@@ -411,7 +423,8 @@ class RunGenerationTurn(SQLModel, table=True):
 
     Stores the exact provider exchange (raw_request/raw_response) plus
     convenience extractions and optional RL fields.  One row per model
-    call per task execution.
+    call per task execution.  Persisted incrementally — one commit per
+    yield from the worker's async generator.
     """
 
     __tablename__ = "run_generation_turns"
@@ -431,13 +444,16 @@ class RunGenerationTurn(SQLModel, table=True):
 
     # Convenience extractions
     response_text: str | None = None
-    tool_calls_json: list | None = Field(default=None, sa_column=Column(JSON))
-    tool_results_json: list | None = Field(default=None, sa_column=Column(JSON))
+    tool_calls_json: list[dict[str, object]] | None = Field(default=None, sa_column=Column(JSON))
+    tool_results_json: list[dict[str, object]] | None = Field(default=None, sa_column=Column(JSON))
 
     # RL fields (None for cloud APIs, populated for vLLM)
-    token_ids_json: list | None = Field(default=None, sa_column=Column(JSON))
-    logprobs_json: list | None = Field(default=None, sa_column=Column(JSON))
+    token_ids_json: list[int] | None = Field(default=None, sa_column=Column(JSON))
+    logprobs_json: list[dict[str, object]] | None = Field(default=None, sa_column=Column(JSON))
     policy_version: str | None = None
+
+    # Execution outcome at time of persist
+    execution_outcome: ExecutionOutcome | None = Field(default=None, index=True)
 
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
@@ -452,7 +468,7 @@ class RunGenerationTurn(SQLModel, table=True):
     def parsed_token_ids(self) -> list[int] | None:
         return self._parse_optional_list("token_ids_json", self.token_ids_json)
 
-    def parsed_logprobs(self) -> list[float] | None:
+    def parsed_logprobs(self) -> list[dict[str, object]] | None:
         return self._parse_optional_list("logprobs_json", self.logprobs_json)
 
     # -- shared helpers --
@@ -495,7 +511,7 @@ class TrainingSession(SQLModel, table=True):
     )
     model_name: str
     config_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    status: str = Field(default="running", index=True)
+    status: TrainingStatus = Field(default=TrainingStatus.RUNNING, index=True)
     started_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     output_dir: str | None = None

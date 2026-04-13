@@ -5,6 +5,7 @@ Frozen Pydantic models. Callers never receive raw SQLModel rows.
 
 from uuid import UUID
 
+from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from pydantic import BaseModel, Field
 
 
@@ -51,7 +52,7 @@ class GraphAnnotationDto(BaseModel):
 
     id: UUID
     run_id: UUID
-    target_type: str
+    target_type: GraphTargetType
     target_id: UUID
     namespace: str
     sequence: int
@@ -64,8 +65,8 @@ class GraphMutationDto(BaseModel):
     id: UUID
     run_id: UUID
     sequence: int
-    mutation_type: str
-    target_type: str
+    mutation_type: MutationType
+    target_type: GraphTargetType
     target_id: UUID
     actor: str
     old_value: dict[str, object] | None
