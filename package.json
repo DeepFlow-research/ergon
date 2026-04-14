@@ -8,6 +8,8 @@
     "check:be:slopcop": "uv run slopcop ergon_core ergon_builtins ergon_cli ergon_infra",
     "check:be": "pnpm run check:be:lint && pnpm run check:be:fmt && pnpm run check:be:type && pnpm run check:be:slopcop",
     "test:be:state": "uv run pytest tests/state -q",
+    "test:be:integration": "uv run pytest tests/integration -v",
+    "test:be:all": "pnpm run test:be:state && pnpm run test:be:integration",
     "test:be:e2e": "uv run pytest tests/e2e -v",
     "check:fe:lint": "pnpm -C ergon-dashboard run lint",
     "check:fe:type": "pnpm -C ergon-dashboard run typecheck",
