@@ -1,17 +1,18 @@
 """GDPEval benchmark definition.
 
-Loads GDP document-processing tasks from a parquet dataset + staged
-rubric file and exposes them via the :class:`Benchmark` interface.
+Loads GDP document-processing tasks from the HuggingFace dataset
+cm2435-new/gdpval_preference_rubrics and exposes them via the
+:class:`Benchmark` interface.
 """
 
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 from typing import ClassVar
 
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.task_types import BenchmarkTask
 
 from ergon_builtins.benchmarks.gdpeval.loader import (
+    HF_REPO_ID,
     extract_task_description,
     find_reference_files,
     load_task_ids,
@@ -24,27 +25,28 @@ class GDPEvalBenchmark(Benchmark):
     Each task asks an agent to produce document outputs (DOCX, Excel,
     CSV, …) from reference inputs.  Evaluation uses a staged rubric
     with sequential gating.
+
+    Data is fetched from HuggingFace on first use and cached locally —
+    no local data directory required.
     """
 
     type_slug: ClassVar[str] = "gdpeval"
-    required_packages: ClassVar[list[str]] = ["pandas"]
+    required_packages: ClassVar[list[str]] = ["pandas", "huggingface_hub"]
     install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 
     def __init__(
         self,
         *,
-        data_dir: str | Path | None = None,
-        rubric_file: str | Path | None = None,
-        reference_dir: str | Path | None = None,
+        dataset_repo: str = HF_REPO_ID,
+        split: str = "train",
         limit: int | None = None,
     ) -> None:
         super().__init__(
             name="gdpeval",
             description="GDP Evaluation benchmark for document-processing tasks",
         )
-        self.data_dir = Path(data_dir) if data_dir else None
-        self.rubric_file = Path(rubric_file) if rubric_file else None
-        self.reference_dir = Path(reference_dir) if reference_dir else None
+        self.dataset_repo = dataset_repo
+        self.split = split
         self.limit = limit
 
     def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
@@ -54,19 +56,15 @@ class GDPEvalBenchmark(Benchmark):
         no multi-instance structure in the GDP dataset.
         """
         task_ids = load_task_ids(
-            rubric_file=self._resolve_rubric_file(),
+            split=self.split,
+            repo_id=self.dataset_repo,
             limit=self.limit,
         )
 
-        ref_dir = self._resolve_reference_dir()
         tasks: list[BenchmarkTask] = []
-
         for task_id in task_ids:
-            description = extract_task_description(
-                task_id,
-                parquet_path=self._resolve_parquet_path(),
-            )
-            ref_files = find_reference_files(task_id, ref_dir)
+            description = extract_task_description(task_id, repo_id=self.dataset_repo)
+            ref_files = find_reference_files(task_id, repo_id=self.dataset_repo)
 
             tasks.append(
                 BenchmarkTask(
@@ -85,26 +83,3 @@ class GDPEvalBenchmark(Benchmark):
 
     def evaluator_requirements(self) -> Sequence[str]:
         return ["default"]
-
-    # -- path helpers -------------------------------------------------------
-
-    def _resolve_data_dir(self) -> Path:
-        if self.data_dir is not None:
-            return self.data_dir
-        raise ValueError(
-            "data_dir must be provided to GDPEvalBenchmark "
-            "(no global settings fallback in the new architecture)"
-        )
-
-    def _resolve_parquet_path(self) -> Path:
-        return self._resolve_data_dir() / "raw" / "gdpeval.parquet"
-
-    def _resolve_rubric_file(self) -> Path:
-        if self.rubric_file is not None:
-            return self.rubric_file
-        return self._resolve_data_dir() / "generated" / "staged_v2" / "staged_rubrics.jsonl"
-
-    def _resolve_reference_dir(self) -> Path:
-        if self.reference_dir is not None:
-            return self.reference_dir
-        return self._resolve_data_dir() / "raw" / "reference_files"

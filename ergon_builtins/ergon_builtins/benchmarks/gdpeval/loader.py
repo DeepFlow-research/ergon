@@ -1,7 +1,8 @@
-"""GDPEval data loading and seeding helpers.
+"""GDPEval data loading helpers — backed by HuggingFace Hub.
 
-Reads the GDP parquet dataset and staged rubric JSONL to produce task
-descriptions, reference file lists, and rubric payloads.
+All data is fetched from cm2435-new/gdpval_preference_rubrics and cached
+locally in ~/.cache/huggingface/hub/ on first access.  Subsequent calls
+within the same process (or across processes) hit the local cache for free.
 """
 
 import functools
@@ -9,108 +10,129 @@ import json
 from pathlib import Path
 from typing import Any
 
+HF_REPO_ID = "cm2435-new/gdpval_preference_rubrics"
+_HF_REPO_TYPE = "dataset"
+
+
 # ---------------------------------------------------------------------------
-# Parquet helpers
+# Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _rubric_filename(split: str) -> str:
+    """Map split name to HF repo filename."""
+    if split == "train":
+        return "rubrics/train_rubrics.jsonl"
+    if split == "eval":
+        return "rubrics/eval_rubrics.jsonl"
+    if split == "full":
+        return "rubrics/staged_rubrics.jsonl"
+    raise ValueError(f"Unknown split {split!r} — expected 'train', 'eval', or 'full'")
 
 
 @functools.lru_cache(maxsize=4)
-def _load_parquet(parquet_path: str) -> Any:  # slopcop: ignore[no-typing-any]
-    """Load and cache a parquet file.  Returns a ``pandas.DataFrame``."""
+def _load_parquet(repo_id: str) -> Any:  # slopcop: ignore[no-typing-any]
+    """Download gdpeval.parquet from HF and cache the DataFrame in-process."""
     # Deferred: optional dependency
     import pandas as pd
 
-    path = Path(parquet_path)
-    if not path.exists():
-        raise FileNotFoundError(
-            f"GDPEval parquet not found at {path}.  "
-            "Copy data from the curation pipeline into your data directory."
-        )
+    # Deferred: optional dependency
+    from huggingface_hub import hf_hub_download
+
+    path = hf_hub_download(
+        repo_id=repo_id,
+        filename="gdpeval.parquet",
+        repo_type=_HF_REPO_TYPE,
+    )
     return pd.read_parquet(path)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
 def extract_task_description(
     task_id: str,
-    parquet_path: Path | None = None,
+    repo_id: str = HF_REPO_ID,
 ) -> str:
-    """Return the task prompt / description for *task_id*."""
-    if parquet_path is None:
-        raise ValueError("parquet_path is required")
-
-    df = _load_parquet(str(parquet_path))
+    """Return the task prompt for *task_id* from the HF parquet."""
+    df = _load_parquet(repo_id)
     row = df[df["task_id"] == task_id]
     if row.empty:
-        raise ValueError(f"Task {task_id!r} not found in {parquet_path}")
+        raise ValueError(f"Task {task_id!r} not found in parquet ({repo_id})")
     return str(row.iloc[0]["prompt"])
 
 
-# ---------------------------------------------------------------------------
-# Reference files
-# ---------------------------------------------------------------------------
+def find_reference_files(
+    task_id: str,
+    repo_id: str = HF_REPO_ID,
+) -> list[Path]:
+    """Download and return local paths to reference files for *task_id*.
 
-
-def find_reference_files(task_id: str, reference_dir: Path) -> list[Path]:
-    """Locate reference / input files for *task_id*.
-
-    Checks two locations:
-      1. ``reference_dir/{task_id}/`` sub-directory
-      2. Files matching ``{task_id}*`` in the root (legacy layout)
+    Files are fetched from ``reference_files/{task_id}/`` in the HF repo and
+    cached in ``~/.cache/huggingface/hub/``.  Only this task's files are
+    downloaded — not the full 1.5 GB corpus.
     """
-    if not reference_dir.exists():
+    # Deferred: optional dependency
+    from huggingface_hub import snapshot_download
+
+    local_dir = snapshot_download(
+        repo_id=repo_id,
+        repo_type=_HF_REPO_TYPE,
+        allow_patterns=[f"reference_files/{task_id}/*"],
+    )
+    task_dir = Path(local_dir) / "reference_files" / task_id
+    if not task_dir.exists():
         return []
-
-    files: list[Path] = []
-
-    task_subdir = reference_dir / task_id
-    if task_subdir.is_dir():
-        files.extend(p for p in task_subdir.iterdir() if p.is_file())
-
-    for p in reference_dir.glob(f"{task_id}*"):
-        if p.is_file() and p not in files:
-            files.append(p)
-
-    return sorted(files)
-
-
-# ---------------------------------------------------------------------------
-# Rubric JSONL helpers
-# ---------------------------------------------------------------------------
+    return sorted(p for p in task_dir.iterdir() if p.is_file())
 
 
 def load_task_ids(
-    rubric_file: Path,
+    split: str = "train",
+    repo_id: str = HF_REPO_ID,
     *,
     limit: int | None = None,
 ) -> list[str]:
-    """Read task IDs from the staged rubric JSONL file.
+    """Read task IDs from the HF rubric JSONL for *split*.
 
-    Each line is a JSON object with at least a ``task_id`` key.
+    Args:
+        split:   One of ``"train"`` (176), ``"eval"`` (44), or ``"full"`` (220).
+        repo_id: HF dataset repo to pull from.
+        limit:   If set, return at most this many IDs.
     """
-    if not rubric_file.exists():
-        raise FileNotFoundError(
-            f"Rubric file not found at {rubric_file}.  "
-            "Copy data from the curation pipeline into your data directory."
-        )
+    # Deferred: optional dependency
+    from huggingface_hub import hf_hub_download
 
+    path = hf_hub_download(
+        repo_id=repo_id,
+        filename=_rubric_filename(split),
+        repo_type=_HF_REPO_TYPE,
+    )
     ids: list[str] = []
-    with open(rubric_file) as f:
+    with open(path) as f:
         for i, line in enumerate(f):
             if limit is not None and i >= limit:
                 break
-            data = json.loads(line)
-            ids.append(data["task_id"])
+            ids.append(json.loads(line)["task_id"])
     return ids
 
 
 def load_rubric_data(
-    rubric_file: Path,
-) -> dict[str, dict]:
-    """Load all rubrics from JSONL into ``{task_id: raw_dict}``."""
-    if not rubric_file.exists():
-        raise FileNotFoundError(f"Rubric file not found at {rubric_file}")
+    split: str = "train",
+    repo_id: str = HF_REPO_ID,
+) -> dict[str, dict]:  # slopcop: ignore[no-typing-any]
+    """Load all rubrics from HF into ``{task_id: raw_dict}`` for *split*."""
+    # Deferred: optional dependency
+    from huggingface_hub import hf_hub_download
 
-    rubrics: dict[str, dict] = {}
-    with open(rubric_file) as f:
+    path = hf_hub_download(
+        repo_id=repo_id,
+        filename=_rubric_filename(split),
+        repo_type=_HF_REPO_TYPE,
+    )
+    rubrics: dict[str, dict] = {}  # slopcop: ignore[no-typing-any]
+    with open(path) as f:
         for line in f:
             data = json.loads(line)
             rubrics[data["task_id"]] = data
@@ -119,10 +141,11 @@ def load_rubric_data(
 
 def load_single_rubric(
     task_id: str,
-    rubric_file: Path,
-) -> dict:
-    """Load the rubric dict for a single *task_id*."""
-    rubrics = load_rubric_data(rubric_file)
+    split: str = "train",
+    repo_id: str = HF_REPO_ID,
+) -> dict:  # slopcop: ignore[no-typing-any]
+    """Load the rubric dict for a single *task_id* from *split*."""
+    rubrics = load_rubric_data(split, repo_id)
     if task_id not in rubrics:
-        raise ValueError(f"Task {task_id!r} not found in {rubric_file}")
+        raise ValueError(f"Task {task_id!r} not found in {split!r} split ({repo_id})")
     return rubrics[task_id]
