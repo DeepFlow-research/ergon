@@ -13,7 +13,8 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
 )
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
@@ -282,6 +283,167 @@ def is_workflow_complete(session: Session, run_id: UUID, definition_id: UUID) ->
 
 
 def is_workflow_failed(session: Session, run_id: UUID, definition_id: UUID) -> bool:
+    """True when any graph node for this run has reached FAILED."""
+    statuses = list(
+        session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
+    )
+    return any(s == TaskExecutionStatus.FAILED for s in statuses)
+
+
+# ---------------------------------------------------------------------------
+# Graph-native write helpers (no GraphNodeLookup)
+# ---------------------------------------------------------------------------
+
+
+def mark_task_running_by_node(
+    session: Session,
+    run_id: UUID,
+    node_id: UUID,
+    execution_id: UUID,
+    *,
+    graph_repo: WorkflowGraphRepository,
+) -> None:
+    graph_repo.update_node_status(
+        session,
+        run_id,
+        node_id,
+        TaskExecutionStatus.RUNNING,
+        meta=MutationMeta(
+            actor="system:propagation",
+            reason=f"execution {execution_id} running",
+        ),
+    )
+
+
+def mark_task_completed_by_node(
+    session: Session,
+    run_id: UUID,
+    node_id: UUID,
+    execution_id: UUID,
+    *,
+    graph_repo: WorkflowGraphRepository,
+) -> None:
+    graph_repo.update_node_status(
+        session,
+        run_id,
+        node_id,
+        TaskExecutionStatus.COMPLETED,
+        meta=MutationMeta(
+            actor="system:propagation",
+            reason=f"execution {execution_id} completed",
+        ),
+    )
+
+
+def mark_task_failed_by_node(
+    session: Session,
+    run_id: UUID,
+    node_id: UUID,
+    error: str,
+    *,
+    execution_id: UUID | None = None,
+    graph_repo: WorkflowGraphRepository,
+) -> None:
+    graph_repo.update_node_status(
+        session,
+        run_id,
+        node_id,
+        TaskExecutionStatus.FAILED,
+        meta=MutationMeta(
+            actor="system:propagation",
+            reason=error,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Graph-native propagation (no GraphNodeLookup, walks RunGraphEdge)
+# ---------------------------------------------------------------------------
+
+
+def on_task_completed_by_node(
+    session: Session,
+    run_id: UUID,
+    node_id: UUID,
+    execution_id: UUID,
+    *,
+    graph_repo: WorkflowGraphRepository,
+) -> list[UUID]:
+    """Process completion of a graph node. Returns newly-ready node_ids.
+
+    Walks RunGraphEdge (not ExperimentDefinitionTaskDependency) so it
+    works for both static and dynamic tasks.
+    """
+    graph_repo.update_node_status(
+        session,
+        run_id,
+        node_id,
+        TaskExecutionStatus.COMPLETED,
+        meta=MutationMeta(
+            actor="system:propagation",
+            reason=f"execution {execution_id} completed",
+        ),
+    )
+
+    outgoing = list(
+        session.exec(
+            select(RunGraphEdge).where(
+                RunGraphEdge.run_id == run_id,
+                RunGraphEdge.source_node_id == node_id,
+            )
+        ).all()
+    )
+    candidate_node_ids = {e.target_node_id for e in outgoing}
+
+    newly_ready: list[UUID] = []
+    for candidate_id in candidate_node_ids:
+        candidate_node = session.get(RunGraphNode, candidate_id)
+        if candidate_node is None or candidate_node.status != TaskExecutionStatus.PENDING:
+            continue
+
+        incoming = list(
+            session.exec(
+                select(RunGraphEdge).where(
+                    RunGraphEdge.run_id == run_id,
+                    RunGraphEdge.target_node_id == candidate_id,
+                )
+            ).all()
+        )
+
+        source_nodes = [session.get(RunGraphNode, e.source_node_id) for e in incoming]
+        if all(n is not None and n.status in TERMINAL_STATUSES for n in source_nodes):
+            graph_repo.update_node_status(
+                session,
+                run_id,
+                candidate_id,
+                TaskExecutionStatus.PENDING,
+                meta=MutationMeta(
+                    actor="system:propagation",
+                    reason=f"all dependencies satisfied after {node_id}",
+                ),
+            )
+            newly_ready.append(candidate_id)
+
+    session.commit()
+    return newly_ready
+
+
+# ---------------------------------------------------------------------------
+# Graph-native terminal-state checks (no definition_id)
+# ---------------------------------------------------------------------------
+
+
+def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
+    """True when every graph node for this run has reached a terminal status."""
+    statuses = list(
+        session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
+    )
+    if not statuses:
+        return True
+    return all(s in TERMINAL_STATUSES for s in statuses)
+
+
+def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
     """True when any graph node for this run has reached FAILED."""
     statuses = list(
         session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()

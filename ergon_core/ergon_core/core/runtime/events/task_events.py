@@ -11,6 +11,8 @@ from ergon_core.core.runtime.events.base import InngestEventContract
 SANDBOX_SKIPPED: Literal["skipped"] = "skipped"
 SandboxId = str | Literal["skipped"]
 
+DYNAMIC_TASK_SENTINEL_ID = UUID("00000000-0000-0000-0000-000000000000")
+
 
 class TaskReadyEvent(InngestEventContract):
     """Emitted when a task's dependencies are satisfied. Triggers task_execute."""
@@ -20,6 +22,7 @@ class TaskReadyEvent(InngestEventContract):
     run_id: UUID
     definition_id: UUID
     task_id: UUID
+    node_id: UUID | None = None
 
 
 class TaskStartedEvent(InngestEventContract):
@@ -43,6 +46,7 @@ class TaskCompletedEvent(InngestEventContract):
     task_id: UUID
     execution_id: UUID
     sandbox_id: SandboxId
+    node_id: UUID | None = None
 
 
 class TaskFailedEvent(InngestEventContract):
@@ -56,6 +60,7 @@ class TaskFailedEvent(InngestEventContract):
     execution_id: UUID
     error: str
     sandbox_id: SandboxId = SANDBOX_SKIPPED
+    node_id: UUID | None = None
 
 
 class WorkflowStartedEvent(InngestEventContract):
