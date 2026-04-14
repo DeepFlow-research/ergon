@@ -123,7 +123,9 @@ class ReActWorker(Worker):
         worker = cls(**kwargs)
         worker._seed_messages = []
         for turn in turns:
-            worker._seed_messages.append(ModelResponse(**turn.raw_response))  # ty: ignore[invalid-argument-type]
+            worker._seed_messages.append(
+                ModelResponse(**turn.raw_response)
+            )  # ty: ignore[invalid-argument-type]
         return worker
 
 

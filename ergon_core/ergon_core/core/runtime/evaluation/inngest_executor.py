@@ -53,7 +53,6 @@ class InngestCriterionExecutor:
         benchmark_name: str,
         criteria: list[CriterionSpec],
     ) -> list[CriterionResult]:
-
         def make_step(spec: CriterionSpec):
             async def run_criterion() -> CriterionResult:
                 span_start = datetime.now(UTC)

@@ -240,7 +240,9 @@ class InstrumentedSandbox:
         started_at = time.time()
         command = f"python: {preview_python_code(code)}"
         try:
-            execution = await self._sandbox.run_code(code, *args, **kwargs)  # ty: ignore[no-matching-overload]
+            execution = await self._sandbox.run_code(
+                code, *args, **kwargs
+            )  # ty: ignore[no-matching-overload]
             stdout = None
             stderr = None
             if getattr(execution, "logs", None):  # slopcop: ignore[no-hasattr-getattr]

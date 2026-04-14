@@ -35,6 +35,29 @@ ergon-infra = { workspace = true }
 line-length = 100
 target-version = "py313"
 
+[tool.ruff.lint]
+select = ["C9"]
+# C901: function/method is too complex (McCabe cyclomatic complexity)
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# Pre-existing complexity debt — tracked for future refactor PRs, not introduced now.
+# persist_definition (28): orchestrates full experiment graph persistence in one method
+"ergon_core/ergon_core/core/runtime/services/experiment_persistence_service.py" = ["C901"]
+# validate (19): validates multi-level experiment object graph
+"ergon_core/ergon_core/api/experiment.py" = ["C901"]
+# extract_agent_trajectories (13), _extract_trajectories (11)
+"ergon_core/ergon_core/core/rl/extraction.py" = ["C901"]
+"ergon_core/ergon_core/core/rl/rollout_service.py" = ["C901"]
+# _load_problems (12): parses MiniF2F problem set from disk
+"ergon_builtins/ergon_builtins/benchmarks/minif2f/benchmark.py" = ["C901"]
+# _collect_file_evidence (11): gathers file path evidence across varied output shapes
+"ergon_builtins/ergon_builtins/evaluators/criteria/file_check.py" = ["C901"]
+# _messages_to_text (12): converts PydanticAI message union to chat-template string
+"ergon_builtins/ergon_builtins/models/transformers_backend.py" = ["C901"]
+
 [tool.slopcop]
 # Per-rule excludes only when a rule is wrong for the whole repo (do not disable no-print / no-typing-any globally).
 
