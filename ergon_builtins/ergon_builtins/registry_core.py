@@ -14,12 +14,14 @@ from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
 from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
+from ergon_builtins.benchmarks.delegation_smoke.benchmark import DelegationSmokeBenchmark
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.benchmarks.smoke_test.rubric import SmokeTestRubric
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.vllm_backend import resolve_vllm
+from ergon_builtins.workers.baselines.manager_researcher_worker import ManagerResearcherWorker
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
@@ -30,11 +32,14 @@ WORKERS: dict[str, type[Worker]] = {
     "training-stub": TrainingStubWorker,
     "smoke-test-worker": SmokeTestWorker,
     "react-v1": ReActWorker,
+    "manager-researcher": ManagerResearcherWorker,
+    "researcher": StubWorker,
 }
 
 BENCHMARKS: dict[str, type[Benchmark]] = {
     "smoke-test": SmokeTestBenchmark,
     "minif2f": MiniF2FBenchmark,
+    "delegation-smoke": DelegationSmokeBenchmark,
 }
 
 EVALUATORS: dict[str, type[Evaluator]] = {
