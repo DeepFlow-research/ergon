@@ -1,7 +1,5 @@
 """ReAct-style worker using pydantic-ai Agent for tool-augmented execution."""
 
-from __future__ import annotations
-
 import dataclasses  # slopcop: ignore[no-dataclass]
 import json
 import logging

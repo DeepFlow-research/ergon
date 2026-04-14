@@ -85,7 +85,7 @@ class TaskManagementToolkit:
                     "node_id": str(result.node_id),
                     "task_key": result.task_key,
                 }
-            except Exception as exc:
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return add_task
@@ -114,7 +114,7 @@ class TaskManagementToolkit:
                     "node_id": str(result.node_id),
                     "previous_status": result.previous_status,
                 }
-            except Exception as exc:
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return abandon_task
@@ -146,7 +146,7 @@ class TaskManagementToolkit:
                     "old_description": result.old_description,
                     "new_description": result.new_description,
                 }
-            except Exception as exc:
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return refine_task

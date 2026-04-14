@@ -5,7 +5,7 @@ No special cases needed in worker_execute_fn.
 """
 
 from collections.abc import AsyncGenerator
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
