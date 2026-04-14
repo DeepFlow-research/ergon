@@ -249,8 +249,8 @@ class RunGraphMutationDto(BaseModel):
     mutation_type: str
     target_type: str
     target_id: str
-    actor: str | None
+    actor: str
     old_value: dict[str, object] | None
-    new_value: dict[str, object] | None
+    new_value: dict[str, object]
     reason: str | None
     created_at: str
