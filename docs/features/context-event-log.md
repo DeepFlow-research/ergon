@@ -181,20 +181,46 @@ class RunContextEvent(SQLModel, table=True):
 
 ### 4.1 Enriching `GenerationTurn`
 
-`GenerationTurn` (the public worker API in `ergon_core/ergon_core/api/generation.py`) currently carries only `prompt_text: str | None` for context. It must be extended to carry the full input message list for turns after the first.
+`GenerationTurn` (the public worker API in `ergon_core/ergon_core/api/generation.py`) must be updated to carry the full typed input message list and drop the old `prompt_text` field.
+
+First, define a `ModelRequestPart` discriminated union alongside `GenerationTurn`. The three part kinds mirror the field names PydanticAI's `dataclasses.asdict()` produces, so construction from framework objects is zero-cost:
 
 ```python
+# ergon_core/ergon_core/api/generation.py
+
+from typing import Annotated, Literal
+from pydantic import Field
+
+
+class SystemPromptPart(BaseModel):
+    part_kind: Literal["system-prompt"] = "system-prompt"
+    content: str
+
+
+class UserPromptPart(BaseModel):
+    part_kind: Literal["user-prompt"] = "user-prompt"
+    content: str
+
+
+class ToolReturnPart(BaseModel):
+    part_kind: Literal["tool-return"] = "tool-return"
+    tool_call_id: str
+    tool_name: str
+    content: str
+
+
+ModelRequestPart = Annotated[
+    SystemPromptPart | UserPromptPart | ToolReturnPart,
+    Field(discriminator="part_kind"),
+]
+
+
 class GenerationTurn(BaseModel):
-    # --- NEW: full input context for this turn ---
-    # Serialised PydanticAI ModelRequest parts, in order.
+    # Input context for this turn — PydanticAI ModelRequest parts in order.
     # Set by the framework adapter (_build_turns in react_worker.py).
     # Workers do not set this directly.
-    messages_in: list[dict[str, object]] = Field(default_factory=list)
+    messages_in: list[ModelRequestPart] = Field(default_factory=list)
 
-    # Kept for backward compatibility; ignored when messages_in is set.
-    prompt_text: str | None = None
-
-    # --- Unchanged ---
     raw_response: dict[str, object]
     tool_results: list[dict[str, object]] = Field(default_factory=list)
     logprobs: list[TokenLogprob] | None = None
@@ -203,7 +229,7 @@ class GenerationTurn(BaseModel):
     completed_at: datetime | None = None
 ```
 
-`messages_in` is a list of serialised PydanticAI message parts — the same structure already stored in `raw_response` for responses. The framework adapter (`_build_turns` in `react_worker.py`) is responsible for populating this; workers never set it directly.
+`prompt_text` is removed entirely. The framework adapter (`_build_turns` in `react_worker.py`) is responsible for populating `messages_in`; workers never set it directly.
 
 ### 4.2 Changes to `_build_turns` in `react_worker.py`
 
@@ -249,9 +275,8 @@ def _to_turn(
     tool_result_request: ModelRequest | None,
 ) -> GenerationTurn:
     raw_resp = _make_json_safe(dataclasses.asdict(response))
-    messages_in = (
-        [_make_json_safe(dataclasses.asdict(p)) for p in request_in.parts]
-        if request_in else []
+    messages_in: list[ModelRequestPart] = (
+        _extract_request_parts(request_in) if request_in else []
     )
     tool_results = (
         _extract_tool_results(tool_result_request)
@@ -263,6 +288,24 @@ def _to_turn(
         tool_results=tool_results,
         logprobs=extract_logprobs(raw_resp),
     )
+
+
+def _extract_request_parts(request: ModelRequest) -> list[ModelRequestPart]:
+    """Convert PydanticAI ModelRequest parts to typed ModelRequestPart objects."""
+    parts: list[ModelRequestPart] = []
+    for part in request.parts:
+        if isinstance(part, PydanticSystemPromptPart):
+            parts.append(SystemPromptPart(content=part.content))
+        elif isinstance(part, PydanticUserPromptPart) and isinstance(part.content, str):
+            parts.append(UserPromptPart(content=part.content))
+        elif isinstance(part, PydanticToolReturnPart):
+            parts.append(ToolReturnPart(
+                tool_call_id=part.tool_call_id,
+                tool_name=part.tool_name,
+                content=part.content,
+            ))
+        # Other part kinds (e.g. image content) are not yet supported — skip.
+    return parts
 ```
 
 ### 4.3 New `ContextEventRepository`
@@ -306,20 +349,19 @@ class ContextEventRepository:
 
         # 1–2. Context events from messages_in (first turn only — system + user)
         for part in turn.messages_in:
-            part_kind = part.get("part_kind")
-            if part_kind == "system-prompt":
+            if isinstance(part, SystemPromptPart):
                 events.append(self._make_event(
                     run_id, execution_id, worker_binding_key, seq,
-                    SystemPromptPayload(text=part.get("content", "")),
+                    SystemPromptPayload(text=part.content),
                 ))
                 seq += 1
-            elif part_kind == "user-prompt":
+            elif isinstance(part, UserPromptPart):
                 events.append(self._make_event(
                     run_id, execution_id, worker_binding_key, seq,
-                    UserMessagePayload(text=part.get("content", "")),
+                    UserMessagePayload(text=part.content),
                 ))
                 seq += 1
-            # tool-return parts are handled as tool_result events below
+            # ToolReturnPart entries are handled as tool_result events below
 
         # 3–4. Events from raw_response (model-generated)
         response_parts = turn.raw_response.get("parts", [])
