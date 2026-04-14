@@ -156,9 +156,7 @@ class RunSnapshotDto(CamelModel):
     executions_by_task: dict[str, list[RunExecutionAttemptDto]] = Field(default_factory=dict)
     evaluations_by_task: dict[str, RunTaskEvaluationDto] = Field(default_factory=dict)
     sandboxes_by_task: dict[str, RunSandboxDto] = Field(default_factory=dict)
-    generation_turns_by_task: dict[str, list["RunGenerationTurnDto"]] = Field(
-        default_factory=dict
-    )
+    generation_turns_by_task: dict[str, list["RunGenerationTurnDto"]] = Field(default_factory=dict)
     threads: list[RunCommunicationThreadDto] = Field(default_factory=list)
     started_at: datetime | None = None
     completed_at: datetime | None = None

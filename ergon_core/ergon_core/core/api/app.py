@@ -1,5 +1,6 @@
 """FastAPI application with Inngest webhook registration."""
 
+import logging
 from contextlib import asynccontextmanager
 
 import inngest.fast_api
@@ -15,12 +16,14 @@ from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.inngest_registry import ALL_FUNCTIONS
 from ergon_core.core.settings import Settings
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("[LIFESPAN] starting ensure_db...", flush=True)
+    logger.info("starting ensure_db...")
     ensure_db()
-    print("[LIFESPAN] ensure_db done, initializing RolloutService...", flush=True)
+    logger.info("ensure_db done, initializing RolloutService...")
     settings = Settings()
     init_rollout_service(
         RolloutService(
@@ -29,7 +32,7 @@ async def lifespan(app: FastAPI):
             tokenizer_name=settings.default_tokenizer,
         )
     )
-    print("[LIFESPAN] ready", flush=True)
+    logger.info("ready")
     yield
 
 
