@@ -195,6 +195,7 @@ def _task_keyed_evaluations(
     for ev in evaluations:
         node_id = defn_to_node.get(ev.definition_task_id)
         if node_id is None:
+            # Dynamic nodes have no definition_task_id; evaluations for unknown tasks are skipped.
             continue
         tid = str(node_id)
         summary = ev.parsed_summary()
@@ -391,6 +392,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         ex.id: ex.node_id for ex in executions if ex.node_id is not None
     }
 
+    # One RunGraphNode per definition task (initialize_from_definition guarantees this).
     defn_to_node: dict[UUID, UUID] = {
         n.definition_task_id: n.id for n in nodes if n.definition_task_id is not None
     }
@@ -405,10 +407,10 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
 
     gen_turns_by_task: dict[str, list[RunGenerationTurnDto]] = defaultdict(list)
     for turn in gen_turns:
-        task_key = execution_task_map.get(turn.task_execution_id)
-        if task_key is None:
+        node_uuid = execution_task_map.get(turn.task_execution_id)
+        if node_uuid is None:
             continue
-        gen_turns_by_task[str(task_key)].append(
+        gen_turns_by_task[str(node_uuid)].append(
             RunGenerationTurnDto(
                 id=str(turn.id),
                 task_execution_id=str(turn.task_execution_id),
