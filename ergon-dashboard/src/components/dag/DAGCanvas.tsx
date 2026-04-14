@@ -4,8 +4,8 @@
  * DAGCanvas - React Flow canvas for visualizing task DAGs.
  *
  * Features:
- * - Automatic dagre layout for hierarchical task display
- * - Level filtering via LevelSelector
+ * - Hierarchical dagre layout with nested container rendering
+ * - Depth-based expansion control via DepthSelector
  * - Search/filter tasks by name
  * - Live updates via useRunState hook
  * - Zoom/pan controls
@@ -24,12 +24,17 @@ import {
   Panel,
   BackgroundVariant,
 } from "@xyflow/react";
-import dagre from "dagre";
 import "@xyflow/react/dist/style.css";
 
-import { TaskState, TaskStatus, WorkflowRunState } from "@/lib/types";
+import { TaskStatus, type WorkflowRunState } from "@/lib/types";
 import { nodeTypes, type TaskNodeType } from "./TaskNode";
-import { LevelSelector } from "./LevelSelector";
+import { GraphDelegationEdge } from "./edges/GraphDelegationEdge";
+import { GraphDependencyEdge } from "./edges/GraphDependencyEdge";
+import { DepthSelector } from "@/features/graph/components/DepthSelector";
+import { GraphExpansionProvider } from "@/features/graph/hooks/useGraphExpansion";
+import { computeHierarchicalLayout, calculateExpandedContainers } from "@/features/graph/layout/hierarchicalLayout";
+import { DEFAULT_EXPANDED_DEPTH } from "@/features/graph/layout/layoutTypes";
+import type { ContainerDimensions } from "@/features/graph/layout/layoutTypes";
 import { SearchInput } from "@/components/common/SearchInput";
 
 interface DAGCanvasProps {
@@ -42,163 +47,14 @@ interface DAGCanvasProps {
   selectedTaskId?: string | null;
 }
 
-// Node dimensions for dagre layout
-const NODE_WIDTH = 220;
-const NODE_HEIGHT = 120;
-
-/**
- * Apply dagre layout to nodes and edges.
- */
-function getLayoutedElements(
-  nodes: TaskNodeType[],
-  edges: Edge[],
-  direction: "TB" | "LR" = "TB"
-) {
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-
-  dagreGraph.setGraph({
-    rankdir: direction,
-    nodesep: 50,
-    ranksep: 80,
-    edgesep: 20,
-  });
-
-  // Add nodes to dagre graph
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
-  });
-
-  // Add edges to dagre graph
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
-  });
-
-  // Run dagre layout
-  dagre.layout(dagreGraph);
-
-  // Apply positions from dagre
-  const layoutedNodes: TaskNodeType[] = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    return {
-      ...node,
-      position: {
-        x: nodeWithPosition.x - NODE_WIDTH / 2,
-        y: nodeWithPosition.y - NODE_HEIGHT / 2,
-      },
-    };
-  });
-
-  return { nodes: layoutedNodes, edges };
-}
-
-/**
- * Convert task map to react-flow nodes and edges.
- */
-function tasksToFlowElements(
-  tasks: Map<string, TaskState>,
-  selectedLevel: number | null,
-  searchQuery: string,
-  onTaskClick?: (taskId: string) => void,
-  selectedTaskId?: string | null,
-): { nodes: TaskNodeType[]; edges: Edge[]; matchingNodeIds: Set<string> } {
-  const nodes: TaskNodeType[] = [];
-  const edges: Edge[] = [];
-
-  // Filter tasks by level if needed
-  const filteredTasks = selectedLevel !== null
-    ? Array.from(tasks.values()).filter((t) => t.level === selectedLevel)
-    : Array.from(tasks.values());
-
-  const filteredTaskIds = new Set(filteredTasks.map((t) => t.id));
-
-  // Find matching task IDs based on search query
-  const searchLower = searchQuery.toLowerCase().trim();
-  const matchingNodeIds = new Set<string>();
-  
-  if (searchLower) {
-    for (const task of filteredTasks) {
-      if (
-        task.name.toLowerCase().includes(searchLower) ||
-        task.description?.toLowerCase().includes(searchLower) ||
-        task.assignedWorkerName?.toLowerCase().includes(searchLower)
-      ) {
-        matchingNodeIds.add(task.id);
-      }
-    }
-  }
-
-  // Create nodes
-  for (const task of filteredTasks) {
-    const isMatch = !searchLower || matchingNodeIds.has(task.id);
-    nodes.push({
-      id: task.id,
-      type: "taskNode",
-      position: { x: 0, y: 0 }, // Will be set by dagre
-      data: {
-        task,
-        onClick: onTaskClick,
-        selected: task.id === selectedTaskId,
-        dimmed: searchLower ? !isMatch : false,
-        highlighted: searchLower ? isMatch : false,
-      },
-    });
-  }
-
-  // Create edges (only between visible tasks)
-  for (const task of filteredTasks) {
-    // Parent-child edges
-    for (const childId of task.childIds) {
-      if (filteredTaskIds.has(childId)) {
-        edges.push({
-          id: `${task.id}->${childId}`,
-          source: task.id,
-          target: childId,
-          type: "smoothstep",
-          animated: tasks.get(childId)?.status === TaskStatus.RUNNING,
-          style: {
-            stroke:
-              tasks.get(childId)?.status === TaskStatus.RUNNING
-                ? "#eab308"
-                : "#94a3b8",
-            strokeWidth: 2,
-            opacity: searchLower && !matchingNodeIds.has(task.id) && !matchingNodeIds.has(childId) ? 0.3 : 1,
-          },
-        });
-      }
-    }
-
-    // Dependency edges (if viewing all levels or same level)
-    for (const depId of task.dependsOnIds) {
-      if (filteredTaskIds.has(depId)) {
-        // Check if this edge already exists (avoid duplicates)
-        const edgeId = `${depId}->${task.id}`;
-        if (!edges.some((e) => e.id === edgeId)) {
-          edges.push({
-            id: edgeId,
-            source: depId,
-            target: task.id,
-            type: "smoothstep",
-            animated: task.status === TaskStatus.RUNNING,
-            style: {
-              stroke:
-                task.status === TaskStatus.RUNNING ? "#eab308" : "#94a3b8",
-              strokeWidth: 2,
-              strokeDasharray: "5,5", // Dashed for dependency edges
-              opacity: searchLower && !matchingNodeIds.has(task.id) && !matchingNodeIds.has(depId) ? 0.3 : 1,
-            },
-          });
-        }
-      }
-    }
-  }
-
-  return { nodes, edges, matchingNodeIds };
-}
-
 /**
  * Status color for minimap nodes.
  */
+const edgeTypes = {
+  graphDelegation: GraphDelegationEdge,
+  graphDependency: GraphDependencyEdge,
+};
+
 function getMinimapNodeColor(node: TaskNodeType): string {
   const status = node.data?.task?.status;
   switch (status) {
@@ -210,6 +66,8 @@ function getMinimapNodeColor(node: TaskNodeType): string {
       return "#ef4444";
     case TaskStatus.READY:
       return "#3b82f6";
+    case TaskStatus.ABANDONED:
+      return "#9ca3af";
     default:
       return "#9ca3af";
   }
@@ -224,10 +82,58 @@ function DAGCanvasInner({
   onTaskClick,
   selectedTaskId,
 }: DAGCanvasProps) {
-  const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
+  const [expandedDepth, setExpandedDepth] = useState<number | "all">(DEFAULT_EXPANDED_DEPTH);
+  const [manualExpansions, setManualExpansions] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [nodes, setNodes, onNodesChange] = useNodesState<TaskNodeType>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [containerDims, setContainerDims] = useState<Map<string, ContainerDimensions>>(new Map());
+  const [prevTaskIds, setPrevTaskIds] = useState<Set<string>>(new Set());
+
+  const newNodeIds = useMemo(() => {
+    if (!runState?.tasks) return new Set<string>();
+    if (prevTaskIds.size === 0) return new Set<string>();
+    const newIds = new Set<string>();
+    for (const id of runState.tasks.keys()) {
+      if (!prevTaskIds.has(id)) newIds.add(id);
+    }
+    return newIds;
+  }, [runState?.tasks, prevTaskIds]);
+
+  useEffect(() => {
+    if (runState?.tasks) {
+      setPrevTaskIds(new Set(runState.tasks.keys()));
+    }
+  }, [runState?.tasks]);
+
+  // Compute max available depth from tasks
+  const maxAvailableDepth = useMemo(() => {
+    if (!runState?.tasks) return 0;
+    let max = 0;
+    for (const task of runState.tasks.values()) {
+      max = Math.max(max, task.level);
+    }
+    return max;
+  }, [runState?.tasks]);
+
+  // Compute expanded containers from depth + manual overrides
+  const expandedContainers = useMemo(() => {
+    if (!runState?.tasks) return new Set<string>();
+    const maxDepth = expandedDepth === "all" ? Infinity : expandedDepth;
+    const fromDepth = calculateExpandedContainers(runState.tasks, maxDepth);
+    // Merge manual expansions (toggled individually)
+    for (const id of manualExpansions) {
+      if (fromDepth.has(id)) {
+        fromDepth.delete(id);
+      } else {
+        const task = runState.tasks.get(id);
+        if (task && task.childIds.length > 0) {
+          fromDepth.add(id);
+        }
+      }
+    }
+    return fromDepth;
+  }, [runState?.tasks, expandedDepth, manualExpansions]);
 
   // Calculate matching node count
   const matchCount = useMemo(() => {
@@ -246,37 +152,62 @@ function DAGCanvasInner({
     return count;
   }, [searchQuery, runState?.tasks]);
 
-  // Convert tasks to flow elements when data changes
+  // Compute hierarchical layout when data changes
   useEffect(() => {
     if (!runState?.tasks || runState.tasks.size === 0) return;
 
-    const { nodes: rawNodes, edges: rawEdges } = tasksToFlowElements(
+    const result = computeHierarchicalLayout(
       runState.tasks,
-      selectedLevel,
+      expandedContainers,
       searchQuery,
       onTaskClick,
       selectedTaskId,
+      "LR",
+      newNodeIds,
     );
 
-    // Apply dagre layout
-    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-      rawNodes,
-      rawEdges
-    );
+    setNodes(result.nodes as TaskNodeType[]);
+    setEdges(result.edges);
+    setContainerDims(result.containerDimensions);
+  }, [
+    runState?.tasks,
+    expandedContainers,
+    searchQuery,
+    onTaskClick,
+    selectedTaskId,
+    newNodeIds,
+    setNodes,
+    setEdges,
+  ]);
 
-    setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
-  }, [runState?.tasks, selectedLevel, searchQuery, onTaskClick, selectedTaskId, setNodes, setEdges]);
+  // Handle depth change — reset manual overrides when depth changes
+  const handleDepthChange = useCallback((depth: number | "all") => {
+    setExpandedDepth(depth);
+    setManualExpansions(new Set());
+  }, []);
 
-  // Handle level change
-  const handleLevelChange = useCallback((level: number | null) => {
-    setSelectedLevel(level);
+  // Toggle individual container expansion
+  const toggleExpand = useCallback((taskId: string) => {
+    setManualExpansions((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
   }, []);
 
   // Handle search change
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
   }, []);
+
+  const expansionContextValue = useMemo(
+    () => ({ expandedContainers, toggleExpand, containerDimensions: containerDims }),
+    [expandedContainers, toggleExpand, containerDims],
+  );
 
   // Loading state
   if (isLoading) {
@@ -309,8 +240,8 @@ function DAGCanvasInner({
     );
   }
 
-  // Error state
-  if (error) {
+  // Error state — only show when we have no data to display
+  if (error && (!runState?.tasks || runState.tasks.size === 0)) {
     const isNotFoundError = error.includes("not found");
     return (
       <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
@@ -389,117 +320,119 @@ function DAGCanvasInner({
 
   return (
     <div className="h-full min-h-[60vh] w-full" data-testid="graph-canvas">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        connectionLineType={ConnectionLineType.SmoothStep}
-        fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.1}
-        maxZoom={2}
-        defaultEdgeOptions={{
-          type: "smoothstep",
-          style: { strokeWidth: 2 },
-        }}
-        proOptions={{ hideAttribution: true }}
-      >
-        {/* Background */}
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          className="bg-gray-50 dark:bg-gray-900"
-        />
+      <GraphExpansionProvider value={expansionContextValue}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          connectionLineType={ConnectionLineType.SmoothStep}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          minZoom={0.1}
+          maxZoom={2}
+          defaultEdgeOptions={{}}
+          proOptions={{ hideAttribution: true }}
+        >
+          {/* Background */}
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={20}
+            size={1}
+            className="bg-gray-50 dark:bg-gray-900"
+          />
 
-        {/* Controls */}
-        <Controls
-          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm"
-          showZoom
-          showFitView
-          showInteractive={false}
-        />
+          {/* Controls */}
+          <Controls
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm"
+            showZoom
+            showFitView
+            showInteractive={false}
+          />
 
-        {/* MiniMap */}
-        <MiniMap
-          nodeColor={getMinimapNodeColor}
-          nodeStrokeWidth={3}
-          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm"
-          maskColor="rgba(0, 0, 0, 0.1)"
-        />
+          {/* MiniMap */}
+          <MiniMap
+            nodeColor={getMinimapNodeColor}
+            nodeStrokeWidth={3}
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm"
+            maskColor="rgba(0, 0, 0, 0.1)"
+          />
 
-        {/* Top Left: Level Selector + Search */}
-        <Panel position="top-left" className="m-2 sm:m-4 space-y-2">
-          <div className="hidden sm:block">
-            <LevelSelector
-              tasks={runState.tasks}
-              selectedLevel={selectedLevel}
-              onChange={handleLevelChange}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <SearchInput
-              value={searchQuery}
-              onChange={handleSearchChange}
-              placeholder="Search tasks..."
-              className="w-40 sm:w-64"
-            />
-            {searchQuery && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                {matchCount} match{matchCount !== 1 ? "es" : ""}
-              </span>
-            )}
-          </div>
-          {/* Level selector on mobile - simplified */}
-          <div className="sm:hidden">
-            <LevelSelector
-              tasks={runState.tasks}
-              selectedLevel={selectedLevel}
-              onChange={handleLevelChange}
-            />
-          </div>
-        </Panel>
+          {/* Top Left: Depth Selector + Search */}
+          <Panel position="top-left" className="m-2 sm:m-4 space-y-2">
+            <div className="hidden sm:block">
+              <DepthSelector
+                tasks={runState.tasks}
+                currentDepth={expandedDepth}
+                onDepthChange={handleDepthChange}
+                maxAvailableDepth={maxAvailableDepth}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <SearchInput
+                value={searchQuery}
+                onChange={handleSearchChange}
+                placeholder="Search tasks..."
+                className="w-40 sm:w-64"
+              />
+              {searchQuery && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  {matchCount} match{matchCount !== 1 ? "es" : ""}
+                </span>
+              )}
+            </div>
+            {/* Depth selector on mobile */}
+            <div className="sm:hidden">
+              <DepthSelector
+                tasks={runState.tasks}
+                currentDepth={expandedDepth}
+                onDepthChange={handleDepthChange}
+                maxAvailableDepth={maxAvailableDepth}
+              />
+            </div>
+          </Panel>
 
-        {/* Run Info Panel */}
-        <Panel position="top-right" className="m-2 sm:m-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 px-3 py-2 sm:px-4 sm:py-3">
-            <h2 className="font-semibold text-gray-900 dark:text-white truncate max-w-[120px] sm:max-w-[200px] text-sm sm:text-base">
-              {runState.name}
-            </h2>
-            <div className="flex items-center gap-2 sm:gap-4 mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-              <span
-                className={`flex items-center gap-1 ${
-                  runState.status === "pending" ||
-                  runState.status === "executing" ||
-                  runState.status === "evaluating"
-                    ? "text-yellow-600 dark:text-yellow-400"
-                    : runState.status === "completed"
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-red-600 dark:text-red-400"
-                }`}
-              >
+          {/* Run Info Panel */}
+          <Panel position="top-right" className="m-2 sm:m-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 px-3 py-2 sm:px-4 sm:py-3">
+              <h2 className="font-semibold text-gray-900 dark:text-white truncate max-w-[120px] sm:max-w-[200px] text-sm sm:text-base">
+                {runState.name}
+              </h2>
+              <div className="flex items-center gap-2 sm:gap-4 mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`flex items-center gap-1 ${
                     runState.status === "pending" ||
                     runState.status === "executing" ||
                     runState.status === "evaluating"
-                      ? "bg-yellow-500 animate-pulse"
+                      ? "text-yellow-600 dark:text-yellow-400"
                       : runState.status === "completed"
-                        ? "bg-green-500"
-                        : "bg-red-500"
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
                   }`}
-                />
-                <span className="hidden sm:inline">{runState.status}</span>
-              </span>
-              {runState.durationSeconds !== null && (
-                <span>{Math.round(runState.durationSeconds)}s</span>
-              )}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      runState.status === "pending" ||
+                      runState.status === "executing" ||
+                      runState.status === "evaluating"
+                        ? "bg-yellow-500 animate-pulse"
+                        : runState.status === "completed"
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                    }`}
+                  />
+                  <span className="hidden sm:inline">{runState.status}</span>
+                </span>
+                {runState.durationSeconds !== null && (
+                  <span>{Math.round(runState.durationSeconds)}s</span>
+                )}
+              </div>
             </div>
-          </div>
-        </Panel>
-      </ReactFlow>
+          </Panel>
+        </ReactFlow>
+      </GraphExpansionProvider>
     </div>
   );
 }
