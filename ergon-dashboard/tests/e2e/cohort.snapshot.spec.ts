@@ -23,7 +23,11 @@ test("cohort detail renders summary and run list", async ({ page }) => {
 
   await expect(page.getByTestId("cohort-header")).toContainText("minif2f-react-worker-gpt5v3");
   await expect(page.getByTestId("cohort-summary-cards")).toContainText("Total runs");
-  await expect(page.getByTestId(`cohort-run-row-${FIXTURE_IDS.runId}`)).toContainText(
-    "amc12a_2008_p25",
+  const runRow = page.getByTestId(`cohort-run-row-${FIXTURE_IDS.runId}`);
+  await expect(runRow).toContainText("minif2f-react-worker-gpt5v3");
+  await expect(runRow).toContainText("Started");
+  await expect(runRow.locator("time[datetime]")).toHaveAttribute(
+    "datetime",
+    "2026-03-18T12:00:00.000Z",
   );
 });
