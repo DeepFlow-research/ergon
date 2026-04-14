@@ -1,19 +1,20 @@
 import { z } from "zod";
 
 import {
+  MutationTypeSchema,
+  GraphTargetTypeSchema,
+} from "@/features/graph/contracts/graphMutations";
+import {
   CohortSummary,
   CohortSummarySchema,
   parseCohortSummary,
-  parseRunAction,
   parseRunCommunicationMessage,
   parseRunCommunicationThread,
   parseRunSandbox,
   parseRunSandboxCommand,
   parseRunTaskEvaluation,
-  RunActionSchema,
   RunCommunicationMessageSchema,
   RunCommunicationThreadSchema,
-  RunAction,
   RunResourceSchema,
   RunResource,
   RunSandboxCommandSchema,
@@ -135,30 +136,6 @@ export const DashboardTaskStatusChangedDataSchema = z.object({
   assigned_worker_name: z.string().nullable().optional(),
 });
 
-export const DashboardAgentActionStartedDataSchema = z.object({
-  run_id: z.string().uuid(),
-  task_id: z.string().uuid(),
-  action_id: z.string().uuid(),
-  worker_id: z.string().uuid(),
-  worker_name: z.string(),
-  action_type: z.string(),
-  action_input: z.string(),
-  timestamp: z.string().datetime({ offset: true }),
-});
-
-export const DashboardAgentActionCompletedDataSchema = z.object({
-  run_id: z.string().uuid(),
-  task_id: z.string().uuid(),
-  action_id: z.string().uuid(),
-  worker_id: z.string().uuid(),
-  action_type: z.string(),
-  action_output: z.string().nullable().optional(),
-  duration_ms: z.number().int(),
-  success: z.boolean(),
-  error: z.string().nullable().optional(),
-  timestamp: z.string().datetime({ offset: true }),
-});
-
 export const DashboardResourcePublishedDataSchema = z.object({
   run_id: z.string().uuid(),
   task_id: z.string().uuid(),
@@ -249,10 +226,6 @@ export const TaskStatusSocketDataSchema = z.object({
   assignedWorkerId: z.string().nullable(),
   assignedWorkerName: z.string().nullable(),
 });
-export const ActionSocketDataSchema = z.object({
-  runId: z.string(),
-  action: RunActionSchema,
-});
 export const ResourceSocketDataSchema = z.object({
   runId: z.string(),
   resource: RunResourceSchema,
@@ -280,10 +253,6 @@ export interface DashboardCohortUpdatedData {
   summary: CohortSummary;
 }
 export type DashboardTaskStatusChangedData = z.infer<typeof DashboardTaskStatusChangedDataSchema>;
-export type DashboardAgentActionStartedData = z.infer<typeof DashboardAgentActionStartedDataSchema>;
-export type DashboardAgentActionCompletedData = z.infer<
-  typeof DashboardAgentActionCompletedDataSchema
->;
 export type DashboardResourcePublishedData = z.infer<typeof DashboardResourcePublishedDataSchema>;
 export type DashboardSandboxCreatedData = z.infer<typeof DashboardSandboxCreatedDataSchema>;
 export type DashboardSandboxCommandData = z.infer<typeof DashboardSandboxCommandDataSchema>;
@@ -304,10 +273,6 @@ export type DashboardGenerationTurnCompletedData = z.infer<
 export type RunListEntry = z.infer<typeof RunListEntrySchema>;
 export type RunCompletedSocketData = z.infer<typeof RunCompletedSocketDataSchema>;
 export type TaskStatusSocketData = z.infer<typeof TaskStatusSocketDataSchema>;
-export interface ActionSocketData {
-  runId: string;
-  action: RunAction;
-}
 export interface ResourceSocketData {
   runId: string;
   resource: RunResource;
@@ -369,18 +334,6 @@ export function parseDashboardTaskStatusChangedData(
   return DashboardTaskStatusChangedDataSchema.parse(input);
 }
 
-export function parseDashboardAgentActionStartedData(
-  input: unknown,
-): DashboardAgentActionStartedData {
-  return DashboardAgentActionStartedDataSchema.parse(input);
-}
-
-export function parseDashboardAgentActionCompletedData(
-  input: unknown,
-): DashboardAgentActionCompletedData {
-  return DashboardAgentActionCompletedDataSchema.parse(input);
-}
-
 export function parseDashboardResourcePublishedData(
   input: unknown,
 ): DashboardResourcePublishedData {
@@ -409,14 +362,6 @@ export function parseRunCompletedSocketData(input: unknown): RunCompletedSocketD
 
 export function parseTaskStatusSocketData(input: unknown): TaskStatusSocketData {
   return TaskStatusSocketDataSchema.parse(input);
-}
-
-export function parseActionSocketData(input: unknown): ActionSocketData {
-  const parsed = ActionSocketDataSchema.parse(input);
-  return {
-    runId: parsed.runId,
-    action: parseRunAction(parsed.action),
-  };
 }
 
 export function parseResourceSocketData(input: unknown): ResourceSocketData {
@@ -453,3 +398,32 @@ export function parseDashboardGenerationTurnCompletedData(
 ): DashboardGenerationTurnCompletedData {
   return DashboardGenerationTurnCompletedDataSchema.parse(input);
 }
+
+// =============================================================================
+// Graph Mutation Events
+// =============================================================================
+
+export const DashboardGraphMutationDataSchema = z.object({
+  run_id: z.string().uuid(),
+  sequence: z.number().int().nonnegative(),
+  mutation_type: MutationTypeSchema,
+  target_type: GraphTargetTypeSchema,
+  target_id: z.string().uuid(),
+  actor: z.string().min(1),
+  new_value: z.record(z.string(), z.unknown()),
+  old_value: z.record(z.string(), z.unknown()).nullable().optional(),
+  reason: z.string().nullable().optional(),
+  timestamp: z.string().datetime({ offset: true }),
+});
+
+export type DashboardGraphMutationData = z.infer<typeof DashboardGraphMutationDataSchema>;
+
+export function parseDashboardGraphMutationData(input: unknown): DashboardGraphMutationData {
+  return DashboardGraphMutationDataSchema.parse(input);
+}
+
+export const GraphMutationSocketDataSchema = z.object({
+  runId: z.string().uuid(),
+  mutation: DashboardGraphMutationDataSchema,
+});
+export type GraphMutationSocketData = z.infer<typeof GraphMutationSocketDataSchema>;

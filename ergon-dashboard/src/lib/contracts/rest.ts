@@ -11,7 +11,6 @@ export const CohortSummarySchema = schemas.CohortSummaryDto;
 export const CohortDetailSchema = schemas.CohortDetailDto;
 export const UpdateCohortRequestSchema = schemas.UpdateCohortRequest;
 
-export const RunActionSchema = schemas.RunActionDto;
 export const RunExecutionAttemptSchema = schemas.RunExecutionAttemptDto;
 export const RunResourceSchema = schemas.RunResourceDto;
 export const RunSandboxCommandSchema = schemas.RunSandboxCommandDto;
@@ -38,7 +37,6 @@ export type TaskStatusValue = z.infer<typeof TaskStatusSchema>;
 type RawCohortSummary = KnownKeys<z.infer<typeof CohortSummarySchema>>;
 type RawCohortDetail = KnownKeys<z.infer<typeof CohortDetailSchema>>;
 type RawCohortRunRow = KnownKeys<NonNullable<RawCohortDetail["runs"]>[number]>;
-type RawRunAction = KnownKeys<z.infer<typeof RunActionSchema>>;
 type RawRunExecutionAttempt = KnownKeys<z.infer<typeof RunExecutionAttemptSchema>>;
 type RawRunResource = KnownKeys<z.infer<typeof RunResourceSchema>>;
 type RawRunSandboxCommand = KnownKeys<z.infer<typeof RunSandboxCommandSchema>>;
@@ -51,7 +49,6 @@ type RawRunEvaluationCriterion = KnownKeys<NonNullable<RawRunTaskEvaluation["cri
 type RawRunSnapshot = KnownKeys<z.infer<typeof RunSnapshotSchema>>;
 
 export type UpdateCohortRequest = z.infer<typeof UpdateCohortRequestSchema>;
-export type RawRunActionType = RawRunAction;
 export type RawRunSandboxType = RawRunSandbox;
 export type RawRunSandboxCommandType = RawRunSandboxCommand;
 
@@ -121,15 +118,6 @@ export interface CohortDetail {
   runs: CohortRunRow[];
 }
 
-export interface RunAction
-  extends Omit<RawRunAction, "completedAt" | "durationMs" | "error" | "output" | "startedAt"> {
-  completedAt: string | null;
-  durationMs: number | null;
-  error: string | null;
-  output: string | null;
-  startedAt: string;
-}
-
 export interface RunExecutionAttempt
   extends Omit<
     RawRunExecutionAttempt,
@@ -163,6 +151,13 @@ export interface RunSandbox
   template: string | null;
 }
 
+/**
+ * Per-task row in {@link RunSnapshot.tasks} (camelCase on the wire).
+ *
+ * Semantics mirror the backend `RunTaskDto` field descriptions:
+ * - `startedAt`: null only while the task has not actually started yet (e.g. pending / ready).
+ * - `completedAt`: null until a terminal outcome; may be null together with `startedAt` if not started.
+ */
 export interface RunTask
   extends Omit<
     RawRunTask,
@@ -171,9 +166,11 @@ export interface RunTask
   assignedWorkerId: string | null;
   assignedWorkerName: string | null;
   childIds: string[];
+  /** Terminal wall time when set; null until finished or if the task never started. */
   completedAt: string | null;
   dependsOnIds: string[];
   parentId: string | null;
+  /** First meaningful execution start; null only before the task has actually started. */
   startedAt: string | null;
 }
 
@@ -204,7 +201,6 @@ export interface RunTaskEvaluation
 export interface RunSnapshot
   extends Omit<
     RawRunSnapshot,
-    | "actionsByTask"
     | "completedAt"
     | "durationSeconds"
     | "error"
@@ -217,7 +213,6 @@ export interface RunSnapshot
     | "tasks"
     | "threads"
   > {
-  actionsByTask: Record<string, RunAction[]>;
   completedAt: string | null;
   durationSeconds: number | null;
   error: string | null;
@@ -266,17 +261,6 @@ function normalizeCohortSummary(summary: RawCohortSummary): CohortSummary {
     },
     total_runs: summary.total_runs ?? 0,
     worst_score: summary.worst_score ?? null,
-  };
-}
-
-function normalizeRunAction(action: RawRunAction): RunAction {
-  return {
-    ...action,
-    completedAt: action.completedAt ?? null,
-    durationMs: action.durationMs ?? null,
-    error: action.error ?? null,
-    output: action.output ?? null,
-    startedAt: action.startedAt ?? new Date(0).toISOString(),
   };
 }
 
@@ -383,10 +367,6 @@ export function parseUpdateCohortRequest(input: unknown): UpdateCohortRequest {
   return UpdateCohortRequestSchema.parse(input);
 }
 
-export function parseRunAction(input: unknown): RunAction {
-  return normalizeRunAction(RunActionSchema.parse(input));
-}
-
 export function parseRunSandbox(input: unknown): RunSandbox {
   return normalizeRunSandbox(RunSandboxSchema.parse(input));
 }
@@ -411,12 +391,6 @@ export function parseRunSnapshot(input: unknown): RunSnapshot {
   const snapshot = RunSnapshotSchema.parse(input);
   return {
     ...snapshot,
-    actionsByTask: Object.fromEntries(
-      Object.entries(snapshot.actionsByTask ?? {}).map(([taskId, actions]) => [
-        taskId,
-        actions.map(normalizeRunAction),
-      ]),
-    ),
     completedAt: snapshot.completedAt ?? null,
     durationSeconds: snapshot.durationSeconds ?? null,
     error: snapshot.error ?? null,

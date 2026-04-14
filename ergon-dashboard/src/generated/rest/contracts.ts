@@ -12,23 +12,18 @@ const RunTaskDto = z.object({
   level: z.number().int(),
   assignedWorkerId: z.union([z.string(), z.null()]).optional(),
   assignedWorkerName: z.union([z.string(), z.null()]).optional(),
-  startedAt: z.union([z.string(), z.null()]).optional(),
-  completedAt: z.union([z.string(), z.null()]).optional(),
-});
-const RunActionDto = z.object({
-  id: z.string(),
-  taskId: z.string(),
-  workerId: z.string(),
-  workerName: z.string(),
-  type: z.string(),
-  input: z.string(),
-  output: z.union([z.string(), z.null()]).optional(),
-  status: z.string(),
-  success: z.boolean(),
-  startedAt: z.union([z.string(), z.null()]).optional(),
-  completedAt: z.union([z.string(), z.null()]).optional(),
-  durationMs: z.union([z.number(), z.null()]).optional(),
-  error: z.union([z.string(), z.null()]).optional(),
+  startedAt: z
+    .union([z.string(), z.null()])
+    .optional()
+    .describe(
+      "When this task began meaningful execution (wall clock). Null only while the task has not actually started yet (for example pending or ready).",
+    ),
+  completedAt: z
+    .union([z.string(), z.null()])
+    .optional()
+    .describe(
+      "When this task reached a terminal outcome (completed, failed, abandoned, etc.). Null until the task finishes, or null together with startedAt if the task has not started yet.",
+    ),
 });
 const RunResourceDto = z.object({
   id: z.string(),
@@ -127,6 +122,23 @@ const RunCommunicationThreadDto = z.object({
   updatedAt: z.string().datetime({ offset: true }),
   messages: z.array(RunCommunicationMessageDto).optional(),
 });
+const RunGenerationTurnDto = z.object({
+  id: z.string(),
+  taskExecutionId: z.string(),
+  workerBindingKey: z.string(),
+  turnIndex: z.number().int(),
+  promptText: z.union([z.string(), z.null()]).optional(),
+  rawResponse: z.object({}).partial().passthrough().optional(),
+  responseText: z.union([z.string(), z.null()]).optional(),
+  toolCalls: z.union([z.array(z.object({}).partial().passthrough()), z.null()]).optional(),
+  toolResults: z.union([z.array(z.object({}).partial().passthrough()), z.null()]).optional(),
+  policyVersion: z.union([z.string(), z.null()]).optional(),
+  hasLogprobs: z.boolean().optional().default(false),
+  createdAt: z.union([z.string(), z.null()]).optional(),
+  tokenIds: z.union([z.array(z.number().int()), z.null()]).optional(),
+  logprobs: z.union([z.array(z.number()), z.null()]).optional(),
+  workerName: z.string().optional().default(""),
+});
 const RunSnapshotDto = z.object({
   id: z.string(),
   experimentId: z.string(),
@@ -134,11 +146,11 @@ const RunSnapshotDto = z.object({
   status: z.string(),
   tasks: z.record(z.string(), RunTaskDto).optional(),
   rootTaskId: z.string().optional().default(""),
-  actionsByTask: z.record(z.string(), z.array(RunActionDto)).optional(),
   resourcesByTask: z.record(z.string(), z.array(RunResourceDto)).optional(),
   executionsByTask: z.record(z.string(), z.array(RunExecutionAttemptDto)).optional(),
   evaluationsByTask: z.record(z.string(), RunTaskEvaluationDto).optional(),
   sandboxesByTask: z.record(z.string(), RunSandboxDto).optional(),
+  generationTurnsByTask: z.record(z.string(), z.array(RunGenerationTurnDto)).optional(),
   threads: z.array(RunCommunicationThreadDto).optional(),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
@@ -220,7 +232,7 @@ const UpdateCohortRequest = z
 
 const BenchmarkName = z.enum(["gdpeval", "minif2f", "researchrubrics", "custom", "smoke_test"]);
 const RunStatus = z.enum(["pending", "executing", "evaluating", "completed", "failed"]);
-const TaskStatus = z.enum(["pending", "ready", "running", "completed", "failed"]);
+const TaskStatus = z.enum(["pending", "ready", "running", "completed", "failed", "abandoned"]);
 
 const DispatchConfigSnapshot = z
   .object({
@@ -271,7 +283,6 @@ export const schemas = {
   CohortMetadataSummaryDto,
   CohortStatsExtras,
   RunTaskDto,
-  RunActionDto,
   RunResourceDto,
   RunExecutionAttemptDto,
   RunEvaluationCriterionDto,
@@ -280,6 +291,7 @@ export const schemas = {
   RunSandboxDto,
   RunCommunicationMessageDto,
   RunCommunicationThreadDto,
+  RunGenerationTurnDto,
   RunSnapshotDto,
   ValidationError,
   HTTPValidationError,

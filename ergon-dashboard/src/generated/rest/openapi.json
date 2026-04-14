@@ -1431,7 +1431,8 @@
                                 "type": "null"
                             }
                         ],
-                        "title": "Startedat"
+                        "title": "Startedat",
+                        "description": "When this task began meaningful execution (wall clock). Null only while the task has not actually started yet (for example pending or ready)."
                     },
                     "completedAt": {
                         "anyOf": [
@@ -1443,7 +1444,8 @@
                                 "type": "null"
                             }
                         ],
-                        "title": "Completedat"
+                        "title": "Completedat",
+                        "description": "When this task reached a terminal outcome (completed, failed, abandoned, etc.). Null until the task finishes, or null together with startedAt if the task has not started yet."
                     }
                 },
                 "additionalProperties": false,
