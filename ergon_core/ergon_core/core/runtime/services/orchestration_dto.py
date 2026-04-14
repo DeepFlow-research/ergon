@@ -29,6 +29,7 @@ class TaskDescriptor(BaseModel):
     task_id: UUID
     task_key: str
     parent_task_id: UUID | None = None
+    node_id: UUID | None = None
 
 
 class InitializeWorkflowCommand(BaseModel):
@@ -56,6 +57,7 @@ class PrepareTaskExecutionCommand(BaseModel):
     run_id: UUID
     definition_id: UUID
     task_id: UUID
+    node_id: UUID | None = None
 
 
 class PreparedTaskExecution(BaseModel):
@@ -71,6 +73,7 @@ class PreparedTaskExecution(BaseModel):
     worker_type: str | None = None
     model_target: str | None = None
     execution_id: UUID
+    node_id: UUID | None = None
     skipped: bool = False
     skip_reason: str | None = None
 
@@ -105,6 +108,7 @@ class PropagateTaskCompletionCommand(BaseModel):
     definition_id: UUID
     task_id: UUID
     execution_id: UUID
+    node_id: UUID | None = None
 
 
 class PropagationResult(BaseModel):
