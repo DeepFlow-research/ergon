@@ -54,6 +54,10 @@ pnpm run test:be:fast   # Fast unit/state tests
 pnpm run test:be:e2e    # E2E tests (requires Docker stack)
 ```
 
+## Git workflow
+
+**Trunk-based development on `main`.** Commit directly to `main` — do not create feature branches or git worktrees. No PRs unless explicitly requested.
+
 ## Key conventions
 
 - Python 3.13+, line length 100
