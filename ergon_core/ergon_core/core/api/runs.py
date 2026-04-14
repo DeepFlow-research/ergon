@@ -197,6 +197,8 @@ def _task_keyed_evaluations(
         node_id = defn_to_node.get(ev.definition_task_id)
         if node_id is None:
             # Dynamic nodes have no definition_task_id; evaluations for unknown tasks are skipped.
+            # TODO: when dynamic-task evaluation is added, RunTaskEvaluation will need a node_id
+            # foreign key so evaluations can be mapped without going through the definition layer.
             continue
         tid = str(node_id)
         summary = ev.parsed_summary()

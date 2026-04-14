@@ -1,7 +1,7 @@
 """Pydantic DTOs for the run detail API surface.
 
-Adapted for definition-backed schema: task structure comes from
-ExperimentDefinitionTask rows rather than a serialized task tree.
+Task structure comes from RunGraphNode + RunGraphEdge rows (the live graph),
+not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
 
 """
 
@@ -241,7 +241,10 @@ class RunGraphMutationDto(BaseModel):
     """One entry in the append-only mutation log for a run.
 
     Field names are snake_case to match the frontend GraphMutationDtoSchema.
+    CamelModel is intentionally not used here — the frontend contract uses snake_case.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     id: str
     run_id: str
