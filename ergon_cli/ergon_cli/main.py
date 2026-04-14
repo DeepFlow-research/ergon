@@ -85,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
     eval_ckpt.add_argument("--model-base", default=None, help="Base model for local eval")
     eval_ckpt.add_argument("--eval-limit", type=int, default=None, help="Max tasks")
 
+    # -- onboard / doctor ------------------------------------------------------
+    sub.add_parser("onboard", help="Interactive environment setup wizard")
+    doctor = sub.add_parser("doctor", help="Check environment health")
+    doctor.add_argument("--verbose", action="store_true", help="Show detailed output")
+
     # -- train (RL training) --------------------------------------------------
     train_cmd = sub.add_parser("train", help="RL training with Ergon environments")
     train_sub = train_cmd.add_subparsers(dest="train_action")
@@ -179,6 +184,16 @@ def main(argv: list[str] | None = None) -> int:
         from ergon_cli.commands.train import handle_train
 
         return handle_train(args)
+    elif args.command == "onboard":
+        # Deferred: CLI startup cost
+        from ergon_cli.commands.onboard import handle_onboard
+
+        return handle_onboard(args)
+    elif args.command == "doctor":
+        # Deferred: CLI startup cost
+        from ergon_cli.commands.doctor import handle_doctor
+
+        return handle_doctor(args)
     else:
         parser.print_help()
         return 0

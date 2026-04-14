@@ -1,6 +1,11 @@
 """Build Experiment from CLI args using registry lookups."""
 
+from collections.abc import Mapping
+
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.experiment import Experiment
+from ergon_core.api.worker import Worker
 
 
 def build_experiment(
@@ -19,13 +24,40 @@ def build_experiment(
     evaluator_cls = EVALUATORS[evaluator_slug]
 
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
-    worker = worker_cls(name="worker", model=model)
     evaluator = evaluator_cls(name="evaluator")
 
+    if benchmark_slug == "delegation-smoke":
+        return _build_delegation_experiment(benchmark, model, evaluator, WORKERS)
+
+    worker = worker_cls(name="worker", model=model)
     return Experiment.from_single_worker(
         benchmark=benchmark,
         worker=worker,
         evaluators={"default": evaluator},
+    )
+
+
+def _build_delegation_experiment(
+    benchmark: Benchmark,
+    model: str,
+    evaluator: Evaluator,
+    workers_registry: Mapping[str, type[Worker]],
+) -> Experiment:
+    """Build experiment with both manager and researcher worker bindings."""
+    manager_cls = workers_registry["manager-researcher"]
+    researcher_cls = workers_registry["researcher"]
+
+    manager = manager_cls(name="manager-researcher", model=model)
+    researcher = researcher_cls(name="researcher", model=model)
+
+    return Experiment(
+        benchmark=benchmark,
+        workers={
+            "manager-researcher": manager,
+            "researcher": researcher,
+        },
+        evaluators={"default": evaluator},
+        assignments={"manager-researcher": "manager-task"},
     )
 
 
