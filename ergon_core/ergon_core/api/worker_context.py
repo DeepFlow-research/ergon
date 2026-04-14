@@ -16,7 +16,20 @@ class WorkerContext(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
+    definition_id: UUID | None = Field(
+        default=None,
+        description=(
+            "ExperimentDefinition.id — the experiment template that governs "
+            "this run's worker bindings, evaluator bindings, and benchmark "
+            "config. Used by delegation tools to resolve worker_binding_key "
+            "to worker_type."
+        ),
+    )
     task_id: UUID
     execution_id: UUID
     sandbox_id: str
+    node_id: UUID | None = Field(
+        default=None,
+        description="RunGraphNode.id — this worker's graph node identity.",
+    )
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]

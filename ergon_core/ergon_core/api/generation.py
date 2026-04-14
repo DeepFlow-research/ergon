@@ -17,6 +17,8 @@ the strings to recover IDs — TODO: verify this round-trip is lossless
 for all tokenizers.
 """
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -55,3 +57,7 @@ class GenerationTurn(BaseModel):
 
     logprobs: list[TokenLogprob] | None = None
     policy_version: str | None = None
+
+    # Timing — set by framework in worker_execute.py, not by workers
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
