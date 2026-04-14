@@ -24,6 +24,10 @@ if TYPE_CHECKING:
     from ergon_core.core.persistence.telemetry.evaluation_summary import (
         EvaluationSummary,
     )
+    from ergon_core.core.persistence.telemetry.tool_call_types import (
+        ToolCall,
+        ToolResult,
+    )
 
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
@@ -105,13 +109,19 @@ class RunTaskExecution(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_task_id: UUID = Field(
+    definition_task_id: UUID | None = Field(
+        default=None,
         foreign_key="experiment_definition_tasks.id",
         index=True,
     )
     definition_worker_id: UUID | None = Field(
         default=None,
         foreign_key="experiment_definition_workers.id",
+        index=True,
+    )
+    node_id: UUID | None = Field(
+        default=None,
+        foreign_key="run_graph_nodes.id",
         index=True,
     )
     attempt_number: int = 1
@@ -153,47 +163,6 @@ class RunTaskExecution(SQLModel, table=True):
 
     @model_validator(mode="after")
     def _validate_error_json(self) -> "RunTaskExecution":
-        self.__class__._parse_error(self.error_json)
-        return self
-
-
-# ---------------------------------------------------------------------------
-# RunAction
-# ---------------------------------------------------------------------------
-
-
-class RunAction(SQLModel, table=True):
-    __tablename__ = "run_actions"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
-    task_execution_id: UUID = Field(
-        foreign_key="run_task_executions.id",
-        index=True,
-    )
-    action_num: int
-    action_type: str
-    input_text: str
-    output_text: str | None = None
-    error_json: dict | None = Field(default=None, sa_column=Column(JSON))
-    started_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-
-    # -- JSON accessor: error_json (nullable) --
-
-    def parsed_error(self) -> dict[str, object] | None:
-        return self.__class__._parse_error(self.error_json)
-
-    @classmethod
-    def _parse_error(cls, data: dict | None) -> dict[str, object] | None:
-        if data is None:
-            return None
-        if not isinstance(data, dict):
-            raise ValueError(f"error_json must be a dict, got {type(data).__name__}")
-        return data
-
-    @model_validator(mode="after")
-    def _validate_error_json(self) -> "RunAction":
         self.__class__._parse_error(self.error_json)
         return self
 
@@ -467,15 +436,21 @@ class RunGenerationTurn(SQLModel, table=True):
         default=None, index=True
     )  # ExecutionOutcome Literal — str for SQLModel compat
 
+    started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
+    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessors --
 
-    def parsed_tool_calls(self) -> list[dict[str, object]]:
-        return self._parse_optional_list("tool_calls_json", self.tool_calls_json) or []
+    def parsed_tool_calls(self) -> list["ToolCall"]:
+        from ergon_core.core.persistence.telemetry.tool_call_types import ToolCall
 
-    def parsed_tool_results(self) -> list[dict[str, object]]:
-        return self._parse_optional_list("tool_results_json", self.tool_results_json) or []
+        return [ToolCall.model_validate(tc) for tc in (self.tool_calls_json or [])]
+
+    def parsed_tool_results(self) -> list["ToolResult"]:
+        from ergon_core.core.persistence.telemetry.tool_call_types import ToolResult
+
+        return [ToolResult.model_validate(tr) for tr in (self.tool_results_json or [])]
 
     def parsed_token_ids(self) -> list[int] | None:
         return self._parse_optional_list("token_ids_json", self.token_ids_json)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from datetime import datetime
 from uuid import UUID
 
 from ergon_core.api.generation import GenerationTurn
@@ -12,7 +11,6 @@ from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionSta
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
     ExecutionOutcome,
-    RunAction,
     RunGenerationTurn,
     RunRecord,
     RunResource,
@@ -42,10 +40,6 @@ class TelemetryRepository:
 
     def get_task_evaluations(self, session: Session, run_id: UUID) -> list[RunTaskEvaluation]:
         stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
-        return list(session.exec(stmt).all())
-
-    def get_actions(self, session: Session, run_id: UUID) -> list[RunAction]:
-        stmt = select(RunAction).where(RunAction.run_id == run_id)
         return list(session.exec(stmt).all())
 
     def get_resources(self, session: Session, run_id: UUID) -> list[RunResource]:
@@ -122,36 +116,6 @@ class TelemetryRepository:
         session.add(execution)
         session.flush()
         return execution
-
-    def create_action(  # slopcop: ignore[max-function-params]
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        task_execution_id: UUID,
-        action_num: int,
-        action_type: str,
-        input_text: str,
-        output_text: str | None = None,
-        error_json: dict[str, object] | None = None,
-        started_at: datetime | None = None,
-        completed_at: datetime | None = None,
-    ) -> RunAction:
-        action = RunAction(
-            id=new_id(),
-            run_id=run_id,
-            task_execution_id=task_execution_id,
-            action_num=action_num,
-            action_type=action_type,
-            input_text=input_text,
-            output_text=output_text,
-            error_json=error_json,
-            started_at=started_at or _utcnow(),
-            completed_at=completed_at,
-        )
-        session.add(action)
-        session.flush()
-        return action
 
     def create_resource(  # slopcop: ignore[max-function-params]
         self,
@@ -249,6 +213,8 @@ class GenerationTurnRepository:
             logprobs_json=([lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None),
             policy_version=turn.policy_version,
             execution_outcome=execution_outcome,
+            started_at=turn.started_at,
+            completed_at=turn.completed_at,
             created_at=_utcnow(),
         )
         session.add(row)
@@ -290,6 +256,8 @@ class GenerationTurnRepository:
                     [lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None
                 ),
                 policy_version=turn.policy_version,
+                started_at=turn.started_at,
+                completed_at=turn.completed_at,
             )
             session.add(row)
             rows.append(row)
