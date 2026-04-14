@@ -12,21 +12,19 @@ import {
   broadcastCohortUpdated,
   broadcastRunCompleted,
   broadcastGenerationTurn,
+  broadcastGraphMutation,
   broadcastTaskEvaluation,
   broadcastTaskStatus,
   broadcastThreadMessage,
-  broadcastActionNew,
-  broadcastActionCompleted,
   broadcastResourceNew,
   broadcastSandboxCreated,
   broadcastSandboxCommand,
   broadcastSandboxClosed,
 } from "@/lib/socket/server";
 import {
-  parseDashboardAgentActionCompletedData,
-  parseDashboardAgentActionStartedData,
   parseDashboardCohortUpdatedData,
   parseDashboardGenerationTurnCompletedData,
+  parseDashboardGraphMutationData,
   parseDashboardResourcePublishedData,
   parseDashboardSandboxClosedData,
   parseDashboardSandboxCommandData,
@@ -38,7 +36,6 @@ import {
   parseDashboardWorkflowStartedData,
 } from "@/lib/contracts/events";
 import {
-  ActionState,
   GenerationTurnState,
   ResourceState,
   SandboxCommandState,
@@ -222,117 +219,6 @@ const onTaskStatusChanged = inngest.createFunction(
       assigned_worker_id ?? null,
       assigned_worker_name ?? null
     );
-
-    return { success: true };
-  }
-);
-
-// =============================================================================
-// Agent Action Events
-// =============================================================================
-
-const onAgentActionStarted = inngest.createFunction(
-  { id: "dashboard-agent-action-started" },
-  { event: "dashboard/agent.action_started" },
-  async ({ event }) => {
-    const payload = parseDashboardAgentActionStartedData(event.data);
-    const {
-      run_id,
-      task_id,
-      action_id,
-      worker_id,
-      worker_name,
-      action_type,
-      action_input,
-      timestamp,
-    } = payload;
-
-    console.log("[Dashboard] Agent action started:", {
-      run_id,
-      task_id,
-      action_type,
-      worker_name,
-    });
-
-    // Create action state
-    const action: ActionState = {
-      id: action_id,
-      taskId: task_id,
-      workerId: worker_id,
-      workerName: worker_name,
-      type: action_type,
-      input: action_input,
-      output: null,
-      status: "started",
-      startedAt: timestamp,
-      completedAt: null,
-      durationMs: null,
-      success: false,
-      error: null,
-    };
-
-    // Update store
-    store.addAction(run_id, action);
-
-    // Broadcast to run subscribers
-    broadcastActionNew(run_id, action);
-
-    return { success: true };
-  }
-);
-
-const onAgentActionCompleted = inngest.createFunction(
-  { id: "dashboard-agent-action-completed" },
-  { event: "dashboard/agent.action_completed" },
-  async ({ event }) => {
-    const payload = parseDashboardAgentActionCompletedData(event.data);
-    const {
-      run_id,
-      task_id,
-      action_id,
-      worker_id,
-      action_type,
-      action_output,
-      duration_ms,
-      success,
-      error,
-      timestamp,
-    } = payload;
-
-    console.log("[Dashboard] Agent action completed:", {
-      run_id,
-      task_id,
-      action_type,
-      success,
-      duration_ms,
-    });
-
-    // Get existing action to preserve input and worker_name
-    const existingActions = store.getActionsForTask(run_id, task_id);
-    const existingAction = existingActions.find((a) => a.id === action_id);
-
-    // Create/update action state
-    const action: ActionState = {
-      id: action_id,
-      taskId: task_id,
-      workerId: worker_id,
-      workerName: existingAction?.workerName ?? "",
-      type: action_type,
-      input: existingAction?.input ?? "",
-      output: action_output ?? null,
-      status: success ? "completed" : "failed",
-      startedAt: existingAction?.startedAt ?? timestamp,
-      completedAt: timestamp,
-      durationMs: duration_ms ?? null,
-      success,
-      error: error ?? null,
-    };
-
-    // Update store
-    store.addAction(run_id, action);
-
-    // Broadcast to run subscribers
-    broadcastActionCompleted(run_id, action);
 
     return { success: true };
   }
@@ -561,6 +447,21 @@ const onGenerationTurnCompleted = inngest.createFunction(
 );
 
 // =============================================================================
+// Graph Mutation Events
+// =============================================================================
+
+const onGraphMutation = inngest.createFunction(
+  { id: "handle-graph-mutation", name: "Handle Graph Mutation" },
+  { event: "dashboard/graph.mutation" },
+  async ({ event }) => {
+    const mutation = parseDashboardGraphMutationData(event.data);
+    store.applyGraphMutation(mutation.run_id, mutation);
+    broadcastGraphMutation(mutation.run_id, mutation);
+    return { success: true };
+  },
+);
+
+// =============================================================================
 // Export all functions
 // =============================================================================
 
@@ -571,11 +472,10 @@ export const functions = [
   onThreadMessageCreated,
   onTaskEvaluationUpdated,
   onTaskStatusChanged,
-  onAgentActionStarted,
-  onAgentActionCompleted,
   onResourcePublished,
   onSandboxCreated,
   onSandboxCommand,
   onSandboxClosed,
   onGenerationTurnCompleted,
+  onGraphMutation,
 ];
