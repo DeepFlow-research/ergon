@@ -54,9 +54,7 @@ def downgrade() -> None:
         sa.ForeignKeyConstraint(["task_execution_id"], ["run_task_executions.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_run_actions_run_id"), "run_actions", ["run_id"], unique=False
-    )
+    op.create_index(op.f("ix_run_actions_run_id"), "run_actions", ["run_id"], unique=False)
     op.create_index(
         op.f("ix_run_actions_task_execution_id"),
         "run_actions",
