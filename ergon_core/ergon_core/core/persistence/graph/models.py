@@ -50,7 +50,14 @@ class RunGraphNode(SQLModel, table=True):
         default=None,
         foreign_key="experiment_definition_tasks.id",
     )
+    # Identifies which benchmark instance this node belongs to (e.g.
+    # which dataset row or environment variant). Maps to
+    # ExperimentDefinitionInstance.instance_key.
     instance_key: str
+
+    # Identifies the task slot in the experiment template (e.g.
+    # 'research-av-safety'). For dynamically spawned tasks, a generated
+    # key like 'dynamic-abc123'.
     task_key: str = Field(index=True)
     description: str
 

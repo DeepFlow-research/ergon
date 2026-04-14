@@ -22,7 +22,6 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    RunAction,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -321,32 +320,6 @@ class EvaluationsQueries(BaseQueries[RunTaskEvaluation]):
 
 
 # ---------------------------------------------------------------------------
-# Actions
-# ---------------------------------------------------------------------------
-
-
-class ActionsQueries(BaseQueries[RunAction]):
-    def __init__(self) -> None:
-        super().__init__(RunAction)
-
-    def list_by_run(self, run_id: UUID) -> list[RunAction]:
-        with get_session() as session:
-            stmt = (
-                select(RunAction).where(RunAction.run_id == run_id).order_by(RunAction.action_num)
-            )
-            return list(session.exec(stmt).all())
-
-    def list_by_execution(self, task_execution_id: UUID) -> list[RunAction]:
-        with get_session() as session:
-            stmt = (
-                select(RunAction)
-                .where(RunAction.task_execution_id == task_execution_id)
-                .order_by(RunAction.action_num)
-            )
-            return list(session.exec(stmt).all())
-
-
-# ---------------------------------------------------------------------------
 # Resources
 # ---------------------------------------------------------------------------
 
@@ -379,7 +352,6 @@ class Queries:
     task_executions: TaskExecutionsQueries
     state_events: StateEventsQueries
     evaluations: EvaluationsQueries
-    actions: ActionsQueries
     resources: ResourcesQueries
 
     def __init__(self) -> None:
@@ -388,7 +360,6 @@ class Queries:
         self.task_executions = TaskExecutionsQueries()
         self.state_events = StateEventsQueries()
         self.evaluations = EvaluationsQueries()
-        self.actions = ActionsQueries()
         self.resources = ResourcesQueries()
 
 

@@ -9,7 +9,10 @@ The repository does NOT validate status transitions or authorization.
 Those are the experiment layer's responsibility.
 """
 
+import asyncio
+import logging
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from uuid import UUID, uuid4
 
 from sqlmodel import Session, col, select
@@ -33,14 +36,26 @@ from ergon_core.core.runtime.errors.graph_errors import (
     NodeNotFoundError,
 )
 from ergon_core.core.runtime.services.graph_dto import (
+    AnnotationDeletedMutation,
+    AnnotationSetMutation,
+    EdgeAddedMutation,
+    EdgeRemovedMutation,
+    EdgeStatusChangedMutation,
     GraphAnnotationDto,
     GraphEdgeDto,
     GraphMutationDto,
+    GraphMutationValue,
     GraphNodeDto,
     MutationMeta,
+    NodeAddedMutation,
+    NodeFieldChangedMutation,
+    NodeRemovedMutation,
+    NodeStatusChangedMutation,
     WorkflowGraphDto,
 )
 from ergon_core.core.utils import utcnow
+
+logger = logging.getLogger(__name__)
 
 # Only fields the execution runtime needs for dispatch live on the core row.
 # Everything experiment-specific (payload, contracts, criteria, budgets)
@@ -63,6 +78,14 @@ class WorkflowGraphRepository:
     authorization (were they allowed to). The experiment layer enforces
     permissions before calling repository methods.
     """
+
+    def __init__(self) -> None:
+        self._mutation_listeners: list[Callable[[RunGraphMutation], Awaitable[None]]] = []
+
+    def add_mutation_listener(
+        self, listener: Callable[[RunGraphMutation], Awaitable[None]]
+    ) -> None:
+        self._mutation_listeners.append(listener)
 
     # ── Initialization ──────────────────────────────────────
 
@@ -175,7 +198,7 @@ class WorkflowGraphRepository:
                     target_id=node.id,
                     actor=meta.actor,
                     old_value=None,
-                    new_value=_node_snapshot(node),
+                    new_value=_node_snapshot(node).model_dump(),
                     reason=meta.reason,
                     created_at=now,
                 )
@@ -203,7 +226,10 @@ class WorkflowGraphRepository:
                         target_id=node.id,
                         actor=meta.actor,
                         old_value=None,
-                        new_value={"namespace": "payload", "payload": dict(task.task_payload)},
+                        new_value=AnnotationSetMutation(
+                            namespace="payload",
+                            payload=dict(task.task_payload),
+                        ).model_dump(),
                         reason=meta.reason,
                         created_at=now,
                     )
@@ -220,7 +246,7 @@ class WorkflowGraphRepository:
                     target_id=edge.id,
                     actor=meta.actor,
                     old_value=None,
-                    new_value=_edge_snapshot(edge),
+                    new_value=_edge_snapshot(edge).model_dump(),
                     reason=meta.reason,
                     created_at=now,
                 )
@@ -287,7 +313,7 @@ class WorkflowGraphRepository:
         meta: MutationMeta,
     ) -> None:
         node = self._get_node_row(session, run_id, node_id)
-        old = _node_snapshot(node)
+        old = _node_removed_snapshot(node)
 
         connected = list(
             session.exec(
@@ -320,7 +346,7 @@ class WorkflowGraphRepository:
             target_id=node_id,
             meta=meta,
             old_value=old,
-            new_value=_node_snapshot(node),
+            new_value=_node_removed_snapshot(node),
         )
 
     def update_node_status(
@@ -347,8 +373,8 @@ class WorkflowGraphRepository:
             target_type="node",
             target_id=node_id,
             meta=meta,
-            old_value={"status": old_status},
-            new_value={"status": new_status},
+            old_value=NodeStatusChangedMutation(status=old_status),
+            new_value=NodeStatusChangedMutation(status=new_status),
         )
         return _to_node_dto(node)
 
@@ -381,8 +407,8 @@ class WorkflowGraphRepository:
             target_type="node",
             target_id=node_id,
             meta=meta,
-            old_value={"field": field, "value": old_value},
-            new_value={"field": field, "value": value},
+            old_value=NodeFieldChangedMutation(field=field, value=old_value),  # type: ignore[arg-type]
+            new_value=NodeFieldChangedMutation(field=field, value=value),  # type: ignore[arg-type]
         )
         return _to_node_dto(node)
 
@@ -436,7 +462,7 @@ class WorkflowGraphRepository:
         meta: MutationMeta,
     ) -> None:
         edge = self._get_edge_row(session, run_id, edge_id)
-        old = _edge_snapshot(edge)
+        old = _edge_removed_snapshot(edge)
 
         edge.status = terminal_status
         edge.updated_at = utcnow()
@@ -451,7 +477,7 @@ class WorkflowGraphRepository:
             target_id=edge_id,
             meta=meta,
             old_value=old,
-            new_value=_edge_snapshot(edge),
+            new_value=_edge_removed_snapshot(edge),
         )
 
     def update_edge_status(
@@ -478,8 +504,8 @@ class WorkflowGraphRepository:
             target_type="edge",
             target_id=edge_id,
             meta=meta,
-            old_value={"status": old_status},
-            new_value={"status": new_status},
+            old_value=EdgeStatusChangedMutation(status=old_status),
+            new_value=EdgeStatusChangedMutation(status=new_status),
         )
         return _to_edge_dto(edge)
 
@@ -518,8 +544,8 @@ class WorkflowGraphRepository:
             target_type=target_type,
             target_id=target_id,
             meta=meta,
-            old_value={"namespace": namespace, "payload": old_payload} if old_payload else None,
-            new_value={"namespace": namespace, "payload": payload},
+            old_value=AnnotationSetMutation(namespace=namespace, payload=old_payload) if old_payload else None,
+            new_value=AnnotationSetMutation(namespace=namespace, payload=payload),
         )
         return _to_annotation_dto(row)
 
@@ -629,8 +655,8 @@ class WorkflowGraphRepository:
             target_type=target_type,
             target_id=target_id,
             meta=meta,
-            old_value={"namespace": namespace, "payload": old_payload} if old_payload else None,
-            new_value={"namespace": namespace, "payload": {}},
+            old_value=AnnotationDeletedMutation(namespace=namespace, payload=old_payload) if old_payload else None,
+            new_value=AnnotationDeletedMutation(namespace=namespace, payload={}),
         )
 
     # ── Query operations ────────────────────────────────────
@@ -809,8 +835,8 @@ class WorkflowGraphRepository:
         target_type: str,
         target_id: UUID,
         meta: MutationMeta,
-        old_value: dict | None,
-        new_value: dict,
+        old_value: GraphMutationValue | None,
+        new_value: GraphMutationValue,
     ) -> None:
         seq = self._next_sequence(session, run_id)
         row = RunGraphMutation(
@@ -820,13 +846,19 @@ class WorkflowGraphRepository:
             target_type=target_type,
             target_id=target_id,
             actor=meta.actor,
-            old_value=old_value,
-            new_value=new_value,
+            old_value=old_value.model_dump() if old_value is not None else None,
+            new_value=new_value.model_dump(),
             reason=meta.reason,
             created_at=utcnow(),
         )
         session.add(row)
         session.flush()
+
+        for listener in self._mutation_listeners:
+            try:
+                asyncio.get_event_loop().create_task(listener(row))
+            except Exception:  # slopcop: ignore[no-broad-except]
+                logger.warning("Mutation listener failed", exc_info=True)
 
     def _check_no_cycle(
         self,
@@ -910,22 +942,40 @@ def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationDto:
     )
 
 
-def _node_snapshot(node: RunGraphNode) -> dict[str, object]:
-    return {
-        "task_key": node.task_key,
-        "instance_key": node.instance_key,
-        "description": node.description,
-        "status": node.status,
-        "assigned_worker_key": node.assigned_worker_key,
-    }
+def _node_removed_snapshot(node: RunGraphNode) -> NodeRemovedMutation:
+    return NodeRemovedMutation(
+        task_key=node.task_key,
+        instance_key=node.instance_key,
+        description=node.description,
+        status=node.status,
+        assigned_worker_key=node.assigned_worker_key,
+    )
 
 
-def _edge_snapshot(edge: RunGraphEdge) -> dict[str, object]:
-    return {
-        "source_node_id": str(edge.source_node_id),
-        "target_node_id": str(edge.target_node_id),
-        "status": edge.status,
-    }
+def _edge_removed_snapshot(edge: RunGraphEdge) -> EdgeRemovedMutation:
+    return EdgeRemovedMutation(
+        source_node_id=str(edge.source_node_id),
+        target_node_id=str(edge.target_node_id),
+        status=edge.status,
+    )
+
+
+def _node_snapshot(node: RunGraphNode) -> NodeAddedMutation:
+    return NodeAddedMutation(
+        task_key=node.task_key,
+        instance_key=node.instance_key,
+        description=node.description,
+        status=node.status,
+        assigned_worker_key=node.assigned_worker_key,
+    )
+
+
+def _edge_snapshot(edge: RunGraphEdge) -> EdgeAddedMutation:
+    return EdgeAddedMutation(
+        source_node_id=str(edge.source_node_id),
+        target_node_id=str(edge.target_node_id),
+        status=edge.status,
+    )
 
 
 def _is_acyclic(edges: list[RunGraphEdge]) -> bool:
