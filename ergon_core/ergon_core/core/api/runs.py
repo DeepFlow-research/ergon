@@ -12,6 +12,7 @@ from ergon_core.core.api.schemas import (
     RunCommunicationThreadDto,
     RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
+    RunGraphMutationDto,
     RunResourceDto,
     RunSandboxCommandDto,
     RunSandboxDto,
@@ -25,14 +26,10 @@ from ergon_core.core.api.schemas import (
 )
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
-    ExperimentDefinitionTask,
-    ExperimentDefinitionTaskAssignment,
-    ExperimentDefinitionTaskDependency,
     ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.telemetry.models import (
     RunGenerationTurn,
     RunRecord,
@@ -54,87 +51,69 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 # ---------------------------------------------------------------------------
 
 
-def _build_task_tree(
-    tasks: list[ExperimentDefinitionTask],
-    dependencies: list[ExperimentDefinitionTaskDependency],
-    current_statuses: dict[UUID, str],
-    worker_assignments: dict[UUID, tuple[str | None, str | None]],
+def _build_task_map(
+    nodes: list[RunGraphNode],
+    edges: list[RunGraphEdge],
+    worker_by_binding: dict[str, ExperimentDefinitionWorker],
     task_timestamps: dict[UUID, tuple[datetime | None, datetime | None]],
 ) -> tuple[dict[str, RunTaskDto], str, int, int, int, int, int]:
-    """Build the flat task map and counts.
+    """Build the flat task map from graph nodes and edges.
 
-    Returns (task_map, root_task_id, total, total_leaf, completed, failed, running).
+    Returns (task_map, root_node_id, total, total_leaf, completed, failed, running).
     """
-    if not tasks:
+    if not nodes:
         return {}, "", 0, 0, 0, 0, 0
 
-    children_map: dict[UUID, list[UUID]] = defaultdict(list)
-    for t in tasks:
-        if t.parent_task_id is not None:
-            children_map[t.parent_task_id].append(t.id)
-
-    deps_map: dict[UUID, list[UUID]] = defaultdict(list)
-    for d in dependencies:
-        deps_map[d.task_id].append(d.depends_on_task_id)
-
-    task_by_id = {t.id: t for t in tasks}
-
-    def _level(t: ExperimentDefinitionTask) -> int:
-        depth = 0
-        current = t
-        while current.parent_task_id is not None:
-            depth += 1
-            parent = task_by_id.get(current.parent_task_id)
-            if parent is None:
-                break
-            current = parent
-        return depth
-
-    root_id: str = ""
-    result: dict[str, RunTaskDto] = {}
-    completed = 0
-    failed = 0
-    running = 0
-    leaf_count = 0
-
-    for t in tasks:
-        tid = str(t.id)
-        child_ids = children_map.get(t.id, [])
-        is_leaf = len(child_ids) == 0
-        status = current_statuses.get(t.id, "pending")
-
-        if t.parent_task_id is None:
-            root_id = tid
-
-        if is_leaf:
-            leaf_count += 1
-            if status in (TaskExecutionStatus.COMPLETED, "completed"):
-                completed += 1
-            elif status in (TaskExecutionStatus.FAILED, "failed"):
-                failed += 1
-            elif status in (TaskExecutionStatus.RUNNING, "running"):
-                running += 1
-
-        worker_id, worker_name = worker_assignments.get(t.id, (None, None))
-        started_at_str, completed_at_str = task_timestamps.get(t.id, (None, None))
-
-        result[tid] = RunTaskDto(
-            id=tid,
-            name=t.task_key,
-            description=t.description,
-            status=status,
-            parent_id=str(t.parent_task_id) if t.parent_task_id else None,
-            child_ids=[str(c) for c in child_ids],
-            depends_on_ids=[str(d) for d in deps_map.get(t.id, [])],
-            is_leaf=is_leaf,
-            level=_level(t),
-            assigned_worker_id=worker_id,
-            assigned_worker_name=worker_name,
-            started_at=started_at_str,
-            completed_at=completed_at_str,
+    task_map: dict[str, RunTaskDto] = {}
+    for node in nodes:
+        nid = str(node.id)
+        worker = worker_by_binding.get(node.assigned_worker_key or "")
+        started_at, completed_at = task_timestamps.get(node.id, (None, None))
+        task_map[nid] = RunTaskDto(
+            id=nid,
+            name=node.task_key,
+            description=node.description,
+            status=node.status,
+            parent_id=None,
+            child_ids=[],
+            depends_on_ids=[],
+            is_leaf=True,
+            level=0,
+            assigned_worker_id=str(worker.id) if worker else None,
+            assigned_worker_name=node.assigned_worker_key,
+            started_at=started_at,
+            completed_at=completed_at,
         )
 
-    return result, root_id, len(tasks), leaf_count, completed, failed, running
+    for edge in edges:
+        src = str(edge.source_node_id)
+        tgt = str(edge.target_node_id)
+        source_task = task_map.get(src)
+        target_task = task_map.get(tgt)
+        if source_task is None or target_task is None:
+            continue
+
+        if target_task.parent_id is None:
+            task_map[tgt] = target_task.model_copy(
+                update={"parent_id": src, "level": source_task.level + 1}
+            )
+            task_map[src] = source_task.model_copy(
+                update={"child_ids": [*source_task.child_ids, tgt], "is_leaf": False}
+            )
+        elif target_task.parent_id != src:
+            task_map[tgt] = target_task.model_copy(
+                update={"depends_on_ids": [*target_task.depends_on_ids, src]}
+            )
+
+    root_id = next((t.id for t in task_map.values() if t.parent_id is None), "")
+    total = len(task_map)
+    leaves = [t for t in task_map.values() if t.is_leaf]
+    total_leaf = len(leaves)
+    completed = sum(1 for t in leaves if t.status == "completed")
+    failed = sum(1 for t in leaves if t.status == "failed")
+    running = sum(1 for t in leaves if t.status == "running")
+
+    return task_map, root_id, total, total_leaf, completed, failed, running
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +126,10 @@ def _task_keyed_executions(
     worker_map: dict[UUID, ExperimentDefinitionWorker],
 ) -> dict[str, list[RunExecutionAttemptDto]]:
     by_task: dict[str, list[RunExecutionAttemptDto]] = defaultdict(list)
-    for ex in sorted(executions, key=lambda e: (str(e.definition_task_id), e.attempt_number)):
-        tid = str(ex.definition_task_id)
+    for ex in sorted(executions, key=lambda e: (str(e.node_id or ""), e.attempt_number)):
+        if ex.node_id is None:
+            continue
+        tid = str(ex.node_id)
         error_msg: str | None = None
         if ex.error_json:
             error_msg = ex.error_json.get("message") or str(ex.error_json)
@@ -209,10 +190,17 @@ def _task_keyed_resources(
 def _task_keyed_evaluations(
     evaluations: list[RunTaskEvaluation],
     run_id: str,
+    defn_to_node: dict[UUID, UUID],
 ) -> dict[str, RunTaskEvaluationDto]:
     result: dict[str, RunTaskEvaluationDto] = {}
     for ev in evaluations:
-        tid = str(ev.definition_task_id)
+        node_id = defn_to_node.get(ev.definition_task_id)
+        if node_id is None:
+            # Dynamic nodes have no definition_task_id; evaluations for unknown tasks are skipped.
+            # TODO: when dynamic-task evaluation is added, RunTaskEvaluation will need a node_id
+            # foreign key so evaluations can be mapped without going through the definition layer.
+            continue
+        tid = str(node_id)
         summary = ev.parsed_summary()
 
         criterion_results = [
@@ -325,16 +313,6 @@ def _build_communication_threads(
     return result
 
 
-def _current_task_statuses(session: Session, run_id: UUID) -> dict[UUID, str]:
-    """Read current task statuses from RunGraphNode (single source of truth)."""
-    nodes = session.exec(
-        select(RunGraphNode.definition_task_id, RunGraphNode.status).where(
-            RunGraphNode.run_id == run_id
-        )
-    ).all()
-    return {defn_id: status for defn_id, status in nodes if defn_id is not None}
-
-
 def _task_timestamps(
     executions: list[RunTaskExecution],
 ) -> dict[UUID, tuple[datetime | None, datetime | None]]:
@@ -342,7 +320,8 @@ def _task_timestamps(
     result: dict[UUID, tuple[datetime | None, datetime | None]] = {}
     by_task: dict[UUID, list[RunTaskExecution]] = defaultdict(list)
     for ex in executions:
-        by_task[ex.definition_task_id].append(ex)
+        if ex.node_id is not None:
+            by_task[ex.node_id].append(ex)
 
     for task_id, execs in by_task.items():
         started = min((e.started_at for e in execs if e.started_at), default=None)
@@ -367,16 +346,12 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
 
     def_id = run.experiment_definition_id
 
-    # Task tree from definition tables
-    tasks_stmt = select(ExperimentDefinitionTask).where(
-        ExperimentDefinitionTask.experiment_definition_id == def_id
-    )
-    def_tasks = list(session.exec(tasks_stmt).all())
+    # Graph nodes and edges for this run
+    nodes_stmt = select(RunGraphNode).where(RunGraphNode.run_id == run_id)
+    nodes = list(session.exec(nodes_stmt).all())
 
-    deps_stmt = select(ExperimentDefinitionTaskDependency).where(
-        ExperimentDefinitionTaskDependency.experiment_definition_id == def_id
-    )
-    def_deps = list(session.exec(deps_stmt).all())
+    edges_stmt = select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
+    edges = list(session.exec(edges_stmt).all())
 
     # Worker definitions for this experiment
     workers_stmt = select(ExperimentDefinitionWorker).where(
@@ -387,17 +362,6 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
     worker_by_binding: dict[str, ExperimentDefinitionWorker] = {
         w.binding_key: w for w in def_workers
     }
-
-    # Task-to-worker assignments
-    assignments_stmt = select(ExperimentDefinitionTaskAssignment).where(
-        ExperimentDefinitionTaskAssignment.experiment_definition_id == def_id
-    )
-    assignments = list(session.exec(assignments_stmt).all())
-    worker_assignments: dict[UUID, tuple[str | None, str | None]] = {}
-    for a in assignments:
-        w = worker_by_binding.get(a.worker_binding_key)
-        if w:
-            worker_assignments[a.task_id] = (str(w.id), w.binding_key)
 
     # Run telemetry
     exec_stmt = select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
@@ -416,7 +380,6 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
     thread_messages = list(session.exec(thread_msgs_stmt).all())
 
     # Derived maps
-    current_statuses = _current_task_statuses(session, run_id)
     timestamps = _task_timestamps(executions)
     (
         task_map,
@@ -426,9 +389,46 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         completed_tasks,
         failed_tasks,
         running_tasks,
-    ) = _build_task_tree(def_tasks, def_deps, current_statuses, worker_assignments, timestamps)
+    ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
 
-    execution_task_map: dict[UUID, UUID] = {ex.id: ex.definition_task_id for ex in executions}
+    execution_task_map: dict[UUID, UUID] = {
+        ex.id: ex.node_id for ex in executions if ex.node_id is not None
+    }
+
+    # One RunGraphNode per definition task (initialize_from_definition guarantees this).
+    defn_to_node: dict[UUID, UUID] = {
+        n.definition_task_id: n.id for n in nodes if n.definition_task_id is not None
+    }
+
+    # Generation turns
+    gen_turns_stmt = (
+        select(RunGenerationTurn)
+        .where(RunGenerationTurn.run_id == run_id)
+        .order_by(RunGenerationTurn.task_execution_id, RunGenerationTurn.turn_index)
+    )
+    gen_turns = list(session.exec(gen_turns_stmt).all())
+
+    gen_turns_by_task: dict[str, list[RunGenerationTurnDto]] = defaultdict(list)
+    for turn in gen_turns:
+        node_uuid = execution_task_map.get(turn.task_execution_id)
+        if node_uuid is None:
+            continue
+        gen_turns_by_task[str(node_uuid)].append(
+            RunGenerationTurnDto(
+                id=str(turn.id),
+                task_execution_id=str(turn.task_execution_id),
+                worker_binding_key=turn.worker_binding_key,
+                turn_index=turn.turn_index,
+                prompt_text=turn.prompt_text,
+                raw_response=turn.raw_response,
+                response_text=turn.response_text,
+                tool_calls=turn.tool_calls_json,
+                tool_results=turn.tool_results_json,
+                policy_version=turn.policy_version,
+                has_logprobs=turn.token_ids_json is not None,
+                created_at=turn.created_at.isoformat() if turn.created_at else None,
+            )
+        )
 
     # Compute final score from evaluations
     final_score: float | None = None
@@ -458,7 +458,8 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         root_task_id=root_task_id,
         resources_by_task=_task_keyed_resources(resources, execution_task_map),
         executions_by_task=_task_keyed_executions(executions, worker_by_id),
-        evaluations_by_task=_task_keyed_evaluations(evaluations, run_id_str),
+        evaluations_by_task=_task_keyed_evaluations(evaluations, run_id_str, defn_to_node),
+        generation_turns_by_task=dict(gen_turns_by_task),
         sandboxes_by_task=_task_keyed_sandboxes(run_summary),
         threads=_build_communication_threads(threads, thread_messages),
         started_at=run.started_at or run.created_at,
@@ -487,6 +488,47 @@ def get_run(run_id: UUID) -> RunSnapshotDto:
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return snapshot
+
+
+# ---------------------------------------------------------------------------
+# Mutations endpoint (Timeline scrubber)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{run_id}/mutations", response_model=list[RunGraphMutationDto])
+def get_mutations(run_id: UUID) -> list[RunGraphMutationDto]:
+    """Return the append-only mutation log for a run, ordered by sequence.
+
+    Used by the Timeline scrubber to replay DAG state at any point in time.
+    """
+    with get_session() as session:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+        stmt = (
+            select(RunGraphMutation)
+            .where(RunGraphMutation.run_id == run_id)
+            .order_by(RunGraphMutation.sequence)
+        )
+        mutations = list(session.exec(stmt).all())
+
+    return [
+        RunGraphMutationDto(
+            id=str(m.id),
+            run_id=str(m.run_id),
+            sequence=m.sequence,
+            mutation_type=m.mutation_type,
+            target_type=m.target_type,
+            target_id=str(m.target_id),
+            actor=m.actor,
+            old_value=m.old_value,
+            new_value=m.new_value,
+            reason=m.reason,
+            created_at=m.created_at.isoformat(),
+        )
+        for m in mutations
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -248,7 +248,7 @@ class TestAbandonTask:
 
         assert any(m.mutation_type == "node.status_changed" for m in new_mutations)
         status_mut = next(m for m in new_mutations if m.mutation_type == "node.status_changed")
-        assert status_mut.new_value["status"] == ABANDONED
+        assert status_mut.new_value.status == ABANDONED  # type: ignore[union-attr]
 
 
 class TestRefineTask:
@@ -315,5 +315,5 @@ class TestRefineTask:
 
         assert any(m.mutation_type == "node.field_changed" for m in new_mutations)
         field_mut = next(m for m in new_mutations if m.mutation_type == "node.field_changed")
-        assert field_mut.new_value["field"] == "description"
-        assert field_mut.new_value["value"] == "refined"
+        assert field_mut.new_value.field == "description"  # type: ignore[union-attr]
+        assert field_mut.new_value.value == "refined"  # type: ignore[union-attr]

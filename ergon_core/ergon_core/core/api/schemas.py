@@ -1,7 +1,7 @@
 """Pydantic DTOs for the run detail API surface.
 
-Adapted for definition-backed schema: task structure comes from
-ExperimentDefinitionTask rows rather than a serialized task tree.
+Task structure comes from RunGraphNode + RunGraphEdge rows (the live graph),
+not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
 
 """
 
@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 
 
 def _to_camel(value: str) -> str:
@@ -230,3 +232,30 @@ class TrainingMetricDto(CamelModel):
     entropy: float | None = None
     completion_mean_length: float | None = None
     step_time_s: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# Run graph mutation DTO (Timeline scrubber)
+# ---------------------------------------------------------------------------
+
+
+class RunGraphMutationDto(BaseModel):
+    """One entry in the append-only mutation log for a run.
+
+    Field names are snake_case to match the frontend GraphMutationDtoSchema.
+    CamelModel is intentionally not used here — the frontend contract uses snake_case.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    run_id: str
+    sequence: int
+    mutation_type: str
+    target_type: str
+    target_id: str
+    actor: str
+    old_value: GraphMutationValue | None
+    new_value: GraphMutationValue
+    reason: str | None
+    created_at: str
