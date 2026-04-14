@@ -183,14 +183,16 @@ class RunContextEvent(SQLModel, table=True):
 
 `GenerationTurn` (the public worker API in `ergon_core/ergon_core/api/generation.py`) must be updated to carry the full typed input message list and drop the old `prompt_text` field.
 
-First, define a `ModelRequestPart` discriminated union alongside `GenerationTurn`. The three part kinds mirror the field names PydanticAI's `dataclasses.asdict()` produces, so construction from framework objects is zero-cost:
+Define two discriminated unions alongside `GenerationTurn` — one for request parts (input to the model) and one for response parts (output from the model). Part kind names mirror PydanticAI's field names so construction from framework objects is direct, with no intermediate dict serialisation.
 
 ```python
 # ergon_core/ergon_core/api/generation.py
 
 from typing import Annotated, Literal
-from pydantic import Field
+from pydantic import BaseModel, Field
 
+
+# --- Request parts (ModelRequest input) ---
 
 class SystemPromptPart(BaseModel):
     part_kind: Literal["system-prompt"] = "system-prompt"
@@ -215,21 +217,47 @@ ModelRequestPart = Annotated[
 ]
 
 
-class GenerationTurn(BaseModel):
-    # Input context for this turn — PydanticAI ModelRequest parts in order.
-    # Set by the framework adapter (_build_turns in react_worker.py).
-    # Workers do not set this directly.
-    messages_in: list[ModelRequestPart] = Field(default_factory=list)
+# --- Response parts (ModelResponse output) ---
 
-    raw_response: dict[str, object]
-    tool_results: list[dict[str, object]] = Field(default_factory=list)
+class TextPart(BaseModel):
+    part_kind: Literal["text"] = "text"
+    content: str
+
+
+class ToolCallPart(BaseModel):
+    part_kind: Literal["tool-call"] = "tool-call"
+    tool_name: str
+    tool_call_id: str
+    args: dict[str, object]
+
+
+class ThinkingPart(BaseModel):
+    part_kind: Literal["thinking"] = "thinking"
+    content: str
+
+
+ModelResponsePart = Annotated[
+    TextPart | ToolCallPart | ThinkingPart,
+    Field(discriminator="part_kind"),
+]
+
+
+class GenerationTurn(BaseModel):
+    # Set by the framework adapter (_build_turns in react_worker.py).
+    # Workers do not set these directly.
+    messages_in: list[ModelRequestPart] = Field(default_factory=list)
+    response_parts: list[ModelResponsePart] = Field(default_factory=list)
+    tool_results: list[ToolReturnPart] = Field(default_factory=list)
+
+    # logprobs are per-response (from vLLM provider_details), not per-part.
+    # Distributed onto individual event payloads by persist_turn.
     logprobs: list[TokenLogprob] | None = None
     policy_version: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
 ```
 
-`prompt_text` is removed entirely. The framework adapter (`_build_turns` in `react_worker.py`) is responsible for populating `messages_in`; workers never set it directly.
+`prompt_text` and `raw_response` are removed entirely. The framework adapter (`_build_turns` in `react_worker.py`) is responsible for populating all three list fields; workers never set them directly.
 
 ### 4.2 Changes to `_build_turns` in `react_worker.py`
 
@@ -274,24 +302,15 @@ def _to_turn(
     response: ModelResponse,
     tool_result_request: ModelRequest | None,
 ) -> GenerationTurn:
-    raw_resp = _make_json_safe(dataclasses.asdict(response))
-    messages_in: list[ModelRequestPart] = (
-        _extract_request_parts(request_in) if request_in else []
-    )
-    tool_results = (
-        _extract_tool_results(tool_result_request)
-        if tool_result_request else []
-    )
     return GenerationTurn(
-        messages_in=messages_in,
-        raw_response=raw_resp,
-        tool_results=tool_results,
-        logprobs=extract_logprobs(raw_resp),
+        messages_in=_extract_request_parts(request_in) if request_in else [],
+        response_parts=_extract_response_parts(response),
+        tool_results=_extract_tool_results(tool_result_request) if tool_result_request else [],
+        logprobs=extract_logprobs(response),
     )
 
 
 def _extract_request_parts(request: ModelRequest) -> list[ModelRequestPart]:
-    """Convert PydanticAI ModelRequest parts to typed ModelRequestPart objects."""
     parts: list[ModelRequestPart] = []
     for part in request.parts:
         if isinstance(part, PydanticSystemPromptPart):
@@ -305,6 +324,24 @@ def _extract_request_parts(request: ModelRequest) -> list[ModelRequestPart]:
                 content=part.content,
             ))
         # Other part kinds (e.g. image content) are not yet supported — skip.
+    return parts
+
+
+def _extract_response_parts(response: ModelResponse) -> list[ModelResponsePart]:
+    parts: list[ModelResponsePart] = []
+    for part in response.parts:
+        if isinstance(part, PydanticTextPart):
+            parts.append(TextPart(content=part.content))
+        elif isinstance(part, PydanticToolCallPart):
+            args = part.args.args_dict() if hasattr(part.args, "args_dict") else {}
+            parts.append(ToolCallPart(
+                tool_name=part.tool_name,
+                tool_call_id=part.tool_call_id,
+                args=args,
+            ))
+        elif isinstance(part, PydanticThinkingPart):
+            parts.append(ThinkingPart(content=part.content))
+        # Other part kinds are not yet supported — skip.
     return parts
 ```
 
@@ -338,9 +375,9 @@ class ContextEventRepository:
         Emits events in this order:
           1. system_prompt (from messages_in SystemPromptPart, first turn only)
           2. user_message (from messages_in UserPromptPart, first turn only)
-          3. thinking (from raw_response, if present)
-          4. assistant_text / tool_call (from raw_response parts)
-          5. tool_result (from turn.tool_results, one per tool call)
+          3. thinking (from response_parts ThinkingPart, if present)
+          4. assistant_text / tool_call (from response_parts TextPart / ToolCallPart)
+          5. tool_result (from tool_results, one per ToolReturnPart)
 
         Returns the list of persisted events (in sequence order).
         """
@@ -363,15 +400,13 @@ class ContextEventRepository:
                 seq += 1
             # ToolReturnPart entries are handled as tool_result events below
 
-        # 3–4. Events from raw_response (model-generated)
-        response_parts = turn.raw_response.get("parts", [])
-        for part in response_parts:
-            part_kind = part.get("part_kind")
-            if part_kind == "thinking":
+        # 3–4. Events from response_parts (model-generated)
+        for part in turn.response_parts:
+            if isinstance(part, ThinkingPart):
                 events.append(self._make_event(
                     run_id, execution_id, worker_binding_key, seq,
                     ThinkingPayload(
-                        text=part.get("content", ""),
+                        text=part.content,
                         # token_ids populated once vLLM provides them natively
                     ),
                     started_at=turn.started_at,
@@ -380,11 +415,11 @@ class ContextEventRepository:
                     execution_outcome=execution_outcome,
                 ))
                 seq += 1
-            elif part_kind == "text":
+            elif isinstance(part, TextPart):
                 events.append(self._make_event(
                     run_id, execution_id, worker_binding_key, seq,
                     AssistantTextPayload(
-                        text=part.get("content", ""),
+                        text=part.content,
                         logprobs=turn.logprobs,
                     ),
                     started_at=turn.started_at,
@@ -393,13 +428,13 @@ class ContextEventRepository:
                     execution_outcome=execution_outcome,
                 ))
                 seq += 1
-            elif part_kind == "tool-call":
+            elif isinstance(part, ToolCallPart):
                 events.append(self._make_event(
                     run_id, execution_id, worker_binding_key, seq,
                     ToolCallPayload(
-                        tool_call_id=part.get("tool_call_id", ""),
-                        tool_name=part.get("tool_name", ""),
-                        args=part.get("args") or {},
+                        tool_call_id=part.tool_call_id,
+                        tool_name=part.tool_name,
+                        args=part.args,
                         logprobs=turn.logprobs,
                     ),
                     started_at=turn.started_at,
@@ -414,10 +449,9 @@ class ContextEventRepository:
             events.append(self._make_event(
                 run_id, execution_id, worker_binding_key, seq,
                 ToolResultPayload(
-                    tool_call_id=tr.get("tool_call_id", ""),
-                    tool_name=tr.get("tool_name", ""),
-                    result=tr.get("result"),
-                    is_error=bool(tr.get("is_error", False)),
+                    tool_call_id=tr.tool_call_id,
+                    tool_name=tr.tool_name,
+                    result=tr.content,
                 ),
             ))
             seq += 1
