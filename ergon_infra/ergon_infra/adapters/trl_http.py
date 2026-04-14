@@ -42,10 +42,13 @@ def make_ergon_http_rollout_func(
     client = httpx.Client(base_url=ergon_url, timeout=30.0)
 
     def rollout_func(prompts: list, trainer: object) -> dict:
-        resp = client.post("/rollouts/submit", json={
-            "definition_id": definition_id,
-            "num_episodes": len(prompts),
-        })
+        resp = client.post(
+            "/rollouts/submit",
+            json={
+                "definition_id": definition_id,
+                "num_episodes": len(prompts),
+            },
+        )
         resp.raise_for_status()
         batch_id = resp.json()["batch_id"]
         logger.info("Submitted rollout batch %s (%d episodes)", batch_id, len(prompts))
@@ -60,7 +63,8 @@ def make_ergon_http_rollout_func(
                 trajs = data["trajectories"]
                 logger.info(
                     "Batch %s complete: %d trajectories",
-                    batch_id, len(trajs),
+                    batch_id,
+                    len(trajs),
                 )
                 return {
                     "prompt_ids": [t["prompt_ids"] for t in trajs],
@@ -71,13 +75,13 @@ def make_ergon_http_rollout_func(
                 }
 
             if data["status"] == "failed":
-                raise RuntimeError(
-                    f"Rollout batch {batch_id} failed: {data.get('failures', [])}"
-                )
+                raise RuntimeError(f"Rollout batch {batch_id} failed: {data.get('failures', [])}")
 
             logger.debug(
                 "Batch %s: %d/%d complete",
-                batch_id, data.get("completed", 0), data.get("total", 0),
+                batch_id,
+                data.get("completed", 0),
+                data.get("total", 0),
             )
             time.sleep(poll_interval_s)
 

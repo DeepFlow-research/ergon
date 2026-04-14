@@ -23,7 +23,6 @@ no Postgres, no Tailscale for internal services.
 
 import logging
 from typing import cast
-from uuid import UUID
 
 from datasets import Dataset
 from transformers import AutoTokenizer
@@ -50,8 +49,7 @@ def run_trl_training(config: TrainingConfig) -> int:
     definition_id = config.definition_id
     if not definition_id:
         raise ValueError(
-            "--definition-id is required. Create one via: "
-            "ergon benchmark run <slug> --limit 1"
+            "--definition-id is required. Create one via: ergon benchmark run <slug> --limit 1"
         )
 
     tokenizer = AutoTokenizer.from_pretrained(config.model)

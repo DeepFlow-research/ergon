@@ -11,7 +11,6 @@ Usage::
 
 import logging
 import time
-from dataclasses import dataclass, field
 
 import httpx
 
@@ -38,13 +37,14 @@ try:
             self._poll_interval_s = poll_interval_s
             self._timeout_s = timeout_s
 
-        async def run(
-            self, sampling_params: dict, **kwargs: object
-        ) -> AgentLoopOutput:
-            resp = await self._client.post("/rollouts/submit", json={
-                "definition_id": self._definition_id,
-                "num_episodes": 1,
-            })
+        async def run(self, sampling_params: dict, **kwargs: object) -> AgentLoopOutput:
+            resp = await self._client.post(
+                "/rollouts/submit",
+                json={
+                    "definition_id": self._definition_id,
+                    "num_episodes": 1,
+                },
+            )
             resp.raise_for_status()
             batch_id = resp.json()["batch_id"]
 
@@ -71,10 +71,12 @@ try:
                 if data["status"] == "failed":
                     raise RuntimeError(f"Rollout failed: {data.get('failures', [])}")
 
+                # reason: asyncio is stdlib but imported locally to keep module-level imports minimal
                 import asyncio
+
                 await asyncio.sleep(self._poll_interval_s)
 
             raise TimeoutError(f"Rollout batch {batch_id} timed out")
 
 except ImportError:
-    pass
+    logger.debug("veRL not installed; ErgonAgentLoop will not be registered")

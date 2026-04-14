@@ -7,6 +7,7 @@ Usage::
     --agent_func_kwargs '{"ergon_url": "http://macbook:9000/api", "definition_id": "<uuid>"}'
 """
 
+import asyncio
 import logging
 import time
 
@@ -44,13 +45,16 @@ async def agent_func(
     ``generate_fn`` and ``tokenizer`` are provided by OpenRLHF but unused —
     Ergon handles generation via its own vLLM and tokenizer.
     """
-    assert _client is not None, "Call configure() before agent_func()"
-    import asyncio
+    if _client is None:
+        raise RuntimeError("Call configure() before agent_func()")
 
-    resp = await _client.post("/rollouts/submit", json={
-        "definition_id": _definition_id,
-        "num_episodes": 1,
-    })
+    resp = await _client.post(
+        "/rollouts/submit",
+        json={
+            "definition_id": _definition_id,
+            "num_episodes": 1,
+        },
+    )
     resp.raise_for_status()
     batch_id = resp.json()["batch_id"]
 
