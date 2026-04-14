@@ -12,6 +12,7 @@ from ergon_core.core.api.schemas import (
     RunCommunicationThreadDto,
     RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
+    RunGraphMutationDto,
     RunResourceDto,
     RunSandboxCommandDto,
     RunSandboxDto,
@@ -28,7 +29,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.telemetry.models import (
     RunGenerationTurn,
     RunRecord,
@@ -485,6 +486,47 @@ def get_run(run_id: UUID) -> RunSnapshotDto:
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return snapshot
+
+
+# ---------------------------------------------------------------------------
+# Mutations endpoint (Timeline scrubber)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{run_id}/mutations", response_model=list[RunGraphMutationDto])
+def get_mutations(run_id: UUID) -> list[RunGraphMutationDto]:
+    """Return the append-only mutation log for a run, ordered by sequence.
+
+    Used by the Timeline scrubber to replay DAG state at any point in time.
+    """
+    with get_session() as session:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+
+        stmt = (
+            select(RunGraphMutation)
+            .where(RunGraphMutation.run_id == run_id)
+            .order_by(RunGraphMutation.sequence)
+        )
+        mutations = list(session.exec(stmt).all())
+
+    return [
+        RunGraphMutationDto(
+            id=str(m.id),
+            run_id=str(m.run_id),
+            sequence=m.sequence,
+            mutation_type=m.mutation_type,
+            target_type=m.target_type,
+            target_id=str(m.target_id),
+            actor=m.actor,
+            old_value=m.old_value,
+            new_value=m.new_value,
+            reason=m.reason,
+            created_at=m.created_at.isoformat(),
+        )
+        for m in mutations
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -230,3 +230,27 @@ class TrainingMetricDto(CamelModel):
     entropy: float | None = None
     completion_mean_length: float | None = None
     step_time_s: float | None = None
+
+
+# ---------------------------------------------------------------------------
+# Run graph mutation DTO (Timeline scrubber)
+# ---------------------------------------------------------------------------
+
+
+class RunGraphMutationDto(BaseModel):
+    """One entry in the append-only mutation log for a run.
+
+    Field names are snake_case to match the frontend GraphMutationDtoSchema.
+    """
+
+    id: str
+    run_id: str
+    sequence: int
+    mutation_type: str
+    target_type: str
+    target_id: str
+    actor: str | None
+    old_value: dict[str, object] | None
+    new_value: dict[str, object] | None
+    reason: str | None
+    created_at: str
