@@ -77,7 +77,9 @@ class VLLMManager:
         """Stop the vLLM server."""
         if not self.is_running:
             return
-        assert self._process is not None
+        if self._process is None:
+            raise RuntimeError("vLLM process is None despite is_running=True")
+
         logger.info("Stopping vLLM (pid=%s)", self._process.pid)
         self._process.send_signal(signal.SIGTERM)
         try:
