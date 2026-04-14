@@ -9,6 +9,9 @@ from typing import Any
 from uuid import UUID
 
 import inngest
+from pydantic import TypeAdapter
+
+from ergon_core.core.persistence.graph.models import RunGraphMutation
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -16,15 +19,15 @@ from ergon_core.core.runtime.services.cohort_service import experiment_cohort_se
 from ergon_core.core.runtime.services.cohort_stats_service import (
     experiment_cohort_stats_service,
 )
+from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 from ergon_core.core.utils import utcnow
 
 from ergon_core.core.persistence.telemetry.models import RunGenerationTurn
 
 from .event_contracts import (
     CohortUpdatedEvent,
-    DashboardAgentActionCompletedEvent,
-    DashboardAgentActionStartedEvent,
     DashboardGenerationTurnEvent,
+    DashboardGraphMutationEvent,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
     DashboardSandboxCommandEvent,
@@ -35,6 +38,8 @@ from .event_contracts import (
     DashboardWorkflowCompletedEvent,
     DashboardWorkflowStartedEvent,
 )
+
+_MUTATION_VALUE_ADAPTER: TypeAdapter[GraphMutationValue] = TypeAdapter(GraphMutationValue)
 
 logger = logging.getLogger(__name__)
 
@@ -166,72 +171,6 @@ class DashboardEmitter:
             )
         except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to emit dashboard/task.evaluation_updated", exc_info=True)
-
-    # ------------------------------------------------------------------
-    # Agent actions
-    # ------------------------------------------------------------------
-
-    async def agent_action_started(
-        self,
-        run_id: UUID,
-        task_id: UUID,
-        action_id: str,
-        worker_id: UUID,
-        worker_name: str,
-        action_type: str,
-        action_input: str,
-    ) -> None:
-        if not self._enabled:
-            return
-        try:
-            evt = DashboardAgentActionStartedEvent(
-                run_id=run_id,
-                task_id=task_id,
-                action_id=action_id,
-                worker_id=worker_id,
-                worker_name=worker_name,
-                action_type=action_type,
-                action_input=action_input,
-                timestamp=utcnow(),
-            )
-            await inngest_client.send(
-                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
-            )
-        except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning("Failed to emit dashboard/agent.action_started", exc_info=True)
-
-    async def agent_action_completed(  # slopcop: ignore[max-function-params]
-        self,
-        run_id: UUID,
-        task_id: UUID,
-        action_id: str,
-        worker_id: UUID,
-        action_type: str,
-        duration_ms: int,
-        success: bool = True,
-        action_output: str | None = None,
-        error: str | None = None,
-    ) -> None:
-        if not self._enabled:
-            return
-        try:
-            evt = DashboardAgentActionCompletedEvent(
-                run_id=run_id,
-                task_id=task_id,
-                action_id=action_id,
-                worker_id=worker_id,
-                action_type=action_type,
-                action_output=action_output,
-                duration_ms=duration_ms,
-                success=success,
-                error=error,
-                timestamp=utcnow(),
-            )
-            await inngest_client.send(
-                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
-            )
-        except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning("Failed to emit dashboard/agent.action_completed", exc_info=True)
 
     # ------------------------------------------------------------------
     # Resources
@@ -373,6 +312,41 @@ class DashboardEmitter:
             )
         except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to emit dashboard/thread.message_created", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Graph mutations (repository listener)
+    # ------------------------------------------------------------------
+
+    async def graph_mutation(self, row: RunGraphMutation) -> None:
+        """Called by WorkflowGraphRepository after a mutation is flushed to PG."""
+        if not self._enabled:
+            return
+        try:
+            raw_new = {"mutation_type": row.mutation_type, **row.new_value}
+            new_value = _MUTATION_VALUE_ADAPTER.validate_python(raw_new)
+
+            old_value: GraphMutationValue | None = None
+            if row.old_value:
+                raw_old = {"mutation_type": row.mutation_type, **row.old_value}
+                old_value = _MUTATION_VALUE_ADAPTER.validate_python(raw_old)
+
+            evt = DashboardGraphMutationEvent(
+                run_id=row.run_id,
+                sequence=row.sequence,
+                mutation_type=row.mutation_type,
+                target_type=row.target_type,
+                target_id=row.target_id,
+                actor=row.actor,
+                new_value=new_value,
+                old_value=old_value,
+                reason=row.reason,
+                timestamp=row.created_at,
+            )
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:  # slopcop: ignore[no-broad-except]
+            logger.warning("Failed to emit dashboard/graph.mutation", exc_info=True)
 
     # ------------------------------------------------------------------
     # Generation turns (repository listener)

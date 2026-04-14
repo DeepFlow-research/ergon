@@ -8,7 +8,9 @@ from datetime import datetime
 from typing import Any, ClassVar
 from uuid import UUID
 
+from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.runtime.events.base import InngestEventContract
+from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 
 # ---------------------------------------------------------------------------
 # Nested models used inside workflow.started
@@ -92,39 +94,6 @@ class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
     run_id: UUID
     task_id: UUID
     evaluation: dict[str, Any]  # slopcop: ignore[no-typing-any]
-
-
-# ---------------------------------------------------------------------------
-# Agent action events
-# ---------------------------------------------------------------------------
-
-
-class DashboardAgentActionStartedEvent(InngestEventContract):
-    name: ClassVar[str] = "dashboard/agent.action_started"
-
-    run_id: UUID
-    task_id: UUID
-    action_id: str
-    worker_id: UUID
-    worker_name: str
-    action_type: str
-    action_input: str
-    timestamp: datetime
-
-
-class DashboardAgentActionCompletedEvent(InngestEventContract):
-    name: ClassVar[str] = "dashboard/agent.action_completed"
-
-    run_id: UUID
-    task_id: UUID
-    action_id: str
-    worker_id: UUID
-    action_type: str
-    action_output: str | None = None
-    duration_ms: int
-    success: bool
-    error: str | None = None
-    timestamp: datetime
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +184,26 @@ class CohortUpdatedEvent(InngestEventContract):
 # ---------------------------------------------------------------------------
 # Generation turn events (RL observability)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Graph mutation events (dynamic delegation observability)
+# ---------------------------------------------------------------------------
+
+
+class DashboardGraphMutationEvent(InngestEventContract):
+    name: ClassVar[str] = "dashboard/graph.mutation"
+
+    run_id: UUID
+    sequence: int
+    mutation_type: MutationType
+    target_type: GraphTargetType
+    target_id: UUID
+    actor: str
+    new_value: GraphMutationValue
+    old_value: GraphMutationValue | None = None
+    reason: str | None = None
+    timestamp: datetime
 
 
 class DashboardGenerationTurnEvent(InngestEventContract):

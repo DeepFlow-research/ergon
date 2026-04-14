@@ -3,8 +3,6 @@
 from .emitter import DashboardEmitter, dashboard_emitter, emit_cohort_updated_for_run
 from .event_contracts import (
     CohortUpdatedEvent,
-    DashboardAgentActionCompletedEvent,
-    DashboardAgentActionStartedEvent,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
     DashboardSandboxCommandEvent,
@@ -19,8 +17,6 @@ from .event_contracts import (
 
 __all__ = [
     "CohortUpdatedEvent",
-    "DashboardAgentActionCompletedEvent",
-    "DashboardAgentActionStartedEvent",
     "DashboardEmitter",
     "DashboardResourcePublishedEvent",
     "DashboardSandboxClosedEvent",
