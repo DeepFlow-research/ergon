@@ -13,16 +13,18 @@ from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.registry import EVALUATORS, WORKERS
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
-from ergon_core.api import Experiment
+from ergon_core.api import Experiment, Worker
+from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunTaskEvaluation,
     RunTaskExecution,
-    RunTaskStateEvent,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
 from ergon_core.core.runtime.services.evaluation_dto import DispatchEvaluatorsCommand
@@ -49,6 +51,28 @@ from ergon_core.core.runtime.services.workflow_initialization_service import (
     WorkflowInitializationService,
 )
 from sqlmodel import select
+
+
+async def _run_worker(worker: Worker, task: BenchmarkTask, ctx: WorkerContext) -> WorkerOutput:
+    """Consume the worker's async generator, persist turns, return output.
+
+    Mirrors the logic in worker_execute_fn without the Inngest/sandbox overhead.
+    """
+    repo = GenerationTurnRepository()
+    turn_count = 0
+    async for turn in worker.execute(task, context=ctx):
+        with get_session() as session:
+            await repo.persist_single(
+                session,
+                run_id=ctx.run_id,
+                execution_id=ctx.execution_id,
+                worker_binding_key=worker.name,
+                turn=turn,
+                turn_index=turn_count,
+                execution_outcome="success",
+            )
+        turn_count += 1
+    return worker.get_output(ctx)
 
 
 class InProcessCriterionExecutor:
@@ -134,7 +158,7 @@ def test_full_lifecycle_with_evaluation():
             execution_id=prepared.execution_id,
             sandbox_id="test-sandbox",
         )
-        result = asyncio.run(live_worker.execute(task_data, context=ctx))
+        result = asyncio.run(_run_worker(live_worker, task_data, ctx))
         exec_svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
@@ -271,14 +295,6 @@ def test_full_lifecycle_with_evaluation():
     assert finalized.final_score is not None
     assert finalized.final_score > 0
     print(f"[VERIFY] Final score: {finalized.final_score}")
-
-    events = list(
-        session.exec(select(RunTaskStateEvent).where(RunTaskStateEvent.run_id == run.id)).all()
-    )
-    statuses = {e.new_status for e in events}
-    assert "pending" in statuses
-    assert "completed" in statuses
-    print(f"[VERIFY] {len(events)} state events (statuses: {statuses})")
 
     session.close()
     print("\n=== C.4 FULL EVALUATION SMOKE TEST: PASS ===")

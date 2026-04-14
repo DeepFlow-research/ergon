@@ -85,10 +85,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: lint-and-type-check
-    # TODO: remove continue-on-error once pre-existing asyncio.run/async-generator
-    # bug in test_full_lifecycle*.py is fixed (StubWorker.execute is an async generator,
-    # tests call asyncio.run() which expects a coroutine).
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 

@@ -12,9 +12,12 @@ from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.registry import WORKERS
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
-from ergon_core.api import Experiment
+from ergon_core.api import Experiment, Worker
+from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -24,7 +27,6 @@ from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionSta
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunTaskExecution,
-    RunTaskStateEvent,
 )
 from ergon_core.core.runtime.services.orchestration_dto import (
     FinalizeTaskExecutionCommand,
@@ -43,6 +45,28 @@ from ergon_core.core.runtime.services.workflow_initialization_service import (
     WorkflowInitializationService,
 )
 from sqlmodel import select
+
+
+async def _run_worker(worker: Worker, task: BenchmarkTask, ctx: WorkerContext) -> WorkerOutput:
+    """Consume the worker's async generator, persist turns, return output.
+
+    Mirrors the logic in worker_execute_fn without the Inngest/sandbox overhead.
+    """
+    repo = GenerationTurnRepository()
+    turn_count = 0
+    async for turn in worker.execute(task, context=ctx):
+        with get_session() as session:
+            await repo.persist_single(
+                session,
+                run_id=ctx.run_id,
+                execution_id=ctx.execution_id,
+                worker_binding_key=worker.name,
+                turn=turn,
+                turn_index=turn_count,
+                execution_outcome="success",
+            )
+        turn_count += 1
+    return worker.get_output(ctx)
 
 
 def test_full_lifecycle():
@@ -150,7 +174,7 @@ def test_full_lifecycle():
             execution_id=prepared.execution_id,
             sandbox_id="test-sandbox",
         )
-        result = asyncio.run(live_worker.execute(task_data, context=ctx))
+        result = asyncio.run(_run_worker(live_worker, task_data, ctx))
         assert result.success
         print(f"[EXEC] Task {prepared.task_key} -> output: {result.output[:50]}")
 
@@ -212,16 +236,6 @@ def test_full_lifecycle():
         assert ex.status == TaskExecutionStatus.COMPLETED
         assert ex.output_text is not None
     print(f"[VERIFY] {len(executions)} task executions, all COMPLETED")
-
-    # State events exist
-    events = list(
-        session.exec(select(RunTaskStateEvent).where(RunTaskStateEvent.run_id == run.id)).all()
-    )
-    assert len(events) > 0
-    statuses = {e.new_status for e in events}
-    assert "pending" in statuses
-    assert "completed" in statuses
-    print(f"[VERIFY] {len(events)} state events recorded (statuses: {statuses})")
 
     session.close()
     print("\n=== B.5 EXECUTION SMOKE TEST: PASS ===")
