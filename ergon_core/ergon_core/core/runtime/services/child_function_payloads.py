@@ -38,6 +38,7 @@ class WorkerExecuteRequest(InngestEventContract):
     worker_type: str
     model_target: str | None = None
     benchmark_type: str
+    node_id: UUID | None = None
 
 
 class PersistOutputsRequest(InngestEventContract):

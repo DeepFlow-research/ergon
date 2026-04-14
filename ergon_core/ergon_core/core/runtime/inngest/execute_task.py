@@ -68,6 +68,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=payload.task_id,
+                node_id=payload.node_id,
             )
         )
 
@@ -88,6 +89,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                     task_id=payload.task_id,
                     execution_id=prepared.execution_id,
                     sandbox_id=SANDBOX_SKIPPED,
+                    node_id=prepared.node_id,
                 ).model_dump(mode="json"),
             )
         )
@@ -152,6 +154,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 worker_type=prepared.worker_type,
                 model_target=prepared.model_target,
                 benchmark_type=prepared.benchmark_type,
+                node_id=prepared.node_id,
             ).model_dump(),
         )
 
@@ -188,6 +191,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                     task_id=payload.task_id,
                     execution_id=prepared.execution_id,
                     sandbox_id=task_sandbox_id,
+                    node_id=prepared.node_id,
                 ).model_dump(mode="json"),
             )
         )
@@ -245,6 +249,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                     execution_id=prepared.execution_id,
                     error=error_msg,
                     sandbox_id=task_sandbox_id,
+                    node_id=prepared.node_id,
                 ).model_dump(mode="json"),
             )
         )

@@ -15,7 +15,7 @@ from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunAction
+from ergon_core.core.persistence.telemetry.models import RunGenerationTurn
 from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
 from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -23,7 +23,6 @@ from ergon_core.core.runtime.services.child_function_payloads import WorkerExecu
 from ergon_core.core.runtime.services.inngest_function_results import WorkerExecuteResult
 from ergon_core.core.runtime.tracing import (
     CompletedSpan,
-    action_context,
     get_trace_sink,
     worker_execute_context,
 )
@@ -72,9 +71,11 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
 
     worker_context = WorkerContext(
         run_id=payload.run_id,
+        definition_id=payload.definition_id,
         task_id=payload.task_id,
         execution_id=payload.execution_id,
         sandbox_id=payload.sandbox_id,
+        node_id=payload.node_id,
     )
 
     repo = GenerationTurnRepository()
@@ -82,7 +83,13 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
 
     turn_count = 0
     try:
+        turn_start = datetime.now(UTC)
         async for turn in worker.execute(task, context=worker_context):
+            turn_end = datetime.now(UTC)
+            turn = turn.model_copy(update={
+                "started_at": turn.started_at or turn_start,
+                "completed_at": turn.completed_at or turn_end,
+            })
             with get_session() as session:
                 await repo.persist_single(
                     session,
@@ -94,6 +101,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
                     execution_outcome="success",
                 )
             turn_count += 1
+            turn_start = datetime.now(UTC)
 
         output = worker.get_output(worker_context)
 
@@ -134,7 +142,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         )
     )
 
-    _emit_action_spans(sink, payload)
+    _emit_tool_call_spans(sink, payload)
 
     return WorkerExecuteResult(
         success=True,
@@ -142,47 +150,50 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     )
 
 
-def _emit_action_spans(sink, payload: WorkerExecuteRequest) -> None:
-    """Emit post-hoc action spans from persisted RunAction rows."""
+def _emit_tool_call_spans(sink, payload: WorkerExecuteRequest) -> None:
+    """Emit OTEL spans for tool calls extracted from generation turns."""
     try:
         with get_session() as session:
-            actions = list(
+            turns = list(
                 session.exec(
-                    select(RunAction)
+                    select(RunGenerationTurn)
                     .where(
-                        RunAction.run_id == payload.run_id,
-                        RunAction.task_execution_id == payload.execution_id,
+                        RunGenerationTurn.run_id == payload.run_id,
+                        RunGenerationTurn.task_execution_id == payload.execution_id,
                     )
-                    .order_by(RunAction.action_num)
+                    .order_by(RunGenerationTurn.turn_index)
                 ).all()
             )
-            for a in actions:
-                duration_ms = None
-                if a.started_at and a.completed_at:
-                    duration_ms = int((a.completed_at - a.started_at).total_seconds() * 1000)
 
-                sink.emit_span(
-                    CompletedSpan(
-                        name=f"action.{a.action_type}",
-                        context=action_context(
-                            payload.run_id,
-                            payload.task_id,
-                            payload.execution_id,
-                            a.id,
-                        ),
-                        start_time=a.started_at or datetime.now(UTC),
-                        end_time=a.completed_at or datetime.now(UTC),
-                        attributes={
-                            "run_id": str(payload.run_id),
-                            "task_id": str(payload.task_id),
-                            "execution_id": str(payload.execution_id),
-                            "action_id": str(a.id),
-                            "action_num": a.action_num,
-                            "action_type": a.action_type,
-                            "success": a.error_json is None,
-                            "duration_ms": duration_ms,
-                        },
+            span_num = 0
+            for turn in turns:
+                tool_calls = turn.parsed_tool_calls()
+                results_by_id = {
+                    tr.tool_call_id: tr for tr in turn.parsed_tool_results()
+                }
+                for tc in tool_calls:
+                    result = results_by_id.get(tc.tool_call_id)
+                    sink.emit_span(
+                        CompletedSpan(
+                            name=f"tool.{tc.tool_name}",
+                            context=worker_execute_context(
+                                payload.run_id,
+                                payload.task_id,
+                                payload.execution_id,
+                            ),
+                            start_time=turn.started_at or turn.created_at,
+                            end_time=turn.completed_at or turn.created_at,
+                            attributes={
+                                "run_id": str(payload.run_id),
+                                "task_id": str(payload.task_id),
+                                "execution_id": str(payload.execution_id),
+                                "turn_index": turn.turn_index,
+                                "tool_name": tc.tool_name,
+                                "tool_call_id": tc.tool_call_id,
+                                "has_result": result is not None,
+                            },
+                        )
                     )
-                )
+                    span_num += 1
     except Exception:  # slopcop: ignore[no-broad-except]
-        logger.debug("Could not emit action spans", exc_info=True)
+        logger.debug("Could not emit tool call spans", exc_info=True)

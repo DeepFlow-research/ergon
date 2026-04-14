@@ -51,6 +51,7 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
+            node_id=payload.node_id,
         )
     )
 
@@ -61,6 +62,7 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
+                node_id=td.node_id,
             ).model_dump(mode="json"),
         )
         for td in propagation.ready_tasks
@@ -140,6 +142,7 @@ async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
+            node_id=payload.node_id,
         )
     )
 
