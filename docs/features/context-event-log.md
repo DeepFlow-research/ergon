@@ -263,6 +263,8 @@ class GenerationTurn(BaseModel):
 
 Currently `_build_turns` only extracts the `ModelResponse` into a `GenerationTurn` and pairs tool results from the subsequent `ModelRequest`. It must also carry the full `ModelRequest` parts for each turn so the runtime can emit `system_prompt`, `user_message`, and `tool_result` context events.
 
+> **Note:** PydanticAI provides `ModelMessagesTypeAdapter` (`pydantic_ai.messages`) for full round-trip serialisation of `list[ModelMessage]` — use `dump_python` / `validate_python` if you ever need to serialise the raw message list (e.g. for debugging snapshots). Do not use `dataclasses.asdict` on PydanticAI message objects. The turn-grouping and part-extraction logic below is still hand-written because PydanticAI has no concept of "turns" as defined here.
+
 ```python
 def _build_turns(messages: list[ModelMessage]) -> list[GenerationTurn]:
     """Build GenerationTurn objects from PydanticAI message history.
@@ -333,11 +335,10 @@ def _extract_response_parts(response: ModelResponse) -> list[ModelResponsePart]:
         if isinstance(part, PydanticTextPart):
             parts.append(TextPart(content=part.content))
         elif isinstance(part, PydanticToolCallPart):
-            args = part.args.args_dict() if hasattr(part.args, "args_dict") else {}
             parts.append(ToolCallPart(
                 tool_name=part.tool_name,
                 tool_call_id=part.tool_call_id,
-                args=args,
+                args=part.args_as_dict(),
             ))
         elif isinstance(part, PydanticThinkingPart):
             parts.append(ThinkingPart(content=part.content))
