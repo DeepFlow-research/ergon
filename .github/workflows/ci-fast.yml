@@ -29,6 +29,11 @@ jobs:
       - name: slopcop check
         run: uv run slopcop ergon_core ergon_builtins ergon_cli ergon_infra
 
+      - name: Cyclomatic complexity check (xenon)
+        # Thresholds reflect current baseline; tighten as complexity debt is paid down.
+        # F/E/C = max-absolute/max-modules/max-average. Radon grades: A(1-5) B(6-10) C(11-15) D(16-20) E(21-25) F(26+)
+        run: uv run xenon --max-absolute F --max-modules E --max-average C ergon_core ergon_builtins ergon_cli ergon_infra
+
   frontend-checks:
     name: "Lint + type-check (Frontend)"
     runs-on: ubuntu-latest
