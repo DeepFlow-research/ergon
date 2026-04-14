@@ -5,18 +5,9 @@ of truth for the definition itself.
 """
 
 from datetime import datetime
-import sys
 from typing import Literal
 
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        pass
-
-
+from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
@@ -443,11 +434,13 @@ class RunGenerationTurn(SQLModel, table=True):
     # -- JSON accessors --
 
     def parsed_tool_calls(self) -> list["ToolCall"]:
+        # reason: deferred to avoid circular import with tool_call_types
         from ergon_core.core.persistence.telemetry.tool_call_types import ToolCall
 
         return [ToolCall.model_validate(tc) for tc in (self.tool_calls_json or [])]
 
     def parsed_tool_results(self) -> list["ToolResult"]:
+        # reason: deferred to avoid circular import with tool_call_types
         from ergon_core.core.persistence.telemetry.tool_call_types import ToolResult
 
         return [ToolResult.model_validate(tr) for tr in (self.tool_results_json or [])]

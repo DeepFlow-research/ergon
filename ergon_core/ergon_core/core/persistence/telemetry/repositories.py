@@ -1,7 +1,5 @@
 """Read and write repository for run telemetry tables."""
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Awaitable, Callable
 from uuid import UUID

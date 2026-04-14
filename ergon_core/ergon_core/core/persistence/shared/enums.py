@@ -4,15 +4,7 @@ StrEnum: DB columns store string literals. StrEnum gives both Python
 type safety and Postgres VARCHAR/JSON compatibility.
 """
 
-import sys
-
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        pass
+from enum import StrEnum
 
 
 class RunStatus(StrEnum):
