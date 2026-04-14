@@ -149,6 +149,10 @@ ContextEventPayload = Annotated[
 ```python
 # ergon_core/ergon_core/core/persistence/context/models.py
 
+from pydantic import TypeAdapter
+from ergon_core.core.persistence.context.event_payloads import ContextEventPayload
+
+
 class RunContextEvent(SQLModel, table=True):
     __tablename__ = "run_context_events"
 
@@ -168,8 +172,6 @@ class RunContextEvent(SQLModel, table=True):
     execution_outcome: str | None = Field(default=None, index=True)
 
     def parsed_payload(self) -> ContextEventPayload:
-        from ergon_core.core.persistence.context.event_payloads import ContextEventPayload
-        from pydantic import TypeAdapter
         return TypeAdapter(ContextEventPayload).validate_python(self.payload)
 ```
 
