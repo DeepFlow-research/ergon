@@ -8,8 +8,46 @@ interface GenerationTracePanelProps {
   runId?: string;
 }
 
+function formatArgs(args: unknown): string {
+  if (args === null || args === undefined) return "";
+  if (typeof args === "object") {
+    return Object.entries(args as Record<string, unknown>)
+      .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+      .join(", ");
+  }
+  return String(args);
+}
+
+function ToolCallEntry({ tc }: { tc: { tool_call_id: string; tool_name: string; args: unknown } }) {
+  const argsStr = formatArgs(tc.args);
+  const isLong = argsStr.length > 120;
+
+  return (
+    <div className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-2 font-mono text-xs dark:border-blue-900/40 dark:bg-blue-950/30">
+      <div className="flex flex-wrap items-baseline gap-0.5">
+        <span className="font-semibold text-blue-700 dark:text-blue-300">{tc.tool_name}</span>
+        <span className="text-gray-500 dark:text-gray-400">(</span>
+        {isLong ? (
+          <details className="inline">
+            <summary className="inline cursor-pointer list-none text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <span className="italic">args…</span>
+            </summary>
+            <span className="block whitespace-pre-wrap break-all pl-2 text-gray-600 dark:text-gray-400">
+              {argsStr}
+            </span>
+          </details>
+        ) : (
+          <span className="text-gray-600 dark:text-gray-400">{argsStr}</span>
+        )}
+        <span className="text-gray-500 dark:text-gray-400">)</span>
+      </div>
+    </div>
+  );
+}
+
 function TurnCard({ turn }: { turn: GenerationTurnState }) {
   const [showRaw, setShowRaw] = useState(false);
+  const hasToolCalls = turn.toolCalls && turn.toolCalls.length > 0;
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700">
@@ -21,7 +59,7 @@ function TurnCard({ turn }: { turn: GenerationTurnState }) {
         <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
           {turn.workerName || turn.workerBindingKey}
         </span>
-        {turn.policyVersion && (
+        {turn.policyVersion !== null && turn.policyVersion !== undefined && (
           <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
             {turn.policyVersion}
           </span>
@@ -36,54 +74,51 @@ function TurnCard({ turn }: { turn: GenerationTurnState }) {
       </div>
 
       <div className="space-y-2 p-3">
-        {turn.responseText && (
+        {/* Tool calls are the primary content — rendered first and prominently */}
+        {hasToolCalls && (
           <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-              Response
+            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+              Tool Calls ({turn.toolCalls!.length})
             </div>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800 dark:text-gray-200">
-              {turn.responseText}
-            </p>
-          </div>
-        )}
-
-        {turn.toolCalls && turn.toolCalls.length > 0 && (
-          <div>
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-              Tool Calls ({turn.toolCalls.length})
-            </div>
-            <div className="space-y-1">
-              {turn.toolCalls.map((tc, i) => (
-                <div
-                  key={`${tc.tool_call_id}-${i}`}
-                  className="rounded-lg bg-gray-50 px-2 py-1.5 font-mono text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                >
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">
-                    {tc.tool_name}
-                  </span>
-                  (
-                  <span className="text-gray-500 dark:text-gray-400">
-                    {typeof tc.args === "object"
-                      ? Object.entries(tc.args as Record<string, unknown>)
-                          .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-                          .join(", ")
-                      : String(tc.args)}
-                  </span>
-                  )
-                </div>
+            <div className="space-y-1.5">
+              {turn.toolCalls!.map((tc, i) => (
+                <ToolCallEntry key={`${tc.tool_call_id}-${i}`} tc={tc} />
               ))}
             </div>
           </div>
         )}
 
-        {!turn.responseText && (!turn.toolCalls || turn.toolCalls.length === 0) && (
+        {/* Response text is secondary — muted and collapsed when there are tool calls */}
+        {turn.responseText && (
+          hasToolCalls ? (
+            <details>
+              <summary className="cursor-pointer text-[10px] font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                Model response text
+              </summary>
+              <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                {turn.responseText}
+              </p>
+            </details>
+          ) : (
+            <div>
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                Response
+              </div>
+              <p className="whitespace-pre-wrap text-xs leading-relaxed text-gray-600 dark:text-gray-300">
+                {turn.responseText}
+              </p>
+            </div>
+          )
+        )}
+
+        {!turn.responseText && !hasToolCalls && (
           <p className="text-sm italic text-gray-400 dark:text-gray-500">
             No response text or tool calls recorded.
           </p>
         )}
 
         {showRaw && (
-          <details className="mt-2">
+          <details className="mt-2" open>
             <summary className="cursor-pointer text-[10px] font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
               Raw turn data
             </summary>

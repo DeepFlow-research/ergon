@@ -79,25 +79,7 @@ function serializedRunState(): SerializedWorkflowRunState {
       [solve.id]: solve,
     },
     rootTaskId: FIXTURE_IDS.rootTaskId,
-    actionsByTask: {
-      [FIXTURE_IDS.solveTaskId]: [
-        {
-          id: FIXTURE_IDS.actionId,
-          taskId: FIXTURE_IDS.solveTaskId,
-          workerId: FIXTURE_IDS.workerId,
-          workerName: "react-worker",
-          type: "lean_check",
-          input: JSON.stringify({ theorem: "amc12a_2008_p25" }),
-          output: JSON.stringify({ status: "running" }),
-          status: "started",
-          startedAt: "2026-03-18T12:00:14.000Z",
-          completedAt: null,
-          durationMs: null,
-          success: false,
-          error: null,
-        },
-      ],
-    },
+    generationTurnsByTask: {},
     resourcesByTask: {
       [FIXTURE_IDS.solveTaskId]: [
         {
