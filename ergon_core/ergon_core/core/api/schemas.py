@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
+
 
 def _to_camel(value: str) -> str:
     head, *tail = value.split("_")
@@ -253,7 +255,7 @@ class RunGraphMutationDto(BaseModel):
     target_type: str
     target_id: str
     actor: str
-    old_value: dict[str, object] | None
-    new_value: dict[str, object]
+    old_value: GraphMutationValue | None
+    new_value: GraphMutationValue
     reason: str | None
     created_at: str

@@ -70,8 +70,8 @@ class GraphMutationDto(BaseModel):
     target_type: GraphTargetType
     target_id: UUID
     actor: str
-    old_value: dict[str, object] | None
-    new_value: dict[str, object]
+    old_value: "GraphMutationValue | None"
+    new_value: "GraphMutationValue"
     reason: str | None
 
 
