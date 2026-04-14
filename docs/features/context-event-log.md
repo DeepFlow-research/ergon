@@ -263,7 +263,11 @@ class GenerationTurn(BaseModel):
 
 Currently `_build_turns` only extracts the `ModelResponse` into a `GenerationTurn` and pairs tool results from the subsequent `ModelRequest`. It must also carry the full `ModelRequest` parts for each turn so the runtime can emit `system_prompt`, `user_message`, and `tool_result` context events.
 
-> **Note:** PydanticAI provides `ModelMessagesTypeAdapter` (`pydantic_ai.messages`) for full round-trip serialisation of `list[ModelMessage]` — use `dump_python` / `validate_python` if you ever need to serialise the raw message list (e.g. for debugging snapshots). Do not use `dataclasses.asdict` on PydanticAI message objects. The turn-grouping and part-extraction logic below is still hand-written because PydanticAI has no concept of "turns" as defined here.
+> **PydanticAI message utilities:**
+> - The caller passes `result.all_messages()` (or `result.new_messages()`) from the `RunResult` into `_build_turns` — do not accumulate messages manually.
+> - PydanticAI also provides a `history_processors` hook for modifying history before each model call (filtering, truncation, summarisation). This is a different concern — it runs in the hot path of agent execution, not as a post-processing step. Do not conflate the two.
+> - `ModelMessagesTypeAdapter` (`pydantic_ai.messages`) handles full round-trip serialisation of `list[ModelMessage]` if you ever need to serialise the raw list for debugging. Do not use `dataclasses.asdict` on PydanticAI message objects.
+> - The turn-grouping and part-extraction logic below is still hand-written: PydanticAI has no concept of "turns" as defined here.
 
 ```python
 def _build_turns(messages: list[ModelMessage]) -> list[GenerationTurn]:
