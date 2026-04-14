@@ -86,9 +86,20 @@ Each payload embeds `event_type` as a `Literal` field so Pydantic can discrimina
 ```python
 # ergon_core/ergon_core/core/persistence/context/event_payloads.py
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field
 from ergon_core.api.generation import TokenLogprob
+
+
+# Exported type alias — use everywhere event_type is stored as a string field
+ContextEventType = Literal[
+    "system_prompt",
+    "user_message",
+    "assistant_text",
+    "tool_call",
+    "tool_result",
+    "thinking",
+]
 
 
 class SystemPromptPayload(BaseModel):
@@ -113,7 +124,7 @@ class ToolCallPayload(BaseModel):
     event_type: Literal["tool_call"] = "tool_call"
     tool_call_id: str
     tool_name: str
-    args: dict[str, object]
+    args: dict[str, Any]
     token_ids: list[int] | None = None
     logprobs: list[TokenLogprob] | None = None
 
@@ -122,7 +133,7 @@ class ToolResultPayload(BaseModel):
     event_type: Literal["tool_result"] = "tool_result"
     tool_call_id: str   # links back to the ToolCallPayload with the same id
     tool_name: str
-    result: object      # the value returned by the tool
+    result: Any         # tool returns are intentionally open — any JSON-serialisable value
     is_error: bool = False
 
 
@@ -150,7 +161,11 @@ ContextEventPayload = Annotated[
 # ergon_core/ergon_core/core/persistence/context/models.py
 
 from pydantic import TypeAdapter
-from ergon_core.core.persistence.context.event_payloads import ContextEventPayload
+from ergon_core.core.persistence.context.event_payloads import (
+    ContextEventPayload,
+    ContextEventType,
+)
+from ergon_core.core.persistence.telemetry.models import ExecutionOutcome
 
 
 class RunContextEvent(SQLModel, table=True):
@@ -163,13 +178,13 @@ class RunContextEvent(SQLModel, table=True):
     )
     worker_binding_key: str = Field(index=True)
     sequence: int
-    event_type: str = Field(index=True)
-    payload: dict = Field(sa_column=Column(JSON))
+    event_type: ContextEventType = Field(index=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON))
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     policy_version: str | None = None
-    execution_outcome: str | None = Field(default=None, index=True)
+    execution_outcome: ExecutionOutcome | None = Field(default=None, index=True)
 
     def parsed_payload(self) -> ContextEventPayload:
         return TypeAdapter(ContextEventPayload).validate_python(self.payload)
@@ -228,7 +243,7 @@ class ToolCallPart(BaseModel):
     part_kind: Literal["tool-call"] = "tool-call"
     tool_name: str
     tool_call_id: str
-    args: dict[str, object]
+    args: dict[str, Any]
 
 
 class ThinkingPart(BaseModel):
@@ -540,11 +555,11 @@ class DashboardContextEventEvent(InngestEventContract):
 
     run_id: UUID
     task_execution_id: UUID
-    task_node_id: UUID          # resolved from execution_task_map at emit time
+    task_node_id: UUID              # resolved from execution_task_map at emit time
     worker_binding_key: str
     sequence: int
-    event_type: str             # one of the 6 event_type literals
-    payload: dict[str, object]  # serialised ContextEventPayload
+    event_type: ContextEventType    # imported from event_payloads
+    payload: ContextEventPayload    # full typed discriminated union; serialised via model_dump(mode="json")
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
@@ -1068,12 +1083,41 @@ ergon-dashboard/src/inngest/functions/
     + onContextEvent.ts            — Inngest handler: parses event, calls store + broadcast
 ```
 
-### Deprecated (stop writing, keep for historical reads)
+### Deleted as part of this work
+
+These are removed in Phase 3 once all readers have been migrated. They are not deleted in Phase 1 or 2.
+
 ```
-ergon_core/ergon_core/core/persistence/telemetry/models.py — RunGenerationTurn
-ergon_core/ergon_core/core/persistence/telemetry/repositories.py — GenerationTurnRepository
-ergon_core/ergon_core/core/api/runs.py — GET /runs/{run_id}/generations endpoint (superseded by context_events_by_task in snapshot)
+ergon_core/ergon_core/core/persistence/telemetry/models.py
+    DELETE  class RunGenerationTurn  (all fields + parsed_tool_calls / parsed_tool_results /
+                                      parsed_token_ids / parsed_logprobs / _parse_optional_list /
+                                      _validate_json_columns methods)
+    KEEP    ExecutionOutcome type alias  (reused by RunContextEvent)
+    KEEP    all other model classes
+
+ergon_core/ergon_core/core/persistence/telemetry/repositories.py
+    DELETE  class GenerationTurnRepository  (entire class: __init__, add_listener,
+                                             persist_single, persist_turns,
+                                             get_for_execution, get_for_run,
+                                             mark_execution_outcome)
+    KEEP    TelemetryRepository  (remove only the GenerationTurnRepository call site inside it)
+
+ergon_core/ergon_core/core/dashboard/emitter.py
+    DELETE  on_turn_persisted() method
+    DELETE  import of RunGenerationTurn
+    KEEP    everything else
+
+ergon_core/ergon_core/core/dashboard/event_contracts.py
+    DELETE  DashboardGenerationTurnEvent class
+    KEEP    all other contracts
+
+ergon_core/ergon_core/core/api/runs.py
+    DELETE  GET /runs/{run_id}/generations endpoint
+    DELETE  generation_turns_by_task field from RunSnapshotDto
+    KEEP    context_events_by_task (added in Phase 2)
 ```
+
+The `run_generation_turns` table is **never dropped** — historical data lives there. The ORM model class is removed but the table is left in place.
 
 ---
 
