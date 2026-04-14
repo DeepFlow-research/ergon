@@ -20,16 +20,6 @@
     "schemaFile": "DashboardTaskStatusChangedEvent.schema.json"
   },
   {
-    "eventName": "dashboard/agent.action_started",
-    "modelName": "DashboardAgentActionStartedEvent",
-    "schemaFile": "DashboardAgentActionStartedEvent.schema.json"
-  },
-  {
-    "eventName": "dashboard/agent.action_completed",
-    "modelName": "DashboardAgentActionCompletedEvent",
-    "schemaFile": "DashboardAgentActionCompletedEvent.schema.json"
-  },
-  {
     "eventName": "dashboard/resource.published",
     "modelName": "DashboardResourcePublishedEvent",
     "schemaFile": "DashboardResourcePublishedEvent.schema.json"

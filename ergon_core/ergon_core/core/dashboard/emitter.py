@@ -5,13 +5,17 @@ client. Errors are caught and logged so callers are never blocked.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import inngest
 from pydantic import TypeAdapter
 
-from ergon_core.core.persistence.graph.models import RunGraphMutation
+from ergon_core.core.persistence.graph.models import (
+    GraphTargetType,
+    MutationType,
+    RunGraphMutation,
+)
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -333,8 +337,8 @@ class DashboardEmitter:
             evt = DashboardGraphMutationEvent(
                 run_id=row.run_id,
                 sequence=row.sequence,
-                mutation_type=row.mutation_type,
-                target_type=row.target_type,
+                mutation_type=cast(MutationType, row.mutation_type),
+                target_type=cast(GraphTargetType, row.target_type),
                 target_id=row.target_id,
                 actor=row.actor,
                 new_value=new_value,
