@@ -1,13 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
+import { MutationTimeline } from "@/features/graph/components/MutationTimeline";
+import {
+  parseGraphMutationDtoArray,
+  type GraphMutationDto,
+} from "@/features/graph/contracts/graphMutations";
+import { replayToSequence } from "@/features/graph/state/graphMutationReducer";
 import { useCohortDetail } from "@/hooks/useCohortDetail";
 import { useRunState } from "@/hooks/useRunState";
+import type { WorkflowRunState } from "@/lib/types";
 import { CohortDetail, RunLifecycleStatus, SerializedWorkflowRunState } from "@/lib/types";
 
 function formatSeconds(value: number | null): string {
@@ -37,23 +44,83 @@ export function RunWorkspacePage({
   const { runState, isLoading, error, isSubscribed } = useRunState(runId, initialRunState);
   const { detail } = useCohortDetail(cohortId ?? "", initialCohortDetail);
 
+  // Timeline playback state
+  const [timelineMode, setTimelineMode] = useState<"live" | "timeline">("live");
+  const [currentSequence, setCurrentSequence] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [mutations, setMutations] = useState<GraphMutationDto[]>([]);
+  const snapshotCache = useRef(new Map<number, WorkflowRunState>());
+
+  // Fetch mutations when entering timeline mode
+  useEffect(() => {
+    if (timelineMode !== "timeline") return;
+    let cancelled = false;
+    fetch(`/api/runs/${runId}/mutations`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        const parsed = parseGraphMutationDtoArray(data);
+        setMutations(parsed);
+        snapshotCache.current.clear();
+        setCurrentSequence(
+          parsed.length > 0 ? parsed[parsed.length - 1].sequence : 0,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setMutations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [timelineMode, runId]);
+
+  const handleToggleTimeline = useCallback(() => {
+    setTimelineMode((prev) => {
+      if (prev === "live") return "timeline";
+      setIsPlaying(false);
+      return "live";
+    });
+  }, []);
+
+  // Build display state: replay for timeline mode, live state otherwise
+  const displayState = useMemo(() => {
+    if (timelineMode === "live" || mutations.length === 0) return runState;
+    if (!runState) return runState;
+    const emptyState: WorkflowRunState = {
+      ...runState,
+      tasks: new Map(),
+      totalTasks: 0,
+      totalLeafTasks: 0,
+      completedTasks: 0,
+      runningTasks: 0,
+      failedTasks: 0,
+    };
+    return replayToSequence(
+      mutations,
+      currentSequence,
+      emptyState,
+      snapshotCache.current,
+    );
+  }, [timelineMode, runState, mutations, currentSequence]);
+
   const runRow = useMemo(() => {
     if (!cohortId || !detail) return null;
     return detail.runs.find((run) => run.run_id === runId) ?? null;
   }, [cohortId, detail, runId]);
 
   const selectedTask = useMemo(() => {
-    if (!runState || !selectedTaskId) return null;
-    return runState.tasks.get(selectedTaskId) ?? null;
-  }, [runState, selectedTaskId]);
+    if (!displayState || !selectedTaskId) return null;
+    return displayState.tasks.get(selectedTaskId) ?? null;
+  }, [displayState, selectedTaskId]);
 
   useEffect(() => {
-    if (!selectedTaskId || !runState) return;
-    if (!runState.tasks.has(selectedTaskId)) {
+    if (!selectedTaskId || !displayState) return;
+    if (!displayState.tasks.has(selectedTaskId)) {
       setSelectedTaskId(null);
       setSelectionNotice("The selected task disappeared from the latest run topology, so the inspector was reset.");
     }
-  }, [runState, selectedTaskId]);
+  }, [displayState, selectedTaskId]);
 
   const status = runState?.status ?? runRow?.status ?? "pending";
   const isInspectorOpen = selectedTaskId !== null;
@@ -97,6 +164,17 @@ export function RunWorkspacePage({
                   {runState?.name ?? runRow?.run_id ?? "Run"}
                 </h1>
                 <StatusBadge status={status as RunLifecycleStatus} />
+                <button
+                  onClick={handleToggleTimeline}
+                  className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+                    timelineMode === "timeline"
+                      ? "bg-blue-600 text-white dark:bg-blue-500"
+                      : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+                  }`}
+                  data-testid="timeline-toggle"
+                >
+                  {timelineMode === "timeline" ? "Live" : "Timeline"}
+                </button>
               </div>
               <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
                 <span>Workflow: {runState?.name ?? "—"}</span>
@@ -166,7 +244,7 @@ export function RunWorkspacePage({
         >
           <DAGCanvas
             runId={runId}
-            runState={runState}
+            runState={displayState}
             isLoading={isLoading}
             error={error}
             isSubscribed={isSubscribed}
@@ -175,10 +253,27 @@ export function RunWorkspacePage({
           />
         </section>
 
+        {timelineMode === "timeline" && mutations.length > 0 && (
+          <section
+            className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 xl:col-span-2"
+            data-testid="timeline-region"
+          >
+            <MutationTimeline
+              mutations={mutations}
+              currentSequence={currentSequence}
+              onSequenceChange={setCurrentSequence}
+              isPlaying={isPlaying}
+              onTogglePlay={() => setIsPlaying((p) => !p)}
+              speed={playbackSpeed}
+              onSpeedChange={setPlaybackSpeed}
+            />
+          </section>
+        )}
+
         {isInspectorOpen ? (
           <section className="min-h-[72vh] xl:h-full xl:min-h-0" data-testid="workspace-region">
             <TaskWorkspace
-              runState={runState}
+              runState={displayState}
               taskId={selectedTaskId}
               error={error}
               onClearSelection={() => setSelectedTaskId(null)}

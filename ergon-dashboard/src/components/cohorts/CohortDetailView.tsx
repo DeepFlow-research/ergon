@@ -7,24 +7,32 @@ import { CohortRunRow, RunLifecycleStatus } from "@/lib/types";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { getCohortDisplayStatus } from "@/lib/cohortStatus";
 import { CohortDetail } from "@/lib/types";
-
-function formatDurationMs(durationMs: number | null | undefined): string {
-  if (durationMs == null) return "—";
-  if (durationMs < 1000) return `${durationMs}ms`;
-  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(1)}s`;
-  return `${(durationMs / 60_000).toFixed(1)}m`;
-}
+import { formatDurationMs } from "@/lib/formatDuration";
 
 function formatScore(score: number | null | undefined): string {
   if (score == null) return "—";
   return `${(score * 100).toFixed(1)}%`;
 }
 
+const startedAtDisplayFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+function formatStartedAt(iso: string | null): { text: string; dateTime: string | null } {
+  if (iso == null || iso === "") return { text: "—", dateTime: null };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { text: "—", dateTime: null };
+  return { text: startedAtDisplayFormatter.format(d), dateTime: iso };
+}
+
 function CohortRunRowCard({ cohortId, run }: { cohortId: string; run: CohortRunRow }) {
+  const started = formatStartedAt(run.started_at);
+
   return (
     <Link
       href={`/cohorts/${cohortId}/runs/${run.run_id}`}
-      className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4 transition-colors hover:border-blue-300 hover:bg-blue-50/40 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-700 dark:hover:bg-blue-950/20 lg:grid-cols-[minmax(0,1.2fr)_repeat(5,minmax(0,0.7fr))]"
+      className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-4 transition-colors hover:border-blue-300 hover:bg-blue-50/40 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-700 dark:hover:bg-blue-950/20 lg:grid-cols-[minmax(0,1.2fr)_repeat(6,minmax(0,0.7fr))]"
       data-testid={`cohort-run-row-${run.run_id}`}
     >
       <div className="min-w-0">
@@ -51,6 +59,18 @@ function CohortRunRowCard({ cohortId, run }: { cohortId: string; run: CohortRunR
       <div>
         <div className="text-xs text-gray-500 dark:text-gray-400">Status</div>
         <div className="text-sm font-medium capitalize text-gray-900 dark:text-white">{run.status}</div>
+      </div>
+      <div>
+        <div className="text-xs text-gray-500 dark:text-gray-400">Started</div>
+        <div className="text-sm font-medium text-gray-900 dark:text-white">
+          {started.dateTime ? (
+            <time dateTime={started.dateTime} title={started.dateTime}>
+              {started.text}
+            </time>
+          ) : (
+            started.text
+          )}
+        </div>
       </div>
       <div>
         <div className="text-xs text-gray-500 dark:text-gray-400">Runtime</div>

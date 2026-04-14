@@ -1,6 +1,4 @@
 import {
-  broadcastActionCompleted,
-  broadcastActionNew,
   broadcastCohortUpdated,
   broadcastRunCompleted,
   broadcastTaskEvaluation,
@@ -10,7 +8,6 @@ import {
 import { config } from "@/lib/config";
 import { store } from "@/lib/state/store";
 import {
-  ActionState,
   CommunicationThreadState,
   CohortDetail,
   CohortSummary,
@@ -216,18 +213,6 @@ export function emitHarnessTaskStatus(data: {
     data.assignedWorkerId ?? null,
     data.assignedWorkerName ?? null,
   );
-}
-
-export function emitHarnessActionNew(runId: string, action: ActionState): void {
-  requireHarnessEnabled();
-  store.addAction(runId, action);
-  broadcastActionNew(runId, action);
-}
-
-export function emitHarnessActionCompleted(runId: string, action: ActionState): void {
-  requireHarnessEnabled();
-  store.addAction(runId, action);
-  broadcastActionCompleted(runId, action);
 }
 
 export function emitHarnessThreadMessage(runId: string, thread: CommunicationThreadState): void {

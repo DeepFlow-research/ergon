@@ -11,7 +11,6 @@ import { useMemo } from "react";
 import {
   ExecutionAttemptState,
   TaskState,
-  ActionState,
   CommunicationThreadState,
   ResourceState,
   SandboxState,
@@ -29,8 +28,6 @@ export interface TaskDependencies {
 export interface UseTaskDetailsResult {
   /** The task state, or null if not found */
   task: TaskState | null;
-  /** Actions performed by this task's worker */
-  actions: ActionState[];
   /** Resources produced by this task */
   resources: ResourceState[];
   /** Execution attempts for this task */
@@ -63,12 +60,6 @@ export function useTaskDetails(
   const task = useMemo(() => {
     if (!runState || !taskId) return null;
     return runState.tasks.get(taskId) ?? null;
-  }, [runState, taskId]);
-
-  // Extract actions for this task
-  const actions = useMemo(() => {
-    if (!runState || !taskId) return [];
-    return runState.actionsByTask.get(taskId) ?? [];
   }, [runState, taskId]);
 
   // Extract resources for this task
@@ -126,7 +117,6 @@ export function useTaskDetails(
 
   return {
     task,
-    actions,
     resources,
     executions,
     sandbox,

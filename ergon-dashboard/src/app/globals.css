@@ -177,3 +177,15 @@ body {
     background-color: rgb(107, 114, 128);
   }
 }
+
+/* Custom React Flow edges — dashed “flow” when task is running */
+@keyframes ergon-edge-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.ergon-edge-animated {
+  stroke-dasharray: 6 6;
+  animation: ergon-edge-dash 0.6s linear infinite;
+}

@@ -2,13 +2,13 @@
 
 import { useTaskDetails } from "@/hooks/useTaskDetails";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { ActionStreamPanel } from "@/components/panels/ActionStreamPanel";
 import { CommunicationPanel } from "@/components/panels/CommunicationPanel";
 import { EvaluationPanel } from "@/components/panels/EvaluationPanel";
 import { GenerationTracePanel } from "@/components/panels/GenerationTracePanel";
 import { ResourcePanel } from "@/components/panels/ResourcePanel";
 import { SandboxPanel } from "@/components/panels/SandboxPanel";
-import { TaskStatus, type WorkflowRunState } from "@/lib/types";
+import type { WorkflowRunState } from "@/lib/types";
+import { formatTaskWallTimestamp } from "@/features/graph/utils/taskTiming";
 
 function EmptySection({ message }: { message: string }) {
   return <div className="text-sm text-gray-500 dark:text-gray-400">{message}</div>;
@@ -47,7 +47,7 @@ export function TaskWorkspace({
   error: string | null;
   onClearSelection?: () => void;
 }) {
-  const { task, actions, resources, executions, sandbox, threads, evaluation, dependencies, isLoading } =
+  const { task, resources, executions, sandbox, threads, evaluation, dependencies, isLoading } =
     useTaskDetails(runState, taskId);
 
   const generationTurns = runState?.generationTurns ?? [];
@@ -88,15 +88,16 @@ export function TaskWorkspace({
   const primarySection =
     resources.length > 0
       ? "outputs"
-      : task.status === TaskStatus.RUNNING && actions.length > 0
-        ? "actions"
-        : evaluation
-          ? "evaluation"
-          : threads.length > 0
-            ? "communication"
-            : sandbox
-              ? "sandbox"
-              : "overview";
+      : evaluation
+        ? "evaluation"
+        : threads.length > 0
+          ? "communication"
+          : sandbox
+            ? "sandbox"
+            : "overview";
+
+  const started = formatTaskWallTimestamp(task.startedAt);
+  const ended = formatTaskWallTimestamp(task.completedAt);
 
   return (
     <div className="flex h-full min-h-[72vh] flex-col gap-4 xl:min-h-0" data-testid="task-workspace">
@@ -118,13 +119,40 @@ export function TaskWorkspace({
             </button>
           )}
         </div>
-        <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500 dark:text-gray-400">
           <span>Worker: {task.assignedWorkerName ?? "—"}</span>
           <span>Level: {task.level}</span>
           <span>Leaf task: {task.isLeaf ? "yes" : "no"}</span>
           <span>Attempts: {executions.length || 0}</span>
           <span>Outputs: {resources.length}</span>
-          <span>Actions: {actions.length}</span>
+          <span className="tabular-nums">
+            Started:{" "}
+            {started.dateTime ? (
+              <time
+                dateTime={started.dateTime}
+                title={started.dateTime}
+                className="text-gray-700 dark:text-gray-300"
+              >
+                {started.text}
+              </time>
+            ) : (
+              started.text
+            )}
+          </span>
+          <span className="tabular-nums">
+            Ended:{" "}
+            {ended.dateTime ? (
+              <time
+                dateTime={ended.dateTime}
+                title={ended.dateTime}
+                className="text-gray-700 dark:text-gray-300"
+              >
+                {ended.text}
+              </time>
+            ) : (
+              ended.text
+            )}
+          </span>
         </div>
         {task.description && (
           <p className="mt-4 text-sm leading-6 text-gray-600 dark:text-gray-300">{task.description}</p>
@@ -132,15 +160,14 @@ export function TaskWorkspace({
       </header>
 
       <div className="min-h-0 space-y-4 overflow-y-auto pr-1" data-testid="workspace-scroll-region">
+        <WorkspaceSection testId="workspace-generations" title="Generations">
+          <GenerationTracePanel turns={generationTurns} runId={runState?.id} />
+        </WorkspaceSection>
+
         <div data-testid="workspace-primary">
           {primarySection === "outputs" && (
             <WorkspaceSection testId="workspace-outputs" title="Outputs">
               <ResourcePanel resources={resources} />
-            </WorkspaceSection>
-          )}
-          {primarySection === "actions" && (
-            <WorkspaceSection testId="workspace-actions" title="Actions">
-              <ActionStreamPanel actions={actions} maxHeight="420px" />
             </WorkspaceSection>
           )}
           {primarySection === "evaluation" && (
@@ -256,12 +283,6 @@ export function TaskWorkspace({
             )}
           </WorkspaceSection>
 
-          {primarySection !== "actions" && (
-            <WorkspaceSection testId="workspace-actions" title="Actions">
-              <ActionStreamPanel actions={actions} maxHeight="360px" />
-            </WorkspaceSection>
-          )}
-
           {primarySection !== "communication" && (
             <WorkspaceSection testId="workspace-communication" title="Communication">
               <CommunicationPanel threads={threads} />
@@ -286,9 +307,6 @@ export function TaskWorkspace({
             </WorkspaceSection>
           )}
 
-          <WorkspaceSection testId="workspace-generations" title="Generations">
-            <GenerationTracePanel turns={generationTurns} runId={runState?.id} />
-          </WorkspaceSection>
         </div>
       </div>
     </div>

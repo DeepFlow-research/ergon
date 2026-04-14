@@ -101,8 +101,7 @@ export function GenerationTracePanel({ turns }: GenerationTracePanelProps) {
   if (turns.length === 0) {
     return (
       <div className="text-center py-6 text-gray-500 dark:text-gray-400">
-        <p>No generation turns yet</p>
-        <p className="text-sm">Turn-level traces appear when vLLM-backed workers execute.</p>
+        <p className="text-sm">Activity will appear as the worker executes.</p>
       </div>
     );
   }
