@@ -84,14 +84,10 @@ class TestOnTaskCompletedByNode:
         )
         session.flush()
 
-        after_a = on_task_completed_by_node(
-            session, run_id, a.id, uuid4(), graph_repo=repo
-        )
+        after_a = on_task_completed_by_node(session, run_id, a.id, uuid4(), graph_repo=repo)
         assert c.id not in after_a
 
-        after_b = on_task_completed_by_node(
-            session, run_id, b.id, uuid4(), graph_repo=repo
-        )
+        after_b = on_task_completed_by_node(session, run_id, b.id, uuid4(), graph_repo=repo)
         assert c.id in after_b
 
     def test_skips_non_pending_candidates(self, session: Session):
@@ -106,9 +102,7 @@ class TestOnTaskCompletedByNode:
         )
         session.flush()
 
-        newly_ready = on_task_completed_by_node(
-            session, run_id, a.id, uuid4(), graph_repo=repo
-        )
+        newly_ready = on_task_completed_by_node(session, run_id, a.id, uuid4(), graph_repo=repo)
         assert b.id not in newly_ready
 
     def test_leaf_node_returns_empty(self, session: Session):
@@ -119,9 +113,7 @@ class TestOnTaskCompletedByNode:
         a = _add_node(repo, session, run_id, "A")
         session.flush()
 
-        newly_ready = on_task_completed_by_node(
-            session, run_id, a.id, uuid4(), graph_repo=repo
-        )
+        newly_ready = on_task_completed_by_node(session, run_id, a.id, uuid4(), graph_repo=repo)
         assert newly_ready == []
 
 
@@ -184,9 +176,7 @@ class TestMarkTaskCompletedByNode:
         session.flush()
 
         execution_id = uuid4()
-        mark_task_completed_by_node(
-            session, run_id, node.id, execution_id, graph_repo=repo
-        )
+        mark_task_completed_by_node(session, run_id, node.id, execution_id, graph_repo=repo)
         session.flush()
 
         row = session.get(RunGraphNode, node.id)

@@ -11,12 +11,9 @@ from contextlib import contextmanager
 from uuid import UUID, uuid4
 
 import pytest
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinition,
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionWorker,
 )
@@ -105,7 +102,7 @@ class TestPrepareGraphNative:
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
         run_id = seed_run(session, def_id)
-        worker = _seed_worker(session, def_id, binding_key="researcher")
+        _seed_worker(session, def_id, binding_key="researcher")
         node = _seed_graph_node(
             session,
             run_id,
@@ -261,7 +258,7 @@ class TestPrepareDefinition:
     ) -> None:
         def_id, inst_id, task_ids = seed_flat_tasks(session, 1)
         run_id = seed_run(session, def_id)
-        worker = _seed_worker(session, def_id, binding_key="researcher")
+        _seed_worker(session, def_id, binding_key="researcher")
 
         session.add(
             ExperimentDefinitionTaskAssignment(
@@ -313,9 +310,7 @@ class TestPrepareDefinition:
                 worker_binding_key="researcher",
             )
         )
-        _seed_graph_node(
-            session, run_id, definition_task_id=task_ids[0], task_key="task-0"
-        )
+        _seed_graph_node(session, run_id, definition_task_id=task_ids[0], task_key="task-0")
         session.flush()
 
         _patch_get_session(monkeypatch, session)

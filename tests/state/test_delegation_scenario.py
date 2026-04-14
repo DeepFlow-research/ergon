@@ -70,8 +70,12 @@ class TestFullDelegationScenario:
 
         # Setup: create parent node (simulating the manager's own node)
         parent = _add_node(
-            graph_repo, session, run_id, "manager",
-            status=RUNNING, instance_key="bench-1",
+            graph_repo,
+            session,
+            run_id,
+            "manager",
+            status=RUNNING,
+            instance_key="bench-1",
         )
 
         # ── Step 1-2: Manager spawns two children ──────────────
@@ -126,7 +130,11 @@ class TestFullDelegationScenario:
 
         # ── Step 4: Simulate child1 completing ─────────────────
         graph_repo.update_node_status(
-            session, run_id, child1.node_id, COMPLETED, meta=META,
+            session,
+            run_id,
+            child1.node_id,
+            COMPLETED,
+            meta=META,
         )
         child1_updated = graph_repo.get_node(session, run_id, child1.node_id)
         assert child1_updated.status == COMPLETED
@@ -169,12 +177,20 @@ class TestFullDelegationScenario:
 
         # ── Step 7: Simulate replacement completing ────────────
         graph_repo.update_node_status(
-            session, run_id, child3.node_id, COMPLETED, meta=META,
+            session,
+            run_id,
+            child3.node_id,
+            COMPLETED,
+            meta=META,
         )
 
         # ── Step 8: Complete parent ────────────────────────────
         graph_repo.update_node_status(
-            session, run_id, parent.id, COMPLETED, meta=META,
+            session,
+            run_id,
+            parent.id,
+            COMPLETED,
+            meta=META,
         )
 
         # ── Assertions ────────────────────────────────────────
@@ -197,14 +213,14 @@ class TestFullDelegationScenario:
         # WAL integrity: mutation sequences are contiguous starting from 0
         mutations = graph_repo.get_mutations(session, run_id)
         sequences = [m.sequence for m in mutations]
-        assert sequences == list(range(len(sequences))), (
-            f"Mutation WAL has gaps: {sequences}"
-        )
+        assert sequences == list(range(len(sequences))), f"Mutation WAL has gaps: {sequences}"
 
         # Verify mutation types present
         mutation_types = [m.mutation_type for m in mutations]
         assert mutation_types.count("node.added") == 4  # parent + 3 children
-        assert mutation_types.count("edge.added") == 3  # parent→child1, parent→child2, parent→child3
+        assert (
+            mutation_types.count("edge.added") == 3
+        )  # parent→child1, parent→child2, parent→child3
         assert "node.status_changed" in mutation_types
 
         # Edge integrity: 3 edges (parent → each child)

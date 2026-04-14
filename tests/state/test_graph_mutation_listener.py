@@ -134,9 +134,7 @@ class TestMutationListener:
         event_loop.run_until_complete(asyncio.sleep(0))
         collected.clear()
 
-        repo.update_node_field(
-            session, run_id, node.id, "description", "updated desc", meta=META
-        )
+        repo.update_node_field(session, run_id, node.id, "description", "updated desc", meta=META)
         event_loop.run_until_complete(asyncio.sleep(0))
 
         assert len(collected) == 1
