@@ -515,25 +515,282 @@ context_event_repo.add_listener(dashboard_emitter.on_context_event)
 await context_event_repo.persist_turn(session, run_id=..., execution_id=..., turn=turn, ...)
 ```
 
+### 4.5 Listener Chain (Python → Inngest → Socket → Client)
+
+The full event flow for every `RunContextEvent` row committed to Postgres:
+
+```
+persist_turn() commits row
+  → calls on_context_event(event: RunContextEvent)
+    → sends Inngest event "dashboard/context.event"
+      → Inngest function runs in dashboard server
+        → store.addContextEvent(runId, taskNodeId, event)
+        → broadcastContextEvent(runId, taskNodeId, event)
+          → socket.io "context:event" to run room
+            → client updates local state
+```
+
+#### `DashboardContextEventEvent` contract
+
+```python
+# ergon_core/ergon_core/core/dashboard/event_contracts.py
+
+class DashboardContextEventEvent(InngestEventContract):
+    name: ClassVar[str] = "dashboard/context.event"
+
+    run_id: UUID
+    task_execution_id: UUID
+    task_node_id: UUID          # resolved from execution_task_map at emit time
+    worker_binding_key: str
+    sequence: int
+    event_type: str             # one of the 6 event_type literals
+    payload: dict[str, object]  # serialised ContextEventPayload
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+```
+
+`task_node_id` is resolved by the emitter from the in-memory `execution_task_map` held by the run context. The frontend should not need to do this lookup — it receives the node ID it needs to index into the task graph directly.
+
+#### `DashboardEmitter.on_context_event`
+
+```python
+# ergon_core/ergon_core/core/dashboard/emitter.py
+
+async def on_context_event(self, event: RunContextEvent) -> None:
+    """Called by ContextEventRepository after each event is committed.
+
+    Resolves task_node_id from the execution map and emits a typed
+    Inngest event. Non-blocking: errors are caught and logged.
+    """
+    if not self._enabled:
+        return
+    try:
+        task_node_id = self._execution_task_map.get(event.task_execution_id)
+        if task_node_id is None:
+            logger.warning(
+                "on_context_event: no task_node_id for execution %s", event.task_execution_id
+            )
+            return
+        evt = DashboardContextEventEvent(
+            run_id=event.run_id,
+            task_execution_id=event.task_execution_id,
+            task_node_id=task_node_id,
+            worker_binding_key=event.worker_binding_key,
+            sequence=event.sequence,
+            event_type=event.event_type,
+            payload=event.payload,
+            created_at=event.created_at,
+            started_at=event.started_at,
+            completed_at=event.completed_at,
+        )
+        await inngest_client.send(
+            inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+        )
+    except Exception:
+        logger.warning("Failed to emit dashboard/context.event", exc_info=True)
+```
+
+`_execution_task_map: dict[UUID, UUID]` is already maintained by `DashboardEmitter` for the graph mutation events — no new state required.
+
+#### Frontend Inngest function
+
+```typescript
+// ergon-dashboard/src/inngest/functions/onContextEvent.ts
+
+export const onContextEvent = inngest.createFunction(
+  { id: "dashboard-context-event" },
+  { event: "dashboard/context.event" },
+  async ({ event }) => {
+    const payload = parseDashboardContextEventData(event.data);
+
+    const contextEvent: ContextEventState = {
+      id: payload.id,
+      taskExecutionId: payload.task_execution_id,
+      taskNodeId: payload.task_node_id,
+      workerBindingKey: payload.worker_binding_key,
+      sequence: payload.sequence,
+      eventType: payload.event_type as ContextEventType,
+      payload: payload.payload as ContextEventPayload,
+      createdAt: payload.created_at,
+      startedAt: payload.started_at ?? null,
+      completedAt: payload.completed_at ?? null,
+    };
+
+    store.addContextEvent(payload.run_id, payload.task_node_id, contextEvent);
+    broadcastContextEvent(payload.run_id, payload.task_node_id, contextEvent);
+
+    return { success: true };
+  },
+);
+```
+
+#### Socket event
+
+```typescript
+// ergon-dashboard/src/lib/socket/types.ts
+
+export interface ServerToClientEvents {
+  // existing events ...
+  "context:event": (data: {
+    runId: string;
+    taskNodeId: string;
+    event: ContextEventState;
+  }) => void;
+}
+```
+
 ---
 
 ## 5. Read Paths
 
 ### 5.1 RL Extraction
 
-`extraction.py` currently groups `RunGenerationTurn` rows by `worker_binding_key` and builds flat token sequences from `response_text` / `logprobs_json`. With the new schema, the same logic becomes explicit and correct:
+`extraction.py` currently groups `RunGenerationTurn` rows by `worker_binding_key` and builds flat token sequences from `response_text` / `logprobs_json`. The `env_mask` is inferred heuristically from the presence of tool calls. With the new schema this becomes exact and explicit.
 
+#### New function signature
+
+The function signature is unchanged — callers pass pre-fetched rows; `extraction.py` does not query the DB directly.
+
+```python
+# ergon_core/ergon_core/core/rl/extraction.py
+
+def extract_agent_trajectories(
+    context_events: list[RunContextEvent],
+    eval_scores: dict[str, float],        # task_execution_id (str) → score
+    tokenizer: Tokenizer,
+    *,
+    reward_strategy: RewardStrategy | None = None,
+) -> list[AgentTrajectory]:
+    """Build TRL-compatible trajectories from context events.
+
+    One AgentTrajectory is returned per unique worker_binding_key.
+    Events must be pre-ordered by (task_execution_id, sequence) — the
+    caller is responsible for this ordering (matches get_for_run output).
+    """
 ```
-agent_tokens  = events where event_type IN (assistant_text, tool_call, thinking)
-env_tokens    = events where event_type = tool_result
-env_mask      = 1 for agent_tokens, 0 for env_tokens
-token_ids     = payload.token_ids (native, no re-tokenisation needed)
-logprobs      = payload.logprobs (per-token, directly from payload)
+
+`prompt_text` is removed from the signature — the prompt is now reconstructed from `system_prompt` + `user_message` events directly, so callers no longer need to pass it separately.
+
+#### Extraction logic
+
+```python
+def extract_agent_trajectories(...) -> list[AgentTrajectory]:
+    # Group events by worker_binding_key, preserving sequence order within each group
+    by_worker: dict[str, list[RunContextEvent]] = defaultdict(list)
+    for event in context_events:
+        by_worker[event.worker_binding_key].append(event)
+
+    trajectories: list[AgentTrajectory] = []
+    strategy = reward_strategy or IndependentTaskReward()
+
+    for worker_key, events in by_worker.items():
+        prompt_text = _build_prompt_text(events)
+        prompt_ids = tokenizer.encode(prompt_text) if prompt_text else []
+
+        completion_ids: list[int] = []
+        logprobs: list[float] = []
+        env_mask: list[int] = []
+        execution_ids: set[str] = set()
+
+        for event in events:
+            parsed = event.parsed_payload()
+            event_type = event.event_type
+
+            if event_type in ("system_prompt", "user_message"):
+                # Prompt context — not part of the completion sequence
+                execution_ids.add(str(event.task_execution_id))
+                continue
+
+            if event_type in ("assistant_text", "tool_call", "thinking"):
+                # Model-generated tokens — env_mask = 1
+                token_ids = _get_token_ids(parsed, tokenizer)
+                token_logprobs = _get_logprobs(parsed, len(token_ids))
+                completion_ids.extend(token_ids)
+                logprobs.extend(token_logprobs)
+                env_mask.extend([1] * len(token_ids))
+
+            elif event_type == "tool_result":
+                # Environment tokens — env_mask = 0
+                assert isinstance(parsed, ToolResultPayload)
+                result_tokens = tokenizer.encode(str(parsed.result))
+                completion_ids.extend(result_tokens)
+                logprobs.extend([0.0] * len(result_tokens))
+                env_mask.extend([0] * len(result_tokens))
+
+            execution_ids.add(str(event.task_execution_id))
+
+        reward = strategy.compute(worker_key, execution_ids, eval_scores)
+
+        trajectories.append(AgentTrajectory(
+            agent_id=worker_key,
+            prompt_ids=prompt_ids,
+            completion_ids=completion_ids,
+            logprobs=logprobs,
+            env_mask=env_mask,
+            reward=reward,
+            turns=_count_turns(events),
+        ))
+
+    return trajectories
+
+
+def _build_prompt_text(events: list[RunContextEvent]) -> str:
+    """Concatenate system_prompt + user_message events for the first execution turn."""
+    parts: list[str] = []
+    for event in events:
+        if event.event_type == "system_prompt":
+            parsed = event.parsed_payload()
+            assert isinstance(parsed, SystemPromptPayload)
+            parts.append(parsed.text)
+        elif event.event_type == "user_message":
+            parsed = event.parsed_payload()
+            assert isinstance(parsed, UserMessagePayload)
+            parts.append(parsed.text)
+        elif event.event_type in ("assistant_text", "tool_call", "thinking", "tool_result"):
+            break  # Stop at first model output — prompt is everything before it
+    return "\n\n".join(parts)
+
+
+def _get_token_ids(parsed: ContextEventPayload, tokenizer: Tokenizer) -> list[int]:
+    """Extract token IDs from a model-generated event payload.
+
+    Uses native token_ids if present (vLLM path); falls back to tokenizing
+    the text content (non-vLLM path). This fallback produces correct token
+    counts but the IDs will not match the model's original forward pass,
+    which is acceptable for reward-only RL but not for importance sampling.
+    """
+    if isinstance(parsed, AssistantTextPayload):
+        return parsed.token_ids if parsed.token_ids is not None else tokenizer.encode(parsed.text)
+    if isinstance(parsed, ToolCallPayload):
+        args_text = json.dumps(parsed.args)
+        return parsed.token_ids if parsed.token_ids is not None else tokenizer.encode(args_text)
+    if isinstance(parsed, ThinkingPayload):
+        return parsed.token_ids if parsed.token_ids is not None else tokenizer.encode(parsed.text)
+    raise ValueError(f"_get_token_ids called on non-model event: {type(parsed)}")
+
+
+def _get_logprobs(parsed: ContextEventPayload, n_tokens: int) -> list[float]:
+    """Extract per-token logprob scalars, padding with 0.0 if unavailable."""
+    logprobs_list: list[TokenLogprob] | None = getattr(parsed, "logprobs", None)
+    if logprobs_list is None:
+        return [0.0] * n_tokens
+    scalars = [lp.logprob for lp in logprobs_list]
+    # Align length to n_tokens (tokenizer re-encode may differ from model tokenisation)
+    if len(scalars) < n_tokens:
+        scalars.extend([0.0] * (n_tokens - len(scalars)))
+    return scalars[:n_tokens]
 ```
 
-The prompt context (`prompt_ids`) is reconstructed from the ordered system_prompt + user_message events for the execution, tokenised once.
+#### Key improvements over the old path
 
-Key improvement: token IDs from vLLM are stored natively per event (no re-tokenisation from token strings). The `token_ids_json` column on `RunGenerationTurn` was always NULL; these fields on `AssistantTextPayload`/`ToolCallPayload`/`ThinkingPayload` will be populated once the vLLM provider is updated to expose them through PydanticAI's `provider_details`.
+| | Old (`RunGenerationTurn`) | New (`RunContextEvent`) |
+|---|---|---|
+| `env_mask` | Inferred heuristically from tool call presence | Exact: derived from `event_type` |
+| `token_ids` | Always re-tokenised from text (lossy) | Native from vLLM when available; text fallback otherwise |
+| `logprobs` | From `logprobs_json` blob, manually aligned | Per-event typed field, aligned by `_get_logprobs` |
+| Prompt | Passed in by caller as `prompt_text` | Reconstructed from `system_prompt` + `user_message` events |
+| Thinking tokens | Dropped entirely | First-class `thinking` events, included in completion |
 
 ### 5.2 Context Reconstruction / `from_buffer()`
 
@@ -570,23 +827,142 @@ This function lives in `ergon_core/ergon_core/core/persistence/context/assembly.
 
 ### 5.3 Dashboard Streaming
 
-`DashboardEmitter` gains a new listener method:
+The emitter and Inngest function are fully specced in §4.5. This section covers the frontend state model, live reducer, and UI components.
 
-```python
-async def on_context_event(self, event: RunContextEvent) -> None:
-    """Emit one context event to the dashboard over Inngest."""
-    await self._send(DashboardContextEventEvent(
-        run_id=event.run_id,
-        task_execution_id=event.task_execution_id,
-        worker_binding_key=event.worker_binding_key,
-        sequence=event.sequence,
-        event_type=event.event_type,
-        payload=event.payload,
-        created_at=event.created_at,
-    ))
+#### TypeScript types
+
+```typescript
+// ergon-dashboard/src/lib/contracts/contextEvents.ts
+
+export type ContextEventType =
+  | "system_prompt"
+  | "user_message"
+  | "assistant_text"
+  | "tool_call"
+  | "tool_result"
+  | "thinking";
+
+// Discriminated union — mirrors Python ContextEventPayload
+export type ContextEventPayload =
+  | { event_type: "system_prompt"; text: string }
+  | { event_type: "user_message"; text: string; from_worker_key: string | null }
+  | { event_type: "assistant_text"; text: string; logprobs: TokenLogprob[] | null }
+  | { event_type: "tool_call"; tool_call_id: string; tool_name: string; args: Record<string, unknown>; logprobs: TokenLogprob[] | null }
+  | { event_type: "tool_result"; tool_call_id: string; tool_name: string; result: unknown; is_error: boolean }
+  | { event_type: "thinking"; text: string; logprobs: TokenLogprob[] | null };
+
+export interface TokenLogprob {
+  token: string;
+  logprob: number;
+}
+
+export interface ContextEventState {
+  id: string;
+  taskExecutionId: string;
+  taskNodeId: string;
+  workerBindingKey: string;
+  sequence: number;
+  eventType: ContextEventType;
+  payload: ContextEventPayload;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
 ```
 
-The frontend receives one `dashboard/context.event` Inngest event per `RunContextEvent` row. The dashboard renders each event as a bubble in the generation panel — system prompts, user messages, thinking, tool calls, tool results, and assistant text are all first-class display types. No client-side parsing of `raw_response` blobs.
+Zod schema in `ergon-dashboard/src/lib/contracts/events.ts` must match the `DashboardContextEventEvent` Python contract field-for-field.
+
+#### Store changes
+
+`WorkflowRunState` replaces `generationTurns: GenerationTurnState[]` with a per-task map:
+
+```typescript
+// ergon-dashboard/src/lib/state/store.ts
+
+export interface WorkflowRunState {
+  // ... existing fields unchanged ...
+
+  // Replaces: generationTurns: GenerationTurnState[]
+  contextEventsByTask: Map<string, ContextEventState[]>;
+  // keyed by task_node_id (string UUID); events are in sequence order within each key
+}
+```
+
+New store method:
+
+```typescript
+addContextEvent(runId: string, taskNodeId: string, event: ContextEventState): void {
+  const run = this.runs.get(runId);
+  if (!run) return;
+  const existing = run.contextEventsByTask.get(taskNodeId) ?? [];
+  // Insert in sequence order — live events typically arrive in order,
+  // but guard against redelivery by deduplicating on id
+  if (existing.some(e => e.id === event.id)) return;
+  run.contextEventsByTask.set(taskNodeId, [...existing, event].sort((a, b) => a.sequence - b.sequence));
+}
+```
+
+#### Client socket handler
+
+```typescript
+socket.on("context:event", ({ runId, taskNodeId, event }) => {
+  setRunState(prev => {
+    const existing = prev.contextEventsByTask.get(taskNodeId) ?? [];
+    if (existing.some(e => e.id === event.id)) return prev; // deduplicate
+    const updated = new Map(prev.contextEventsByTask);
+    updated.set(taskNodeId, [...existing, event].sort((a, b) => a.sequence - b.sequence));
+    return { ...prev, contextEventsByTask: updated };
+  });
+});
+```
+
+#### Snapshot hydration
+
+On initial load, `build_run_snapshot` returns `context_events_by_task` (see §5.4). The client hydrates `contextEventsByTask` from this field directly — the structure is identical.
+
+#### UI components
+
+```
+ergon-dashboard/src/features/graph/components/
+  ContextEventLog.tsx          — container: takes ContextEventState[], renders in order
+  ContextEventEntry.tsx        — dispatcher: switches on eventType, renders child
+  events/
+    SystemPromptEvent.tsx      — grey collapsed header; expand to show full text
+    UserMessageEvent.tsx       — indigo chat bubble; shows from_worker_key label if set
+    ThinkingEvent.tsx          — purple italicised block; collapsed by default (can be long)
+    AssistantTextEvent.tsx     — white assistant bubble; plain text render
+    ToolCallEvent.tsx          — amber block; tool name as header, args as collapsible JSON
+    ToolResultEvent.tsx        — green block (red if is_error); result as collapsible JSON
+```
+
+**`ContextEventLog`** — receives all `ContextEventState[]` for a task node. Renders events in `sequence` order. Each event is separated by a thin timeline connector.
+
+**`ContextEventEntry`** — pure dispatcher:
+```tsx
+function ContextEventEntry({ event }: { event: ContextEventState }) {
+  switch (event.eventType) {
+    case "system_prompt":   return <SystemPromptEvent payload={event.payload} />;
+    case "user_message":    return <UserMessageEvent payload={event.payload} />;
+    case "thinking":        return <ThinkingEvent payload={event.payload} timestamps={event} />;
+    case "assistant_text":  return <AssistantTextEvent payload={event.payload} timestamps={event} />;
+    case "tool_call":       return <ToolCallEvent payload={event.payload} timestamps={event} />;
+    case "tool_result":     return <ToolResultEvent payload={event.payload} />;
+  }
+}
+```
+
+**Event-type component contracts:**
+
+| Component | Key props | Default collapsed? | Notes |
+|---|---|---|---|
+| `SystemPromptEvent` | `text` | Yes | Full text in expand |
+| `UserMessageEvent` | `text`, `from_worker_key` | No | Show delegation source label when set |
+| `ThinkingEvent` | `text`, `startedAt`, `completedAt` | Yes | Duration badge; italic text |
+| `AssistantTextEvent` | `text`, `startedAt`, `completedAt` | No | Duration badge |
+| `ToolCallEvent` | `tool_name`, `args`, `tool_call_id`, timing | Yes (args) | Header shows tool name; args as syntax-highlighted JSON |
+| `ToolResultEvent` | `tool_name`, `result`, `is_error` | Yes (result) | Red border if `is_error`; result as JSON |
+
+`ToolCallEvent` and `ToolResultEvent` should be visually linked by `tool_call_id` — when expanded, the tool result shows a back-reference to the call that produced it (and vice versa). Implementation can use a subtle connector line or matching colour stripe.
 
 ### 5.4 REST Snapshot
 
@@ -637,7 +1013,9 @@ ergon_core/migrations/versions/<hash>_add_run_context_events.py
 ### Changed files
 ```
 ergon_core/ergon_core/api/generation.py
-    + messages_in: list[dict[str, object]] on GenerationTurn
+    + ModelRequestPart union (SystemPromptPart | UserPromptPart | ToolReturnPart)
+    + ModelResponsePart union (TextPart | ToolCallPart | ThinkingPart)
+    ~ GenerationTurn: messages_in, response_parts, tool_results (typed); drop raw_response, prompt_text
 
 ergon_builtins/ergon_builtins/workers/baselines/react_worker.py
     ~ _build_turns(): populate messages_in from ModelRequest parts
@@ -665,8 +1043,29 @@ ergon_core/ergon_core/core/api/schemas.py
 ergon_core/ergon_core/core/rl/extraction.py
     ~ extract_agent_trajectories(): read RunContextEvent instead of RunGenerationTurn
 
-ergon-dashboard/src/features/graph/  (frontend)
-    ~ generation turn display → context event display (system_prompt, thinking, tool_call etc.)
+ergon-dashboard/src/features/graph/components/
+    + ContextEventLog.tsx
+    + ContextEventEntry.tsx
+    + events/SystemPromptEvent.tsx
+    + events/UserMessageEvent.tsx
+    + events/ThinkingEvent.tsx
+    + events/AssistantTextEvent.tsx
+    + events/ToolCallEvent.tsx
+    + events/ToolResultEvent.tsx
+
+ergon-dashboard/src/lib/contracts/
+    + contextEvents.ts             — ContextEventState, ContextEventPayload, ContextEventType TS types
+    ~ events.ts                    — + Zod schema for DashboardContextEventEvent
+
+ergon-dashboard/src/lib/state/store.ts
+    ~ WorkflowRunState: generationTurns → contextEventsByTask: Map<string, ContextEventState[]>
+    + addContextEvent() store method
+
+ergon-dashboard/src/lib/socket/types.ts
+    + "context:event" to ServerToClientEvents
+
+ergon-dashboard/src/inngest/functions/
+    + onContextEvent.ts            — Inngest handler: parses event, calls store + broadcast
 ```
 
 ### Deprecated (stop writing, keep for historical reads)
