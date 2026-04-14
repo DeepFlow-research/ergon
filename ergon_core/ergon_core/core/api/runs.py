@@ -8,7 +8,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException
 from ergon_core.core.api.schemas import (
-    RunActionDto,
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
     RunEvaluationCriterionDto,
@@ -35,7 +34,6 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.telemetry.models import (
-    RunAction,
     RunGenerationTurn,
     RunRecord,
     RunResource,
@@ -178,47 +176,6 @@ def _task_keyed_executions(
                 agent_id=agent_id,
                 agent_name=agent_name,
                 output_resource_ids=resource_ids,
-            )
-        )
-    return dict(by_task)
-
-
-def _task_keyed_actions(
-    actions: list[RunAction],
-    execution_task_map: dict[UUID, UUID],
-    execution_worker_map: dict[UUID, ExperimentDefinitionWorker | None],
-) -> dict[str, list[RunActionDto]]:
-    by_task: dict[str, list[RunActionDto]] = defaultdict(list)
-    for a in actions:
-        task_id_uuid = execution_task_map.get(a.task_execution_id)
-        if task_id_uuid is None:
-            continue
-        tid = str(task_id_uuid)
-
-        worker = execution_worker_map.get(a.task_execution_id)
-        worker_id = str(worker.id) if worker else ""
-        worker_name = worker.binding_key if worker else "unknown"
-
-        duration_ms: int | None = None
-        if a.started_at and a.completed_at:
-            delta = a.completed_at - a.started_at
-            duration_ms = int(delta.total_seconds() * 1000)
-
-        by_task[tid].append(
-            RunActionDto(
-                id=str(a.id),
-                task_id=tid,
-                worker_id=worker_id,
-                worker_name=worker_name,
-                type=a.action_type,
-                input=a.input_text,
-                output=a.output_text,
-                status="failed" if a.error_json else "completed",
-                started_at=a.started_at,
-                completed_at=a.completed_at,
-                duration_ms=duration_ms,
-                success=a.error_json is None,
-                error=str(a.error_json) if a.error_json else None,
             )
         )
     return dict(by_task)
@@ -446,9 +403,6 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
     exec_stmt = select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
     executions = list(session.exec(exec_stmt).all())
 
-    actions_stmt = select(RunAction).where(RunAction.run_id == run_id)
-    actions = list(session.exec(actions_stmt).all())
-
     resources_stmt = select(RunResource).where(RunResource.run_id == run_id)
     resources = list(session.exec(resources_stmt).all())
 
@@ -475,10 +429,6 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
     ) = _build_task_tree(def_tasks, def_deps, current_statuses, worker_assignments, timestamps)
 
     execution_task_map: dict[UUID, UUID] = {ex.id: ex.definition_task_id for ex in executions}
-    execution_worker_map: dict[UUID, ExperimentDefinitionWorker | None] = {
-        ex.id: worker_by_id.get(ex.definition_worker_id) if ex.definition_worker_id else None
-        for ex in executions
-    }
 
     # Compute final score from evaluations
     final_score: float | None = None
@@ -506,7 +456,6 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         status=run.status,
         tasks=task_map,
         root_task_id=root_task_id,
-        actions_by_task=_task_keyed_actions(actions, execution_task_map, execution_worker_map),
         resources_by_task=_task_keyed_resources(resources, execution_task_map),
         executions_by_task=_task_keyed_executions(executions, worker_by_id),
         evaluations_by_task=_task_keyed_evaluations(evaluations, run_id_str),

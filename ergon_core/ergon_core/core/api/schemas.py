@@ -42,22 +42,6 @@ class RunTaskDto(CamelModel):
     completed_at: datetime | None = None
 
 
-class RunActionDto(CamelModel):
-    id: str
-    task_id: str
-    worker_id: str
-    worker_name: str
-    type: str
-    input: str
-    output: str | None = None
-    status: str
-    success: bool
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    duration_ms: int | None = None
-    error: str | None = None
-
-
 class RunResourceDto(CamelModel):
     id: str
     task_id: str
@@ -168,11 +152,13 @@ class RunSnapshotDto(CamelModel):
     status: str
     tasks: dict[str, RunTaskDto] = Field(default_factory=dict)
     root_task_id: str = ""  # slopcop: ignore[no-str-empty-default]
-    actions_by_task: dict[str, list[RunActionDto]] = Field(default_factory=dict)
     resources_by_task: dict[str, list[RunResourceDto]] = Field(default_factory=dict)
     executions_by_task: dict[str, list[RunExecutionAttemptDto]] = Field(default_factory=dict)
     evaluations_by_task: dict[str, RunTaskEvaluationDto] = Field(default_factory=dict)
     sandboxes_by_task: dict[str, RunSandboxDto] = Field(default_factory=dict)
+    generation_turns_by_task: dict[str, list["RunGenerationTurnDto"]] = Field(
+        default_factory=dict
+    )
     threads: list[RunCommunicationThreadDto] = Field(default_factory=list)
     started_at: datetime | None = None
     completed_at: datetime | None = None
