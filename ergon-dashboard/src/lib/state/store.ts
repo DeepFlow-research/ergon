@@ -18,7 +18,6 @@ import {
   TaskStatus,
   TaskTreeNode,
   TaskState,
-  ActionState,
   CommunicationThreadState,
   ResourceState,
   SandboxState,
@@ -26,6 +25,8 @@ import {
   TaskEvaluationState,
   WorkflowRunState,
 } from "../types";
+import { applyGraphMutation as reduceGraphMutation } from "@/features/graph/state/graphMutationReducer";
+import type { DashboardGraphMutationData } from "@/lib/contracts/events";
 
 // Extend global to store DashboardStore instance across module loads
 declare global {
@@ -72,10 +73,6 @@ class DashboardStore {
     return Array.from(run.tasks.values()).filter((t) => t.level === level);
   }
 
-  getActionsForTask(runId: string, taskId: string): ActionState[] {
-    return this.runs.get(runId)?.actionsByTask.get(taskId) ?? [];
-  }
-
   getResourcesForTask(runId: string, taskId: string): ResourceState[] {
     return this.runs.get(runId)?.resourcesByTask.get(taskId) ?? [];
   }
@@ -119,7 +116,6 @@ class DashboardStore {
       status: "executing",
       tasks,
       rootTaskId,
-      actionsByTask: new Map(),
       resourcesByTask: new Map(),
       executionsByTask: new Map(),
       sandboxesByTask: new Map(),
@@ -246,26 +242,6 @@ class DashboardStore {
   }
 
   /**
-   * Add or update an action from agent.action_started or agent.action_completed events.
-   */
-  addAction(runId: string, action: ActionState): void {
-    const run = this.runs.get(runId);
-    if (!run) return;
-
-    const taskActions = run.actionsByTask.get(action.taskId) ?? [];
-
-    // Check if this action already exists (update case)
-    const existingIndex = taskActions.findIndex((a) => a.id === action.id);
-    if (existingIndex >= 0) {
-      taskActions[existingIndex] = action;
-    } else {
-      taskActions.push(action);
-    }
-
-    run.actionsByTask.set(action.taskId, taskActions);
-  }
-
-  /**
    * Add a resource from a resource.published event.
    */
   addResource(runId: string, resource: ResourceState): void {
@@ -383,6 +359,13 @@ class DashboardStore {
     sandbox.status = "closed";
     sandbox.closedAt = timestamp;
     sandbox.closeReason = reason;
+  }
+
+  applyGraphMutation(runId: string, mutation: DashboardGraphMutationData): void {
+    const run = this.runs.get(runId);
+    if (!run) return;
+    const updated = reduceGraphMutation(run, mutation);
+    this.runs.set(runId, updated);
   }
 
   /**

@@ -1,8 +1,8 @@
 import type { RunSnapshot } from "@/lib/contracts/rest";
 import { parseRunSnapshot } from "@/lib/contracts/rest";
 import type {
-  ActionState,
   ExecutionAttemptState,
+  GenerationTurnState,
   ResourceState,
   SandboxState,
   SerializedWorkflowRunState,
@@ -30,18 +30,6 @@ function deserializeExecution(
     ...execution,
     evaluationDetails: execution.evaluationDetails ?? {},
     status: toTaskStatus(execution.status),
-  };
-}
-
-function deserializeAction(action: RunSnapshot["actionsByTask"][string][number]): ActionState {
-  return {
-    ...action,
-    status: action.status as ActionState["status"],
-    startedAt: action.startedAt ?? new Date(0).toISOString(),
-    completedAt: action.completedAt ?? null,
-    durationMs: action.durationMs ?? null,
-    error: action.error ?? null,
-    output: action.output ?? null,
   };
 }
 
@@ -76,6 +64,29 @@ function deserializeEvaluation(evaluation: RunSnapshot["evaluationsByTask"][stri
   };
 }
 
+function deserializeGenerationTurns(data: RunSnapshot): GenerationTurnState[] {
+  const byTask = (data as unknown as Record<string, unknown>).generationTurnsByTask as
+    | Record<string, Array<Record<string, unknown>>>
+    | undefined;
+  if (!byTask) return [];
+
+  const turns: GenerationTurnState[] = [];
+  for (const taskTurns of Object.values(byTask)) {
+    for (const t of taskTurns) {
+      turns.push({
+        taskExecutionId: String(t.taskExecutionId ?? ""),
+        workerBindingKey: String(t.workerBindingKey ?? ""),
+        workerName: String(t.workerName ?? ""),
+        turnIndex: Number(t.turnIndex ?? 0),
+        responseText: (t.responseText as string) ?? null,
+        toolCalls: (t.toolCalls as GenerationTurnState["toolCalls"]) ?? null,
+        policyVersion: (t.policyVersion as string) ?? null,
+      });
+    }
+  }
+  return turns.sort((a, b) => a.turnIndex - b.turnIndex);
+}
+
 export function deserializeRunState(input: unknown): WorkflowRunState {
   const data = parseRunSnapshot(input);
 
@@ -88,12 +99,6 @@ export function deserializeRunState(input: unknown): WorkflowRunState {
       Object.entries(data.tasks ?? {}).map(([taskId, task]) => [taskId, deserializeTask(task)]),
     ),
     rootTaskId: data.rootTaskId,
-    actionsByTask: new Map(
-      Object.entries(data.actionsByTask ?? {}).map(([taskId, actions]) => [
-        taskId,
-        actions.map(deserializeAction),
-      ]),
-    ),
     resourcesByTask: new Map(
       Object.entries(data.resourcesByTask ?? {}).map(([taskId, resources]) => [
         taskId,
@@ -113,7 +118,7 @@ export function deserializeRunState(input: unknown): WorkflowRunState {
       ]),
     ),
     threads: data.threads ?? [],
-    generationTurns: [],
+    generationTurns: deserializeGenerationTurns(data),
     evaluationsByTask: new Map(
       Object.entries(data.evaluationsByTask ?? {}).map(([taskId, evaluation]) => [
         taskId,
@@ -137,7 +142,6 @@ export function serializeRunState(run: WorkflowRunState): SerializedWorkflowRunS
   return {
     ...run,
     tasks: Object.fromEntries(run.tasks.entries()),
-    actionsByTask: Object.fromEntries(run.actionsByTask.entries()),
     resourcesByTask: Object.fromEntries(run.resourcesByTask.entries()),
     executionsByTask: Object.fromEntries(run.executionsByTask.entries()),
     sandboxesByTask: Object.fromEntries(run.sandboxesByTask.entries()),

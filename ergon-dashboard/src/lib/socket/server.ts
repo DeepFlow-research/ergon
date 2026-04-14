@@ -13,7 +13,6 @@ import { serializeRunState } from "../runState";
 import {
   ServerToClientEvents,
   ClientToServerEvents,
-  ActionState,
   DashboardCohortUpdatedData,
   DashboardTaskEvaluationUpdatedData,
   DashboardThreadMessageCreatedData,
@@ -23,6 +22,7 @@ import {
   SandboxCommandState,
   TaskStatus,
 } from "../types";
+import type { DashboardGraphMutationData } from "@/lib/contracts/events";
 
 // Typed Socket.io server
 type TypedServer = SocketServer<ClientToServerEvents, ServerToClientEvents>;
@@ -210,25 +210,6 @@ export function broadcastTaskStatus(
 }
 
 /**
- * Broadcast new action started to subscribers of that run.
- */
-export function broadcastActionNew(runId: string, action: ActionState): void {
-  const io = getIO();
-  io?.to(`run:${runId}`).emit("action:new", { runId, action });
-}
-
-/**
- * Broadcast action completed to subscribers of that run.
- */
-export function broadcastActionCompleted(
-  runId: string,
-  action: ActionState
-): void {
-  const io = getIO();
-  io?.to(`run:${runId}`).emit("action:completed", { runId, action });
-}
-
-/**
  * Broadcast new resource to subscribers of that run.
  */
 export function broadcastResourceNew(
@@ -294,4 +275,12 @@ export function broadcastGenerationTurn(
 ): void {
   const io = getIO();
   io?.to(`run:${runId}`).emit("generation:turn", { runId, turn });
+}
+
+export function broadcastGraphMutation(
+  runId: string,
+  mutation: DashboardGraphMutationData,
+): void {
+  const io = getIO();
+  io?.to(`run:${runId}`).emit("graph:mutation", { runId, mutation });
 }

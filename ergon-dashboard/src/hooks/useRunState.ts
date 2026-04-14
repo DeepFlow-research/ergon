@@ -13,7 +13,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSocket } from "@/hooks/useSocket";
 import {
-  parseActionSocketData,
   parseDashboardTaskEvaluationUpdatedData,
   parseDashboardThreadMessageCreatedData,
   parseResourceSocketData,
@@ -23,19 +22,20 @@ import {
   parseSandboxCreatedSocketData,
   parseTaskStatusSocketData,
 } from "@/lib/contracts/events";
-import type { RunAction, RunSandbox, RunSandboxCommand } from "@/lib/contracts/rest";
+import type { GraphMutationSocketData } from "@/lib/contracts/events";
+import type { RunSandbox, RunSandboxCommand } from "@/lib/contracts/rest";
 import {
   ExecutionAttemptState,
   GenerationTurnState,
   TaskStatus,
   TaskState,
-  ActionState,
   SandboxState,
   SandboxCommandState,
   WorkflowRunState,
   SerializedWorkflowRunState,
 } from "@/lib/types";
 import { deserializeRunState } from "@/lib/runState";
+import { useGraphMutations } from "@/features/graph/hooks/useGraphMutations";
 
 interface UseRunStateResult {
   runState: WorkflowRunState | null;
@@ -72,18 +72,6 @@ function recalculateTaskMetrics(tasks: Map<string, TaskState>): Pick<
 
 function nextExecutionStatus(status: TaskStatus): TaskStatus {
   return status === TaskStatus.READY ? TaskStatus.PENDING : status;
-}
-
-function normalizeActionState(action: RunAction): ActionState {
-  return {
-    ...action,
-    status: action.status as ActionState["status"],
-    output: action.output ?? null,
-    completedAt: action.completedAt ?? null,
-    durationMs: action.durationMs ?? null,
-    error: action.error ?? null,
-    startedAt: action.startedAt ?? new Date(0).toISOString(),
-  };
 }
 
 function normalizeSandboxState(sandbox: RunSandbox): SandboxState {
@@ -269,51 +257,6 @@ export function useRunState(
     [runId]
   );
 
-  // Handle new action
-  const handleActionNew = useCallback(
-    (payload: unknown) => {
-      const data = parseActionSocketData(payload);
-      if (data.runId !== runId) return;
-
-      setRunState((prev) => {
-        if (!prev) return prev;
-
-        const taskActions = prev.actionsByTask.get(data.action.taskId) ?? [];
-        const newActionsByTask = new Map(prev.actionsByTask);
-        newActionsByTask.set(data.action.taskId, [
-          ...taskActions,
-          normalizeActionState(data.action),
-        ]);
-
-        return { ...prev, actionsByTask: newActionsByTask };
-      });
-    },
-    [runId]
-  );
-
-  // Handle action completed
-  const handleActionCompleted = useCallback(
-    (payload: unknown) => {
-      const data = parseActionSocketData(payload);
-      if (data.runId !== runId) return;
-
-      setRunState((prev) => {
-        if (!prev) return prev;
-
-        const taskActions = prev.actionsByTask.get(data.action.taskId) ?? [];
-        const updatedActions = taskActions.map((a) =>
-          a.id === data.action.id ? normalizeActionState(data.action) : a
-        );
-
-        const newActionsByTask = new Map(prev.actionsByTask);
-        newActionsByTask.set(data.action.taskId, updatedActions);
-
-        return { ...prev, actionsByTask: newActionsByTask };
-      });
-    },
-    [runId]
-  );
-
   // Handle new resource
   const handleResourceNew = useCallback(
     (payload: unknown) => {
@@ -491,6 +434,16 @@ export function useRunState(
     [runId]
   );
 
+  const { handleGraphMutation } = useGraphMutations(setRunState);
+
+  const handleGraphMutationSocket = useCallback(
+    (data: GraphMutationSocketData) => {
+      if (data.runId !== runId) return;
+      handleGraphMutation(data.mutation);
+    },
+    [runId, handleGraphMutation],
+  );
+
   // Handle full run state sync (for initial load / completed runs)
   const handleSyncRun = useCallback(
     (data: SerializedWorkflowRunState | null) => {
@@ -555,8 +508,6 @@ export function useRunState(
     // Set up event listeners
     socket.on("sync:run", handleSyncRun);
     socket.on("task:status", handleTaskStatus);
-    socket.on("action:new", handleActionNew);
-    socket.on("action:completed", handleActionCompleted);
     socket.on("resource:new", handleResourceNew);
     socket.on("sandbox:created", handleSandboxCreated);
     socket.on("sandbox:command", handleSandboxCommand);
@@ -565,13 +516,12 @@ export function useRunState(
     socket.on("thread:message", handleThreadMessage);
     socket.on("task:evaluation", handleTaskEvaluation);
     socket.on("generation:turn", handleGenerationTurn);
+    socket.on("graph:mutation", handleGraphMutationSocket);
 
     return () => {
       if (retryTimeout) clearTimeout(retryTimeout);
       socket.off("sync:run", handleSyncRun);
       socket.off("task:status", handleTaskStatus);
-      socket.off("action:new", handleActionNew);
-      socket.off("action:completed", handleActionCompleted);
       socket.off("resource:new", handleResourceNew);
       socket.off("sandbox:created", handleSandboxCreated);
       socket.off("sandbox:command", handleSandboxCommand);
@@ -580,6 +530,7 @@ export function useRunState(
       socket.off("thread:message", handleThreadMessage);
       socket.off("task:evaluation", handleTaskEvaluation);
       socket.off("generation:turn", handleGenerationTurn);
+      socket.off("graph:mutation", handleGraphMutationSocket);
     };
   }, [
     socket,
@@ -589,8 +540,6 @@ export function useRunState(
     unsubscribe,
     handleSyncRun,
     handleTaskStatus,
-    handleActionNew,
-    handleActionCompleted,
     handleResourceNew,
     handleSandboxCreated,
     handleSandboxCommand,
@@ -599,6 +548,7 @@ export function useRunState(
     handleThreadMessage,
     handleTaskEvaluation,
     handleGenerationTurn,
+    handleGraphMutationSocket,
   ]);
 
   // Unsubscribe on unmount
@@ -611,9 +561,10 @@ export function useRunState(
     };
   }, [unsubscribe]);
 
-  // Handle connection errors
+  // Handle connection errors — only block the UI when we have no data at all.
+  // If runState was loaded via REST, socket disconnect is non-fatal.
   useEffect(() => {
-    if (!isConnected && socket) {
+    if (!isConnected && socket && !hasRunStateRef.current) {
       setError((prev) => prev ?? "Disconnected from server");
     }
   }, [isConnected, socket]);

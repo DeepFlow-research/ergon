@@ -10,11 +10,10 @@ import type {
   RunTaskEvaluation as RestRunTaskEvaluation,
 } from "@/lib/contracts/rest";
 import type {
-  ActionSocketData,
-  DashboardAgentActionCompletedData as GeneratedDashboardAgentActionCompletedData,
-  DashboardAgentActionStartedData as GeneratedDashboardAgentActionStartedData,
   DashboardCohortUpdatedData as GeneratedDashboardCohortUpdatedData,
+  DashboardGraphMutationData as GeneratedDashboardGraphMutationData,
   DashboardResourcePublishedData as GeneratedDashboardResourcePublishedData,
+  GraphMutationSocketData as GeneratedGraphMutationSocketData,
   ResourceSocketData,
   RunCompletedSocketData,
   DashboardSandboxClosedData as GeneratedDashboardSandboxClosedData,
@@ -43,6 +42,7 @@ export enum TaskStatus {
   RUNNING = "running",
   COMPLETED = "completed",
   FAILED = "failed",
+  ABANDONED = "abandoned",
 }
 
 export enum TaskTrigger {
@@ -68,8 +68,6 @@ export const DashboardEventNames = {
   WORKFLOW_COMPLETED: "dashboard/workflow.completed",
   COHORT_UPDATED: "dashboard/cohort.updated",
   TASK_STATUS_CHANGED: "dashboard/task.status_changed",
-  AGENT_ACTION_STARTED: "dashboard/agent.action_started",
-  AGENT_ACTION_COMPLETED: "dashboard/agent.action_completed",
   RESOURCE_PUBLISHED: "dashboard/resource.published",
   SANDBOX_CREATED: "dashboard/sandbox.created",
   SANDBOX_COMMAND: "dashboard/sandbox.command",
@@ -77,6 +75,7 @@ export const DashboardEventNames = {
   THREAD_MESSAGE_CREATED: "dashboard/thread.message_created",
   TASK_EVALUATION_UPDATED: "dashboard/task.evaluation_updated",
   GENERATION_TURN_COMPLETED: "dashboard/generation.turn_completed",
+  GRAPH_MUTATION: "dashboard/graph.mutation",
 } as const;
 
 export type DashboardEventName =
@@ -93,8 +92,6 @@ export type CohortRunRow = NonNullable<RestCohortDetail["runs"]>[number];
 export type CohortDetail = RestCohortDetail;
 export type DashboardCohortUpdatedData = GeneratedDashboardCohortUpdatedData;
 export type DashboardTaskStatusChangedData = GeneratedDashboardTaskStatusChangedData;
-export type DashboardAgentActionStartedData = GeneratedDashboardAgentActionStartedData;
-export type DashboardAgentActionCompletedData = GeneratedDashboardAgentActionCompletedData;
 export type DashboardResourcePublishedData = GeneratedDashboardResourcePublishedData;
 export type DashboardSandboxCreatedData = GeneratedDashboardSandboxCreatedData;
 export type DashboardSandboxCommandData = GeneratedDashboardSandboxCommandData;
@@ -109,6 +106,9 @@ export type DashboardTaskEvaluationUpdatedData = GeneratedDashboardTaskEvaluatio
 import type { DashboardGenerationTurnCompletedData as _GeneratedDashboardGenerationTurnCompletedData } from "@/lib/contracts/events";
 export type DashboardGenerationTurnCompletedData = _GeneratedDashboardGenerationTurnCompletedData;
 
+export type DashboardGraphMutationData = GeneratedDashboardGraphMutationData;
+export type GraphMutationSocketData = GeneratedGraphMutationSocketData;
+
 // =============================================================================
 // Union Types for Inngest Event Handling
 // =============================================================================
@@ -118,15 +118,14 @@ export type DashboardEventData =
   | DashboardWorkflowCompletedData
   | DashboardCohortUpdatedData
   | DashboardTaskStatusChangedData
-  | DashboardAgentActionStartedData
-  | DashboardAgentActionCompletedData
   | DashboardResourcePublishedData
   | DashboardSandboxCreatedData
   | DashboardSandboxCommandData
   | DashboardSandboxClosedData
   | DashboardThreadMessageCreatedData
   | DashboardTaskEvaluationUpdatedData
-  | DashboardGenerationTurnCompletedData;
+  | DashboardGenerationTurnCompletedData
+  | DashboardGraphMutationData;
 
 // =============================================================================
 // Inngest Event Types (for type-safe event handling)
@@ -137,10 +136,6 @@ export type DashboardEvents = {
   "dashboard/workflow.completed": { data: DashboardWorkflowCompletedData };
   "dashboard/cohort.updated": { data: DashboardCohortUpdatedData };
   "dashboard/task.status_changed": { data: DashboardTaskStatusChangedData };
-  "dashboard/agent.action_started": { data: DashboardAgentActionStartedData };
-  "dashboard/agent.action_completed": {
-    data: DashboardAgentActionCompletedData;
-  };
   "dashboard/resource.published": { data: DashboardResourcePublishedData };
   "dashboard/sandbox.created": { data: DashboardSandboxCreatedData };
   "dashboard/sandbox.command": { data: DashboardSandboxCommandData };
@@ -148,6 +143,7 @@ export type DashboardEvents = {
   "dashboard/thread.message_created": { data: DashboardThreadMessageCreatedData };
   "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
   "dashboard/generation.turn_completed": { data: DashboardGenerationTurnCompletedData };
+  "dashboard/graph.mutation": { data: DashboardGraphMutationData };
 };
 
 // =============================================================================
@@ -168,7 +164,9 @@ export interface TaskState {
   dependsOnIds: string[];
   assignedWorkerId: string | null;
   assignedWorkerName: string | null;
+  /** From run snapshot `startedAt`: null only before the task has actually started. */
   startedAt: string | null;
+  /** From run snapshot `completedAt`: null until the task finishes (or never started). */
   completedAt: string | null;
   isLeaf: boolean;
   level: number; // Depth in tree (root = 0)
@@ -188,26 +186,6 @@ export interface ExecutionAttemptState {
   errorMessage: string | null;
   score: number | null;
   evaluationDetails: Record<string, unknown>;
-}
-
-/**
- * Action state in the store.
- * Represents an agent tool call during task execution.
- */
-export interface ActionState {
-  id: string;
-  taskId: string;
-  workerId: string;
-  workerName: string;
-  type: string; // Tool name
-  input: string; // JSON string
-  output: string | null; // JSON string
-  status: "started" | "completed" | "failed";
-  startedAt: string;
-  completedAt: string | null;
-  durationMs: number | null;
-  success: boolean;
-  error: string | null;
 }
 
 /**
@@ -277,9 +255,6 @@ export interface WorkflowRunState {
   tasks: Map<string, TaskState>;
   rootTaskId: string;
 
-  // Actions by task (append-only)
-  actionsByTask: Map<string, ActionState[]>;
-
   // Resources by task
   resourcesByTask: Map<string, ResourceState[]>;
 
@@ -327,8 +302,6 @@ export interface ServerToClientEvents {
   "run:started": (data: { runId: string; name: string }) => void;
   "run:completed": (data: RunCompletedSocketData) => void;
   "task:status": (data: TaskStatusSocketData) => void;
-  "action:new": (data: ActionSocketData) => void;
-  "action:completed": (data: ActionSocketData) => void;
   "resource:new": (data: ResourceSocketData) => void;
   "sandbox:created": (data: SandboxCreatedSocketData) => void;
   "sandbox:command": (data: SandboxCommandSocketData) => void;
@@ -336,6 +309,7 @@ export interface ServerToClientEvents {
   "thread:message": (data: DashboardThreadMessageCreatedData) => void;
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
   "generation:turn": (data: { runId: string; turn: GenerationTurnState }) => void;
+  "graph:mutation": (data: GraphMutationSocketData) => void;
   // Sync event - sends all current runs to a client on request
   "sync:runs": (runs: RunListEntry[]) => void;
   // Sync event - sends full state for a specific run
