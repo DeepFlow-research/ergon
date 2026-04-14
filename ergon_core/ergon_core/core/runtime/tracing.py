@@ -18,8 +18,8 @@ Target span hierarchy (one trace per run, keyed by run_id)::
     │   instance_key
     │   ├── sandbox.setup
     │   ├── worker.execute
-    │   │   └── action (per RunAction)
-    │   │       action_id, action_num, action_type, success, duration_ms
+    │   │   └── tool.{tool_name} (per tool call in GenerationTurn)
+    │   │       turn_index, tool_name, tool_call_id, has_result
     │   ├── persist.outputs
     │   │   resource_ids
     │   └── evaluation.task (per evaluator)
@@ -30,7 +30,7 @@ Target span hierarchy (one trace per run, keyed by run_id)::
     └── workflow.complete OR workflow.failed
 
 Every span stores relational IDs (run_id, task_id, execution_id,
-action_id, evaluator_id) for PG lookup — not payload copies.
+evaluator_id) for PG lookup — not payload copies.
 See otel_tracing_v2.md for full attribute schemas per span.
 """
 

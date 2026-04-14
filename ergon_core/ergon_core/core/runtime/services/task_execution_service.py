@@ -33,7 +33,6 @@ from ergon_core.core.utils import require_not_none, utcnow
 
 
 class TaskExecutionService:
-
     def __init__(self) -> None:
         self._graph_repo = WorkflowGraphRepository()
 
@@ -44,9 +43,7 @@ class TaskExecutionService:
 
     # -- Graph-native path (dynamic tasks) ---
 
-    def _prepare_graph_native(
-        self, command: PrepareTaskExecutionCommand
-    ) -> PreparedTaskExecution:
+    def _prepare_graph_native(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
         with get_session() as session:
             node = session.get(RunGraphNode, command.node_id)
             if node is None:
@@ -73,8 +70,7 @@ class TaskExecutionService:
 
             worker_row = session.exec(
                 select(ExperimentDefinitionWorker).where(
-                    ExperimentDefinitionWorker.experiment_definition_id
-                    == command.definition_id,
+                    ExperimentDefinitionWorker.experiment_definition_id == command.definition_id,
                     ExperimentDefinitionWorker.binding_key == worker_binding_key,
                 )
             ).first()
@@ -95,9 +91,7 @@ class TaskExecutionService:
                 run_id=command.run_id,
                 node_id=command.node_id,
                 definition_worker_id=worker_row.id,
-                attempt_number=self._next_attempt_number(
-                    session, command.run_id, command.node_id
-                ),
+                attempt_number=self._next_attempt_number(session, command.run_id, command.node_id),
                 status=TaskExecutionStatus.RUNNING,
                 started_at=utcnow(),
             )
@@ -132,9 +126,7 @@ class TaskExecutionService:
 
     # -- Definition path (static tasks) ---
 
-    def _prepare_definition(
-        self, command: PrepareTaskExecutionCommand
-    ) -> PreparedTaskExecution:
+    def _prepare_definition(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
         with get_session() as session:
             task = require_not_none(
                 session.get(ExperimentDefinitionTask, command.task_id),
@@ -162,10 +154,8 @@ class TaskExecutionService:
                 worker_binding_key = assignment.worker_binding_key
 
                 worker_stmt = select(ExperimentDefinitionWorker).where(
-                    ExperimentDefinitionWorker.experiment_definition_id
-                    == command.definition_id,
-                    ExperimentDefinitionWorker.binding_key
-                    == assignment.worker_binding_key,
+                    ExperimentDefinitionWorker.experiment_definition_id == command.definition_id,
+                    ExperimentDefinitionWorker.binding_key == assignment.worker_binding_key,
                 )
                 worker = session.exec(worker_stmt).first()
                 if worker is not None:
@@ -258,9 +248,7 @@ class TaskExecutionService:
 
     # -- Helpers ---
 
-    def _next_attempt_number(
-        self, session: Session, run_id: UUID, node_id: UUID
-    ) -> int:
+    def _next_attempt_number(self, session: Session, run_id: UUID, node_id: UUID) -> int:
         count = session.exec(
             select(func.count(RunTaskExecution.id)).where(
                 RunTaskExecution.run_id == run_id,
@@ -269,9 +257,7 @@ class TaskExecutionService:
         ).one()
         return count + 1
 
-    def _next_attempt_number_by_task(
-        self, session: Session, run_id: UUID, task_id: UUID
-    ) -> int:
+    def _next_attempt_number_by_task(self, session: Session, run_id: UUID, task_id: UUID) -> int:
         count = session.exec(
             select(func.count(RunTaskExecution.id)).where(
                 RunTaskExecution.run_id == run_id,

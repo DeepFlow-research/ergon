@@ -16,8 +16,7 @@ class TaskNotPendingError(DelegationError):
 
     def __init__(self, node_id: UUID, current_status: str) -> None:
         super().__init__(
-            f"Cannot refine node {node_id}: status is '{current_status}', "
-            f"expected 'pending'"
+            f"Cannot refine node {node_id}: status is '{current_status}', expected 'pending'"
         )
         self.node_id = node_id
         self.current_status = current_status
@@ -27,9 +26,6 @@ class TaskAlreadyTerminalError(DelegationError):
     """abandon_task called on an already-terminal node."""
 
     def __init__(self, node_id: UUID, current_status: str) -> None:
-        super().__init__(
-            f"Cannot abandon node {node_id}: already terminal "
-            f"('{current_status}')"
-        )
+        super().__init__(f"Cannot abandon node {node_id}: already terminal ('{current_status}')")
         self.node_id = node_id
         self.current_status = current_status

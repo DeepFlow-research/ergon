@@ -68,9 +68,7 @@ class TaskManagementService:
         node_uuid = uuid4()
         task_key = f"{_DYNAMIC_TASK_KEY_PREFIX}{node_uuid.hex[:8]}"
 
-        parent_node = self._graph_repo.get_node(
-            session, command.run_id, command.parent_node_id
-        )
+        parent_node = self._graph_repo.get_node(session, command.run_id, command.parent_node_id)
 
         node = self._graph_repo.add_node(
             session,

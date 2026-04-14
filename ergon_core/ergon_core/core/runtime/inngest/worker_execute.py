@@ -86,10 +86,12 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         turn_start = datetime.now(UTC)
         async for turn in worker.execute(task, context=worker_context):
             turn_end = datetime.now(UTC)
-            turn = turn.model_copy(update={
-                "started_at": turn.started_at or turn_start,
-                "completed_at": turn.completed_at or turn_end,
-            })
+            turn = turn.model_copy(
+                update={
+                    "started_at": turn.started_at or turn_start,
+                    "completed_at": turn.completed_at or turn_end,
+                }
+            )
             with get_session() as session:
                 await repo.persist_single(
                     session,
@@ -168,9 +170,7 @@ def _emit_tool_call_spans(sink, payload: WorkerExecuteRequest) -> None:
             span_num = 0
             for turn in turns:
                 tool_calls = turn.parsed_tool_calls()
-                results_by_id = {
-                    tr.tool_call_id: tr for tr in turn.parsed_tool_results()
-                }
+                results_by_id = {tr.tool_call_id: tr for tr in turn.parsed_tool_results()}
                 for tc in tool_calls:
                     result = results_by_id.get(tc.tool_call_id)
                     sink.emit_span(

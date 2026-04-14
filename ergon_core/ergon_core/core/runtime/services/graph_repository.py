@@ -544,7 +544,9 @@ class WorkflowGraphRepository:
             target_type=target_type,
             target_id=target_id,
             meta=meta,
-            old_value=AnnotationSetMutation(namespace=namespace, payload=old_payload) if old_payload else None,
+            old_value=AnnotationSetMutation(namespace=namespace, payload=old_payload)
+            if old_payload
+            else None,
             new_value=AnnotationSetMutation(namespace=namespace, payload=payload),
         )
         return _to_annotation_dto(row)
@@ -655,7 +657,9 @@ class WorkflowGraphRepository:
             target_type=target_type,
             target_id=target_id,
             meta=meta,
-            old_value=AnnotationDeletedMutation(namespace=namespace, payload=old_payload) if old_payload else None,
+            old_value=AnnotationDeletedMutation(namespace=namespace, payload=old_payload)
+            if old_payload
+            else None,
             new_value=AnnotationDeletedMutation(namespace=namespace, payload={}),
         )
 
