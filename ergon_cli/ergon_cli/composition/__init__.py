@@ -29,11 +29,53 @@ def build_experiment(
     if benchmark_slug == "delegation-smoke":
         return _build_delegation_experiment(benchmark, model, evaluator, WORKERS)
 
+    if worker_slug == "manager-researcher":
+        return _build_manager_researcher_experiment(benchmark, model, evaluator, WORKERS)
+
     worker = worker_cls(name="worker", model=model)
     return Experiment.from_single_worker(
         benchmark=benchmark,
         worker=worker,
         evaluators={"default": evaluator},
+    )
+
+
+def _build_manager_researcher_experiment(
+    benchmark: Benchmark,
+    model: str,
+    evaluator: Evaluator,
+    workers_registry: Mapping[str, type[Worker]],
+) -> Experiment:
+    """Build experiment with manager-researcher + researcher for any benchmark.
+
+    The manager-researcher is assigned to all static benchmark tasks.
+    The researcher worker is registered as a sub-worker binding only —
+    it receives no static task assignments; dynamic tasks spawned by the
+    manager via add_task() will resolve it via ExperimentDefinitionWorker
+    lookup in _prepare_graph_native().
+    """
+    manager_cls = workers_registry["manager-researcher"]
+    researcher_cls = workers_registry["researcher"]
+
+    manager = manager_cls(name="manager-researcher", model=model)
+    researcher = researcher_cls(name="researcher", model=model)
+
+    # Collect all task keys so we can explicitly assign the manager to them.
+    # The persistence service only auto-assigns when there is exactly 1 worker;
+    # with 2 workers we must provide explicit assignments.
+    instances = benchmark.build_instances()
+    all_task_keys = [
+        task.task_key for tasks in instances.values() for task in tasks
+    ]
+
+    return Experiment(
+        benchmark=benchmark,
+        workers={
+            "manager-researcher": manager,
+            "researcher": researcher,
+        },
+        evaluators={"default": evaluator},
+        assignments={"manager-researcher": all_task_keys},
     )
 
 
