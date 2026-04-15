@@ -56,8 +56,7 @@ CREATE TABLE run_context_events (
     payload     JSONB       NOT NULL,  -- typed by event_type; see §3.3
 
     -- RL metadata (on model-generated events only)
-    policy_version TEXT,
-    execution_outcome TEXT  -- "success" | "failure" | NULL
+    policy_version TEXT
 );
 
 CREATE UNIQUE INDEX ON run_context_events (task_execution_id, sequence);
@@ -70,14 +69,14 @@ The `UNIQUE` constraint on `(task_execution_id, sequence)` enforces append-only 
 
 ### 3.2 Event types
 
-| `event_type` | Produced by | Has logprobs |
+| `event_type` | Produced by | Has `turn_token_ids` / `turn_logprobs` |
 |---|---|---|
 | `system_prompt` | Worker / runtime at turn start | No |
 | `user_message` | Worker or agent-to-agent delegation | No |
-| `assistant_text` | Model | Yes (vLLM only) |
-| `tool_call` | Model | Yes (vLLM only) |
+| `assistant_text` | Model | On first model-output event of the turn (vLLM only; `None` until provider support added) |
+| `tool_call` | Model | On first model-output event of the turn (vLLM only; `None` until provider support added) |
 | `tool_result` | Environment | No |
-| `thinking` | Model (extended thinking only) | Yes (vLLM only) |
+| `thinking` | Model (extended thinking only) | On first model-output event of the turn (vLLM only; `None` until provider support added) |
 
 ### 3.3 Payload shapes (Python discriminated union)
 
@@ -116,8 +115,9 @@ class UserMessagePayload(BaseModel):
 class AssistantTextPayload(BaseModel):
     event_type: Literal["assistant_text"] = "assistant_text"
     text: str
-    token_ids: list[int] | None = None
-    logprobs: list[TokenLogprob] | None = None
+    turn_id: str                                        # links events from the same generation call
+    turn_token_ids: list[int] | None = None             # set on FIRST model-output event of the turn only
+    turn_logprobs: list[TokenLogprob] | None = None     # set on FIRST model-output event of the turn only
 
 
 class ToolCallPayload(BaseModel):
@@ -125,8 +125,9 @@ class ToolCallPayload(BaseModel):
     tool_call_id: str
     tool_name: str
     args: dict[str, Any]
-    token_ids: list[int] | None = None
-    logprobs: list[TokenLogprob] | None = None
+    turn_id: str                                        # links events from the same generation call
+    turn_token_ids: list[int] | None = None             # None if another event in this turn holds them
+    turn_logprobs: list[TokenLogprob] | None = None     # None if another event in this turn holds them
 
 
 class ToolResultPayload(BaseModel):
@@ -140,8 +141,9 @@ class ToolResultPayload(BaseModel):
 class ThinkingPayload(BaseModel):
     event_type: Literal["thinking"] = "thinking"
     text: str
-    token_ids: list[int] | None = None
-    logprobs: list[TokenLogprob] | None = None
+    turn_id: str                                        # links events from the same generation call
+    turn_token_ids: list[int] | None = None             # set on FIRST model-output event of the turn only
+    turn_logprobs: list[TokenLogprob] | None = None     # set on FIRST model-output event of the turn only
 
 
 ContextEventPayload = Annotated[
@@ -161,11 +163,11 @@ ContextEventPayload = Annotated[
 # ergon_core/ergon_core/core/persistence/context/models.py
 
 from pydantic import TypeAdapter
+from sqlalchemy.dialects.postgresql import JSONB
 from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
     ContextEventType,
 )
-from ergon_core.core.persistence.telemetry.models import ExecutionOutcome
 
 
 class RunContextEvent(SQLModel, table=True):
@@ -179,12 +181,12 @@ class RunContextEvent(SQLModel, table=True):
     worker_binding_key: str = Field(index=True)
     sequence: int
     event_type: ContextEventType = Field(index=True)
-    payload: dict[str, Any] = Field(sa_column=Column(JSON))
+    payload: dict[str, Any] = Field(sa_column=Column(JSONB))
+    # Note: SQLAlchemy maps JSONB to TEXT in SQLite (used in tests) — no fixture changes needed.
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     policy_version: str | None = None
-    execution_outcome: ExecutionOutcome | None = Field(default=None, index=True)
 
     def parsed_payload(self) -> ContextEventPayload:
         return TypeAdapter(ContextEventPayload).validate_python(self.payload)
@@ -264,9 +266,14 @@ class GenerationTurn(BaseModel):
     response_parts: list[ModelResponsePart] = Field(default_factory=list)
     tool_results: list[ToolReturnPart] = Field(default_factory=list)
 
-    # logprobs are per-response (from vLLM provider_details), not per-part.
-    # Distributed onto individual event payloads by persist_turn.
-    logprobs: list[TokenLogprob] | None = None
+    # turn_token_ids and turn_logprobs are both turn-level: flat lists covering all
+    # model-generated tokens in this generation call in generation order (text, thinking,
+    # tool args — whichever vLLM exposes). Both stored on the FIRST model-output context
+    # event only; group by turn_id to find them.
+    # turn_token_ids: None until the vLLM provider is updated to extract token IDs from
+    # provider_details (PydanticAI currently exposes logprobs but drops token IDs).
+    turn_token_ids: list[int] | None = None
+    turn_logprobs: list[TokenLogprob] | None = None
     policy_version: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -380,6 +387,30 @@ class ContextEventRepository:
     def add_listener(self, listener: Callable[[RunContextEvent], Awaitable[None]]) -> None:
         self._listeners.append(listener)
 
+    def _make_event(
+        self,
+        run_id: UUID,
+        execution_id: UUID,
+        worker_binding_key: str,
+        sequence: int,
+        payload: ContextEventPayload,
+        *,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+        policy_version: str | None = None,
+    ) -> RunContextEvent:
+        return RunContextEvent(
+            run_id=run_id,
+            task_execution_id=execution_id,
+            worker_binding_key=worker_binding_key,
+            sequence=sequence,
+            event_type=payload.event_type,
+            payload=payload.model_dump(mode="json"),
+            started_at=started_at,
+            completed_at=completed_at,
+            policy_version=policy_version,
+        )
+
     async def persist_turn(
         self,
         session: Session,
@@ -388,7 +419,6 @@ class ContextEventRepository:
         execution_id: UUID,
         worker_binding_key: str,
         turn: GenerationTurn,
-        execution_outcome: ExecutionOutcome = "success",
     ) -> list[RunContextEvent]:
         """Decompose one GenerationTurn into ordered context events and persist them.
 
@@ -403,6 +433,13 @@ class ContextEventRepository:
         """
         events: list[RunContextEvent] = []
         seq = self._next_sequence(execution_id)
+
+        # Each generation call gets a unique turn_id so model-output events can be
+        # grouped. turn_token_ids and turn_logprobs are both stored on the FIRST
+        # model-output event only; subsequent events in the same turn have None.
+        turn_id = str(uuid4())
+        turn_token_ids_remaining = turn.turn_token_ids
+        turn_logprobs_remaining = turn.turn_logprobs
 
         # 1–2. Context events from messages_in (first turn only — system + user)
         for part in turn.messages_in:
@@ -427,26 +464,32 @@ class ContextEventRepository:
                     run_id, execution_id, worker_binding_key, seq,
                     ThinkingPayload(
                         text=part.content,
-                        # token_ids populated once vLLM provides them natively
+                        turn_id=turn_id,
+                        turn_token_ids=turn_token_ids_remaining,
+                        turn_logprobs=turn_logprobs_remaining,
                     ),
                     started_at=turn.started_at,
                     completed_at=turn.completed_at,
                     policy_version=turn.policy_version,
-                    execution_outcome=execution_outcome,
                 ))
+                turn_token_ids_remaining = None  # assigned to first event; clear for rest
+                turn_logprobs_remaining = None
                 seq += 1
             elif isinstance(part, TextPart):
                 events.append(self._make_event(
                     run_id, execution_id, worker_binding_key, seq,
                     AssistantTextPayload(
                         text=part.content,
-                        logprobs=turn.logprobs,
+                        turn_id=turn_id,
+                        turn_token_ids=turn_token_ids_remaining,
+                        turn_logprobs=turn_logprobs_remaining,
                     ),
                     started_at=turn.started_at,
                     completed_at=turn.completed_at,
                     policy_version=turn.policy_version,
-                    execution_outcome=execution_outcome,
                 ))
+                turn_token_ids_remaining = None
+                turn_logprobs_remaining = None
                 seq += 1
             elif isinstance(part, ToolCallPart):
                 events.append(self._make_event(
@@ -455,13 +498,16 @@ class ContextEventRepository:
                         tool_call_id=part.tool_call_id,
                         tool_name=part.tool_name,
                         args=part.args,
-                        logprobs=turn.logprobs,
+                        turn_id=turn_id,
+                        turn_token_ids=turn_token_ids_remaining,
+                        turn_logprobs=turn_logprobs_remaining,
                     ),
                     started_at=turn.started_at,
                     completed_at=turn.completed_at,
                     policy_version=turn.policy_version,
-                    execution_outcome=execution_outcome,
                 ))
+                turn_token_ids_remaining = None
+                turn_logprobs_remaining = None
                 seq += 1
 
         # 5. Tool results
@@ -527,7 +573,17 @@ await repo.persist_single(session, run_id=..., execution_id=..., turn=turn, ...)
 context_event_repo = ContextEventRepository()
 context_event_repo.add_listener(dashboard_emitter.on_context_event)
 ...
-await context_event_repo.persist_turn(session, run_id=..., execution_id=..., turn=turn, ...)
+# Build turns from ALL messages — not an incremental slice.
+result: RunResult = await agent.run(...)
+turns = _build_turns(result.all_messages())
+for turn in turns:
+    # Register the execution→node mapping before emitting events so the
+    # DashboardEmitter can resolve task_node_id in on_context_event.
+    dashboard_emitter.register_execution(execution_id=execution_id, task_node_id=node_id)
+    await context_event_repo.persist_turn(
+        session, run_id=run_id, execution_id=execution_id,
+        worker_binding_key=worker_binding_key, turn=turn,
+    )
 ```
 
 ### 4.5 Listener Chain (Python → Inngest → Socket → Client)
@@ -553,9 +609,10 @@ persist_turn() commits row
 class DashboardContextEventEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/context.event"
 
+    id: UUID                        # RunContextEvent.id — used as dedup key on the frontend
     run_id: UUID
     task_execution_id: UUID
-    task_node_id: UUID              # resolved from execution_task_map at emit time
+    task_node_id: UUID              # resolved from _execution_task_map at emit time
     worker_binding_key: str
     sequence: int
     event_type: ContextEventType    # imported from event_payloads
@@ -606,9 +663,19 @@ async def on_context_event(self, event: RunContextEvent) -> None:
         logger.warning("Failed to emit dashboard/context.event", exc_info=True)
 ```
 
-`_execution_task_map: dict[UUID, UUID]` is already maintained by `DashboardEmitter` for the graph mutation events — no new state required.
+`_execution_task_map: dict[UUID, UUID]` must be added to `DashboardEmitter`. It is populated via a new `register_execution` method called from `worker_execute.py` before `persist_turn` (see §4.4):
+
+```python
+def register_execution(self, execution_id: UUID, task_node_id: UUID) -> None:
+    """Register execution_id → task graph node_id mapping.
+    Called from worker_execute.py before persist_turn so that on_context_event
+    can resolve task_node_id without a DB lookup."""
+    self._execution_task_map[execution_id] = task_node_id
+```
 
 #### Frontend Inngest function
+
+`parseDashboardContextEventData` is a Zod parse helper that validates raw Inngest event data against the `DashboardContextEventEvent` Zod schema (defined in `ergon-dashboard/src/lib/contracts/events.ts`). It throws on validation failure. The `id` field on `ContextEventState` maps to `event.data.id` from the Inngest payload — it is used as the deduplication key in `addContextEvent` and the socket handler.
 
 ```typescript
 // ergon-dashboard/src/inngest/functions/onContextEvent.ts
@@ -770,31 +837,53 @@ def _build_prompt_text(events: list[RunContextEvent]) -> str:
 def _get_token_ids(parsed: ContextEventPayload, tokenizer: Tokenizer) -> list[int]:
     """Extract token IDs from a model-generated event payload.
 
-    Uses native token_ids if present (vLLM path); falls back to tokenizing
-    the text content (non-vLLM path). This fallback produces correct token
-    counts but the IDs will not match the model's original forward pass,
-    which is acceptable for reward-only RL but not for importance sampling.
+    Uses turn_token_ids if present (vLLM path — turn-level flat list on the first
+    event of each turn). Falls back to tokenising the text content (non-vLLM path).
+    The fallback produces correct token counts but IDs won't match the model's
+    original forward pass, which is acceptable for reward-only RL but not for
+    importance sampling. See also the multi-event alignment note on _get_logprobs.
     """
     if isinstance(parsed, AssistantTextPayload):
-        return parsed.token_ids if parsed.token_ids is not None else tokenizer.encode(parsed.text)
+        return parsed.turn_token_ids if parsed.turn_token_ids is not None else tokenizer.encode(parsed.text)
     if isinstance(parsed, ToolCallPayload):
         args_text = json.dumps(parsed.args)
-        return parsed.token_ids if parsed.token_ids is not None else tokenizer.encode(args_text)
+        return parsed.turn_token_ids if parsed.turn_token_ids is not None else tokenizer.encode(args_text)
     if isinstance(parsed, ThinkingPayload):
-        return parsed.token_ids if parsed.token_ids is not None else tokenizer.encode(parsed.text)
+        return parsed.turn_token_ids if parsed.turn_token_ids is not None else tokenizer.encode(parsed.text)
     raise ValueError(f"_get_token_ids called on non-model event: {type(parsed)}")
 
 
 def _get_logprobs(parsed: ContextEventPayload, n_tokens: int) -> list[float]:
-    """Extract per-token logprob scalars, padding with 0.0 if unavailable."""
-    logprobs_list: list[TokenLogprob] | None = getattr(parsed, "logprobs", None)
-    if logprobs_list is None:
+    """Extract per-token logprob scalars from turn_logprobs, padding with 0.0 if unavailable.
+
+    NOTE: This slicing is only correct for single-event turns (text-only or tool-call-only).
+    For multi-event turns (text + tool_call), the flat turn_logprobs list covers ALL tokens in
+    generation order; slicing per-event misaligns the logprobs. The correct path for multi-event
+    turns is to group by turn_id, collect all token_ids across the group, then align turn_logprobs
+    once against the concatenated list. This is a Phase 1 implementation concern; the schema is
+    correct. Until multi-event alignment is implemented, single-event turns are exact and
+    multi-event turns fall back to partial logprob coverage or 0.0 padding.
+    """
+    lps: list[TokenLogprob] | None = getattr(parsed, "turn_logprobs", None)
+    if lps is None:
         return [0.0] * n_tokens
-    scalars = [lp.logprob for lp in logprobs_list]
-    # Align length to n_tokens (tokenizer re-encode may differ from model tokenisation)
+    scalars = [lp.logprob for lp in lps]
+    # Align length to n_tokens
     if len(scalars) < n_tokens:
         scalars.extend([0.0] * (n_tokens - len(scalars)))
     return scalars[:n_tokens]
+
+
+def _count_turns(events: list[RunContextEvent]) -> int:
+    """Count distinct generation turns (unique turn_ids across model-output events)."""
+    seen: set[str] = set()
+    for event in events:
+        if event.event_type in ("assistant_text", "tool_call", "thinking"):
+            parsed = event.parsed_payload()
+            turn_id: str | None = getattr(parsed, "turn_id", None)
+            if turn_id:
+                seen.add(turn_id)
+    return len(seen)
 ```
 
 #### Key improvements over the old path
@@ -840,6 +929,102 @@ Grouping rule: consecutive model-generated events (`thinking`, `assistant_text`,
 
 This function lives in `ergon_core/ergon_core/core/persistence/context/assembly.py`.
 
+```python
+# ergon_core/ergon_core/core/persistence/context/assembly.py
+
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    SystemPromptPart as PydanticSystemPromptPart,
+    UserPromptPart as PydanticUserPromptPart,
+    TextPart as PydanticTextPart,
+    ToolCallPart as PydanticToolCallPart,
+    ToolReturnPart as PydanticToolReturnPart,
+    ThinkingPart as PydanticThinkingPart,
+    ArgsDict,
+    ModelMessage,
+)
+from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.context.event_payloads import (
+    SystemPromptPayload,
+    UserMessagePayload,
+    AssistantTextPayload,
+    ToolCallPayload,
+    ToolResultPayload,
+    ThinkingPayload,
+)
+
+
+def assemble_pydantic_ai_messages(events: list[RunContextEvent]) -> list[ModelMessage]:
+    """Reconstruct the PydanticAI ModelRequest/ModelResponse sequence from stored events.
+
+    Events must be pre-sorted by sequence (ascending) — matches get_for_execution output.
+
+    Grouping rules:
+    - system_prompt + user_message events → SystemPromptPart / UserPromptPart in the first ModelRequest
+    - thinking / assistant_text / tool_call events → parts of the current ModelResponse
+    - tool_result event → closes the current ModelResponse, opens a new ModelRequest with ToolReturnPart
+    - trailing response (turn with no tool results) → flushed at end
+    """
+    messages: list[ModelMessage] = []
+    current_request_parts: list = []
+    current_response_parts: list = []
+
+    for event in events:
+        parsed = event.parsed_payload()
+
+        if event.event_type == "system_prompt":
+            assert isinstance(parsed, SystemPromptPayload)
+            current_request_parts.append(PydanticSystemPromptPart(content=parsed.text))
+
+        elif event.event_type == "user_message":
+            assert isinstance(parsed, UserMessagePayload)
+            current_request_parts.append(PydanticUserPromptPart(content=parsed.text))
+
+        elif event.event_type in ("thinking", "assistant_text", "tool_call"):
+            # First model-generated event of a turn: flush the pending request
+            if current_request_parts and not current_response_parts:
+                messages.append(ModelRequest(parts=current_request_parts))
+                current_request_parts = []
+
+            if event.event_type == "thinking":
+                assert isinstance(parsed, ThinkingPayload)
+                current_response_parts.append(PydanticThinkingPart(content=parsed.text))
+            elif event.event_type == "assistant_text":
+                assert isinstance(parsed, AssistantTextPayload)
+                current_response_parts.append(PydanticTextPart(content=parsed.text))
+            elif event.event_type == "tool_call":
+                assert isinstance(parsed, ToolCallPayload)
+                current_response_parts.append(PydanticToolCallPart(
+                    tool_name=parsed.tool_name,
+                    tool_call_id=parsed.tool_call_id,
+                    args=ArgsDict(args_dict=parsed.args),
+                ))
+
+        elif event.event_type == "tool_result":
+            assert isinstance(parsed, ToolResultPayload)
+            # Close the current ModelResponse
+            if current_response_parts:
+                messages.append(ModelResponse(parts=current_response_parts))
+                current_response_parts = []
+            # Open a new ModelRequest with the tool return
+            # str(parsed.result): worker JSON-serialises complex results before storage,
+            # so the string representation is adequate for re-injection.
+            current_request_parts.append(PydanticToolReturnPart(
+                tool_call_id=parsed.tool_call_id,
+                tool_name=parsed.tool_name,
+                content=str(parsed.result),
+            ))
+
+    # Flush any trailing response (final turn produced no tool results)
+    if current_response_parts:
+        messages.append(ModelResponse(parts=current_response_parts))
+
+    return messages
+```
+
+`ArgsDict` is `pydantic_ai.messages.ArgsDict`. Confirm exact import path during Phase 1 implementation — PydanticAI's internal message module paths can shift between minor versions.
+
 ### 5.3 Dashboard Streaming
 
 The emitter and Inngest function are fully specced in §4.5. This section covers the frontend state model, live reducer, and UI components.
@@ -861,10 +1046,10 @@ export type ContextEventType =
 export type ContextEventPayload =
   | { event_type: "system_prompt"; text: string }
   | { event_type: "user_message"; text: string; from_worker_key: string | null }
-  | { event_type: "assistant_text"; text: string; logprobs: TokenLogprob[] | null }
-  | { event_type: "tool_call"; tool_call_id: string; tool_name: string; args: Record<string, unknown>; logprobs: TokenLogprob[] | null }
+  | { event_type: "assistant_text"; text: string; turn_id: string; turn_logprobs: TokenLogprob[] | null }
+  | { event_type: "tool_call"; tool_call_id: string; tool_name: string; args: Record<string, unknown>; turn_id: string; turn_logprobs: TokenLogprob[] | null }
   | { event_type: "tool_result"; tool_call_id: string; tool_name: string; result: unknown; is_error: boolean }
-  | { event_type: "thinking"; text: string; logprobs: TokenLogprob[] | null };
+  | { event_type: "thinking"; text: string; turn_id: string; turn_logprobs: TokenLogprob[] | null };
 
 export interface TokenLogprob {
   token: string;
@@ -991,7 +1176,7 @@ context_events_stmt = (
 )
 context_events = list(session.exec(context_events_stmt).all())
 
-context_events_by_task: dict[str, list[RunContextEventDto]] = defaultdict(list)
+context_events_by_task: dict[str, list["RunContextEventDto"]] = defaultdict(list)
 for event in context_events:
     task_node_id = execution_task_map.get(event.task_execution_id)
     if task_node_id is None:
@@ -1009,6 +1194,20 @@ for event in context_events:
 ```
 
 The `RunSnapshotDto` field `generation_turns_by_task` is renamed to `context_events_by_task` and typed accordingly.
+
+```python
+# ergon_core/ergon_core/core/api/schemas.py
+
+class RunContextEventDto(BaseModel):
+    id: str
+    task_execution_id: str
+    sequence: int
+    event_type: str             # ContextEventType — kept as plain str for forward compat
+    payload: dict[str, Any]
+    created_at: str             # ISO 8601
+    started_at: str | None = None
+    completed_at: str | None = None
+```
 
 ---
 
@@ -1092,7 +1291,7 @@ ergon_core/ergon_core/core/persistence/telemetry/models.py
     DELETE  class RunGenerationTurn  (all fields + parsed_tool_calls / parsed_tool_results /
                                       parsed_token_ids / parsed_logprobs / _parse_optional_list /
                                       _validate_json_columns methods)
-    KEEP    ExecutionOutcome type alias  (reused by RunContextEvent)
+    KEEP    ExecutionOutcome type alias  (still used by RunTaskExecution; no longer used by RunContextEvent)
     KEEP    all other model classes
 
 ergon_core/ergon_core/core/persistence/telemetry/repositories.py
@@ -1173,11 +1372,11 @@ Once all readers have been migrated and no new `RunGenerationTurn` rows are bein
 
 ## 8. Known Gaps Deferred to Later Work
 
-**Token IDs from vLLM.** `AssistantTextPayload.token_ids` and `ToolCallPayload.token_ids` are defined but will remain `None` until the vLLM provider is updated to extract token IDs from `provider_details` (PydanticAI currently exposes logprobs but drops token IDs). This does not block the schema migration; it is tracked as a separate provider improvement.
+**Token IDs from vLLM.** `turn_token_ids` (on the first model-output event of each turn, alongside `turn_logprobs`) will remain `None` until the vLLM provider is updated to extract token IDs from `provider_details`. PydanticAI currently exposes logprobs via `provider_details["logprobs"]` but does not surface the corresponding token ID integers. The schema and `GenerationTurn` DTO are ready; populating the field requires a provider-side improvement and does not block the schema migration.
 
-**Logprobs for tool call argument tokens.** PydanticAI reads logprobs from `choice.logprobs.content` (text content tokens, per OpenAI API spec). Whether vLLM also puts tool call argument tokens into this field is empirically unknown — vLLM generates everything in one forward pass then splits, so it *may* include them. A spike (`scripts/spike_logprob_splitting.py`) has been written; run it with `VLLM_BASE_URL` set against a live vLLM instance to get a definitive answer.
+**Logprobs for tool call argument tokens.** `turn_logprobs` stores the flat `choice.logprobs.content` list from vLLM, and is held on the first model-output event of each turn (grouped by `turn_id`). Whether vLLM includes tool call argument tokens in `logprobs.content` is empirically unknown — vLLM generates everything in one forward pass then splits, so it *may* include them. A spike (`scripts/spike_logprob_splitting.py`) has been written; run it with `VLLM_BASE_URL` set against a live vLLM instance to get a definitive answer. Until the spike runs, `turn_logprobs` is stored as `None`; populate once the live probe confirms coverage.
 
-**RL implication of the above:** For TRL/GRPO, logprobs are needed as a flat list covering all model-generated tokens per response — *not* split per part. All model tokens (TextPart + ToolCallPart + ThinkingPart) get `env_mask=1`; the boundary that matters for RL is between model tokens and tool result tokens, not between text and tool call within a response. If vLLM includes tool call tokens in `logprobs.content`, the existing flat list is complete and correct as-is. If not, tool call argument logprobs are unavailable and RL training falls back to 0.0 logprobs for those tokens (same as the current fallback). Store `logprobs` as `None` on all event payloads for now; populate once the live probe confirms coverage.
+**RL logprob alignment for multi-event turns.** The current `_get_logprobs` helper slices `turn_logprobs` to `n_tokens` per event, which is correct only for single-event turns. For turns that produce multiple model-output events (e.g., ThinkingPart + TextPart + ToolCallPart), the correct approach is to group events by `turn_id`, accumulate all `token_ids` across the group, then align `turn_logprobs` once against the concatenated token sequence. This avoids misaligning text-token logprobs onto tool-call-token positions. Implement `turn_id`-grouped alignment in Phase 1; it is required for importance-sampling–based RL. Reward-only RL is unaffected (rewards depend on outcomes, not individual token logprobs).
 
 **Extended thinking extraction.** `ThinkingPayload` is defined. Extraction from PydanticAI's `ModelResponse` (`part_kind == "thinking"`) requires verifying the actual field name in the PydanticAI dataclass for the Claude backend. This should be confirmed during Phase 1 implementation.
 
