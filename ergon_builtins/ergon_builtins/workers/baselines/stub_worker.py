@@ -6,7 +6,7 @@ Returns fixed output without calling any model. For smoke tests only.
 from collections.abc import AsyncGenerator
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.api.generation import GenerationTurn
+from ergon_core.api.generation import GenerationTurn, TextPart
 
 
 class StubWorker(Worker):
@@ -22,7 +22,5 @@ class StubWorker(Worker):
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
         yield GenerationTurn(
-            raw_response={
-                "parts": [{"part_kind": "text", "content": f"Stub output for {task.task_key}"}],
-            },
+            response_parts=[TextPart(content=f"Stub output for {task.task_key}")],
         )
