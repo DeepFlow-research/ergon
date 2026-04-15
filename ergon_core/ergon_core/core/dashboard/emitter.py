@@ -26,11 +26,11 @@ from ergon_core.core.runtime.services.cohort_stats_service import (
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 from ergon_core.core.utils import utcnow
 
-from ergon_core.core.persistence.telemetry.models import RunGenerationTurn
+from ergon_core.core.persistence.context.models import RunContextEvent as _RunContextEvent
 
 from .event_contracts import (
     CohortUpdatedEvent,
-    DashboardGenerationTurnEvent,
+    DashboardContextEventEvent,
     DashboardGraphMutationEvent,
     DashboardResourcePublishedEvent,
     DashboardSandboxClosedEvent,
@@ -53,6 +53,7 @@ class DashboardEmitter:
 
     def __init__(self, *, enabled: bool = True) -> None:
         self._enabled = enabled
+        self._execution_task_map: dict[UUID, UUID] = {}
 
     @property
     def enabled(self) -> bool:
@@ -353,29 +354,48 @@ class DashboardEmitter:
             logger.warning("Failed to emit dashboard/graph.mutation", exc_info=True)
 
     # ------------------------------------------------------------------
-    # Generation turns (repository listener)
+    # Context events (repository listener)
     # ------------------------------------------------------------------
 
-    async def on_turn_persisted(self, row: RunGenerationTurn) -> None:
-        """Called by GenerationTurnRepository after a turn is committed to PG."""
+    def register_execution(self, execution_id: UUID, task_node_id: UUID) -> None:
+        """Register execution_id → task graph node_id mapping.
+        Called from worker_execute.py before persist_turn so that on_context_event
+        can resolve task_node_id without a DB lookup."""
+        self._execution_task_map[execution_id] = task_node_id
+
+    async def on_context_event(self, event: "_RunContextEvent") -> None:
+        """Called by ContextEventRepository after each event is committed."""
         if not self._enabled:
             return
         try:
-            evt = DashboardGenerationTurnEvent(
-                run_id=row.run_id,
-                task_execution_id=row.task_execution_id,
-                worker_binding_key=row.worker_binding_key,
-                worker_name=row.worker_binding_key,
-                turn_index=row.turn_index,
-                response_text=row.response_text,
-                tool_calls=row.tool_calls_json,
-                policy_version=row.policy_version,
+            # reason: avoid circular import at module level between dashboard and persistence layers
+            from ergon_core.core.persistence.context.models import _PAYLOAD_ADAPTER  # noqa: PLC2701
+
+            task_node_id = self._execution_task_map.get(event.task_execution_id)
+            if task_node_id is None:
+                logger.warning(
+                    "on_context_event: no task_node_id for execution %s",
+                    event.task_execution_id,
+                )
+                return
+            evt = DashboardContextEventEvent(
+                id=event.id,
+                run_id=event.run_id,
+                task_execution_id=event.task_execution_id,
+                task_node_id=task_node_id,
+                worker_binding_key=event.worker_binding_key,
+                sequence=event.sequence,
+                event_type=event.event_type,
+                payload=_PAYLOAD_ADAPTER.validate_python(event.payload),
+                created_at=event.created_at,
+                started_at=event.started_at,
+                completed_at=event.completed_at,
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
             )
         except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning("Failed to emit dashboard/generation.turn_completed", exc_info=True)
+            logger.warning("Failed to emit dashboard/context.event", exc_info=True)
 
     # ------------------------------------------------------------------
     # Cohort
