@@ -20,6 +20,7 @@ from ergon_builtins.workers.baselines.minif2f_react_worker import (
     MiniF2FReActWorker,
     _make_run_skill,
     _noop_stakeholder,
+    _read_final_proof,
 )
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.api import BenchmarkTask
@@ -143,3 +144,110 @@ async def test_run_skill_rejects_unsupported_skill() -> None:
 async def test_noop_stakeholder_returns_usable_message() -> None:
     reply = await _noop_stakeholder("any question")
     assert "No stakeholder" in reply
+
+
+@pytest.mark.asyncio
+async def test_read_final_proof_returns_contents_when_file_present() -> None:
+    sandbox = MagicMock()
+    sandbox.commands.run = AsyncMock(
+        return_value=MagicMock(
+            exit_code=0,
+            stdout="theorem foo : 1 = 1 := rfl\n",
+            stderr="",
+        )
+    )
+    result = await _read_final_proof(sandbox)
+    assert result == "theorem foo : 1 = 1 := rfl\n"
+
+
+@pytest.mark.asyncio
+async def test_read_final_proof_returns_none_when_file_missing() -> None:
+    sandbox = MagicMock()
+    # cat returns non-zero when the file is absent (with 2>/dev/null, stderr empty)
+    sandbox.commands.run = AsyncMock(
+        return_value=MagicMock(exit_code=1, stdout="", stderr="")
+    )
+    result = await _read_final_proof(sandbox)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_read_final_proof_tolerates_sandbox_exception() -> None:
+    sandbox = MagicMock()
+    sandbox.commands.run = AsyncMock(side_effect=RuntimeError("sandbox dead"))
+    result = await _read_final_proof(sandbox)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_execute_populates_artifacts_with_final_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After execute() finishes, get_output must surface the scraped proof."""
+    fake_sandbox = MagicMock(name="AsyncSandbox")
+    # Used by _read_final_proof at end-of-execute.
+    fake_sandbox.commands.run = AsyncMock(
+        return_value=MagicMock(
+            exit_code=0,
+            stdout="theorem t : 1 = 1 := rfl\n",
+            stderr="",
+        )
+    )
+    task_id = uuid4()
+    mgr = MiniF2FSandboxManager()
+    mgr._sandboxes[task_id] = fake_sandbox
+
+    async def _stub_super_execute(self, task, *, context):  # slopcop: ignore[no-typing-any]
+        return
+        yield
+
+    # Stub the ReAct loop itself and the sync get_output on the base class
+    # so we don't need a live DB.
+    monkeypatch.setattr(
+        "ergon_builtins.workers.baselines.react_worker.ReActWorker.execute",
+        _stub_super_execute,
+    )
+    from ergon_core.api import WorkerOutput
+
+    def _stub_base_get_output(self, context):  # slopcop: ignore[no-typing-any]
+        return WorkerOutput(output="done", success=True, artifacts={})
+
+    monkeypatch.setattr(
+        "ergon_builtins.workers.baselines.react_worker.ReActWorker.get_output",
+        _stub_base_get_output,
+    )
+
+    worker = MiniF2FReActWorker(name="minif2f-react", model=None)
+    ctx = _make_context(task_id=task_id)
+
+    async for _ in worker.execute(_make_task(), context=ctx):
+        pass
+
+    out = worker.get_output(ctx)
+    # Proof is shipped in both artifacts AND output — the runtime's evaluator
+    # dispatch only carries output_text forward, so output is the critical path.
+    assert out.artifacts["final_solution.lean"] == "theorem t : 1 = 1 := rfl\n"
+    assert out.output == "theorem t : 1 = 1 := rfl\n"
+    assert out.success is True
+
+
+@pytest.mark.asyncio
+async def test_get_output_returns_base_when_no_proof_captured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the agent never wrote final_solution.lean, artifacts stay empty."""
+    from ergon_core.api import WorkerOutput
+
+    worker = MiniF2FReActWorker(name="minif2f-react", model=None)
+    # _final_proof stays None because execute() was never called.
+
+    def _stub_base_get_output(self, context):  # slopcop: ignore[no-typing-any]
+        return WorkerOutput(output="", success=False, artifacts={})
+
+    monkeypatch.setattr(
+        "ergon_builtins.workers.baselines.react_worker.ReActWorker.get_output",
+        _stub_base_get_output,
+    )
+    ctx = _make_context()
+    out = worker.get_output(ctx)
+    assert out.artifacts == {}

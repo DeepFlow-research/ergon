@@ -12,16 +12,25 @@ are required — search/check/verify tools drive ``sandbox.commands.run``
 themselves.
 """
 
+import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 from uuid import UUID
 
-from ergon_core.api import BenchmarkTask, WorkerContext
+from ergon_core.api import BenchmarkTask, WorkerContext, WorkerOutput
 from ergon_core.api.generation import GenerationTurn
 
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit, WriteLeanResponse
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
+
+logger = logging.getLogger(__name__)
+
+# Where the ReAct agent is instructed to write its final proof. We scrape
+# this path off the sandbox at end-of-execute and pin the contents into
+# WorkerOutput.artifacts so ProofVerificationCriterion can pick it up.
+_FINAL_SOLUTION_PATH = "/workspace/final_output/final_solution.lean"
+_FINAL_SOLUTION_ARTIFACT_KEY = "final_solution.lean"
 
 
 async def _noop_stakeholder(_question: str) -> str:
@@ -98,6 +107,9 @@ class MiniF2FReActWorker(ReActWorker):
             system_prompt=system_prompt or DEFAULT_SYSTEM_PROMPT,
             max_iterations=max_iterations,
         )
+        # Captured at end-of-execute by reading the final-solution file out
+        # of the sandbox; surfaced to the runtime via get_output().
+        self._final_proof: str | None = None
 
     async def execute(
         self,
@@ -121,8 +133,64 @@ class MiniF2FReActWorker(ReActWorker):
         )
         self.tools = toolkit.get_tools()
 
-        async for turn in super().execute(task, context=context):
-            yield turn
+        try:
+            async for turn in super().execute(task, context=context):
+                yield turn
+        finally:
+            # Pull the final proof off the sandbox even if the base generator
+            # raised or was closed early — without this, evaluation would have
+            # no artifact to score against. The sandbox is still alive here:
+            # teardown happens in task_execution_service.finalize_success,
+            # after get_output() runs.
+            self._final_proof = await _read_final_proof(sandbox)
+            logger.info(
+                "MiniF2FReActWorker captured final proof: %s bytes",
+                len(self._final_proof) if self._final_proof else 0,
+            )
+
+    def get_output(self, context: WorkerContext) -> WorkerOutput:
+        """Return a WorkerOutput that routes the proof through the pipeline.
+
+        The runtime's evaluator dispatch (``evaluator_dispatch_service.py``)
+        only carries ``execution.output_text`` forward into ``agent_reasoning``
+        — the worker's ``artifacts`` dict is dropped by the time the criterion
+        runs. So we ship the final proof code as the *output text* itself. The
+        criterion's ``_extract_proof`` fallback then picks it up out of
+        ``context.worker_result.output`` (see
+        ``ergon_builtins/benchmarks/minif2f/rules/proof_verification.py``).
+        """
+        base = super().get_output(context)
+        if self._final_proof is None:
+            return base
+        artifacts = dict(base.artifacts) if base.artifacts else {}
+        artifacts[_FINAL_SOLUTION_ARTIFACT_KEY] = self._final_proof
+        return base.model_copy(
+            update={
+                "output": self._final_proof,
+                "success": True,
+                "artifacts": artifacts,
+            }
+        )
+
+
+async def _read_final_proof(sandbox: Any) -> str | None:  # slopcop: ignore[no-typing-any]
+    """Return the contents of the agent's final proof file, or None."""
+    try:
+        result = await sandbox.commands.run(
+            f"cat {_FINAL_SOLUTION_PATH} 2>/dev/null",
+            timeout=15,
+        )
+    except Exception as exc:  # slopcop: ignore[no-broad-except]
+        logger.warning("Failed to read final proof from sandbox: %s", exc)
+        return None
+    if result.exit_code != 0 or not (result.stdout or "").strip():
+        logger.info(
+            "No final proof at %s (exit=%d); scoring will see empty artifacts.",
+            _FINAL_SOLUTION_PATH,
+            result.exit_code,
+        )
+        return None
+    return result.stdout
 
 
 __all__ = [
