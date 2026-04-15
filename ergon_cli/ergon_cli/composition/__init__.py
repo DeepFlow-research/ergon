@@ -29,6 +29,9 @@ def build_experiment(
     if benchmark_slug == "delegation-smoke":
         return _build_delegation_experiment(benchmark, model, evaluator, WORKERS)
 
+    if benchmark_slug.startswith("researchrubrics-"):
+        return _build_researchrubrics_experiment(benchmark, model, evaluator, WORKERS)
+
     if worker_slug == "manager-researcher":
         return _build_manager_researcher_experiment(benchmark, model, evaluator, WORKERS)
 
@@ -64,9 +67,7 @@ def _build_manager_researcher_experiment(
     # The persistence service only auto-assigns when there is exactly 1 worker;
     # with 2 workers we must provide explicit assignments.
     instances = benchmark.build_instances()
-    all_task_keys = [
-        task.task_key for tasks in instances.values() for task in tasks
-    ]
+    all_task_keys = [task.task_key for tasks in instances.values() for task in tasks]
 
     return Experiment(
         benchmark=benchmark,
@@ -100,6 +101,38 @@ def _build_delegation_experiment(
         },
         evaluators={"default": evaluator},
         assignments={"manager-researcher": "manager-task"},
+    )
+
+
+def _build_researchrubrics_experiment(
+    benchmark: Benchmark,
+    model: str,
+    evaluator: Evaluator,
+    workers_registry: Mapping[str, type[Worker]],
+) -> Experiment:
+    """Build experiment with researchrubrics-manager + researcher.
+
+    Manager is assigned to all static benchmark tasks.  Researcher is
+    registered as a sub-worker binding only -- dynamic tasks spawned by
+    the manager via add_task() resolve it at runtime.
+    """
+    manager_cls = workers_registry["researchrubrics-manager"]
+    researcher_cls = workers_registry["researchrubrics-researcher"]
+
+    manager = manager_cls(name="researchrubrics-manager", model=model)
+    researcher = researcher_cls(name="researchrubrics-researcher", model=model)
+
+    instances = benchmark.build_instances()
+    all_task_keys = [task.task_key for tasks in instances.values() for task in tasks]
+
+    return Experiment(
+        benchmark=benchmark,
+        workers={
+            "researchrubrics-manager": manager,
+            "researchrubrics-researcher": researcher,
+        },
+        evaluators={"default": evaluator},
+        assignments={"researchrubrics-manager": all_task_keys},
     )
 
 

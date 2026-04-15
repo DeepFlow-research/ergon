@@ -51,10 +51,12 @@ try:
     from ergon_builtins.registry_data import (
         BENCHMARKS as _data_benchmarks,
         EVALUATORS as _data_evaluators,
+        WORKERS as _data_workers,
     )
 
     BENCHMARKS.update(_data_benchmarks)
     EVALUATORS.update(_data_evaluators)
+    WORKERS.update(_data_workers)
 except ImportError:
     log.info(
         "ergon-builtins[data] not installed; gdpeval and researchrubrics benchmarks unavailable"

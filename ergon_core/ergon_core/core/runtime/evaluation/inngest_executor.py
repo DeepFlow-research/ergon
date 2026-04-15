@@ -71,6 +71,14 @@ class InngestCriterionExecutor:
                 cr_result: CriterionResult
 
                 if isinstance(criterion, Criterion):
+                    runtime = (
+                        DefaultCriterionRuntime(
+                            context=criterion_context,
+                            sandbox_manager=self.sandbox_manager,
+                        )
+                        if self.sandbox_manager is not None
+                        else None
+                    )
                     eval_ctx = EvaluationContext(
                         run_id=task_context.run_id,
                         task=BenchmarkTask(
@@ -83,6 +91,7 @@ class InngestCriterionExecutor:
                         ),
                         sandbox_id=task_context.sandbox_id or None,
                         metadata={},
+                        runtime=runtime,
                     )
                     cr_result = await criterion.evaluate(eval_ctx)
                 elif self.sandbox_manager is not None:
