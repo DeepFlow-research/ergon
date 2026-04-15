@@ -15,6 +15,12 @@ from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.delegation_smoke.benchmark import DelegationSmokeBenchmark
+from ergon_builtins.benchmarks.researchrubrics.smoke import (
+    ResearchRubricsSmokeTestBenchmark,
+)
+from ergon_builtins.benchmarks.researchrubrics.smoke_rubric import (
+    ResearchRubricsSmokeRubric,
+)
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.benchmarks.smoke_test.rubric import SmokeTestRubric
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
@@ -26,6 +32,9 @@ from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
+from ergon_builtins.workers.research_rubrics.stub_worker import (
+    StubResearchRubricsWorker,
+)
 
 WORKERS: dict[str, type[Worker]] = {
     "stub-worker": StubWorker,
@@ -34,12 +43,14 @@ WORKERS: dict[str, type[Worker]] = {
     "react-v1": ReActWorker,
     "manager-researcher": ManagerResearcherWorker,
     "researcher": StubWorker,
+    "researchrubrics-stub": StubResearchRubricsWorker,
 }
 
 BENCHMARKS: dict[str, type[Benchmark]] = {
     "smoke-test": SmokeTestBenchmark,
     "minif2f": MiniF2FBenchmark,
     "delegation-smoke": DelegationSmokeBenchmark,
+    "researchrubrics-smoke": ResearchRubricsSmokeTestBenchmark,
 }
 
 EVALUATORS: dict[str, type[Evaluator]] = {
@@ -48,6 +59,7 @@ EVALUATORS: dict[str, type[Evaluator]] = {
     "smoke-test-rubric": SmokeTestRubric,
     "staged-rubric": StagedRubric,
     "minif2f-rubric": MiniF2FRubric,
+    "researchrubrics-smoke-rubric": ResearchRubricsSmokeRubric,
 }
 
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {

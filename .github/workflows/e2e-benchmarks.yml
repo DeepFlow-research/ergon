@@ -93,7 +93,9 @@ jobs:
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-        run: uv run pytest tests/e2e/test_benchmarks_stubbed.py::TestE2BSandboxBenchmarks -v --timeout=180
+        run: |
+          uv run pytest tests/e2e/test_benchmarks_stubbed.py::TestE2BSandboxBenchmarks -v --timeout=180
+          uv run pytest tests/e2e/test_researchrubrics_smoke_e2b.py::TestResearchRubricsSmokeE2B -v --timeout=180
 
       - name: Dump API logs on failure
         if: failure()
