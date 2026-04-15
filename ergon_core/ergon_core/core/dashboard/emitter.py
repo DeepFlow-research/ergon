@@ -26,6 +26,7 @@ from ergon_core.core.runtime.services.cohort_stats_service import (
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 from ergon_core.core.utils import utcnow
 
+from ergon_core.core.persistence.context.event_payloads import ContextEventType
 from ergon_core.core.persistence.context.models import RunContextEvent as _RunContextEvent
 
 from .event_contracts import (
@@ -385,7 +386,7 @@ class DashboardEmitter:
                 task_node_id=task_node_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
-                event_type=event.event_type,
+                event_type=cast(ContextEventType, event.event_type),
                 payload=_PAYLOAD_ADAPTER.validate_python(event.payload),
                 created_at=event.created_at,
                 started_at=event.started_at,

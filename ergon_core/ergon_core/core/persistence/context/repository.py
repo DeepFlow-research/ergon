@@ -5,8 +5,6 @@ Repository maintains per-execution sequence counters in memory (not DB).
 This is safe because each execution runs in a single Inngest invocation.
 """
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime
@@ -188,7 +186,7 @@ class ContextEventRepository:
                             tool_call_id=part.tool_call_id,
                             tool_name=part.tool_name,
                             result=part.content,
-                            # TODO: set is_error=True when ToolReturnPart gains an is_error field (currently always False)
+                            # Set is_error=True when ToolReturnPart gains an is_error field (currently always False)
                         ),
                     )
                 )

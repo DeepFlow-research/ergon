@@ -9,8 +9,6 @@ Token layout: flat interleaved completion_ids with env_mask marking
 model tokens (1) vs environment tokens (0).
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from collections import defaultdict
@@ -177,7 +175,7 @@ def _get_logprobs(
     parsed: AssistantTextPayload | ToolCallPayload | ThinkingPayload, n_tokens: int
 ) -> list[float]:
     """Return per-token logprob scalars, padding with 0.0 if unavailable."""
-    lps = getattr(parsed, "turn_logprobs", None)
+    lps = parsed.turn_logprobs
     if lps is None:
         return [0.0] * n_tokens
     scalars = [lp.logprob for lp in lps]
@@ -190,7 +188,7 @@ def _count_turns(events: list[RunContextEvent]) -> int:
     seen: set[str] = set()
     for event in events:
         if event.event_type in ("assistant_text", "tool_call", "thinking"):
-            turn_id = getattr(event.parsed_payload(), "turn_id", None)
-            if turn_id is not None:
-                seen.add(turn_id)
+            parsed = event.parsed_payload()
+            if isinstance(parsed, (AssistantTextPayload, ToolCallPayload, ThinkingPayload)):
+                seen.add(parsed.turn_id)
     return len(seen)

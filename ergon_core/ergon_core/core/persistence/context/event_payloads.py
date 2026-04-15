@@ -5,8 +5,6 @@ Pattern mirrors GraphMutationValue in graph_dto.py — embed event_type as
 a Literal field so Pydantic can discriminate on deserialisation.
 """
 
-from __future__ import annotations
-
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
@@ -59,7 +57,9 @@ class ToolResultPayload(BaseModel):
     event_type: Literal["tool_result"] = "tool_result"
     tool_call_id: str  # links back to the ToolCallPayload with the same id
     tool_name: str
-    result: Any  # slopcop: ignore[no-typing-any]  # intentionally open — any JSON-serialisable value
+    result: (
+        Any  # slopcop: ignore[no-typing-any]  # intentionally open — any JSON-serialisable value
+    )
     is_error: bool = False
 
 

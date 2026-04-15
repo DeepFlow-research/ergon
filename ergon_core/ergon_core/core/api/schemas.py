@@ -5,8 +5,6 @@ not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
 
 """
 
-from __future__ import annotations
-
 from datetime import datetime
 from typing import Any
 

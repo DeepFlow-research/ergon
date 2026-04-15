@@ -1,8 +1,6 @@
 # ergon_core/ergon_core/core/persistence/context/models.py
 """ORM model for run_context_events."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID

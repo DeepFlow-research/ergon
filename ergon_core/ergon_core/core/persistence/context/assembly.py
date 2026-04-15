@@ -5,8 +5,6 @@ Used by ReActWorker.from_buffer() to resume a paused execution.
 Events must be pre-sorted by sequence (ascending).
 """
 
-from __future__ import annotations
-
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -45,9 +43,7 @@ def _to_response_part(event: RunContextEvent):
         return PydanticTextPart(content=parsed.text)
     if event.event_type == "tool_call":
         if not isinstance(parsed, ToolCallPayload):
-            raise ValueError(
-                f"Expected ToolCallPayload for tool_call event, got {type(parsed)}"
-            )
+            raise ValueError(f"Expected ToolCallPayload for tool_call event, got {type(parsed)}")
         return PydanticToolCallPart(
             tool_name=parsed.tool_name,
             tool_call_id=parsed.tool_call_id,
