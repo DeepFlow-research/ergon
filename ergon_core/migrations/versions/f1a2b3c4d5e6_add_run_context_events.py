@@ -35,6 +35,12 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["run_id"], ["runs.id"]),
         sa.ForeignKeyConstraint(["task_execution_id"], ["run_task_executions.id"]),
         sa.PrimaryKeyConstraint("id"),
+        # Inline unique constraint — avoids a separate ALTER TABLE which SQLite does not support.
+        sa.UniqueConstraint(
+            "task_execution_id",
+            "sequence",
+            name="uq_run_context_events_execution_sequence",
+        ),
     )
     op.create_index(
         op.f("ix_run_context_events_event_type"),
@@ -60,11 +66,6 @@ def upgrade() -> None:
         ["worker_binding_key"],
         unique=False,
     )
-    op.create_unique_constraint(
-        "uq_run_context_events_execution_sequence",
-        "run_context_events",
-        ["task_execution_id", "sequence"],
-    )
 
 
 def downgrade() -> None:
@@ -72,9 +73,5 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_run_context_events_task_execution_id"), table_name="run_context_events")
     op.drop_index(op.f("ix_run_context_events_run_id"), table_name="run_context_events")
     op.drop_index(op.f("ix_run_context_events_event_type"), table_name="run_context_events")
-    op.drop_constraint(
-        "uq_run_context_events_execution_sequence",
-        "run_context_events",
-        type_="unique",
-    )
+    # Unique constraint is inline on the table; dropped automatically with it.
     op.drop_table("run_context_events")
