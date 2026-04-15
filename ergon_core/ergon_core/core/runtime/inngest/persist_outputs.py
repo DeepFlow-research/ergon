@@ -20,6 +20,7 @@ from ergon_core.core.providers.sandbox.manager import (
     DefaultSandboxManager,
     DownloadedFiles,
 )
+from ergon_core.core.providers.sandbox.resource_publisher import SandboxResourcePublisher
 from ergon_core.core.runtime.errors import ContractViolationError
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import PersistOutputsRequest
@@ -81,6 +82,18 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     if not downloaded.files:
         return PersistOutputsResult()
 
+    # NOTE: this path predates the blob-backed ``SandboxResourcePublisher``.
+    # It writes one row per downloaded file, pointing at the *local* path
+    # the downloader wrote to (``file_info.local_path``).  The publisher
+    # below does a separate, orthogonal thing: it hashes sandbox contents
+    # into the content-addressed blob store and appends rows keyed by
+    # ``blob_path``.  For files that appear in both paths (e.g. a report
+    # in ``/workspace/final_output/``), we'll end up with two rows -- one
+    # ``kind="output"`` at ``local_path`` and one ``kind="report"`` at
+    # ``blob_path``.  That's intentional for now: the local-path row is
+    # the legacy quick-access copy; the blob row is the durable,
+    # dedup-able, append-only record.  Once every consumer reads via the
+    # publisher, this loop can go away.
     resource_ids: list[UUID] = []
     with get_session() as session:
         for file_info in downloaded.files:
@@ -143,11 +156,6 @@ async def _publish_resources(
     No-op when the benchmark doesn't use sandboxes (e.g. ``DefaultSandboxManager``
     with ``E2B_API_KEY`` unset).
     """
-    # Deferred: avoid top-level import cycle between providers and runtime.
-    from ergon_core.core.providers.sandbox.resource_publisher import (
-        SandboxResourcePublisher,
-    )
-
     sandbox = sandbox_manager.get_sandbox(payload.task_id)
     if sandbox is None:
         logger.info(

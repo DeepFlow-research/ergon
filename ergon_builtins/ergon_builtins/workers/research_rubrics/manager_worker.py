@@ -67,10 +67,16 @@ class ResearchRubricsManagerWorker(ReActWorker):
     ) -> AsyncGenerator[GenerationTurn, None]:
         if context.node_id is None:
             raise RuntimeError("ResearchRubricsManagerWorker requires WorkerContext.node_id")
+        if context.definition_id is None:
+            raise RuntimeError(
+                "ResearchRubricsManagerWorker requires WorkerContext.definition_id; "
+                "it's the anchor TaskManagementToolkit uses to look up worker bindings "
+                "when add_task() spawns children."
+            )
 
         tm_toolkit = TaskManagementToolkit(
             run_id=context.run_id,
-            definition_id=context.definition_id or context.run_id,
+            definition_id=context.definition_id,
             parent_node_id=context.node_id,
         )
         tm_tools = tm_toolkit.get_tools()

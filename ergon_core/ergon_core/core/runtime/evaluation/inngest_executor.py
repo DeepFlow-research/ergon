@@ -37,7 +37,7 @@ class InngestCriterionExecutor:
         task_id: UUID,
         execution_id: UUID,
         evaluator_id: UUID,
-        sandbox_manager: "BaseSandboxManager | None" = None,
+        sandbox_manager: "BaseSandboxManager",
         trace_sink: TraceSink | None = None,
     ):
         self.ctx = ctx
@@ -70,15 +70,12 @@ class InngestCriterionExecutor:
                 criterion = spec.criterion
                 cr_result: CriterionResult
 
+                runtime = DefaultCriterionRuntime(
+                    context=criterion_context,
+                    sandbox_manager=self.sandbox_manager,
+                )
+
                 if isinstance(criterion, Criterion):
-                    runtime = (
-                        DefaultCriterionRuntime(
-                            context=criterion_context,
-                            sandbox_manager=self.sandbox_manager,
-                        )
-                        if self.sandbox_manager is not None
-                        else None
-                    )
                     eval_ctx = EvaluationContext(
                         run_id=task_context.run_id,
                         task=BenchmarkTask(
@@ -94,20 +91,11 @@ class InngestCriterionExecutor:
                         runtime=runtime,
                     )
                     cr_result = await criterion.evaluate(eval_ctx)
-                elif self.sandbox_manager is not None:
-                    runtime = DefaultCriterionRuntime(
-                        context=criterion_context,
-                        sandbox_manager=self.sandbox_manager,
-                    )
+                else:
                     try:
                         cr_result = await criterion.evaluate(runtime, criterion_context)
                     finally:
                         await runtime.cleanup()
-                else:
-                    raise TypeError(
-                        f"Criterion {type(criterion).__name__} is not a public Criterion ABC "
-                        f"implementation and no sandbox_manager is available for internal criteria"
-                    )
 
                 self._sink.emit_span(
                     CompletedSpan(

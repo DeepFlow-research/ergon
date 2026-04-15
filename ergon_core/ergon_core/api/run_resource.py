@@ -1,16 +1,17 @@
-"""Public read-only DTO for run_resources rows.
+"""Public read-only DTO for a ``run_resources`` row.
 
-The ORM class is ``ergon_core.core.persistence.telemetry.models.RunResource``;
-this module exposes ``RunResourceView`` for public API and toolkit consumers.
+The ORM row lives at ``ergon_core.core.persistence.telemetry.models.RunResource``;
+this module is the API-layer shape callers should depend on.  ``RunResourceKind``
+is imported at the package level (``ergon_core.api``), so prefer that import
+site over reaching into the ORM module.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any  # slopcop: ignore[no-typing-any]
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-# Re-export so callers have one import site.
 from ergon_core.core.persistence.telemetry.models import RunResourceKind
 
 if TYPE_CHECKING:
@@ -20,25 +21,53 @@ __all__ = ["RunResourceKind", "RunResourceView"]
 
 
 class RunResourceView(BaseModel):
-    """Read-only DTO for a run_resources row.
+    """Read-only DTO for a ``run_resources`` row.
 
     Construct via ``RunResourceView.from_row(orm_row)``.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    id: UUID
-    run_id: UUID
-    task_execution_id: UUID | None
-    kind: RunResourceKind
-    name: str
-    mime_type: str
-    file_path: str
-    size_bytes: int
-    content_hash: str | None
-    error: str | None
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
-    created_at: datetime
+    id: UUID = Field(description="Primary key of the run_resources row.")
+    run_id: UUID = Field(description="The run this resource was produced in.")
+    task_execution_id: UUID | None = Field(
+        description=(
+            "The task execution that produced the resource, or ``None`` for "
+            "run-scoped resources (e.g. aggregate reports)."
+        ),
+    )
+    kind: RunResourceKind = Field(
+        description="Canonical category (report, worker_output, trace, etc.).",
+    )
+    name: str = Field(
+        description="Human-readable name -- usually the sandbox file name or the output slot.",
+    )
+    mime_type: str = Field(
+        description="Best-effort MIME type, guessed from ``name`` if not provided.",
+    )
+    file_path: str = Field(
+        description=(
+            "Absolute path to the content-addressed blob on disk "
+            "(``${ERGON_BLOB_ROOT}/<hash[:2]>/<hash>``)."
+        ),
+    )
+    size_bytes: int = Field(description="Size of the blob in bytes.")
+    content_hash: str | None = Field(
+        description="SHA-256 hex digest of the blob; used for dedup and verification.",
+    )
+    error: str | None = Field(
+        description="Populated only when writing the resource failed; ``None`` on success.",
+    )
+    metadata: dict[str, object] = Field(
+        default_factory=dict,
+        description='Free-form publisher metadata (e.g. ``{"sandbox_origin": "..."}``).',
+    )
+    created_at: datetime = Field(
+        description=(
+            "Row insertion time; the log is append-only, so ``(created_at, id)`` "
+            "DESC defines 'latest' for a given file_path."
+        ),
+    )
 
     @classmethod
     def from_row(cls, row: "_RunResourceRow") -> "RunResourceView":

@@ -97,7 +97,10 @@ invalid-argument-type = "warn"
 # pydantic-ai Tool(function=...) — ToolFuncEither union doesn't resolve async callables.
 # invalid-return-type: async tool functions return Coroutine but stubs expect plain value.
 [[tool.ty.overrides]]
-include = ["**/benchmarks/**/toolkit.py"]
+include = [
+    "**/benchmarks/**/toolkit.py",
+    "**/tools/*_toolkit.py",
+]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"
@@ -141,6 +144,8 @@ unresolved-attribute = "warn"
 invalid-return-type = "warn"
 
 # SQLModel .where() / .order_by() column expressions — ty can't resolve SQLAlchemy operator overloads.
+# unresolved-attribute: Column(datetime|UUID).desc() / .in_() — the SQLAlchemy
+# InstrumentedAttribute descriptor exposes these, but ty sees the Python type only.
 [[tool.ty.overrides]]
 include = [
     "**/persistence/queries.py",
@@ -150,6 +155,7 @@ include = [
 ]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
+unresolved-attribute = "warn"
 
 # Remaining files with isolated third-party type issues (inngest JSON, pydantic-ai, SQLModel select).
 [[tool.ty.overrides]]
@@ -184,11 +190,17 @@ include = ["**/core/api/app.py"]
 invalid-argument-type = "warn"
 
 # Tests: SQLModel column expressions (.desc(), .is_()) and asyncio.run with AsyncGenerator.
+# Tests also exercise pydantic-ai Tool helpers and stub sandbox objects, so we
+# need the same toolkit-style relaxations that apply to production code in
+# tools/ and benchmarks/.
 [[tool.ty.overrides]]
 include = ["tests/**"]
 [tool.ty.overrides.rules]
 unresolved-attribute = "warn"
 invalid-argument-type = "warn"
+invalid-return-type = "warn"
+call-non-callable = "warn"
+not-subscriptable = "warn"
 
 [tool.ty.environment]
 extra-paths = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra"]

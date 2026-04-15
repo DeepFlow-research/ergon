@@ -3,22 +3,18 @@
 from uuid import UUID
 
 from ergon_core.api.criterion import Criterion
+from ergon_core.api.criterion_runtime import CommandResult, SandboxResult
 from pydantic import BaseModel, ConfigDict, Field
 
-
-class SandboxResult(BaseModel):
-    """Result from sandbox code execution."""
-
-    stdout: list[str] = Field(default_factory=list)
-    stderr: list[str] = Field(default_factory=list)
-
-
-class CommandResult(BaseModel):
-    """Result from command execution in a sandbox."""
-
-    stdout: str | None = None
-    stderr: str | None = None
-    exit_code: int | None = None
+# Re-exported for callers that still import from here.
+__all__ = [
+    "CommandResult",
+    "CriterionContext",
+    "CriterionSpec",
+    "LLMJudgeResponse",
+    "SandboxResult",
+    "TaskEvaluationContext",
+]
 
 
 class LLMJudgeResponse(BaseModel):

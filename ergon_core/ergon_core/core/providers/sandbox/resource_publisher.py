@@ -33,10 +33,13 @@ class SandboxResourcePublisher:
     dedup makes repeated calls safe.
     """
 
-    # (sandbox_path, resource_kind) -- directories scanned by sync().
-    PUBLISH_DIRS: ClassVar[list[tuple[str, RunResourceKind]]] = [
+    # Default ``(sandbox_path, resource_kind)`` pairs scanned by ``sync()``.
+    # Managers that need to publish from additional directories (e.g. a
+    # researcher's scratchpad as well as ``final_output/``) pass a custom
+    # ``publish_dirs`` to ``__init__``.
+    DEFAULT_PUBLISH_DIRS: ClassVar[tuple[tuple[str, RunResourceKind], ...]] = (
         ("/workspace/final_output/", RunResourceKind.REPORT),
-    ]
+    )
 
     def __init__(
         self,
@@ -45,11 +48,13 @@ class SandboxResourcePublisher:
         run_id: UUID,
         task_execution_id: UUID,
         blob_root: Path = _DEFAULT_BLOB_ROOT,
+        publish_dirs: tuple[tuple[str, RunResourceKind], ...] | None = None,
     ) -> None:
         self._sandbox = sandbox
         self._run_id = run_id
         self._task_execution_id = task_execution_id
         self._blob_root = blob_root
+        self._publish_dirs = publish_dirs if publish_dirs is not None else self.DEFAULT_PUBLISH_DIRS
 
     # ------------------------------------------------------------------
     # Filesystem sync -- called from write-type toolkit methods and from
@@ -57,13 +62,13 @@ class SandboxResourcePublisher:
     # ------------------------------------------------------------------
 
     async def sync(self) -> list[RunResourceView]:
-        """Scan ``PUBLISH_DIRS``; append one row for each file whose
+        """Scan the configured publish dirs; append one row for each file whose
         ``content_hash`` differs from the current latest row at that sandbox
         path.  Returns Views for the rows that were created (empty if nothing
         changed).
         """
         created: list[RunResourceView] = []
-        for sandbox_dir, resource_kind in self.PUBLISH_DIRS:
+        for sandbox_dir, resource_kind in self._publish_dirs:
             entries = await self._list_sandbox_dir(sandbox_dir)
             for entry in entries:
                 sandbox_full_path = f"{sandbox_dir}{entry.name}"

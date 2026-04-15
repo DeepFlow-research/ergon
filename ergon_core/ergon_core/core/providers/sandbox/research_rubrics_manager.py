@@ -56,6 +56,19 @@ class ResearchRubricsSandboxManager(BaseSandboxManager):
         task_id: UUID,
     ) -> None:
         """Install research packages and create the workspace layout."""
+        if AsyncSandbox is None:
+            # The class-level ``try: from e2b_code_interpreter ...`` lets us
+            # import this module when e2b isn't installed (documentation builds,
+            # type-only contexts).  Reaching this method with no e2b means
+            # somebody constructed the manager without the optional dep --
+            # fail fast with a clear message instead of a confusing
+            # ``NoneType is not callable`` deeper down.
+            raise RuntimeError(
+                "e2b_code_interpreter is not installed; install the 'sandbox' "
+                "extra (``pip install ergon[sandbox]``) or ``uv sync`` with the "
+                "default groups to use ResearchRubricsSandboxManager."
+            )
+
         for pkg in _INSTALL_PACKAGES:
             result = await sandbox.commands.run(
                 f"pip install '{pkg}'",

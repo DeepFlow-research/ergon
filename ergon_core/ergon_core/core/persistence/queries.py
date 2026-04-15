@@ -225,6 +225,15 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
         Children are discovered via the graph edge layer: the parent
         execution's ``node_id`` is the source of edges whose targets host
         child executions.
+
+        TODO(graph-edges): the RFC for this work assumed a direct
+        ``parent_task_execution_id`` FK on ``RunTaskExecution`` and this
+        helper would just filter by that column.  That column doesn't
+        exist -- parent/child lives in ``RunGraphEdge`` -- so this
+        implementation reads the graph layer instead.  Revisit once the
+        graph/edge structure for subtasks is pinned down; at that point
+        this helper should move into a dedicated graph queries class and
+        the implementation can be simplified.
         """
         with get_session() as session:
             parent = session.get(RunTaskExecution, parent_id)
@@ -438,7 +447,7 @@ class ResourcesQueries(BaseQueries[RunResource]):
         size_bytes: int,
         error: str | None,
         content_hash: str | None,
-        metadata: dict | None = None,
+        metadata: dict[str, object] | None = None,
     ) -> RunResource:
         """Append one row to the log. Never updates."""
         with get_session() as session:

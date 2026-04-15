@@ -26,21 +26,24 @@ def build_experiment(
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
     evaluator = evaluator_cls(name="evaluator")
 
-    if benchmark_slug == "delegation-smoke":
-        return _build_delegation_experiment(benchmark, model, evaluator, WORKERS)
-
-    if benchmark_slug.startswith("researchrubrics-"):
-        return _build_researchrubrics_experiment(benchmark, model, evaluator, WORKERS)
-
-    if worker_slug == "manager-researcher":
-        return _build_manager_researcher_experiment(benchmark, model, evaluator, WORKERS)
-
-    worker = worker_cls(name="worker", model=model)
-    return Experiment.from_single_worker(
-        benchmark=benchmark,
-        worker=worker,
-        evaluators={"default": evaluator},
-    )
+    # Composition is driven by the explicit worker selection first; the
+    # benchmark only wins when nothing else matches (delegation-smoke needs
+    # both manager + researcher regardless of which single worker the user
+    # typed).
+    match (worker_slug, benchmark_slug):
+        case (_, "delegation-smoke"):
+            return _build_delegation_experiment(benchmark, model, evaluator, WORKERS)
+        case ("manager-researcher", _):
+            return _build_manager_researcher_experiment(benchmark, model, evaluator, WORKERS)
+        case ("researchrubrics-manager", _):
+            return _build_researchrubrics_experiment(benchmark, model, evaluator, WORKERS)
+        case _:
+            worker = worker_cls(name="worker", model=model)
+            return Experiment.from_single_worker(
+                benchmark=benchmark,
+                worker=worker,
+                evaluators={"default": evaluator},
+            )
 
 
 def _build_manager_researcher_experiment(

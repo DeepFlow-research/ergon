@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 
 from ergon_core.api.generation import GenerationTurn
+from ergon_core.api.run_resource import RunResourceView
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.providers.sandbox.research_rubrics_manager import (
@@ -74,7 +75,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
 
         run_skill = make_run_skill(model=self.model)
 
-        async def publisher_sync() -> list[object]:
+        async def publisher_sync() -> list[RunResourceView]:
             publisher = manager.publisher_for(
                 task_id=context.task_id,
                 run_id=context.run_id,
