@@ -69,12 +69,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        op.f("ix_run_context_events_worker_binding_key"), table_name="run_context_events"
-    )
-    op.drop_index(
-        op.f("ix_run_context_events_task_execution_id"), table_name="run_context_events"
-    )
+    op.drop_index(op.f("ix_run_context_events_worker_binding_key"), table_name="run_context_events")
+    op.drop_index(op.f("ix_run_context_events_task_execution_id"), table_name="run_context_events")
     op.drop_index(op.f("ix_run_context_events_run_id"), table_name="run_context_events")
     op.drop_index(op.f("ix_run_context_events_event_type"), table_name="run_context_events")
     op.drop_constraint(

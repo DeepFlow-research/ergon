@@ -171,5 +171,3 @@ async def _persist_context_events(
             turn_count,
             exc_info=True,
         )
-
-

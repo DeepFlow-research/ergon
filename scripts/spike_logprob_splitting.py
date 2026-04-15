@@ -160,8 +160,13 @@ def scenario_b_tool_call_only() -> tuple[MockChoice, str]:
     choice_b1 = MockChoice(
         message=MockMessage(
             content=None,
-            tool_calls=[MockToolCall(id="call_001", type="function",
-                                     function=MockFunction(name="search", arguments=args))],
+            tool_calls=[
+                MockToolCall(
+                    id="call_001",
+                    type="function",
+                    function=MockFunction(name="search", arguments=args),
+                )
+            ],
         ),
         logprobs=MockLogprobs(content=tool_tokens),  # hypothesis: vLLM includes these
         finish_reason="tool_calls",
@@ -171,15 +176,24 @@ def scenario_b_tool_call_only() -> tuple[MockChoice, str]:
     choice_b2 = MockChoice(
         message=MockMessage(
             content=None,
-            tool_calls=[MockToolCall(id="call_001", type="function",
-                                     function=MockFunction(name="search", arguments=args))],
+            tool_calls=[
+                MockToolCall(
+                    id="call_001",
+                    type="function",
+                    function=MockFunction(name="search", arguments=args),
+                )
+            ],
         ),
         logprobs=MockLogprobs(content=[]),  # standard OpenAI behaviour
         finish_reason="tool_calls",
     )
 
-    return (choice_b1, "tool-call-only [vLLM hypothesis: tokens in logprobs.content]",
-            choice_b2, "tool-call-only [OpenAI standard: empty logprobs.content]")  # type: ignore[return-value]
+    return (
+        choice_b1,
+        "tool-call-only [vLLM hypothesis: tokens in logprobs.content]",
+        choice_b2,
+        "tool-call-only [OpenAI standard: empty logprobs.content]",
+    )  # type: ignore[return-value]
 
 
 def scenario_c_text_plus_tool_call() -> tuple[MockChoice, str]:
@@ -197,8 +211,13 @@ def scenario_c_text_plus_tool_call() -> tuple[MockChoice, str]:
     choice = MockChoice(
         message=MockMessage(
             content=text,
-            tool_calls=[MockToolCall(id="call_002", type="function",
-                                     function=MockFunction(name="search", arguments=args))],
+            tool_calls=[
+                MockToolCall(
+                    id="call_002",
+                    type="function",
+                    function=MockFunction(name="search", arguments=args),
+                )
+            ],
         ),
         # If vLLM: all tokens present; if OpenAI standard: only text tokens
         logprobs=MockLogprobs(content=tokens),
@@ -221,8 +240,13 @@ def scenario_d_thinking_plus_tool_call() -> tuple[MockChoice, str]:
     choice = MockChoice(
         message=MockMessage(
             content=None,
-            tool_calls=[MockToolCall(id="call_003", type="function",
-                                     function=MockFunction(name="search", arguments=args))],
+            tool_calls=[
+                MockToolCall(
+                    id="call_003",
+                    type="function",
+                    function=MockFunction(name="search", arguments=args),
+                )
+            ],
         ),
         logprobs=MockLogprobs(content=tokens),
         finish_reason="tool_calls",
@@ -289,22 +313,28 @@ def split_logprobs_by_parts(
             result["text"] = tokens[:split_at]
             result["tool_call"] = tokens[split_at:]
             print(f"  Boundary found at token index {split_at}")
-            print(f"  Text tokens:      {len(result['text'])} "
-                  f"covering {sum(len(t.token) for t in result['text'])} chars")
-            print(f"  Tool call tokens: {len(result['tool_call'])} "
-                  f"covering {sum(len(t.token) for t in result['tool_call'])} chars")
+            print(
+                f"  Text tokens:      {len(result['text'])} "
+                f"covering {sum(len(t.token) for t in result['text'])} chars"
+            )
+            print(
+                f"  Tool call tokens: {len(result['tool_call'])} "
+                f"covering {sum(len(t.token) for t in result['tool_call'])} chars"
+            )
             # Verify coverage
             expected_tool_chars = len(tool_call_args)
             actual_tool_chars = sum(len(t.token) for t in result["tool_call"])
             if actual_tool_chars == expected_tool_chars:
                 print(f"  ✓ Tool call token coverage exact ({actual_tool_chars} chars)")
             else:
-                print(f"  ✗ Coverage mismatch: expected {expected_tool_chars} chars, "
-                      f"got {actual_tool_chars}")
+                print(
+                    f"  ✗ Coverage mismatch: expected {expected_tool_chars} chars, "
+                    f"got {actual_tool_chars}"
+                )
         else:
             print(f"  ✗ Cannot split: full text does not start with text_content")
             print(f"    Expected prefix: {text_content!r}")
-            print(f"    Actual start:    {full[:len(text_content)]!r}")
+            print(f"    Actual start:    {full[: len(text_content)]!r}")
             result["text"] = tokens  # fall back: all tokens to text
     elif text_content:
         result["text"] = tokens
@@ -342,12 +372,14 @@ def extract_parts(choice: MockChoice) -> list[dict[str, Any]]:
         parts.append({"part_kind": "text", "content": choice.message.content})
     if choice.message.tool_calls:
         for tc in choice.message.tool_calls:
-            parts.append({
-                "part_kind": "tool-call",
-                "tool_name": tc.function.name,
-                "args": tc.function.arguments,
-                "tool_call_id": tc.id,
-            })
+            parts.append(
+                {
+                    "part_kind": "tool-call",
+                    "tool_name": tc.function.name,
+                    "args": tc.function.arguments,
+                    "tool_call_id": tc.id,
+                }
+            )
     return parts
 
 
@@ -486,7 +518,9 @@ does choice.logprobs.content contain the tool call argument tokens?
             print("\n--- Probe 1: tool-call-only (no text content) ---")
             resp = await client.chat.completions.create(
                 model=model_id,
-                messages=[{"role": "user", "content": "Search for Paris population. Use the search tool."}],
+                messages=[
+                    {"role": "user", "content": "Search for Paris population. Use the search tool."}
+                ],
                 tools=tools,
                 tool_choice="required",
                 logprobs=True,
@@ -525,7 +559,12 @@ does choice.logprobs.content contain the tool call argument tokens?
             print("\n--- Probe 2: text + tool call ---")
             resp2 = await client.chat.completions.create(
                 model=model_id,
-                messages=[{"role": "user", "content": "Tell me briefly what you're about to search for, then search for Paris population."}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Tell me briefly what you're about to search for, then search for Paris population.",
+                    }
+                ],
                 tools=tools,
                 logprobs=True,
                 top_logprobs=1,
@@ -536,13 +575,17 @@ does choice.logprobs.content contain the tool call argument tokens?
             print(f"message.content: {choice2.message.content!r}")
             if choice2.logprobs and choice2.logprobs.content:
                 full2 = "".join(t.token for t in choice2.logprobs.content)
-                print(f"logprob tokens:  {len(choice2.logprobs.content)} — reconstructed: {full2!r}")
+                print(
+                    f"logprob tokens:  {len(choice2.logprobs.content)} — reconstructed: {full2!r}"
+                )
                 if choice2.message.tool_calls:
                     args2 = choice2.message.tool_calls[0].function.arguments
                     text2 = choice2.message.content or ""
                     expected_len = len(text2) + len(args2)
-                    print(f"text chars: {len(text2)}, tool args chars: {len(args2)}, "
-                          f"total expected: {expected_len}, logprob chars: {len(full2)}")
+                    print(
+                        f"text chars: {len(text2)}, tool args chars: {len(args2)}, "
+                        f"total expected: {expected_len}, logprob chars: {len(full2)}"
+                    )
                     if len(full2) >= expected_len:
                         print("✓ logprob coverage includes both text AND tool call tokens")
                     elif len(full2) == len(text2):

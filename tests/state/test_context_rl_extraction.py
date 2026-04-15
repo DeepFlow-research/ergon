@@ -30,8 +30,13 @@ def _seed_events(session: Session, turns: list[GenerationTurn], worker_key: str 
     exec_id = uuid4()
     for turn in turns:
         asyncio.run(
-            repo.persist_turn(session, run_id=run_id, execution_id=exec_id,
-                              worker_binding_key=worker_key, turn=turn)
+            repo.persist_turn(
+                session,
+                run_id=run_id,
+                execution_id=exec_id,
+                worker_binding_key=worker_key,
+                turn=turn,
+            )
         )
     events = repo.get_for_run(session, run_id)
     return events, run_id, exec_id
@@ -39,14 +44,16 @@ def _seed_events(session: Session, turns: list[GenerationTurn], worker_key: str 
 
 class TestExtractAgentTrajectories:
     def test_text_only_turn(self, session: Session):
-        turns = [GenerationTurn(
-            messages_in=[
-                SystemPromptPart(content="sys"),
-                UserPromptPart(content="task"),
-            ],
-            response_parts=[TextPart(content="done")],
-            tool_results=[],
-        )]
+        turns = [
+            GenerationTurn(
+                messages_in=[
+                    SystemPromptPart(content="sys"),
+                    UserPromptPart(content="task"),
+                ],
+                response_parts=[TextPart(content="done")],
+                tool_results=[],
+            )
+        ]
         events, run_id, exec_id = _seed_events(session, turns)
 
         trajectories = extract_agent_trajectories(
@@ -64,17 +71,15 @@ class TestExtractAgentTrajectories:
         turns = [
             GenerationTurn(
                 messages_in=[UserPromptPart(content="search")],
-                response_parts=[ToolCallPart(
-                    tool_name="search", tool_call_id="c1", args={"q": "x"}
-                )],
+                response_parts=[
+                    ToolCallPart(tool_name="search", tool_call_id="c1", args={"q": "x"})
+                ],
                 tool_results=[],
             ),
             GenerationTurn(
                 messages_in=[
                     UserPromptPart(content="search"),
-                    ToolReturnPart(
-                        tool_call_id="c1", tool_name="search", content="result"
-                    ),
+                    ToolReturnPart(tool_call_id="c1", tool_name="search", content="result"),
                 ],
                 response_parts=[TextPart(content="ok")],
                 tool_results=[],
@@ -90,14 +95,16 @@ class TestExtractAgentTrajectories:
         assert 1 in t.env_mask
 
     def test_prompt_reconstructed_from_events(self, session: Session):
-        turns = [GenerationTurn(
-            messages_in=[
-                SystemPromptPart(content="You are helpful."),
-                UserPromptPart(content="Solve it."),
-            ],
-            response_parts=[TextPart(content="ok")],
-            tool_results=[],
-        )]
+        turns = [
+            GenerationTurn(
+                messages_in=[
+                    SystemPromptPart(content="You are helpful."),
+                    UserPromptPart(content="Solve it."),
+                ],
+                response_parts=[TextPart(content="ok")],
+                tool_results=[],
+            )
+        ]
         events, run_id, exec_id = _seed_events(session, turns)
 
         trajectories = extract_agent_trajectories(
@@ -107,11 +114,13 @@ class TestExtractAgentTrajectories:
         assert len(t.prompt_ids) > 0
 
     def test_reward_assigned(self, session: Session):
-        turns = [GenerationTurn(
-            messages_in=[UserPromptPart(content="task")],
-            response_parts=[TextPart(content="answer")],
-            tool_results=[],
-        )]
+        turns = [
+            GenerationTurn(
+                messages_in=[UserPromptPart(content="task")],
+                response_parts=[TextPart(content="answer")],
+                tool_results=[],
+            )
+        ]
         events, run_id, exec_id = _seed_events(session, turns)
 
         trajectories = extract_agent_trajectories(
