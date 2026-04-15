@@ -19,6 +19,8 @@ class RewardStrategy(Protocol):
         agent_id: str,
         turns: list[RunGenerationTurn],
         eval_scores: dict[str, float],
+        *,
+        execution_ids: set[str] | None = None,
     ) -> float: ...
 
 
@@ -27,6 +29,10 @@ class IndependentTaskReward:
 
     Filters ``eval_scores`` to only the task executions this agent
     participated in (matched via ``task_execution_id``).
+
+    Accepts an optional ``execution_ids`` kwarg so callers that work with
+    ``RunContextEvent`` rows (which don't carry ``RunGenerationTurn`` objects)
+    can pass the IDs directly instead of synthesising dummy turn objects.
     """
 
     def assign(
@@ -34,8 +40,13 @@ class IndependentTaskReward:
         agent_id: str,
         turns: list[RunGenerationTurn],
         eval_scores: dict[str, float],
+        *,
+        execution_ids: set[str] | None = None,
     ) -> float:
-        agent_execution_ids = {str(t.task_execution_id) for t in turns}
+        if execution_ids is not None:
+            agent_execution_ids = execution_ids
+        else:
+            agent_execution_ids = {str(t.task_execution_id) for t in turns}
         agent_scores = [score for key, score in eval_scores.items() if key in agent_execution_ids]
         return mean(agent_scores) if agent_scores else 0.0
 
@@ -48,6 +59,8 @@ class SharedEpisodeReward:
         agent_id: str,
         turns: list[RunGenerationTurn],
         eval_scores: dict[str, float],
+        *,
+        execution_ids: set[str] | None = None,
     ) -> float:
         if not eval_scores:
             return 0.0
