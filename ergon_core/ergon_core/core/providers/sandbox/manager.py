@@ -464,7 +464,37 @@ if created:
 
 
 class DefaultSandboxManager(BaseSandboxManager):
-    """No custom dependencies. Used by benchmarks without specific sandbox setup."""
+    """No custom dependencies. Used by benchmarks without specific sandbox setup.
+
+    If E2B_API_KEY is not configured (e.g. CI stub runs) the sandbox step is
+    skipped entirely and SANDBOX_SKIPPED is returned so the task can still run
+    with a worker that doesn't need filesystem access.
+    """
+
+    async def create(
+        self,
+        sandbox_key: UUID,
+        run_id: UUID,
+        timeout_minutes: int = 30,
+        envs: dict[str, str] | None = None,
+        display_task_id: UUID | None = None,
+    ) -> str:
+        if not settings.e2b_api_key:
+            # Deferred: avoid a circular import between providers and runtime events.
+            from ergon_core.core.runtime.events.task_events import SANDBOX_SKIPPED
+
+            logger.info(
+                "E2B_API_KEY not set — skipping sandbox creation for task %s (stub mode)",
+                sandbox_key,
+            )
+            return SANDBOX_SKIPPED
+        return await super().create(
+            sandbox_key,
+            run_id=run_id,
+            timeout_minutes=timeout_minutes,
+            envs=envs,
+            display_task_id=display_task_id,
+        )
 
     async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         pass
