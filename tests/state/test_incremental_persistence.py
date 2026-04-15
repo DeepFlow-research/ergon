@@ -29,11 +29,10 @@ from tests.state.factories import seed_flat_tasks, seed_run
 
 
 def _make_turn(index: int, text: str = "response") -> GenerationTurn:
+    from ergon_core.api.generation import TextPart
+
     return GenerationTurn(
-        prompt_text=f"Task: prompt {index}" if index == 0 else None,
-        raw_response={
-            "parts": [{"part_kind": "text", "content": f"{text} {index}"}],
-        },
+        response_parts=[TextPart(content=f"{text} {index}")],
         tool_results=[],
     )
 
@@ -80,7 +79,7 @@ async def test_persist_single_writes_row(session: Session):
     assert len(rows) == 1
     assert rows[0].turn_index == 0
     assert rows[0].execution_outcome == "success"
-    assert rows[0].prompt_text == "Task: prompt 0"
+    assert rows[0].response_text == "response 0"
 
 
 @pytest.mark.asyncio
@@ -131,16 +130,17 @@ async def test_mark_execution_outcome(session: Session):
 
 
 @pytest.mark.asyncio
-async def test_persist_single_populates_prompt_text(session: Session):
-    """persist_single() stores prompt_text from the GenerationTurn."""
+async def test_persist_single_populates_response_text(session: Session):
+    """persist_single() stores response_text extracted from response_parts."""
+    from ergon_core.api.generation import TextPart
+
     def_id, _, task_ids = seed_flat_tasks(session, 1)
     run_id = seed_run(session, def_id)
     execution = _make_execution(session, run_id, task_ids[0])
 
     repo = GenerationTurnRepository()
     turn = GenerationTurn(
-        prompt_text="Task: Research quantum computing",
-        raw_response={"parts": [{"part_kind": "text", "content": "hello"}]},
+        response_parts=[TextPart(content="hello quantum computing")],
     )
 
     await repo.persist_single(
@@ -153,7 +153,7 @@ async def test_persist_single_populates_prompt_text(session: Session):
     )
 
     rows = repo.get_for_execution(session, execution.id)
-    assert rows[0].prompt_text == "Task: Research quantum computing"
+    assert rows[0].response_text == "hello quantum computing"
 
 
 @pytest.mark.asyncio
