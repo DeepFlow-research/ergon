@@ -62,7 +62,7 @@ jobs:
     name: "E2B sandbox I/O tests"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'e2e-sandbox')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'feature/')
     steps:
       - uses: actions/checkout@v4
 
