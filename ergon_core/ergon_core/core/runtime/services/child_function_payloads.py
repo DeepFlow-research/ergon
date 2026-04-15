@@ -52,6 +52,7 @@ class PersistOutputsRequest(InngestEventContract):
     sandbox_id: str | None = None
     output_dir: str | None = None
     benchmark_type: str
+    worker_output_text: str | None = None
 
 
 class EvaluateTaskRunRequest(InngestEventContract):

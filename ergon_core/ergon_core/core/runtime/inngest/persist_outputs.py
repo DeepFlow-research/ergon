@@ -1,6 +1,8 @@
 """Inngest child function: persist outputs from sandbox.
 
 Downloads outputs from sandbox and registers them as RunResource rows.
+Also invokes :class:`SandboxResourcePublisher` for append-only blob-store
+publication and ``WorkerOutput`` capture.
 """
 
 import logging
@@ -12,7 +14,7 @@ from uuid import UUID
 import inngest
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.ids import new_id
-from ergon_core.core.persistence.telemetry.models import RunResource
+from ergon_core.core.persistence.telemetry.models import RunResource, RunResourceKind
 from ergon_core.core.providers.sandbox.manager import (
     BaseSandboxManager,
     DefaultSandboxManager,
@@ -104,6 +106,12 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
         run_id,
     )
 
+    # ------------------------------------------------------------------
+    # SandboxResourcePublisher: append-only blob-store sync + WorkerOutput
+    # Must run BEFORE sandbox teardown so we can still read sandbox files.
+    # ------------------------------------------------------------------
+    await _publish_resources(sandbox_manager, payload)
+
     get_trace_sink().emit_span(
         CompletedSpan(
             name="persist.outputs",
@@ -124,6 +132,58 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
         output_resource_ids=resource_ids,
         outputs_count=len(resource_ids),
     )
+
+
+async def _publish_resources(
+    sandbox_manager: BaseSandboxManager,
+    payload: PersistOutputsRequest,
+) -> None:
+    """Run the SandboxResourcePublisher if a live sandbox exists for this task.
+
+    No-op when the benchmark doesn't use sandboxes (e.g. ``DefaultSandboxManager``
+    with ``E2B_API_KEY`` unset).
+    """
+    # Deferred: avoid top-level import cycle between providers and runtime.
+    from ergon_core.core.providers.sandbox.resource_publisher import (
+        SandboxResourcePublisher,
+    )
+
+    sandbox = sandbox_manager.get_sandbox(payload.task_id)
+    if sandbox is None:
+        logger.info(
+            "persist-outputs: no live sandbox for task_id=%s, skipping publisher",
+            payload.task_id,
+        )
+        return
+
+    publisher = SandboxResourcePublisher(
+        sandbox=sandbox,
+        run_id=payload.run_id,
+        task_execution_id=payload.execution_id,
+    )
+
+    # Sync PUBLISH_DIRS -- catches anything the runtime crashed past.
+    synced = await publisher.sync()
+    if synced:
+        logger.info(
+            "persist-outputs: publisher.sync() created %d resource(s) for run_id=%s",
+            len(synced),
+            payload.run_id,
+        )
+
+    # Publish the WorkerOutput text as a blob-backed resource.
+    if payload.worker_output_text:
+        view = publisher.publish_value(
+            kind=RunResourceKind.OUTPUT,
+            name="worker_output",
+            content=payload.worker_output_text,
+        )
+        if view is not None:
+            logger.info(
+                "persist-outputs: published worker_output resource_id=%s for run_id=%s",
+                view.id,
+                payload.run_id,
+            )
 
 
 async def _download_outputs(
