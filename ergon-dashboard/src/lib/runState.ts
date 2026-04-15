@@ -119,6 +119,7 @@ export function deserializeRunState(input: unknown): WorkflowRunState {
     ),
     threads: data.threads ?? [],
     generationTurns: deserializeGenerationTurns(data),
+    contextEventsByTask: new Map(),
     evaluationsByTask: new Map(
       Object.entries(data.evaluationsByTask ?? {}).map(([taskId, evaluation]) => [
         taskId,

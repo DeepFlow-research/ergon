@@ -11,6 +11,7 @@ import { config } from "../config";
 import { store } from "../state/store";
 import { serializeRunState } from "../runState";
 import {
+  ContextEventState,
   ServerToClientEvents,
   ClientToServerEvents,
   DashboardCohortUpdatedData,
@@ -283,4 +284,13 @@ export function broadcastGraphMutation(
 ): void {
   const io = getIO();
   io?.to(`run:${runId}`).emit("graph:mutation", { runId, mutation });
+}
+
+export function broadcastContextEvent(
+  runId: string,
+  taskNodeId: string,
+  event: ContextEventState,
+): void {
+  const io = getIO();
+  io?.to(`run:${runId}`).emit("context:event", { runId, taskNodeId, event });
 }
