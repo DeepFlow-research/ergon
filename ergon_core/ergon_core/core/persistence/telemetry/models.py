@@ -163,6 +163,19 @@ class RunTaskExecution(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 
 
+class RunResourceKind(StrEnum):
+    """Canonical kinds for run_resources.kind.
+
+    Stored as VARCHAR; enforced at the API boundary, not in the DB schema.
+    """
+
+    OUTPUT = "output"
+    REPORT = "report"
+    ARTIFACT = "artifact"
+    SEARCH_CACHE = "search_cache"
+    NOTE = "note"
+
+
 class RunResource(SQLModel, table=True):
     __tablename__ = "run_resources"
 
@@ -179,6 +192,10 @@ class RunResource(SQLModel, table=True):
     size_bytes: int
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+    # Append-only log support
+    error: str | None = Field(default=None)
+    content_hash: str | None = Field(default=None, index=True)
 
     # -- JSON accessor: metadata_json --
 
