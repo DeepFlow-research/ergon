@@ -41,6 +41,7 @@ import {
   SandboxCommandState,
   TaskStatus,
 } from "@/lib/types";
+import { onContextEvent } from "./onContextEvent";
 
 // =============================================================================
 // Workflow Lifecycle Events
@@ -478,4 +479,5 @@ export const functions = [
   onSandboxClosed,
   onGenerationTurnCompleted,
   onGraphMutation,
+  onContextEvent,
 ];

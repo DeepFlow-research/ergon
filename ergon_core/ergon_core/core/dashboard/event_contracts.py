@@ -8,6 +8,10 @@ from datetime import datetime
 from typing import Any, ClassVar
 from uuid import UUID
 
+from ergon_core.core.persistence.context.event_payloads import (
+    ContextEventPayload,
+    ContextEventType,
+)
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.runtime.events.base import InngestEventContract
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
@@ -182,11 +186,6 @@ class CohortUpdatedEvent(InngestEventContract):
 
 
 # ---------------------------------------------------------------------------
-# Generation turn events (RL observability)
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
 # Graph mutation events (dynamic delegation observability)
 # ---------------------------------------------------------------------------
 
@@ -206,21 +205,17 @@ class DashboardGraphMutationEvent(InngestEventContract):
     timestamp: datetime
 
 
-class DashboardGenerationTurnEvent(InngestEventContract):
-    """Emitted after each model generation turn for live dashboard streaming.
+class DashboardContextEventEvent(InngestEventContract):
+    name: ClassVar[str] = "dashboard/context.event"
 
-    Carries the convenience fields only (no raw_request / raw_response /
-    logprobs to keep the event payload small).  The dashboard can fetch
-    full details via ``GET /runs/{run_id}/generations``.
-    """
-
-    name: ClassVar[str] = "dashboard/generation.turn_completed"
-
+    id: UUID  # RunContextEvent.id — dedup key on frontend
     run_id: UUID
     task_execution_id: UUID
+    task_node_id: UUID  # resolved from _execution_task_map at emit time
     worker_binding_key: str
-    worker_name: str
-    turn_index: int
-    response_text: str | None = None
-    tool_calls: list[dict[str, Any]] | None = None  # slopcop: ignore[no-typing-any]
-    policy_version: str | None = None
+    sequence: int
+    event_type: ContextEventType
+    payload: ContextEventPayload  # serialised via model_dump(mode="json")
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None

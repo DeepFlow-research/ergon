@@ -8,7 +8,7 @@ can later verify.
 from collections.abc import AsyncGenerator
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.api.generation import GenerationTurn
+from ergon_core.api.generation import GenerationTurn, TextPart
 
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"
@@ -31,14 +31,9 @@ class SmokeTestWorker(Worker):
             from e2b_code_interpreter import AsyncSandbox
         except ImportError:
             yield GenerationTurn(
-                raw_response={
-                    "parts": [
-                        {
-                            "part_kind": "text",
-                            "content": f"e2b not available — stub output for {task.task_key}",
-                        }
-                    ],
-                },
+                response_parts=[
+                    TextPart(content=f"e2b not available — stub output for {task.task_key}")
+                ],
             )
             return
 
@@ -48,12 +43,7 @@ class SmokeTestWorker(Worker):
         await sandbox.files.write(MARKER_PATH, MARKER_CONTENT)
 
         yield GenerationTurn(
-            raw_response={
-                "parts": [
-                    {
-                        "part_kind": "text",
-                        "content": f"Wrote {MARKER_PATH} to sandbox {context.sandbox_id}",
-                    }
-                ],
-            },
+            response_parts=[
+                TextPart(content=f"Wrote {MARKER_PATH} to sandbox {context.sandbox_id}")
+            ],
         )

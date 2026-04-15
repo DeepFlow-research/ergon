@@ -1,3 +1,6 @@
+import type { ContextEventState } from "./contracts/contextEvents";
+export type { ContextEventState };
+
 import type {
   BenchmarkName as RestBenchmarkName,
   CohortDetail as RestCohortDetail,
@@ -76,6 +79,7 @@ export const DashboardEventNames = {
   TASK_EVALUATION_UPDATED: "dashboard/task.evaluation_updated",
   GENERATION_TURN_COMPLETED: "dashboard/generation.turn_completed",
   GRAPH_MUTATION: "dashboard/graph.mutation",
+  CONTEXT_EVENT: "dashboard/context.event",
 } as const;
 
 export type DashboardEventName =
@@ -103,8 +107,9 @@ export type TaskEvaluationState = RestRunTaskEvaluation;
 export type DashboardThreadMessageCreatedData = GeneratedDashboardThreadMessageCreatedData;
 export type DashboardTaskEvaluationUpdatedData = GeneratedDashboardTaskEvaluationUpdatedData;
 
-import type { DashboardGenerationTurnCompletedData as _GeneratedDashboardGenerationTurnCompletedData } from "@/lib/contracts/events";
+import type { DashboardGenerationTurnCompletedData as _GeneratedDashboardGenerationTurnCompletedData, DashboardContextEventEventData as _GeneratedDashboardContextEventEventData } from "@/lib/contracts/events";
 export type DashboardGenerationTurnCompletedData = _GeneratedDashboardGenerationTurnCompletedData;
+export type DashboardContextEventEventData = _GeneratedDashboardContextEventEventData;
 
 export type DashboardGraphMutationData = GeneratedDashboardGraphMutationData;
 export type GraphMutationSocketData = GeneratedGraphMutationSocketData;
@@ -125,7 +130,8 @@ export type DashboardEventData =
   | DashboardThreadMessageCreatedData
   | DashboardTaskEvaluationUpdatedData
   | DashboardGenerationTurnCompletedData
-  | DashboardGraphMutationData;
+  | DashboardGraphMutationData
+  | DashboardContextEventEventData;
 
 // =============================================================================
 // Inngest Event Types (for type-safe event handling)
@@ -144,6 +150,7 @@ export type DashboardEvents = {
   "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
   "dashboard/generation.turn_completed": { data: DashboardGenerationTurnCompletedData };
   "dashboard/graph.mutation": { data: DashboardGraphMutationData };
+  "dashboard/context.event": { data: DashboardContextEventEventData };
 };
 
 // =============================================================================
@@ -273,6 +280,9 @@ export interface WorkflowRunState {
   // Generation turns (RL observability) — append-only, keyed by task execution
   generationTurns: GenerationTurnState[];
 
+  // Context events (lossless per-event records) keyed by task node ID
+  contextEventsByTask: Map<string, ContextEventState[]>;
+
   // Timing
   startedAt: string;
   completedAt: string | null;
@@ -310,6 +320,7 @@ export interface ServerToClientEvents {
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
   "generation:turn": (data: { runId: string; turn: GenerationTurnState }) => void;
   "graph:mutation": (data: GraphMutationSocketData) => void;
+  "context:event": (data: { runId: string; taskNodeId: string; event: ContextEventState }) => void;
   // Sync event - sends all current runs to a client on request
   "sync:runs": (runs: RunListEntry[]) => void;
   // Sync event - sends full state for a specific run

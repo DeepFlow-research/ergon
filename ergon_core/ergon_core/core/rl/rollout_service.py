@@ -20,10 +20,10 @@ from ergon_core.core.persistence.shared.enums import (
     RunStatus,
 )
 from ergon_core.core.persistence.shared.ids import new_id
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
     RolloutBatchRun,
-    RunGenerationTurn,
     RunRecord,
     RunTaskEvaluation,
     RunTaskExecution,
@@ -242,16 +242,16 @@ class RolloutService:
             session.commit()
 
     def _extract_trajectories(self, run_ids: list[UUID]) -> list[Trajectory]:
-        """Load turns + evals from DB, run extraction, build Trajectory list."""
+        """Load context events + evals from DB, run extraction, build Trajectory list."""
         with self._session_factory() as session:
-            all_turns = list(
+            all_events = list(
                 session.exec(
-                    select(RunGenerationTurn)
-                    .where(RunGenerationTurn.run_id.in_(run_ids))  # type: ignore[union-attr]
+                    select(RunContextEvent)
+                    .where(RunContextEvent.run_id.in_(run_ids))  # type: ignore[union-attr]
                     .order_by(
-                        RunGenerationTurn.run_id,
-                        RunGenerationTurn.task_execution_id,
-                        RunGenerationTurn.turn_index,
+                        RunContextEvent.run_id,
+                        RunContextEvent.task_execution_id,
+                        RunContextEvent.sequence,
                     )
                 ).all()
             )
@@ -266,9 +266,9 @@ class RolloutService:
                 ).all()
             )
 
-        turns_by_run: dict[UUID, list[RunGenerationTurn]] = defaultdict(list)
-        for turn in all_turns:
-            turns_by_run[turn.run_id].append(turn)
+        events_by_run: dict[UUID, list[RunContextEvent]] = defaultdict(list)
+        for event in all_events:
+            events_by_run[event.run_id].append(event)
 
         evals_by_run: dict[UUID, dict[str, float]] = defaultdict(dict)
         for ev in all_evals:
@@ -289,18 +289,11 @@ class RolloutService:
         result: list[Trajectory] = []
         tokenizer = self._get_tokenizer()
         for run_id in run_ids:
-            run_turns = turns_by_run.get(run_id, [])
-            first_prompt = run_turns[0].prompt_text if run_turns else None
-            prompt_text = tokenizer.apply_chat_template(
-                [{"role": "user", "content": first_prompt or "Complete the benchmark task."}],
-                tokenize=False,
-                add_generation_prompt=True,
-            )
+            run_events = events_by_run.get(run_id, [])
             agent_trajs = extract_agent_trajectories(
-                run_turns,
+                run_events,
                 evals_remapped.get(run_id, {}),
                 tokenizer,
-                prompt_text=prompt_text,
                 reward_strategy=self._reward_strategy,
             )
             for traj in agent_trajs:

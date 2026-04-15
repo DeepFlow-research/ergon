@@ -427,3 +427,68 @@ export const GraphMutationSocketDataSchema = z.object({
   mutation: DashboardGraphMutationDataSchema,
 });
 export type GraphMutationSocketData = z.infer<typeof GraphMutationSocketDataSchema>;
+
+// =============================================================================
+// Context Event Events
+// =============================================================================
+
+const TokenLogprobSchema = z.object({
+  token: z.string(),
+  logprob: z.number(),
+});
+
+const ContextEventPayloadSchema = z.discriminatedUnion("event_type", [
+  z.object({ event_type: z.literal("system_prompt"), text: z.string() }),
+  z.object({
+    event_type: z.literal("user_message"),
+    text: z.string(),
+    from_worker_key: z.string().nullable(),
+  }),
+  z.object({
+    event_type: z.literal("assistant_text"),
+    text: z.string(),
+    turn_id: z.string(),
+    turn_logprobs: z.array(TokenLogprobSchema).nullable(),
+  }),
+  z.object({
+    event_type: z.literal("tool_call"),
+    tool_call_id: z.string(),
+    tool_name: z.string(),
+    args: z.record(z.string(), z.unknown()),
+    turn_id: z.string(),
+    turn_logprobs: z.array(TokenLogprobSchema).nullable(),
+  }),
+  z.object({
+    event_type: z.literal("tool_result"),
+    tool_call_id: z.string(),
+    tool_name: z.string(),
+    result: z.unknown(),
+    is_error: z.boolean(),
+  }),
+  z.object({
+    event_type: z.literal("thinking"),
+    text: z.string(),
+    turn_id: z.string(),
+    turn_logprobs: z.array(TokenLogprobSchema).nullable(),
+  }),
+]);
+
+export const DashboardContextEventEventSchema = z.object({
+  id: z.string(),
+  run_id: z.string(),
+  task_execution_id: z.string(),
+  task_node_id: z.string(),
+  worker_binding_key: z.string(),
+  sequence: z.number(),
+  event_type: z.string(),
+  payload: ContextEventPayloadSchema,
+  created_at: z.string(),
+  started_at: z.string().nullable(),
+  completed_at: z.string().nullable(),
+});
+
+export type DashboardContextEventEventData = z.infer<typeof DashboardContextEventEventSchema>;
+
+export function parseDashboardContextEventData(data: unknown): DashboardContextEventEventData {
+  return DashboardContextEventEventSchema.parse(data);
+}

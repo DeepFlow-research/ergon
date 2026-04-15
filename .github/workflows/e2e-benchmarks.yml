@@ -37,6 +37,8 @@ jobs:
           sleep 5
 
       - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
       - name: Install project
         run: uv sync --frozen --all-packages
 
@@ -60,7 +62,7 @@ jobs:
     name: "E2B sandbox I/O tests"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'e2e-sandbox')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'feature/')
     steps:
       - uses: actions/checkout@v4
 
@@ -79,6 +81,8 @@ jobs:
           sleep 5
 
       - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
       - name: Install project
         run: uv sync --frozen --all-packages
 

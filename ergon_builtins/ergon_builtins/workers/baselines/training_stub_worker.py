@@ -2,7 +2,7 @@
 
 Unlike stub-worker (which returns a plain string with no turns), this
 worker generates fake token-level data that exercises the full trajectory
-extraction pipeline: RunGenerationTurn persistence, logprob storage,
+extraction pipeline: RunContextEvent persistence, logprob storage,
 and rollout_func return formatting.
 
 Use with ``--worker training-stub`` for CPU-only integration tests of
@@ -13,7 +13,19 @@ import random
 from collections.abc import AsyncGenerator
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.api.generation import GenerationTurn, TokenLogprob
+from typing import cast
+
+from ergon_core.api.generation import (
+    GenerationTurn,
+    ModelRequestPart,
+    ModelResponsePart,
+    TextPart,
+    ThinkingPart,
+    TokenLogprob,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 
 
 class TrainingStubWorker(Worker):
@@ -47,25 +59,42 @@ def _build_synthetic_turns(task_key: str) -> list[GenerationTurn]:
             for j in range(num_tokens)
         ]
 
-        tool_results: list[dict] = []
-        if i < num_turns - 1:
+        is_last = i == num_turns - 1
+        if not is_last:
+            response_parts = cast(
+                list[ModelResponsePart],
+                [
+                    ToolCallPart(
+                        tool_name="stub_tool",
+                        tool_call_id=f"call_{i}",
+                        args={"turn": i, "task": task_key},
+                    )
+                ],
+            )
             tool_results = [
-                {
-                    "tool_call_id": f"call_{i}",
-                    "tool_name": "stub_tool",
-                    "result": f"Tool result for turn {i} of {task_key}",
-                }
+                ToolReturnPart(
+                    tool_call_id=f"call_{i}",
+                    tool_name="stub_tool",
+                    content=f"Tool result for turn {i} of {task_key}",
+                )
             ]
+        else:
+            response_parts = cast(
+                list[ModelResponsePart],
+                [TextPart(content=f"Synthetic response turn {i}")],
+            )
+            tool_results = []
+
+        messages_in: list[ModelRequestPart] = (
+            [UserPromptPart(content=f"Task: Synthetic task {task_key}")] if i == 0 else []
+        )
 
         turns.append(
             GenerationTurn(
-                prompt_text=f"Task: Synthetic task {task_key}" if i == 0 else None,
-                raw_response={
-                    "parts": [{"part_kind": "text", "content": f"Synthetic response turn {i}"}],
-                    "provider_details": {"logprobs": [lp.model_dump() for lp in logprobs]},
-                },
+                messages_in=messages_in,
+                response_parts=response_parts,
                 tool_results=tool_results,
-                logprobs=logprobs,
+                turn_logprobs=logprobs,
                 policy_version="synthetic-v0",
             )
         )

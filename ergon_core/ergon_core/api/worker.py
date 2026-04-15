@@ -3,6 +3,9 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Mapping
 from typing import Any, ClassVar, Self
+from uuid import UUID
+
+from sqlmodel import Session
 
 from ergon_core.api.dependencies import check_packages
 from ergon_core.api.errors import DependencyError
@@ -56,11 +59,11 @@ class Worker(ABC):
     @classmethod
     def from_buffer(
         cls,
-        turns: list[GenerationTurn],
-        task: BenchmarkTask,
+        execution_id: UUID,
+        session: Session,
         **kwargs: Any,  # slopcop: ignore[no-typing-any]
     ) -> Self | None:
-        """Construct a worker pre-seeded with recovered turn history.
+        """Construct a worker pre-seeded with context event history.
 
         Returns a new worker instance whose ``execute()`` will continue
         from where the previous execution left off, or ``None`` if this

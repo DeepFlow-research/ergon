@@ -147,6 +147,17 @@ class RunCommunicationThreadDto(CamelModel):
     messages: list[RunCommunicationMessageDto] = Field(default_factory=list)
 
 
+class RunContextEventDto(CamelModel):
+    id: str
+    task_execution_id: str
+    sequence: int
+    event_type: str
+    payload: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    created_at: str
+    started_at: str | None = None
+    completed_at: str | None = None
+
+
 class RunSnapshotDto(CamelModel):
     id: str
     experiment_id: str
@@ -159,6 +170,7 @@ class RunSnapshotDto(CamelModel):
     evaluations_by_task: dict[str, RunTaskEvaluationDto] = Field(default_factory=dict)
     sandboxes_by_task: dict[str, RunSandboxDto] = Field(default_factory=dict)
     generation_turns_by_task: dict[str, list["RunGenerationTurnDto"]] = Field(default_factory=dict)
+    context_events_by_task: dict[str, list[RunContextEventDto]] = Field(default_factory=dict)
     threads: list[RunCommunicationThreadDto] = Field(default_factory=list)
     started_at: datetime | None = None
     completed_at: datetime | None = None

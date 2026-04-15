@@ -4,7 +4,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from uuid import UUID
 
-from ergon_core.api.generation import GenerationTurn
+from ergon_core.api.generation import GenerationTurn, TextPart, ToolCallPart
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
@@ -15,7 +15,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskEvaluation,
     RunTaskExecution,
 )
-from ergon_core.core.providers.generation import pydantic_ai_format as pa_format
 from ergon_core.core.utils import utcnow as _utcnow
 from sqlmodel import Session, select
 
@@ -202,13 +201,17 @@ class GenerationTurnRepository:
             task_execution_id=execution_id,
             worker_binding_key=worker_binding_key,
             turn_index=turn_index,
-            prompt_text=turn.prompt_text,
-            raw_response=turn.raw_response,
-            response_text=pa_format.extract_text(turn.raw_response),
-            tool_calls_json=pa_format.extract_tool_calls(turn.raw_response),
-            tool_results_json=turn.tool_results or None,
-            token_ids_json=None,
-            logprobs_json=([lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None),
+            prompt_text=None,
+            raw_response={},
+            response_text=_extract_response_text(turn),
+            tool_calls_json=_extract_tool_calls_json(turn),
+            tool_results_json=(
+                [tr.model_dump() for tr in turn.tool_results] if turn.tool_results else None
+            ),
+            token_ids_json=turn.turn_token_ids or None,
+            logprobs_json=(
+                [lp.model_dump() for lp in turn.turn_logprobs] if turn.turn_logprobs else None
+            ),
             policy_version=turn.policy_version,
             execution_outcome=execution_outcome,
             started_at=turn.started_at,
@@ -244,14 +247,16 @@ class GenerationTurnRepository:
                 task_execution_id=execution_id,
                 worker_binding_key=worker_binding_key,
                 turn_index=i,
-                prompt_text=turn.prompt_text,
-                raw_response=turn.raw_response,
-                response_text=pa_format.extract_text(turn.raw_response),
-                tool_calls_json=pa_format.extract_tool_calls(turn.raw_response),
-                tool_results_json=turn.tool_results or None,
-                token_ids_json=None,
+                prompt_text=None,
+                raw_response={},
+                response_text=_extract_response_text(turn),
+                tool_calls_json=_extract_tool_calls_json(turn),
+                tool_results_json=(
+                    [tr.model_dump() for tr in turn.tool_results] if turn.tool_results else None
+                ),
+                token_ids_json=turn.turn_token_ids or None,
                 logprobs_json=(
-                    [lp.model_dump() for lp in turn.logprobs] if turn.logprobs else None
+                    [lp.model_dump() for lp in turn.turn_logprobs] if turn.turn_logprobs else None
                 ),
                 policy_version=turn.policy_version,
                 started_at=turn.started_at,
@@ -297,3 +302,33 @@ class GenerationTurnRepository:
             turn.execution_outcome = outcome
             session.add(turn)
         session.commit()
+
+
+# ---------------------------------------------------------------------------
+# Helpers — extract convenience fields from new typed GenerationTurn
+# ---------------------------------------------------------------------------
+
+
+def _extract_response_text(turn: GenerationTurn) -> str | None:
+    """Extract the first text content from response_parts."""
+    for part in turn.response_parts:
+        if isinstance(part, TextPart):
+            return part.content
+    return None
+
+
+def _extract_tool_calls_json(
+    turn: GenerationTurn,
+) -> list[dict[str, object]] | None:
+    """Extract tool call dicts from response_parts."""
+    calls: list[dict[str, object]] = []
+    for part in turn.response_parts:
+        if isinstance(part, ToolCallPart):
+            calls.append(
+                {
+                    "tool_call_id": part.tool_call_id,
+                    "tool_name": part.tool_name,
+                    "args": part.args,
+                }
+            )
+    return calls if calls else None

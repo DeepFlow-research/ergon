@@ -58,6 +58,8 @@ pnpm run test:be:e2e    # E2E tests (requires Docker stack)
 
 **Trunk-based development on `main`.** Commit directly to `main` — do not create feature branches or git worktrees. No PRs unless explicitly requested.
 
+When a feature branch is needed (e.g. for a PR review), use the `feature/<name>` prefix. PRs from `feature/*` branches automatically run the full E2B sandbox I/O test suite in CI.
+
 ## Key conventions
 
 - Python 3.13+, line length 100

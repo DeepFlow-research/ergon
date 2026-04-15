@@ -13,6 +13,7 @@
 
 import { config } from "../config";
 import {
+  ContextEventState,
   ExecutionAttemptState,
   GenerationTurnState,
   TaskStatus,
@@ -122,6 +123,7 @@ class DashboardStore {
       threads: [],
       evaluationsByTask: new Map(),
       generationTurns: [],
+      contextEventsByTask: new Map(),
       startedAt,
       completedAt: null,
       durationSeconds: null,
@@ -269,6 +271,17 @@ class DashboardStore {
     const run = this.runs.get(runId);
     if (!run) return;
     run.generationTurns.push(turn);
+  }
+
+  addContextEvent(runId: string, taskNodeId: string, event: ContextEventState): void {
+    const run = this.runs.get(runId);
+    if (!run) return;
+    const existing = run.contextEventsByTask.get(taskNodeId) ?? [];
+    if (existing.some((e) => e.id === event.id)) return; // deduplicate
+    run.contextEventsByTask.set(
+      taskNodeId,
+      [...existing, event].sort((a, b) => a.sequence - b.sequence),
+    );
   }
 
   upsertEvaluation(runId: string, taskId: string | null, evaluation: TaskEvaluationState): void {
