@@ -19,6 +19,16 @@ def build_experiment(
     # Deferred: CLI startup cost
     from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
 
+    # MiniF2F has benchmark-specific defaults: the generic stub-worker cannot
+    # produce Lean proofs and stub-rubric cannot verify them. Auto-route the
+    # CLI defaults to the minif2f-native worker/evaluator so users only need
+    # `ergon benchmark run minif2f --model <X> --limit 1`.
+    if benchmark_slug == "minif2f":
+        if worker_slug == "stub-worker":
+            worker_slug = "minif2f-react"
+        if evaluator_slug == "stub-rubric":
+            evaluator_slug = "minif2f-rubric"
+
     benchmark_cls = BENCHMARKS[benchmark_slug]
     worker_cls = WORKERS[worker_slug]
     evaluator_cls = EVALUATORS[evaluator_slug]
