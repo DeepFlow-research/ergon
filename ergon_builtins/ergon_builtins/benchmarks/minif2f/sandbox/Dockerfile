@@ -73,6 +73,14 @@ RUN for bin in /opt/elan/bin/*; do \
         > /etc/profile.d/elan.sh \
     && chmod 0644 /etc/profile.d/elan.sh
 
+# --- Pre-create agent workspace dirs owned by the sandbox user ---
+# The E2B sandbox runs as uid 1000 who cannot mkdir at /. Pre-create the
+# working dirs the ReAct agent writes into (drafts, final proofs, inputs)
+# so the worker does not need sudo at task time.
+RUN mkdir -p /workspace/scratchpad /workspace/final_output /inputs /skills \
+    && chown -R 1000:1000 /workspace /inputs /skills \
+    && chmod -R 0775 /workspace /inputs /skills
+
 # --- Smoke test: fail the build loudly if setup is broken ---
 RUN lake env lean --version \
     && /usr/local/bin/lake env lean --version

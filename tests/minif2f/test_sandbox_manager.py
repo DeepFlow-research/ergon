@@ -146,10 +146,14 @@ async def test_verify_setup_raises_when_lean_missing(
 
     fake_sandbox = MagicMock()
     fake_sandbox.sandbox_id = "sbx_broken"
-    # Smoke test returns non-zero.
-    fake_sandbox.commands.run = AsyncMock(
-        return_value=MagicMock(exit_code=127, stdout="", stderr="lake: command not found")
-    )
+
+    # Dir-setup mkdir succeeds; the `lake env lean --version` smoke check fails.
+    async def _run(cmd: str, **_kwargs: object) -> MagicMock:
+        if "lake env lean --version" in cmd:
+            return MagicMock(exit_code=127, stdout="", stderr="lake: command not found")
+        return MagicMock(exit_code=0, stdout="", stderr="")
+
+    fake_sandbox.commands.run = AsyncMock(side_effect=_run)
     fake_sandbox.files.write = AsyncMock()
     fake_sandbox.run_code = AsyncMock(
         return_value=MagicMock(error=None, logs=MagicMock(stdout=[], stderr=[]))

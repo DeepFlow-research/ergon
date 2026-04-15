@@ -67,6 +67,40 @@ class MiniF2FSandboxManager(BaseSandboxManager):
         # the next manager re-instantiation.
         self.template = _resolve_template()
 
+    async def _create_directory_structure(self, sandbox: AsyncSandbox, sandbox_key: UUID) -> None:
+        """Ensure workspace dirs exist and are writable by the sandbox user.
+
+        The base class uses ``sandbox.run_code`` (the E2B code-interpreter
+        Jupyter endpoint) which our bare-Dockerfile template does not
+        expose. We use plain shell commands. The template's Dockerfile
+        pre-creates ``/workspace/{scratchpad,final_output}`` and
+        ``/inputs`` chowned to the sandbox user (uid 1000); we fall back
+        to ``mkdir -p`` so this also works on older template builds.
+        """
+        # Template-version-agnostic: use -p so no-op if dirs already exist,
+        # and run with /bin/sh -c so the shell handles nonexistent paths.
+        result = await sandbox.commands.run(
+            "mkdir -p /tmp/minif2f_probe /workspace/scratchpad "
+            "/workspace/final_output /inputs 2>/dev/null || true",
+            timeout=30,
+        )
+        # Writability smoke test — the criterion writes to
+        # /tools/mathlib_project/src/verify.lean, which the Dockerfile
+        # chowns to the sandbox user.
+        try:
+            await sandbox.files.write("/tools/mathlib_project/src/.ergon_probe", b"ok")
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
+            await self.terminate(sandbox_key)
+            raise RuntimeError(
+                f"MiniF2F sandbox /tools/mathlib_project/src not writable "
+                f"for sandbox_key={sandbox_key}: {exc}"
+            ) from exc
+        logger.debug(
+            "MiniF2F dir setup for sandbox_key=%s: mkdir exit=%d",
+            sandbox_key,
+            result.exit_code,
+        )
+
     async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         # Pre-built template already contains elan, Lean toolchain, mathlib4
         # and decompressed oleans.  Nothing to do here.
