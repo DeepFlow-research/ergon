@@ -50,6 +50,13 @@ class DownloadedFiles(BaseModel):
 class BaseSandboxManager(ABC):
     """Abstract base class for E2B sandbox management."""
 
+    # Optional name or ID of a pre-built E2B template to provision the sandbox
+    # from. When set, it is threaded to ``AsyncSandbox.create(template=...)``,
+    # which skips the per-sandbox package install step. Subclasses override
+    # this (or set it on the instance in __init__) to point at their benchmark
+    # image — e.g. MiniF2FSandboxManager uses "ergon-minif2f-v1".
+    template: str | None = None
+
     _instance: "BaseSandboxManager | None" = None
     _sandboxes: dict[UUID, "AsyncSandbox"] = {}
     _file_registries: dict[UUID, dict[str, str]] = {}
@@ -237,6 +244,12 @@ if created:
                 }
                 if envs:
                     create_kwargs["envs"] = envs
+                # Resolve template from class or instance attribute. Subclasses
+                # can set it either at class scope (ClassVar) or on self in
+                # __init__ (e.g. to load a template_id from a user registry).
+                template = getattr(self, "template", None)
+                if template:
+                    create_kwargs["template"] = template
                 sandbox = await AsyncSandbox.create(**create_kwargs)
             except Exception as e:  # slopcop: ignore[no-broad-except]
                 raise RuntimeError(
