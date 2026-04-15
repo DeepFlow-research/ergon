@@ -37,6 +37,8 @@ jobs:
           sleep 5
 
       - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
       - name: Install project
         run: uv sync --frozen --all-packages
 
@@ -79,6 +81,8 @@ jobs:
           sleep 5
 
       - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
       - name: Install project
         run: uv sync --frozen --all-packages
 
