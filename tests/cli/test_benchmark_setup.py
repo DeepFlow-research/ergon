@@ -1,7 +1,6 @@
 """Tests for ``ergon benchmark setup <slug>`` CLI command."""
 
 import json
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -18,33 +17,50 @@ def _make_args(slug: str = "minif2f", *, force: bool = False):
     return ns
 
 
+class _FakeBuildInfo:
+    """Stand-in for ``e2b.template.types.BuildInfo``."""
+
+    def __init__(self, template_id: str = "tmpl_test123", build_id: str = "build_test") -> None:
+        self.template_id = template_id
+        self.build_id = build_id
+        self.name = "ergon-minif2f-v1"
+        self.alias = "ergon-minif2f-v1"
+        self.tags: list[str] = []
+
+
+def _patch_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    build_info: _FakeBuildInfo | None = None,
+    raise_on_build: Exception | None = None,
+) -> MagicMock:
+    """Patch ``e2b.Template`` so ``setup_benchmark`` never hits the network."""
+
+    # Builder returned from from_dockerfile()/set_start_cmd() — chainable MagicMock.
+    builder = MagicMock()
+    builder.from_dockerfile.return_value = builder
+    builder.set_start_cmd.return_value = builder
+
+    # `Template(...)` call returns the builder; `Template.build(...)` returns BuildInfo.
+    fake_template_cls = MagicMock()
+    fake_template_cls.return_value = builder
+    if raise_on_build is not None:
+        fake_template_cls.build.side_effect = raise_on_build
+    else:
+        fake_template_cls.build.return_value = build_info or _FakeBuildInfo()
+
+    import e2b
+
+    monkeypatch.setattr(e2b, "Template", fake_template_cls)
+    return fake_template_cls
+
+
 # ---------------------------------------------------------------------------
-# 1. E2B CLI not installed
-# ---------------------------------------------------------------------------
-
-
-def test_fails_when_e2b_cli_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: None)
-    rc = setup_benchmark(_make_args())
-    assert rc != 0
-
-
-def test_error_message_mentions_install_url(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: None)
-    setup_benchmark(_make_args())
-    captured = capsys.readouterr()
-    assert "https://e2b.dev/docs/cli" in captured.err
-
-
-# ---------------------------------------------------------------------------
-# 2. E2B_API_KEY not set
+# 1. E2B_API_KEY not set
 # ---------------------------------------------------------------------------
 
 
 def test_fails_when_api_key_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/e2b")
     monkeypatch.delenv("E2B_API_KEY", raising=False)
     rc = setup_benchmark(_make_args())
     assert rc != 0
@@ -53,7 +69,6 @@ def test_fails_when_api_key_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_error_message_mentions_api_key(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/e2b")
     monkeypatch.delenv("E2B_API_KEY", raising=False)
     setup_benchmark(_make_args())
     captured = capsys.readouterr()
@@ -61,24 +76,22 @@ def test_error_message_mentions_api_key(
 
 
 # ---------------------------------------------------------------------------
-# 3. Unknown slug
+# 2. Unknown slug
 # ---------------------------------------------------------------------------
 
 
 def test_fails_for_unknown_slug(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/e2b")
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     rc = setup_benchmark(_make_args(slug="nonexistent"))
     assert rc != 0
 
 
 # ---------------------------------------------------------------------------
-# 4. Idempotency — skips build when already registered
+# 3. Idempotency — skips build when already registered
 # ---------------------------------------------------------------------------
 
 
 def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/e2b")
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
 
@@ -92,32 +105,19 @@ def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
 
 
 # ---------------------------------------------------------------------------
-# 5. Happy path — full build + persist
+# 4. Happy path — full build + persist
 # ---------------------------------------------------------------------------
 
 
-def _fake_e2b_build(cmd, *, cwd=None, **_kwargs):  # noqa: ANN001, ANN003
-    """Simulate ``e2b template build`` by writing an ``e2b.toml``."""
-    if cwd is not None:
-        e2b_toml = Path(cwd) / "e2b.toml"
-        e2b_toml.write_text(
-            'template_id = "tmpl_test123"\n'
-            'template_name = "ergon-minif2f-v1"\n'
-            'start_cmd = "/bin/bash"\n'
-        )
-    result = MagicMock(spec=subprocess.CompletedProcess)
-    result.returncode = 0
-    return result
-
-
 def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/e2b")
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr("ergon_cli.commands.benchmark.subprocess.run", _fake_e2b_build)
+    fake = _patch_sdk(monkeypatch)
 
     rc = setup_benchmark(_make_args())
     assert rc == 0
+
+    fake.build.assert_called_once()
 
     registry = tmp_path / "sandbox_templates.json"
     assert registry.exists()
@@ -125,14 +125,14 @@ def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert "minif2f" in data
     assert data["minif2f"]["template_id"] == "tmpl_test123"
     assert data["minif2f"]["template_name"] == "ergon-minif2f-v1"
+    assert data["minif2f"]["build_id"] == "build_test"
     assert "built_at" in data["minif2f"]
 
 
 def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/e2b")
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr("ergon_cli.commands.benchmark.subprocess.run", _fake_e2b_build)
+    _patch_sdk(monkeypatch)
 
     # Pre-populate with old entry
     registry = tmp_path / "sandbox_templates.json"
@@ -148,21 +148,14 @@ def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 
 
 # ---------------------------------------------------------------------------
-# 6. Build failure propagates
+# 5. Build failure propagates
 # ---------------------------------------------------------------------------
 
 
-def _fake_e2b_build_failure(cmd, *, cwd=None, **_kwargs):  # noqa: ANN001, ANN003
-    result = MagicMock(spec=subprocess.CompletedProcess)
-    result.returncode = 1
-    return result
-
-
 def test_build_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("shutil.which", lambda _name: "/usr/local/bin/e2b")
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
-    monkeypatch.setattr("ergon_cli.commands.benchmark.subprocess.run", _fake_e2b_build_failure)
+    _patch_sdk(monkeypatch, raise_on_build=RuntimeError("simulated build failure"))
 
     rc = setup_benchmark(_make_args())
     assert rc != 0

@@ -18,24 +18,35 @@ E2B sandbox template for formal proof verification with Lean 4.
   mathlib compiles from source. This should never happen for a tagged release.
   If it does, check that `v4.29.0` still has published cache artifacts.
 
-## Building manually
+## Building
 
 ```bash
-cd ergon/ergon_builtins/ergon_builtins/benchmarks/minif2f/sandbox/
-e2b template build --dockerfile Dockerfile --name ergon-minif2f-v1 \
-    --cmd "/bin/bash" --cpu-count 2 --memory-mb 8192
+export E2B_API_KEY=<your-runtime-key>
+ergon benchmark setup minif2f           # builds + pushes to E2B
+ergon benchmark setup minif2f --force   # rebuild even if registered
 ```
 
-The preferred path is the wrapped CLI command (Phase 3):
-
-```bash
-ergon benchmark setup minif2f
-```
+Internally this uses the **E2B Python SDK** (`e2b.Template.build()`), not the
+`e2b` CLI — so only `E2B_API_KEY` is needed, **not** `E2B_ACCESS_TOKEN`.  The
+template is built remotely by E2B's build service from the Dockerfile in this
+directory; after a successful build the template_id is persisted to
+`~/.ergon/sandbox_templates.json`.
 
 ## Verifying the template
 
 ```bash
-e2b template list   # should show ergon-minif2f-v1
+python -c "
+import asyncio, os
+from e2b_code_interpreter import AsyncSandbox
+async def check():
+    sbx = await AsyncSandbox.create(template='<template_id>', timeout=300)
+    try:
+        r = await sbx.commands.run('bash -c \"lean --version\"')
+        print(r.stdout)
+    finally:
+        await sbx.kill()
+asyncio.run(check())
+"
 ```
 
 ## Versioning
