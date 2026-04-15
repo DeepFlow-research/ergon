@@ -10,7 +10,6 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 import sqlmodel
 from alembic import op
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "f1a2b3c4d5e6"
@@ -28,7 +27,7 @@ def upgrade() -> None:
         sa.Column("worker_binding_key", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("event_type", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
