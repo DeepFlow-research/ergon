@@ -66,6 +66,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare shared blob root
+        # Bind-mounted at the same path on host and inside the api container
+        # so pytest can read the files the publisher writes.  World-writable
+        # because the container runs as a different UID than the runner.
+        run: |
+          sudo mkdir -p /tmp/ergon-blob
+          sudo chmod 777 /tmp/ergon-blob
+
       - name: Start CI stack
         env:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
@@ -93,6 +101,7 @@ jobs:
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          ERGON_BLOB_ROOT: /tmp/ergon-blob
         # --timeout=600 (per-test) is a safety net against a hung E2B
         # sandbox or pending Inngest event; actual CI run-time for this
         # suite is <60s. A per-test limit (rather than no limit) gives us
