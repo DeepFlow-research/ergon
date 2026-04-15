@@ -12,9 +12,10 @@ from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
 from pydantic import BaseModel
 
-LEAN_CMD = (
-    "export PATH=$HOME/.elan/bin:$PATH && cd /tools/mathlib_project && lean src/verify.lean 2>&1"
-)
+# The ergon-minif2f-v1 template exposes elan via /usr/local/bin symlinks, so no
+# PATH export is needed. `lake env lean` is required for mathlib4 imports to
+# resolve against the cached oleans.
+LEAN_CMD = "cd /tools/mathlib_project && lake env lean src/verify.lean 2>&1"
 
 
 class ExtractedProof(BaseModel):

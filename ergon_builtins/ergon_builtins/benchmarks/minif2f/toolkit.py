@@ -17,7 +17,11 @@ try:
 except ImportError:
     Tool = None  # type: ignore[assignment,misc]
 
-LEAN_CMD_PREFIX = "export PATH=$HOME/.elan/bin:$PATH && cd /tools/mathlib_project/src &&"
+# The ergon-minif2f-v1 template exposes elan via /usr/local/bin symlinks, so no
+# PATH export is needed. We cd into the mathlib project and invoke `lake env
+# lean` so mathlib4 imports resolve against the cached oleans.
+LEAN_CMD_PREFIX = "cd /tools/mathlib_project &&"
+LEAN_CMD = "lake env lean"
 
 # ── Response models ───────────────────────────────────────────────────
 
@@ -185,7 +189,7 @@ class MiniF2FToolkit:
                 return LeanCheckResponse(success=False, error="Sandbox not available")
 
             try:
-                cmd = f"{LEAN_CMD_PREFIX} lean {file_path} 2>&1"
+                cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} {file_path} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=60)
                     output = (result.stdout or "") + (result.stderr or "")
@@ -239,7 +243,7 @@ class MiniF2FToolkit:
                         ),
                     )
 
-                cmd = f"{LEAN_CMD_PREFIX} lean {file_path} 2>&1"
+                cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} {file_path} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=60)
                     output = (result.stdout or "") + (result.stderr or "")
@@ -312,7 +316,7 @@ class MiniF2FToolkit:
                     lean_content.encode("utf-8"),
                 )
 
-                cmd = f"{LEAN_CMD_PREFIX} lean {temp_file} 2>&1"
+                cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} src/{temp_file} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=30)
                     output = (result.stdout or "") + (result.stderr or "")
