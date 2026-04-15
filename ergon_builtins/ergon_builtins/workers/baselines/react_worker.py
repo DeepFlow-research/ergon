@@ -111,11 +111,12 @@ class ReActWorker(Worker):
                     break
 
         # Build all turns from the complete message history after the run.
-        # Using all_messages() (not incremental slices) ensures tool_results
+        # Using ctx.state.message_history (not incremental slices) ensures tool_results
         # are correctly paired with their generating ModelResponse.
-        # AgentRun.all_messages() works on both complete and partial runs —
-        # it reads ctx.state.message_history which is populated incrementally.
-        turns = _build_turns(run.all_messages())
+        # Works for both complete and partial (max_iterations) runs —
+        # pydantic-ai 0.7.x moved all_messages() to AgentRunResult, but
+        # ctx.state.message_history is always populated incrementally.
+        turns = _build_turns(run.ctx.state.message_history)
         for turn in turns:
             yield turn
 
@@ -181,7 +182,7 @@ def _format_task(task: BenchmarkTask) -> str:
 def _build_turns(messages: list[ModelMessage]) -> list[GenerationTurn]:
     """Build GenerationTurn objects from a complete PydanticAI message list.
 
-    Caller must pass result.all_messages() — NOT incremental slices.
+    Caller must pass the full message history — NOT incremental slices.
     Using incremental slices causes tool_results to always be empty because
     ToolReturnParts appear in the *next* ModelRequest, which is not in the slice.
     """
