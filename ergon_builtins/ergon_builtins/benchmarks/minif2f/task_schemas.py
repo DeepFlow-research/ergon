@@ -1,28 +1,21 @@
-"""MiniF2F task shapes — problem_id, statement, proof_type."""
-
-from pathlib import Path
+"""MiniF2F task shapes -- v2c schema (Lean 4, HuggingFace jsonl)."""
 
 from pydantic import BaseModel, Field
 
 
 class MiniF2FProblem(BaseModel):
-    """A MiniF2F problem with its ground-truth proof."""
+    """A MiniF2F-v2c problem parsed from the HuggingFace jsonl file."""
 
-    problem_id: str = Field(description="Theorem name, e.g. 'amc12a_2008_p25'")
-    problem_statement: str = Field(description="Lean theorem statement (up to :=)")
-    ground_truth_proof: str = Field(description="Full ground-truth theorem block")
-    split: str = Field(description="Dataset split: 'valid' or 'test'")
-    proof_type: str = Field(default="lean", description="Formal system (currently only 'lean')")
-    lean_file_path: Path | None = Field(
-        default=None, description="Source .lean file path (if loaded from disk)"
-    )
+    name: str = Field(description="Problem name, e.g. 'mathd_algebra_478'")
+    informal_statement: str = Field(description="Natural-language problem statement")
+    formal_statement: str = Field(description="Lean 4 theorem statement ending with ':= by'")
+    header: str = Field(description="Import block (e.g. 'import Mathlib\\n...')")
 
 
 class MiniF2FTaskPayload(BaseModel):
     """Structured payload carried inside ``BenchmarkTask.task_payload``."""
 
-    problem_id: str
-    problem_statement: str
-    ground_truth_proof: str
-    split: str
-    proof_type: str = "lean"
+    name: str
+    informal_statement: str
+    formal_statement: str
+    header: str
