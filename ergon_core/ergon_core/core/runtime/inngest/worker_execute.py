@@ -1,9 +1,9 @@
 """Inngest child function: worker execution.
 
 Looks up the registered worker, constructs a BenchmarkTask, and runs execute().
-Consumes the async generator, persisting each yielded GenerationTurn to PG
-via the repository. Dashboard events are emitted per-turn via the repository
-listener pattern.
+Consumes the async generator, persisting context events to PG via the
+ContextEventRepository. Dashboard events are emitted per-turn via the
+repository listener pattern.
 """
 
 import logging
@@ -11,12 +11,12 @@ from datetime import UTC, datetime
 
 import inngest
 from ergon_builtins.registry import WORKERS
+from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunGenerationTurn
-from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
+from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import WorkerExecuteRequest
@@ -26,7 +26,6 @@ from ergon_core.core.runtime.tracing import (
     get_trace_sink,
     worker_execute_context,
 )
-from sqlmodel import select
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +77,12 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         node_id=payload.node_id,
     )
 
-    repo = GenerationTurnRepository()
-    repo.add_listener(dashboard_emitter.on_turn_persisted)
+    context_event_repo = ContextEventRepository()
+    context_event_repo.add_listener(dashboard_emitter.on_context_event)
+    dashboard_emitter.register_execution(
+        execution_id=payload.execution_id,
+        task_node_id=payload.node_id,
+    )
 
     turn_count = 0
     try:
@@ -92,16 +95,12 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
                     "completed_at": turn.completed_at or turn_end,
                 }
             )
-            with get_session() as session:
-                await repo.persist_single(
-                    session,
-                    run_id=payload.run_id,
-                    execution_id=payload.execution_id,
-                    worker_binding_key=payload.worker_binding_key,
-                    turn=turn,
-                    turn_index=turn_count,
-                    execution_outcome="success",
-                )
+            await _persist_context_events(
+                context_event_repo,
+                payload,
+                turn,
+                turn_count,
+            )
             turn_count += 1
             turn_start = datetime.now(UTC)
 
@@ -115,8 +114,6 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
             turn_count,
             error_msg,
         )
-        with get_session() as session:
-            repo.mark_execution_outcome(session, payload.execution_id, "failure")
         raise
 
     sink = get_trace_sink()
@@ -144,56 +141,35 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         )
     )
 
-    _emit_tool_call_spans(sink, payload)
-
     return WorkerExecuteResult(
         success=True,
         output_text=output.output,
     )
 
 
-def _emit_tool_call_spans(sink, payload: WorkerExecuteRequest) -> None:
-    """Emit OTEL spans for tool calls extracted from generation turns."""
+async def _persist_context_events(
+    context_event_repo: ContextEventRepository,
+    payload: WorkerExecuteRequest,
+    turn: GenerationTurn,
+    turn_count: int,
+) -> None:
+    """Persist context events for a single turn, swallowing failures so they
+    never interrupt the primary generation turn write."""
     try:
         with get_session() as session:
-            turns = list(
-                session.exec(
-                    select(RunGenerationTurn)
-                    .where(
-                        RunGenerationTurn.run_id == payload.run_id,
-                        RunGenerationTurn.task_execution_id == payload.execution_id,
-                    )
-                    .order_by(RunGenerationTurn.turn_index)
-                ).all()
+            await context_event_repo.persist_turn(
+                session,
+                run_id=payload.run_id,
+                execution_id=payload.execution_id,
+                worker_binding_key=payload.worker_binding_key,
+                turn=turn,
             )
-
-            span_num = 0
-            for turn in turns:
-                tool_calls = turn.parsed_tool_calls()
-                results_by_id = {tr.tool_call_id: tr for tr in turn.parsed_tool_results()}
-                for tc in tool_calls:
-                    result = results_by_id.get(tc.tool_call_id)
-                    sink.emit_span(
-                        CompletedSpan(
-                            name=f"tool.{tc.tool_name}",
-                            context=worker_execute_context(
-                                payload.run_id,
-                                payload.task_id,
-                                payload.execution_id,
-                            ),
-                            start_time=turn.started_at or turn.created_at,
-                            end_time=turn.completed_at or turn.created_at,
-                            attributes={
-                                "run_id": str(payload.run_id),
-                                "task_id": str(payload.task_id),
-                                "execution_id": str(payload.execution_id),
-                                "turn_index": turn.turn_index,
-                                "tool_name": tc.tool_name,
-                                "tool_call_id": tc.tool_call_id,
-                                "has_result": result is not None,
-                            },
-                        )
-                    )
-                    span_num += 1
     except Exception:  # slopcop: ignore[no-broad-except]
-        logger.debug("Could not emit tool call spans", exc_info=True)
+        logger.warning(
+            "context event persist failed for execution %s turn %d",
+            payload.execution_id,
+            turn_count,
+            exc_info=True,
+        )
+
+
