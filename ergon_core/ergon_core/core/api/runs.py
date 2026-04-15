@@ -1,5 +1,7 @@
 """FastAPI router for persisted run-detail snapshots."""
 
+from __future__ import annotations
+
 from collections import defaultdict
 from datetime import datetime
 from statistics import mean
@@ -10,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from ergon_core.core.api.schemas import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
+    RunContextEventDto,
     RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
     RunGraphMutationDto,
@@ -24,6 +27,7 @@ from ergon_core.core.api.schemas import (
     TrainingMetricDto,
     TrainingSessionDto,
 )
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionWorker,
@@ -430,6 +434,32 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
             )
         )
 
+    # Load context events
+    context_events_stmt = (
+        select(RunContextEvent)
+        .where(RunContextEvent.run_id == run_id)
+        .order_by(RunContextEvent.task_execution_id, RunContextEvent.sequence)
+    )
+    context_events_rows = list(session.exec(context_events_stmt).all())
+
+    context_events_by_task: dict[str, list[RunContextEventDto]] = defaultdict(list)
+    for event in context_events_rows:
+        task_node_id = execution_task_map.get(event.task_execution_id)
+        if task_node_id is None:
+            continue
+        context_events_by_task[str(task_node_id)].append(
+            RunContextEventDto(
+                id=str(event.id),
+                task_execution_id=str(event.task_execution_id),
+                sequence=event.sequence,
+                event_type=event.event_type,
+                payload=event.payload,
+                created_at=event.created_at.isoformat(),
+                started_at=event.started_at.isoformat() if event.started_at else None,
+                completed_at=event.completed_at.isoformat() if event.completed_at else None,
+            )
+        )
+
     # Compute final score from evaluations
     final_score: float | None = None
     if evaluations:
@@ -460,6 +490,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         executions_by_task=_task_keyed_executions(executions, worker_by_id),
         evaluations_by_task=_task_keyed_evaluations(evaluations, run_id_str, defn_to_node),
         generation_turns_by_task=dict(gen_turns_by_task),
+        context_events_by_task=dict(context_events_by_task),
         sandboxes_by_task=_task_keyed_sandboxes(run_summary),
         threads=_build_communication_threads(threads, thread_messages),
         started_at=run.started_at or run.created_at,
