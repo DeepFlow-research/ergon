@@ -5,6 +5,7 @@ regardless of which optional extras are installed.
 """
 
 from collections.abc import Callable
+from pathlib import Path
 
 from ergon_core.api import Benchmark, Evaluator, Worker
 from ergon_core.core.providers.generation.model_resolution import ResolvedModel
@@ -64,6 +65,10 @@ EVALUATORS: dict[str, type[Evaluator]] = {
 
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
     "gdpeval": GDPEvalSandboxManager,
+}
+
+SANDBOX_TEMPLATES: dict[str, Path] = {
+    "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox",
 }
 
 MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
