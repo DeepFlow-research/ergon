@@ -86,7 +86,7 @@ class TestNodeRemoval:
             session, run_id, source_node_id=b.id, target_node_id=c.id, status="active", meta=META
         )
 
-        repo.remove_node(session, run_id, b.id, terminal_status="removed", meta=META)
+        repo.remove_node(session, run_id=run_id, node_id=b.id, terminal_status="removed", meta=META)
 
         graph = repo.get_graph(session, run_id)
 
@@ -95,7 +95,7 @@ class TestNodeRemoval:
         assert b.id in node_ids  # node is marked terminal, not deleted
         assert c.id in node_ids
 
-        b_node = repo.get_node(session, run_id, b.id)
+        b_node = repo.get_node(session, run_id=run_id, node_id=b.id)
         assert b_node.status == "removed"
 
         for edge in graph.edges:
@@ -113,7 +113,7 @@ class TestMutationLog:
         repo.add_edge(
             session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META
         )
-        repo.update_node_status(session, run_id, a.id, "running", meta=META)
+        repo.update_node_status(session, run_id=run_id, node_id=a.id, new_status="running", meta=META)
 
         mutations = repo.get_mutations(session, run_id)
 

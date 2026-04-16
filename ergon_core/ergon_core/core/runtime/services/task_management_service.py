@@ -67,7 +67,7 @@ class TaskManagementService:
         node_uuid = uuid4()
         task_key = f"{_DYNAMIC_TASK_KEY_PREFIX}{node_uuid.hex[:8]}"
 
-        parent_node = self._graph_repo.get_node(session, command.run_id, command.parent_node_id)
+        parent_node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.parent_node_id)
 
         node = self._graph_repo.add_node(
             session,
@@ -147,7 +147,7 @@ class TaskManagementService:
         Inngest event. Running executions for this node will complete
         on their own; results are ignored because the node is abandoned.
         """
-        node = self._graph_repo.get_node(session, command.run_id, command.node_id)
+        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
         previous_status = node.status
 
         if previous_status in TERMINAL_STATUSES:
@@ -155,9 +155,9 @@ class TaskManagementService:
 
         self._graph_repo.update_node_status(
             session,
-            command.run_id,
-            command.node_id,
-            ABANDONED,
+            run_id=command.run_id,
+            node_id=command.node_id,
+            new_status=ABANDONED,
             meta=MutationMeta(actor="manager-worker", reason="manager abandoned task"),
         )
         session.commit()
@@ -186,7 +186,7 @@ class TaskManagementService:
         Only pending nodes can be refined. The graph node's description
         is the single source of truth -- no definition row to keep in sync.
         """
-        node = self._graph_repo.get_node(session, command.run_id, command.node_id)
+        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
         old_description = node.description
 
         if node.status != PENDING:
@@ -194,10 +194,10 @@ class TaskManagementService:
 
         self._graph_repo.update_node_field(
             session,
-            command.run_id,
-            command.node_id,
-            "description",
-            command.new_description,
+            run_id=command.run_id,
+            node_id=command.node_id,
+            field="description",
+            value=command.new_description,
             meta=MutationMeta(actor="manager-worker", reason="manager refined task"),
         )
         session.commit()

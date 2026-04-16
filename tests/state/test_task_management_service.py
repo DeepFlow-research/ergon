@@ -73,12 +73,12 @@ class TestAddTask:
             ),
         )
 
-        child = repo.get_node(session, run_id, result.node_id)
+        child = repo.get_node(session, run_id=run_id, node_id=result.node_id)
         assert child.description == "research quantum computing"
         assert child.assigned_worker_key == "researcher"
         assert child.status == PENDING
 
-        edge = repo.get_edge(session, run_id, result.edge_id)
+        edge = repo.get_edge(session, run_id=run_id, edge_id=result.edge_id)
         assert edge.source_node_id == parent.id
         assert edge.target_node_id == result.node_id
 
@@ -100,7 +100,7 @@ class TestAddTask:
             ),
         )
 
-        child = repo.get_node(session, run_id, result.node_id)
+        child = repo.get_node(session, run_id=run_id, node_id=result.node_id)
         assert child.instance_key == "bench-42"
 
     def test_generates_dynamic_task_key(self, session: Session):
@@ -170,7 +170,7 @@ class TestAbandonTask:
         assert result.previous_status == PENDING
         assert result.new_status == ABANDONED
 
-        updated = repo.get_node(session, run_id, node.id)
+        updated = repo.get_node(session, run_id=run_id, node_id=node.id)
         assert updated.status == ABANDONED
 
     def test_transitions_running_to_abandoned(self, session: Session):
@@ -270,7 +270,7 @@ class TestRefineTask:
         assert result.old_description == "node target"
         assert result.new_description == "improved description"
 
-        updated = repo.get_node(session, run_id, node.id)
+        updated = repo.get_node(session, run_id=run_id, node_id=node.id)
         assert updated.description == "improved description"
 
     def test_on_non_pending_raises(self, session: Session):

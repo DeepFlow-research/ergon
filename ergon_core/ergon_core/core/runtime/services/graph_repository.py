@@ -305,9 +305,9 @@ class WorkflowGraphRepository:
     def remove_node(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
-        *,
         terminal_status: str,
         meta: MutationMeta,
     ) -> None:
@@ -326,8 +326,8 @@ class WorkflowGraphRepository:
         for edge in connected:
             self.remove_edge(
                 session,
-                run_id,
-                edge.id,
+                run_id=run_id,
+                edge_id=edge.id,
                 terminal_status=terminal_status,
                 meta=meta,
             )
@@ -351,10 +351,10 @@ class WorkflowGraphRepository:
     def update_node_status(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
         new_status: str,
-        *,
         meta: MutationMeta,
     ) -> GraphNodeDto:
         node = self._get_node_row(session, run_id, node_id)
@@ -380,11 +380,11 @@ class WorkflowGraphRepository:
     def update_node_field(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
         field: str,
         value: str | None,
-        *,
         meta: MutationMeta,
     ) -> GraphNodeDto:
         if field not in _UPDATABLE_NODE_FIELDS:
@@ -454,9 +454,9 @@ class WorkflowGraphRepository:
     def remove_edge(
         self,
         session: Session,
+        *,
         run_id: UUID,
         edge_id: UUID,
-        *,
         terminal_status: str,
         meta: MutationMeta,
     ) -> None:
@@ -482,10 +482,10 @@ class WorkflowGraphRepository:
     def update_edge_status(
         self,
         session: Session,
+        *,
         run_id: UUID,
         edge_id: UUID,
         new_status: str,
-        *,
         meta: MutationMeta,
     ) -> GraphEdgeDto:
         edge = self._get_edge_row(session, run_id, edge_id)
@@ -680,6 +680,7 @@ class WorkflowGraphRepository:
     def get_node(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
     ) -> GraphNodeDto:
@@ -688,6 +689,7 @@ class WorkflowGraphRepository:
     def get_edge(
         self,
         session: Session,
+        *,
         run_id: UUID,
         edge_id: UUID,
     ) -> GraphEdgeDto:
@@ -696,6 +698,7 @@ class WorkflowGraphRepository:
     def get_incoming_edges(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
     ) -> list[GraphEdgeDto]:
@@ -712,6 +715,7 @@ class WorkflowGraphRepository:
     def get_outgoing_edges(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
     ) -> list[GraphEdgeDto]:

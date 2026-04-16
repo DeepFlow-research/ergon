@@ -47,9 +47,9 @@ def _update_task_status(
         reason = str(event_metadata["error"])
     graph_repo.update_node_status(
         session,
-        run_id,
-        node_id,
-        new_status,
+        run_id=run_id,
+        node_id=node_id,
+        new_status=new_status,
         meta=MutationMeta(actor="system:propagation", reason=reason),
     )
 
@@ -247,9 +247,9 @@ def on_task_completed(
                 if edge_id:
                     graph_repo.update_edge_status(
                         session,
-                        run_id,
-                        edge_id,
-                        "satisfied",
+                        run_id=run_id,
+                        edge_id=edge_id,
+                        new_status="satisfied",
                         meta=_PROPAGATION_META,
                     )
 
@@ -304,9 +304,9 @@ def mark_task_running_by_node(
 ) -> None:
     graph_repo.update_node_status(
         session,
-        run_id,
-        node_id,
-        TaskExecutionStatus.RUNNING,
+        run_id=run_id,
+        node_id=node_id,
+        new_status=TaskExecutionStatus.RUNNING,
         meta=MutationMeta(
             actor="system:propagation",
             reason=f"execution {execution_id} running",
@@ -324,9 +324,9 @@ def mark_task_completed_by_node(
 ) -> None:
     graph_repo.update_node_status(
         session,
-        run_id,
-        node_id,
-        TaskExecutionStatus.COMPLETED,
+        run_id=run_id,
+        node_id=node_id,
+        new_status=TaskExecutionStatus.COMPLETED,
         meta=MutationMeta(
             actor="system:propagation",
             reason=f"execution {execution_id} completed",
@@ -345,9 +345,9 @@ def mark_task_failed_by_node(
 ) -> None:
     graph_repo.update_node_status(
         session,
-        run_id,
-        node_id,
-        TaskExecutionStatus.FAILED,
+        run_id=run_id,
+        node_id=node_id,
+        new_status=TaskExecutionStatus.FAILED,
         meta=MutationMeta(
             actor="system:propagation",
             reason=error,
@@ -375,9 +375,9 @@ def on_task_completed_by_node(
     """
     graph_repo.update_node_status(
         session,
-        run_id,
-        node_id,
-        TaskExecutionStatus.COMPLETED,
+        run_id=run_id,
+        node_id=node_id,
+        new_status=TaskExecutionStatus.COMPLETED,
         meta=MutationMeta(
             actor="system:propagation",
             reason=f"execution {execution_id} completed",
@@ -413,9 +413,9 @@ def on_task_completed_by_node(
         if all(n is not None and n.status in TERMINAL_STATUSES for n in source_nodes):
             graph_repo.update_node_status(
                 session,
-                run_id,
-                candidate_id,
-                TaskExecutionStatus.PENDING,
+                run_id=run_id,
+                node_id=candidate_id,
+                new_status=TaskExecutionStatus.PENDING,
                 meta=MutationMeta(
                     actor="system:propagation",
                     reason=f"all dependencies satisfied after {node_id}",

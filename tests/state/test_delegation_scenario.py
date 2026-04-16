@@ -122,20 +122,20 @@ class TestFullDelegationScenario:
         assert len(graph.nodes) == 3  # parent + 2 children
         assert len(graph.edges) == 2  # parent→child1, parent→child2
 
-        child1_node = graph_repo.get_node(session, run_id, child1.node_id)
-        child2_node = graph_repo.get_node(session, run_id, child2.node_id)
+        child1_node = graph_repo.get_node(session, run_id=run_id, node_id=child1.node_id)
+        child2_node = graph_repo.get_node(session, run_id=run_id, node_id=child2.node_id)
         assert child1_node.status == PENDING
         assert child2_node.status == PENDING
 
         # ── Step 4: Simulate child1 completing ─────────────────
         graph_repo.update_node_status(
             session,
-            run_id,
-            child1.node_id,
-            COMPLETED,
+            run_id=run_id,
+            node_id=child1.node_id,
+            new_status=COMPLETED,
             meta=META,
         )
-        child1_updated = graph_repo.get_node(session, run_id, child1.node_id)
+        child1_updated = graph_repo.get_node(session, run_id=run_id, node_id=child1.node_id)
         assert child1_updated.status == COMPLETED
 
         # ── Step 5: Abandon child2 ────────────────────────────
@@ -146,7 +146,7 @@ class TestFullDelegationScenario:
         assert abandon_result.previous_status == PENDING
         assert abandon_result.new_status == ABANDONED
 
-        child2_updated = graph_repo.get_node(session, run_id, child2.node_id)
+        child2_updated = graph_repo.get_node(session, run_id=run_id, node_id=child2.node_id)
         assert child2_updated.status == ABANDONED
 
         # ── Step 6: Spawn replacement ──────────────────────────
@@ -177,18 +177,18 @@ class TestFullDelegationScenario:
         # ── Step 7: Simulate replacement completing ────────────
         graph_repo.update_node_status(
             session,
-            run_id,
-            child3.node_id,
-            COMPLETED,
+            run_id=run_id,
+            node_id=child3.node_id,
+            new_status=COMPLETED,
             meta=META,
         )
 
         # ── Step 8: Complete parent ────────────────────────────
         graph_repo.update_node_status(
             session,
-            run_id,
-            parent.id,
-            COMPLETED,
+            run_id=run_id,
+            node_id=parent.id,
+            new_status=COMPLETED,
             meta=META,
         )
 
