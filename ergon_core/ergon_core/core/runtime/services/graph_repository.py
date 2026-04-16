@@ -275,8 +275,15 @@ class WorkflowGraphRepository:
         description: str,
         status: str,
         assigned_worker_key: str | None = None,
+        parent_node_id: UUID | None = None,
+        level: int = 0,
         meta: MutationMeta,
     ) -> GraphNodeDto:
+        """Create a graph node. Writes the containment columns directly.
+
+        parent_node_id and level are set at creation time and never change.
+        The caller (TaskManagementService) computes level = parent.level + 1.
+        """
         now = utcnow()
         node = RunGraphNode(
             run_id=run_id,
@@ -285,6 +292,8 @@ class WorkflowGraphRepository:
             description=description,
             status=status,
             assigned_worker_key=assigned_worker_key,
+            parent_node_id=parent_node_id,
+            level=level,
             created_at=now,
             updated_at=now,
         )
