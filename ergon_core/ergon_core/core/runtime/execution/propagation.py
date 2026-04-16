@@ -490,7 +490,16 @@ def on_task_completed_or_failed(
 
     for candidate_id in candidate_node_ids:
         candidate_node = session.get(RunGraphNode, candidate_id)
-        if candidate_node is None or candidate_node.status in TERMINAL_STATUSES:
+        if candidate_node is None:
+            continue
+        # COMPLETED and FAILED targets are out of scope for any further
+        # action.  CANCELLED is a special case: on the success path, a
+        # CANCELLED managed subtask is eligible for re-activation when all
+        # deps complete (Phase 3).  On the failure path, we only want to
+        # invalidate the edge, not touch the already-terminal target.
+        if candidate_node.status in TERMINAL_STATUSES and candidate_node.status != CANCELLED:
+            continue
+        if candidate_node.status == CANCELLED and not is_success:
             continue
 
         if not is_success:
@@ -517,8 +526,28 @@ def on_task_completed_or_failed(
             invalidated.append(candidate_id)
             continue
 
-        # Source completed — check if ALL incoming edges are satisfied
-        if candidate_node.status != TaskExecutionStatus.PENDING:
+        # Source completed — check if this candidate can become READY.
+        #
+        # Eligibility:
+        #   - PENDING (first activation): normal case.
+        #   - CANCELLED managed subtask (parent_node_id is not None):
+        #     re-activation after the manager or an upstream restart
+        #     invalidated it. Policy: any CANCELLED managed subtask
+        #     re-activates when all deps re-satisfy; if the manager
+        #     explicitly cancelled and doesn't want it re-activated it
+        #     can re-cancel. Keeps propagation logic simple and avoids
+        #     needing a cancel_cause column on the node.
+        #   - CANCELLED static workflow node (parent_node_id is None):
+        #     NOT re-activated — no supervisor to adapt, and the static
+        #     workflow expects terminal nodes to stay terminal.
+        #
+        # Everything else (COMPLETED, FAILED, RUNNING) is skipped.
+        status = candidate_node.status
+        is_managed_subtask = candidate_node.parent_node_id is not None
+        is_pending = status == TaskExecutionStatus.PENDING
+        is_reactivatable_cancelled = status == CANCELLED and is_managed_subtask
+
+        if not (is_pending or is_reactivatable_cancelled):
             continue
 
         incoming = list(
@@ -532,6 +561,11 @@ def on_task_completed_or_failed(
 
         source_nodes = [session.get(RunGraphNode, e.source_node_id) for e in incoming]
         if all(n is not None and n.status == TaskExecutionStatus.COMPLETED for n in source_nodes):
+            reason = (
+                f"all dependencies satisfied after {node_id}"
+                if is_pending
+                else f"re-activating cancelled subtask after {node_id}"
+            )
             graph_repo.update_node_status(
                 session,
                 run_id=run_id,
@@ -539,8 +573,12 @@ def on_task_completed_or_failed(
                 new_status=TaskExecutionStatus.PENDING,
                 meta=MutationMeta(
                     actor="system:propagation",
-                    reason=f"all dependencies satisfied after {node_id}",
+                    reason=reason,
                 ),
+                # Must be False for the CANCELLED -> PENDING transition;
+                # CANCELLED is terminal and only_if_not_terminal=True
+                # would block the re-activation write.
+                only_if_not_terminal=False,
             )
             newly_ready.append(candidate_id)
 
