@@ -188,6 +188,11 @@ class TaskManagementService:
         if old_status in TERMINAL_STATUSES:
             raise TaskAlreadyTerminalError(command.node_id, old_status)
 
+        # The explicit raise above handles the non-concurrent case. The
+        # only_if_not_terminal guard below is still required as a safety net:
+        # a concurrent cascade could transition the node between our get_node
+        # and our update_node_status. The guard makes this a harmless no-op
+        # rather than a double-write.
         applied = self._graph_repo.update_node_status(
             session,
             run_id=command.run_id,
@@ -377,6 +382,8 @@ class TaskManagementService:
             description=command.description,
             status=PENDING,
             assigned_worker_key=command.worker_binding_key,
+            parent_node_id=command.parent_node_id,
+            level=parent_node.level + 1,
             meta=_MANAGER_META,
         )
 
