@@ -152,7 +152,7 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
             memory_mb=memory_mb,
             on_build_logs=_on_build_logs,
         )
-    except Exception as exc:  # noqa: BLE001 — surface SDK error verbatim
+    except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
         return _fail(f"Error: E2B SDK Template.build() failed: {exc}")
 
     build_time = round(time.monotonic() - t0, 1)
