@@ -27,6 +27,7 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphMutation,
     RunGraphNode,
 )
+from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.runtime.errors.graph_errors import (
     CycleError,
     DanglingEdgeError,
@@ -356,10 +357,23 @@ class WorkflowGraphRepository:
         node_id: UUID,
         new_status: str,
         meta: MutationMeta,
-    ) -> GraphNodeDto:
-        node = self._get_node_row(session, run_id, node_id)
-        old_status = node.status
+        only_if_not_terminal: bool = False,
+    ) -> bool:
+        """Transition a node's status. Returns True if the write applied.
 
+        When ``only_if_not_terminal`` is True, the write is skipped if the
+        node is already in a terminal status (COMPLETED, FAILED, CANCELLED).
+        This is the single invariant that closes all race conditions in the
+        cascade cancellation system — concurrent paths that both attempt to
+        write a terminal status resolve to "first writer wins" without
+        requiring distributed locks.
+        """
+        node = self._get_node_row(session, run_id, node_id)
+
+        if only_if_not_terminal and node.status in TERMINAL_STATUSES:
+            return False
+
+        old_status = node.status
         node.status = new_status
         node.updated_at = utcnow()
         session.add(node)
@@ -375,7 +389,7 @@ class WorkflowGraphRepository:
             old_value=NodeStatusChangedMutation(status=old_status),
             new_value=NodeStatusChangedMutation(status=new_status),
         )
-        return _to_node_dto(node)
+        return True
 
     def update_node_field(
         self,
