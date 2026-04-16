@@ -20,6 +20,8 @@ function deserializeTask(task: RunSnapshot["tasks"][string]): TaskState {
   return {
     ...task,
     status: toTaskStatus(task.status),
+    history: [],
+    lastTrigger: null,
   };
 }
 
@@ -136,6 +138,9 @@ export function deserializeRunState(input: unknown): WorkflowRunState {
     failedTasks: data.failedTasks,
     finalScore: data.finalScore ?? null,
     error: data.error ?? null,
+    edges: new Map(),
+    annotationsByTarget: new Map(),
+    unhandledMutations: [],
   };
 }
 

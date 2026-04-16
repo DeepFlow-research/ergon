@@ -45,9 +45,24 @@ function ToolCallEntry({ tc }: { tc: { tool_call_id: string; tool_name: string; 
   );
 }
 
+function formatTurnTime(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      fractionalSecondDigits: 3,
+    });
+  } catch {
+    return null;
+  }
+}
+
 function TurnCard({ turn }: { turn: GenerationTurnState }) {
   const [showRaw, setShowRaw] = useState(false);
   const hasToolCalls = turn.toolCalls && turn.toolCalls.length > 0;
+  const turnTime = formatTurnTime(turn.at ?? null);
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700">
@@ -55,6 +70,14 @@ function TurnCard({ turn }: { turn: GenerationTurnState }) {
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
           Turn {turn.turnIndex}
         </span>
+        {turnTime && (
+          <span
+            className="font-mono text-[10px] tabular-nums text-gray-400 dark:text-gray-500"
+            title={turn.at ?? undefined}
+          >
+            {turnTime}
+          </span>
+        )}
         <span className="text-xs text-gray-400 dark:text-gray-500">|</span>
         <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
           {turn.workerName || turn.workerBindingKey}

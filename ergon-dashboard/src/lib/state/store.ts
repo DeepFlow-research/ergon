@@ -27,7 +27,9 @@ import {
   WorkflowRunState,
 } from "../types";
 import { applyGraphMutation as reduceGraphMutation } from "@/features/graph/state/graphMutationReducer";
+import { inferTrigger } from "@/lib/runEvents";
 import type { DashboardGraphMutationData } from "@/lib/contracts/events";
+import type { TaskTransitionRecord } from "@/lib/types";
 
 // Extend global to store DashboardStore instance across module loads
 declare global {
@@ -134,6 +136,9 @@ class DashboardStore {
       failedTasks: 0,
       finalScore: null,
       error: null,
+      edges: new Map(),
+      annotationsByTarget: new Map(),
+      unhandledMutations: [],
     };
 
     this.runs.set(runId, run);
@@ -219,7 +224,23 @@ class DashboardStore {
       }
     }
 
+    const fromStatus = task.status;
     task.status = newStatus;
+
+    if (fromStatus !== newStatus) {
+      const trigger = inferTrigger(fromStatus, newStatus);
+      const record: TaskTransitionRecord = {
+        from: fromStatus,
+        to: newStatus,
+        trigger,
+        at: timestamp,
+        sequence: null,
+        actor: assignedWorkerName ?? task.assignedWorkerName ?? null,
+        reason: null,
+      };
+      task.history = [...(task.history ?? []), record];
+      task.lastTrigger = trigger;
+    }
 
     if (assignedWorkerId !== undefined) {
       task.assignedWorkerId = assignedWorkerId;

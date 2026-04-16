@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
 
 interface MutationTimelineProps {
@@ -11,6 +11,27 @@ interface MutationTimelineProps {
   onTogglePlay: () => void;
   speed: number;
   onSpeedChange: (speed: number) => void;
+}
+
+/**
+ * Tailwind background token per mutation type. We expose this alongside the
+ * slider so the user can see the *distribution* of mutations (adds vs status
+ * changes vs removals) at a glance, not just the current sequence.
+ */
+const MUTATION_TYPE_COLORS: Record<string, string> = {
+  "node.added": "bg-sky-500",
+  "node.removed": "bg-rose-500",
+  "node.status_changed": "bg-indigo-500",
+  "node.field_changed": "bg-purple-500",
+  "edge.added": "bg-emerald-500",
+  "edge.removed": "bg-rose-400",
+  "edge.status_changed": "bg-emerald-400",
+  "annotation.set": "bg-amber-500",
+  "annotation.deleted": "bg-amber-300",
+};
+
+function colorFor(mutationType: string): string {
+  return MUTATION_TYPE_COLORS[mutationType] ?? "bg-slate-400";
 }
 
 const SPEED_OPTIONS = [1, 2, 5, 10] as const;
@@ -29,10 +50,23 @@ export function MutationTimeline({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentSequenceRef = useRef(currentSequence);
   currentSequenceRef.current = currentSequence;
+  const [hoverInfo, setHoverInfo] = useState<{
+    sequence: number;
+    type: string;
+    actor: string;
+    reason: string | null;
+  } | null>(null);
 
   const maxSequence =
     mutations.length > 0 ? mutations[mutations.length - 1].sequence : 0;
   const minSequence = mutations.length > 0 ? mutations[0].sequence : 0;
+
+  // Per-type counts so the user can see what kind of activity dominated.
+  const typeCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const m of mutations) c[m.mutation_type] = (c[m.mutation_type] ?? 0) + 1;
+    return c;
+  }, [mutations]);
 
   const currentIndex = mutations.findIndex(
     (m) => m.sequence === currentSequence,
@@ -108,8 +142,63 @@ export function MutationTimeline({
       })
     : "—";
 
+  const seqSpan = Math.max(1, maxSequence - minSequence);
+
   return (
     <div className="flex flex-col gap-3">
+      {/* Lane strip: one tick per mutation, colored by kind. Clicking jumps
+          to that sequence, making the strip a direct nav control. */}
+      <div
+        className="relative h-4 w-full overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800"
+        data-testid="mutation-lane-strip"
+      >
+        {mutations.map((m) => {
+          const leftPct = ((m.sequence - minSequence) / seqSpan) * 100;
+          const active = m.sequence === currentSequence;
+          return (
+            <button
+              key={m.sequence}
+              type="button"
+              onClick={() => onSequenceChange(m.sequence)}
+              onMouseEnter={() =>
+                setHoverInfo({
+                  sequence: m.sequence,
+                  type: m.mutation_type,
+                  actor: m.actor,
+                  reason: m.reason,
+                })
+              }
+              onMouseLeave={() => setHoverInfo(null)}
+              className={`absolute top-0 h-full w-[2px] ${colorFor(m.mutation_type)} ${active ? "ring-2 ring-indigo-500" : "opacity-70 hover:opacity-100"}`}
+              style={{ left: `${leftPct}%` }}
+              title={`seq ${m.sequence} — ${m.mutation_type}`}
+              aria-label={`Jump to sequence ${m.sequence} (${m.mutation_type})`}
+            />
+          );
+        })}
+      </div>
+
+      {/* Legend: how many of each kind are in this run. */}
+      <div className="flex flex-wrap gap-1.5 text-[10px]">
+        {Object.entries(typeCounts).map(([type, count]) => (
+          <span
+            key={type}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-1.5 py-0.5 font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300"
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${colorFor(type)}`} aria-hidden />
+            <span className="font-mono uppercase tracking-wide">{type}</span>
+            <span className="font-mono tabular-nums text-slate-400">{count}</span>
+          </span>
+        ))}
+      </div>
+
+      {hoverInfo && (
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[11px] text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+          seq {hoverInfo.sequence} · <span className="font-semibold">{hoverInfo.type}</span> · {hoverInfo.actor}
+          {hoverInfo.reason ? ` — ${hoverInfo.reason}` : ""}
+        </div>
+      )}
+
       {/* Slider */}
       <div className="flex items-center gap-3">
         <span className="min-w-[4rem] text-right font-mono text-xs text-gray-500 dark:text-gray-400">
