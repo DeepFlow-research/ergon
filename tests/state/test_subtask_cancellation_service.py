@@ -1,7 +1,8 @@
 """SubtaskCancellationService unit tests.
 
-Verifies single-level cascade cancel: non-terminal children are
-cancelled, terminal children are skipped, grandchildren are untouched.
+Verifies recursive cascade cancel: the full descendant subtree is
+cancelled in one pass, non-terminal nodes are cancelled, terminal
+nodes are skipped.
 """
 
 from uuid import uuid4
@@ -142,8 +143,8 @@ class TestCancelOrphans:
         assert result.cancelled_node_ids == []
         assert result.events_to_emit == []
 
-    def test_only_direct_children_not_grandchildren(self, session: Session):
-        """cancel_orphans is single-level — grandchildren are untouched."""
+    def test_recursive_cancels_grandchildren(self, session: Session):
+        """cancel_orphans walks the full subtree — grandchildren are cancelled too."""
         repo = WorkflowGraphRepository()
         svc = SubtaskCancellationService(graph_repo=repo)
         run_id = uuid4()
@@ -177,10 +178,75 @@ class TestCancelOrphans:
             cause="parent_terminal",
         )
 
-        # Only child is cancelled, not grandchild
-        assert len(result.cancelled_node_ids) == 1
+        # Both child and grandchild are cancelled in one pass
+        assert len(result.cancelled_node_ids) == 2
         assert child.id in result.cancelled_node_ids
+        assert grandchild.id in result.cancelled_node_ids
 
-        # Grandchild still pending (cascade would happen via separate Inngest event)
+        # Verify DB state
         gc_node = repo.get_node(session, run_id=run_id, node_id=grandchild.id)
-        assert gc_node.status == PENDING
+        assert gc_node.status == CANCELLED
+
+    def test_deep_tree_cancelled_fully(self, session: Session):
+        """A 4-level deep tree is cancelled in a single call."""
+        repo = WorkflowGraphRepository()
+        svc = SubtaskCancellationService(graph_repo=repo)
+        run_id = uuid4()
+        definition_id = uuid4()
+
+        root = _add_node(repo, session, run_id, "root", status=CANCELLED)
+        l1 = _add_node(repo, session, run_id, "L1", status=RUNNING, parent_node_id=root.id, level=1)
+        l2 = _add_node(repo, session, run_id, "L2", status=PENDING, parent_node_id=l1.id, level=2)
+        l3 = _add_node(repo, session, run_id, "L3", status=PENDING, parent_node_id=l2.id, level=3)
+
+        result = svc.cancel_orphans(
+            session,
+            run_id=run_id,
+            definition_id=definition_id,
+            parent_node_id=root.id,
+            cause="parent_terminal",
+        )
+
+        assert set(result.cancelled_node_ids) == {l1.id, l2.id, l3.id}
+        assert len(result.events_to_emit) == 3
+
+    def test_skips_terminal_but_walks_past_them(self, session: Session):
+        """A completed child's non-terminal grandchild is still cancelled."""
+        repo = WorkflowGraphRepository()
+        svc = SubtaskCancellationService(graph_repo=repo)
+        run_id = uuid4()
+        definition_id = uuid4()
+
+        parent = _add_node(repo, session, run_id, "parent", status=CANCELLED)
+        completed_child = _add_node(
+            repo,
+            session,
+            run_id,
+            "completed-child",
+            status=COMPLETED,
+            parent_node_id=parent.id,
+            level=1,
+        )
+        # Grandchild under the completed child — still needs cancelling
+        orphan_grandchild = _add_node(
+            repo,
+            session,
+            run_id,
+            "orphan-gc",
+            status=RUNNING,
+            parent_node_id=completed_child.id,
+            level=2,
+        )
+
+        result = svc.cancel_orphans(
+            session,
+            run_id=run_id,
+            definition_id=definition_id,
+            parent_node_id=parent.id,
+            cause="parent_terminal",
+        )
+
+        # completed_child is skipped (already terminal)
+        # but orphan_grandchild is still cancelled
+        assert len(result.cancelled_node_ids) == 1
+        assert orphan_grandchild.id in result.cancelled_node_ids

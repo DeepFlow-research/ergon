@@ -1,11 +1,14 @@
-"""SubtaskCancellationService — single-level cascade cancel.
+"""SubtaskCancellationService — recursive cascade cancel.
 
-Marks non-terminal children of a parent node as CANCELLED and returns
-events for the caller to emit. Does NOT recurse — cascade to
-grandchildren is driven by Inngest re-delivering task/cancelled.
+Walks the entire descendant subtree of a parent node via BFS and
+marks every non-terminal node as CANCELLED in a single transaction.
+Returns task/cancelled events for each transitioned node so the
+caller can trigger per-node cleanup (sandbox teardown, execution
+row update) via Inngest.
 """
 
 import logging
+from collections import deque
 from typing import Literal
 from uuid import UUID
 
@@ -25,11 +28,16 @@ logger = logging.getLogger(__name__)
 
 
 class SubtaskCancellationService:
-    """Marks non-terminal children of a parent node as CANCELLED.
+    """Recursively cancels all non-terminal descendants of a parent node.
+
+    Uses BFS on parent_node_id to walk the full subtree in one DB
+    transaction. This avoids relying on Inngest event chains for
+    recursion — a dropped or delayed event can't leave grandchildren
+    running under a cancelled parent.
 
     Separated from TaskCleanupService because cancellation fans out
-    (one parent -> N children in a single DB transaction) while cleanup
-    runs per-node (sandbox teardown, execution row update).
+    (one parent -> N descendants in a single DB transaction) while
+    cleanup runs per-node (sandbox teardown, execution row update).
 
     Separated from TaskManagementService because that service handles
     agent-initiated commands while this service is called exclusively
@@ -48,33 +56,43 @@ class SubtaskCancellationService:
         parent_node_id: UUID,
         cause: Literal["parent_terminal", "dep_invalidated"],
     ) -> CancelOrphansResult:
-        """Mark every non-terminal child of parent_node_id as CANCELLED.
+        """Recursively cancel every non-terminal descendant of parent_node_id.
 
-        Returns events for caller to emit after DB commit succeeds.
-        Single-level only — grandchild cascade driven by Inngest.
+        Walks the subtree via BFS on parent_node_id. Each non-terminal
+        node is marked CANCELLED with the first-writer-wins guard.
+        Returns events for caller to emit after DB commit succeeds —
+        each event triggers per-node cleanup (sandbox release, etc).
         """
-        children = session.exec(
-            select(RunGraphNode.id, RunGraphNode.status).where(
-                RunGraphNode.run_id == run_id,
-                RunGraphNode.parent_node_id == parent_node_id,
-            )
-        ).all()
-
         meta = MutationMeta(actor="system:cascade", reason=cause)
         transitioned: list[UUID] = []
-        for child_id, child_status in children:
-            if child_status in TERMINAL_STATUSES:
-                continue
-            applied = self._graph_repo.update_node_status(
-                session,
-                run_id=run_id,
-                node_id=child_id,
-                new_status=CANCELLED,
-                meta=meta,
-                only_if_not_terminal=True,
-            )
-            if applied:
-                transitioned.append(child_id)
+
+        queue: deque[UUID] = deque([parent_node_id])
+        while queue:
+            current_parent = queue.popleft()
+            children = session.exec(
+                select(RunGraphNode.id, RunGraphNode.status).where(
+                    RunGraphNode.run_id == run_id,
+                    RunGraphNode.parent_node_id == current_parent,
+                )
+            ).all()
+
+            for child_id, child_status in children:
+                # Always enqueue so we walk the full tree, even past
+                # already-terminal nodes (their children might not be).
+                queue.append(child_id)
+
+                if child_status in TERMINAL_STATUSES:
+                    continue
+                applied = self._graph_repo.update_node_status(
+                    session,
+                    run_id=run_id,
+                    node_id=child_id,
+                    new_status=CANCELLED,
+                    meta=meta,
+                    only_if_not_terminal=True,
+                )
+                if applied:
+                    transitioned.append(child_id)
 
         events = [
             TaskCancelledEvent(
