@@ -1,64 +1,148 @@
-"""DTOs for TaskManagementService — dynamic delegation commands and results."""
+"""DTOs for TaskManagementService — subtask lifecycle commands and results.
 
-from uuid import UUID
+UUID fields use NewType aliases so type checkers catch cross-field
+swaps at the call boundary.
+"""
 
 from pydantic import BaseModel, Field
 
+from ergon_core.core.persistence.shared.types import NodeId, RunId
 
-class AddTaskCommand(BaseModel):
-    """Command to spawn a new sub-task from a running worker."""
+
+# ── add_subtask ────────────────────────────────────────────────────────────
+
+
+class AddSubtaskCommand(BaseModel):
+    """Create one subtask under a parent node.
+
+    definition_id is NOT here — the service resolves it from run_id
+    at dispatch time.
+    """
+
+    run_id: RunId
+    parent_node_id: NodeId
+    description: str = Field(min_length=1)
+    worker_binding_key: str = "researcher"
+    depends_on: list[NodeId] = Field(default_factory=list)
 
     model_config = {"frozen": True}
 
-    run_id: UUID
-    definition_id: UUID
-    parent_node_id: UUID
-    description: str
-    worker_binding_key: str
-    task_payload: dict[str, object] = Field(default_factory=dict)
 
+class AddSubtaskResult(BaseModel):
+    """Result snapshot after creating a subtask node."""
 
-class AddTaskResult(BaseModel):
-    """Result of spawning a new sub-task."""
-
-    model_config = {"frozen": True}
-
-    node_id: UUID
-    edge_id: UUID
+    node_id: NodeId
     task_key: str
     status: str
 
+    model_config = {"frozen": True}
 
-class AbandonTaskCommand(BaseModel):
-    """Command to abandon a stalling sub-task."""
+
+# ── plan_subtasks ──────────────────────────────────────────────────────────
+
+
+class SubtaskSpec(BaseModel):
+    """One entry in a plan_subtasks call."""
+
+    local_key: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    worker_binding_key: str = "researcher"
+    depends_on: list[str] = Field(default_factory=list)
 
     model_config = {"frozen": True}
 
-    run_id: UUID
-    node_id: UUID
 
+class PlanSubtasksCommand(BaseModel):
+    """Batch-create subtasks with local dependency references."""
 
-class AbandonTaskResult(BaseModel):
+    run_id: RunId
+    parent_node_id: NodeId
+    subtasks: list[SubtaskSpec]
+
     model_config = {"frozen": True}
 
-    node_id: UUID
-    previous_status: str
-    new_status: str
+
+class PlanSubtasksResult(BaseModel):
+    """Maps local_key to created node_id plus identifies root tasks."""
+
+    nodes: dict[str, NodeId]
+    roots: list[str]
+
+    model_config = {"frozen": True}
+
+
+# ── cancel_task ───────────────────────────────────────────────────────────
+
+
+class CancelTaskCommand(BaseModel):
+    """Command to cancel a subtask node."""
+
+    run_id: RunId
+    node_id: NodeId
+
+    model_config = {"frozen": True}
+
+
+class CancelTaskResult(BaseModel):
+    """Result of cancelling a subtask node."""
+
+    node_id: NodeId
+    old_status: str
+    cascaded_count: int
+
+    model_config = {"frozen": True}
+
+
+# ── refine_task ───────────────────────────────────────────────────────────
 
 
 class RefineTaskCommand(BaseModel):
     """Command to update description on a pending sub-task."""
 
-    model_config = {"frozen": True}
+    run_id: RunId
+    node_id: NodeId
+    new_description: str = Field(min_length=1)
 
-    run_id: UUID
-    node_id: UUID
-    new_description: str
+    model_config = {"frozen": True}
 
 
 class RefineTaskResult(BaseModel):
-    model_config = {"frozen": True}
+    """Result of refining a subtask description."""
 
-    node_id: UUID
+    node_id: NodeId
     old_description: str
     new_description: str
+
+    model_config = {"frozen": True}
+
+
+# ── restart_task ──────────────────────────────────────────────────────────
+
+
+class RestartTaskCommand(BaseModel):
+    """Command to reset a terminal subtask back to PENDING and re-queue it.
+
+    Pairs with ``refine_task`` for the edit-then-rerun flow: the manager
+    calls ``refine_task`` first to update the description, then
+    ``restart_task`` to put the node back in the scheduling queue.
+    """
+
+    run_id: RunId
+    node_id: NodeId
+
+    model_config = {"frozen": True}
+
+
+class RestartTaskResult(BaseModel):
+    """Result of restarting a subtask node.
+
+    ``invalidated_node_ids`` lists any downstream targets that were
+    cancelled because their input became stale (e.g. a COMPLETED
+    downstream node whose upstream source is being re-run).
+    """
+
+    node_id: NodeId
+    old_status: str
+    invalidated_node_ids: list[NodeId] = Field(default_factory=list)
+
+    model_config = {"frozen": True}

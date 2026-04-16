@@ -26,7 +26,7 @@ const containerBorderColors: Record<string, string> = {
   running: "border-yellow-400 dark:border-yellow-500",
   completed: "border-green-400 dark:border-green-500",
   failed: "border-red-400 dark:border-red-500",
-  abandoned: "border-gray-400 dark:border-gray-500",
+  cancelled: "border-gray-400 dark:border-gray-500",
 };
 
 function ContainerNodeComponent({
@@ -72,7 +72,7 @@ function ContainerNodeComponent({
         ${borderColor}
         ${selected ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400" : ""}
         ${dimmed ? "opacity-30" : ""}
-        ${task.status === ("abandoned" as TaskStatus) ? "bg-gray-50/50 dark:bg-gray-900/30" : ""}
+        ${task.status === ("cancelled" as TaskStatus) ? "bg-gray-50/50 dark:bg-gray-900/30" : ""}
       `}
       style={{
         width: containerWidth,

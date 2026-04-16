@@ -82,7 +82,9 @@ class TestMutationListener:
         event_loop.run_until_complete(asyncio.sleep(0))
         collected.clear()
 
-        repo.update_node_status(session, run_id, node.id, "running", meta=META)
+        repo.update_node_status(
+            session, run_id=run_id, node_id=node.id, new_status="running", meta=META
+        )
         event_loop.run_until_complete(asyncio.sleep(0))
 
         assert len(collected) == 1
@@ -108,7 +110,7 @@ class TestMutationListener:
             run_id,
             source_node_id=a.id,
             target_node_id=b.id,
-            status="active",
+            status="pending",
             meta=META,
         )
         event_loop.run_until_complete(asyncio.sleep(0))
@@ -133,7 +135,14 @@ class TestMutationListener:
         event_loop.run_until_complete(asyncio.sleep(0))
         collected.clear()
 
-        repo.update_node_field(session, run_id, node.id, "description", "updated desc", meta=META)
+        repo.update_node_field(
+            session,
+            run_id=run_id,
+            node_id=node.id,
+            field="description",
+            value="updated desc",
+            meta=META,
+        )
         event_loop.run_until_complete(asyncio.sleep(0))
 
         assert len(collected) == 1

@@ -18,6 +18,7 @@ from ergon_core.core.persistence.graph.models import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
 from ergon_core.core.runtime.services.cohort_stats_service import (
@@ -175,6 +176,33 @@ class DashboardEmitter:
             )
         except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to emit dashboard/task.evaluation_updated", exc_info=True)
+
+    async def task_cancelled(self, event: TaskCancelledEvent) -> None:
+        """Emit a task status change to 'cancelled' for the dashboard.
+
+        Called when a ``TaskCancelledEvent`` is processed so the real-time
+        dashboard can reflect the cancellation immediately.
+        """
+        if not self._enabled:
+            return
+        try:
+            evt = DashboardTaskStatusChangedEvent(
+                run_id=event.run_id,
+                task_id=event.node_id,
+                task_name="",
+                parent_task_id=None,
+                old_status=None,
+                new_status="cancelled",
+                triggered_by=f"cancel:{event.cause}",
+                timestamp=utcnow(),
+                assigned_worker_id=None,
+                assigned_worker_name=None,
+            )
+            await inngest_client.send(
+                inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
+            )
+        except Exception:  # slopcop: ignore[no-broad-except]
+            logger.warning("Failed to emit dashboard/task.cancelled", exc_info=True)
 
     # ------------------------------------------------------------------
     # Resources

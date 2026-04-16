@@ -22,7 +22,7 @@ const RunTaskDto = z.object({
     .union([z.string(), z.null()])
     .optional()
     .describe(
-      "When this task reached a terminal outcome (completed, failed, abandoned, etc.). Null until the task finishes, or null together with startedAt if the task has not started yet.",
+      "When this task reached a terminal outcome (completed, failed, cancelled, etc.). Null until the task finishes, or null together with startedAt if the task has not started yet.",
     ),
 });
 const RunResourceDto = z.object({
@@ -232,7 +232,7 @@ const UpdateCohortRequest = z
 
 const BenchmarkName = z.enum(["gdpeval", "minif2f", "researchrubrics", "custom", "smoke_test"]);
 const RunStatus = z.enum(["pending", "executing", "evaluating", "completed", "failed"]);
-const TaskStatus = z.enum(["pending", "ready", "running", "completed", "failed", "abandoned"]);
+const TaskStatus = z.enum(["pending", "ready", "running", "completed", "failed", "cancelled"]);
 
 const DispatchConfigSnapshot = z
   .object({

@@ -27,6 +27,7 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphMutation,
     RunGraphNode,
 )
+from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.runtime.errors.graph_errors import (
     CycleError,
     DanglingEdgeError,
@@ -264,7 +265,7 @@ class WorkflowGraphRepository:
 
     # ── Node operations ─────────────────────────────────────
 
-    def add_node(
+    def add_node(  # slopcop: ignore[max-function-params]
         self,
         session: Session,
         run_id: UUID,
@@ -274,8 +275,15 @@ class WorkflowGraphRepository:
         description: str,
         status: str,
         assigned_worker_key: str | None = None,
+        parent_node_id: UUID | None = None,
+        level: int = 0,
         meta: MutationMeta,
     ) -> GraphNodeDto:
+        """Create a graph node. Writes the containment columns directly.
+
+        parent_node_id and level are set at creation time and never change.
+        The caller (TaskManagementService) computes level = parent.level + 1.
+        """
         now = utcnow()
         node = RunGraphNode(
             run_id=run_id,
@@ -284,6 +292,8 @@ class WorkflowGraphRepository:
             description=description,
             status=status,
             assigned_worker_key=assigned_worker_key,
+            parent_node_id=parent_node_id,
+            level=level,
             created_at=now,
             updated_at=now,
         )
@@ -305,9 +315,9 @@ class WorkflowGraphRepository:
     def remove_node(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
-        *,
         terminal_status: str,
         meta: MutationMeta,
     ) -> None:
@@ -326,8 +336,8 @@ class WorkflowGraphRepository:
         for edge in connected:
             self.remove_edge(
                 session,
-                run_id,
-                edge.id,
+                run_id=run_id,
+                edge_id=edge.id,
                 terminal_status=terminal_status,
                 meta=meta,
             )
@@ -351,15 +361,28 @@ class WorkflowGraphRepository:
     def update_node_status(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
         new_status: str,
-        *,
         meta: MutationMeta,
-    ) -> GraphNodeDto:
-        node = self._get_node_row(session, run_id, node_id)
-        old_status = node.status
+        only_if_not_terminal: bool = False,
+    ) -> bool:
+        """Transition a node's status. Returns True if the write applied.
 
+        When ``only_if_not_terminal`` is True, the write is skipped if the
+        node is already in a terminal status (COMPLETED, FAILED, CANCELLED).
+        This is the single invariant that closes all race conditions in the
+        cascade cancellation system — concurrent paths that both attempt to
+        write a terminal status resolve to "first writer wins" without
+        requiring distributed locks.
+        """
+        node = self._get_node_row(session, run_id, node_id)
+
+        if only_if_not_terminal and node.status in TERMINAL_STATUSES:
+            return False
+
+        old_status = node.status
         node.status = new_status
         node.updated_at = utcnow()
         session.add(node)
@@ -375,16 +398,16 @@ class WorkflowGraphRepository:
             old_value=NodeStatusChangedMutation(status=old_status),
             new_value=NodeStatusChangedMutation(status=new_status),
         )
-        return _to_node_dto(node)
+        return True
 
     def update_node_field(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
         field: str,
         value: str | None,
-        *,
         meta: MutationMeta,
     ) -> GraphNodeDto:
         if field not in _UPDATABLE_NODE_FIELDS:
@@ -454,9 +477,9 @@ class WorkflowGraphRepository:
     def remove_edge(
         self,
         session: Session,
+        *,
         run_id: UUID,
         edge_id: UUID,
-        *,
         terminal_status: str,
         meta: MutationMeta,
     ) -> None:
@@ -482,10 +505,10 @@ class WorkflowGraphRepository:
     def update_edge_status(
         self,
         session: Session,
+        *,
         run_id: UUID,
         edge_id: UUID,
         new_status: str,
-        *,
         meta: MutationMeta,
     ) -> GraphEdgeDto:
         edge = self._get_edge_row(session, run_id, edge_id)
@@ -680,6 +703,7 @@ class WorkflowGraphRepository:
     def get_node(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
     ) -> GraphNodeDto:
@@ -688,6 +712,7 @@ class WorkflowGraphRepository:
     def get_edge(
         self,
         session: Session,
+        *,
         run_id: UUID,
         edge_id: UUID,
     ) -> GraphEdgeDto:
@@ -696,6 +721,7 @@ class WorkflowGraphRepository:
     def get_incoming_edges(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
     ) -> list[GraphEdgeDto]:
@@ -712,6 +738,7 @@ class WorkflowGraphRepository:
     def get_outgoing_edges(
         self,
         session: Session,
+        *,
         run_id: UUID,
         node_id: UUID,
     ) -> list[GraphEdgeDto]:
@@ -904,6 +931,8 @@ def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
         description=row.description,
         status=row.status,
         assigned_worker_key=row.assigned_worker_key,
+        parent_node_id=row.parent_node_id,
+        level=row.level,
     )
 
 
