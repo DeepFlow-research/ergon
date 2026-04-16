@@ -108,7 +108,7 @@ class TestMutationListener:
             run_id,
             source_node_id=a.id,
             target_node_id=b.id,
-            status="active",
+            status="pending",
             meta=META,
         )
         event_loop.run_until_complete(asyncio.sleep(0))

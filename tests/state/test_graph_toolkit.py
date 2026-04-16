@@ -98,7 +98,7 @@ def _seed_edge(
         run_id=run.id,
         source_node_id=source_node.id,
         target_node_id=target_node.id,
-        status="active",
+        status="pending",
     )
     session.add(edge)
     session.flush()

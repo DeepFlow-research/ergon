@@ -37,10 +37,10 @@ class TestCycleDetection:
         c = _add_node(repo, session, run_id, "C")
 
         repo.add_edge(
-            session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META
+            session, run_id, source_node_id=a.id, target_node_id=b.id, status="pending", meta=META
         )
         repo.add_edge(
-            session, run_id, source_node_id=b.id, target_node_id=c.id, status="active", meta=META
+            session, run_id, source_node_id=b.id, target_node_id=c.id, status="pending", meta=META
         )
 
         with pytest.raises(CycleError):
@@ -49,7 +49,7 @@ class TestCycleDetection:
                 run_id,
                 source_node_id=c.id,
                 target_node_id=a.id,
-                status="active",
+                status="pending",
                 meta=META,
             )
 
@@ -65,7 +65,7 @@ class TestCycleDetection:
                 run_id,
                 source_node_id=a.id,
                 target_node_id=a.id,
-                status="active",
+                status="pending",
                 meta=META,
             )
 
@@ -80,10 +80,10 @@ class TestNodeRemoval:
         c = _add_node(repo, session, run_id, "C")
 
         repo.add_edge(
-            session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META
+            session, run_id, source_node_id=a.id, target_node_id=b.id, status="pending", meta=META
         )
         repo.add_edge(
-            session, run_id, source_node_id=b.id, target_node_id=c.id, status="active", meta=META
+            session, run_id, source_node_id=b.id, target_node_id=c.id, status="pending", meta=META
         )
 
         repo.remove_node(session, run_id=run_id, node_id=b.id, terminal_status="removed", meta=META)
@@ -111,7 +111,7 @@ class TestMutationLog:
         a = _add_node(repo, session, run_id, "A")
         b = _add_node(repo, session, run_id, "B")
         repo.add_edge(
-            session, run_id, source_node_id=a.id, target_node_id=b.id, status="active", meta=META
+            session, run_id, source_node_id=a.id, target_node_id=b.id, status="pending", meta=META
         )
         repo.update_node_status(session, run_id=run_id, node_id=a.id, new_status="running", meta=META)
 
@@ -181,6 +181,6 @@ class TestReferentialIntegrity:
                 run_id,
                 source_node_id=a.id,
                 target_node_id=uuid4(),
-                status="active",
+                status="pending",
                 meta=META,
             )

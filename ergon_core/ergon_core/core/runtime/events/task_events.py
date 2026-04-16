@@ -119,4 +119,4 @@ class TaskCancelledEvent(InngestEventContract):
     execution_id: UUID | None
     cause: CancelCause
 
-    model_config = {"frozen": True}
+    model_config = {"frozen": True, "extra": "allow"}

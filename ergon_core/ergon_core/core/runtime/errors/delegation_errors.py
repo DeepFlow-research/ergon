@@ -23,9 +23,9 @@ class TaskNotPendingError(DelegationError):
 
 
 class TaskAlreadyTerminalError(DelegationError):
-    """abandon_task called on an already-terminal node."""
+    """cancel_task called on an already-terminal node."""
 
     def __init__(self, node_id: UUID, current_status: str) -> None:
-        super().__init__(f"Cannot abandon node {node_id}: already terminal ('{current_status}')")
+        super().__init__(f"Cannot cancel node {node_id}: already terminal ('{current_status}')")
         self.node_id = node_id
         self.current_status = current_status

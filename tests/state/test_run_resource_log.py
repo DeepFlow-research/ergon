@@ -366,7 +366,7 @@ class TestListChildrenOf:
                 run_id=run.id,
                 source_node_id=parent_node.id,
                 target_node_id=child_node_a.id,
-                status="active",
+                status="pending",
             )
         )
         session.add(
@@ -374,7 +374,7 @@ class TestListChildrenOf:
                 run_id=run.id,
                 source_node_id=parent_node.id,
                 target_node_id=child_node_b.id,
-                status="active",
+                status="pending",
             )
         )
         session.flush()
