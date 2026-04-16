@@ -15,7 +15,7 @@ from ergon_core.core.runtime.events.task_events import (
     TaskFailedEvent,
     TaskReadyEvent,
 )
-from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.inngest_client import RUN_CANCEL, TASK_CANCEL, inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import (
     PersistOutputsRequest,
     SandboxSetupRequest,
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 @inngest_client.create_function(
     fn_id="task-execute",
     trigger=inngest.TriggerEvent(event="task/ready"),
-    cancel=RUN_CANCEL,
+    cancel=[*RUN_CANCEL, *TASK_CANCEL],
     retries=0,
     concurrency=[inngest.Concurrency(limit=15)],
     output_type=TaskExecuteResult,
