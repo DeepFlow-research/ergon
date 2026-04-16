@@ -15,8 +15,8 @@ function labelFor(status: TaskStatus): string {
       return "Completed";
     case TaskStatus.FAILED:
       return "Failed";
-    case TaskStatus.ABANDONED:
-      return "Abandoned";
+    case TaskStatus.CANCELLED:
+      return "Cancelled";
     default:
       return "Task";
   }
@@ -69,7 +69,7 @@ export const TaskGraphStatusIcon = memo(function TaskGraphStatusIcon({
       </span>
     );
   }
-  if (status === TaskStatus.ABANDONED) {
+  if (status === TaskStatus.CANCELLED) {
     return (
       <span className={`${base} text-gray-500 dark:text-gray-400`} aria-label={labelFor(status)}>
         <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>

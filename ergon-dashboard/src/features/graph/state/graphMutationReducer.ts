@@ -18,7 +18,7 @@ import {
 const TERMINAL_STATUSES: Set<string> = new Set([
   "completed",
   "failed",
-  "abandoned",
+  "cancelled",
 ]);
 
 /**

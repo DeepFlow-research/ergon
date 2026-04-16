@@ -45,7 +45,7 @@ export enum TaskStatus {
   RUNNING = "running",
   COMPLETED = "completed",
   FAILED = "failed",
-  ABANDONED = "abandoned",
+  CANCELLED = "cancelled",
 }
 
 export enum TaskTrigger {

@@ -70,11 +70,11 @@ const statusConfig: Record<string, StatusConfig> = {
     label: "Failed",
     color: "#ef4444",
   },
-  [TaskStatus.ABANDONED]: {
+  [TaskStatus.CANCELLED]: {
     bg: "bg-gray-100 dark:bg-gray-800",
     text: "text-gray-500 dark:text-gray-400",
     ring: "ring-gray-200 dark:ring-gray-700",
-    label: "Abandoned",
+    label: "Cancelled",
     color: "#9ca3af",
   },
   executing: {

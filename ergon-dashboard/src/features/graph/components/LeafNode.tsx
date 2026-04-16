@@ -24,7 +24,7 @@ const statusBorderColors: Record<string, string> = {
   running: "border-yellow-400 dark:border-yellow-500",
   completed: "border-green-400 dark:border-green-500",
   failed: "border-red-400 dark:border-red-500",
-  abandoned: "border-gray-400 dark:border-gray-500",
+  cancelled: "border-gray-400 dark:border-gray-500",
 };
 
 const statusBgColors: Record<string, string> = {
@@ -33,7 +33,7 @@ const statusBgColors: Record<string, string> = {
   running: "bg-yellow-50 dark:bg-yellow-900/20",
   completed: "bg-green-50 dark:bg-green-900/20",
   failed: "bg-red-50 dark:bg-red-900/20",
-  abandoned: "bg-gray-100 dark:bg-gray-800/50",
+  cancelled: "bg-gray-100 dark:bg-gray-800/50",
 };
 
 function LeafNodeComponent({

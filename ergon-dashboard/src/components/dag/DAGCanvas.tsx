@@ -28,7 +28,6 @@ import "@xyflow/react/dist/style.css";
 
 import { TaskStatus, type WorkflowRunState } from "@/lib/types";
 import { nodeTypes, type TaskNodeType } from "./TaskNode";
-import { GraphDelegationEdge } from "./edges/GraphDelegationEdge";
 import { GraphDependencyEdge } from "./edges/GraphDependencyEdge";
 import { DepthSelector } from "@/features/graph/components/DepthSelector";
 import { GraphExpansionProvider } from "@/features/graph/hooks/useGraphExpansion";
@@ -51,7 +50,6 @@ interface DAGCanvasProps {
  * Status color for minimap nodes.
  */
 const edgeTypes = {
-  graphDelegation: GraphDelegationEdge,
   graphDependency: GraphDependencyEdge,
 };
 
@@ -66,7 +64,7 @@ function getMinimapNodeColor(node: TaskNodeType): string {
       return "#ef4444";
     case TaskStatus.READY:
       return "#3b82f6";
-    case TaskStatus.ABANDONED:
+    case TaskStatus.CANCELLED:
       return "#9ca3af";
     default:
       return "#9ca3af";
