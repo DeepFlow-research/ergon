@@ -18,16 +18,17 @@ READY = "ready"
 RUNNING = "running"
 COMPLETED = "completed"
 FAILED = "failed"
-ABANDONED = "abandoned"
+CANCELLED = "cancelled"
 
-TERMINAL_STATUSES = frozenset({COMPLETED, FAILED, ABANDONED})
+TERMINAL_STATUSES = frozenset({COMPLETED, FAILED, CANCELLED})
 
-NodeStatus = Literal["pending", "ready", "running", "completed", "failed", "abandoned"]
+NodeStatus = Literal["pending", "ready", "running", "completed", "failed", "cancelled"]
 
 # ── Edge status ───────────────────────────────────────────────────
+# Edges are pure dependency relations (containment lives on the node).
+# "active" is removed — delegation edges no longer exist.
 EDGE_PENDING = "pending"
 EDGE_SATISFIED = "satisfied"
-EDGE_ACTIVE = "active"
-EDGE_ABANDONED = "abandoned"
+EDGE_INVALIDATED = "invalidated"
 
-EdgeStatus = Literal["pending", "satisfied", "active", "abandoned"]
+EdgeStatus = Literal["pending", "satisfied", "invalidated"]

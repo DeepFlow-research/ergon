@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 import inngest
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.graph.status_conventions import (
-    ABANDONED,
+    CANCELLED,
     PENDING,
     TERMINAL_STATUSES,
 )
@@ -85,7 +85,7 @@ class TaskManagementService:
             command.run_id,
             source_node_id=command.parent_node_id,
             target_node_id=node.id,
-            status="active",
+            status="pending",
             meta=_TASK_META,
         )
 
@@ -141,11 +141,11 @@ class TaskManagementService:
         session: Session,
         command: AbandonTaskCommand,
     ) -> AbandonTaskResult:
-        """Mark a sub-task node as abandoned.
+        """Mark a sub-task node as cancelled.
 
         Validates the node is not already terminal. Does NOT fire any
         Inngest event. Running executions for this node will complete
-        on their own; results are ignored because the node is abandoned.
+        on their own; results are ignored because the node is cancelled.
         """
         node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
         previous_status = node.status
@@ -157,13 +157,13 @@ class TaskManagementService:
             session,
             run_id=command.run_id,
             node_id=command.node_id,
-            new_status=ABANDONED,
-            meta=MutationMeta(actor="manager-worker", reason="manager abandoned task"),
+            new_status=CANCELLED,
+            meta=MutationMeta(actor="manager-worker", reason="manager cancelled task"),
         )
         session.commit()
 
         logger.info(
-            "abandon_task: node %s status %s -> abandoned",
+            "abandon_task: node %s status %s -> cancelled",
             command.node_id,
             previous_status,
         )
@@ -171,7 +171,7 @@ class TaskManagementService:
         return AbandonTaskResult(
             node_id=command.node_id,
             previous_status=previous_status,
-            new_status=ABANDONED,
+            new_status=CANCELLED,
         )
 
     # ── refine_task ───────────────────────────────────────────

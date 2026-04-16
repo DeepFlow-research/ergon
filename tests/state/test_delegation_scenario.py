@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.persistence.graph.status_conventions import (
-    ABANDONED,
+    CANCELLED,
     COMPLETED,
     PENDING,
     RUNNING,
@@ -144,10 +144,10 @@ class TestFullDelegationScenario:
             AbandonTaskCommand(run_id=run_id, node_id=child2.node_id),
         )
         assert abandon_result.previous_status == PENDING
-        assert abandon_result.new_status == ABANDONED
+        assert abandon_result.new_status == CANCELLED
 
         child2_updated = graph_repo.get_node(session, run_id=run_id, node_id=child2.node_id)
-        assert child2_updated.status == ABANDONED
+        assert child2_updated.status == CANCELLED
 
         # ── Step 6: Spawn replacement ──────────────────────────
         with patch(
@@ -196,7 +196,7 @@ class TestFullDelegationScenario:
 
         # All nodes are terminal
         final_graph = graph_repo.get_graph(session, run_id)
-        assert len(final_graph.nodes) == 4  # parent + child1 + child2(abandoned) + child3
+        assert len(final_graph.nodes) == 4  # parent + child1 + child2(cancelled) + child3
         for node in final_graph.nodes:
             assert node.status in TERMINAL_STATUSES, (
                 f"Node {node.task_key} has non-terminal status: {node.status}"
@@ -206,7 +206,7 @@ class TestFullDelegationScenario:
         statuses = {n.task_key: n.status for n in final_graph.nodes}
         assert statuses["manager"] == COMPLETED
         assert statuses[child1.task_key] == COMPLETED
-        assert statuses[child2.task_key] == ABANDONED
+        assert statuses[child2.task_key] == CANCELLED
         assert statuses[child3.task_key] == COMPLETED
 
         # WAL integrity: mutation sequences are contiguous starting from 0

@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.persistence.graph.status_conventions import (
-    ABANDONED,
+    CANCELLED,
     COMPLETED,
     FAILED,
     PENDING,
@@ -168,10 +168,10 @@ class TestAbandonTask:
         )
 
         assert result.previous_status == PENDING
-        assert result.new_status == ABANDONED
+        assert result.new_status == CANCELLED
 
         updated = repo.get_node(session, run_id=run_id, node_id=node.id)
-        assert updated.status == ABANDONED
+        assert updated.status == CANCELLED
 
     def test_transitions_running_to_abandoned(self, session: Session):
         repo = WorkflowGraphRepository()
@@ -186,7 +186,7 @@ class TestAbandonTask:
         )
 
         assert result.previous_status == RUNNING
-        assert result.new_status == ABANDONED
+        assert result.new_status == CANCELLED
 
     def test_on_completed_node_raises(self, session: Session):
         repo = WorkflowGraphRepository()
@@ -221,7 +221,7 @@ class TestAbandonTask:
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "gone", status=ABANDONED)
+        node = _add_node(repo, session, run_id, "gone", status=CANCELLED)
 
         with pytest.raises(TaskAlreadyTerminalError):
             svc.abandon_task(
@@ -247,7 +247,7 @@ class TestAbandonTask:
 
         assert any(m.mutation_type == "node.status_changed" for m in new_mutations)
         status_mut = next(m for m in new_mutations if m.mutation_type == "node.status_changed")
-        assert status_mut.new_value.status == ABANDONED  # type: ignore[union-attr]
+        assert status_mut.new_value.status == CANCELLED  # type: ignore[union-attr]
 
 
 class TestRefineTask:
