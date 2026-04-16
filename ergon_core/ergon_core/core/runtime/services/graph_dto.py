@@ -46,6 +46,8 @@ class GraphNodeDto(BaseModel):
     description: str
     status: str  # not NodeStatus — DB allows domain-specific statuses (§4.7 in status_conventions)
     assigned_worker_key: str | None
+    parent_node_id: NodeId | None
+    level: int
 
 
 class GraphEdgeDto(BaseModel):

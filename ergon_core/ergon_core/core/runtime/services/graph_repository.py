@@ -931,6 +931,8 @@ def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
         description=row.description,
         status=row.status,
         assigned_worker_key=row.assigned_worker_key,
+        parent_node_id=row.parent_node_id,
+        level=row.level,
     )
 
 
