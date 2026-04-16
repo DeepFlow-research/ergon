@@ -9,7 +9,6 @@ from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.runtime.execution.propagation import (
     is_workflow_complete_v2,
     is_workflow_failed_v2,
-    on_task_completed_by_node,
     on_task_completed_or_failed,
 )
 from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup

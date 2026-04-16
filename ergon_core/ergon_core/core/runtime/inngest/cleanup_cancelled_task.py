@@ -44,26 +44,16 @@ async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> dict:
 
     svc = TaskCleanupService()
 
-    def _update_db_rows() -> bool:
+    def _update_db_rows() -> dict:
         from ergon_core.core.persistence.shared.db import get_session
 
         with get_session() as session:
-            updated = svc._mark_execution_cancelled(session, payload.execution_id)
-            session.commit()
-        return updated
+            result = svc.cleanup(
+                session,
+                run_id=payload.run_id,
+                node_id=payload.node_id,
+                execution_id=payload.execution_id,
+            )
+        return result.model_dump(mode="json")
 
-    execution_updated = await ctx.step.run("update-db-rows", _update_db_rows)
-
-    async def _release_sandbox() -> bool:
-        # TODO: wire when sandbox management module exists
-        return False
-
-    sandbox_released = await ctx.step.run("release-sandbox", _release_sandbox)
-
-    return CleanupResult(
-        run_id=payload.run_id,
-        node_id=payload.node_id,
-        execution_id=payload.execution_id,
-        sandbox_released=sandbox_released,
-        execution_row_updated=execution_updated,
-    ).model_dump(mode="json")
+    return await ctx.step.run("update-db-rows", _update_db_rows)

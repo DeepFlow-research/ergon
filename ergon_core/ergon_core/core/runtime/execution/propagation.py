@@ -453,6 +453,10 @@ def on_task_completed_or_failed(
       reported as invalidated (caller emits task/cancelled).
 
     Walks RunGraphEdge so it works for both static and dynamic tasks.
+
+    Precondition: the caller must ensure node_id is already in terminal_status
+    before calling this function. The node's own status is NOT written here —
+    only edge statuses and downstream candidate statuses are updated.
     """
     is_success = terminal_status == TaskExecutionStatus.COMPLETED
 

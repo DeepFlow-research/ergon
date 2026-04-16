@@ -19,6 +19,7 @@ import inngest
 
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.events.task_events import (
+    CancelCause,
     TaskCancelledEvent,
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -37,7 +38,7 @@ async def _cancel_orphans_for(
     run_id: UUID,
     definition_id: UUID,
     parent_node_id: UUID,
-    cause: str,
+    cause: CancelCause,
 ) -> int:
     """Two durable steps: scan-and-cancel, then emit events."""
     svc = SubtaskCancellationService()
@@ -49,7 +50,7 @@ async def _cancel_orphans_for(
                 run_id=run_id,
                 definition_id=definition_id,
                 parent_node_id=parent_node_id,
-                cause=cause,  # type: ignore[arg-type]
+                cause=cause,
             )
         return {
             "cancelled_node_ids": [str(nid) for nid in result.cancelled_node_ids],
