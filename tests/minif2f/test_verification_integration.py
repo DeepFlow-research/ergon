@@ -105,6 +105,8 @@ async def test_fixture_proof_verifies_to_score_1() -> None:
         )
         eval_ctx = EvaluationContext(
             run_id=run_id,
+            task_id=uuid4(),
+            execution_id=uuid4(),
             task=_make_task(),
             worker_result=worker_output,
             sandbox_id=mgr.get_sandbox(run_id).sandbox_id,  # type: ignore[union-attr]
@@ -137,6 +139,8 @@ async def test_sorry_proof_scores_zero_without_sandbox() -> None:
     )
     eval_ctx = EvaluationContext(
         run_id=run_id,
+        task_id=uuid4(),
+        execution_id=uuid4(),
         task=_make_task(),
         worker_result=worker_output,
         sandbox_id=None,
