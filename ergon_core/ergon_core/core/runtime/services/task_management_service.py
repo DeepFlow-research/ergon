@@ -194,7 +194,7 @@ class TaskManagementService:
             run_id=command.run_id,
             node_id=command.node_id,
             new_status=CANCELLED,
-            meta=MutationMeta(actor="manager-worker", reason="manager_decision"),
+            meta=_MANAGER_META,
             only_if_not_terminal=True,
         )
 

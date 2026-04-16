@@ -30,9 +30,14 @@ class SubtaskLifecycleToolkit:
 
     The toolkit is a closure factory, not a service: it captures
     ``run_id`` and ``parent_node_id`` from ``WorkerContext`` so that
-    individual tool functions never accept raw UUIDs from the LLM.
-    This prevents agents from operating on nodes outside their own
-    subtree --- the containment boundary is enforced by construction.
+    creation tools (add_subtask, plan_subtasks, list_subtasks) are
+    scoped to the manager's subtree by construction.
+
+    Note: cancel_task, refine_task, and get_subtask accept a
+    ``node_id`` from the LLM and do not yet verify containment
+    (i.e. that the target is a descendant of ``parent_node_id``).
+    The service layer checks status guards but not subtree membership.
+    TODO: add descendant-of check for full containment enforcement.
 
     ``definition_id`` is NOT captured here --- the service resolves it
     from ``run_id`` at dispatch time, keeping the tool surface

@@ -66,12 +66,14 @@ class ManagerResearcherWorker(ReActWorker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
-        if context.node_id is not None:
-            self.tools = build_subtask_lifecycle_tools(
-                run_id=context.run_id,
-                parent_node_id=context.node_id,
-                sandbox_id=context.sandbox_id,
-            )
+        if context.node_id is None:
+            raise RuntimeError("ManagerResearcherWorker requires WorkerContext.node_id")
+
+        self.tools = build_subtask_lifecycle_tools(
+            run_id=context.run_id,
+            parent_node_id=context.node_id,
+            sandbox_id=context.sandbox_id,
+        )
 
         async for turn in super().execute(task, context=context):
             yield turn
