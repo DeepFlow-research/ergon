@@ -14,7 +14,13 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskDependency,
 )
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
+from ergon_core.core.persistence.graph.status_conventions import (
+    CANCELLED,
+    EDGE_INVALIDATED,
+    EDGE_SATISFIED,
+    FAILED,
+    TERMINAL_STATUSES,
+)
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
@@ -370,6 +376,8 @@ def on_task_completed_by_node(
 ) -> list[UUID]:
     """Process completion of a graph node. Returns newly-ready node_ids.
 
+    .. deprecated:: Use on_task_completed_or_failed for new code.
+
     Walks RunGraphEdge (not ExperimentDefinitionTaskDependency) so it
     works for both static and dynamic tasks.
     """
@@ -427,19 +435,120 @@ def on_task_completed_by_node(
     return newly_ready
 
 
+def on_task_completed_or_failed(
+    session: Session,
+    run_id: UUID,
+    node_id: UUID,
+    terminal_status: str,
+    *,
+    graph_repo: WorkflowGraphRepository,
+) -> tuple[list[UUID], list[UUID]]:
+    """Handle a node reaching COMPLETED, FAILED, or CANCELLED.
+
+    Returns (newly_ready_node_ids, invalidated_target_node_ids).
+
+    - COMPLETED: outgoing edges become SATISFIED; targets with all deps
+      satisfied become READY.
+    - FAILED / CANCELLED: outgoing edges become INVALIDATED; targets are
+      reported as invalidated (caller emits task/cancelled).
+
+    Walks RunGraphEdge so it works for both static and dynamic tasks.
+    """
+    is_success = terminal_status == TaskExecutionStatus.COMPLETED
+
+    outgoing = list(
+        session.exec(
+            select(RunGraphEdge).where(
+                RunGraphEdge.run_id == run_id,
+                RunGraphEdge.source_node_id == node_id,
+            )
+        ).all()
+    )
+
+    edge_status = EDGE_SATISFIED if is_success else EDGE_INVALIDATED
+    for edge in outgoing:
+        graph_repo.update_edge_status(
+            session,
+            run_id=run_id,
+            edge_id=edge.id,
+            new_status=edge_status,
+            meta=_PROPAGATION_META,
+        )
+
+    candidate_node_ids = {e.target_node_id for e in outgoing}
+
+    newly_ready: list[UUID] = []
+    invalidated: list[UUID] = []
+
+    for candidate_id in candidate_node_ids:
+        candidate_node = session.get(RunGraphNode, candidate_id)
+        if candidate_node is None or candidate_node.status in TERMINAL_STATUSES:
+            continue
+
+        if not is_success:
+            # Source failed/cancelled — mark target as invalidated
+            graph_repo.update_node_status(
+                session,
+                run_id=run_id,
+                node_id=candidate_id,
+                new_status=CANCELLED,
+                meta=MutationMeta(
+                    actor="system:propagation",
+                    reason=f"dependency {node_id} {terminal_status}",
+                ),
+                only_if_not_terminal=True,
+            )
+            invalidated.append(candidate_id)
+            continue
+
+        # Source completed — check if ALL incoming edges are satisfied
+        if candidate_node.status != TaskExecutionStatus.PENDING:
+            continue
+
+        incoming = list(
+            session.exec(
+                select(RunGraphEdge).where(
+                    RunGraphEdge.run_id == run_id,
+                    RunGraphEdge.target_node_id == candidate_id,
+                )
+            ).all()
+        )
+
+        source_nodes = [session.get(RunGraphNode, e.source_node_id) for e in incoming]
+        if all(
+            n is not None and n.status == TaskExecutionStatus.COMPLETED for n in source_nodes
+        ):
+            graph_repo.update_node_status(
+                session,
+                run_id=run_id,
+                node_id=candidate_id,
+                new_status=TaskExecutionStatus.PENDING,
+                meta=MutationMeta(
+                    actor="system:propagation",
+                    reason=f"all dependencies satisfied after {node_id}",
+                ),
+            )
+            newly_ready.append(candidate_id)
+
+    session.commit()
+    return newly_ready, invalidated
+
+
 # ---------------------------------------------------------------------------
 # Graph-native terminal-state checks (no definition_id)
 # ---------------------------------------------------------------------------
 
 
 def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
-    """True when every graph node for this run has reached a terminal status."""
+    """Every node terminal; zero FAILED. CANCELLED is neutral."""
     statuses = list(
         session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
     )
     if not statuses:
         return True
-    return all(s in TERMINAL_STATUSES for s in statuses)
+    return all(s in TERMINAL_STATUSES for s in statuses) and not any(
+        s == FAILED for s in statuses
+    )
 
 
 def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:

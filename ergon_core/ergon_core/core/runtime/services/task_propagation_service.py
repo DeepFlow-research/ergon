@@ -1,12 +1,16 @@
 """Task propagation: resolve DAG dependencies and detect terminal states."""
 
+from uuid import UUID
+
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.events.task_events import DYNAMIC_TASK_SENTINEL_ID
+from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.runtime.execution.propagation import (
     is_workflow_complete_v2,
     is_workflow_failed_v2,
     on_task_completed_by_node,
+    on_task_completed_or_failed,
 )
 from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
@@ -35,11 +39,11 @@ class TaskPropagationService:
                         workflow_terminal_state=WorkflowTerminalState.NONE,
                     )
 
-            newly_ready_node_ids = on_task_completed_by_node(
+            newly_ready_node_ids, invalidated_node_ids = on_task_completed_or_failed(
                 session,
                 command.run_id,
                 node_id,
-                command.execution_id,
+                TaskExecutionStatus.COMPLETED,
                 graph_repo=graph_repo,
             )
 
@@ -66,11 +70,29 @@ class TaskPropagationService:
                 definition_id=command.definition_id,
                 completed_task_id=command.task_id,
                 ready_tasks=ready_descriptors,
+                invalidated_targets=invalidated_node_ids,
                 workflow_terminal_state=terminal,
             )
 
     def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
         with get_session() as session:
+            graph_repo = WorkflowGraphRepository()
+
+            node_id = command.node_id
+            if node_id is None:
+                graph_lookup = GraphNodeLookup(session, command.run_id)
+                node_id = graph_lookup.node_id(command.task_id)
+
+            invalidated_node_ids: list[UUID] = []
+            if node_id is not None:
+                _ready, invalidated_node_ids = on_task_completed_or_failed(
+                    session,
+                    command.run_id,
+                    node_id,
+                    TaskExecutionStatus.FAILED,
+                    graph_repo=graph_repo,
+                )
+
             terminal = WorkflowTerminalState.NONE
             if is_workflow_failed_v2(session, command.run_id):
                 terminal = WorkflowTerminalState.FAILED
@@ -79,5 +101,6 @@ class TaskPropagationService:
                 run_id=command.run_id,
                 definition_id=command.definition_id,
                 completed_task_id=command.task_id,
+                invalidated_targets=invalidated_node_ids,
                 workflow_terminal_state=terminal,
             )
