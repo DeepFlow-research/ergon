@@ -1,20 +1,129 @@
-"""DTOs for TaskManagementService — dynamic delegation commands and results.
+"""DTOs for TaskManagementService — subtask lifecycle commands and results.
 
 UUID fields use NewType aliases so type checkers catch cross-field
-swaps at the call boundary (e.g. passing a NodeId where a RunId is
-expected). Status fields use Literal types to catch typos.
+swaps at the call boundary.
 """
 
 from pydantic import BaseModel, Field
 
+from ergon_core.core.persistence.shared.types import NodeId, RunId
+
+
+# ── add_subtask ────────────────────────────────────────────────────────────
+
+
+class AddSubtaskCommand(BaseModel):
+    """Create one subtask under a parent node.
+
+    definition_id is NOT here — the service resolves it from run_id
+    at dispatch time.
+    """
+
+    run_id: RunId
+    parent_node_id: NodeId
+    description: str = Field(min_length=1)
+    worker_binding_key: str = "researcher"
+    depends_on: list[NodeId] = Field(default_factory=list)
+
+    model_config = {"frozen": True}
+
+
+class AddSubtaskResult(BaseModel):
+    """Result snapshot after creating a subtask node."""
+
+    node_id: NodeId
+    task_key: str
+    status: str
+
+    model_config = {"frozen": True}
+
+
+# ── plan_subtasks ──────────────────────────────────────────────────────────
+
+
+class SubtaskSpec(BaseModel):
+    """One entry in a plan_subtasks call."""
+
+    local_key: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    worker_binding_key: str = "researcher"
+    depends_on: list[str] = Field(default_factory=list)
+
+    model_config = {"frozen": True}
+
+
+class PlanSubtasksCommand(BaseModel):
+    """Batch-create subtasks with local dependency references."""
+
+    run_id: RunId
+    parent_node_id: NodeId
+    subtasks: list[SubtaskSpec]
+
+    model_config = {"frozen": True}
+
+
+class PlanSubtasksResult(BaseModel):
+    """Maps local_key to created node_id plus identifies root tasks."""
+
+    nodes: dict[str, NodeId]
+    roots: list[str]
+
+    model_config = {"frozen": True}
+
+
+# ── cancel_task ───────────────────────────────────────────────────────────
+
+
+class CancelTaskCommand(BaseModel):
+    """Command to cancel a subtask node."""
+
+    run_id: RunId
+    node_id: NodeId
+
+    model_config = {"frozen": True}
+
+
+class CancelTaskResult(BaseModel):
+    """Result of cancelling a subtask node."""
+
+    node_id: NodeId
+    old_status: str
+    cascaded_count: int
+
+    model_config = {"frozen": True}
+
+
+# ── refine_task ───────────────────────────────────────────────────────────
+
+
+class RefineTaskCommand(BaseModel):
+    """Command to update description on a pending sub-task."""
+
+    run_id: RunId
+    node_id: NodeId
+    new_description: str = Field(min_length=1)
+
+    model_config = {"frozen": True}
+
+
+class RefineTaskResult(BaseModel):
+    """Result of refining a subtask description."""
+
+    node_id: NodeId
+    old_description: str
+    new_description: str
+
+    model_config = {"frozen": True}
+
+
+# ── Backward-compatible classes (removed once all consumers migrate) ────────
+
 from ergon_core.core.persistence.graph.status_conventions import NodeStatus
-from ergon_core.core.persistence.shared.types import DefinitionId, EdgeId, NodeId, RunId
+from ergon_core.core.persistence.shared.types import DefinitionId, EdgeId
 
 
 class AddTaskCommand(BaseModel):
-    """Command to spawn a new sub-task from a running worker."""
-
-    model_config = {"frozen": True}
+    """Deprecated — use AddSubtaskCommand."""
 
     run_id: RunId
     definition_id: DefinitionId
@@ -23,48 +132,34 @@ class AddTaskCommand(BaseModel):
     worker_binding_key: str
     task_payload: dict[str, object] = Field(default_factory=dict)
 
+    model_config = {"frozen": True}
+
 
 class AddTaskResult(BaseModel):
-    """Result of spawning a new sub-task."""
-
-    model_config = {"frozen": True}
+    """Deprecated — use AddSubtaskResult."""
 
     node_id: NodeId
     edge_id: EdgeId
     task_key: str
     status: NodeStatus
 
+    model_config = {"frozen": True}
+
 
 class AbandonTaskCommand(BaseModel):
-    """Command to abandon a stalling sub-task."""
-
-    model_config = {"frozen": True}
+    """Deprecated — use CancelTaskCommand."""
 
     run_id: RunId
     node_id: NodeId
 
+    model_config = {"frozen": True}
+
 
 class AbandonTaskResult(BaseModel):
-    model_config = {"frozen": True}
+    """Deprecated — use CancelTaskResult."""
 
     node_id: NodeId
     previous_status: NodeStatus
     new_status: NodeStatus
 
-
-class RefineTaskCommand(BaseModel):
-    """Command to update description on a pending sub-task."""
-
     model_config = {"frozen": True}
-
-    run_id: RunId
-    node_id: NodeId
-    new_description: str
-
-
-class RefineTaskResult(BaseModel):
-    model_config = {"frozen": True}
-
-    node_id: NodeId
-    old_description: str
-    new_description: str
