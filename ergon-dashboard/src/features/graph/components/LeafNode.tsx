@@ -5,6 +5,7 @@ import type { TaskState, TaskStatus } from "@/lib/types";
 import { TaskGraphStatusIcon } from "@/components/dag/TaskGraphStatusIcon";
 import { getLevelColor } from "@/features/graph/theme/levelColors";
 import { getTaskTimingPrimaryLine } from "@/features/graph/utils/taskTiming";
+import { tokensFor } from "@/lib/statusTokens";
 import { Handle, Position } from "@xyflow/react";
 
 interface LeafNodeProps {
@@ -18,23 +19,24 @@ interface LeafNodeProps {
   maxGraphDepth?: number;
 }
 
-const statusBorderColors: Record<string, string> = {
-  pending: "border-gray-300 dark:border-gray-600",
-  ready: "border-blue-400 dark:border-blue-500",
-  running: "border-yellow-400 dark:border-yellow-500",
-  completed: "border-green-400 dark:border-green-500",
-  failed: "border-red-400 dark:border-red-500",
-  abandoned: "border-gray-400 dark:border-gray-500",
-};
-
-const statusBgColors: Record<string, string> = {
-  pending: "bg-gray-50 dark:bg-gray-800",
-  ready: "bg-blue-50 dark:bg-blue-900/20",
-  running: "bg-yellow-50 dark:bg-yellow-900/20",
-  completed: "bg-green-50 dark:bg-green-900/20",
-  failed: "bg-red-50 dark:bg-red-900/20",
-  abandoned: "bg-gray-100 dark:bg-gray-800/50",
-};
+/**
+ * CornerBadge — slot-1-style corner status indicator. A solid circular badge
+ * ringed with white (or dark ring on dark mode) that overlaps the node's
+ * top-right corner; pulses on RUNNING. This replaces the floating
+ * `TaskGraphStatusIcon` which read as just another icon, not a status.
+ */
+function CornerBadge({ status }: { status: TaskStatus }) {
+  const tokens = tokensFor(status);
+  return (
+    <div
+      className={`absolute -right-1 -top-1 z-30 flex size-[22px] items-center justify-center rounded-full border-2 border-white shadow-sm dark:border-slate-900 ${tokens.solidBg} ${tokens.animate ? "animate-pulse" : ""}`}
+      aria-label={`Status: ${tokens.label}`}
+      title={tokens.label}
+    >
+      <TaskGraphStatusIcon status={status} />
+    </div>
+  );
+}
 
 function LeafNodeComponent({
   task,
@@ -67,9 +69,9 @@ function LeafNodeComponent({
     onClick?.(task.id);
   };
 
-  const borderColor =
-    statusBorderColors[task.status] ?? statusBorderColors.pending;
-  const bgColor = statusBgColors[task.status] ?? statusBgColors.pending;
+  const tokens = tokensFor(task.status);
+  const borderColor = tokens.border;
+  const bgColor = tokens.softBg;
   const timingLine = getTaskTimingPrimaryLine(task);
 
   if (variant === "compact") {
@@ -93,15 +95,13 @@ function LeafNodeComponent({
         `}
         style={{ borderLeft: `3px solid ${levelHex}` }}
       >
-        <div className="absolute right-1 top-1 z-10 scale-90">
-          <TaskGraphStatusIcon status={task.status} />
-        </div>
+        <CornerBadge status={task.status} />
         <Handle
           type="target"
           position={targetPos}
           className="!h-2 !w-2 !border-2 !border-white !bg-gray-400 dark:!border-gray-900 dark:!bg-gray-500"
         />
-        <span className="truncate pr-8 text-xs font-medium text-gray-900 dark:text-white">
+        <span className="truncate pr-6 text-xs font-medium text-gray-900 dark:text-white">
           {task.name}
         </span>
         <Handle
@@ -132,16 +132,14 @@ function LeafNodeComponent({
         `}
         style={{ borderLeft: `3px solid ${levelHex}` }}
       >
-        <div className="absolute right-1.5 top-1.5 z-10">
-          <TaskGraphStatusIcon status={task.status} />
-        </div>
+        <CornerBadge status={task.status} />
         <Handle
           type="target"
           position={targetPos}
           className="!h-3 !w-3 !border-2 !border-white !bg-gray-400 dark:!border-gray-900 dark:!bg-gray-500"
         />
 
-        <div className="p-2.5 pr-10">
+        <div className="p-2.5 pr-8">
           <div className="mb-1.5 flex items-center gap-2">
             <span className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
               {task.status}
@@ -207,16 +205,14 @@ function LeafNodeComponent({
       `}
       style={{ borderLeft: `3px solid ${levelHex}` }}
     >
-      <div className="absolute right-2 top-2 z-10">
-        <TaskGraphStatusIcon status={task.status} />
-      </div>
+      <CornerBadge status={task.status} />
       <Handle
         type="target"
         position={targetPos}
         className="!h-3 !w-3 !border-2 !border-white !bg-gray-400 dark:!border-gray-900 dark:!bg-gray-500"
       />
 
-      <div className="p-3 pr-11">
+      <div className="p-3 pr-8">
         {/* Header: Status + Level */}
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">

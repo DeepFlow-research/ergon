@@ -7,6 +7,7 @@ import { EvaluationPanel } from "@/components/panels/EvaluationPanel";
 import { GenerationTracePanel } from "@/components/panels/GenerationTracePanel";
 import { ResourcePanel } from "@/components/panels/ResourcePanel";
 import { SandboxPanel } from "@/components/panels/SandboxPanel";
+import { TaskTransitionLog } from "@/components/workspace/TaskTransitionLog";
 import type { WorkflowRunState } from "@/lib/types";
 import { formatTaskWallTimestamp } from "@/features/graph/utils/taskTiming";
 
@@ -41,11 +42,13 @@ export function TaskWorkspace({
   taskId,
   error,
   onClearSelection,
+  onJumpToSequence,
 }: {
   runState: WorkflowRunState | null;
   taskId: string | null;
   error: string | null;
   onClearSelection?: () => void;
+  onJumpToSequence?: (sequence: number) => void;
 }) {
   const { task, resources, executions, sandbox, threads, evaluation, dependencies, isLoading } =
     useTaskDetails(runState, taskId);
@@ -160,6 +163,10 @@ export function TaskWorkspace({
       </header>
 
       <div className="min-h-0 space-y-4 overflow-y-auto pr-1" data-testid="workspace-scroll-region">
+        <WorkspaceSection testId="workspace-transitions" title="State transitions">
+          <TaskTransitionLog task={task} onJumpToSequence={onJumpToSequence} />
+        </WorkspaceSection>
+
         <WorkspaceSection testId="workspace-generations" title="Generations">
           <GenerationTracePanel turns={generationTurns} runId={runState?.id} />
         </WorkspaceSection>

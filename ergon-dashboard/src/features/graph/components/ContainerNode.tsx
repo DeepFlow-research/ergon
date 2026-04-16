@@ -6,6 +6,7 @@ import type { TaskState, TaskStatus } from "@/lib/types";
 import { TaskGraphStatusIcon } from "@/components/dag/TaskGraphStatusIcon";
 import { getLevelColor } from "@/features/graph/theme/levelColors";
 import { getTaskTimingPrimaryLine } from "@/features/graph/utils/taskTiming";
+import { tokensFor } from "@/lib/statusTokens";
 
 interface ContainerNodeProps {
   task: TaskState;
@@ -19,15 +20,6 @@ interface ContainerNodeProps {
   layoutDirection?: "TB" | "LR";
   maxGraphDepth?: number;
 }
-
-const containerBorderColors: Record<string, string> = {
-  pending: "border-gray-300 dark:border-gray-600",
-  ready: "border-blue-400 dark:border-blue-500",
-  running: "border-yellow-400 dark:border-yellow-500",
-  completed: "border-green-400 dark:border-green-500",
-  failed: "border-red-400 dark:border-red-500",
-  abandoned: "border-gray-400 dark:border-gray-500",
-};
 
 function ContainerNodeComponent({
   task,
@@ -51,8 +43,8 @@ function ContainerNodeComponent({
     onToggleExpand(task.id);
   };
 
-  const borderColor =
-    containerBorderColors[task.status] ?? containerBorderColors.pending;
+  const tokens = tokensFor(task.status);
+  const borderColor = tokens.border;
 
   const depthForPalette = Math.max(maxGraphDepth ?? task.level, task.level);
   const levelHex = getLevelColor(task.level, depthForPalette);
@@ -90,9 +82,15 @@ function ContainerNodeComponent({
         className="flex items-center gap-2 rounded-t-md border-b border-dashed border-black/10 px-3 py-2 dark:border-white/10"
         style={{ backgroundColor: levelHex }}
       >
-        <TaskGraphStatusIcon status={task.status} />
+        <div
+          className={`flex size-[20px] shrink-0 items-center justify-center rounded-full border-2 border-white shadow-sm ${tokens.solidBg} ${tokens.animate ? "animate-pulse" : ""}`}
+          title={tokens.label}
+          aria-label={`Status: ${tokens.label}`}
+        >
+          <TaskGraphStatusIcon status={task.status} />
+        </div>
         <span className="truncate text-xs font-semibold uppercase tracking-wide text-gray-900 dark:text-gray-950">
-          {task.status}
+          {tokens.label}
         </span>
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold leading-tight text-gray-900 dark:text-gray-950">
           {task.name}
