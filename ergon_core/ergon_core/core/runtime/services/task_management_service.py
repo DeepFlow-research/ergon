@@ -157,6 +157,18 @@ class TaskManagementService:
 
         session.commit()
 
+        # Dispatch task/ready for subtasks with no unsatisfied dependencies so
+        # the execute_task Inngest function picks them up. Mirrors plan_subtasks
+        # (which dispatches roots) and start_workflow (which dispatches initial
+        # tasks). Without this, dynamically-added subtasks sit PENDING forever.
+        if not command.depends_on:
+            definition_id = self._resolve_definition_id(session, command.run_id)
+            self._dispatch_task_ready(
+                run_id=command.run_id,
+                definition_id=definition_id,
+                node_id=node.id,
+            )
+
         logger.info(
             "add_subtask: created node %s (key=%s) under parent %s",
             node.id,

@@ -45,7 +45,13 @@ export function RunWorkspacePage({
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
-  const [isStreamOpen, setIsStreamOpen] = useState(true);
+  // Default the event stream to open on lg+ viewports (≥1024px) so it's
+  // discoverable immediately, but start collapsed on small screens so the
+  // graph is not pushed below the fold on mobile/tablet.
+  const [isStreamOpen, setIsStreamOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 1024px)").matches;
+  });
   const { runState, isLoading, error, isSubscribed } = useRunState(runId, initialRunState);
   const { detail } = useCohortDetail(cohortId ?? "", initialCohortDetail);
 
@@ -263,15 +269,37 @@ export function RunWorkspacePage({
                   type="button"
                   onClick={() => setIsStreamOpen((p) => !p)}
                   aria-pressed={isStreamOpen}
-                  className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
                     isStreamOpen
                       ? "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900"
                       : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
                   }`}
-                  title="Toggle event stream (e)"
+                  title="Toggle event stream (press e)"
                   data-testid="event-stream-toggle"
                 >
-                  {isStreamOpen ? "Hide events" : "Show events"}
+                  <span>{isStreamOpen ? "Hide events" : "Show events"}</span>
+                  {events.length > 0 && (
+                    <span
+                      className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                        isStreamOpen
+                          ? "bg-white/20 text-white dark:bg-slate-900/20 dark:text-slate-900"
+                          : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200"
+                      }`}
+                      data-testid="event-stream-count-badge"
+                    >
+                      {events.length > 999 ? "999+" : events.length}
+                    </span>
+                  )}
+                  <kbd
+                    className={`ml-0.5 hidden rounded border px-1 font-mono text-[10px] sm:inline-block ${
+                      isStreamOpen
+                        ? "border-white/30 text-white/80 dark:border-slate-900/30 dark:text-slate-900/80"
+                        : "border-gray-300 text-gray-400 dark:border-gray-600 dark:text-gray-500"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    e
+                  </kbd>
                 </button>
               </div>
               <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">

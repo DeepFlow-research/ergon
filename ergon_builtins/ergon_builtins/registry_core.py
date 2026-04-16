@@ -32,6 +32,7 @@ from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.workers.baselines.manager_researcher_worker import ManagerResearcherWorker
 from ergon_builtins.workers.baselines.minif2f_react_worker import MiniF2FReActWorker
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.workers.baselines.researcher_stub_worker import ResearcherStubWorker
 from ergon_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
@@ -46,7 +47,8 @@ WORKERS: dict[str, type[Worker]] = {
     "react-v1": ReActWorker,
     "minif2f-react": MiniF2FReActWorker,
     "manager-researcher": ManagerResearcherWorker,
-    "researcher": StubWorker,
+    "researcher": ResearcherStubWorker,
+    "researcher-stub": ResearcherStubWorker,
     "researchrubrics-stub": StubResearchRubricsWorker,
 }
 
