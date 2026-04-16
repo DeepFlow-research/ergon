@@ -30,13 +30,7 @@ STUB_CONFIGS = [
         "ci-stub",
         id="smoke-test/stub/stub",
     ),
-    pytest.param(
-        "minif2f",
-        "stub-worker",
-        "stub-rubric",
-        "ci-stub",
-        id="minif2f/stub/stub",
-    ),
+    # minif2f requires an E2B sandbox even with stub-worker; tested in E2B_CONFIGS instead.
 ]
 
 E2B_CONFIGS = [

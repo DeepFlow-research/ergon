@@ -17,7 +17,7 @@ try:
 except ImportError:
     Tool = None  # type: ignore[assignment,misc]
 
-LEAN_CMD_PREFIX = "export PATH=$HOME/.elan/bin:$PATH && cd /tools/mathlib_project/src &&"
+from ergon_builtins.benchmarks.minif2f.constants import LEAN_CMD, LEAN_CMD_PREFIX
 
 # ── Response models ───────────────────────────────────────────────────
 
@@ -130,9 +130,9 @@ class MiniF2FToolkit:
         self,
         *,
         sandbox,
-        ask_stakeholder_fn,
         sandbox_run_skill,
         run_id,
+        ask_stakeholder_fn=None,
     ) -> None:
         self._sandbox = sandbox
         self._ask = ask_stakeholder_fn
@@ -140,13 +140,15 @@ class MiniF2FToolkit:
         self._run_id = run_id
 
     def get_tools(self) -> list[Tool]:
-        return [
+        tools = [
             self._write_lean_file(),
             self._check_lean_file(),
             self._verify_lean_proof(),
             self._search_lemmas(),
-            self._ask_stakeholder(),
         ]
+        if self._ask is not None:
+            tools.append(self._ask_stakeholder())
+        return tools
 
     # ── Lean tools ────────────────────────────────────────────────────
 
@@ -185,7 +187,7 @@ class MiniF2FToolkit:
                 return LeanCheckResponse(success=False, error="Sandbox not available")
 
             try:
-                cmd = f"{LEAN_CMD_PREFIX} lean {file_path} 2>&1"
+                cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} {file_path} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=60)
                     output = (result.stdout or "") + (result.stderr or "")
@@ -239,7 +241,7 @@ class MiniF2FToolkit:
                         ),
                     )
 
-                cmd = f"{LEAN_CMD_PREFIX} lean {file_path} 2>&1"
+                cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} {file_path} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=60)
                     output = (result.stdout or "") + (result.stderr or "")
@@ -312,7 +314,7 @@ class MiniF2FToolkit:
                     lean_content.encode("utf-8"),
                 )
 
-                cmd = f"{LEAN_CMD_PREFIX} lean {temp_file} 2>&1"
+                cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} src/{temp_file} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=30)
                     output = (result.stdout or "") + (result.stderr or "")
@@ -350,6 +352,8 @@ class MiniF2FToolkit:
             Args:
                 question: Your question about the proof.
             """
+            if self._ask is None:
+                raise RuntimeError("ask_stakeholder called but no callback was provided")
             return await self._ask(question)
 
         return Tool(function=ask_stakeholder, takes_ctx=False)

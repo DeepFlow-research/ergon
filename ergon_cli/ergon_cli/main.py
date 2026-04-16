@@ -11,6 +11,14 @@ def build_parser() -> argparse.ArgumentParser:
     bench = sub.add_parser("benchmark", help="Benchmark operations")
     bench_sub = bench.add_subparsers(dest="bench_action")
     bench_sub.add_parser("list", help="List available benchmarks")
+    setup_parser = bench_sub.add_parser(
+        "setup", help="Build and register the E2B sandbox template for a benchmark"
+    )
+    setup_parser.add_argument("slug", help="Benchmark slug (e.g., 'minif2f')")
+    setup_parser.add_argument(
+        "--force", action="store_true", help="Rebuild even if the template already exists"
+    )
+
     run_parser = bench_sub.add_parser("run", help="Run a benchmark")
     run_parser.add_argument("slug", help="Benchmark slug")
     run_parser.add_argument("--model", default="openai:gpt-4o", help="Model to use")

@@ -12,9 +12,9 @@ from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
 from pydantic import BaseModel
 
-LEAN_CMD = (
-    "export PATH=$HOME/.elan/bin:$PATH && cd /tools/mathlib_project && lean src/verify.lean 2>&1"
-)
+from ergon_builtins.benchmarks.minif2f.constants import LEAN_CMD, LEAN_CMD_PREFIX
+
+VERIFY_LEAN_CMD = f"{LEAN_CMD_PREFIX} {LEAN_CMD} src/verify.lean 2>&1"
 
 
 class ExtractedProof(BaseModel):
@@ -163,7 +163,7 @@ class ProofVerificationCriterion(Criterion):
             proof_code.encode("utf-8"),
         )
 
-        result = await runtime.run_command(LEAN_CMD, timeout=120)
+        result = await runtime.run_command(VERIFY_LEAN_CMD, timeout=120)
 
         output = (result.stdout or "") + (result.stderr or "")
         verified = result.exit_code == 0
