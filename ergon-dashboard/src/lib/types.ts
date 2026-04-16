@@ -158,6 +158,24 @@ export type DashboardEvents = {
 // =============================================================================
 
 /**
+ * One transition in a task's lifecycle (pending→ready→running→completed, etc).
+ *
+ * Created by the graph mutation reducer on every `node.status_changed` event
+ * and surfaced in the per-task transition log and the unified event stream.
+ */
+export interface TaskTransitionRecord {
+  from: TaskStatus | null;
+  to: TaskStatus;
+  /** Best-effort trigger. When the backend does not include one we infer from (from → to). */
+  trigger: TaskTrigger | "unknown";
+  at: string;
+  /** The graph-mutation sequence number that produced this transition, if known. */
+  sequence: number | null;
+  actor: string | null;
+  reason: string | null;
+}
+
+/**
  * Task state in the store (flattened from TaskTreeNode).
  * Represents the current state of a task during execution.
  */
@@ -177,6 +195,10 @@ export interface TaskState {
   completedAt: string | null;
   isLeaf: boolean;
   level: number; // Depth in tree (root = 0)
+  /** Chronological history of status transitions for this task. */
+  history?: TaskTransitionRecord[];
+  /** Most recent transition trigger (shortcut for UI without walking history). */
+  lastTrigger?: TaskTrigger | "unknown" | null;
 }
 
 export interface ExecutionAttemptState {
@@ -246,6 +268,51 @@ export interface GenerationTurnState {
   responseText: string | null;
   toolCalls: Array<{ tool_call_id: string; tool_name: string; args: unknown }> | null;
   policyVersion: string | null;
+  /** ISO timestamp of when this turn completed, if available. Used for timeline correlation. */
+  at?: string | null;
+  /** Task node this turn belongs to (for cross-linking from timeline/stream). */
+  taskId?: string | null;
+}
+
+/**
+ * A DAG edge tracked independently of node parent/child structure, so we can
+ * respond to edge.removed / edge.status_changed mutations instead of silently
+ * dropping them.
+ */
+export interface EdgeState {
+  id: string;
+  sourceId: string;
+  targetId: string;
+  status: string;
+  createdAt: string;
+}
+
+/**
+ * An annotation applied to a node or edge. Kept as a lossless append-only
+ * list per target so `annotation.set` / `annotation.deleted` never vanish.
+ */
+export interface AnnotationState {
+  namespace: string;
+  payload: Record<string, unknown>;
+  setAt: string;
+  /** True when an annotation.deleted mutation retired this record. */
+  deleted?: boolean;
+  deletedAt?: string | null;
+}
+
+/**
+ * Record of a graph mutation the reducer could not fully apply. Surfaced in
+ * the timeline as a ⚠ marker so users notice dropped updates instead of them
+ * silently disappearing.
+ */
+export interface UnhandledMutationRecord {
+  mutationId: string;
+  sequence: number;
+  mutationType: string;
+  targetId: string;
+  actor: string;
+  createdAt: string;
+  note: string;
 }
 
 /**
@@ -298,6 +365,15 @@ export interface WorkflowRunState {
   // Result
   finalScore: number | null;
   error: string | null;
+
+  /** Edges tracked independently so edge-level mutations are visible. */
+  edges?: Map<string, EdgeState>;
+
+  /** Annotations by target (node or edge) id. */
+  annotationsByTarget?: Map<string, AnnotationState[]>;
+
+  /** Graph mutations the reducer could not apply (never silently dropped). */
+  unhandledMutations?: UnhandledMutationRecord[];
 }
 
 // =============================================================================
