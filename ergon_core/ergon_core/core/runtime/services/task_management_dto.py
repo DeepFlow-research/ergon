@@ -1,8 +1,14 @@
-"""DTOs for TaskManagementService — dynamic delegation commands and results."""
+"""DTOs for TaskManagementService — dynamic delegation commands and results.
 
-from uuid import UUID
+UUID fields use NewType aliases so type checkers catch cross-field
+swaps at the call boundary (e.g. passing a NodeId where a RunId is
+expected). Status fields use Literal types to catch typos.
+"""
 
 from pydantic import BaseModel, Field
+
+from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.core.persistence.shared.types import DefinitionId, EdgeId, NodeId, RunId
 
 
 class AddTaskCommand(BaseModel):
@@ -10,9 +16,9 @@ class AddTaskCommand(BaseModel):
 
     model_config = {"frozen": True}
 
-    run_id: UUID
-    definition_id: UUID
-    parent_node_id: UUID
+    run_id: RunId
+    definition_id: DefinitionId
+    parent_node_id: NodeId
     description: str
     worker_binding_key: str
     task_payload: dict[str, object] = Field(default_factory=dict)
@@ -23,10 +29,10 @@ class AddTaskResult(BaseModel):
 
     model_config = {"frozen": True}
 
-    node_id: UUID
-    edge_id: UUID
+    node_id: NodeId
+    edge_id: EdgeId
     task_key: str
-    status: str
+    status: NodeStatus
 
 
 class AbandonTaskCommand(BaseModel):
@@ -34,16 +40,16 @@ class AbandonTaskCommand(BaseModel):
 
     model_config = {"frozen": True}
 
-    run_id: UUID
-    node_id: UUID
+    run_id: RunId
+    node_id: NodeId
 
 
 class AbandonTaskResult(BaseModel):
     model_config = {"frozen": True}
 
-    node_id: UUID
-    previous_status: str
-    new_status: str
+    node_id: NodeId
+    previous_status: NodeStatus
+    new_status: NodeStatus
 
 
 class RefineTaskCommand(BaseModel):
@@ -51,14 +57,14 @@ class RefineTaskCommand(BaseModel):
 
     model_config = {"frozen": True}
 
-    run_id: UUID
-    node_id: UUID
+    run_id: RunId
+    node_id: NodeId
     new_description: str
 
 
 class RefineTaskResult(BaseModel):
     model_config = {"frozen": True}
 
-    node_id: UUID
+    node_id: NodeId
     old_description: str
     new_description: str

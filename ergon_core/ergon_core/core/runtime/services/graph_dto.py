@@ -1,12 +1,23 @@
 """DTOs for WorkflowGraphRepository return types.
 
 Frozen Pydantic models. Callers never receive raw SQLModel rows.
+
+UUID fields use NewType aliases (RunId, NodeId, etc.) so that type
+checkers catch cross-field swaps — e.g. passing a node_id where a
+run_id is expected. The aliases are erased at runtime (zero
+serialization cost).
 """
 
 from typing import Annotated, Literal
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
+from ergon_core.core.persistence.shared.types import (
+    DefinitionId,
+    EdgeId,
+    NodeId,
+    RunId,
+)
 from pydantic import BaseModel, Field
 
 
@@ -27,34 +38,34 @@ class MutationMeta(BaseModel):
 class GraphNodeDto(BaseModel):
     model_config = {"frozen": True}
 
-    id: UUID
-    run_id: UUID
-    definition_task_id: UUID | None
+    id: NodeId
+    run_id: RunId
+    definition_task_id: DefinitionId | None
     instance_key: str
     task_key: str
     description: str
-    status: str
+    status: str  # not NodeStatus — DB allows domain-specific statuses (§4.7 in status_conventions)
     assigned_worker_key: str | None
 
 
 class GraphEdgeDto(BaseModel):
     model_config = {"frozen": True}
 
-    id: UUID
-    run_id: UUID
-    definition_dependency_id: UUID | None
-    source_node_id: UUID
-    target_node_id: UUID
-    status: str
+    id: EdgeId
+    run_id: RunId
+    definition_dependency_id: DefinitionId | None
+    source_node_id: NodeId
+    target_node_id: NodeId
+    status: str  # not EdgeStatus — DB allows domain-specific statuses
 
 
 class GraphAnnotationDto(BaseModel):
     model_config = {"frozen": True}
 
-    id: UUID
-    run_id: UUID
+    id: UUID  # annotation's own id
+    run_id: RunId
     target_type: GraphTargetType
-    target_id: UUID
+    target_id: UUID  # polymorphic: NodeId or EdgeId depending on target_type
     namespace: str
     sequence: int
     payload: dict[str, object]
@@ -63,12 +74,12 @@ class GraphAnnotationDto(BaseModel):
 class GraphMutationDto(BaseModel):
     model_config = {"frozen": True}
 
-    id: UUID
-    run_id: UUID
+    id: UUID  # mutation's own id — not a node/edge/run id
+    run_id: RunId
     sequence: int
     mutation_type: MutationType
     target_type: GraphTargetType
-    target_id: UUID
+    target_id: UUID  # polymorphic: could be NodeId, EdgeId, or annotation id
     actor: str
     old_value: "GraphMutationValue | None"
     new_value: "GraphMutationValue"
@@ -80,7 +91,7 @@ class WorkflowGraphDto(BaseModel):
 
     model_config = {"frozen": True}
 
-    run_id: UUID
+    run_id: RunId
     nodes: list[GraphNodeDto] = Field(default_factory=list)
     edges: list[GraphEdgeDto] = Field(default_factory=list)
 
