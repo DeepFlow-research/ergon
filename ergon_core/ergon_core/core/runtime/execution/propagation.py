@@ -449,8 +449,12 @@ def on_task_completed_or_failed(
 
     - COMPLETED: outgoing edges become SATISFIED; targets with all deps
       satisfied become READY.
-    - FAILED / CANCELLED: outgoing edges become INVALIDATED; targets are
-      reported as invalidated (caller emits task/cancelled).
+    - FAILED / CANCELLED: outgoing edges become INVALIDATED.  For static
+      workflow nodes (parent_node_id is None), targets are auto-cancelled
+      and reported as invalidated.  For dynamic subtasks (parent_node_id
+      set), targets stay PENDING so the manager can adapt — the edge is
+      invalidated but the node is left for the manager to retry, cancel,
+      or re-plan via the subtask lifecycle tools.
 
     Walks RunGraphEdge so it works for both static and dynamic tasks.
 
@@ -490,7 +494,15 @@ def on_task_completed_or_failed(
             continue
 
         if not is_success:
-            # Source failed/cancelled — mark target as invalidated
+            # Dynamic subtasks (parent_node_id set) are manager-owned.
+            # The manager polls via list_subtasks and decides whether to
+            # retry, cancel, or re-plan — so we leave the target PENDING
+            # and only invalidate the edge.  Static workflow nodes
+            # (parent_node_id is None) have no adaptive supervisor, so
+            # auto-cancel is the correct behaviour.
+            if candidate_node.parent_node_id is not None:
+                continue
+
             graph_repo.update_node_status(
                 session,
                 run_id=run_id,
