@@ -16,38 +16,60 @@ This is the "downstream invalidation on re-run" pattern (see Fractal OS task pro
 
 ## Test Scenario (E2E integration test)
 
-This is the acceptance test. A deterministic stub manager spawns two subgraphs and exercises every propagation path:
+This is the acceptance test — the north star that task propagation logic doesn't get broken. It runs in CI as a state test (SQLite, no Docker, no sleeps).
+
+### Graph topology
 
 ```
 Manager (L1, RUNNING)
-├── Graph 1: A → B, A → C     (plan_subtasks, A is root)
-└── Graph 2: D → E             (plan_subtasks, D is root)
+├── Graph 1 — Diamond with fan-in:
+│   A ──→ B ──→ F
+│   A ──→ C ──→ F        (F has TWO incoming edges: from B and from C)
+│
+├── Graph 2 — Chain (3-deep, for recursive invalidation):
+│   D ──→ E ──→ G
+│
+└── H (independent leaf, no deps — sanity baseline)
 ```
 
-### Step-by-step
+8 child nodes. Created via three `plan_subtasks` calls (Graph 1, Graph 2, H standalone via `add_subtask`).
 
-| Step | Action | Assert |
-|------|--------|--------|
-| 1 | Manager spawns Graph 1 (A→B, A→C) and Graph 2 (D→E) via two `plan_subtasks` calls | 5 child nodes created, all PENDING. A and D are roots (no deps). B, C, E blocked. |
-| 2 | Stub workers complete A | A is COMPLETED. Edges A→B and A→C become SATISFIED. B and C become READY. |
-| 3 | Stub workers complete B and C | B, C are COMPLETED. Graph 1 is fully done. |
-| 4 | Manager cancels D | D is CANCELLED. E stays PENDING (managed subtask, not auto-cancelled). Edge D→E is INVALIDATED. |
-| 5 | Manager restarts D | D is PENDING again. Edge D→E is reset to EDGE_PENDING. task/ready emitted for D. |
-| 6 | Stub worker completes D | D is COMPLETED. Edge D→E becomes SATISFIED. E becomes READY. |
-| 7 | Stub worker starts E | E is RUNNING. |
-| 8 | Manager restarts D (while E is in-progress) | D is PENDING. E is CANCELLED (running against stale input). Edge D→E reset to EDGE_PENDING. |
-| 9 | Stub worker completes D (again) | D is COMPLETED. Edge D→E becomes SATISFIED. E becomes READY (was CANCELLED, now PENDING). |
-| 10 | Stub worker completes E | E is COMPLETED. All 5 children + manager are terminal. |
-| 11 | Manager completes | Workflow is COMPLETED. |
+### Step-by-step (15 steps)
+
+| Step | Action | Assert | Tests |
+|------|--------|--------|-------|
+| 1 | Manager spawns Graph 1 (A→B, A→C, B→F, C→F), Graph 2 (D→E→G), and H | 8 child nodes. A, D, H are roots (PENDING, no deps). B, C, E, F, G blocked. | Creation, edge wiring |
+| 2 | A completes | B and C become READY. F stays PENDING (not all deps met). | **Fan-out**: completion unblocks multiple targets |
+| 3 | B completes | F stays PENDING (C not done yet). | **Fan-in**: partial dep satisfaction does NOT unblock |
+| 4 | C completes | F becomes READY (all deps met). | **Fan-in**: full dep satisfaction unblocks |
+| 5 | F completes | Graph 1 fully done. | Normal completion |
+| 6 | D completes → E becomes READY | E is READY. G stays PENDING. | Chain propagation |
+| 7 | E starts running | E is RUNNING. | Status transition |
+| 8 | Manager cancels E (while RUNNING) | E is CANCELLED. G stays PENDING (managed subtask, not auto-cancelled). Edge E→G INVALIDATED. | **Cancel running node**, managed subtask no-cascade |
+| 9 | Manager restarts E (from CANCELLED) | E is PENDING. Edge E→G reset to EDGE_PENDING. task/ready emitted for E. | **Restart from CANCELLED**, edge reset |
+| 10 | E completes → G becomes READY | G is READY. | Re-propagation after restart |
+| 11 | G completes | Graph 2 fully done. | Normal completion |
+| 12 | Manager restarts B (B was COMPLETED, F was COMPLETED) | B is PENDING. **F is invalidated** (stale input): F goes CANCELLED, edges B→F and C→F reset to EDGE_PENDING. G unaffected (different graph). | **Restart with completed downstream**, deep invalidation, cross-graph isolation |
+| 13 | B completes again | **F re-activates**: C is still COMPLETED, B now COMPLETED → all deps satisfied → F becomes READY. | **Fan-in re-activation**: CANCELLED target re-activates when all deps re-satisfied |
+| 14 | F completes again | Graph 1 re-done. | Re-propagation after invalidation |
+| 15 | H completes, manager completes | All 8 children + manager terminal. Zero FAILED. Workflow COMPLETED. | **Workflow terminal detection** |
 
 ### What this covers
 
-- **Cancel without cascade** (step 4): managed subtask downstream stays PENDING
-- **Restart from cancelled** (step 5): terminal → PENDING, edge reset
-- **Normal dep propagation** (steps 2, 3, 6): completion satisfies edges, unblocks targets
-- **Restart with downstream invalidation** (step 8): the hard case — D re-runs, E (in-progress) must be cancelled and re-queued
-- **Re-propagation after restart** (step 9): D completes again, E unblocks again
-- **Workflow terminal** (step 11): all nodes terminal, zero FAILED → COMPLETED
+| Pattern | Steps | Why it matters |
+|---------|-------|----------------|
+| Fan-out (one source → multiple targets) | 2 | Most basic propagation |
+| Fan-in (multiple sources → one target) | 3, 4 | #1 source of propagation bugs — must wait for ALL deps |
+| Diamond (fan-out + fan-in) | 2–5 | Where edge-counting bugs hide |
+| Chain propagation (A→B→C) | 6, 10 | Multi-hop dependency |
+| Cancel while RUNNING | 8 | Real-world manager behavior (not just cancelling PENDING) |
+| Managed subtask no-cascade | 8 | Downstream stays PENDING, not auto-cancelled |
+| Restart from CANCELLED | 9 | Terminal → PENDING, edge reset |
+| Restart with completed downstream (deep invalidation) | 12 | The hard case: stale output must cascade |
+| Fan-in re-activation | 13 | CANCELLED target re-activates when all deps re-satisfied |
+| Cross-graph isolation | 12 | Restart in Graph 1 doesn't touch Graph 2 |
+| Independent leaf | 15 | Node with no deps, no downstream — sanity |
+| Workflow terminal | 15 | All terminal + zero FAILED = COMPLETED |
 
 ## Current State — What Works
 
@@ -58,19 +80,21 @@ Manager (L1, RUNNING)
 | D completes → E becomes READY | Yes | `on_task_completed_or_failed(COMPLETED)` satisfies edges |
 | Recursive cancel cascade | Yes | `SubtaskCancellationService.cancel_orphans` BFS |
 | First-writer-wins guard | Yes | `update_node_status(only_if_not_terminal=True)` |
+| Fan-in propagation | Yes | `on_task_completed_or_failed` checks ALL incoming source nodes |
 
 ## Gaps
 
 ### Gap 1: `restart_task` service method + tool
 
-**No way to reset a terminal node back to PENDING.** The manager can cancel, refine (pending only), and add — but cannot restart.
+**No way to reset a terminal node back to PENDING.** The manager can cancel, refine, and add — but cannot restart.
 
 Needed:
 - `RestartTaskCommand(run_id, node_id)` DTO
 - `RestartTaskResult(node_id, old_status)` DTO
 - `TaskManagementService.restart_task()`:
-  - Validate node is in TERMINAL_STATUSES (raise if not)
-  - Reset node status to PENDING (using unguarded `update_node_status`, i.e. `only_if_not_terminal=False`)
+  - Validate node is in TERMINAL_STATUSES (raise `TaskNotTerminalError` if not)
+  - Call `_invalidate_downstream()` first (see Gap 2)
+  - Reset node status to PENDING (unguarded `update_node_status`, `only_if_not_terminal=False`)
   - Reset all outgoing edges from this node to EDGE_PENDING
   - Emit `task/ready` event so the scheduler picks it up
   - Return result
@@ -81,7 +105,7 @@ Needed:
 
 **When a node is restarted, its downstream targets are running against stale input.** They must be cancelled and re-queued.
 
-Needed — a `_invalidate_downstream` function called by `restart_task` after resetting the node:
+Needed — `_invalidate_downstream()` called by `restart_task` before resetting the node's own edges:
 
 ```
 _invalidate_downstream(session, run_id, node_id, graph_repo):
@@ -90,20 +114,20 @@ _invalidate_downstream(session, run_id, node_id, graph_repo):
         target = edge.target_node
         if target is non-terminal (PENDING, READY, RUNNING):
             cancel target (it may be running against stale input)
-            # target stays cancelled until the restarted node completes
-            # and propagation re-satisfies the edge
+            emit task/cancelled for cleanup
         if target is COMPLETED:
-            # target's output is also stale — restart it recursively
-            restart target → PENDING
-            reset target's outgoing edges
-            recurse into target's downstream
+            # target's output is stale — cancel it too, then
+            # reset its outgoing edges and recurse
+            cancel target
+            emit task/cancelled for cleanup
+            recurse into target's outgoing edges
 ```
 
 The recursion terminates because:
-- CANCELLED/FAILED targets are already terminal and have no stale output to invalidate
 - The graph is a DAG (no cycles, enforced by Kahn's algorithm in `plan_subtasks`)
+- We only recurse into COMPLETED targets (CANCELLED/FAILED have no stale output)
 
-**Key semantic:** Restarting D doesn't just cancel E — it also resets the D→E edge to PENDING so that when D completes again, normal propagation re-satisfies the edge and E becomes READY.
+**Key semantic:** Restarting B resets B→F edge to PENDING, cancels F, and resets F's outgoing edges too. When B completes again, normal propagation re-satisfies the B→F edge. If C is still COMPLETED (the other fan-in source), F becomes READY.
 
 ### Gap 3: Re-activating a CANCELLED node via propagation
 
@@ -114,16 +138,28 @@ if candidate_node.status != TaskExecutionStatus.PENDING:
     continue
 ```
 
-After step 8, E is CANCELLED (invalidated by D's restart). When D completes again in step 9, propagation needs to re-activate E. This means the check needs to also allow CANCELLED targets to become READY — but only when ALL incoming edges are satisfied.
+After step 12, F is CANCELLED (invalidated by B's restart). When B completes again in step 13, propagation needs to re-activate F. The check must also allow CANCELLED targets to become READY when ALL incoming edges are satisfied.
 
 Change: when a source completes and the target is CANCELLED with all deps now satisfied, reset the target to PENDING and add it to `newly_ready`.
 
-This is safe because:
-- The target was cancelled by _us_ (downstream invalidation), not by the user
-- All its deps are now satisfied, so it's valid to re-run
-- The `only_if_not_terminal` guard is NOT used here — we deliberately write over CANCELLED
+**Re-activation policy (decided):** Any CANCELLED managed subtask (parent_node_id set) re-activates when all deps are satisfied. If the manager explicitly cancelled a node and doesn't want it re-activated, it can re-cancel. This avoids needing a `cancel_cause` column on the node and keeps the propagation logic simple.
 
-**Open question:** Should this re-activation only apply to nodes cancelled by downstream invalidation (`cause=dep_invalidated`)? Or should it apply to any CANCELLED node whose deps are all satisfied? The conservative approach is to add a `cancel_cause` field to `RunGraphNode` and only re-activate nodes cancelled by invalidation, not user-cancelled nodes. The simpler approach is to re-activate any CANCELLED node — the manager can always re-cancel if that's not what it wanted.
+Static workflow nodes (parent_node_id=None) do NOT re-activate — they have no supervisor to adapt.
+
+### Gap 4: Widen `refine_task` to work on terminal nodes
+
+Currently `refine_task` rejects any non-PENDING node:
+
+```python
+if node.status != PENDING:
+    raise TaskNotPendingError(command.node_id, node.status)
+```
+
+The manager should be able to edit a task's description or properties before restarting it. The composition is: `refine_task(D, new_description)` → `restart_task(D)`.
+
+Change: allow `refine_task` on any status **except RUNNING** (the worker is actively using the description). PENDING, COMPLETED, FAILED, CANCELLED are all refinable.
+
+This is a one-line change: `if node.status == RUNNING: raise TaskRunningError(...)`.
 
 ## File Map
 
@@ -131,61 +167,66 @@ This is safe because:
 
 | Path | Purpose |
 |------|---------|
-| `ergon_core/.../services/task_management_dto.py` | Add `RestartTaskCommand`, `RestartTaskResult` |
 | `tests/state/test_restart_and_invalidation.py` | Unit tests for restart_task + downstream invalidation |
 | `tests/state/test_propagation_reactivation.py` | Unit tests for CANCELLED → PENDING re-activation on dep satisfaction |
-| `tests/state/test_manager_dag_scenario.py` | Full E2E scenario from the table above (11 steps) |
+| `tests/state/test_manager_dag_scenario.py` | Full 15-step E2E scenario |
 
 ### Modified files
 
 | Path | Change |
 |------|--------|
-| `ergon_core/.../services/task_management_service.py` | Add `restart_task()` method, `_invalidate_downstream()` helper |
-| `ergon_core/.../execution/propagation.py` | `on_task_completed_or_failed`: allow CANCELLED targets to re-activate when all deps satisfied |
-| `ergon_core/.../persistence/graph/status_conventions.py` | Possibly add `INVALIDATED_CANCEL_CAUSE` constant |
+| `ergon_core/.../services/task_management_dto.py` | Add `RestartTaskCommand`, `RestartTaskResult` |
+| `ergon_core/.../services/task_management_service.py` | Add `restart_task()`, `_invalidate_downstream()`. Widen `refine_task` status check. |
+| `ergon_core/.../execution/propagation.py` | `on_task_completed_or_failed`: allow CANCELLED managed subtasks to re-activate when all deps satisfied |
+| `ergon_core/.../runtime/errors/delegation_errors.py` | Add `TaskNotTerminalError`, `TaskRunningError` |
 | `ergon_builtins/.../tools/subtask_lifecycle_toolkit.py` | Add `_make_restart_task()`, update `get_tools()` to return 8 tools |
-| `ergon_core/.../services/task_management_dto.py` | Add DTOs |
-| `ergon_core/.../runtime/errors/delegation_errors.py` | Add `TaskNotTerminalError` |
 
 ## Implementation Order
 
-### Phase 1: restart_task (no downstream invalidation yet)
+### Phase 1: Widen `refine_task` + restart_task (no downstream invalidation yet)
 
+- [ ] Widen `refine_task`: change guard from `status != PENDING` to `status == RUNNING`
+- [ ] Add `TaskNotTerminalError`, `TaskRunningError` to delegation_errors
 - [ ] Add `RestartTaskCommand` / `RestartTaskResult` DTOs
-- [ ] Add `TaskNotTerminalError`
-- [ ] Implement `TaskManagementService.restart_task()`: reset node to PENDING, reset outgoing edges to EDGE_PENDING, emit task/ready
+- [ ] Implement `TaskManagementService.restart_task()`: validate terminal, reset node to PENDING, reset outgoing edges to EDGE_PENDING, emit task/ready
 - [ ] Add `_make_restart_task()` to toolkit (8th tool)
-- [ ] Unit test: restart from COMPLETED, FAILED, CANCELLED; reject restart of PENDING/RUNNING node
+- [ ] Unit test: restart from COMPLETED, FAILED, CANCELLED; reject restart of PENDING/RUNNING
 - [ ] Unit test: outgoing edges reset to EDGE_PENDING
+- [ ] Unit test: `refine_task` now works on COMPLETED/FAILED/CANCELLED, still rejects RUNNING
 
 ### Phase 2: Downstream invalidation
 
-- [ ] Implement `_invalidate_downstream()` in task_management_service: recursive BFS that cancels non-terminal targets and restarts completed targets
-- [ ] Wire `_invalidate_downstream()` into `restart_task()` (called after node reset, before edge reset)
-- [ ] Unit test: restart D while E is RUNNING → E cancelled, edge reset
-- [ ] Unit test: restart D while E is COMPLETED → E restarted recursively, E's outgoing edges reset
-- [ ] Unit test: deep chain D→E→F, restart D → E and F both invalidated
+- [ ] Implement `_invalidate_downstream()` in task_management_service: walks outgoing edges, cancels non-terminal targets, recurses into completed targets
+- [ ] Wire into `restart_task()` (called before edge reset)
+- [ ] Unit test: restart D while E is RUNNING → E cancelled, edge D→E reset
+- [ ] Unit test: restart D while E is COMPLETED → E cancelled, E's outgoing edges reset
+- [ ] Unit test: deep chain D→E→G, restart D → E and G both invalidated
+- [ ] Unit test: fan-in — restart B, F invalidated, but C→F edge also reset
 
 ### Phase 3: Re-activation of CANCELLED targets on dep satisfaction
 
-- [ ] Modify `on_task_completed_or_failed(COMPLETED)` to check CANCELLED targets alongside PENDING
-- [ ] When all incoming edges satisfied for a CANCELLED target, reset to PENDING + add to newly_ready
-- [ ] Unit test: D restarts, completes again → E (CANCELLED) becomes READY
-- [ ] Unit test: user-cancelled node with all deps satisfied — decide on re-activation policy
+- [ ] Modify `on_task_completed_or_failed(COMPLETED)`: for managed subtasks (parent_node_id set), check CANCELLED targets alongside PENDING
+- [ ] When all incoming source nodes are COMPLETED for a CANCELLED managed subtask, reset to PENDING + add to newly_ready
+- [ ] Unit test: D restarts, completes again → E (CANCELLED) re-activates
+- [ ] Unit test: fan-in re-activation — B restarts, completes → F re-activates (C still COMPLETED)
+- [ ] Unit test: static workflow CANCELLED node does NOT re-activate (no parent_node_id)
+- [ ] Unit test: user-cancelled node with all deps satisfied — re-activates (manager can re-cancel)
 
 ### Phase 4: E2E integration test
 
-- [ ] Write `test_manager_dag_scenario.py` with the full 11-step scenario
-- [ ] Stub workers that complete after a configurable delay
-- [ ] All assertions from the scenario table
-- [ ] Wire into CI (`pnpm run test:be:state`)
+- [ ] Write `test_manager_dag_scenario.py` with the full 15-step scenario
+- [ ] Uses `TaskManagementService` + `WorkflowGraphRepository` directly (no Inngest, no stubs sleeping)
+- [ ] Simulates worker completion via `graph_repo.update_node_status()` + `on_task_completed_or_failed()`
+- [ ] All assertions from the 15-step scenario table
+- [ ] Runs in `tests/state/` (SQLite, per-test transaction rollback)
+- [ ] Wire into CI via existing `pnpm run test:be:state`
 
 ## Open Questions
 
-1. **Re-activation policy:** Should CANCELLED nodes re-activate when all deps are satisfied, regardless of how they were cancelled? Or only when cancelled by downstream invalidation? Adding a `cancel_cause` column to `RunGraphNode` is cleaner but more invasive. The alternative is: any CANCELLED managed subtask re-activates when all deps are satisfied. The manager can always re-cancel.
+1. **Concurrent restart + completion race:** If the manager calls `restart_task(D)` at the same moment D's worker reports completion, who wins? The restart should win (manager's intent is explicit), but we need to think about the edge reset happening after propagation already satisfied the edges. Likely solved by: `restart_task` runs in the manager's session, propagation runs in the Inngest step's session. The DB transaction that commits first wins. If propagation committed first (edges satisfied), restart will re-reset them. If restart committed first, propagation sees the node as PENDING and skips.
 
-2. **Concurrent restart + completion race:** If the manager calls `restart_task(D)` at the same moment D's worker reports completion, who wins? The restart should probably win (the manager's intent is explicit), but we need to think about the edge reset happening after propagation already satisfied the edges.
+2. **Event semantics for restart:** Should `restart_task` emit a new event type (`task/restarted`) or reuse `task/ready`? A new event type gives better observability in Inngest dashboard but adds another function to register. Recommendation: reuse `task/ready` — the scheduler doesn't need to distinguish "first run" from "re-run".
 
-3. **Event semantics for restart:** Should `restart_task` emit a new event type (`task/restarted`) or reuse `task/ready`? A new event type gives better observability in Inngest dashboard but adds another function to register.
+3. **Sandbox lifecycle on restart:** When a node is restarted, its downstream targets get `task/cancelled` events which trigger `cleanup_cancelled_task_fn` (sandbox teardown). The restarted node itself goes PENDING→RUNNING and gets a fresh sandbox via normal `execute_task_fn` dispatch. The old execution's sandbox for the restarted node is NOT explicitly cleaned up — it will be orphaned. We may want to emit `task/cancelled` for the restarted node too, just for sandbox cleanup, even though it's not really "cancelled". Or add a `task/restarted` event that triggers cleanup.
 
-4. **Sandbox lifecycle on restart:** When a node is restarted, should its old sandbox be cleaned up? The current `cleanup_cancelled_task_fn` handles sandbox teardown for cancelled nodes, but a restarted node goes PENDING→RUNNING again and needs a fresh sandbox.
+4. **`refine_task` on RUNNING — edge case:** A manager might want to refine a running task's description for the _next_ run (if it plans to restart it). Current plan blocks RUNNING. Alternative: allow refine on RUNNING but document that the current execution won't see the change. Keeping it blocked is safer for now.
