@@ -11,11 +11,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

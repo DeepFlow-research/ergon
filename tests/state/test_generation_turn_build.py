@@ -1,6 +1,25 @@
 # tests/state/test_generation_turn_build.py
 """Tests for the new _build_turns logic in react_worker."""
 
+from ergon_builtins.workers.baselines.react_worker import _build_turns
+from ergon_core.api.generation import (
+    GenerationTurn,
+)
+from ergon_core.api.generation import (
+    SystemPromptPart as ErgonSystemPromptPart,
+)
+from ergon_core.api.generation import (
+    TextPart as ErgonTextPart,
+)
+from ergon_core.api.generation import (
+    ToolCallPart as ErgonToolCallPart,
+)
+from ergon_core.api.generation import (
+    ToolReturnPart as ErgonToolReturnPart,
+)
+from ergon_core.api.generation import (
+    UserPromptPart as ErgonUserPromptPart,
+)
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
@@ -9,16 +28,6 @@ from pydantic_ai.messages import (
     ToolCallPart,
     ToolReturnPart,
     UserPromptPart,
-)
-
-from ergon_builtins.workers.baselines.react_worker import _build_turns
-from ergon_core.api.generation import (
-    GenerationTurn,
-    SystemPromptPart as ErgonSystemPromptPart,
-    TextPart as ErgonTextPart,
-    ToolCallPart as ErgonToolCallPart,
-    ToolReturnPart as ErgonToolReturnPart,
-    UserPromptPart as ErgonUserPromptPart,
 )
 
 

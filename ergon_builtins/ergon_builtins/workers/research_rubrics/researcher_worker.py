@@ -8,8 +8,8 @@ ReActWorker.execute().
 from collections.abc import AsyncGenerator
 from typing import ClassVar
 
+from ergon_core.api import RunResourceView
 from ergon_core.api.generation import GenerationTurn
-from ergon_core.api.run_resource import RunResourceView
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.providers.sandbox.research_rubrics_manager import (

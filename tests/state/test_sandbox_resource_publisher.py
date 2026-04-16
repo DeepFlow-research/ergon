@@ -11,8 +11,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -23,7 +21,7 @@ from ergon_core.core.persistence.telemetry.models import (
 from ergon_core.core.providers.sandbox.resource_publisher import (
     SandboxResourcePublisher,
 )
-
+from sqlmodel import Session
 
 # ---------------------------------------------------------------------------
 # Fake sandbox stubs

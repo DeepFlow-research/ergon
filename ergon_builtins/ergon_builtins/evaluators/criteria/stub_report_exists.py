@@ -11,9 +11,8 @@ import hashlib
 from pathlib import Path
 from typing import ClassVar
 
-from ergon_core.api import Criterion, CriterionResult, EvaluationContext
+from ergon_core.api import Criterion, CriterionResult, EvaluationContext, RunResourceKind
 from ergon_core.core.persistence.queries import queries
-from ergon_core.core.persistence.telemetry.models import RunResourceKind
 
 
 class StubReportExistsCriterion(Criterion):

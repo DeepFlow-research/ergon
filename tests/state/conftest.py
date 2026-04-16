@@ -4,14 +4,13 @@ Module-scoped in-memory SQLite engine with per-test transaction rollback
 so every test sees a clean database without the cost of re-creating tables.
 """
 
-import pytest
-from sqlalchemy import Engine
-from sqlmodel import Session, SQLModel, create_engine
-
 import ergon_core.core.persistence.context.models as _context_models  # noqa: F401
 import ergon_core.core.persistence.definitions.models as _def_models  # noqa: F401
 import ergon_core.core.persistence.graph.models as _graph_models  # noqa: F401
 import ergon_core.core.persistence.telemetry.models as _telemetry_models  # noqa: F401
+import pytest
+from sqlalchemy import Engine
+from sqlmodel import Session, SQLModel, create_engine
 
 
 @pytest.fixture(scope="module")

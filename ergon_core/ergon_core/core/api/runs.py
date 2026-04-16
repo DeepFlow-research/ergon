@@ -6,20 +6,19 @@ from statistics import mean
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
 from ergon_core.core.api.schemas import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
     RunContextEventDto,
     RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
+    RunGenerationTurnDto,
     RunGraphMutationDto,
     RunResourceDto,
     RunSandboxCommandDto,
     RunSandboxDto,
     RunSnapshotDto,
     RunTaskDto,
-    RunGenerationTurnDto,
     RunTaskEvaluationDto,
     TrainingCurvePointDto,
     TrainingMetricDto,
@@ -30,8 +29,8 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionWorker,
 )
-from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
     RunGenerationTurn,
     RunRecord,
@@ -43,6 +42,7 @@ from ergon_core.core.persistence.telemetry.models import (
     TrainingMetric,
     TrainingSession,
 )
+from fastapi import APIRouter, HTTPException
 from sqlmodel import Session, select
 
 router = APIRouter(prefix="/runs", tags=["runs"])

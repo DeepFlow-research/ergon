@@ -12,7 +12,6 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TextPart
 from ergon_core.core.providers.sandbox.research_rubrics_manager import (

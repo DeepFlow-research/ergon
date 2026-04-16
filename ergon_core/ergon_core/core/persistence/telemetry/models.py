@@ -5,10 +5,8 @@ of truth for the definition itself.
 """
 
 from datetime import datetime
-from typing import Literal
-
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:

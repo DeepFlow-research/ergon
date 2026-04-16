@@ -20,10 +20,10 @@ from ergon_core.core.runtime.errors.graph_errors import (
     NodeNotFoundError,
 )
 from ergon_core.core.runtime.errors.inngest_errors import (
-    ErgonNonRetriableError,
     ConfigurationError,
     ContractViolationError,
     DataIntegrityError,
+    ErgonNonRetriableError,
     RegistryLookupError,
 )
 

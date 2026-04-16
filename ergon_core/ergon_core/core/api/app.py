@@ -4,8 +4,6 @@ import logging
 from contextlib import asynccontextmanager
 
 import inngest.fast_api
-from fastapi import FastAPI
-
 from ergon_core.core.api.cohorts import router as cohorts_router
 from ergon_core.core.api.rollouts import init_service as init_rollout_service
 from ergon_core.core.api.rollouts import router as rollouts_router
@@ -15,6 +13,7 @@ from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.inngest_registry import ALL_FUNCTIONS
 from ergon_core.core.settings import Settings
+from fastapi import FastAPI
 
 logger = logging.getLogger(__name__)
 

@@ -6,8 +6,6 @@ a particular graph shape, returning the UUIDs tests need for assertions.
 
 from uuid import UUID, uuid4
 
-from sqlmodel import Session
-
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -16,6 +14,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from sqlmodel import Session
 
 
 def seed_flat_tasks(

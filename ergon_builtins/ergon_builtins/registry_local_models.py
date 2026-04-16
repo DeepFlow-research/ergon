@@ -7,8 +7,9 @@ layer in registry.py handles the ImportError gracefully.
 
 from collections.abc import Callable
 
-from ergon_builtins.models.transformers_backend import resolve_transformers
 from ergon_core.core.providers.generation.model_resolution import ResolvedModel
+
+from ergon_builtins.models.transformers_backend import resolve_transformers
 
 MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
     "transformers": resolve_transformers,

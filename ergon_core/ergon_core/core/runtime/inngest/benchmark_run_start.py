@@ -9,8 +9,8 @@ from typing import ClassVar
 
 import inngest
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
-from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.api.experiment import Experiment
+from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.events.base import InngestEventContract
 from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
 from ergon_core.core.runtime.inngest_client import inngest_client

@@ -15,8 +15,6 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from uuid import UUID, uuid4
 
-from sqlmodel import Session, col, select
-
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
@@ -54,6 +52,7 @@ from ergon_core.core.runtime.services.graph_dto import (
     WorkflowGraphDto,
 )
 from ergon_core.core.utils import utcnow
+from sqlmodel import Session, col, select
 
 logger = logging.getLogger(__name__)
 

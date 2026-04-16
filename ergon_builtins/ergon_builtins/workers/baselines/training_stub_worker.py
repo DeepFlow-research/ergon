@@ -11,10 +11,9 @@ the RL training loop.
 
 import random
 from collections.abc import AsyncGenerator
-
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from typing import cast
 
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import (
     GenerationTurn,
     ModelRequestPart,

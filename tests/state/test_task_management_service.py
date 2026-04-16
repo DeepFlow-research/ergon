@@ -7,8 +7,6 @@ Graph nodes are created directly via WorkflowGraphRepository.
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
 from ergon_core.core.persistence.graph.status_conventions import (
     ABANDONED,
     COMPLETED,
@@ -30,6 +28,7 @@ from ergon_core.core.runtime.services.task_management_dto import (
 from ergon_core.core.runtime.services.task_management_service import (
     TaskManagementService,
 )
+from sqlmodel import Session
 
 META = MutationMeta(actor="test", reason="test-setup")
 

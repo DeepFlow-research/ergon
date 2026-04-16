@@ -8,9 +8,8 @@ not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def _to_camel(value: str) -> str:

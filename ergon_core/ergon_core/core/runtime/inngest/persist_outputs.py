@@ -12,6 +12,7 @@ from pathlib import Path
 from uuid import UUID
 
 import inngest
+from ergon_builtins.registry import SANDBOX_MANAGERS
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import RunResource, RunResourceKind
@@ -31,7 +32,6 @@ from ergon_core.core.runtime.tracing import (
     persist_outputs_context,
 )
 from ergon_core.core.utils import get_mime_type, utcnow
-from ergon_builtins.registry import SANDBOX_MANAGERS
 
 logger = logging.getLogger(__name__)
 

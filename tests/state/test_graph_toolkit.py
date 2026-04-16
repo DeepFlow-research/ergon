@@ -10,8 +10,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
+from ergon_builtins.tools.graph_toolkit import ResearchGraphToolkit
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
@@ -22,9 +21,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
 )
 from ergon_core.core.utils import utcnow as _utcnow
-
-from ergon_builtins.tools.graph_toolkit import ResearchGraphToolkit
-
+from sqlmodel import Session
 
 # ---------------------------------------------------------------------------
 # helpers

@@ -14,12 +14,11 @@ from collections.abc import Callable
 from uuid import UUID
 
 import inngest as inngest_lib
-from sqlmodel import Session
-
 from ergon_core.core.rl.extraction import Tokenizer
 from ergon_core.core.rl.rewards import RewardStrategy
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.rl.rollout_types import BatchStatus, SubmitRequest
+from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 

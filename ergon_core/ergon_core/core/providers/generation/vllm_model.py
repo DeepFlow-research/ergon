@@ -74,10 +74,9 @@ def _discover_vllm_model_name(endpoint: str) -> str:
     during test setup before vLLM is running).
     """
     # Deferred: runtime-only dependency
-    import urllib.request
-
     # Deferred: runtime-only dependency
     import json as _json
+    import urllib.request
 
     url = f"{endpoint}/v1/models"
     try:

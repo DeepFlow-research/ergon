@@ -7,10 +7,9 @@ Construct via ``from_view`` / ``from_row`` classmethods.
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from ergon_core.api.run_resource import RunResourceKind, RunResourceView
+from ergon_core.api import RunResourceKind, RunResourceView
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ResourceRef(BaseModel):

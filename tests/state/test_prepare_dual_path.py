@@ -11,8 +11,6 @@ from contextlib import contextmanager
 from uuid import UUID, uuid4
 
 import pytest
-from sqlmodel import Session
-
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionWorker,
@@ -27,8 +25,9 @@ from ergon_core.core.runtime.services.orchestration_dto import (
 from ergon_core.core.runtime.services.task_execution_service import (
     TaskExecutionService,
 )
-from tests.state.factories import seed_flat_tasks, seed_run
+from sqlmodel import Session
 
+from tests.state.factories import seed_flat_tasks, seed_run
 
 # ---------------------------------------------------------------------------
 # Helpers

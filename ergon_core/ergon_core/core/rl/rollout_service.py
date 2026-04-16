@@ -12,15 +12,12 @@ from collections.abc import Callable
 from uuid import UUID, uuid4
 
 import inngest
-from sqlmodel import Session, select
-from transformers import AutoTokenizer
-
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.shared.enums import (
     TERMINAL_RUN_STATUSES,
     RunStatus,
 )
 from ergon_core.core.persistence.shared.ids import new_id
-from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
     RolloutBatchRun,
@@ -42,6 +39,8 @@ from ergon_core.core.rl.rollout_types import (
     Trajectory,
 )
 from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+from sqlmodel import Session, select
+from transformers import AutoTokenizer
 
 logger = logging.getLogger(__name__)
 

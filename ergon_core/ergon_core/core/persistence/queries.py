@@ -19,9 +19,9 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskEvaluator,
     ExperimentDefinitionWorker,
 )
+from ergon_core.core.persistence.graph.models import RunGraphEdge
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.graph.models import RunGraphEdge
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,

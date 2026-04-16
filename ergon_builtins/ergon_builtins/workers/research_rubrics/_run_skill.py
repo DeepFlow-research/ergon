@@ -59,12 +59,11 @@ def make_run_skill(
         **kwargs: object,
     ) -> _T:
         # reason: deferred to avoid import-time cost when module is merely imported
-        from pydantic_ai import Agent
-
         # reason: deferred alongside pydantic_ai
         from ergon_core.core.providers.generation.model_resolution import (
             resolve_model_target,
         )
+        from pydantic_ai import Agent
 
         resolved = resolve_model_target(model)
 

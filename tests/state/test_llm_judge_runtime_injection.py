@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult, WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask

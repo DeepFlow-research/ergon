@@ -4,8 +4,8 @@ These are the contracts between Inngest functions and services.
 Adapted from ref: definition_id replaces experiment_id.
 """
 
-from datetime import datetime
 import sys
+from datetime import datetime
 
 if sys.version_info >= (3, 11):
     from enum import StrEnum

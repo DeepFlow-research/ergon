@@ -10,11 +10,11 @@ from ergon_core.api import Benchmark, Evaluator, Worker
 from ergon_core.core.providers.generation.model_resolution import ResolvedModel
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
+from ergon_builtins.benchmarks.delegation_smoke.benchmark import DelegationSmokeBenchmark
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
 from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
-from ergon_builtins.benchmarks.delegation_smoke.benchmark import DelegationSmokeBenchmark
 from ergon_builtins.benchmarks.researchrubrics.smoke import (
     ResearchRubricsSmokeTestBenchmark,
 )

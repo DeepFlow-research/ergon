@@ -10,9 +10,8 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from ergon_core.core.persistence.telemetry.models import RunResourceKind
+from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:
     from ergon_core.core.persistence.telemetry.models import RunResource as _RunResourceRow

@@ -10,8 +10,6 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlmodel import Session, select
-
 from ergon_core.api.generation import (
     GenerationTurn,
     SystemPromptPart,
@@ -31,6 +29,7 @@ from ergon_core.core.persistence.context.event_payloads import (
     UserMessagePayload,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 

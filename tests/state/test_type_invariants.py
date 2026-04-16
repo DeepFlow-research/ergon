@@ -6,24 +6,24 @@ time, catching bugs that would previously slip through as unchecked strings.
 
 from uuid import uuid4
 
-from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunTaskExecution,
-    RunTaskStateEvent,
-    ExperimentCohort,
-    ExperimentCohortStatus,
-    RunResource,
-    RunGenerationTurn,
-    TrainingSession,
+from ergon_core.core.persistence.graph.models import (
+    RunGraphAnnotation,
+    RunGraphMutation,
 )
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
     TaskExecutionStatus,
     TrainingStatus,
 )
-from ergon_core.core.persistence.graph.models import (
-    RunGraphMutation,
-    RunGraphAnnotation,
+from ergon_core.core.persistence.telemetry.models import (
+    ExperimentCohort,
+    ExperimentCohortStatus,
+    RunGenerationTurn,
+    RunRecord,
+    RunResource,
+    RunTaskExecution,
+    RunTaskStateEvent,
+    TrainingSession,
 )
 
 

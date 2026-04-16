@@ -19,8 +19,6 @@ Requires:
 import os
 
 import pytest
-from sqlmodel import select
-
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -29,7 +27,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunResourceKind,
     RunTaskEvaluation,
 )
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from tests.e2e.conftest import run_benchmark
 
@@ -86,8 +84,8 @@ class TestResearchRubricsSmokeE2B:
             assert report.size_bytes > 0
 
             # Verify the blob file exists and its hash matches.
-            from pathlib import Path
             import hashlib
+            from pathlib import Path
 
             blob = Path(report.file_path)
             assert blob.exists(), f"Blob file missing at {report.file_path}"

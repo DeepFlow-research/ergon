@@ -7,8 +7,6 @@ separate session scopes (simulating API restarts).
 
 from uuid import uuid4
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
     RolloutBatch,
@@ -16,6 +14,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
 )
 from ergon_core.core.rl.rollout_types import BatchStatus
+from sqlmodel import Session, select
 
 from tests.state.factories import seed_flat_tasks
 

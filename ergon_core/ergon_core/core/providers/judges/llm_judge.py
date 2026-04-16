@@ -6,9 +6,8 @@ used by the criterion runtime when evaluating LLMJudgeCriterion instances.
 
 from typing import Any, TypeVar
 
-from openai import AsyncOpenAI
-
 from ergon_core.core.settings import settings
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
 T = TypeVar("T", bound=BaseModel)

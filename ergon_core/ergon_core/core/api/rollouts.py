@@ -8,8 +8,6 @@ any Ergon internals.
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
-
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.rl.rollout_types import (
     PollResponse,
@@ -19,6 +17,7 @@ from ergon_core.core.rl.rollout_types import (
     WeightSyncResponse,
 )
 from ergon_core.core.rl.vllm_manager import VLLMManager
+from fastapi import APIRouter, HTTPException
 
 logger = logging.getLogger(__name__)
 

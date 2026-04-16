@@ -9,11 +9,10 @@ executor contract guarantees injection.
 
 from typing import ClassVar
 
-from pydantic import BaseModel
-
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
+from pydantic import BaseModel
 
 
 class _JudgeVerdict(BaseModel):

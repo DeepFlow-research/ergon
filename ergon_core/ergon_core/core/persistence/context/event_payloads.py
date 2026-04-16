@@ -7,9 +7,8 @@ a Literal field so Pydantic can discriminate on deserialisation.
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
-
 from ergon_core.api.generation import TokenLogprob
+from pydantic import BaseModel, Field
 
 # Exported type alias — use everywhere event_type is stored as a string field.
 ContextEventType = Literal[

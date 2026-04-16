@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskEvaluation
 from ergon_core.core.runtime.services.orchestration_dto import FinalizeWorkflowCommand
 from ergon_core.core.runtime.services.workflow_finalization_service import (
     WorkflowFinalizationService,
 )
+from sqlmodel import Session
+
 from tests.state.factories import seed_flat_tasks
 
 

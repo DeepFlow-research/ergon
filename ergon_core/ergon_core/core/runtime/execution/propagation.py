@@ -21,7 +21,6 @@ from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from sqlmodel import Session, select
 
-
 _PROPAGATION_META = MutationMeta(actor="system:propagation")
 
 

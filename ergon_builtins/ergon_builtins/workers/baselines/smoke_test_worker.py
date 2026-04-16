@@ -8,7 +8,6 @@ can later verify.
 from collections.abc import AsyncGenerator
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TextPart
 

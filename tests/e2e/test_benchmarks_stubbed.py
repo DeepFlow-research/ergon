@@ -10,8 +10,6 @@ Requires:
 """
 
 import pytest
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -20,9 +18,9 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskEvaluation,
     RunTaskExecution,
 )
+from sqlmodel import Session, select
 
 from tests.e2e.conftest import run_benchmark
-
 
 STUB_CONFIGS = [
     pytest.param(

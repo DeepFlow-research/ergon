@@ -18,8 +18,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session, select
-
 from ergon_builtins.benchmarks.researchrubrics.smoke import (
     ResearchRubricsSmokeTestBenchmark,
 )
@@ -51,7 +49,6 @@ from ergon_core.core.persistence.telemetry.models import (
 from ergon_core.core.providers.sandbox.resource_publisher import (
     SandboxResourcePublisher,
 )
-from ergon_core.core.runtime.services.run_service import create_run
 from ergon_core.core.runtime.services.orchestration_dto import (
     FinalizeTaskExecutionCommand,
     FinalizeWorkflowCommand,
@@ -59,6 +56,7 @@ from ergon_core.core.runtime.services.orchestration_dto import (
     PrepareTaskExecutionCommand,
     PropagateTaskCompletionCommand,
 )
+from ergon_core.core.runtime.services.run_service import create_run
 from ergon_core.core.runtime.services.task_execution_service import (
     TaskExecutionService,
 )
@@ -71,7 +69,7 @@ from ergon_core.core.runtime.services.workflow_finalization_service import (
 from ergon_core.core.runtime.services.workflow_initialization_service import (
     WorkflowInitializationService,
 )
-
+from sqlmodel import Session, select
 
 # ---------------------------------------------------------------------------
 # Fake sandbox stubs (mirrors tests/state/test_sandbox_resource_publisher.py)

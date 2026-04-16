@@ -12,8 +12,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
 from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     DocumentFailure,
     DocumentSuccess,
@@ -39,7 +37,7 @@ from ergon_core.core.persistence.telemetry.models import (
 from ergon_core.core.providers.sandbox.resource_publisher import (
     SandboxResourcePublisher,
 )
-
+from sqlmodel import Session
 
 # ---------------------------------------------------------------------------
 # Fake sandbox stubs (mirrors test_sandbox_resource_publisher.py)

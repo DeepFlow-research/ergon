@@ -15,9 +15,8 @@ from ergon_core.api.criterion_runtime import (
     SandboxResult,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
-from openai import AsyncOpenAI
-
 from ergon_core.core.settings import settings
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 if TYPE_CHECKING:

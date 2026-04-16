@@ -14,7 +14,6 @@ from typing import ClassVar
 from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-
 from ergon_core.api.run_resource import RunResourceView
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.telemetry.models import RunResourceKind
