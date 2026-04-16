@@ -339,6 +339,7 @@ class TestListChildrenOf:
             task_key="researcher-a",
             description="child a",
             status="running",
+            parent_node_id=parent_node.id,
         )
         child_node_b = RunGraphNode(
             id=uuid4(),
@@ -347,6 +348,7 @@ class TestListChildrenOf:
             task_key="researcher-b",
             description="child b",
             status="running",
+            parent_node_id=parent_node.id,
         )
         # Unrelated sibling node
         sibling_node = RunGraphNode(

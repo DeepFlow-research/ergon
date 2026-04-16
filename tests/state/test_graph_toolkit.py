@@ -7,7 +7,7 @@ empty-case behaviour.  Follows the same fixture pattern as
 
 from contextlib import contextmanager
 from datetime import timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from ergon_builtins.tools.graph_toolkit import ResearchGraphToolkit
@@ -57,6 +57,7 @@ def _seed_node(
     run: RunRecord,
     *,
     task_key: str = "task",
+    parent_node_id: UUID | None = None,
 ) -> RunGraphNode:
     node = RunGraphNode(
         id=uuid4(),
@@ -65,6 +66,7 @@ def _seed_node(
         task_key=task_key,
         description=task_key,
         status="running",
+        parent_node_id=parent_node_id,
     )
     session.add(node)
     session.flush()
@@ -217,8 +219,10 @@ class TestListChildResources:
         run = _seed_run(session)
 
         parent_node = _seed_node(session, run, task_key="parent")
-        child_node = _seed_node(session, run, task_key="child")
-        grandchild_node = _seed_node(session, run, task_key="grandchild")
+        child_node = _seed_node(session, run, task_key="child", parent_node_id=parent_node.id)
+        grandchild_node = _seed_node(
+            session, run, task_key="grandchild", parent_node_id=child_node.id
+        )
 
         _seed_edge(session, run, parent_node, child_node)
         _seed_edge(session, run, child_node, grandchild_node)
@@ -292,9 +296,9 @@ class TestListDescendantResources:
         run = _seed_run(session)
 
         root_node = _seed_node(session, run, task_key="root")
-        l1_node = _seed_node(session, run, task_key="l1")
-        l2_node = _seed_node(session, run, task_key="l2")
-        l3_node = _seed_node(session, run, task_key="l3")
+        l1_node = _seed_node(session, run, task_key="l1", parent_node_id=root_node.id)
+        l2_node = _seed_node(session, run, task_key="l2", parent_node_id=l1_node.id)
+        l3_node = _seed_node(session, run, task_key="l3", parent_node_id=l2_node.id)
 
         _seed_edge(session, run, root_node, l1_node)
         _seed_edge(session, run, l1_node, l2_node)
@@ -354,7 +358,7 @@ class TestListDescendantResources:
         run = _seed_run(session)
 
         node_a = _seed_node(session, run, task_key="a")
-        node_b = _seed_node(session, run, task_key="b")
+        node_b = _seed_node(session, run, task_key="b", parent_node_id=node_a.id)
 
         # Bidirectional edges -> cycle
         _seed_edge(session, run, node_a, node_b)

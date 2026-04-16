@@ -19,7 +19,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskEvaluator,
     ExperimentDefinitionWorker,
 )
-from ergon_core.core.persistence.graph.models import RunGraphEdge
+from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -222,28 +222,20 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
     def list_children_of(self, parent_id: UUID) -> list[RunTaskExecution]:
         """Return direct child task executions of the given parent execution.
 
-        Children are discovered via the graph edge layer: the parent
-        execution's ``node_id`` is the source of edges whose targets host
-        child executions.
-
-        TODO(graph-edges): the RFC for this work assumed a direct
-        ``parent_task_execution_id`` FK on ``RunTaskExecution`` and this
-        helper would just filter by that column.  That column doesn't
-        exist -- parent/child lives in ``RunGraphEdge`` -- so this
-        implementation reads the graph layer instead.  Revisit once the
-        graph/edge structure for subtasks is pinned down; at that point
-        this helper should move into a dedicated graph queries class and
-        the implementation can be simplified.
+        Uses RunGraphNode.parent_node_id for containment lookup instead
+        of edge traversal. The parent execution's node_id is looked up,
+        then all child nodes with that parent_node_id are found, and
+        their executions returned.
         """
         with get_session() as session:
             parent = session.get(RunTaskExecution, parent_id)
             if parent is None or parent.node_id is None:
                 return []
-            child_node_ids_stmt = select(RunGraphEdge.target_node_id).where(
-                RunGraphEdge.source_node_id == parent.node_id
+            child_node_ids_stmt = select(RunGraphNode.id).where(
+                RunGraphNode.parent_node_id == parent.node_id
             )
-            stmt = (
-                select(RunTaskExecution).where(RunTaskExecution.node_id.in_(child_node_ids_stmt))  # type: ignore[union-attr]
+            stmt = select(RunTaskExecution).where(
+                RunTaskExecution.node_id.in_(child_node_ids_stmt)  # type: ignore[union-attr]
             )
             return list(session.exec(stmt).all())
 
