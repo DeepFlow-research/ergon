@@ -113,7 +113,9 @@ class TestMutationLog:
         repo.add_edge(
             session, run_id, source_node_id=a.id, target_node_id=b.id, status="pending", meta=META
         )
-        repo.update_node_status(session, run_id=run_id, node_id=a.id, new_status="running", meta=META)
+        repo.update_node_status(
+            session, run_id=run_id, node_id=a.id, new_status="running", meta=META
+        )
 
         mutations = repo.get_mutations(session, run_id)
 

@@ -519,9 +519,7 @@ def on_task_completed_or_failed(
         )
 
         source_nodes = [session.get(RunGraphNode, e.source_node_id) for e in incoming]
-        if all(
-            n is not None and n.status == TaskExecutionStatus.COMPLETED for n in source_nodes
-        ):
+        if all(n is not None and n.status == TaskExecutionStatus.COMPLETED for n in source_nodes):
             graph_repo.update_node_status(
                 session,
                 run_id=run_id,
@@ -550,9 +548,7 @@ def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
     )
     if not statuses:
         return True
-    return all(s in TERMINAL_STATUSES for s in statuses) and not any(
-        s == FAILED for s in statuses
-    )
+    return all(s in TERMINAL_STATUSES for s in statuses) and not any(s == FAILED for s in statuses)
 
 
 def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:

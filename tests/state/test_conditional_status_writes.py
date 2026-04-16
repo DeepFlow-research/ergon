@@ -31,14 +31,21 @@ class TestConditionalStatusWrites:
         run_id = uuid4()
 
         node = repo.add_node(
-            session, run_id,
-            task_key="t1", instance_key="i0", description="test",
-            status=COMPLETED, meta=META,
+            session,
+            run_id,
+            task_key="t1",
+            instance_key="i0",
+            description="test",
+            status=COMPLETED,
+            meta=META,
         )
         result = repo.update_node_status(
             session,
-            run_id=run_id, node_id=node.id, new_status=CANCELLED,
-            meta=META, only_if_not_terminal=True,
+            run_id=run_id,
+            node_id=node.id,
+            new_status=CANCELLED,
+            meta=META,
+            only_if_not_terminal=True,
         )
         assert result is False
 
@@ -47,14 +54,21 @@ class TestConditionalStatusWrites:
         run_id = uuid4()
 
         node = repo.add_node(
-            session, run_id,
-            task_key="t1", instance_key="i0", description="test",
-            status=FAILED, meta=META,
+            session,
+            run_id,
+            task_key="t1",
+            instance_key="i0",
+            description="test",
+            status=FAILED,
+            meta=META,
         )
         result = repo.update_node_status(
             session,
-            run_id=run_id, node_id=node.id, new_status=CANCELLED,
-            meta=META, only_if_not_terminal=True,
+            run_id=run_id,
+            node_id=node.id,
+            new_status=CANCELLED,
+            meta=META,
+            only_if_not_terminal=True,
         )
         assert result is False
 
@@ -63,14 +77,21 @@ class TestConditionalStatusWrites:
         run_id = uuid4()
 
         node = repo.add_node(
-            session, run_id,
-            task_key="t1", instance_key="i0", description="test",
-            status=CANCELLED, meta=META,
+            session,
+            run_id,
+            task_key="t1",
+            instance_key="i0",
+            description="test",
+            status=CANCELLED,
+            meta=META,
         )
         result = repo.update_node_status(
             session,
-            run_id=run_id, node_id=node.id, new_status=COMPLETED,
-            meta=META, only_if_not_terminal=True,
+            run_id=run_id,
+            node_id=node.id,
+            new_status=COMPLETED,
+            meta=META,
+            only_if_not_terminal=True,
         )
         assert result is False
 
@@ -79,14 +100,21 @@ class TestConditionalStatusWrites:
         run_id = uuid4()
 
         node = repo.add_node(
-            session, run_id,
-            task_key="t1", instance_key="i0", description="test",
-            status=RUNNING, meta=META,
+            session,
+            run_id,
+            task_key="t1",
+            instance_key="i0",
+            description="test",
+            status=RUNNING,
+            meta=META,
         )
         result = repo.update_node_status(
             session,
-            run_id=run_id, node_id=node.id, new_status=CANCELLED,
-            meta=META, only_if_not_terminal=True,
+            run_id=run_id,
+            node_id=node.id,
+            new_status=CANCELLED,
+            meta=META,
+            only_if_not_terminal=True,
         )
         assert result is True
         refreshed = repo.get_node(session, run_id=run_id, node_id=node.id)
@@ -98,14 +126,20 @@ class TestConditionalStatusWrites:
         run_id = uuid4()
 
         node = repo.add_node(
-            session, run_id,
-            task_key="t1", instance_key="i0", description="test",
-            status=COMPLETED, meta=META,
+            session,
+            run_id,
+            task_key="t1",
+            instance_key="i0",
+            description="test",
+            status=COMPLETED,
+            meta=META,
         )
         # Default only_if_not_terminal=False: unconditional
         result = repo.update_node_status(
             session,
-            run_id=run_id, node_id=node.id, new_status=FAILED,
+            run_id=run_id,
+            node_id=node.id,
+            new_status=FAILED,
             meta=META,
         )
         assert result is True
@@ -115,17 +149,24 @@ class TestConditionalStatusWrites:
         run_id = uuid4()
 
         node = repo.add_node(
-            session, run_id,
-            task_key="t1", instance_key="i0", description="test",
-            status=COMPLETED, meta=META,
+            session,
+            run_id,
+            task_key="t1",
+            instance_key="i0",
+            description="test",
+            status=COMPLETED,
+            meta=META,
         )
         mutations_before = repo.get_mutations(session, run_id)
         count_before = len(mutations_before)
 
         repo.update_node_status(
             session,
-            run_id=run_id, node_id=node.id, new_status=CANCELLED,
-            meta=META, only_if_not_terminal=True,
+            run_id=run_id,
+            node_id=node.id,
+            new_status=CANCELLED,
+            meta=META,
+            only_if_not_terminal=True,
         )
         mutations_after = repo.get_mutations(session, run_id)
         assert len(mutations_after) == count_before

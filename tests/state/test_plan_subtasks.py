@@ -164,9 +164,7 @@ class TestPlanSubtasksIntegration:
             assert node.instance_key == "bench-1"
 
         # Verify dependency edge: research -> synthesize
-        edges = repo.get_incoming_edges(
-            session, run_id=run_id, node_id=result.nodes["synthesize"]
-        )
+        edges = repo.get_incoming_edges(session, run_id=run_id, node_id=result.nodes["synthesize"])
         assert len(edges) == 1
         assert edges[0].source_node_id == result.nodes["research"]
 

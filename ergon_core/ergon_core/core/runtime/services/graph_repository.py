@@ -265,7 +265,7 @@ class WorkflowGraphRepository:
 
     # ── Node operations ─────────────────────────────────────
 
-    def add_node(
+    def add_node(  # slopcop: ignore[max-function-params]
         self,
         session: Session,
         run_id: UUID,

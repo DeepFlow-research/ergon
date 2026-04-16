@@ -45,6 +45,7 @@ async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> dict:
     svc = TaskCleanupService()
 
     def _update_db_rows() -> dict:
+        # reason: deferred to avoid circular import at module level
         from ergon_core.core.persistence.shared.db import get_session
 
         with get_session() as session:

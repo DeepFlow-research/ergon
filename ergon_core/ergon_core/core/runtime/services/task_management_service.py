@@ -82,6 +82,7 @@ def _latest_execution_id(session: Session, node_id: UUID) -> UUID | None:
     Used to attach execution_id to TaskCancelledEvent so the cleanup
     function can release the correct sandbox.
     """
+    # reason: deferred to avoid circular import at module level
     from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 
     exe = session.exec(
@@ -176,9 +177,7 @@ class TaskManagementService:
         Uses only_if_not_terminal to avoid races. Counts non-terminal
         descendants so the caller knows the cascade scope.
         """
-        node = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.node_id
-        )
+        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
         old_status = node.status
 
         if old_status in TERMINAL_STATUSES:
@@ -200,9 +199,7 @@ class TaskManagementService:
 
         cascaded = 0
         if applied:
-            cascaded = _count_non_terminal_descendants(
-                session, command.run_id, command.node_id
-            )
+            cascaded = _count_non_terminal_descendants(session, command.run_id, command.node_id)
 
         session.commit()
 
@@ -326,9 +323,7 @@ class TaskManagementService:
         Only pending nodes can be refined. The graph node's description
         is the single source of truth -- no definition row to keep in sync.
         """
-        node = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.node_id
-        )
+        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
         old_description = node.description
 
         if node.status != PENDING:
@@ -413,9 +408,7 @@ class TaskManagementService:
         Every run references exactly one definition, so this is always
         available. Used to populate event payloads.
         """
-        run = session.exec(
-            select(RunRecord).where(RunRecord.id == run_id)
-        ).first()
+        run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
         if run is None:
             # Fallback for tests that don't seed RunRecord
             return DYNAMIC_TASK_SENTINEL_ID

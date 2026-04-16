@@ -61,22 +61,35 @@ class TestListSubtasks:
 
         parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
         child_a = _add_node(
-            repo, session, run_id, "child-a",
-            status=PENDING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "child-a",
+            status=PENDING,
+            parent_node_id=parent.id,
+            level=1,
         )
         child_b = _add_node(
-            repo, session, run_id, "child-b",
-            status=RUNNING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "child-b",
+            status=RUNNING,
+            parent_node_id=parent.id,
+            level=1,
         )
         # Grandchild should NOT appear
         _add_node(
-            repo, session, run_id, "grandchild",
-            status=PENDING, parent_node_id=child_a.id, level=2,
+            repo,
+            session,
+            run_id,
+            "grandchild",
+            status=PENDING,
+            parent_node_id=child_a.id,
+            level=2,
         )
 
-        results = svc.list_subtasks(
-            session, run_id=run_id, parent_node_id=parent.id
-        )
+        results = svc.list_subtasks(session, run_id=run_id, parent_node_id=parent.id)
 
         assert len(results) == 2
         result_ids = {r.node_id for r in results}
@@ -92,17 +105,25 @@ class TestListSubtasks:
         parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
         # Create in reverse order to verify sorting
         _add_node(
-            repo, session, run_id, "zzz-last",
-            status=PENDING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "zzz-last",
+            status=PENDING,
+            parent_node_id=parent.id,
+            level=1,
         )
         _add_node(
-            repo, session, run_id, "aaa-first",
-            status=PENDING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "aaa-first",
+            status=PENDING,
+            parent_node_id=parent.id,
+            level=1,
         )
 
-        results = svc.list_subtasks(
-            session, run_id=run_id, parent_node_id=parent.id
-        )
+        results = svc.list_subtasks(session, run_id=run_id, parent_node_id=parent.id)
 
         assert len(results) == 2
         assert results[0].task_key == "aaa-first"
@@ -116,9 +137,7 @@ class TestListSubtasks:
 
         parent = _add_node(repo, session, run_id, "lonely", status=RUNNING)
 
-        results = svc.list_subtasks(
-            session, run_id=run_id, parent_node_id=parent.id
-        )
+        results = svc.list_subtasks(session, run_id=run_id, parent_node_id=parent.id)
 
         assert results == []
 
@@ -130,23 +149,28 @@ class TestListSubtasks:
 
         parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
         child = _add_node(
-            repo, session, run_id, "done-child",
-            status=COMPLETED, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "done-child",
+            status=COMPLETED,
+            parent_node_id=parent.id,
+            level=1,
         )
 
         # Seed an execution with output
-        session.add(RunTaskExecution(
-            run_id=run_id,
-            node_id=child.id,
-            status=TaskExecutionStatus.COMPLETED,
-            started_at=utcnow(),
-            output_text="research results here",
-        ))
+        session.add(
+            RunTaskExecution(
+                run_id=run_id,
+                node_id=child.id,
+                status=TaskExecutionStatus.COMPLETED,
+                started_at=utcnow(),
+                output_text="research results here",
+            )
+        )
         session.flush()
 
-        results = svc.list_subtasks(
-            session, run_id=run_id, parent_node_id=parent.id
-        )
+        results = svc.list_subtasks(session, run_id=run_id, parent_node_id=parent.id)
 
         assert len(results) == 1
         assert results[0].output == "research results here"
@@ -160,22 +184,27 @@ class TestListSubtasks:
 
         parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
         child = _add_node(
-            repo, session, run_id, "failed-child",
-            status=FAILED, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "failed-child",
+            status=FAILED,
+            parent_node_id=parent.id,
+            level=1,
         )
 
-        session.add(RunTaskExecution(
-            run_id=run_id,
-            node_id=child.id,
-            status=TaskExecutionStatus.FAILED,
-            started_at=utcnow(),
-            error_json={"message": "timeout exceeded"},
-        ))
+        session.add(
+            RunTaskExecution(
+                run_id=run_id,
+                node_id=child.id,
+                status=TaskExecutionStatus.FAILED,
+                started_at=utcnow(),
+                error_json={"message": "timeout exceeded"},
+            )
+        )
         session.flush()
 
-        results = svc.list_subtasks(
-            session, run_id=run_id, parent_node_id=parent.id
-        )
+        results = svc.list_subtasks(session, run_id=run_id, parent_node_id=parent.id)
 
         assert len(results) == 1
         assert results[0].error == "timeout exceeded"
@@ -189,12 +218,22 @@ class TestListSubtasks:
 
         parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
         dep = _add_node(
-            repo, session, run_id, "dep-node",
-            status=COMPLETED, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "dep-node",
+            status=COMPLETED,
+            parent_node_id=parent.id,
+            level=1,
         )
         target = _add_node(
-            repo, session, run_id, "target-node",
-            status=PENDING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "target-node",
+            status=PENDING,
+            parent_node_id=parent.id,
+            level=1,
         )
 
         repo.add_edge(
@@ -206,9 +245,7 @@ class TestListSubtasks:
             meta=META,
         )
 
-        results = svc.list_subtasks(
-            session, run_id=run_id, parent_node_id=parent.id
-        )
+        results = svc.list_subtasks(session, run_id=run_id, parent_node_id=parent.id)
 
         target_info = next(r for r in results if r.node_id == target.id)
         assert dep.id in target_info.depends_on

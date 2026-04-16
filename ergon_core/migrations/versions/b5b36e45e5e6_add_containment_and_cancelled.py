@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = 'b5b36e45e5e6'
-down_revision: Union[str, None] = 'f9075c2ddbc9'
+revision: str = "b5b36e45e5e6"
+down_revision: Union[str, None] = "f9075c2ddbc9"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -25,13 +25,16 @@ def upgrade() -> None:
     )
     op.create_foreign_key(
         "fk_run_graph_nodes_parent",
-        "run_graph_nodes", "run_graph_nodes",
-        ["parent_node_id"], ["id"],
+        "run_graph_nodes",
+        "run_graph_nodes",
+        ["parent_node_id"],
+        ["id"],
         ondelete="SET NULL",
     )
     op.create_index(
         "ix_run_graph_nodes_parent_node_id",
-        "run_graph_nodes", ["parent_node_id"],
+        "run_graph_nodes",
+        ["parent_node_id"],
     )
 
     # 2. Add level column (default 0 = root).

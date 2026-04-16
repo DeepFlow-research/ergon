@@ -60,20 +60,40 @@ class TestCancelOrphans:
 
         parent = _add_node(repo, session, run_id, "parent", status=CANCELLED)
         pending_child = _add_node(
-            repo, session, run_id, "pending-child",
-            status=PENDING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "pending-child",
+            status=PENDING,
+            parent_node_id=parent.id,
+            level=1,
         )
         running_child = _add_node(
-            repo, session, run_id, "running-child",
-            status=RUNNING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "running-child",
+            status=RUNNING,
+            parent_node_id=parent.id,
+            level=1,
         )
         _add_node(
-            repo, session, run_id, "completed-child",
-            status=COMPLETED, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "completed-child",
+            status=COMPLETED,
+            parent_node_id=parent.id,
+            level=1,
         )
         _add_node(
-            repo, session, run_id, "failed-child",
-            status=FAILED, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "failed-child",
+            status=FAILED,
+            parent_node_id=parent.id,
+            level=1,
         )
 
         result = svc.cancel_orphans(
@@ -131,12 +151,22 @@ class TestCancelOrphans:
 
         parent = _add_node(repo, session, run_id, "parent", status=CANCELLED)
         child = _add_node(
-            repo, session, run_id, "child",
-            status=PENDING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "child",
+            status=PENDING,
+            parent_node_id=parent.id,
+            level=1,
         )
         grandchild = _add_node(
-            repo, session, run_id, "grandchild",
-            status=PENDING, parent_node_id=child.id, level=2,
+            repo,
+            session,
+            run_id,
+            "grandchild",
+            status=PENDING,
+            parent_node_id=child.id,
+            level=2,
         )
 
         result = svc.cancel_orphans(

@@ -50,7 +50,7 @@ class TaskCleanupService:
         execution_updated = self._mark_execution_cancelled(session, execution_id)
         session.commit()
 
-        # TODO: sandbox teardown — wire when sandbox management exists
+        # slopcop: ignore[no-todo-comment] — sandbox teardown, wire when sandbox management exists
         sandbox_released = False
 
         logger.info(

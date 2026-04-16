@@ -63,10 +63,7 @@ async def _cancel_orphans_for(
 
         async def _emit_events() -> None:
             await inngest_client.send(
-                [
-                    inngest.Event(name="task/cancelled", data=e)
-                    for e in scan_result["events"]
-                ]
+                [inngest.Event(name="task/cancelled", data=e) for e in scan_result["events"]]
             )
 
         await ctx.step.run("emit-cancelled-events", _emit_events)

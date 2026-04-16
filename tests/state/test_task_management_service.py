@@ -307,16 +307,31 @@ class TestCancelTask:
 
         parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
         _add_node(
-            repo, session, run_id, "child-a",
-            status=PENDING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "child-a",
+            status=PENDING,
+            parent_node_id=parent.id,
+            level=1,
         )
         _add_node(
-            repo, session, run_id, "child-b",
-            status=RUNNING, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "child-b",
+            status=RUNNING,
+            parent_node_id=parent.id,
+            level=1,
         )
         _add_node(
-            repo, session, run_id, "child-c",
-            status=COMPLETED, parent_node_id=parent.id, level=1,
+            repo,
+            session,
+            run_id,
+            "child-c",
+            status=COMPLETED,
+            parent_node_id=parent.id,
+            level=1,
         )
 
         with patch(

@@ -13,16 +13,16 @@ from collections.abc import Callable
 from typing import Any
 
 
-async def _stub_sandbox_exec(
-    *, sandbox_id: str, command: str, timeout_s: int
-) -> dict[str, str]:
+async def _stub_sandbox_exec(*, sandbox_id: str, command: str, timeout_s: int) -> dict[str, str]:
     """Stub until sandbox management module exists."""
     raise NotImplementedError(
         f"Sandbox exec not yet wired (sandbox_id={sandbox_id}, command={command!r})"
     )
 
 
-def make_sandbox_bash_tool(*, sandbox_id: str) -> Callable[..., Any]:
+def make_sandbox_bash_tool(
+    *, sandbox_id: str
+) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
     """Produce a single bash callable bound to the given sandbox."""
 
     async def bash(command: str, timeout_s: int = 30) -> dict[str, object]:
@@ -43,7 +43,7 @@ def make_sandbox_bash_tool(*, sandbox_id: str) -> Callable[..., Any]:
                 "stderr": result.get("stderr", ""),
                 "exit_code": result.get("exit_code", 0),
             }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
             return {"success": False, "error": str(exc)}
 
     return bash

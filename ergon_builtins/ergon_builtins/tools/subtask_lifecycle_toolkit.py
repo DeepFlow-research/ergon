@@ -48,17 +48,17 @@ class SubtaskLifecycleToolkit:
     def __init__(
         self,
         *,
-        run_id: RunId,
-        parent_node_id: NodeId,
+        run_id: UUID,
+        parent_node_id: UUID,
         sandbox_id: str,
     ) -> None:
-        self._run_id = run_id
-        self._parent_node_id = parent_node_id
+        self._run_id = RunId(run_id)
+        self._parent_node_id = NodeId(parent_node_id)
         self._sandbox_id = sandbox_id
         self._mgmt = TaskManagementService()
         self._inspect = TaskInspectionService()
 
-    def get_tools(self) -> list[Callable[..., Any]]:
+    def get_tools(self) -> list[Callable[..., Any]]:  # slopcop: ignore[no-typing-any]
         """Return the seven subtask lifecycle tools for Agent(tools=[...])."""
         return [
             self._make_add_subtask(),
@@ -72,7 +72,7 @@ class SubtaskLifecycleToolkit:
 
     # -- management --------------------------------------------------------
 
-    def _make_add_subtask(self) -> Callable[..., Any]:
+    def _make_add_subtask(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
 
         async def add_subtask(
@@ -95,12 +95,12 @@ class SubtaskLifecycleToolkit:
                         ),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return add_subtask
 
-    def _make_plan_subtasks(self) -> Callable[..., Any]:
+    def _make_plan_subtasks(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
 
         async def plan_subtasks(subtasks: list[dict]) -> dict[str, object]:
@@ -119,12 +119,12 @@ class SubtaskLifecycleToolkit:
                         ),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return plan_subtasks
 
-    def _make_cancel_task(self) -> Callable[..., Any]:
+    def _make_cancel_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
         mgmt, run_id = self._mgmt, self._run_id
 
         async def cancel_task(node_id: str) -> dict[str, object]:
@@ -133,15 +133,15 @@ class SubtaskLifecycleToolkit:
                 with get_session() as session:
                     result = mgmt.cancel_task(
                         session,
-                        CancelTaskCommand(run_id=run_id, node_id=UUID(node_id)),
+                        CancelTaskCommand(run_id=run_id, node_id=NodeId(UUID(node_id))),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return cancel_task
 
-    def _make_refine_task(self) -> Callable[..., Any]:
+    def _make_refine_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
         mgmt, run_id = self._mgmt, self._run_id
 
         async def refine_task(node_id: str, new_description: str) -> dict[str, object]:
@@ -152,38 +152,36 @@ class SubtaskLifecycleToolkit:
                         session,
                         RefineTaskCommand(
                             run_id=run_id,
-                            node_id=UUID(node_id),
+                            node_id=NodeId(UUID(node_id)),
                             new_description=new_description,
                         ),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return refine_task
 
     # -- inspection --------------------------------------------------------
 
-    def _make_list_subtasks(self) -> Callable[..., Any]:
+    def _make_list_subtasks(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
         inspect, run_id, pid = self._inspect, self._run_id, self._parent_node_id
 
         async def list_subtasks() -> dict[str, object]:
             """Return the current status and output-excerpt of every direct subtask."""
             try:
                 with get_session() as session:
-                    infos = inspect.list_subtasks(
-                        session, run_id=run_id, parent_node_id=pid
-                    )
+                    infos = inspect.list_subtasks(session, run_id=run_id, parent_node_id=pid)
                 return {
                     "success": True,
                     "subtasks": [i.model_dump(mode="json") for i in infos],
                 }
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return list_subtasks
 
-    def _make_get_subtask(self) -> Callable[..., Any]:
+    def _make_get_subtask(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
         inspect, run_id = self._inspect, self._run_id
 
         async def get_subtask(node_id: str) -> dict[str, object]:
@@ -191,10 +189,10 @@ class SubtaskLifecycleToolkit:
             try:
                 with get_session() as session:
                     info = inspect.get_subtask(
-                        session, run_id=run_id, node_id=UUID(node_id)
+                        session, run_id=run_id, node_id=NodeId(UUID(node_id))
                     )
                 return {"success": True, **info.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return get_subtask
@@ -202,10 +200,10 @@ class SubtaskLifecycleToolkit:
 
 def build_subtask_lifecycle_tools(
     *,
-    run_id: RunId,
-    parent_node_id: NodeId,
+    run_id: UUID,
+    parent_node_id: UUID,
     sandbox_id: str,
-) -> list[Callable[..., Any]]:
+) -> list[Callable[..., Any]]:  # slopcop: ignore[no-typing-any]
     """Factory entry point for workers.
 
     Convenience wrapper so workers don't need to know about the toolkit class.
