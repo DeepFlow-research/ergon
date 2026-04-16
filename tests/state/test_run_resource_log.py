@@ -339,6 +339,7 @@ class TestListChildrenOf:
             task_key="researcher-a",
             description="child a",
             status="running",
+            parent_node_id=parent_node.id,
         )
         child_node_b = RunGraphNode(
             id=uuid4(),
@@ -347,6 +348,7 @@ class TestListChildrenOf:
             task_key="researcher-b",
             description="child b",
             status="running",
+            parent_node_id=parent_node.id,
         )
         # Unrelated sibling node
         sibling_node = RunGraphNode(
@@ -366,7 +368,7 @@ class TestListChildrenOf:
                 run_id=run.id,
                 source_node_id=parent_node.id,
                 target_node_id=child_node_a.id,
-                status="active",
+                status="pending",
             )
         )
         session.add(
@@ -374,7 +376,7 @@ class TestListChildrenOf:
                 run_id=run.id,
                 source_node_id=parent_node.id,
                 target_node_id=child_node_b.id,
-                status="active",
+                status="pending",
             )
         )
         session.flush()

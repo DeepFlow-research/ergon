@@ -179,6 +179,7 @@ class RunSnapshotDto(CamelModel):
     completed_tasks: int = 0
     failed_tasks: int = 0
     running_tasks: int = 0
+    cancelled_tasks: int = 0
     final_score: float | None = None
     error: str | None = None
 

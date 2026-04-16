@@ -12,7 +12,12 @@ class DelegationError(GraphError):
 
 
 class TaskNotPendingError(DelegationError):
-    """refine_task called on a non-pending node."""
+    """refine_task called on a non-pending node.
+
+    Retained for backwards compatibility. ``refine_task`` now accepts any
+    non-RUNNING status and raises ``TaskRunningError`` instead; callers
+    that relied on this error should update their except clauses.
+    """
 
     def __init__(self, node_id: UUID, current_status: str) -> None:
         super().__init__(
@@ -22,10 +27,68 @@ class TaskNotPendingError(DelegationError):
         self.current_status = current_status
 
 
-class TaskAlreadyTerminalError(DelegationError):
-    """abandon_task called on an already-terminal node."""
+class TaskRunningError(DelegationError):
+    """refine_task called on a node that is currently RUNNING.
+
+    The worker is actively consuming the description; editing it mid-flight
+    would produce inconsistent behaviour. The caller should cancel or wait
+    for the task to terminate, then refine + restart.
+    """
 
     def __init__(self, node_id: UUID, current_status: str) -> None:
-        super().__init__(f"Cannot abandon node {node_id}: already terminal ('{current_status}')")
+        super().__init__(
+            f"Cannot refine node {node_id}: status is '{current_status}' "
+            "(refine is blocked while a worker is running)"
+        )
         self.node_id = node_id
         self.current_status = current_status
+
+
+class TaskNotTerminalError(DelegationError):
+    """restart_task called on a node that is not in a terminal status.
+
+    Only COMPLETED, FAILED, or CANCELLED nodes can be restarted. A PENDING
+    node hasn't run yet; a RUNNING node is live — the manager should cancel
+    first if it wants to restart.
+    """
+
+    def __init__(self, node_id: UUID, current_status: str) -> None:
+        super().__init__(
+            f"Cannot restart node {node_id}: status is '{current_status}', "
+            "expected one of 'completed', 'failed', 'cancelled'"
+        )
+        self.node_id = node_id
+        self.current_status = current_status
+
+
+class TaskAlreadyTerminalError(DelegationError):
+    """cancel_task called on an already-terminal node."""
+
+    def __init__(self, node_id: UUID, current_status: str) -> None:
+        super().__init__(f"Cannot cancel node {node_id}: already terminal ('{current_status}')")
+        self.node_id = node_id
+        self.current_status = current_status
+
+
+class CycleDetectedError(DelegationError):
+    """Raised when plan_subtasks dependency graph contains a cycle."""
+
+    def __init__(self, remaining_keys: list[str]) -> None:
+        super().__init__(f"Cycle detected among keys: {remaining_keys}")
+        self.remaining_keys = remaining_keys
+
+
+class DuplicateLocalKeyError(DelegationError):
+    """Raised when plan_subtasks has duplicate local_key values."""
+
+    def __init__(self, key: str) -> None:
+        super().__init__(f"Duplicate local_key: {key!r}")
+        self.key = key
+
+
+class UnknownLocalKeyError(DelegationError):
+    """Raised when depends_on references a local_key not in the plan."""
+
+    def __init__(self, unknown: list[str]) -> None:
+        super().__init__(f"Unknown depends_on keys: {unknown}")
+        self.unknown = unknown

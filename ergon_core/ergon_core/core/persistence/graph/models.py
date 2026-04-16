@@ -71,6 +71,21 @@ class RunGraphNode(SQLModel, table=True):
     # (payload, contracts, criteria) goes in annotations.
     assigned_worker_key: str | None = None
 
+    # Containment: self-referential FK to the spawning node.
+    # NULL for definition-seeded roots; set for every dynamic subtask.
+    # Stored (not derived) so a single SELECT on run_graph_nodes gives
+    # a fully legible hierarchy without joins or edge traversal.
+    parent_node_id: UUID | None = Field(
+        default=None,
+        foreign_key="run_graph_nodes.id",
+        index=True,
+    )
+
+    # Depth in the containment tree. 0 for roots, parent.level + 1
+    # for dynamic subtasks. Stored for debuggability and to avoid
+    # N+1 level computation at query/rendering time.
+    level: int = Field(default=0)
+
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 

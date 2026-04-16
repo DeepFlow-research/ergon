@@ -164,13 +164,18 @@ class TestManagerWorker:
                 turns.append(turn)
 
         # After execute, tools should be populated:
-        # 3 task-management tools + 6 graph tools = 9
-        assert len(worker.tools) == 9
+        # 8 subtask lifecycle tools + 6 graph tools = 14
+        assert len(worker.tools) == 14
 
         tool_names = {_tool_name(t) for t in worker.tools}
-        assert "add_task" in tool_names
-        assert "abandon_task" in tool_names
+        assert "add_subtask" in tool_names
+        assert "plan_subtasks" in tool_names
+        assert "cancel_task" in tool_names
         assert "refine_task" in tool_names
+        assert "restart_task" in tool_names
+        assert "list_subtasks" in tool_names
+        assert "get_subtask" in tool_names
+        assert "bash" in tool_names
         assert "list_my_resources" in tool_names
         assert "list_child_resources" in tool_names
 

@@ -30,7 +30,7 @@ import { inferTrigger } from "@/lib/runEvents";
 const TERMINAL_STATUSES: Set<string> = new Set([
   "completed",
   "failed",
-  "abandoned",
+  "cancelled",
 ]);
 
 interface MutationContext {
@@ -131,7 +131,7 @@ export function applyGraphMutation(
       return applyNodeStatusChange(
         next,
         mutation.target_id,
-        { status: "abandoned" },
+        { status: "cancelled" },
         ctx,
       );
 

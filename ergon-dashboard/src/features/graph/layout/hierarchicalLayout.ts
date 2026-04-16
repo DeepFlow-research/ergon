@@ -66,9 +66,9 @@ const DEP_DEFAULT_STROKE = "#94a3b8";
 const DELEGATION_ACTIVE_STROKE = "#3b82f6";
 const DELEGATION_DEFAULT_STROKE = "#94a3b8";
 
-function isEdgeFadedForRemovedOrAbandoned(a?: TaskState, b?: TaskState): boolean {
+function isEdgeFadedForRemovedOrCancelled(a?: TaskState, b?: TaskState): boolean {
   const statuses = [a?.status, b?.status].map((s) => (s == null ? "" : String(s)));
-  return statuses.some((s) => s === "abandoned" || s === "removed");
+  return statuses.some((s) => s === "cancelled" || s === "removed");
 }
 
 function searchDimmed(
@@ -90,7 +90,7 @@ function dependencyEdgeStyle(
   sourceId: string,
   targetId: string,
 ): { stroke: string; strokeDasharray: string; opacity: number; animated?: boolean } {
-  const faded = isEdgeFadedForRemovedOrAbandoned(source, target);
+  const faded = isEdgeFadedForRemovedOrCancelled(source, target);
   const dimmed = searchDimmed(searchLower, matchingNodeIds, sourceId, targetId);
   const satisfied = source?.status === "completed";
   return {
@@ -109,7 +109,7 @@ function delegationEdgeStyle(
   parentId: string,
   childId: string,
 ): { stroke: string; strokeWidth: number; opacity: number; animated?: boolean } {
-  const faded = isEdgeFadedForRemovedOrAbandoned(parent, child);
+  const faded = isEdgeFadedForRemovedOrCancelled(parent, child);
   const dimmed = searchDimmed(searchLower, matchingNodeIds, parentId, childId);
   const active =
     child?.status === "running" ||
@@ -498,11 +498,12 @@ export function computeHierarchicalLayout(
           id: `${taskId}->${childId}`,
           source: taskId,
           target: childId,
-          type: "graphDelegation",
+          type: "graphDependency",
           animated: Boolean(delStyle.animated),
           data: {
             stroke: delStyle.stroke,
             strokeWidth: delStyle.strokeWidth,
+            strokeDasharray: "none",
             opacity: delStyle.opacity,
           },
         });

@@ -28,7 +28,7 @@ class DelegationSmokeBenchmark(Benchmark):
                 description=(
                     "You are a manager agent. Your job is to delegate research "
                     "sub-tasks to researcher agents and synthesize their results.\n\n"
-                    "Use the add_task tool to spawn exactly 2 researcher sub-tasks:\n"
+                    "Use the add_subtask tool to spawn exactly 2 researcher sub-tasks:\n"
                     "1. 'Research the history of reinforcement learning'\n"
                     "2. 'Research recent advances in multi-agent systems'\n\n"
                     "After spawning both, wait briefly, then provide a synthesis "

@@ -58,15 +58,19 @@ def _build_task_map(
     edges: list[RunGraphEdge],
     worker_by_binding: dict[str, ExperimentDefinitionWorker],
     task_timestamps: dict[UUID, tuple[datetime | None, datetime | None]],
-) -> tuple[dict[str, RunTaskDto], str, int, int, int, int, int]:
-    """Build the flat task map from graph nodes and edges.
+) -> tuple[dict[str, RunTaskDto], str, int, int, int, int, int, int]:
+    """Three clean passes using stored containment columns.
 
-    Returns (task_map, root_node_id, total, total_leaf, completed, failed, running).
+    Pass 1: node columns (parent_node_id, level) — no edge traversal.
+    Pass 2: reverse lookup for child_ids and is_leaf.
+    Pass 3: dependency edges -> depends_on_ids.
     """
     if not nodes:
-        return {}, "", 0, 0, 0, 0, 0
+        return {}, "", 0, 0, 0, 0, 0, 0
 
     task_map: dict[str, RunTaskDto] = {}
+
+    # Pass 1: build every node DTO from stored columns
     for node in nodes:
         nid = str(node.id)
         worker = worker_by_binding.get(node.assigned_worker_key or "")
@@ -76,36 +80,34 @@ def _build_task_map(
             name=node.task_key,
             description=node.description,
             status=node.status,
-            parent_id=None,
+            parent_id=str(node.parent_node_id) if node.parent_node_id else None,
             child_ids=[],
             depends_on_ids=[],
             is_leaf=True,
-            level=0,
+            level=node.level,
             assigned_worker_id=str(worker.id) if worker else None,
             assigned_worker_name=node.assigned_worker_key,
             started_at=started_at,
             completed_at=completed_at,
         )
 
-    for edge in edges:
-        src = str(edge.source_node_id)
-        tgt = str(edge.target_node_id)
-        source_task = task_map.get(src)
-        target_task = task_map.get(tgt)
-        if source_task is None or target_task is None:
-            continue
+    # Pass 2: derive child_ids and is_leaf from parent_id
+    for nid, dto in task_map.items():
+        if dto.parent_id and dto.parent_id in task_map:
+            parent = task_map[dto.parent_id]
+            task_map[dto.parent_id] = parent.model_copy(
+                update={"child_ids": [*parent.child_ids, nid], "is_leaf": False}
+            )
 
-        if target_task.parent_id is None:
-            task_map[tgt] = target_task.model_copy(
-                update={"parent_id": src, "level": source_task.level + 1}
-            )
-            task_map[src] = source_task.model_copy(
-                update={"child_ids": [*source_task.child_ids, tgt], "is_leaf": False}
-            )
-        elif target_task.parent_id != src:
-            task_map[tgt] = target_task.model_copy(
-                update={"depends_on_ids": [*target_task.depends_on_ids, src]}
-            )
+    # Pass 3: dependency edges -> depends_on_ids
+    for edge in edges:
+        src, tgt = str(edge.source_node_id), str(edge.target_node_id)
+        target_task = task_map.get(tgt)
+        if target_task is None:
+            continue
+        task_map[tgt] = target_task.model_copy(
+            update={"depends_on_ids": [*target_task.depends_on_ids, src]}
+        )
 
     root_id = next((t.id for t in task_map.values() if t.parent_id is None), "")
     total = len(task_map)
@@ -114,8 +116,9 @@ def _build_task_map(
     completed = sum(1 for t in leaves if t.status == "completed")
     failed = sum(1 for t in leaves if t.status == "failed")
     running = sum(1 for t in leaves if t.status == "running")
+    cancelled = sum(1 for t in leaves if t.status == "cancelled")
 
-    return task_map, root_id, total, total_leaf, completed, failed, running
+    return task_map, root_id, total, total_leaf, completed, failed, running, cancelled
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +394,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         completed_tasks,
         failed_tasks,
         running_tasks,
+        cancelled_tasks,
     ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
 
     execution_task_map: dict[UUID, UUID] = {
@@ -499,6 +503,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         completed_tasks=completed_tasks,
         failed_tasks=failed_tasks,
         running_tasks=running_tasks,
+        cancelled_tasks=cancelled_tasks,
         final_score=final_score,
         error=run.error_message,
     )

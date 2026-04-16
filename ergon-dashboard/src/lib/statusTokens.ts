@@ -85,8 +85,8 @@ export const STATUS_TOKENS: Record<TaskStatus, StatusTokens> = {
     ring: "ring-rose-400 dark:ring-rose-500",
     animate: false,
   },
-  [TaskStatus.ABANDONED]: {
-    label: "Abandoned",
+  [TaskStatus.CANCELLED]: {
+    label: "Cancelled",
     hex: "#71717a", // zinc-500
     softBg: "bg-zinc-100 dark:bg-zinc-800/70",
     solidBg: "bg-zinc-500 dark:bg-zinc-400",
@@ -105,7 +105,7 @@ export const TASK_STATUS_ORDER: TaskStatus[] = [
   TaskStatus.RUNNING,
   TaskStatus.COMPLETED,
   TaskStatus.FAILED,
-  TaskStatus.ABANDONED,
+  TaskStatus.CANCELLED,
 ];
 
 export function tokensFor(status: TaskStatus | string): StatusTokens {

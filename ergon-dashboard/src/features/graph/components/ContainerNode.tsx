@@ -64,7 +64,7 @@ function ContainerNodeComponent({
         ${borderColor}
         ${selected ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400" : ""}
         ${dimmed ? "opacity-30" : ""}
-        ${task.status === ("abandoned" as TaskStatus) ? "bg-gray-50/50 dark:bg-gray-900/30" : ""}
+        ${task.status === ("cancelled" as TaskStatus) ? "bg-gray-50/50 dark:bg-gray-900/30" : ""}
       `}
       style={{
         width: containerWidth,

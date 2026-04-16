@@ -117,14 +117,14 @@ class TestOnTaskCompletedByNode:
 
 
 class TestIsWorkflowCompleteV2:
-    def test_treats_abandoned_as_terminal(self, session: Session):
-        """COMPLETED + COMPLETED + ABANDONED -> workflow complete."""
+    def test_treats_cancelled_as_terminal(self, session: Session):
+        """COMPLETED + COMPLETED + CANCELLED -> workflow complete."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
         _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
         _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.COMPLETED)
-        _add_node(repo, session, run_id, "C", status="abandoned")
+        _add_node(repo, session, run_id, "C", status="cancelled")
         session.flush()
 
         assert is_workflow_complete_v2(session, run_id) is True
@@ -142,13 +142,13 @@ class TestIsWorkflowCompleteV2:
 
 
 class TestIsWorkflowFailedV2:
-    def test_abandoned_is_not_failed(self, session: Session):
-        """COMPLETED + ABANDONED -> not failed."""
+    def test_cancelled_is_not_failed(self, session: Session):
+        """COMPLETED + CANCELLED -> not failed."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
         _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
-        _add_node(repo, session, run_id, "B", status="abandoned")
+        _add_node(repo, session, run_id, "B", status="cancelled")
         session.flush()
 
         assert is_workflow_failed_v2(session, run_id) is False

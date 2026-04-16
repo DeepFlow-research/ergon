@@ -99,9 +99,9 @@ class TaskExecutionService:
 
             self._graph_repo.update_node_status(
                 session,
-                command.run_id,
-                command.node_id,
-                TaskExecutionStatus.RUNNING,
+                run_id=command.run_id,
+                node_id=command.node_id,
+                new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(
                     actor="task-execution-service",
                     reason=f"prepare: execution {execution.id}",

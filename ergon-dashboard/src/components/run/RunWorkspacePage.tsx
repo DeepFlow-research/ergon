@@ -120,7 +120,7 @@ export function RunWorkspacePage({
       [TaskStatus.RUNNING]: 0,
       [TaskStatus.COMPLETED]: 0,
       [TaskStatus.FAILED]: 0,
-      [TaskStatus.ABANDONED]: 0,
+      [TaskStatus.CANCELLED]: 0,
     };
     if (!displayState) return { leafStatusCounts: empty, leafTotal: 0 };
     let total = 0;
@@ -145,7 +145,7 @@ export function RunWorkspacePage({
       TaskStatus.RUNNING,
       TaskStatus.COMPLETED,
       TaskStatus.FAILED,
-      TaskStatus.ABANDONED,
+      TaskStatus.CANCELLED,
     ];
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
