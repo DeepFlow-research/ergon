@@ -35,12 +35,8 @@ from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.task_management_dto import (
-    AbandonTaskCommand,
-    AbandonTaskResult,
     AddSubtaskCommand,
     AddSubtaskResult,
-    AddTaskCommand,
-    AddTaskResult,
     CancelTaskCommand,
     CancelTaskResult,
     PlanSubtasksCommand,
@@ -357,102 +353,6 @@ class TaskManagementService:
             node_id=command.node_id,
             old_description=old_description,
             new_description=command.new_description,
-        )
-
-    # ── Backward-compat wrappers (removed once consumers migrate) ──
-
-    def add_task(
-        self,
-        session: Session,
-        command: AddTaskCommand,
-    ) -> AddTaskResult:
-        """Deprecated — use add_subtask. Kept for backward compatibility."""
-        node_uuid = uuid4()
-        task_key = f"{_DYNAMIC_TASK_KEY_PREFIX}{node_uuid.hex[:8]}"
-
-        parent_node = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.parent_node_id
-        )
-
-        node = self._graph_repo.add_node(
-            session,
-            command.run_id,
-            task_key=task_key,
-            instance_key=parent_node.instance_key,
-            description=command.description,
-            status=PENDING,
-            assigned_worker_key=command.worker_binding_key,
-            parent_node_id=command.parent_node_id,
-            level=parent_node.level + 1,
-            meta=_MANAGER_META,
-        )
-
-        edge = self._graph_repo.add_edge(
-            session,
-            command.run_id,
-            source_node_id=command.parent_node_id,
-            target_node_id=node.id,
-            status="pending",
-            meta=_MANAGER_META,
-        )
-
-        session.commit()
-
-        return AddTaskResult(
-            node_id=node.id,
-            edge_id=edge.id,
-            task_key=task_key,
-            status=PENDING,
-        )
-
-    async def dispatch_task_ready(
-        self,
-        *,
-        run_id: UUID,
-        definition_id: UUID,
-        node_id: UUID,
-    ) -> None:
-        """Deprecated — plan_subtasks dispatches automatically."""
-        event = TaskReadyEvent(
-            run_id=run_id,
-            definition_id=definition_id,
-            task_id=DYNAMIC_TASK_SENTINEL_ID,
-            node_id=node_id,
-        )
-        await inngest_client.send(
-            inngest.Event(
-                name=TaskReadyEvent.name,
-                data=event.model_dump(mode="json"),
-            )
-        )
-
-    def abandon_task(
-        self,
-        session: Session,
-        command: AbandonTaskCommand,
-    ) -> AbandonTaskResult:
-        """Deprecated — use cancel_task. Kept for backward compatibility."""
-        node = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.node_id
-        )
-        previous_status = node.status
-
-        if previous_status in TERMINAL_STATUSES:
-            raise TaskAlreadyTerminalError(command.node_id, previous_status)
-
-        self._graph_repo.update_node_status(
-            session,
-            run_id=command.run_id,
-            node_id=command.node_id,
-            new_status=CANCELLED,
-            meta=MutationMeta(actor="manager-worker", reason="manager cancelled task"),
-        )
-        session.commit()
-
-        return AbandonTaskResult(
-            node_id=command.node_id,
-            previous_status=previous_status,
-            new_status=CANCELLED,
         )
 
     # ── Internal helpers ─────────────────────────────────────

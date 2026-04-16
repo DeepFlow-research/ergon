@@ -57,7 +57,7 @@ def _build_manager_researcher_experiment(
     The manager-researcher is assigned to all static benchmark tasks.
     The researcher worker is registered as a sub-worker binding only —
     it receives no static task assignments; dynamic tasks spawned by the
-    manager via add_task() will resolve it via ExperimentDefinitionWorker
+    manager via add_subtask() will resolve it via ExperimentDefinitionWorker
     lookup in _prepare_graph_native().
     """
     manager_cls = workers_registry["manager-researcher"]
@@ -117,7 +117,7 @@ def _build_researchrubrics_experiment(
 
     Manager is assigned to all static benchmark tasks.  Researcher is
     registered as a sub-worker binding only -- dynamic tasks spawned by
-    the manager via add_task() resolve it at runtime.
+    the manager via add_subtask() resolve it at runtime.
     """
     manager_cls = workers_registry["researchrubrics-manager"]
     researcher_cls = workers_registry["researchrubrics-researcher"]
