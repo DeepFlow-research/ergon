@@ -1,9 +1,9 @@
 """Subtask lifecycle toolkit for manager agents.
 
-Produces the seven manager-facing tool callables for ``Agent(tools=[...])``.
+Produces the eight manager-facing tool callables for ``Agent(tools=[...])``.
 Replaces the old ``TaskManagementToolkit`` with expanded capabilities:
-add_subtask, plan_subtasks, cancel_task, refine_task, list_subtasks,
-get_subtask, and sandboxed bash.
+add_subtask, plan_subtasks, cancel_task, refine_task, restart_task,
+list_subtasks, get_subtask, and sandboxed bash.
 """
 
 from collections.abc import Callable
@@ -17,6 +17,7 @@ from ergon_core.core.runtime.services.task_management_dto import (
     CancelTaskCommand,
     PlanSubtasksCommand,
     RefineTaskCommand,
+    RestartTaskCommand,
     SubtaskSpec,
 )
 from ergon_core.core.runtime.services.task_management_service import TaskManagementService
@@ -26,7 +27,7 @@ from ergon_builtins.tools.bash_sandbox_tool import make_sandbox_bash_tool
 
 
 class SubtaskLifecycleToolkit:
-    """Produces the seven manager-facing tool callables for ``Agent(tools=[...])``.
+    """Produces the eight manager-facing tool callables for ``Agent(tools=[...])``.
 
     The toolkit is a closure factory, not a service: it captures
     ``run_id`` and ``parent_node_id`` from ``WorkerContext`` so that
@@ -59,12 +60,13 @@ class SubtaskLifecycleToolkit:
         self._inspect = TaskInspectionService()
 
     def get_tools(self) -> list[Callable[..., Any]]:  # slopcop: ignore[no-typing-any]
-        """Return the seven subtask lifecycle tools for Agent(tools=[...])."""
+        """Return the eight subtask lifecycle tools for Agent(tools=[...])."""
         return [
             self._make_add_subtask(),
             self._make_plan_subtasks(),
             self._make_cancel_task(),
             self._make_refine_task(),
+            self._make_restart_task(),
             self._make_list_subtasks(),
             self._make_get_subtask(),
             make_sandbox_bash_tool(sandbox_id=self._sandbox_id),
@@ -145,7 +147,12 @@ class SubtaskLifecycleToolkit:
         mgmt, run_id = self._mgmt, self._run_id
 
         async def refine_task(node_id: str, new_description: str) -> dict[str, object]:
-            """Refine a pending subtask's description (allowed only while status=pending)."""
+            """Refine a subtask's description. Allowed on any status except RUNNING.
+
+            Pairs with ``restart_task`` for the edit-then-rerun flow: call
+            ``refine_task`` first to update the description, then
+            ``restart_task`` to put the node back in the scheduling queue.
+            """
             try:
                 with get_session() as session:
                     result = mgmt.refine_task(
@@ -161,6 +168,32 @@ class SubtaskLifecycleToolkit:
                 return {"success": False, "error": str(exc)}
 
         return refine_task
+
+    def _make_restart_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+        mgmt, run_id = self._mgmt, self._run_id
+
+        async def restart_task(node_id: str) -> dict[str, object]:
+            """Reset a terminal subtask back to PENDING and re-dispatch.
+
+            Only nodes in terminal status (COMPLETED / FAILED / CANCELLED)
+            may be restarted. Downstream targets that were running against
+            stale input are invalidated (cancelled and re-queued) so the
+            subgraph is consistent when this node re-runs.
+            """
+            try:
+                with get_session() as session:
+                    result = mgmt.restart_task(
+                        session,
+                        RestartTaskCommand(
+                            run_id=run_id,
+                            node_id=NodeId(UUID(node_id)),
+                        ),
+                    )
+                return {"success": True, **result.model_dump(mode="json")}
+            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+                return {"success": False, "error": str(exc)}
+
+        return restart_task
 
     # -- inspection --------------------------------------------------------
 

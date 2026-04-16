@@ -16,6 +16,7 @@ from ergon_core.core.persistence.graph.status_conventions import (
     CANCELLED,
     EDGE_PENDING,
     PENDING,
+    RUNNING,
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -23,7 +24,8 @@ from ergon_core.core.runtime.errors.delegation_errors import (
     CycleDetectedError,
     DuplicateLocalKeyError,
     TaskAlreadyTerminalError,
-    TaskNotPendingError,
+    TaskNotTerminalError,
+    TaskRunningError,
     UnknownLocalKeyError,
 )
 from ergon_core.core.runtime.events.task_events import (
@@ -43,6 +45,8 @@ from ergon_core.core.runtime.services.task_management_dto import (
     PlanSubtasksResult,
     RefineTaskCommand,
     RefineTaskResult,
+    RestartTaskCommand,
+    RestartTaskResult,
     SubtaskSpec,
 )
 from sqlmodel import Session, select
@@ -318,16 +322,22 @@ class TaskManagementService:
         session: Session,
         command: RefineTaskCommand,
     ) -> RefineTaskResult:
-        """Update description on a pending sub-task.
+        """Update description on a sub-task that is not currently RUNNING.
 
-        Only pending nodes can be refined. The graph node's description
-        is the single source of truth -- no definition row to keep in sync.
+        Refinement is allowed on PENDING, COMPLETED, FAILED, and CANCELLED
+        nodes — this supports the edit-then-rerun flow (``refine_task``
+        followed by ``restart_task``). RUNNING is blocked because a worker
+        is actively consuming the description and editing it mid-flight
+        would produce inconsistent behaviour.
+
+        The graph node's description is the single source of truth --
+        no definition row to keep in sync.
         """
         node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
         old_description = node.description
 
-        if node.status != PENDING:
-            raise TaskNotPendingError(command.node_id, node.status)
+        if node.status == RUNNING:
+            raise TaskRunningError(command.node_id, node.status)
 
         self._graph_repo.update_node_field(
             session,
@@ -350,7 +360,112 @@ class TaskManagementService:
             new_description=command.new_description,
         )
 
+    # ── restart_task ─────────────────────────────────────────
+
+    def restart_task(
+        self,
+        session: Session,
+        command: RestartTaskCommand,
+    ) -> RestartTaskResult:
+        """Reset a terminal node back to PENDING and re-dispatch task/ready.
+
+        Only nodes in a terminal status (COMPLETED, FAILED, CANCELLED) may
+        be restarted. The outgoing dependency edges are reset to
+        EDGE_PENDING so that, when this node completes again, normal
+        propagation re-satisfies them.
+
+        In this Phase 1 implementation, downstream invalidation is NOT
+        yet performed — Phase 2 wires in ``_invalidate_downstream`` which
+        cancels non-terminal downstream targets (their input is about to
+        change) and recurses into COMPLETED downstream targets (their
+        output is now stale).
+        """
+        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
+        old_status = node.status
+
+        if old_status not in TERMINAL_STATUSES:
+            raise TaskNotTerminalError(command.node_id, old_status)
+
+        # Phase 2 hook: invalidate downstream targets before resetting own
+        # edges. Currently a no-op; replaced in Phase 2.
+        invalidated_node_ids = self._invalidate_downstream(
+            session,
+            run_id=command.run_id,
+            node_id=command.node_id,
+        )
+
+        # Reset this node's outgoing edges so they re-satisfy on re-run.
+        outgoing = self._graph_repo.get_outgoing_edges(
+            session, run_id=command.run_id, node_id=command.node_id
+        )
+        for edge in outgoing:
+            if edge.status != EDGE_PENDING:
+                self._graph_repo.update_edge_status(
+                    session,
+                    run_id=command.run_id,
+                    edge_id=edge.id,
+                    new_status=EDGE_PENDING,
+                    meta=_MANAGER_META,
+                )
+
+        # Reset the node itself. only_if_not_terminal=False because we
+        # explicitly want to transition terminal -> pending here; the
+        # check above already rejected non-terminal inputs.
+        self._graph_repo.update_node_status(
+            session,
+            run_id=command.run_id,
+            node_id=command.node_id,
+            new_status=PENDING,
+            meta=_MANAGER_META,
+            only_if_not_terminal=False,
+        )
+
+        session.commit()
+
+        definition_id = self._resolve_definition_id(session, command.run_id)
+        self._dispatch_task_ready(
+            run_id=command.run_id,
+            definition_id=definition_id,
+            node_id=command.node_id,
+        )
+
+        logger.info(
+            "restart_task: node %s status %s -> pending (invalidated=%d)",
+            command.node_id,
+            old_status,
+            len(invalidated_node_ids),
+        )
+
+        return RestartTaskResult(
+            node_id=command.node_id,
+            old_status=old_status,
+            invalidated_node_ids=invalidated_node_ids,
+        )
+
     # ── Internal helpers ─────────────────────────────────────
+
+    def _invalidate_downstream(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        node_id: UUID,
+    ) -> list[UUID]:
+        """Cascade invalidate downstream targets whose input is becoming stale.
+
+        Phase 1 stub — no-op.  Phase 2 implements the actual cascade:
+          - Non-terminal targets: cancel + emit task/cancelled.
+          - COMPLETED targets: cancel (stale output) and recurse into
+            their outgoing edges so deeper COMPLETED descendants are also
+            invalidated.
+          - FAILED / CANCELLED targets: already terminal; leave alone
+            (they produced no output to stale).
+
+        Returns the list of node_ids that were invalidated.
+        """
+        # Phase 2 hook — intentionally returns empty list until wired.
+        _ = (session, run_id, node_id)
+        return []
 
     def _validate_plan(self, subtasks: list[SubtaskSpec]) -> None:
         """Check for duplicate keys, unknown references, and cycles."""

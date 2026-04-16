@@ -114,3 +114,35 @@ class RefineTaskResult(BaseModel):
     new_description: str
 
     model_config = {"frozen": True}
+
+
+# ── restart_task ──────────────────────────────────────────────────────────
+
+
+class RestartTaskCommand(BaseModel):
+    """Command to reset a terminal subtask back to PENDING and re-queue it.
+
+    Pairs with ``refine_task`` for the edit-then-rerun flow: the manager
+    calls ``refine_task`` first to update the description, then
+    ``restart_task`` to put the node back in the scheduling queue.
+    """
+
+    run_id: RunId
+    node_id: NodeId
+
+    model_config = {"frozen": True}
+
+
+class RestartTaskResult(BaseModel):
+    """Result of restarting a subtask node.
+
+    ``invalidated_node_ids`` lists any downstream targets that were
+    cancelled because their input became stale (e.g. a COMPLETED
+    downstream node whose upstream source is being re-run).
+    """
+
+    node_id: NodeId
+    old_status: str
+    invalidated_node_ids: list[NodeId] = Field(default_factory=list)
+
+    model_config = {"frozen": True}

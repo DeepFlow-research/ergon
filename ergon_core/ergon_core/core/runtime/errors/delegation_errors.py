@@ -12,11 +12,50 @@ class DelegationError(GraphError):
 
 
 class TaskNotPendingError(DelegationError):
-    """refine_task called on a non-pending node."""
+    """refine_task called on a non-pending node.
+
+    Retained for backwards compatibility. ``refine_task`` now accepts any
+    non-RUNNING status and raises ``TaskRunningError`` instead; callers
+    that relied on this error should update their except clauses.
+    """
 
     def __init__(self, node_id: UUID, current_status: str) -> None:
         super().__init__(
             f"Cannot refine node {node_id}: status is '{current_status}', expected 'pending'"
+        )
+        self.node_id = node_id
+        self.current_status = current_status
+
+
+class TaskRunningError(DelegationError):
+    """refine_task called on a node that is currently RUNNING.
+
+    The worker is actively consuming the description; editing it mid-flight
+    would produce inconsistent behaviour. The caller should cancel or wait
+    for the task to terminate, then refine + restart.
+    """
+
+    def __init__(self, node_id: UUID, current_status: str) -> None:
+        super().__init__(
+            f"Cannot refine node {node_id}: status is '{current_status}' "
+            "(refine is blocked while a worker is running)"
+        )
+        self.node_id = node_id
+        self.current_status = current_status
+
+
+class TaskNotTerminalError(DelegationError):
+    """restart_task called on a node that is not in a terminal status.
+
+    Only COMPLETED, FAILED, or CANCELLED nodes can be restarted. A PENDING
+    node hasn't run yet; a RUNNING node is live — the manager should cancel
+    first if it wants to restart.
+    """
+
+    def __init__(self, node_id: UUID, current_status: str) -> None:
+        super().__init__(
+            f"Cannot restart node {node_id}: status is '{current_status}', "
+            "expected one of 'completed', 'failed', 'cancelled'"
         )
         self.node_id = node_id
         self.current_status = current_status

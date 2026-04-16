@@ -14,10 +14,10 @@ def _make_toolkit() -> SubtaskLifecycleToolkit:
     )
 
 
-def test_get_tools_returns_seven_callables() -> None:
+def test_get_tools_returns_eight_callables() -> None:
     toolkit = _make_toolkit()
     tools = toolkit.get_tools()
-    assert len(tools) == 7
+    assert len(tools) == 8
     assert all(callable(t) for t in tools)
 
 
@@ -49,6 +49,17 @@ async def test_refine_task_handles_invalid_uuid_gracefully() -> None:
     assert len(result["error"]) > 0
 
 
+async def test_restart_task_handles_invalid_uuid_gracefully() -> None:
+    toolkit = _make_toolkit()
+    tools = toolkit.get_tools()
+    restart = tools[4]
+    result = await restart("not-a-uuid")
+    assert result["success"] is False
+    assert "error" in result
+    assert isinstance(result["error"], str)
+    assert len(result["error"]) > 0
+
+
 def test_tools_have_correct_function_names() -> None:
     toolkit = _make_toolkit()
     tools = toolkit.get_tools()
@@ -57,6 +68,7 @@ def test_tools_have_correct_function_names() -> None:
         "plan_subtasks",
         "cancel_task",
         "refine_task",
+        "restart_task",
         "list_subtasks",
         "get_subtask",
         "bash",

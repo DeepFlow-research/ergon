@@ -17,7 +17,7 @@ from ergon_core.core.persistence.graph.status_conventions import (
 )
 from ergon_core.core.runtime.errors.delegation_errors import (
     TaskAlreadyTerminalError,
-    TaskNotPendingError,
+    TaskRunningError,
 )
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
@@ -399,15 +399,15 @@ class TestRefineTask:
         updated = repo.get_node(session, run_id=run_id, node_id=node.id)
         assert updated.description == "improved description"
 
-    def test_on_non_pending_raises(self, session: Session):
-        """refine_task raises TaskNotPendingError on non-pending nodes."""
+    def test_on_running_raises(self, session: Session):
+        """refine_task raises TaskRunningError on RUNNING nodes only."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
         node = _add_node(repo, session, run_id, "busy", status=RUNNING)
 
-        with pytest.raises(TaskNotPendingError) as exc_info:
+        with pytest.raises(TaskRunningError) as exc_info:
             svc.refine_task(
                 session,
                 RefineTaskCommand(
@@ -418,6 +418,35 @@ class TestRefineTask:
             )
         assert exc_info.value.node_id == node.id
         assert exc_info.value.current_status == RUNNING
+
+    @pytest.mark.parametrize("status", [COMPLETED, FAILED, CANCELLED])
+    def test_on_terminal_allowed(self, session: Session, status: str):
+        """refine_task now accepts COMPLETED / FAILED / CANCELLED nodes.
+
+        Supports the edit-then-rerun flow: the manager can update the
+        description on a terminal node before calling restart_task.
+        """
+        repo = WorkflowGraphRepository()
+        svc = TaskManagementService(graph_repo=repo)
+        run_id = uuid4()
+
+        node = _add_node(repo, session, run_id, f"node-{status}", status=status)
+
+        result = svc.refine_task(
+            session,
+            RefineTaskCommand(
+                run_id=run_id,
+                node_id=node.id,
+                new_description=f"refined while {status}",
+            ),
+        )
+
+        assert result.new_description == f"refined while {status}"
+
+        updated = repo.get_node(session, run_id=run_id, node_id=node.id)
+        assert updated.description == f"refined while {status}"
+        # Status must be unchanged — refine does not transition.
+        assert updated.status == status
 
     def test_mutation_logged(self, session: Session):
         """refine_task logs a node.field_changed mutation."""
