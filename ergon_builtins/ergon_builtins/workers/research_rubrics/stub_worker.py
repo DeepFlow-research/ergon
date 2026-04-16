@@ -11,6 +11,8 @@ sandbox path without paying for cloud LLM calls.
 from collections.abc import AsyncGenerator
 from typing import ClassVar
 
+from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TextPart
 from ergon_core.core.providers.sandbox.research_rubrics_manager import (
@@ -65,19 +67,6 @@ class StubResearchRubricsWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
-        # e2b_code_interpreter is a hard requirement for this worker -- it
-        # cannot produce anything useful without a real sandbox.  Deferred
-        # import keeps the module importable when e2b is absent (type
-        # checking, registry scanning), but execute() must fail fast.
-        try:
-            from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-        except ImportError as exc:
-            raise RuntimeError(
-                "StubResearchRubricsWorker requires e2b_code_interpreter; "
-                "install the 'sandbox' extra (pip install ergon[sandbox]) "
-                "or uv sync with default groups."
-            ) from exc
-
         sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
 
         # Ensure the output directory exists.

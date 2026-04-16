@@ -7,6 +7,8 @@ can later verify.
 
 from collections.abc import AsyncGenerator
 
+from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TextPart
 
@@ -26,17 +28,6 @@ class SmokeTestWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
-        try:
-            # Deferred: optional dependency
-            from e2b_code_interpreter import AsyncSandbox
-        except ImportError:
-            yield GenerationTurn(
-                response_parts=[
-                    TextPart(content=f"e2b not available — stub output for {task.task_key}")
-                ],
-            )
-            return
-
         sandbox = await AsyncSandbox.connect(
             sandbox_id=context.sandbox_id,
         )
