@@ -44,7 +44,9 @@ class StubReportExistsCriterion(Criterion):
                 score=0.0,
                 passed=False,
                 weight=self.weight,
-                feedback=(f"No RunResource(kind=REPORT) found for execution {context.execution_id}"),
+                feedback=(
+                    f"No RunResource(kind=REPORT) found for execution {context.execution_id}"
+                ),
             )
 
         report = report_rows[0]
