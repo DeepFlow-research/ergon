@@ -25,7 +25,9 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import TypeVar, get_args, get_origin, get_type_hints
 
+from ergon_core.core.providers.generation.model_resolution import resolve_model_target
 from pydantic import BaseModel
+from pydantic_ai import Agent
 
 logger = logging.getLogger(__name__)
 
@@ -58,13 +60,6 @@ def make_run_skill(
         response_model: type[_T],
         **kwargs: object,
     ) -> _T:
-        # reason: deferred to avoid import-time cost when module is merely imported
-        # reason: deferred alongside pydantic_ai
-        from ergon_core.core.providers.generation.model_resolution import (
-            resolve_model_target,
-        )
-        from pydantic_ai import Agent
-
         resolved = resolve_model_target(model)
 
         agent: Agent[None, _T] = Agent(

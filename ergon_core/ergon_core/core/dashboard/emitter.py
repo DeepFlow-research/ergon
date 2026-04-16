@@ -27,7 +27,7 @@ from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 from ergon_core.core.utils import utcnow
 from pydantic import TypeAdapter
 
-from .event_contracts import (
+from ergon_core.core.dashboard.event_contracts import (
     CohortUpdatedEvent,
     DashboardContextEventEvent,
     DashboardGraphMutationEvent,

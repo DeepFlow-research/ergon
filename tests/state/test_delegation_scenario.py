@@ -29,7 +29,7 @@ from ergon_core.core.runtime.services.task_management_service import (
 )
 from sqlmodel import Session
 
-from .mocks import FakeInngestClient
+from tests.state.mocks import FakeInngestClient
 
 META = MutationMeta(actor="test", reason="scenario-setup")
 
