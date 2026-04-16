@@ -20,3 +20,13 @@ RUN_CANCEL = [
         if_exp="event.data.run_id == async.data.run_id",
     )
 ]
+
+# Per-node cancel matcher. Fires on task/cancelled for this exact node_id.
+# Used by execute_task_fn to drop queued or terminate in-flight invocations
+# when a parent terminates or the manager explicitly cancels.
+TASK_CANCEL = [
+    inngest.Cancel(
+        event="task/cancelled",
+        if_exp="event.data.node_id == async.data.node_id",
+    ),
+]
