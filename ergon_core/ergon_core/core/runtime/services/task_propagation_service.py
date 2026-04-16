@@ -23,7 +23,20 @@ from ergon_core.core.runtime.services.orchestration_dto import (
 
 
 class TaskPropagationService:
+    """Resolve DAG dependencies after a task reaches a terminal state.
+
+    Separated from the Inngest wrappers so the dependency resolution logic
+    is testable without an event loop. Each method opens its own session
+    because the caller (an Inngest step function) may retry independently.
+    """
+
     def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+        """Handle successful task completion: satisfy deps, cascade invalidations.
+
+        Returns newly-ready tasks (for scheduling) and invalidated targets
+        (for emitting task/cancelled events). Uses the graph-native v2 path
+        which reads stored containment columns rather than edge traversal.
+        """
         with get_session() as session:
             graph_repo = WorkflowGraphRepository()
 
@@ -75,6 +88,11 @@ class TaskPropagationService:
             )
 
     def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+        """Handle task failure: invalidate downstream deps, detect workflow terminal.
+
+        Unlike propagate(), never produces newly-ready tasks — a failed source
+        only invalidates outgoing edges and marks targets CANCELLED.
+        """
         with get_session() as session:
             graph_repo = WorkflowGraphRepository()
 

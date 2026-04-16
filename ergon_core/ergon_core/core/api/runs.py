@@ -58,7 +58,7 @@ def _build_task_map(
     edges: list[RunGraphEdge],
     worker_by_binding: dict[str, ExperimentDefinitionWorker],
     task_timestamps: dict[UUID, tuple[datetime | None, datetime | None]],
-) -> tuple[dict[str, RunTaskDto], str, int, int, int, int, int]:
+) -> tuple[dict[str, RunTaskDto], str, int, int, int, int, int, int]:
     """Three clean passes using stored containment columns.
 
     Pass 1: node columns (parent_node_id, level) — no edge traversal.
@@ -66,7 +66,7 @@ def _build_task_map(
     Pass 3: dependency edges -> depends_on_ids.
     """
     if not nodes:
-        return {}, "", 0, 0, 0, 0, 0
+        return {}, "", 0, 0, 0, 0, 0, 0
 
     task_map: dict[str, RunTaskDto] = {}
 
@@ -116,8 +116,9 @@ def _build_task_map(
     completed = sum(1 for t in leaves if t.status == "completed")
     failed = sum(1 for t in leaves if t.status == "failed")
     running = sum(1 for t in leaves if t.status == "running")
+    cancelled = sum(1 for t in leaves if t.status == "cancelled")
 
-    return task_map, root_id, total, total_leaf, completed, failed, running
+    return task_map, root_id, total, total_leaf, completed, failed, running, cancelled
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +394,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         completed_tasks,
         failed_tasks,
         running_tasks,
+        cancelled_tasks,
     ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
 
     execution_task_map: dict[UUID, UUID] = {
@@ -501,6 +503,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
         completed_tasks=completed_tasks,
         failed_tasks=failed_tasks,
         running_tasks=running_tasks,
+        cancelled_tasks=cancelled_tasks,
         final_score=final_score,
         error=run.error_message,
     )
