@@ -35,18 +35,7 @@ class StubReportExistsCriterion(Criterion):
         super().__init__(name=name, weight=weight)
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
-        # Look up RunResource rows for this execution via metadata.
-        execution_id = context.metadata.get("execution_id")
-        if execution_id is None:
-            return CriterionResult(
-                name=self.name,
-                score=0.0,
-                passed=False,
-                weight=self.weight,
-                feedback="No execution_id in EvaluationContext.metadata",
-            )
-
-        resources = queries.resources.list_latest_for_execution(execution_id)
+        resources = queries.resources.list_latest_for_execution(context.execution_id)
         report_rows = [r for r in resources if r.kind == RunResourceKind.REPORT.value]
 
         if not report_rows:
@@ -55,7 +44,7 @@ class StubReportExistsCriterion(Criterion):
                 score=0.0,
                 passed=False,
                 weight=self.weight,
-                feedback=(f"No RunResource(kind=REPORT) found for execution {execution_id}"),
+                feedback=(f"No RunResource(kind=REPORT) found for execution {context.execution_id}"),
             )
 
         report = report_rows[0]

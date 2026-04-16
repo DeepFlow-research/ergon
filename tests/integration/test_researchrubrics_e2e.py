@@ -238,13 +238,14 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
         criterion = StubReportExistsCriterion()
         ctx = EvaluationContext(
             run_id=run.id,
+            task_id=task_desc.task_id,
+            execution_id=prepared.execution_id,
             task=BenchmarkTask(
                 task_key="smoke-research-001",
                 instance_key="default",
                 description="smoke test",
             ),
             worker_result=WorkerOutput(output="Stub report written"),
-            metadata={"execution_id": prepared.execution_id},
         )
         result = asyncio.run(criterion.evaluate(ctx))
         assert result.passed, f"Criterion failed: {result.feedback}"

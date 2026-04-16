@@ -23,6 +23,8 @@ def _make_eval_context(
 ) -> EvaluationContext:
     return EvaluationContext(
         run_id=uuid4(),
+        task_id=uuid4(),
+        execution_id=uuid4(),
         task=BenchmarkTask(
             task_key="test",
             instance_key="default",

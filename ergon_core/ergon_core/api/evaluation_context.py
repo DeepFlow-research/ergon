@@ -37,6 +37,8 @@ class EvaluationContext(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     run_id: UUID
+    task_id: UUID
+    execution_id: UUID
     task: BenchmarkTask
     worker_result: WorkerOutput
     sandbox_id: str | None = None

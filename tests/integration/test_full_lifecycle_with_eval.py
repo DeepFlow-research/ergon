@@ -8,6 +8,7 @@ Calls the same services the Inngest functions call, without requiring a live ser
 """
 
 import asyncio
+from uuid import uuid4
 
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
@@ -90,10 +91,11 @@ class InProcessCriterionExecutor:
             criterion = spec.criterion
             eval_ctx = EvaluationContext(
                 run_id=task_context.run_id,
+                task_id=uuid4(),
+                execution_id=uuid4(),
                 task=BenchmarkTask(task_key="", instance_key="", description=""),
                 worker_result=WR(output=task_context.agent_reasoning),
                 sandbox_id=None,
-                metadata={},
             )
             result = await criterion.evaluate(eval_ctx)
             results.append(result)

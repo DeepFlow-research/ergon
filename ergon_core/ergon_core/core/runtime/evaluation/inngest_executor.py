@@ -78,6 +78,8 @@ class InngestCriterionExecutor:
                 if isinstance(criterion, Criterion):
                     eval_ctx = EvaluationContext(
                         run_id=task_context.run_id,
+                        task_id=self.task_id,
+                        execution_id=self.execution_id,
                         task=BenchmarkTask(
                             task_key="",
                             instance_key="",
@@ -87,11 +89,6 @@ class InngestCriterionExecutor:
                             output=task_context.agent_reasoning,
                         ),
                         sandbox_id=task_context.sandbox_id or None,
-                        metadata={
-                            "execution_id": str(self.execution_id),
-                            "task_id": str(self.task_id),
-                            "evaluator_id": str(self.evaluator_id),
-                        },
                         runtime=runtime,
                     )
                     cr_result = await criterion.evaluate(eval_ctx)
