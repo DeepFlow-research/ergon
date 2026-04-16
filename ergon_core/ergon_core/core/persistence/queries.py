@@ -19,6 +19,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskEvaluator,
     ExperimentDefinitionWorker,
 )
+from ergon_core.core.persistence.graph.models import RunGraphEdge
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -218,6 +219,34 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
             stmt = select(RunTaskExecution).where(RunTaskExecution.status == status)
             return list(session.exec(stmt).all())
 
+    def list_children_of(self, parent_id: UUID) -> list[RunTaskExecution]:
+        """Return direct child task executions of the given parent execution.
+
+        Children are discovered via the graph edge layer: the parent
+        execution's ``node_id`` is the source of edges whose targets host
+        child executions.
+
+        TODO(graph-edges): the RFC for this work assumed a direct
+        ``parent_task_execution_id`` FK on ``RunTaskExecution`` and this
+        helper would just filter by that column.  That column doesn't
+        exist -- parent/child lives in ``RunGraphEdge`` -- so this
+        implementation reads the graph layer instead.  Revisit once the
+        graph/edge structure for subtasks is pinned down; at that point
+        this helper should move into a dedicated graph queries class and
+        the implementation can be simplified.
+        """
+        with get_session() as session:
+            parent = session.get(RunTaskExecution, parent_id)
+            if parent is None or parent.node_id is None:
+                return []
+            child_node_ids_stmt = select(RunGraphEdge.target_node_id).where(
+                RunGraphEdge.source_node_id == parent.node_id
+            )
+            stmt = (
+                select(RunTaskExecution).where(RunTaskExecution.node_id.in_(child_node_ids_stmt))  # type: ignore[union-attr]
+            )
+            return list(session.exec(stmt).all())
+
     def update_status(
         self,
         execution_id: UUID,
@@ -337,6 +366,107 @@ class ResourcesQueries(BaseQueries[RunResource]):
         with get_session() as session:
             stmt = select(RunResource).where(RunResource.task_execution_id == task_execution_id)
             return list(session.exec(stmt).all())
+
+    # --- append-only-log reads -------------------------------------------
+
+    def latest_by_path(
+        self,
+        *,
+        task_execution_id: UUID,
+        file_path: str,
+    ) -> RunResource | None:
+        """Most-recently-inserted row for (task_execution_id, file_path)."""
+        with get_session() as session:
+            stmt = (
+                select(RunResource)
+                .where(
+                    RunResource.task_execution_id == task_execution_id,
+                    RunResource.file_path == file_path,
+                )
+                .order_by(RunResource.created_at.desc(), RunResource.id.desc())
+                .limit(1)
+            )
+            return session.exec(stmt).first()
+
+    def find_by_hash(
+        self,
+        *,
+        task_execution_id: UUID,
+        content_hash: str,
+    ) -> RunResource | None:
+        """Any row in this task execution whose content_hash matches."""
+        with get_session() as session:
+            stmt = (
+                select(RunResource)
+                .where(
+                    RunResource.task_execution_id == task_execution_id,
+                    RunResource.content_hash == content_hash,
+                )
+                .limit(1)
+            )
+            return session.exec(stmt).first()
+
+    def list_latest_for_execution(
+        self,
+        task_execution_id: UUID,
+    ) -> list[RunResource]:
+        """One row per file_path -- the most-recently-inserted row wins.
+
+        Uses a subquery to find the max (created_at, id) per file_path,
+        compatible with both Postgres and SQLite.
+        """
+        with get_session() as session:
+            all_rows = list(
+                session.exec(
+                    select(RunResource)
+                    .where(RunResource.task_execution_id == task_execution_id)
+                    .order_by(
+                        RunResource.file_path,
+                        RunResource.created_at.desc(),
+                        RunResource.id.desc(),
+                    )
+                ).all()
+            )
+            seen: dict[str, RunResource] = {}
+            for row in all_rows:
+                if row.file_path not in seen:
+                    seen[row.file_path] = row
+            return list(seen.values())
+
+    # --- append ----------------------------------------------------------
+
+    def append(  # slopcop: ignore[max-function-params]
+        self,
+        *,
+        run_id: UUID,
+        task_execution_id: UUID,
+        kind: str,
+        name: str,
+        mime_type: str,
+        file_path: str,
+        size_bytes: int,
+        error: str | None,
+        content_hash: str | None,
+        metadata: dict[str, object] | None = None,
+    ) -> RunResource:
+        """Append one row to the log. Never updates."""
+        with get_session() as session:
+            row = RunResource(
+                run_id=run_id,
+                task_execution_id=task_execution_id,
+                kind=kind,
+                name=name,
+                mime_type=mime_type,
+                file_path=file_path,
+                size_bytes=size_bytes,
+                error=error,
+                content_hash=content_hash,
+                metadata_json=metadata or {},
+            )
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return row
 
 
 # ---------------------------------------------------------------------------

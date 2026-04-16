@@ -5,18 +5,6 @@ Used by ReActWorker.from_buffer() to resume a paused execution.
 Events must be pre-sorted by sequence (ascending).
 """
 
-from pydantic_ai.messages import (
-    ModelMessage,
-    ModelRequest,
-    ModelResponse,
-    SystemPromptPart as PydanticSystemPromptPart,
-    TextPart as PydanticTextPart,
-    ThinkingPart as PydanticThinkingPart,
-    ToolCallPart as PydanticToolCallPart,
-    ToolReturnPart as PydanticToolReturnPart,
-    UserPromptPart as PydanticUserPromptPart,
-)
-
 from ergon_core.core.persistence.context.event_payloads import (
     AssistantTextPayload,
     SystemPromptPayload,
@@ -26,6 +14,29 @@ from ergon_core.core.persistence.context.event_payloads import (
     UserMessagePayload,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+)
+from pydantic_ai.messages import (
+    SystemPromptPart as PydanticSystemPromptPart,
+)
+from pydantic_ai.messages import (
+    TextPart as PydanticTextPart,
+)
+from pydantic_ai.messages import (
+    ThinkingPart as PydanticThinkingPart,
+)
+from pydantic_ai.messages import (
+    ToolCallPart as PydanticToolCallPart,
+)
+from pydantic_ai.messages import (
+    ToolReturnPart as PydanticToolReturnPart,
+)
+from pydantic_ai.messages import (
+    UserPromptPart as PydanticUserPromptPart,
+)
 
 
 def _to_response_part(event: RunContextEvent):

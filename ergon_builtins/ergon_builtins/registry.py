@@ -7,7 +7,6 @@ The only conditionality is at this composition boundary.
 from collections.abc import Callable
 
 import structlog
-
 from ergon_core.api import Benchmark, Evaluator, Worker
 from ergon_core.core.providers.generation.model_resolution import (
     ResolvedModel,
@@ -17,9 +16,17 @@ from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.registry_core import (
     BENCHMARKS as _core_benchmarks,
+)
+from ergon_builtins.registry_core import (
     EVALUATORS as _core_evaluators,
+)
+from ergon_builtins.registry_core import (
     MODEL_BACKENDS as _core_model_backends,
+)
+from ergon_builtins.registry_core import (
     SANDBOX_MANAGERS as _core_sandbox_managers,
+)
+from ergon_builtins.registry_core import (
     WORKERS as _core_workers,
 )
 
@@ -50,11 +57,17 @@ except ImportError:
 try:
     from ergon_builtins.registry_data import (
         BENCHMARKS as _data_benchmarks,
+    )
+    from ergon_builtins.registry_data import (
         EVALUATORS as _data_evaluators,
+    )
+    from ergon_builtins.registry_data import (
+        WORKERS as _data_workers,
     )
 
     BENCHMARKS.update(_data_benchmarks)
     EVALUATORS.update(_data_evaluators)
+    WORKERS.update(_data_workers)
 except ImportError:
     log.info(
         "ergon-builtins[data] not installed; gdpeval and researchrubrics benchmarks unavailable"

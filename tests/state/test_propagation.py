@@ -7,8 +7,6 @@ RunGraphNode.status and RunGraphMutation rows.
 
 from uuid import uuid4
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.runtime.execution.propagation import (
@@ -22,6 +20,8 @@ from ergon_core.core.runtime.execution.propagation import (
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
+from sqlmodel import Session, select
+
 from tests.state.factories import (
     seed_chain,
     seed_diamond,

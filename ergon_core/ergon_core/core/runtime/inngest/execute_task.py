@@ -30,8 +30,8 @@ from ergon_core.core.runtime.services.inngest_function_results import (
 from ergon_core.core.runtime.services.orchestration_dto import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
-    PrepareTaskExecutionCommand,
     PreparedTaskExecution,
+    PrepareTaskExecutionCommand,
 )
 from ergon_core.core.runtime.services.task_execution_service import TaskExecutionService
 from ergon_core.core.runtime.tracing import (
@@ -172,6 +172,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 sandbox_id=sandbox_result.sandbox_id,
                 output_dir=sandbox_result.output_dir,
                 benchmark_type=prepared.benchmark_type,
+                worker_output_text=worker_result.output_text,
             ).model_dump(),
         )
 

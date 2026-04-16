@@ -7,14 +7,16 @@ runs all criteria, aggregates results, persists RunTaskEvaluation.
 from datetime import UTC, datetime
 
 import inngest
-from ergon_builtins.registry import EVALUATORS
+from ergon_builtins.registry import EVALUATORS, SANDBOX_MANAGERS
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.evaluation_summary import (
     CriterionResultEntry,
     EvaluationSummary,
 )
 from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
+from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.runtime.errors import ContractViolationError, RegistryLookupError
 from ergon_core.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
 from ergon_core.core.runtime.evaluation.inngest_executor import InngestCriterionExecutor
@@ -119,11 +121,26 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
 
     evaluator = evaluator_cls(name=evaluator_binding_key)
 
+    # Resolve the benchmark-specific sandbox manager so criteria that need a
+    # runtime (LLM judge, sandbox exec) always receive one.  Falls back to
+    # ``DefaultSandboxManager`` for benchmarks that don't register a custom
+    # one.  The manager is a singleton per class, so this doesn't spin up a
+    # new instance per evaluation.
+    definition = queries.definitions.get(payload.definition_id)
+    benchmark_type = definition.benchmark_type if definition is not None else None
+    manager_cls = (
+        SANDBOX_MANAGERS.get(benchmark_type, DefaultSandboxManager)
+        if benchmark_type is not None
+        else DefaultSandboxManager
+    )
+    sandbox_manager = manager_cls()
+
     executor = InngestCriterionExecutor(
         ctx,
         task_id=task_id,
         execution_id=execution_id,
         evaluator_id=evaluator_id,
+        sandbox_manager=sandbox_manager,
     )
 
     task_context = TaskEvaluationContext(

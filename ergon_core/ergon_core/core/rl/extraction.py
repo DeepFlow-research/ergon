@@ -14,8 +14,6 @@ import logging
 from collections import defaultdict
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field
-
 from ergon_core.core.persistence.context.event_payloads import (
     AssistantTextPayload,
     SystemPromptPayload,
@@ -26,6 +24,7 @@ from ergon_core.core.persistence.context.event_payloads import (
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.rl.rewards import IndependentTaskReward, RewardStrategy
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 

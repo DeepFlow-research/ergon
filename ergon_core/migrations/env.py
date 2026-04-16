@@ -6,15 +6,14 @@ the full schema, then delegates to Alembic for migration execution.
 
 from logging.config import fileConfig
 
-from alembic import context
-from sqlalchemy import engine_from_config, pool
-from sqlmodel import SQLModel
-
 import ergon_core.core.persistence.definitions.models  # noqa: F401
 import ergon_core.core.persistence.graph.models  # noqa: F401
 import ergon_core.core.persistence.saved_specs.models  # noqa: F401
 import ergon_core.core.persistence.telemetry.models  # noqa: F401
+from alembic import context
 from ergon_core.core.settings import Settings
+from sqlalchemy import engine_from_config, pool
+from sqlmodel import SQLModel
 
 config = context.config
 

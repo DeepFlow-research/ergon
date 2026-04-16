@@ -8,21 +8,6 @@ from collections.abc import AsyncGenerator
 from typing import Any, Self
 from uuid import UUID
 
-from pydantic import BaseModel
-from pydantic_ai import Agent
-from pydantic_ai.messages import (
-    ModelMessage,
-    ModelRequest,
-    ModelResponse,
-    SystemPromptPart as PydanticSystemPromptPart,
-    TextPart as PydanticTextPart,
-    ThinkingPart as PydanticThinkingPart,
-    ToolCallPart as PydanticToolCallPart,
-    ToolReturnPart as PydanticToolReturnPart,
-    UserPromptPart as PydanticUserPromptPart,
-)
-from sqlmodel import Session
-
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerOutput
 from ergon_core.api.generation import (
     GenerationTurn,
@@ -39,6 +24,32 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.providers.generation.model_resolution import resolve_model_target
 from ergon_core.core.providers.generation.pydantic_ai_format import extract_logprobs
 from ergon_core.core.rl import LOGPROB_SETTINGS
+from pydantic import BaseModel
+from pydantic_ai import Agent
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+)
+from pydantic_ai.messages import (
+    SystemPromptPart as PydanticSystemPromptPart,
+)
+from pydantic_ai.messages import (
+    TextPart as PydanticTextPart,
+)
+from pydantic_ai.messages import (
+    ThinkingPart as PydanticThinkingPart,
+)
+from pydantic_ai.messages import (
+    ToolCallPart as PydanticToolCallPart,
+)
+from pydantic_ai.messages import (
+    ToolReturnPart as PydanticToolReturnPart,
+)
+from pydantic_ai.messages import (
+    UserPromptPart as PydanticUserPromptPart,
+)
+from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 

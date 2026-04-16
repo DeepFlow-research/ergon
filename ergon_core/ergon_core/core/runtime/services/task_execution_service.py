@@ -2,9 +2,6 @@
 
 from uuid import UUID
 
-from sqlalchemy import func
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -30,6 +27,8 @@ from ergon_core.core.runtime.services.orchestration_dto import (
     PrepareTaskExecutionCommand,
 )
 from ergon_core.core.utils import require_not_none, utcnow
+from sqlalchemy import func
+from sqlmodel import Session, select
 
 
 class TaskExecutionService:

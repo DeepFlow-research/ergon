@@ -8,6 +8,7 @@ Calls the same services the Inngest functions call, without requiring a live ser
 """
 
 import asyncio
+from uuid import uuid4
 
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
@@ -17,8 +18,6 @@ from ergon_core.api import Experiment, Worker
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
@@ -26,6 +25,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskEvaluation,
     RunTaskExecution,
 )
+from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
 from ergon_core.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
 from ergon_core.core.runtime.services.evaluation_dto import DispatchEvaluatorsCommand
 from ergon_core.core.runtime.services.evaluator_dispatch_service import (
@@ -90,10 +90,11 @@ class InProcessCriterionExecutor:
             criterion = spec.criterion
             eval_ctx = EvaluationContext(
                 run_id=task_context.run_id,
+                task_id=uuid4(),
+                execution_id=uuid4(),
                 task=BenchmarkTask(task_key="", instance_key="", description=""),
                 worker_result=WR(output=task_context.agent_reasoning),
                 sandbox_id=None,
-                metadata={},
             )
             result = await criterion.evaluate(eval_ctx)
             results.append(result)

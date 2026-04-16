@@ -9,8 +9,8 @@ from typing import Any, cast
 from uuid import UUID
 
 import inngest
-from pydantic import TypeAdapter
-
+from ergon_core.core.persistence.context.event_payloads import ContextEventType
+from ergon_core.core.persistence.context.models import RunContextEvent as _RunContextEvent
 from ergon_core.core.persistence.graph.models import (
     GraphTargetType,
     MutationType,
@@ -25,11 +25,9 @@ from ergon_core.core.runtime.services.cohort_stats_service import (
 )
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 from ergon_core.core.utils import utcnow
+from pydantic import TypeAdapter
 
-from ergon_core.core.persistence.context.event_payloads import ContextEventType
-from ergon_core.core.persistence.context.models import RunContextEvent as _RunContextEvent
-
-from .event_contracts import (
+from ergon_core.core.dashboard.event_contracts import (
     CohortUpdatedEvent,
     DashboardContextEventEvent,
     DashboardGraphMutationEvent,

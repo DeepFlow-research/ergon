@@ -7,11 +7,10 @@ runtime corruption (deadlocks, dangling references, broken audit replay).
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
 from ergon_core.core.runtime.errors.graph_errors import CycleError, DanglingEdgeError
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
+from sqlmodel import Session
 
 META = MutationMeta(actor="test", reason="state-test")
 

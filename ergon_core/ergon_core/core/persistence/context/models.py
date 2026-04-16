@@ -6,12 +6,11 @@ from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
+from ergon_core.core.persistence.context.event_payloads import ContextEventPayload
+from ergon_core.core.persistence.shared.ids import new_id
 from pydantic import TypeAdapter
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
-
-from ergon_core.core.persistence.context.event_payloads import ContextEventPayload
-from ergon_core.core.persistence.shared.ids import new_id
 
 TZDateTime = DateTime(timezone=True)
 

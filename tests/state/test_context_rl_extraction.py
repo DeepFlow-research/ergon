@@ -5,8 +5,6 @@ import asyncio
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
 from ergon_core.api.generation import (
     GenerationTurn,
     SystemPromptPart,
@@ -17,6 +15,7 @@ from ergon_core.api.generation import (
 )
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.rl.extraction import AgentTrajectory, extract_agent_trajectories
+from sqlmodel import Session
 
 
 class _FakeTokenizer:

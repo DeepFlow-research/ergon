@@ -2,6 +2,7 @@
 
 from uuid import UUID, uuid4
 
+from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.runtime.events.task_events import (
     DYNAMIC_TASK_SENTINEL_ID,
     TaskCompletedEvent,
@@ -9,12 +10,11 @@ from ergon_core.core.runtime.events.task_events import (
     TaskReadyEvent,
 )
 from ergon_core.core.runtime.services.orchestration_dto import (
-    PrepareTaskExecutionCommand,
     PreparedTaskExecution,
+    PrepareTaskExecutionCommand,
     PropagateTaskCompletionCommand,
     TaskDescriptor,
 )
-from ergon_core.api.worker_context import WorkerContext
 
 
 class TestDynamicTaskSentinel:

@@ -9,10 +9,9 @@ import time
 from typing import Callable
 from uuid import UUID
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 

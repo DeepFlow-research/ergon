@@ -11,8 +11,6 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
 from ergon_core.core.persistence.graph.status_conventions import (
     ABANDONED,
     COMPLETED,
@@ -29,8 +27,9 @@ from ergon_core.core.runtime.services.task_management_dto import (
 from ergon_core.core.runtime.services.task_management_service import (
     TaskManagementService,
 )
+from sqlmodel import Session
 
-from .mocks import FakeInngestClient
+from tests.state.mocks import FakeInngestClient
 
 META = MutationMeta(actor="test", reason="scenario-setup")
 

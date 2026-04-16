@@ -15,8 +15,8 @@ from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
-from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.context.repository import ContextEventRepository
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import WorkerExecuteRequest

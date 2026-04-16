@@ -11,8 +11,6 @@ from pathlib import Path
 from uuid import UUID
 
 import inngest
-from sqlmodel import select
-
 from ergon_builtins.registry import SANDBOX_MANAGERS
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
@@ -27,6 +25,7 @@ from ergon_core.core.runtime.tracing import (
     sandbox_setup_context,
 )
 from ergon_core.core.settings import settings
+from sqlmodel import select
 
 logger = logging.getLogger(__name__)
 

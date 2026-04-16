@@ -10,10 +10,9 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from ergon_core.core.settings import Settings
 from sqlalchemy import Engine
 from sqlmodel import Session, create_engine
-
-from ergon_core.core.settings import Settings
 
 logger = logging.getLogger(__name__)
 

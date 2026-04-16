@@ -16,8 +16,6 @@ from ergon_core.api import Experiment, Worker
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -28,6 +26,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunTaskExecution,
 )
+from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
 from ergon_core.core.runtime.services.orchestration_dto import (
     FinalizeTaskExecutionCommand,
     FinalizeWorkflowCommand,

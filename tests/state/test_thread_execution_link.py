@@ -7,14 +7,13 @@ None (messages not tied to a specific execution).
 
 from uuid import uuid4
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ThreadMessage,
-    Thread,
     RunTaskExecution,
+    Thread,
+    ThreadMessage,
 )
+from sqlmodel import Session, select
 
 from tests.state.factories import seed_flat_tasks, seed_run
 

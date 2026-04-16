@@ -8,20 +8,18 @@ Verifies:
 - get_output() reads from PG via repository
 """
 
-import pytest
 from uuid import uuid4
 
-from sqlmodel import Session, select
-
+import pytest
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.worker import Worker
 from ergon_core.api.worker_context import WorkerContext
+from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunGenerationTurn, RunTaskExecution
 from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
-from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
+from sqlmodel import Session, select
 
 from tests.state.factories import seed_flat_tasks, seed_run
-
 
 # ---------------------------------------------------------------------------
 # Test helpers

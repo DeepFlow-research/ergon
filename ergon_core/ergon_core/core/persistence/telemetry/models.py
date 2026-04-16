@@ -5,10 +5,8 @@ of truth for the definition itself.
 """
 
 from datetime import datetime
-from typing import Literal
-
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
@@ -163,6 +161,42 @@ class RunTaskExecution(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 
 
+class RunResourceKind(StrEnum):
+    """Canonical kinds for ``run_resources.kind``.
+
+    Stored as VARCHAR; enforced at the API boundary, not in the DB schema.
+    Each kind documents the publisher that produces it so a new reader can
+    trace a row back to the code that wrote it.
+    """
+
+    OUTPUT = "output"
+    """Text output of a worker's ``WorkerOutput``.  Produced by
+    ``_publish_resources`` in ``core.runtime.inngest.persist_outputs``
+    when the worker completes successfully."""
+
+    REPORT = "report"
+    """Terminal report written by a worker into a sandbox publish
+    directory (default: ``/workspace/final_output/``).  Produced by
+    ``SandboxResourcePublisher.sync()`` -- called from the
+    research-rubrics toolkit after every write and from
+    ``persist_outputs`` at task end."""
+
+    ARTIFACT = "artifact"
+    """Intermediate file a worker saved into a publish directory that
+    isn't a report (e.g. plots, derived datasets).  Same publisher path
+    as ``REPORT`` but with a different ``PUBLISH_DIRS`` mapping."""
+
+    SEARCH_CACHE = "search_cache"
+    """Raw JSON search payload cached by the research toolkit's Exa
+    search handler.  Produced by the toolkit calling
+    ``publisher.publish_value(kind=SEARCH_CACHE, ...)``."""
+
+    NOTE = "note"
+    """Free-form scratch note written by an agent via
+    ``publish_value(kind=NOTE, ...)`` -- used by the manager worker to
+    leave breadcrumbs for subsequent researchers."""
+
+
 class RunResource(SQLModel, table=True):
     __tablename__ = "run_resources"
 
@@ -179,6 +213,10 @@ class RunResource(SQLModel, table=True):
     size_bytes: int
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+    # Append-only log support
+    error: str | None = Field(default=None)
+    content_hash: str | None = Field(default=None, index=True)
 
     # -- JSON accessor: metadata_json --
 

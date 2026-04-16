@@ -6,17 +6,6 @@ instances built directly (no DB round-trip needed for pure logic tests).
 
 from uuid import uuid4
 
-from pydantic_ai.messages import (
-    ModelRequest,
-    ModelResponse,
-    SystemPromptPart as PydanticSystemPromptPart,
-    TextPart as PydanticTextPart,
-    ThinkingPart as PydanticThinkingPart,
-    ToolCallPart as PydanticToolCallPart,
-    ToolReturnPart as PydanticToolReturnPart,
-    UserPromptPart as PydanticUserPromptPart,
-)
-
 from ergon_core.core.persistence.context.assembly import assemble_pydantic_ai_messages
 from ergon_core.core.persistence.context.event_payloads import (
     AssistantTextPayload,
@@ -27,6 +16,28 @@ from ergon_core.core.persistence.context.event_payloads import (
     UserMessagePayload,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+)
+from pydantic_ai.messages import (
+    SystemPromptPart as PydanticSystemPromptPart,
+)
+from pydantic_ai.messages import (
+    TextPart as PydanticTextPart,
+)
+from pydantic_ai.messages import (
+    ThinkingPart as PydanticThinkingPart,
+)
+from pydantic_ai.messages import (
+    ToolCallPart as PydanticToolCallPart,
+)
+from pydantic_ai.messages import (
+    ToolReturnPart as PydanticToolReturnPart,
+)
+from pydantic_ai.messages import (
+    UserPromptPart as PydanticUserPromptPart,
+)
 
 
 def _make_event(event_type: str, payload, sequence: int) -> RunContextEvent:

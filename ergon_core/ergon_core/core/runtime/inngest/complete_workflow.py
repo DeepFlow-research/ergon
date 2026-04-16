@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
+from ergon_core.core.dashboard import emit_cohort_updated_for_run
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
@@ -20,7 +21,6 @@ from ergon_core.core.runtime.tracing import (
     workflow_complete_context,
     workflow_root_context,
 )
-from ergon_core.core.dashboard import emit_cohort_updated_for_run
 
 logger = logging.getLogger(__name__)
 

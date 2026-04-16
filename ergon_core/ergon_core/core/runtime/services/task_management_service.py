@@ -9,8 +9,7 @@ import logging
 from uuid import UUID, uuid4
 
 import inngest
-from sqlmodel import Session
-
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.graph.status_conventions import (
     ABANDONED,
     PENDING,
@@ -25,7 +24,6 @@ from ergon_core.core.runtime.events.task_events import (
     TaskReadyEvent,
 )
 from ergon_core.core.runtime.inngest_client import inngest_client
-from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.task_management_dto import (
@@ -36,6 +34,7 @@ from ergon_core.core.runtime.services.task_management_dto import (
     RefineTaskCommand,
     RefineTaskResult,
 )
+from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 

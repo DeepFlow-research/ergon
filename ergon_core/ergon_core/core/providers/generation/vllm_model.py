@@ -5,7 +5,9 @@ resolving ``model_target`` strings (e.g. ``"openai:gpt-4o"`` or
 ``"vllm:http://localhost:8000"``) to a PydanticAI-compatible model.
 """
 
+import json as _json
 import logging
+import urllib.request
 
 import pydantic_ai.models
 from pydantic import BaseModel
@@ -73,12 +75,6 @@ def _discover_vllm_model_name(endpoint: str) -> str:
     Falls back to ``"default"`` if the endpoint is unreachable (e.g.
     during test setup before vLLM is running).
     """
-    # Deferred: runtime-only dependency
-    import urllib.request
-
-    # Deferred: runtime-only dependency
-    import json as _json
-
     url = f"{endpoint}/v1/models"
     try:
         with urllib.request.urlopen(url, timeout=5) as resp:

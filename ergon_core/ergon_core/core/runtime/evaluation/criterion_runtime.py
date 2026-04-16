@@ -1,20 +1,22 @@
-"""Criterion runtime: execution helpers passed into criteria.
+"""Default concrete implementation of ``CriterionRuntime``.
 
-CriterionRuntime is a protocol. DefaultCriterionRuntime is the real
-implementation backed by E2B sandbox + OpenAI LLM judge.
+The Protocol itself lives in ``ergon_core.api.criterion_runtime`` so that
+``EvaluationContext`` (also in ``api/``) can type it without importing
+from ``core``.  This module is the real implementation backed by the
+sandbox manager + OpenAI LLM judge.
 """
 
 import logging
-from typing import TYPE_CHECKING, Protocol, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
-from ergon_core.core.runtime.evaluation.evaluation_schemas import (
+from ergon_core.api.criterion_runtime import (
     CommandResult,
-    CriterionContext,
+    CriterionRuntime,
     SandboxResult,
 )
-from openai import AsyncOpenAI
-
+from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
 from ergon_core.core.settings import settings
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -23,17 +25,8 @@ if TYPE_CHECKING:
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
-
-class CriterionRuntime(Protocol):
-    """Execution helper passed into a single criterion."""
-
-    async def ensure_sandbox(self) -> None: ...
-    async def upload_files(self, files: list[dict]) -> None: ...
-    async def write_file(self, path: str, content: bytes) -> None: ...
-    async def run_command(self, command: str, timeout: int = 30) -> CommandResult: ...
-    async def execute_code(self, code: str) -> SandboxResult: ...
-    async def call_llm_judge(self, messages: list, response_type: type[T]) -> T: ...
-    async def cleanup(self) -> None: ...
+# Re-export the Protocol so existing imports from this module keep working.
+__all__ = ["CriterionRuntime", "DefaultCriterionRuntime"]
 
 
 class DefaultCriterionRuntime:

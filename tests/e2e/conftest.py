@@ -8,9 +8,8 @@ import os
 import subprocess
 
 import pytest
-from sqlmodel import Session
-
 from ergon_core.core.persistence.shared.db import get_engine
+from sqlmodel import Session
 
 
 @pytest.fixture(scope="session", autouse=True)

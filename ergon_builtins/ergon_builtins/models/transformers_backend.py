@@ -11,12 +11,12 @@ requests structured output (e.g. ``output_type`` on the Agent).
 import json as _json
 import logging
 
+import outlines
 import pydantic_ai.messages as _messages
 import pydantic_ai.models as _models
-from pydantic_ai.settings import ModelSettings
 import torch
-import outlines
 from ergon_core.core.providers.generation.model_resolution import ResolvedModel
+from pydantic_ai.settings import ModelSettings
 
 logger = logging.getLogger(__name__)
 

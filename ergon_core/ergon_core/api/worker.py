@@ -5,8 +5,6 @@ from collections.abc import AsyncGenerator, Mapping
 from typing import Any, ClassVar, Self
 from uuid import UUID
 
-from sqlmodel import Session
-
 from ergon_core.api.dependencies import check_packages
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.generation import GenerationTurn
@@ -15,6 +13,7 @@ from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
+from sqlmodel import Session
 
 
 class Worker(ABC):
