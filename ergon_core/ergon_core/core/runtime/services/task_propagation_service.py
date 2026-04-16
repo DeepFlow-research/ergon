@@ -12,6 +12,7 @@ from ergon_core.core.runtime.execution.propagation import (
     on_task_completed_or_failed,
 )
 from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
+from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.orchestration_dto import (
     PropagateTaskCompletionCommand,
@@ -50,6 +51,21 @@ class TaskPropagationService:
                         completed_task_id=command.task_id,
                         workflow_terminal_state=WorkflowTerminalState.NONE,
                     )
+
+            # Mark the triggering node as COMPLETED before propagating edges.
+            # on_task_completed_or_failed only updates edges and downstream
+            # candidates — the node's own status must be set by the caller.
+            graph_repo.update_node_status(
+                session,
+                run_id=command.run_id,
+                node_id=node_id,
+                new_status=TaskExecutionStatus.COMPLETED,
+                meta=MutationMeta(
+                    actor="system:propagation",
+                    reason=f"task {command.task_id} completed",
+                ),
+                only_if_not_terminal=True,
+            )
 
             newly_ready_node_ids, invalidated_node_ids = on_task_completed_or_failed(
                 session,
@@ -102,6 +118,19 @@ class TaskPropagationService:
 
             invalidated_node_ids: list[UUID] = []
             if node_id is not None:
+                # Mark the triggering node as FAILED before propagating edges.
+                graph_repo.update_node_status(
+                    session,
+                    run_id=command.run_id,
+                    node_id=node_id,
+                    new_status=TaskExecutionStatus.FAILED,
+                    meta=MutationMeta(
+                        actor="system:propagation",
+                        reason=f"task {command.task_id} failed",
+                    ),
+                    only_if_not_terminal=True,
+                )
+
                 _ready, invalidated_node_ids = on_task_completed_or_failed(
                     session,
                     command.run_id,

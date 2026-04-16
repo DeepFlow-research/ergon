@@ -18,18 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Add parent_node_id column + FK + index.
+    # 1. Add parent_node_id column + index.
+    # FK constraint is declared on the SQLModel field; we skip
+    # op.create_foreign_key here because SQLite does not support
+    # ALTER TABLE ... ADD CONSTRAINT. The ORM handles referential
+    # integrity at the application level.
     op.add_column(
         "run_graph_nodes",
         sa.Column("parent_node_id", sa.Uuid(), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_run_graph_nodes_parent",
-        "run_graph_nodes",
-        "run_graph_nodes",
-        ["parent_node_id"],
-        ["id"],
-        ondelete="SET NULL",
     )
     op.create_index(
         "ix_run_graph_nodes_parent_node_id",
@@ -44,31 +40,42 @@ def upgrade() -> None:
     )
 
     # 3. Backfill: old delegation edges (status='active') become parent_node_id
-    #    on their target node.
+    #    on their target node. Uses subquery syntax for SQLite compatibility
+    #    (SQLite does not support UPDATE ... FROM).
     op.execute("""
-        UPDATE run_graph_nodes tgt
-           SET parent_node_id = e.source_node_id
-          FROM run_graph_edges e
-         WHERE e.target_node_id = tgt.id
-           AND e.status = 'active'
+        UPDATE run_graph_nodes
+           SET parent_node_id = (
+               SELECT e.source_node_id
+                 FROM run_graph_edges e
+                WHERE e.target_node_id = run_graph_nodes.id
+                  AND e.status = 'active'
+                LIMIT 1
+           )
+         WHERE id IN (
+               SELECT e.target_node_id
+                 FROM run_graph_edges e
+                WHERE e.status = 'active'
+           )
     """)
 
-    # 4. Recursive level backfill.
-    op.execute("""
-        WITH RECURSIVE tree AS (
-            SELECT id, 0 AS depth
-              FROM run_graph_nodes
-             WHERE parent_node_id IS NULL
-            UNION ALL
-            SELECT n.id, t.depth + 1
-              FROM run_graph_nodes n
-              JOIN tree t ON n.parent_node_id = t.id
-        )
-        UPDATE run_graph_nodes
-           SET level = tree.depth
-          FROM tree
-         WHERE run_graph_nodes.id = tree.id
-    """)
+    # 4. Recursive level backfill. SQLite supports recursive CTEs but not
+    #    UPDATE ... FROM, so we use a correlated subquery approach instead.
+    #    For each node with a parent, set level = parent's level + 1.
+    #    We iterate up to 10 levels deep (sufficient for practical subtask trees).
+    for _depth in range(10):
+        op.execute("""
+            UPDATE run_graph_nodes
+               SET level = (
+                   SELECT p.level + 1
+                     FROM run_graph_nodes p
+                    WHERE p.id = run_graph_nodes.parent_node_id
+               )
+             WHERE parent_node_id IS NOT NULL
+               AND level = 0
+               AND parent_node_id IN (
+                   SELECT id FROM run_graph_nodes WHERE level > 0 OR parent_node_id IS NULL
+               )
+        """)
 
     # 5. Delete delegation edges — containment now lives on the node.
     op.execute("DELETE FROM run_graph_edges WHERE status = 'active'")
@@ -83,6 +90,5 @@ def downgrade() -> None:
     op.execute("UPDATE run_graph_nodes SET status = 'abandoned' WHERE status = 'cancelled'")
     op.execute("UPDATE run_graph_edges SET status = 'abandoned' WHERE status = 'invalidated'")
     op.drop_index("ix_run_graph_nodes_parent_node_id")
-    op.drop_constraint("fk_run_graph_nodes_parent", "run_graph_nodes")
     op.drop_column("run_graph_nodes", "level")
     op.drop_column("run_graph_nodes", "parent_node_id")
