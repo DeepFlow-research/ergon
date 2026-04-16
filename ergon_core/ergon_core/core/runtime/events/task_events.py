@@ -89,3 +89,34 @@ class WorkflowFailedEvent(InngestEventContract):
     run_id: UUID
     definition_id: UUID
     error: str
+
+
+# ── Cancel cause ──────────────────────────────────────────────────
+
+CancelCause = Literal[
+    "manager_decision",
+    "parent_terminal",
+    "dep_invalidated",
+    "run_cancelled",
+]
+
+
+class TaskCancelledEvent(InngestEventContract):
+    """Emitted whenever a node transitions from non-terminal into CANCELLED.
+
+    Consumers:
+      - cancel_orphan_subtasks_fn (recurse cascade to descendants)
+      - cleanup_cancelled_task_fn (release sandbox, mark execution row)
+      - execute_task_fn (via TASK_CANCEL matcher — drops queued / terminates running)
+      - dashboard_emitter
+    """
+
+    name: ClassVar[str] = "task/cancelled"
+
+    run_id: UUID
+    definition_id: UUID
+    node_id: UUID
+    execution_id: UUID | None
+    cause: CancelCause
+
+    model_config = {"frozen": True}
