@@ -15,6 +15,17 @@ class FakeInngestClient:
         self,
         events: inngest.Event | list[inngest.Event],
     ) -> None:
+        """Async send — used by dispatch_task_ready (deprecated path)."""
+        if isinstance(events, list):
+            self.sent_events.extend(events)
+        else:
+            self.sent_events.append(events)
+
+    def send_sync(
+        self,
+        events: inngest.Event | list[inngest.Event],
+    ) -> None:
+        """Sync send — used by cancel_task and plan_subtasks."""
         if isinstance(events, list):
             self.sent_events.extend(events)
         else:
