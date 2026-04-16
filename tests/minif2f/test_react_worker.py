@@ -19,7 +19,6 @@ from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxMana
 from ergon_builtins.workers.baselines.minif2f_react_worker import (
     MiniF2FReActWorker,
     _make_run_skill,
-    _noop_stakeholder,
     _read_final_proof,
 )
 from ergon_core.api.worker_context import WorkerContext
@@ -105,8 +104,8 @@ async def test_execute_builds_toolkit_against_live_sandbox(
 
     tools = captured["tools"]
     assert isinstance(tools, list)
-    # Five tools: write/check/verify lean + search_lemmas + ask_stakeholder
-    assert len(tools) == 5
+    # Four tools: write/check/verify lean + search_lemmas (no stakeholder in autonomous mode)
+    assert len(tools) == 4
 
 
 @pytest.mark.asyncio
@@ -141,12 +140,6 @@ async def test_run_skill_rejects_unsupported_skill() -> None:
 
 
 @pytest.mark.asyncio
-async def test_noop_stakeholder_returns_usable_message() -> None:
-    reply = await _noop_stakeholder("any question")
-    assert "No stakeholder" in reply
-
-
-@pytest.mark.asyncio
 async def test_read_final_proof_returns_contents_when_file_present() -> None:
     sandbox = MagicMock()
     sandbox.commands.run = AsyncMock(
@@ -164,9 +157,7 @@ async def test_read_final_proof_returns_contents_when_file_present() -> None:
 async def test_read_final_proof_returns_none_when_file_missing() -> None:
     sandbox = MagicMock()
     # cat returns non-zero when the file is absent (with 2>/dev/null, stderr empty)
-    sandbox.commands.run = AsyncMock(
-        return_value=MagicMock(exit_code=1, stdout="", stderr="")
-    )
+    sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=1, stdout="", stderr=""))
     result = await _read_final_proof(sandbox)
     assert result is None
 

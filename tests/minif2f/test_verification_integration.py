@@ -20,10 +20,8 @@ import pytest
 from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
-from ergon_builtins.benchmarks.minif2f.sandbox_manager import (
-    MiniF2FSandboxManager,
-    _REGISTRY_PATH,
-)
+from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
+from ergon_builtins.benchmarks.minif2f.sandbox.utils import REGISTRY_PATH
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
@@ -39,13 +37,13 @@ FIXTURE_PROOF = Path(__file__).parent.parent / "fixtures/minif2f/known_good_proo
 def _require_setup() -> None:
     if not os.environ.get("E2B_API_KEY"):
         pytest.skip("E2B_API_KEY not set — skipping live sandbox test")
-    if not _REGISTRY_PATH.exists():
-        pytest.skip(f"{_REGISTRY_PATH} missing — run `ergon benchmark setup minif2f` first")
+    if not REGISTRY_PATH.exists():
+        pytest.skip(f"{REGISTRY_PATH} missing — run `ergon benchmark setup minif2f` first")
     try:
-        with _REGISTRY_PATH.open() as f:
+        with REGISTRY_PATH.open() as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
-        pytest.skip(f"{_REGISTRY_PATH} unreadable — rerun setup")
+        pytest.skip(f"{REGISTRY_PATH} unreadable — rerun setup")
     if "minif2f" not in data:
         pytest.skip("minif2f template not registered — run `ergon benchmark setup minif2f`")
 

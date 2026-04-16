@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import inngest
+from e2b import Template
 
 from ergon_cli.composition import build_experiment
 from ergon_cli.discovery import list_benchmarks
@@ -23,6 +24,7 @@ from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
 from ergon_core.core.runtime.services.run_service import create_run
+from ergon_core.core.settings import settings
 
 
 def _fail(message: str, exit_code: int = 1) -> int:
@@ -72,7 +74,7 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
     force: bool = args.force
 
     # 1. Validate E2B_API_KEY
-    if not os.environ.get("E2B_API_KEY"):
+    if not settings.e2b_api_key:
         return _fail(
             "Error: E2B_API_KEY is not set.\n"
             "Export your E2B API key before running this command:\n"
@@ -83,10 +85,7 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
     # 2. Look up template dir
     if slug not in SANDBOX_TEMPLATES:
         available = ", ".join(sorted(SANDBOX_TEMPLATES)) or "(none)"
-        return _fail(
-            f"Error: unknown benchmark slug '{slug}'.\n"
-            f"Available slugs: {available}"
-        )
+        return _fail(f"Error: unknown benchmark slug '{slug}'.\nAvailable slugs: {available}")
 
     template_dir = SANDBOX_TEMPLATES[slug]
 
@@ -128,9 +127,6 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
 
     if not dockerfile_path.exists():
         return _fail(f"Error: Dockerfile not found at {dockerfile_path}")
-
-    # reason: deferred — e2b SDK is heavy and only needed for setup
-    from e2b import Template
 
     dockerfile_content = dockerfile_path.read_text()
 
@@ -175,10 +171,7 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
 
     # 7. Report
     print(f"\nSuccess! Template ID: {template_id} (build {build_info.build_id}, {build_time}s)")
-    print(
-        f"Now run: `ergon benchmark run {slug}"
-        " --worker minif2f-react --model <model> --limit 1`"
-    )
+    print(f"Now run: `ergon benchmark run {slug} --worker minif2f-react --model <model> --limit 1`")
     return 0
 
 

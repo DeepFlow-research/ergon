@@ -33,15 +33,6 @@ _FINAL_SOLUTION_PATH = "/workspace/final_output/final_solution.lean"
 _FINAL_SOLUTION_ARTIFACT_KEY = "final_solution.lean"
 
 
-async def _noop_stakeholder(_question: str) -> str:
-    """Stakeholder hint callback — unused in autonomous runs."""
-    return (
-        "No stakeholder is available in this run. Proceed using only the "
-        "Lean tools (write_lean_file, check_lean_file, verify_lean_proof, "
-        "search_lemmas)."
-    )
-
-
 def _make_run_skill(sandbox: Any) -> Any:  # slopcop: ignore[no-typing-any]
     """Return a minimal ``sandbox_run_skill`` callable bound to `sandbox`.
 
@@ -127,7 +118,6 @@ class MiniF2FReActWorker(ReActWorker):
 
         toolkit = MiniF2FToolkit(
             sandbox=sandbox,
-            ask_stakeholder_fn=_noop_stakeholder,
             sandbox_run_skill=_make_run_skill(sandbox),
             run_id=context.run_id,
         )
@@ -191,10 +181,3 @@ async def _read_final_proof(sandbox: Any) -> str | None:  # slopcop: ignore[no-t
         )
         return None
     return result.stdout
-
-
-__all__ = [
-    "DEFAULT_SYSTEM_PROMPT",
-    "MiniF2FReActWorker",
-    "WriteLeanResponse",
-]

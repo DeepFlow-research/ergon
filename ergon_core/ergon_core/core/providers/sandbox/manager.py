@@ -244,12 +244,8 @@ if created:
                 }
                 if envs:
                     create_kwargs["envs"] = envs
-                # Resolve template from class or instance attribute. Subclasses
-                # can set it either at class scope (ClassVar) or on self in
-                # __init__ (e.g. to load a template_id from a user registry).
-                template = getattr(self, "template", None)
-                if template:
-                    create_kwargs["template"] = template
+                if self.template:
+                    create_kwargs["template"] = self.template
                 sandbox = await AsyncSandbox.create(**create_kwargs)
             except Exception as e:  # slopcop: ignore[no-broad-except]
                 raise RuntimeError(

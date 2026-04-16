@@ -17,11 +17,7 @@ try:
 except ImportError:
     Tool = None  # type: ignore[assignment,misc]
 
-# The ergon-minif2f-v1 template exposes elan via /usr/local/bin symlinks, so no
-# PATH export is needed. We cd into the mathlib project and invoke `lake env
-# lean` so mathlib4 imports resolve against the cached oleans.
-LEAN_CMD_PREFIX = "cd /tools/mathlib_project &&"
-LEAN_CMD = "lake env lean"
+from ergon_builtins.benchmarks.minif2f.constants import LEAN_CMD, LEAN_CMD_PREFIX
 
 # ── Response models ───────────────────────────────────────────────────
 
@@ -134,9 +130,9 @@ class MiniF2FToolkit:
         self,
         *,
         sandbox,
-        ask_stakeholder_fn,
         sandbox_run_skill,
         run_id,
+        ask_stakeholder_fn=None,
     ) -> None:
         self._sandbox = sandbox
         self._ask = ask_stakeholder_fn
@@ -144,13 +140,15 @@ class MiniF2FToolkit:
         self._run_id = run_id
 
     def get_tools(self) -> list[Tool]:
-        return [
+        tools = [
             self._write_lean_file(),
             self._check_lean_file(),
             self._verify_lean_proof(),
             self._search_lemmas(),
-            self._ask_stakeholder(),
         ]
+        if self._ask is not None:
+            tools.append(self._ask_stakeholder())
+        return tools
 
     # ── Lean tools ────────────────────────────────────────────────────
 

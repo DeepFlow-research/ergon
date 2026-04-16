@@ -52,6 +52,10 @@ def _patch_sdk(
     import e2b
 
     monkeypatch.setattr(e2b, "Template", fake_template_cls)
+    # Also patch the already-imported name in the benchmark module.
+    import ergon_cli.commands.benchmark as _bench_mod
+
+    monkeypatch.setattr(_bench_mod, "Template", fake_template_cls)
     return fake_template_cls
 
 
@@ -61,7 +65,9 @@ def _patch_sdk(
 
 
 def test_fails_when_api_key_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("E2B_API_KEY", raising=False)
+    from ergon_core.core.settings import settings
+
+    monkeypatch.setattr(settings, "e2b_api_key", "")
     rc = setup_benchmark(_make_args())
     assert rc != 0
 
@@ -69,7 +75,9 @@ def test_fails_when_api_key_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_error_message_mentions_api_key(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.delenv("E2B_API_KEY", raising=False)
+    from ergon_core.core.settings import settings
+
+    monkeypatch.setattr(settings, "e2b_api_key", "")
     setup_benchmark(_make_args())
     captured = capsys.readouterr()
     assert "E2B_API_KEY" in captured.err
