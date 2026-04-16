@@ -65,16 +65,18 @@ class StubResearchRubricsWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
+        # e2b_code_interpreter is a hard requirement for this worker -- it
+        # cannot produce anything useful without a real sandbox.  Deferred
+        # import keeps the module importable when e2b is absent (type
+        # checking, registry scanning), but execute() must fail fast.
         try:
-            # Deferred: optional dependency
             from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-        except ImportError:
-            yield GenerationTurn(
-                response_parts=[
-                    TextPart(content=(f"e2b not available -- stub output for {task.task_key}"))
-                ],
-            )
-            return
+        except ImportError as exc:
+            raise RuntimeError(
+                "StubResearchRubricsWorker requires e2b_code_interpreter; "
+                "install the 'sandbox' extra (pip install ergon[sandbox]) "
+                "or uv sync with default groups."
+            ) from exc
 
         sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
 
