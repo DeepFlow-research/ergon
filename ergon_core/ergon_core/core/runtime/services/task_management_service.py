@@ -14,6 +14,7 @@ from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import (
     CANCELLED,
+    COMPLETED,
     EDGE_PENDING,
     PENDING,
     RUNNING,
@@ -453,19 +454,177 @@ class TaskManagementService:
     ) -> list[UUID]:
         """Cascade invalidate downstream targets whose input is becoming stale.
 
-        Phase 1 stub — no-op.  Phase 2 implements the actual cascade:
-          - Non-terminal targets: cancel + emit task/cancelled.
-          - COMPLETED targets: cancel (stale output) and recurse into
-            their outgoing edges so deeper COMPLETED descendants are also
-            invalidated.
-          - FAILED / CANCELLED targets: already terminal; leave alone
-            (they produced no output to stale).
+        When a node is restarted, its downstream targets may be:
 
-        Returns the list of node_ids that were invalidated.
+        - Non-terminal (PENDING / READY / RUNNING): they were queued or
+          running against the old output. Cancel them; the edge will be
+          reset by the caller once we return. PENDING targets will go
+          CANCELLED but become eligible for re-activation once deps
+          re-satisfy (Phase 3).
+        - COMPLETED: their output is now stale because it was computed
+          from the old version of this node. Cancel them, reset their
+          own outgoing edges, and recurse into their downstream so deeper
+          COMPLETED descendants are also invalidated.
+        - FAILED / CANCELLED: already terminal with no stale output to
+          flush. Leave them alone; the edge will still be reset so a
+          later restart/re-activation can satisfy it.
+
+        Termination: the graph is a DAG (enforced by Kahn's algorithm in
+        plan_subtasks and by _check_no_cycle in add_edge), so recursion
+        on outgoing edges is finite.
+
+        Returns the flat list of node_ids that were cancelled during the
+        cascade, in visitation order.
         """
-        # Phase 2 hook — intentionally returns empty list until wired.
-        _ = (session, run_id, node_id)
-        return []
+        invalidated: list[UUID] = []
+        # Stack-based DFS — we need to recurse into COMPLETED targets to
+        # reach their deeper COMPLETED descendants.
+        stack: list[UUID] = [node_id]
+        # Guard against multi-parent re-visits (diamond): if B and C both
+        # feed F and B and C are both restarted as a pair, we'd visit F
+        # twice. Not a correctness bug (idempotent cancels) but wasteful.
+        seen: set[UUID] = set()
+
+        while stack:
+            current = stack.pop()
+            outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, node_id=current)
+            for edge in outgoing:
+                target_id = edge.target_node_id
+                if target_id in seen:
+                    continue
+                seen.add(target_id)
+
+                target = self._graph_repo.get_node(session, run_id=run_id, node_id=target_id)
+
+                if target.status == COMPLETED:
+                    # Stale output — cancel, reset incoming edges (so
+                    # other fan-in parents re-satisfy them on their next
+                    # completion), reset outgoing edges, then recurse.
+                    self._cancel_for_invalidation(session, run_id=run_id, node_id=target_id)
+                    invalidated.append(target_id)
+                    self._reset_incoming_edges(session, run_id=run_id, node_id=target_id)
+                    self._reset_outgoing_edges(session, run_id=run_id, node_id=target_id)
+                    stack.append(target_id)
+                elif target.status in TERMINAL_STATUSES:
+                    # FAILED or CANCELLED — no stale output, no recursion.
+                    # Edge to this target will be reset by the caller (for
+                    # the initiating node) or by the cascade's
+                    # _reset_outgoing_edges on a deeper COMPLETED node.
+                    continue
+                else:
+                    # Non-terminal (PENDING / READY / RUNNING) — stale
+                    # input. Cancel it. Reset incoming edges so fan-in
+                    # siblings must re-satisfy them before the target
+                    # re-activates. Do NOT recurse into outgoing: the
+                    # target never completed, so no stale downstream.
+                    self._cancel_for_invalidation(session, run_id=run_id, node_id=target_id)
+                    invalidated.append(target_id)
+                    self._reset_incoming_edges(session, run_id=run_id, node_id=target_id)
+
+        return invalidated
+
+    def _cancel_for_invalidation(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        node_id: UUID,
+    ) -> None:
+        """Cancel a node as part of downstream invalidation and emit task/cancelled.
+
+        Uses ``only_if_not_terminal=False`` because the cascade specifically
+        needs to transition COMPLETED (stale output) → CANCELLED. The
+        caller has already filtered out FAILED / CANCELLED targets (no
+        stale output to flush), so the only terminal status we will
+        overwrite here is COMPLETED — which is the whole point.
+        """
+        self._graph_repo.update_node_status(
+            session,
+            run_id=run_id,
+            node_id=node_id,
+            new_status=CANCELLED,
+            meta=MutationMeta(
+                actor="manager-worker",
+                reason="downstream_invalidation",
+            ),
+            only_if_not_terminal=False,
+        )
+
+        definition_id = self._resolve_definition_id(session, run_id)
+        execution_id = _latest_execution_id(session, node_id)
+        event = TaskCancelledEvent(
+            run_id=run_id,
+            definition_id=definition_id,
+            node_id=node_id,
+            execution_id=execution_id,
+            cause="downstream_invalidation",
+        )
+        inngest_client.send_sync(
+            inngest.Event(
+                name=TaskCancelledEvent.name,
+                data=event.model_dump(mode="json"),
+            )
+        )
+
+    def _reset_outgoing_edges(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        node_id: UUID,
+    ) -> None:
+        """Reset a node's outgoing edges to EDGE_PENDING.
+
+        Called during cascade recursion on COMPLETED targets so their
+        downstream edges are ready to re-satisfy when this node is
+        eventually re-run (via its own restart or via re-activation).
+        """
+        outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, node_id=node_id)
+        for edge in outgoing:
+            if edge.status != EDGE_PENDING:
+                self._graph_repo.update_edge_status(
+                    session,
+                    run_id=run_id,
+                    edge_id=edge.id,
+                    new_status=EDGE_PENDING,
+                    meta=MutationMeta(
+                        actor="manager-worker",
+                        reason="downstream_invalidation",
+                    ),
+                )
+
+    def _reset_incoming_edges(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        node_id: UUID,
+    ) -> None:
+        """Reset a node's incoming edges to EDGE_PENDING.
+
+        When a downstream target is cancelled due to invalidation, its
+        incoming edges reflect the old generation's satisfaction. Resetting
+        them to EDGE_PENDING keeps edge state consistent with the "new
+        generation" model: an edge is SATISFIED only when the current
+        source completion has propagated to this target.
+
+        Re-activation in propagation is driven by source-node status (not
+        edge status), so this does not affect whether the target
+        re-activates — it only keeps the edge WAL honest.
+        """
+        incoming = self._graph_repo.get_incoming_edges(session, run_id=run_id, node_id=node_id)
+        for edge in incoming:
+            if edge.status != EDGE_PENDING:
+                self._graph_repo.update_edge_status(
+                    session,
+                    run_id=run_id,
+                    edge_id=edge.id,
+                    new_status=EDGE_PENDING,
+                    meta=MutationMeta(
+                        actor="manager-worker",
+                        reason="downstream_invalidation",
+                    ),
+                )
 
     def _validate_plan(self, subtasks: list[SubtaskSpec]) -> None:
         """Check for duplicate keys, unknown references, and cycles."""

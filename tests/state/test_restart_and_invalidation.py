@@ -233,3 +233,284 @@ class TestRestartTaskBasic:
         assert result.invalidated_node_ids == []
         updated = repo.get_node(session, run_id=run_id, node_id=node.id)
         assert updated.status == PENDING
+
+
+def _build_chain(repo, session, run_id, parent_id, keys: list[str], statuses: list[str]):
+    """Helper: build a straight A→B→C chain with specified statuses."""
+    assert len(keys) == len(statuses)
+    nodes = []
+    for key, status in zip(keys, statuses, strict=True):
+        nodes.append(
+            _add_node(
+                repo,
+                session,
+                run_id,
+                key,
+                status=status,
+                parent_node_id=parent_id,
+                level=1,
+            )
+        )
+    for src, tgt, tgt_status in zip(nodes[:-1], nodes[1:], statuses[1:], strict=True):
+        # A completed source with a completed downstream uses SATISFIED
+        # edges; every other combination uses PENDING. We infer based on
+        # whether the source is COMPLETED.
+        edge_status = (
+            EDGE_SATISFIED if src.status == COMPLETED and tgt_status != PENDING else EDGE_PENDING
+        )
+        repo.add_edge(
+            session,
+            run_id,
+            source_node_id=src.id,
+            target_node_id=tgt.id,
+            status=edge_status,
+            meta=META,
+        )
+    session.commit()
+    return nodes
+
+
+class TestDownstreamInvalidation:
+    """Phase 2: invalidate downstream targets when an upstream node is restarted."""
+
+    def test_running_target_cancelled(self, session: Session):
+        """Restart D while E is RUNNING → E is CANCELLED, D→E edge reset."""
+        fake = FakeInngestClient()
+        repo = WorkflowGraphRepository()
+        svc = TaskManagementService(graph_repo=repo)
+        run_id = uuid4()
+
+        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
+        d, e = _build_chain(repo, session, run_id, parent.id, ["D", "E"], [COMPLETED, RUNNING])
+
+        with patch(
+            "ergon_core.core.runtime.services.task_management_service.inngest_client",
+            fake,
+        ):
+            result = svc.restart_task(
+                session,
+                RestartTaskCommand(run_id=run_id, node_id=d.id),
+            )
+
+        assert e.id in result.invalidated_node_ids
+        e_after = repo.get_node(session, run_id=run_id, node_id=e.id)
+        assert e_after.status == CANCELLED
+
+        # D→E edge was reset by restart_task's own loop.
+        outgoing = repo.get_outgoing_edges(session, run_id=run_id, node_id=d.id)
+        assert all(edge.status == EDGE_PENDING for edge in outgoing)
+
+        # task/cancelled emitted for E.
+        cancelled_events = fake.events_by_name("task/cancelled")
+        assert any(evt.data["node_id"] == str(e.id) for evt in cancelled_events)
+        assert any(evt.data["cause"] == "downstream_invalidation" for evt in cancelled_events)
+
+    def test_completed_target_cancelled_and_edges_reset(self, session: Session):
+        """Restart D while E is COMPLETED → E cancelled, E's outgoing edges reset."""
+        fake = FakeInngestClient()
+        repo = WorkflowGraphRepository()
+        svc = TaskManagementService(graph_repo=repo)
+        run_id = uuid4()
+
+        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
+        d, e, g = _build_chain(
+            repo,
+            session,
+            run_id,
+            parent.id,
+            ["D", "E", "G"],
+            [COMPLETED, COMPLETED, PENDING],
+        )
+        # E→G was created EDGE_PENDING by helper (G status was PENDING), so
+        # set it to SATISFIED manually to represent the "E completed then G
+        # was cancelled separately" vs. "E completed but G blocked" — here
+        # we just want to prove E's outgoing edge resets regardless.
+        e_out = repo.get_outgoing_edges(session, run_id=run_id, node_id=e.id)
+        if e_out and e_out[0].status != EDGE_SATISFIED:
+            repo.update_edge_status(
+                session,
+                run_id=run_id,
+                edge_id=e_out[0].id,
+                new_status=EDGE_SATISFIED,
+                meta=META,
+            )
+            session.commit()
+
+        with patch(
+            "ergon_core.core.runtime.services.task_management_service.inngest_client",
+            fake,
+        ):
+            result = svc.restart_task(
+                session,
+                RestartTaskCommand(run_id=run_id, node_id=d.id),
+            )
+
+        assert e.id in result.invalidated_node_ids
+        e_after = repo.get_node(session, run_id=run_id, node_id=e.id)
+        assert e_after.status == CANCELLED
+
+        # E's outgoing edge (E→G) was reset because E was COMPLETED and had
+        # to have its output invalidated deeper.
+        e_out_after = repo.get_outgoing_edges(session, run_id=run_id, node_id=e.id)
+        assert all(edge.status == EDGE_PENDING for edge in e_out_after)
+        # G was PENDING, so it also gets cancelled by the cascade.
+        g_after = repo.get_node(session, run_id=run_id, node_id=g.id)
+        assert g_after.status == CANCELLED
+
+    def test_deep_chain_cascades(self, session: Session):
+        """Deep chain D→E→G, all COMPLETED. Restart D → E and G both invalidated."""
+        fake = FakeInngestClient()
+        repo = WorkflowGraphRepository()
+        svc = TaskManagementService(graph_repo=repo)
+        run_id = uuid4()
+
+        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
+        d, e, g = _build_chain(
+            repo,
+            session,
+            run_id,
+            parent.id,
+            ["D", "E", "G"],
+            [COMPLETED, COMPLETED, COMPLETED],
+        )
+        # Helper wires PENDING edges when target is COMPLETED; fix for
+        # the steady-state pre-restart case where all edges are SATISFIED.
+        for src_node in (d, e):
+            for edge in repo.get_outgoing_edges(session, run_id=run_id, node_id=src_node.id):
+                if edge.status != EDGE_SATISFIED:
+                    repo.update_edge_status(
+                        session,
+                        run_id=run_id,
+                        edge_id=edge.id,
+                        new_status=EDGE_SATISFIED,
+                        meta=META,
+                    )
+        session.commit()
+
+        with patch(
+            "ergon_core.core.runtime.services.task_management_service.inngest_client",
+            fake,
+        ):
+            result = svc.restart_task(
+                session,
+                RestartTaskCommand(run_id=run_id, node_id=d.id),
+            )
+
+        assert set(result.invalidated_node_ids) == {e.id, g.id}
+        e_after = repo.get_node(session, run_id=run_id, node_id=e.id)
+        g_after = repo.get_node(session, run_id=run_id, node_id=g.id)
+        assert e_after.status == CANCELLED
+        assert g_after.status == CANCELLED
+
+        # All edges in the chain are reset.
+        for src_node in (d, e):
+            for edge in repo.get_outgoing_edges(session, run_id=run_id, node_id=src_node.id):
+                assert edge.status == EDGE_PENDING
+
+    def test_fan_in_invalidation_resets_both_incoming_edges(self, session: Session):
+        """Restart B (A→B→F, A→C→F, F COMPLETED). F cancelled + both B→F and C→F reset."""
+        fake = FakeInngestClient()
+        repo = WorkflowGraphRepository()
+        svc = TaskManagementService(graph_repo=repo)
+        run_id = uuid4()
+
+        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
+
+        # Build diamond: A→B, A→C, B→F, C→F. All COMPLETED.
+        a = _add_node(
+            repo, session, run_id, "A", status=COMPLETED, parent_node_id=parent.id, level=1
+        )
+        b = _add_node(
+            repo, session, run_id, "B", status=COMPLETED, parent_node_id=parent.id, level=1
+        )
+        c = _add_node(
+            repo, session, run_id, "C", status=COMPLETED, parent_node_id=parent.id, level=1
+        )
+        f = _add_node(
+            repo, session, run_id, "F", status=COMPLETED, parent_node_id=parent.id, level=1
+        )
+        for src, tgt in [(a, b), (a, c), (b, f), (c, f)]:
+            repo.add_edge(
+                session,
+                run_id,
+                source_node_id=src.id,
+                target_node_id=tgt.id,
+                status=EDGE_SATISFIED,
+                meta=META,
+            )
+        session.commit()
+
+        with patch(
+            "ergon_core.core.runtime.services.task_management_service.inngest_client",
+            fake,
+        ):
+            result = svc.restart_task(
+                session,
+                RestartTaskCommand(run_id=run_id, node_id=b.id),
+            )
+
+        assert f.id in result.invalidated_node_ids
+        f_after = repo.get_node(session, run_id=run_id, node_id=f.id)
+        assert f_after.status == CANCELLED
+
+        # Both incoming edges to F (B→F and C→F) must be EDGE_PENDING.
+        # B→F reset by restart_task's own loop; C→F reset by the cascade
+        # when it recursed into F (via _reset_outgoing_edges on F — but
+        # F has no outgoing here; the important semantic is the INCOMING
+        # to F). Wait: the plan says C→F must be reset too. That has to
+        # happen explicitly.
+        incoming_to_f = repo.get_incoming_edges(session, run_id=run_id, node_id=f.id)
+        statuses = {edge.source_node_id: edge.status for edge in incoming_to_f}
+        # B→F: reset because B's outgoing was reset on restart.
+        assert statuses[b.id] == EDGE_PENDING
+        # C→F: must be reset when F is cancelled as part of invalidation,
+        # otherwise F can never re-activate (C→F is still SATISFIED from
+        # the old C completion).
+        assert statuses[c.id] == EDGE_PENDING
+
+    def test_already_cancelled_downstream_left_alone(self, session: Session):
+        """Downstream target that is already CANCELLED is not re-cancelled."""
+        fake = FakeInngestClient()
+        repo = WorkflowGraphRepository()
+        svc = TaskManagementService(graph_repo=repo)
+        run_id = uuid4()
+
+        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
+        d, e = _build_chain(repo, session, run_id, parent.id, ["D", "E"], [COMPLETED, CANCELLED])
+
+        with patch(
+            "ergon_core.core.runtime.services.task_management_service.inngest_client",
+            fake,
+        ):
+            result = svc.restart_task(
+                session,
+                RestartTaskCommand(run_id=run_id, node_id=d.id),
+            )
+
+        # E was already CANCELLED; the invalidation cascade should skip it.
+        assert e.id not in result.invalidated_node_ids
+        e_after = repo.get_node(session, run_id=run_id, node_id=e.id)
+        assert e_after.status == CANCELLED
+
+    def test_failed_downstream_left_alone(self, session: Session):
+        """Downstream target that is FAILED is not touched."""
+        fake = FakeInngestClient()
+        repo = WorkflowGraphRepository()
+        svc = TaskManagementService(graph_repo=repo)
+        run_id = uuid4()
+
+        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
+        d, e = _build_chain(repo, session, run_id, parent.id, ["D", "E"], [COMPLETED, FAILED])
+
+        with patch(
+            "ergon_core.core.runtime.services.task_management_service.inngest_client",
+            fake,
+        ):
+            result = svc.restart_task(
+                session,
+                RestartTaskCommand(run_id=run_id, node_id=d.id),
+            )
+
+        assert e.id not in result.invalidated_node_ids
+        e_after = repo.get_node(session, run_id=run_id, node_id=e.id)
+        assert e_after.status == FAILED

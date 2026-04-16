@@ -97,6 +97,7 @@ CancelCause = Literal[
     "manager_decision",
     "parent_terminal",
     "dep_invalidated",
+    "downstream_invalidation",
     "run_cancelled",
 ]
 
