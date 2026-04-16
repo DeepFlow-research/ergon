@@ -3,16 +3,19 @@
 /**
  * ResourcePanel - Display input and output resources for a task.
  *
- * Features:
- * - File name, size (formatted), mime type icon
- * - Created timestamp
- * - Future: download/preview links
+ * Clicking a row opens a modal viewer appropriate to the resource's mime
+ * type (markdown, plain text / JSON / logs, CSV table, PDF, image). Viewer
+ * dispatch and content-fetch live in ResourceViewerDialog.
  */
 
+import { useState } from "react";
+
+import { ResourceViewerDialog } from "@/components/viewers/ResourceViewerDialog";
 import { ResourceState } from "@/lib/types";
 
 interface ResourcePanelProps {
   resources: ResourceState[];
+  runId?: string | null;
 }
 
 /**
@@ -131,18 +134,20 @@ function getMimeTypeColor(mimeType: string): string {
 
 interface ResourceItemProps {
   resource: ResourceState;
+  onOpen?: (resource: ResourceState) => void;
 }
 
-function ResourceItem({ resource }: ResourceItemProps) {
+function ResourceItem({ resource, onOpen }: ResourceItemProps) {
   const iconColor = getMimeTypeColor(resource.mimeType);
+  const clickable = onOpen !== undefined;
 
-  return (
-    <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+  const content = (
+    <>
       {/* Icon */}
       <div className={iconColor}>{getMimeTypeIcon(resource.mimeType)}</div>
 
       {/* File info */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 text-left">
         <div className="font-medium text-gray-900 dark:text-white truncate">
           {resource.name}
         </div>
@@ -157,11 +162,32 @@ function ResourceItem({ resource }: ResourceItemProps) {
       <div className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
         {formatRelativeTime(resource.createdAt)}
       </div>
-    </div>
+    </>
   );
+
+  const className =
+    "flex w-full items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors";
+
+  if (clickable) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen?.(resource)}
+        className={
+          className +
+          " cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+        }
+      >
+        {content}
+      </button>
+    );
+  }
+  return <div className={className}>{content}</div>;
 }
 
-export function ResourcePanel({ resources }: ResourcePanelProps) {
+export function ResourcePanel({ resources, runId = null }: ResourcePanelProps) {
+  const [selected, setSelected] = useState<ResourceState | null>(null);
+
   if (resources.length === 0) {
     return (
       <div className="text-center py-6 text-gray-500 dark:text-gray-400">
@@ -184,6 +210,10 @@ export function ResourcePanel({ resources }: ResourcePanelProps) {
     );
   }
 
+  // onOpen is only wired when we have a runId — otherwise clicking has no
+  // way to fetch content, so keep the row as a non-interactive div.
+  const onOpen = runId !== null ? setSelected : undefined;
+
   return (
     <div className="space-y-2">
       <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
@@ -191,9 +221,14 @@ export function ResourcePanel({ resources }: ResourcePanelProps) {
       </div>
       <div className="space-y-2">
         {resources.map((resource) => (
-          <ResourceItem key={resource.id} resource={resource} />
+          <ResourceItem key={resource.id} resource={resource} onOpen={onOpen} />
         ))}
       </div>
+      <ResourceViewerDialog
+        runId={runId}
+        resource={selected}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }
