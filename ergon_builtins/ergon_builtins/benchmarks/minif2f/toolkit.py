@@ -352,6 +352,7 @@ class MiniF2FToolkit:
             Args:
                 question: Your question about the proof.
             """
+            assert self._ask is not None  # guarded by get_tools()
             return await self._ask(question)
 
         return Tool(function=ask_stakeholder, takes_ctx=False)
