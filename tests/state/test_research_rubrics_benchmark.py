@@ -45,7 +45,10 @@ class TestResearchRubricsVanillaBenchmark:
             ResearchRubricsVanillaBenchmark,
         )
 
-        # Construction should set dataset_name to ScaleAI's
+        # The vanilla loader hard-codes its HF source as a ClassVar —
+        # there is no mutable ``dataset_name`` constructor arg (unlike
+        # the ablated loader, which accepts ``dataset_name``).  See the
+        # class docstring in vanilla.py.
+        assert ResearchRubricsVanillaBenchmark.DATASET_NAME == "ScaleAI/researchrubrics"
         benchmark = ResearchRubricsVanillaBenchmark(limit=1)
-        assert benchmark.dataset_name == "ScaleAI/researchrubrics"
         assert benchmark.name == "researchrubrics-vanilla"
