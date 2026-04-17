@@ -17,6 +17,10 @@ from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
+from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
+from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
+    SWEBenchSandboxManager,
+)
 from ergon_builtins.benchmarks.researchrubrics.smoke import (
     ResearchRubricsSmokeTestBenchmark,
 )
@@ -55,6 +59,7 @@ BENCHMARKS: dict[str, type[Benchmark]] = {
     "minif2f": MiniF2FBenchmark,
     "delegation-smoke": DelegationSmokeBenchmark,
     "researchrubrics-smoke": ResearchRubricsSmokeTestBenchmark,
+    "swebench-verified": SweBenchVerifiedBenchmark,
 }
 
 EVALUATORS: dict[str, type[Evaluator]] = {
@@ -69,10 +74,12 @@ EVALUATORS: dict[str, type[Evaluator]] = {
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
     "gdpeval": GDPEvalSandboxManager,
     "minif2f": MiniF2FSandboxManager,
+    "swebench-verified": SWEBenchSandboxManager,
 }
 
 SANDBOX_TEMPLATES: dict[str, Path] = {
     "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox",
+    "swebench-verified": Path(__file__).parent / "benchmarks/swebench_verified/sandbox",
 }
 
 MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {

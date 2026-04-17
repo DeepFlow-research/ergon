@@ -27,6 +27,9 @@ from ergon_builtins.registry_core import (
     SANDBOX_MANAGERS as _core_sandbox_managers,
 )
 from ergon_builtins.registry_core import (
+    SANDBOX_TEMPLATES,
+)
+from ergon_builtins.registry_core import (
     WORKERS as _core_workers,
 )
 
