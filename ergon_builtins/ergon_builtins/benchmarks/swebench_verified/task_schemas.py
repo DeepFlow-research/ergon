@@ -91,5 +91,10 @@ def _parse_test_list(value: Any) -> list[str]:  # slopcop: ignore[no-typing-any]
     if isinstance(value, list):
         return [str(v) for v in value]
     if isinstance(value, str):
-        return [str(v) for v in json.loads(value)]
+        parsed = json.loads(value)
+        if not isinstance(parsed, list):
+            raise TypeError(
+                f"FAIL/PASS list JSON must decode to list, got {type(parsed).__name__}"
+            )
+        return [str(v) for v in parsed]
     raise TypeError(f"Unsupported FAIL/PASS list type: {type(value)!r}")

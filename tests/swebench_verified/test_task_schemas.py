@@ -1,8 +1,11 @@
 """Tests for SWE-Bench task schemas."""
 
+import pytest
+
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
+    _parse_test_list,  # noqa: PLC2701
 )
 
 
@@ -43,3 +46,21 @@ def test_worker_description_excludes_test_patch() -> None:
     assert RAW_ROW["problem_statement"] in description
     assert "test patch" not in description
     assert "gold patch" not in description
+
+
+def test_parse_test_list_accepts_list() -> None:
+    assert _parse_test_list(["a", "b"]) == ["a", "b"]
+
+
+def test_parse_test_list_accepts_json_string() -> None:
+    assert _parse_test_list('["a", "b"]') == ["a", "b"]
+
+
+def test_parse_test_list_rejects_json_non_list() -> None:
+    with pytest.raises(TypeError):
+        _parse_test_list('"just a string"')
+
+
+def test_parse_test_list_rejects_unknown_type() -> None:
+    with pytest.raises(TypeError):
+        _parse_test_list(42)
