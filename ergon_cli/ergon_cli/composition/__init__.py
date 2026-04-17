@@ -26,15 +26,20 @@ def build_experiment(
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
     evaluator = evaluator_cls(name="evaluator")
 
-    # Two composition paths exist because two real manager workers exist:
+    # Three composition paths, one per real manager worker:
     # ``manager-researcher`` (generic) binds a plain ``react-v1`` sub-agent;
-    # ``researchrubrics-manager`` binds ``researchrubrics-researcher`` which
-    # writes real report files and is what the end-to-end demo uses.
+    # ``researchrubrics-manager`` binds ``researchrubrics-researcher`` (report
+    # writing); ``minif2f-manager`` binds ``minif2f-prover`` (Lean 4 proof).
+    # Each manager assigns itself to every static task and registers its
+    # dedicated sub-worker under a matching binding key so ``add_subtask``
+    # resolves to it.
     match worker_slug:
         case "manager-researcher":
             return _build_manager_researcher_experiment(benchmark, model, evaluator, WORKERS)
         case "researchrubrics-manager":
             return _build_researchrubrics_experiment(benchmark, model, evaluator, WORKERS)
+        case "minif2f-manager":
+            return _build_minif2f_experiment(benchmark, model, evaluator, WORKERS)
         case _:
             worker = worker_cls(name="worker", model=model)
             return Experiment.from_single_worker(
@@ -110,6 +115,39 @@ def _build_researchrubrics_experiment(
         },
         evaluators={"default": evaluator},
         assignments={"researchrubrics-manager": all_task_keys},
+    )
+
+
+def _build_minif2f_experiment(
+    benchmark: Benchmark,
+    model: str,
+    evaluator: Evaluator,
+    workers_registry: Mapping[str, type[Worker]],
+) -> Experiment:
+    """Build experiment with minif2f-manager + minif2f-prover sub-worker.
+
+    Manager is assigned to all static benchmark tasks.  Prover is registered
+    as a sub-worker binding only — dynamic subtasks spawned by the manager
+    via ``add_subtask(worker_binding_key='minif2f-prover')`` resolve it at
+    runtime.
+    """
+    manager_cls = workers_registry["minif2f-manager"]
+    prover_cls = workers_registry["minif2f-prover"]
+
+    manager = manager_cls(name="minif2f-manager", model=model)
+    prover = prover_cls(name="minif2f-prover", model=model)
+
+    instances = benchmark.build_instances()
+    all_task_keys = [task.task_key for tasks in instances.values() for task in tasks]
+
+    return Experiment(
+        benchmark=benchmark,
+        workers={
+            "minif2f-manager": manager,
+            "minif2f-prover": prover,
+        },
+        evaluators={"default": evaluator},
+        assignments={"minif2f-manager": all_task_keys},
     )
 
 

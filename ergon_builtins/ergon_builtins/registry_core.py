@@ -16,6 +16,7 @@ from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
+from ergon_builtins.benchmarks.minif2f.smoke import MiniF2FSmokeBenchmark
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
@@ -30,6 +31,7 @@ from ergon_builtins.workers.baselines.minif2f_react_worker import MiniF2FReActWo
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.swebench_worker import SWEBenchReActWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
+from ergon_builtins.workers.minif2f import MiniF2FManagerWorker, MiniF2FProverWorker
 
 # NOTE: ``StubWorker`` is intentionally *not* registered here.  The class is
 # still importable from ``ergon_builtins.workers.baselines`` for use as an
@@ -40,12 +42,15 @@ WORKERS: dict[str, type[Worker]] = {
     "training-stub": TrainingStubWorker,
     "react-v1": ReActWorker,
     "minif2f-react": MiniF2FReActWorker,
+    "minif2f-manager": MiniF2FManagerWorker,
+    "minif2f-prover": MiniF2FProverWorker,
     "swebench-react": SWEBenchReActWorker,
     "manager-researcher": ManagerResearcherWorker,
 }
 
 BENCHMARKS: dict[str, type[Benchmark]] = {
     "minif2f": MiniF2FBenchmark,
+    "minif2f-smoke": MiniF2FSmokeBenchmark,
     "swebench-verified": SweBenchVerifiedBenchmark,
 }
 
@@ -60,11 +65,13 @@ EVALUATORS: dict[str, type[Evaluator]] = {
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
     "gdpeval": GDPEvalSandboxManager,
     "minif2f": MiniF2FSandboxManager,
+    "minif2f-smoke": MiniF2FSandboxManager,
     "swebench-verified": SWEBenchSandboxManager,
 }
 
 SANDBOX_TEMPLATES: dict[str, Path] = {
     "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox",
+    "minif2f-smoke": Path(__file__).parent / "benchmarks/minif2f/sandbox",
     "swebench-verified": Path(__file__).parent / "benchmarks/swebench_verified/sandbox",
 }
 
