@@ -52,6 +52,7 @@ BENCHMARK_DEPS: dict[str, BenchmarkDeps] = {
     "researchrubrics": BenchmarkDeps(
         extras=["ergon-builtins[data]"], optional_keys=["EXA_API_KEY"]
     ),
+    "swebench-verified": BenchmarkDeps(e2b=True, extras=["ergon-builtins[data]"]),
 }
 
 
