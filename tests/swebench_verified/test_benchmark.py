@@ -9,6 +9,10 @@ from ergon_builtins.benchmarks.swebench_verified.benchmark import (
 )
 
 
+def _fake_load_rows(*, limit=None):
+    return FAKE_ROWS if limit is None else FAKE_ROWS[:limit]
+
+
 FAKE_ROWS = [
     {
         "instance_id": "django__django-1",
@@ -42,7 +46,7 @@ FAKE_ROWS = [
 def test_build_instances_yields_one_task_per_row() -> None:
     with patch(
         "ergon_builtins.benchmarks.swebench_verified.benchmark._load_rows",
-        return_value=FAKE_ROWS,
+        side_effect=_fake_load_rows,
     ):
         benchmark = SweBenchVerifiedBenchmark()
         instances = benchmark.build_instances()
@@ -57,7 +61,7 @@ def test_build_instances_yields_one_task_per_row() -> None:
 def test_limit_truncates() -> None:
     with patch(
         "ergon_builtins.benchmarks.swebench_verified.benchmark._load_rows",
-        return_value=FAKE_ROWS,
+        side_effect=_fake_load_rows,
     ):
         benchmark = SweBenchVerifiedBenchmark(limit=1)
         tasks = benchmark.build_instances()["default"]
@@ -69,7 +73,7 @@ def test_limit_truncates() -> None:
 def test_task_description_excludes_test_patch_and_gold_patch() -> None:
     with patch(
         "ergon_builtins.benchmarks.swebench_verified.benchmark._load_rows",
-        return_value=FAKE_ROWS,
+        side_effect=_fake_load_rows,
     ):
         benchmark = SweBenchVerifiedBenchmark()
         task = benchmark.build_instances()["default"][0]
@@ -82,7 +86,7 @@ def test_task_description_excludes_test_patch_and_gold_patch() -> None:
 def test_task_payload_retains_test_patch_for_evaluator() -> None:
     with patch(
         "ergon_builtins.benchmarks.swebench_verified.benchmark._load_rows",
-        return_value=FAKE_ROWS,
+        side_effect=_fake_load_rows,
     ):
         benchmark = SweBenchVerifiedBenchmark()
         task = benchmark.build_instances()["default"][0]

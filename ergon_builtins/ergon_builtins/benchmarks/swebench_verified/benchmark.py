@@ -47,8 +47,6 @@ class SweBenchVerifiedBenchmark(Benchmark):
 
     def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
         rows = _load_rows(limit=self.limit)
-        if self.limit is not None:
-            rows = rows[: self.limit]
         tasks: list[BenchmarkTask] = []
         for row in rows:
             instance = SWEBenchInstance.from_raw(row)
