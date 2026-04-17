@@ -165,7 +165,6 @@ include = [
     "**/runtime/services/**",
     "**/runtime/execution/**",
     "**/providers/judges/**",
-    "**/benchmarks/smoke_test/**",
     "ergon_cli/**",
     "ergon_infra/**",
 ]

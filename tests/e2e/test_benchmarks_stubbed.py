@@ -1,13 +1,32 @@
-"""E2E tests: run each benchmark via the CLI with stubbed components.
+"""E2E tests: canonical demo run through the full CLI pipeline.
 
-Exercises the full Inngest pipeline (sandbox-setup -> worker-execute ->
-persist-outputs -> evaluate -> finalize) and asserts correct DB state.
+After the stub-consolidation RFC the demo command is a single line:
+
+    ergon benchmark run researchrubrics --limit 1 \\
+        --worker researchrubrics-manager --evaluator stub-rubric
+
+It exercises every stage that used to be covered by three separate
+"smoke" benchmarks:
+
+* **Delegation path**: ``researchrubrics-manager`` spawns
+  ``researchrubrics-researcher`` subtasks via ``add_subtask``.  That
+  confirms dynamic DAG expansion + sub-worker resolution work.
+* **Sandbox I/O**: the researcher writes a real report file under
+  ``/workspace/final_output/report.md`` and ``SandboxResourcePublisher``
+  syncs it to a ``RunResource``.
+* **Evaluation actually runs**: the new ``StubCriterion`` reads back
+  the RunResource, probes the sandbox for each blob, and fires a
+  ``echo $((1+1))`` canary.  ``score == 1.0`` iff all three checks
+  pass end-to-end.
 
 Requires:
   - docker-compose.ci.yml running (postgres + inngest + api)
   - ERGON_DATABASE_URL set to the Postgres instance
-  - E2B_API_KEY set for smoke-test-worker/smoke-test-rubric tests
+  - OPENAI_API_KEY set (manager + researcher are real LLM agents)
+  - E2B sandbox available (docker-compose local, or E2B_API_KEY)
 """
+
+import os
 
 import pytest
 from ergon_core.core.persistence.shared.db import get_engine
@@ -22,47 +41,47 @@ from sqlmodel import Session, select
 
 from tests.e2e.conftest import run_benchmark
 
-STUB_CONFIGS = [
-    pytest.param(
-        "smoke-test",
-        "stub-worker",
-        "stub-rubric",
-        "ci-stub",
-        id="smoke-test/stub/stub",
-    ),
-    # minif2f requires an E2B sandbox even with stub-worker; tested in E2B_CONFIGS instead.
-]
-
-E2B_CONFIGS = [
-    pytest.param(
-        "smoke-test",
-        "smoke-test-worker",
-        "smoke-test-rubric",
-        "ci-e2b",
-        id="smoke-test/e2b-worker/sandbox-rubric",
-    ),
-]
+DEMO_SLUG = "researchrubrics"
+DEMO_WORKER = "researchrubrics-manager"
+DEMO_EVALUATOR = "stub-rubric"
+DEMO_TIMEOUT = 600  # manager → plan → spawn → researcher → report; allow headroom
 
 
 def _get_session() -> Session:
     return Session(get_engine())
 
 
-class TestStubbedBenchmarks:
-    """Benchmarks with stub-worker + stub-rubric — no external API keys needed."""
+def _demo_run(cohort: str):
+    return run_benchmark(
+        DEMO_SLUG,
+        worker=DEMO_WORKER,
+        evaluator=DEMO_EVALUATOR,
+        cohort=cohort,
+        limit=1,
+        timeout=DEMO_TIMEOUT,
+    )
 
-    @pytest.mark.parametrize("slug,worker,evaluator,cohort", STUB_CONFIGS)
-    def test_run_completes(self, slug, worker, evaluator, cohort):
-        result = run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
+
+@pytest.fixture(autouse=True)
+def _require_api_keys():
+    if not os.environ.get("OPENAI_API_KEY"):
+        pytest.skip("OPENAI_API_KEY not set — skipping researchrubrics demo run")
+
+
+class TestResearchRubricsDemo:
+    """Canonical demo: manager+researcher delegation into a real sandbox,
+    evaluated by ``stub-rubric`` which asserts the full pipeline works."""
+
+    def test_run_completes(self):
+        result = _demo_run("ci-researchrubrics-demo")
         assert result.returncode == 0, (
             f"CLI exited {result.returncode}:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
         assert "Status:     completed" in result.stdout
 
-    @pytest.mark.parametrize("slug,worker,evaluator,cohort", STUB_CONFIGS)
-    def test_single_execution_per_task(self, slug, worker, evaluator, cohort):
-        """Each task should have exactly one execution record."""
-        run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
+    def test_executions_complete(self):
+        """Every execution (manager + spawned researcher subtasks) completes."""
+        _demo_run("ci-researchrubrics-exec")
 
         with _get_session() as session:
             latest_run = session.exec(
@@ -77,6 +96,9 @@ class TestStubbedBenchmarks:
                     select(RunTaskExecution).where(RunTaskExecution.run_id == latest_run.id)
                 ).all()
             )
+            assert len(executions) >= 2, (
+                f"Expected ≥2 executions (manager + ≥1 spawned researcher), got {len(executions)}"
+            )
 
             for ex in executions:
                 assert ex.status == TaskExecutionStatus.COMPLETED, (
@@ -84,10 +106,17 @@ class TestStubbedBenchmarks:
                 )
                 assert ex.completed_at is not None
 
-    @pytest.mark.parametrize("slug,worker,evaluator,cohort", STUB_CONFIGS)
-    def test_evaluations_exist(self, slug, worker, evaluator, cohort):
-        """Each task should have evaluation records with scores."""
-        run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
+    def test_stub_criterion_scores_one(self):
+        """``stub-rubric`` must return score=1.0 on a real pipeline run.
+
+        This is the load-bearing assertion of the whole consolidation:
+        if the evaluator, resource store, and sandbox runtime are all
+        wired up correctly, ``StubCriterion`` sees resources it can read
+        both host-side and sandbox-side and the canary succeeds.  Any
+        regression in that chain flips this to 0.0 with a specific
+        feedback reason.
+        """
+        _demo_run("ci-researchrubrics-score")
 
         with _get_session() as session:
             latest_run = session.exec(
@@ -105,11 +134,14 @@ class TestStubbedBenchmarks:
             )
             assert len(evaluations) > 0, "Expected at least one evaluation"
             for ev in evaluations:
-                assert ev.score is not None
+                assert ev.score == 1.0, (
+                    f"Expected stub-rubric score=1.0 (resources + sandbox canary), "
+                    f"got {ev.score}. Feedback: {ev.feedback}"
+                )
+                assert ev.passed is True
 
-    @pytest.mark.parametrize("slug,worker,evaluator,cohort", STUB_CONFIGS)
-    def test_summary_json_populated(self, slug, worker, evaluator, cohort):
-        run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
+    def test_summary_json_populated(self):
+        _demo_run("ci-researchrubrics-summary")
 
         with _get_session() as session:
             latest_run = session.exec(
@@ -124,55 +156,12 @@ class TestStubbedBenchmarks:
             assert "evaluators_count" in summary
 
     def test_cohort_created(self):
-        """At least one cohort should exist after running benchmarks."""
-        run_benchmark(
-            "smoke-test", worker="stub-worker", evaluator="stub-rubric", cohort="ci-cohort-check"
-        )
+        """Cohort row exists after a demo run."""
+        cohort_name = "ci-cohort-check"
+        _demo_run(cohort_name)
 
         with _get_session() as session:
             cohort = session.exec(
-                select(ExperimentCohort).where(ExperimentCohort.name == "ci-cohort-check")
+                select(ExperimentCohort).where(ExperimentCohort.name == cohort_name)
             ).first()
-            assert cohort is not None, "Cohort 'ci-cohort-check' should exist"
-
-
-class TestE2BSandboxBenchmarks:
-    """Benchmarks with real E2B sandbox I/O — requires E2B_API_KEY."""
-
-    @pytest.fixture(autouse=True)
-    def _require_e2b(self):
-        # Deferred: runtime-only dependency
-        import os
-
-        if not os.environ.get("E2B_API_KEY"):
-            pytest.skip("E2B_API_KEY not set — skipping sandbox I/O tests")
-
-    @pytest.mark.parametrize("slug,worker,evaluator,cohort", E2B_CONFIGS)
-    def test_sandbox_roundtrip(self, slug, worker, evaluator, cohort):
-        """Worker writes file -> criterion reads file -> score=1.0."""
-        result = run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
-        assert result.returncode == 0, (
-            f"CLI exited {result.returncode}:\nstdout: {result.stdout}\nstderr: {result.stderr}"
-        )
-
-        with _get_session() as session:
-            latest_run = session.exec(
-                select(RunRecord)
-                .order_by(RunRecord.created_at.desc())  # type: ignore[union-attr]
-                .limit(1)
-            ).first()
-            assert latest_run is not None
-            assert latest_run.status == RunStatus.COMPLETED
-
-            evaluations = list(
-                session.exec(
-                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == latest_run.id)
-                ).all()
-            )
-            assert len(evaluations) > 0
-            for ev in evaluations:
-                assert ev.score == 1.0, (
-                    f"Expected score=1.0 (sandbox file found), got {ev.score}. "
-                    f"Feedback: {ev.feedback}"
-                )
-                assert ev.passed is True
+            assert cohort is not None, f"Cohort {cohort_name!r} should exist"

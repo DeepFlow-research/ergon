@@ -46,7 +46,6 @@ class BenchmarkDeps(BaseModel):
 
 
 BENCHMARK_DEPS: dict[str, BenchmarkDeps] = {
-    "smoke-test": BenchmarkDeps(e2b=True),
     "minif2f": BenchmarkDeps(e2b=True),
     "gdpeval": BenchmarkDeps(e2b=True, extras=["ergon-builtins[data]"]),
     "researchrubrics": BenchmarkDeps(

@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = bench_sub.add_parser("run", help="Run a benchmark")
     run_parser.add_argument("slug", help="Benchmark slug")
     run_parser.add_argument("--model", default="openai:gpt-4o", help="Model to use")
-    run_parser.add_argument("--worker", default="stub-worker", help="Worker slug")
+    run_parser.add_argument("--worker", default="react-v1", help="Worker slug")
     run_parser.add_argument("--evaluator", default="stub-rubric", help="Evaluator slug")
     run_parser.add_argument("--workflow", default="single", help="Workflow variant")
     run_parser.add_argument(

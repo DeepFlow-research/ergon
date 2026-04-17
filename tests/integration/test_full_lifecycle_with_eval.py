@@ -10,10 +10,10 @@ Calls the same services the Inngest functions call, without requiring a live ser
 import asyncio
 from uuid import uuid4
 
-from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
-from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
+from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.registry import EVALUATORS, WORKERS
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
+from tests.integration._fixture_benchmark import LifecycleFixtureBenchmark
 from ergon_core.api import Experiment, Worker
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
@@ -107,9 +107,15 @@ def test_full_lifecycle_with_evaluation():
     ensure_db()
 
     # ── Construct + Validate + Persist ──────────────────────────────
-    benchmark = SmokeTestBenchmark(workflow="flat", task_count=2)
+    # ``VariedStubRubric`` is intentional: the new ``StubCriterion`` now
+    # requires sandbox + published resources to return 1.0, neither of
+    # which this purely-in-process test sets up.  ``varied-stub-rubric``
+    # is the RL reward-shape fixture -- it produces a deterministic-ish
+    # non-zero score without needing a sandbox, so it's the right tool
+    # for testing the evaluation *dispatch* plumbing in isolation.
+    benchmark = LifecycleFixtureBenchmark(task_count=2)
     worker = StubWorker(name="test", model="openai:gpt-4o")
-    rubric = StubRubric()
+    rubric = VariedStubRubric()
 
     experiment = Experiment.from_single_worker(
         benchmark=benchmark,
@@ -226,7 +232,7 @@ def test_full_lifecycle_with_evaluation():
                     task_context=task_context,
                     evaluator=evaluator,
                     task=task_for_eval,
-                    benchmark_name="smoke-test",
+                    benchmark_name="lifecycle-fixture",
                 )
             )
             eval_result = service_result.result

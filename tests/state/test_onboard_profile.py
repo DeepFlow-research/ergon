@@ -28,7 +28,7 @@ class TestRequiredKeys:
         assert "GOOGLE_API_KEY" not in keys
 
     def test_e2b_benchmark_needs_e2b_key(self) -> None:
-        p = OnboardProfile(benchmarks=["smoke-test"])
+        p = OnboardProfile(benchmarks=["minif2f"])
         keys = p.required_keys()
         assert "E2B_API_KEY" in keys
 
@@ -94,8 +94,8 @@ class TestRequiredExtras:
         extras = p.required_extras()
         assert "ergon-builtins[data]" in extras
 
-    def test_smoke_test_needs_no_extra(self) -> None:
-        p = OnboardProfile(benchmarks=["smoke-test"])
+    def test_minif2f_needs_no_extra(self) -> None:
+        p = OnboardProfile(benchmarks=["minif2f"])
         assert p.required_extras() == []
 
     def test_training_adds_infra_training(self) -> None:

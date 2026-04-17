@@ -12,12 +12,12 @@ class _FakeArgs:
 
 class TestOnboardWizard:
     def test_minimal_flow_cloud_only(self, tmp_path: Path, monkeypatch: object) -> None:
-        """User picks smoke-test, OpenAI, no training."""
+        """User picks minif2f, OpenAI, no training."""
         env_path = tmp_path / ".env"
         monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
 
         # Sequence of user inputs the wizard will consume:
-        #   1. select_multiple (benchmarks): "1" = smoke-test
+        #   1. select_multiple (benchmarks): "1" = minif2f
         #   2. select_multiple (LLM providers): "1" = openai
         #   3. confirm (training): "n"
         #   4. ask_secret (OPENAI_API_KEY): "sk-test"
@@ -38,12 +38,12 @@ class TestOnboardWizard:
         assert "E2B_API_KEY=e2b-test" in content
 
     def test_training_with_remote_gpu(self, tmp_path: Path, monkeypatch: object) -> None:
-        """User picks minif2f, Anthropic, training with Shadeform."""
+        """User picks gdpeval, Anthropic, training with Shadeform."""
         env_path = tmp_path / ".env"
         monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
 
         # Sequence:
-        #   1. benchmarks: "2" = minif2f
+        #   1. benchmarks: "2" = gdpeval
         #   2. LLM providers: "2" = anthropic
         #   3. training: "y"
         #   4. local GPU: "n"
@@ -75,7 +75,8 @@ class TestOnboardWizard:
         env_path = tmp_path / ".env"
         monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
 
-        inputs = iter(["4", "4", "n", "or-key", "exa-key"])
+        # benchmarks: "3" = researchrubrics; LLM providers: "4" = openrouter
+        inputs = iter(["3", "4", "n", "or-key", "exa-key"])
 
         with (
             patch("builtins.input", side_effect=lambda *_a, **_kw: next(inputs)),

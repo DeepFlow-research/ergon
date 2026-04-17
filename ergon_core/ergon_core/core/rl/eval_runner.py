@@ -102,7 +102,7 @@ async def _run_local_eval(
     Uses the checkpoint path as the vLLM model target so each checkpoint
     is actually evaluated (not just the base model).
     """
-    model_target = f"vllm:{ckpt.path}" if model_base else "stub-worker"
+    model_target = f"vllm:{ckpt.path}" if model_base else "training-stub"
 
     cmd = [
         "ergon",

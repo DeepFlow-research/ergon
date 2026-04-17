@@ -11,7 +11,7 @@ from ergon_core.api.worker import Worker
 def build_experiment(
     benchmark_slug: str,
     model: str,
-    worker_slug: str = "stub-worker",
+    worker_slug: str = "react-v1",
     evaluator_slug: str = "stub-rubric",
     workflow: str = "single",
     limit: int | None = None,
@@ -26,16 +26,14 @@ def build_experiment(
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
     evaluator = evaluator_cls(name="evaluator")
 
-    # Composition is driven by the explicit worker selection first; the
-    # benchmark only wins when nothing else matches (delegation-smoke needs
-    # both manager + researcher regardless of which single worker the user
-    # typed).
-    match (worker_slug, benchmark_slug):
-        case (_, "delegation-smoke"):
-            return _build_delegation_experiment(benchmark, model, evaluator, WORKERS)
-        case ("manager-researcher", _):
+    # Two composition paths exist because two real manager workers exist:
+    # ``manager-researcher`` (generic) binds a plain ``react-v1`` sub-agent;
+    # ``researchrubrics-manager`` binds ``researchrubrics-researcher`` which
+    # writes real report files and is what the end-to-end demo uses.
+    match worker_slug:
+        case "manager-researcher":
             return _build_manager_researcher_experiment(benchmark, model, evaluator, WORKERS)
-        case ("researchrubrics-manager", _):
+        case "researchrubrics-manager":
             return _build_researchrubrics_experiment(benchmark, model, evaluator, WORKERS)
         case _:
             worker = worker_cls(name="worker", model=model)
@@ -52,16 +50,16 @@ def _build_manager_researcher_experiment(
     evaluator: Evaluator,
     workers_registry: Mapping[str, type[Worker]],
 ) -> Experiment:
-    """Build experiment with manager-researcher + researcher for any benchmark.
+    """Build experiment with manager-researcher + react-v1 sub-worker.
 
-    The manager-researcher is assigned to all static benchmark tasks.
-    The researcher worker is registered as a sub-worker binding only —
-    it receives no static task assignments; dynamic tasks spawned by the
-    manager via add_subtask() will resolve it via ExperimentDefinitionWorker
-    lookup in _prepare_graph_native().
+    The manager is assigned to all static benchmark tasks.  A generic
+    ReAct sub-worker is bound under the ``"researcher"`` key so that
+    dynamic subtasks spawned via ``add_subtask()`` (default binding key
+    ``"researcher"`` per ``subtask_lifecycle_toolkit``) resolve to a
+    real agent rather than the retired ``StubWorker`` alias.
     """
     manager_cls = workers_registry["manager-researcher"]
-    researcher_cls = workers_registry["researcher"]
+    researcher_cls = workers_registry["react-v1"]
 
     manager = manager_cls(name="manager-researcher", model=model)
     researcher = researcher_cls(name="researcher", model=model)
@@ -80,30 +78,6 @@ def _build_manager_researcher_experiment(
         },
         evaluators={"default": evaluator},
         assignments={"manager-researcher": all_task_keys},
-    )
-
-
-def _build_delegation_experiment(
-    benchmark: Benchmark,
-    model: str,
-    evaluator: Evaluator,
-    workers_registry: Mapping[str, type[Worker]],
-) -> Experiment:
-    """Build experiment with both manager and researcher worker bindings."""
-    manager_cls = workers_registry["manager-researcher"]
-    researcher_cls = workers_registry["researcher"]
-
-    manager = manager_cls(name="manager-researcher", model=model)
-    researcher = researcher_cls(name="researcher", model=model)
-
-    return Experiment(
-        benchmark=benchmark,
-        workers={
-            "manager-researcher": manager,
-            "researcher": researcher,
-        },
-        evaluators={"default": evaluator},
-        assignments={"manager-researcher": "manager-task"},
     )
 
 

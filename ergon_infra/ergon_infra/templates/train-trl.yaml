@@ -5,7 +5,7 @@
 #   sky launch ergon_infra/ergon_infra/templates/train-trl.yaml -y \
 #     --env DEFINITION_ID=<uuid> \
 #     --env MODEL=Qwen/Qwen2.5-7B \
-#     --env BENCHMARK=smoke-test
+#     --env BENCHMARK=minif2f
 
 name: ergon-training
 
@@ -21,7 +21,7 @@ file_mounts:
 envs:
   DEFINITION_ID:
   MODEL:
-  BENCHMARK: ${BENCHMARK:-smoke-test}
+  BENCHMARK: ${BENCHMARK:-minif2f}
   VLLM_MODE: ${VLLM_MODE:-server}
   VLLM_PORT: ${VLLM_PORT:-8000}
   VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-4096}

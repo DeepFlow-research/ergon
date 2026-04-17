@@ -42,8 +42,9 @@ cp .env.example .env
 # Start the stack (Postgres, API, Inngest, dashboard)
 docker compose up
 
-# Run a benchmark
-ergon benchmark run smoke_test
+# Run a benchmark (one-line demo: manager + researcher into a real sandbox)
+ergon benchmark run researchrubrics --limit 1 \
+    --worker researchrubrics-manager --evaluator stub-rubric
 ```
 
 ## Configuration

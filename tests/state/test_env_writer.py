@@ -79,7 +79,7 @@ class TestWriteEnvIntegration:
         """A realistic profile produces a readable, parseable .env."""
         env_path = tmp_path / ".env"
         profile = OnboardProfile(
-            benchmarks=["gdpeval", "smoke-test"],
+            benchmarks=["gdpeval", "minif2f"],
             llm_providers=[LLMProvider.OPENAI, LLMProvider.ANTHROPIC],
             training=True,
             keys={

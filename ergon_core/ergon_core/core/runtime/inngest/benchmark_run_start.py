@@ -29,7 +29,7 @@ class BenchmarkRunRequest(InngestEventContract):
 
     benchmark_slug: str
     model: str
-    worker_slug: str = "stub-worker"
+    worker_slug: str = "react-v1"
     evaluator_slug: str = "stub-rubric"
     cohort_name: str = ""  # slopcop: ignore[no-str-empty-default]
 

@@ -8,10 +8,10 @@ directly to simulate the event-driven flow:
 
 import asyncio
 
-from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.registry import WORKERS
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
+from tests.integration._fixture_benchmark import LifecycleFixtureBenchmark
 from ergon_core.api import Experiment, Worker
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
@@ -74,7 +74,7 @@ def test_full_lifecycle():
     ensure_db()
 
     # ── Phase A: Construct + Validate + Persist ─────────────────────
-    benchmark = SmokeTestBenchmark(workflow="flat", task_count=2)
+    benchmark = LifecycleFixtureBenchmark(task_count=2)
     worker = StubWorker(name="test", model="openai:gpt-4o")
     rubric = StubRubric()
 
@@ -87,7 +87,7 @@ def test_full_lifecycle():
 
     persisted = experiment.persist()
     assert persisted.definition_id is not None
-    assert persisted.benchmark_type == "smoke-test"
+    assert persisted.benchmark_type == "lifecycle-fixture"
     assert persisted.task_count == 2
     assert persisted.instance_count == 1
     print(f"[PERSIST] Definition {persisted.definition_id} with {persisted.task_count} tasks")

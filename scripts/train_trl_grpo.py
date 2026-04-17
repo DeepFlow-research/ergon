@@ -10,7 +10,7 @@ definition creation and service checks automatically.
 Example::
 
     python scripts/train_trl_grpo.py \\
-        --benchmark smoke-test \\
+        --benchmark minif2f \\
         --definition-id <uuid> \\
         --model Qwen/Qwen2.5-1.5B \\
         --vllm-mode colocate \\
