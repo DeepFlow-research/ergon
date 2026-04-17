@@ -1,7 +1,18 @@
 name: E2E Benchmarks
 
+# Expensive: spins up the full docker-compose stack + burns real LLM and
+# E2B sandbox credits.  We explicitly do NOT run this on every push.
+# Coverage posture:
+#   - schedule: daily 06:00 UTC (catches regressions on main automatically —
+#     removes the "I forgot to run it" failure mode)
+#   - pull_request + "run-e2e" label: opt-in when a PR touches LLM/sandbox
+#     code.  Just label the PR instead of remembering to dispatch manually.
+#   - workflow_dispatch: ad-hoc runs from the Actions UI.
 on:
+  schedule:
+    - cron: "0 6 * * *"
   pull_request:
+    types: [labeled, opened, synchronize, reopened]
     paths:
       - "ergon_core/**"
       - "ergon_builtins/**"
@@ -10,16 +21,22 @@ on:
       - "tests/e2e/**"
       - "docker-compose.ci.yml"
       - "Dockerfile"
+      - ".github/workflows/e2e-benchmarks.yml"
   workflow_dispatch:
 
 jobs:
   e2e-researchrubrics-demo:
     name: "ResearchRubrics demo (real sandbox + LLM)"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Requires E2B + OPENAI API keys; only run on feature branches or
-    # manual dispatch to avoid spending secrets on every push.
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'feature/')
+    timeout-minutes: 20
+    # Fire on: schedule, manual dispatch, or a PR labeled `run-e2e`.
+    # A bare `feature/*` PR without the label will NOT trigger this job —
+    # that's intentional, since each run costs real E2B + LLM credits.
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'run-e2e'))
     steps:
       - uses: actions/checkout@v4
 
@@ -58,14 +75,94 @@ jobs:
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Route pydantic-ai's OpenAI client through OpenRouter.  The
+          # `openai` SDK (which pydantic-ai uses) honors both env vars
+          # automatically — no code changes needed, only the model
+          # string must be an OpenRouter-qualified path (ERGON_MODEL).
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_BASE_URL: https://openrouter.ai/api/v1
+          # Cheap-but-capable tool-calling model.  gpt-4o-mini via
+          # OpenRouter is ~$0.15/$0.60 per 1M tokens and has rock-solid
+          # tool-calling behaviour — the manager spawns subtasks and the
+          # researcher uses the sandbox shell, and both need reliable
+          # structured-output from the model.  If this proves too weak
+          # on researchrubrics tasks, bump to
+          # `openai:anthropic/claude-3.5-haiku` (still under $5/1M).
+          ERGON_MODEL: openai:openai/gpt-4o-mini
           ERGON_BLOB_ROOT: /tmp/ergon-blob
+          CI: "true"
         # --timeout=600 per-test is a safety net against a hung E2B
         # sandbox or pending Inngest event; actual run-time for this
         # suite is a couple of minutes. Per-test limit (rather than no
         # limit) surfaces clean pytest errors with stacks instead of
         # the opaque 6-hour GitHub-Actions job cancel.
         run: uv run pytest tests/e2e/test_benchmarks_stubbed.py::TestResearchRubricsDemo -v --timeout=600
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.ci.yml logs api --tail 100
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down -v
+
+  e2e-minif2f-demo:
+    name: "MiniF2F demo (real Lean sandbox + LLM)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Same trigger posture as the researchrubrics job: schedule + label
+    # opt-in + manual dispatch.  Lean template build is slow enough that
+    # we REALLY don't want to pay for it on every push.
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare shared blob root
+        run: |
+          sudo mkdir -p /tmp/ergon-blob
+          sudo chmod 777 /tmp/ergon-blob
+
+      - name: Start CI stack
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+        run: docker compose -f docker-compose.ci.yml up -d --build --wait
+        timeout-minutes: 5
+
+      - name: Wait for Inngest sync
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8289/v1/events/test > /dev/null 2>&1 && break
+            sleep 2
+          done
+          sleep 5
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+      - name: Install project
+        run: uv sync --frozen --all-packages
+
+      - name: Run minif2f demo E2E
+        env:
+          ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
+          INNGEST_API_BASE_URL: http://localhost:8289
+          INNGEST_DEV: "1"
+          INNGEST_EVENT_KEY: dev
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_BASE_URL: https://openrouter.ai/api/v1
+          ERGON_MODEL: openai:openai/gpt-4o-mini
+          ERGON_BLOB_ROOT: /tmp/ergon-blob
+          CI: "true"
+        # --timeout=900 per-test: Lean sandbox boot + manager→prover→
+        # compile takes longer than the researchrubrics demo; actual
+        # run-time is 3-5 min. Per-test limit gives clean pytest errors
+        # instead of the opaque 6-hour GitHub-Actions cancel.
+        run: uv run pytest tests/e2e/test_benchmarks_stubbed.py::TestMiniF2FDemo -v --timeout=900
 
       - name: Dump API logs on failure
         if: failure()

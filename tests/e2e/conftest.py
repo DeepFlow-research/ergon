@@ -39,8 +39,15 @@ def run_benchmark(
     limit: int = 1,
     cohort: str = "ci",
     timeout: int = 120,
+    model: str | None = None,
 ) -> subprocess.CompletedProcess:
-    """Run a benchmark via the ergon CLI and return the process result."""
+    """Run a benchmark via the ergon CLI and return the process result.
+
+    ``model`` falls back to ``$ERGON_MODEL`` so CI can pick a cheap
+    OpenRouter model (e.g. ``openai:openai/gpt-4o-mini``) without
+    editing tests.  If neither ``model`` nor ``$ERGON_MODEL`` is set
+    the CLI default (``openai:gpt-4o``) wins.
+    """
     cmd = [
         "ergon",
         "benchmark",
@@ -57,5 +64,8 @@ def run_benchmark(
         "--timeout",
         str(timeout),
     ]
+    resolved_model = model or os.environ.get("ERGON_MODEL")
+    if resolved_model:
+        cmd.extend(["--model", resolved_model])
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     return subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=timeout + 30)
