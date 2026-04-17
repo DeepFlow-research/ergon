@@ -30,7 +30,9 @@ class SWEBenchInstance(BaseModel):
     test_patch: str
 
     @classmethod
-    def from_raw(cls, row: Mapping[str, Any]) -> "SWEBenchInstance":  # slopcop: ignore[no-typing-any]
+    def from_raw(
+        cls, row: Mapping[str, Any]
+    ) -> "SWEBenchInstance":  # slopcop: ignore[no-typing-any]
         return cls(
             instance_id=row["instance_id"],
             repo=row["repo"],
@@ -77,13 +79,15 @@ class SWEBenchTaskPayload(BaseModel):
         ]
         if self.hints_text.strip():
             parts.extend(["", "## Hints", self.hints_text.strip()])
-        parts.extend([
-            "",
-            "## Task",
-            "Modify the repository so that the described issue is fixed.",
-            "When done, your changes will be extracted as a `git diff HEAD` and",
-            "scored against a hidden test suite.",
-        ])
+        parts.extend(
+            [
+                "",
+                "## Task",
+                "Modify the repository so that the described issue is fixed.",
+                "When done, your changes will be extracted as a `git diff HEAD` and",
+                "scored against a hidden test suite.",
+            ]
+        )
         return "\n".join(parts)
 
 
@@ -93,8 +97,6 @@ def _parse_test_list(value: Any) -> list[str]:  # slopcop: ignore[no-typing-any]
     if isinstance(value, str):
         parsed = json.loads(value)
         if not isinstance(parsed, list):
-            raise TypeError(
-                f"FAIL/PASS list JSON must decode to list, got {type(parsed).__name__}"
-            )
+            raise TypeError(f"FAIL/PASS list JSON must decode to list, got {type(parsed).__name__}")
         return [str(v) for v in parsed]
     raise TypeError(f"Unsupported FAIL/PASS list type: {type(value)!r}")

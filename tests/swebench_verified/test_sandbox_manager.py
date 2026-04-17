@@ -57,7 +57,12 @@ def test_resolve_template_prefers_registry_template_id(
     registry = tmp_path / "sandbox_templates.json"
     registry.write_text(
         json.dumps(
-            {"swebench-verified": {"template_id": "tmpl_sw123", "template_name": "ergon-swebench-v1"}}
+            {
+                "swebench-verified": {
+                    "template_id": "tmpl_sw123",
+                    "template_name": "ergon-swebench-v1",
+                }
+            }
         )
     )
     monkeypatch.setattr(

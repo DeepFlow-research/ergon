@@ -67,7 +67,9 @@ class SweBenchVerifiedBenchmark(Benchmark):
         return ("default",)
 
 
-def _load_rows(*, limit: int | None = None) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
+def _load_rows(
+    *, limit: int | None = None
+) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
     """Load rows from the HF dataset. Isolated for testability."""
     from datasets import load_dataset
 
