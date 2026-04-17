@@ -30,6 +30,7 @@ from ergon_builtins.benchmarks.researchrubrics.smoke_rubric import (
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.benchmarks.smoke_test.rubric import SmokeTestRubric
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
+from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.vllm_backend import resolve_vllm
@@ -70,6 +71,7 @@ EVALUATORS: dict[str, type[Evaluator]] = {
     "smoke-test-rubric": SmokeTestRubric,
     "staged-rubric": StagedRubric,
     "minif2f-rubric": MiniF2FRubric,
+    "swebench-rubric": SWEBenchRubric,
     "researchrubrics-smoke-rubric": ResearchRubricsSmokeRubric,
 }
 
