@@ -23,7 +23,14 @@ class RubricCriterion(BaseModel):
 
 
 class ResearchRubricsTaskPayload(BaseModel):
-    """Structured payload carried inside ``BenchmarkTask.task_payload``."""
+    """Payload for the **ablated** ResearchRubrics dataset.
+
+    The ablated variant is a derivative of the vanilla ScaleAI dataset in
+    which the original ``prompt`` has been edited (``ablated_prompt``)
+    and the removed content is recorded under ``removed_elements`` /
+    ``ablation_type``.  This shape is produced by
+    :class:`ResearchRubricsBenchmark`.
+    """
 
     sample_id: str = Field(description="Unique identifier from HuggingFace dataset")
     domain: str = Field(
@@ -38,3 +45,34 @@ class ResearchRubricsTaskPayload(BaseModel):
         default=None, description="Elements removed during ablation"
     )
     ablation_type: str | None = Field(default=None, description="Type of ablation applied")
+
+
+class VanillaResearchRubricsTaskPayload(BaseModel):
+    """Payload for the **vanilla** ``ScaleAI/researchrubrics`` dataset.
+
+    The vanilla variant has a different HF schema than the ablated one:
+    it carries the unedited ``prompt`` plus difficulty-classification
+    metadata (``conceptual_breadth``, ``logical_nesting``, ``exploration``)
+    and does **not** have ``ablated_prompt`` / ``removed_elements`` /
+    ``ablation_type``.  Produced by
+    :class:`ResearchRubricsVanillaBenchmark`.
+    """
+
+    sample_id: str = Field(description="Unique identifier from HuggingFace dataset")
+    domain: str = Field(
+        description=(
+            "Domain category: AI & ML, Historical Analysis, "
+            "Business Planning & Research, Technical Documentation, etc."
+        ),
+    )
+    prompt: str = Field(description="Full (un-ablated) prompt from the vanilla dataset")
+    rubrics: list[RubricCriterion] = Field(description="List of evaluation criteria")
+    conceptual_breadth: str | None = Field(
+        default=None, description="Difficulty axis: Simple / Intermediate / Complex"
+    )
+    logical_nesting: str | None = Field(
+        default=None, description="Difficulty axis: Simple / Intermediate / Complex"
+    )
+    exploration: str | None = Field(
+        default=None, description="Difficulty axis: Low / Medium / High"
+    )

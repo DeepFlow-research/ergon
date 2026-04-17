@@ -5,11 +5,17 @@ from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubr
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
     RubricCriterion,
+    VanillaResearchRubricsTaskPayload,
+)
+from ergon_builtins.benchmarks.researchrubrics.vanilla import (
+    ResearchRubricsVanillaBenchmark,
 )
 
 __all__ = [
     "ResearchRubricsBenchmark",
     "ResearchRubricsRubric",
     "ResearchRubricsTaskPayload",
+    "ResearchRubricsVanillaBenchmark",
     "RubricCriterion",
+    "VanillaResearchRubricsTaskPayload",
 ]

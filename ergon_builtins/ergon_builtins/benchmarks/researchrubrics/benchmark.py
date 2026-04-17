@@ -1,7 +1,11 @@
-"""ResearchRubrics benchmark for studying adaptive stakeholder querying.
+"""ResearchRubrics **ablated** benchmark for studying adaptive stakeholder querying.
 
 Uses deep research tasks with weighted evaluation criteria to study
 whether agents know when and what to ask stakeholders.
+
+This module is the loader for the *ablated* dataset variant only -- the
+vanilla ``ScaleAI/researchrubrics`` dataset has a different column
+schema and lives in :mod:`ergon_builtins.benchmarks.researchrubrics.vanilla`.
 """
 
 from collections.abc import Mapping, Sequence
@@ -17,12 +21,18 @@ from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
 
 
 class ResearchRubricsBenchmark(Benchmark):
-    """Benchmark backed by the ResearchRubrics HuggingFace dataset.
+    """Benchmark backed by the **ablated** ResearchRubrics HuggingFace dataset.
 
-    ``build_instances`` loads samples from the (ablated) HuggingFace dataset
-    and returns one task per sample.  Each task's ``task_payload`` carries the
-    full ``ResearchRubricsTaskPayload`` so the rubric and worker can
+    ``build_instances`` loads samples from the ablated HuggingFace
+    dataset (expected columns: ``sample_id``, ``domain``,
+    ``ablated_prompt``, ``rubrics``, ``removed_elements``,
+    ``ablation_type``) and returns one task per sample. Each task's
+    ``task_payload`` carries the full
+    :class:`ResearchRubricsTaskPayload` so the rubric and worker can
     reconstruct criteria and prompts.
+
+    For the un-ablated vanilla dataset see
+    :class:`ResearchRubricsVanillaBenchmark`.
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
