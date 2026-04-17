@@ -50,6 +50,25 @@ jobs:
          github.event.action == 'reopened' ||
          (github.event.action == 'labeled' &&
           github.event.label.name == 'run-e2e')))
+    # Job-level env so both `docker compose up` (for interpolation into
+    # the api container) and the pytest step see the same values.  The
+    # alternative — setting them only on the pytest step — meant the
+    # worker ReAct loop inside the api container had no OPENAI_API_KEY
+    # and crashed on `tests/e2e/test_benchmarks_stubbed.py::TestMiniF2FDemo`
+    # (see run 24578046124).
+    env:
+      E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      # gpt-4o-mini via OpenRouter: $0.15 / $0.60 per 1M tokens,
+      # reliable tool-calling, well-established.  If tool-calling
+      # quality on these tasks proves marginal, try
+      # `openai:anthropic/claude-3.5-haiku` (stronger reasoning at
+      # $0.80/$4.00) or `openai:google/gemini-2.0-flash-001`
+      # (cheapest current-gen at $0.10/$0.40).
+      ERGON_MODEL: openai:openai/gpt-4o-mini
+      ERGON_BLOB_ROOT: /tmp/ergon-blob
+      CI: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -62,8 +81,9 @@ jobs:
           sudo chmod 777 /tmp/ergon-blob
 
       - name: Start CI stack
-        env:
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+        # docker-compose.ci.yml interpolates OPENAI_API_KEY, OPENAI_BASE_URL,
+        # ERGON_MODEL (and E2B_API_KEY) from this step's env into the api
+        # container.  Job-level env (above) makes them available here.
         run: docker compose -f docker-compose.ci.yml up -d --build --wait
         timeout-minutes: 5
 
@@ -83,28 +103,13 @@ jobs:
 
       - name: Run researchrubrics demo E2E
         env:
+          # Only the host-facing vars need to override job-level defaults
+          # here.  LLM credentials (OPENAI_API_KEY / OPENAI_BASE_URL /
+          # ERGON_MODEL) and sandbox/E2B/blob root come from job-level env.
           ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          # Route pydantic-ai's OpenAI client through OpenRouter.  The
-          # `openai` SDK (which pydantic-ai uses) reads both vars from
-          # the env — no code change needed, just the right model string
-          # (see ERGON_MODEL).  Using OpenRouter keeps the provider
-          # abstraction so we can swap to Anthropic / Gemini / etc. by
-          # changing one line instead of rewiring auth.
-          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENAI_BASE_URL: https://openrouter.ai/api/v1
-          # gpt-4o-mini via OpenRouter: $0.15 / $0.60 per 1M tokens,
-          # reliable tool-calling, well-established.  If tool-calling
-          # quality on researchrubrics tasks proves marginal, try
-          # `openai:anthropic/claude-3.5-haiku` (stronger reasoning at
-          # $0.80/$4.00) or `openai:google/gemini-2.0-flash-001`
-          # (cheapest current-gen at $0.10/$0.40).
-          ERGON_MODEL: openai:openai/gpt-4o-mini
-          ERGON_BLOB_ROOT: /tmp/ergon-blob
-          CI: "true"
         # --timeout=600 per-test is a safety net against a hung E2B
         # sandbox or pending Inngest event; actual run-time for this
         # suite is a couple of minutes. Per-test limit (rather than no
@@ -132,6 +137,16 @@ jobs:
          github.event.action == 'reopened' ||
          (github.event.action == 'labeled' &&
           github.event.label.name == 'run-e2e')))
+    # Same env posture as the researchrubrics job — see its block for
+    # why we hoist LLM credentials to job-level (docker-compose needs
+    # them at `up` time to interpolate into the api container).
+    env:
+      E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      ERGON_MODEL: openai:openai/gpt-4o-mini
+      ERGON_BLOB_ROOT: /tmp/ergon-blob
+      CI: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -141,8 +156,6 @@ jobs:
           sudo chmod 777 /tmp/ergon-blob
 
       - name: Start CI stack
-        env:
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
         run: docker compose -f docker-compose.ci.yml up -d --build --wait
         timeout-minutes: 5
 
@@ -162,16 +175,11 @@ jobs:
 
       - name: Run minif2f demo E2E
         env:
+          # Host-facing vars only; LLM credentials come from job-level env.
           ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENAI_BASE_URL: https://openrouter.ai/api/v1
-          ERGON_MODEL: openai:openai/gpt-4o-mini
-          ERGON_BLOB_ROOT: /tmp/ergon-blob
-          CI: "true"
         # --timeout=900 per-test: Lean sandbox boot + manager→prover→
         # compile takes longer than the researchrubrics demo; actual
         # run-time is 3-5 min. Per-test limit gives clean pytest errors

@@ -6,11 +6,20 @@ gates for the stub-consolidation RFC.
 
 ``TestResearchRubricsDemo``::
 
-    ergon benchmark run researchrubrics --limit 1 \\
+    ergon benchmark run researchrubrics-vanilla --limit 1 \\
         --worker researchrubrics-manager --evaluator stub-rubric
 
 Exercises ``add_subtask`` delegation, ``SandboxResourcePublisher``
 host/sandbox I/O, and the ``StubCriterion`` bash canary.
+
+We use the *vanilla* slug (not the ablated one) specifically because
+the ablated loader's fallback path calls ``HfApi().whoami()`` to build
+a per-user dataset slug, which requires an HF token the CI runner
+doesn't have (see run 24578046124 for the concrete
+``LocalTokenNotFoundError``).  Vanilla hardcodes
+``ScaleAI/researchrubrics`` — a public dataset that needs no auth.
+Managers, subtask-spawn wiring, and the stub evaluator chain are all
+identical between the two variants, so the demo coverage is unchanged.
 
 ``TestMiniF2FDemo``::
 
@@ -55,7 +64,12 @@ from sqlmodel import Session, select
 
 from tests.e2e.conftest import run_benchmark
 
-DEMO_SLUG = "researchrubrics"
+# Vanilla, not ablated: ablated's loader calls ``HfApi().whoami()`` in
+# its dataset-name fallback, which needs an HF token the CI runner has
+# no reason to hold.  Vanilla points at the public
+# ``ScaleAI/researchrubrics`` and needs no auth.  See the module
+# docstring for context.
+DEMO_SLUG = "researchrubrics-vanilla"
 DEMO_WORKER = "researchrubrics-manager"
 DEMO_EVALUATOR = "stub-rubric"
 DEMO_TIMEOUT = 600  # manager → plan → spawn → researcher → report; allow headroom
