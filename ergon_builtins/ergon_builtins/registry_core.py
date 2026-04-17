@@ -17,6 +17,10 @@ from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
+from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
+from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
+    SWEBenchSandboxManager,
+)
 from ergon_builtins.benchmarks.researchrubrics.smoke import (
     ResearchRubricsSmokeTestBenchmark,
 )
@@ -26,6 +30,7 @@ from ergon_builtins.benchmarks.researchrubrics.smoke_rubric import (
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.benchmarks.smoke_test.rubric import SmokeTestRubric
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
+from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.vllm_backend import resolve_vllm
@@ -34,6 +39,7 @@ from ergon_builtins.workers.baselines.minif2f_react_worker import MiniF2FReActWo
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
+from ergon_builtins.workers.baselines.swebench_worker import SWEBenchReActWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
 from ergon_builtins.workers.research_rubrics.stub_worker import (
     StubResearchRubricsWorker,
@@ -45,6 +51,7 @@ WORKERS: dict[str, type[Worker]] = {
     "smoke-test-worker": SmokeTestWorker,
     "react-v1": ReActWorker,
     "minif2f-react": MiniF2FReActWorker,
+    "swebench-react": SWEBenchReActWorker,
     "manager-researcher": ManagerResearcherWorker,
     "researcher": StubWorker,
     "researchrubrics-stub": StubResearchRubricsWorker,
@@ -55,6 +62,7 @@ BENCHMARKS: dict[str, type[Benchmark]] = {
     "minif2f": MiniF2FBenchmark,
     "delegation-smoke": DelegationSmokeBenchmark,
     "researchrubrics-smoke": ResearchRubricsSmokeTestBenchmark,
+    "swebench-verified": SweBenchVerifiedBenchmark,
 }
 
 EVALUATORS: dict[str, type[Evaluator]] = {
@@ -63,16 +71,19 @@ EVALUATORS: dict[str, type[Evaluator]] = {
     "smoke-test-rubric": SmokeTestRubric,
     "staged-rubric": StagedRubric,
     "minif2f-rubric": MiniF2FRubric,
+    "swebench-rubric": SWEBenchRubric,
     "researchrubrics-smoke-rubric": ResearchRubricsSmokeRubric,
 }
 
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
     "gdpeval": GDPEvalSandboxManager,
     "minif2f": MiniF2FSandboxManager,
+    "swebench-verified": SWEBenchSandboxManager,
 }
 
 SANDBOX_TEMPLATES: dict[str, Path] = {
     "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox",
+    "swebench-verified": Path(__file__).parent / "benchmarks/swebench_verified/sandbox",
 }
 
 MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {

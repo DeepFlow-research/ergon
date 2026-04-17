@@ -16,8 +16,9 @@ local-models = [
 ]
 data = [
     "pandas",
-    "datasets",
+    "datasets>=2.20",
     "huggingface_hub",
+    "swebench>=3.0,<5",
 ]
 all = [
     "ergon-builtins[local-models,data]",
