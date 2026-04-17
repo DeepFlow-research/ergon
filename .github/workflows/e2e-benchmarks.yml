@@ -53,20 +53,22 @@ jobs:
     # Job-level env so both `docker compose up` (for interpolation into
     # the api container) and the pytest step see the same values.  The
     # alternative — setting them only on the pytest step — meant the
-    # worker ReAct loop inside the api container had no OPENAI_API_KEY
-    # and crashed on `tests/e2e/test_benchmarks_stubbed.py::TestMiniF2FDemo`
-    # (see run 24578046124).
+    # worker ReAct loop inside the api container had no LLM credentials
+    # and crashed (see run 24578046124).
     env:
       E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      OPENAI_BASE_URL: https://openrouter.ai/api/v1
+      # OpenRouter-native routing: the ``openrouter:`` model-target
+      # prefix resolves to pydantic-ai's ``OpenRouterProvider``, which
+      # reads ``OPENROUTER_API_KEY`` directly.  No ``OPENAI_API_KEY`` /
+      # ``OPENAI_BASE_URL`` hijack — those env vars stay available for
+      # real OpenAI traffic if we ever want it.  See
+      # ``ergon_builtins/models/openrouter_backend.py``.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       # gpt-4o-mini via OpenRouter: $0.15 / $0.60 per 1M tokens,
-      # reliable tool-calling, well-established.  If tool-calling
-      # quality on these tasks proves marginal, try
-      # `openai:anthropic/claude-3.5-haiku` (stronger reasoning at
-      # $0.80/$4.00) or `openai:google/gemini-2.0-flash-001`
-      # (cheapest current-gen at $0.10/$0.40).
-      ERGON_MODEL: openai:openai/gpt-4o-mini
+      # reliable tool-calling.  To swap providers (Anthropic / Gemini /
+      # etc.) change only the part after the ``openrouter:`` prefix —
+      # the key and URL are identical across them.
+      ERGON_MODEL: openrouter:openai/gpt-4o-mini
       ERGON_BLOB_ROOT: /tmp/ergon-blob
       CI: "true"
     steps:
@@ -81,7 +83,7 @@ jobs:
           sudo chmod 777 /tmp/ergon-blob
 
       - name: Start CI stack
-        # docker-compose.ci.yml interpolates OPENAI_API_KEY, OPENAI_BASE_URL,
+        # docker-compose.ci.yml interpolates OPENROUTER_API_KEY,
         # ERGON_MODEL (and E2B_API_KEY) from this step's env into the api
         # container.  Job-level env (above) makes them available here.
         run: docker compose -f docker-compose.ci.yml up -d --build --wait
@@ -142,9 +144,8 @@ jobs:
     # them at `up` time to interpolate into the api container).
     env:
       E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      OPENAI_BASE_URL: https://openrouter.ai/api/v1
-      ERGON_MODEL: openai:openai/gpt-4o-mini
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      ERGON_MODEL: openrouter:openai/gpt-4o-mini
       ERGON_BLOB_ROOT: /tmp/ergon-blob
       CI: "true"
     steps:

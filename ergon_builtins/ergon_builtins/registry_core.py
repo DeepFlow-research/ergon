@@ -25,6 +25,7 @@ from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
+from ergon_builtins.models.openrouter_backend import resolve_openrouter
 from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.workers.baselines.manager_researcher_worker import ManagerResearcherWorker
 from ergon_builtins.workers.baselines.minif2f_react_worker import MiniF2FReActWorker
@@ -80,4 +81,9 @@ MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
     "openai": resolve_cloud,
     "anthropic": resolve_cloud,
     "google": resolve_cloud,
+    # OpenRouter is a distinct prefix (not a ``resolve_cloud`` reuse)
+    # so the routing is legible in model targets and the provider reads
+    # its own ``OPENROUTER_API_KEY`` env var instead of squatting on
+    # ``OPENAI_API_KEY``.  See ``openrouter_backend`` for the full why.
+    "openrouter": resolve_openrouter,
 }

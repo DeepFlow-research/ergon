@@ -27,15 +27,14 @@ services:
       - E2B_API_KEY=${E2B_API_KEY:-}
       - OTEL_TRACES_ENABLED=false
       # LLM credentials for worker ReAct loops running inside this
-      # container.  Managers/sub-agents call pydantic-ai → the OpenAI SDK,
-      # which reads ``OPENAI_API_KEY`` + ``OPENAI_BASE_URL`` from env.  CI
-      # routes through OpenRouter by setting those two vars on the
-      # runner; we interpolate them here so the api container inherits
-      # them — without this, the CLI dispatch succeeds but the worker
-      # task fails with "api_key client option must be set".  See the
-      # MiniF2F failure in run 24578046124.
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      # container.  Managers/sub-agents call pydantic-ai; when the model
+      # target is ``openrouter:…`` pydantic-ai instantiates an
+      # ``OpenRouterProvider`` which reads ``OPENROUTER_API_KEY`` from
+      # env.  CI passes the key via job-level env → docker-compose
+      # interpolation → container env.  Without this the CLI dispatch
+      # succeeds but the worker task fails inside the container.  See
+      # run 24578046124 for the historical failure mode.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - ERGON_MODEL=${ERGON_MODEL:-}
       # Share blob root with host so pytest can read the files the
       # SandboxResourcePublisher writes from inside the container.  The
