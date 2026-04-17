@@ -174,7 +174,7 @@ export function TaskWorkspace({
         <div data-testid="workspace-primary">
           {primarySection === "outputs" && (
             <WorkspaceSection testId="workspace-outputs" title="Outputs">
-              <ResourcePanel resources={resources} />
+              <ResourcePanel resources={resources} runId={runState?.id ?? null} />
             </WorkspaceSection>
           )}
           {primarySection === "evaluation" && (
@@ -298,7 +298,7 @@ export function TaskWorkspace({
 
           {primarySection !== "outputs" && (
             <WorkspaceSection testId="workspace-outputs" title="Outputs">
-              <ResourcePanel resources={resources} />
+              <ResourcePanel resources={resources} runId={runState?.id ?? null} />
             </WorkspaceSection>
           )}
 

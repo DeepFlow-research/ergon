@@ -1,7 +1,9 @@
 """FastAPI router for persisted run-detail snapshots."""
 
+import os
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from statistics import mean
 from typing import Any
 from uuid import UUID
@@ -43,6 +45,7 @@ from ergon_core.core.persistence.telemetry.models import (
     TrainingSession,
 )
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -619,6 +622,74 @@ def get_generations(
         result.append(dto)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Resource content endpoint (file viewer modal)
+# ---------------------------------------------------------------------------
+
+
+# Max bytes we'll stream from a RunResource. The modal viewer is not a
+# download manager — anything bigger 413s so the browser doesn't OOM.
+_RESOURCE_CONTENT_MAX_BYTES: int = 10 * 1024 * 1024
+
+
+def _blob_root() -> Path:
+    """Resolve the blob root used by publishers. Mirrors
+    ``ergon_core.core.providers.sandbox.resource_publisher._DEFAULT_BLOB_ROOT``
+    at call time so tests can override via ``ERGON_BLOB_ROOT``.
+    """
+    return Path(os.environ.get("ERGON_BLOB_ROOT", "/var/ergon/blob")).resolve()
+
+
+@router.get("/{run_id}/resources/{resource_id}/content")
+def get_resource_content(run_id: UUID, resource_id: UUID) -> FileResponse:
+    """Stream the blob bytes for a RunResource.
+
+    Used by the dashboard's file-viewer modal. Enforces:
+    - resource must belong to the named run (no cross-run leaks);
+    - resolved path must sit under ``ERGON_BLOB_ROOT`` (traversal guard);
+    - size <= ``_RESOURCE_CONTENT_MAX_BYTES`` (413 otherwise).
+    """
+    with get_session() as session:
+        stmt = select(RunResource).where(
+            RunResource.id == resource_id,
+            RunResource.run_id == run_id,
+        )
+        resource = session.exec(stmt).first()
+
+    if resource is None:
+        raise HTTPException(status_code=404, detail=f"Resource {resource_id} not found")
+
+    if resource.file_path is None:
+        raise HTTPException(status_code=404, detail="Resource has no backing blob")
+
+    try:
+        blob_path = Path(resource.file_path).resolve(strict=True)
+    except (FileNotFoundError, OSError) as e:
+        raise HTTPException(status_code=404, detail="Resource blob missing on disk") from e
+
+    root = _blob_root()
+    try:
+        blob_path.relative_to(root)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail="Resource blob outside blob root") from e
+
+    size = blob_path.stat().st_size
+    if size > _RESOURCE_CONTENT_MAX_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Resource content {size} bytes exceeds viewer limit "
+            f"({_RESOURCE_CONTENT_MAX_BYTES} bytes)",
+        )
+
+    media_type = resource.mime_type or "application/octet-stream"
+    return FileResponse(
+        path=blob_path,
+        media_type=media_type,
+        filename=resource.name,
+        content_disposition_type="inline",
+    )
 
 
 # ---------------------------------------------------------------------------
