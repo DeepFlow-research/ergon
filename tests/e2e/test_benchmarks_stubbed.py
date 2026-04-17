@@ -34,16 +34,18 @@ Scores 1.0 iff the Lean kernel accepts the proof.
 Requires:
   - docker-compose.ci.yml running (postgres + inngest + api)
   - ERGON_DATABASE_URL set to the Postgres instance
-  - OPENAI_API_KEY set (managers + sub-agents are real LLM agents).
-    CI populates this from the ``OPENROUTER_API_KEY`` secret and sets
-    ``OPENAI_BASE_URL=https://openrouter.ai/api/v1`` +
-    ``ERGON_MODEL=openai:openai/gpt-4o-mini`` to route through a cheap,
-    reliable tool-calling model.  See
-    ``.github/workflows/e2e-benchmarks.yml``.
+  - An LLM provider key — either ``OPENROUTER_API_KEY`` (the CI
+    posture, routed via the ``openrouter:`` model-target prefix and
+    pydantic-ai's ``OpenRouterProvider``) or ``OPENAI_API_KEY`` for
+    direct OpenAI.  CI sets ``ERGON_MODEL=openrouter:openai/gpt-4o-mini``
+    — a cheap, reliable tool-calling model — and wires the key into
+    both the runner and the api container.  See
+    ``.github/workflows/e2e-benchmarks.yml`` +
+    ``ergon_builtins/models/openrouter_backend.py``.
   - E2B sandbox available (docker-compose local, or E2B_API_KEY);
     minif2f also requires the ``ergon-minif2f-v1`` Lean 4 template.
 
-Locally, running without ``OPENAI_API_KEY`` cleanly skips these tests.
+Locally, running without any provider key cleanly skips these tests.
 Under ``CI=true`` a missing key is a **hard failure** — a silently
 skipped job is worse than a red one because it can masquerade as
 coverage (this previously let a no-op "green" demo ship to main).
@@ -94,22 +96,33 @@ def _demo_run(cohort: str):
 def _require_api_keys():
     """Require a real LLM key to exercise the manager/researcher ReAct loop.
 
+    Accepts either ``OPENROUTER_API_KEY`` (the current CI posture — see
+    ``ergon_builtins/models/openrouter_backend.py``) or ``OPENAI_API_KEY``
+    (direct OpenAI, for local development without an OpenRouter account).
+    Whichever is present, pydantic-ai's provider resolution reads it
+    automatically when the matching model-target prefix (``openrouter:``
+    or ``openai:``) is dispatched.
+
     Locally (no ``CI`` env var) we skip so developers without keys can
     still run the fast test suite.  Under ``CI=true`` a missing key is
     a hard failure: we previously shipped a green-badge no-op because
     the CI secret was silently empty and the skip hid it.  Never again.
     """
-    if os.environ.get("OPENAI_API_KEY"):
+    if os.environ.get("OPENROUTER_API_KEY") or os.environ.get("OPENAI_API_KEY"):
         return
     if os.environ.get("CI", "").lower() in {"1", "true", "yes"}:
         pytest.fail(
-            "OPENAI_API_KEY not set in CI. The workflow wires the "
-            "OPENROUTER_API_KEY secret through as OPENAI_API_KEY (see "
-            ".github/workflows/e2e-benchmarks.yml). A missing key here "
-            "means the secret is not configured on the repo — fix it in "
-            "GitHub → Settings → Secrets rather than letting the job skip."
+            "No LLM provider key set in CI. The workflow passes the "
+            "OPENROUTER_API_KEY secret through to both the runner and "
+            "the api container (see .github/workflows/e2e-benchmarks.yml "
+            "and docker-compose.ci.yml).  A missing key here means the "
+            "secret is not configured on the repo — fix it in GitHub → "
+            "Settings → Secrets rather than letting the job skip."
         )
-    pytest.skip("OPENAI_API_KEY not set — skipping real-LLM demo run (local).")
+    pytest.skip(
+        "No LLM provider key set (OPENROUTER_API_KEY or OPENAI_API_KEY) — "
+        "skipping real-LLM demo run (local)."
+    )
 
 
 class TestResearchRubricsDemo:
