@@ -6,8 +6,6 @@ reaches the worker, and we keep ``test_patch`` in the payload for the
 evaluator only — ``build_worker_description`` never includes it.
 """
 
-from __future__ import annotations
-
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -22,7 +20,9 @@ class SWEBenchInstance(BaseModel):
     repo: str
     base_commit: str
     problem_statement: str
-    hints_text: str = ""
+    # HF dataset schema guarantees hints_text is a str; `.strip()` depends
+    # on it never being None.
+    hints_text: str = ""  # slopcop: ignore[no-str-empty-default]
     version: str
     fail_to_pass: list[str]
     pass_to_pass: list[str]
@@ -31,8 +31,9 @@ class SWEBenchInstance(BaseModel):
 
     @classmethod
     def from_raw(
-        cls, row: Mapping[str, Any]
-    ) -> "SWEBenchInstance":  # slopcop: ignore[no-typing-any]
+        cls,
+        row: Mapping[str, Any],  # slopcop: ignore[no-typing-any]
+    ) -> "SWEBenchInstance":
         return cls(
             instance_id=row["instance_id"],
             repo=row["repo"],
@@ -60,7 +61,9 @@ class SWEBenchTaskPayload(BaseModel):
     base_commit: str
     version: str
     problem_statement: str
-    hints_text: str = ""
+    # Mirrors SWEBenchInstance.hints_text; empty string is the documented
+    # dataset default when hints are absent.
+    hints_text: str = ""  # slopcop: ignore[no-str-empty-default]
     fail_to_pass: list[str]
     pass_to_pass: list[str]
     environment_setup_commit: str

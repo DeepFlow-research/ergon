@@ -5,8 +5,6 @@ one ``BenchmarkTask`` per instance. The worker only sees the problem
 statement; the evaluator receives ``test_patch`` via the task payload.
 """
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
@@ -71,6 +69,8 @@ def _load_rows(
     *, limit: int | None = None
 ) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
     """Load rows from the HF dataset. Isolated for testability."""
+    # reason: lazy import — `datasets` is a heavy optional dep pulled in
+    # only when someone actually runs the benchmark loader.
     from datasets import load_dataset
 
     ds = load_dataset(HF_DATASET_ID, split=HF_SPLIT)

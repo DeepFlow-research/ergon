@@ -7,8 +7,6 @@ start, not here.  This manager only provisions the E2B sandbox from the
 pre-built template.
 """
 
-from __future__ import annotations
-
 import logging
 from uuid import UUID
 
