@@ -10,7 +10,7 @@ import asyncio
 
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.registry import WORKERS
-from ergon_builtins.workers.baselines.stub_worker import StubWorker
+from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
 from tests.integration._fixture_benchmark import LifecycleFixtureBenchmark
 from ergon_core.api import Experiment, Worker
 from ergon_core.api.results import WorkerOutput
@@ -74,8 +74,12 @@ def test_full_lifecycle():
     ensure_db()
 
     # ── Phase A: Construct + Validate + Persist ─────────────────────
+    # ``TrainingStubWorker`` is the registered stub worker slug
+    # (``training-stub``); ``StubWorker`` is an unregistered internal
+    # fixture so the orchestration pipeline can't resolve it when it
+    # looks up ``prepared.worker_type`` in ``WORKERS``.
     benchmark = LifecycleFixtureBenchmark(task_count=2)
-    worker = StubWorker(name="test", model="openai:gpt-4o")
+    worker = TrainingStubWorker(name="test", model="openai:gpt-4o")
     rubric = StubRubric()
 
     experiment = Experiment.from_single_worker(

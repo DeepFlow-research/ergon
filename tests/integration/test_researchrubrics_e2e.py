@@ -1,9 +1,10 @@
-"""E2E integration test for the researchrubrics pipeline (offline, no real E2B).
+"""E2E integration test for the stub-rubric pipeline (offline, no real E2B).
 
 Exercises the full orchestration stack with all externals stubbed:
-  - ``ResearchRubricsBenchmark(limit=1)`` supplies real task metadata
-  - ``StubWorker`` + manual sandbox writes simulate a researcher that
-    produces ``/workspace/final_output/report.md``
+  - ``LifecycleFixtureBenchmark(task_count=1)`` supplies a trivial task
+    (avoids HF auth + dataset downloads that real benchmarks need)
+  - ``TrainingStubWorker`` + manual sandbox writes simulate a researcher
+    that produces ``/workspace/final_output/report.md``
   - ``SandboxResourcePublisher`` syncs that file to the RunResource store
   - ``StubCriterion`` + a fake ``CriterionRuntime`` evaluates against the
     published resources (resource blob exists + sandbox readable +
@@ -16,11 +17,10 @@ This is the fast offline mirror of the online
 import asyncio
 import hashlib
 from pathlib import Path
-from uuid import uuid4
 
-from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.evaluators.criteria.stub_criterion import StubCriterion
-from ergon_builtins.workers.baselines.stub_worker import StubWorker
+from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
+from tests.integration._fixture_benchmark import LifecycleFixtureBenchmark
 from ergon_core.api import Experiment
 from ergon_core.api.criterion_runtime import CommandResult, SandboxResult
 from ergon_core.api.evaluation_context import EvaluationContext
@@ -28,6 +28,9 @@ from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.definitions.models import (
+    ExperimentDefinitionEvaluator,
+)
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
@@ -177,13 +180,17 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
     ensure_db()
 
     # ── Construct ──────────────────────────────────────────────────
-    benchmark = ResearchRubricsBenchmark(limit=1)
+    # LifecycleFixtureBenchmark keeps this test fully offline: no HF
+    # dataset download, no auth tokens, no benchmark-specific loaders.
+    # The point of the test is to exercise the publisher / resource
+    # store / StubCriterion plumbing, not the researchrubrics task
+    # loader.
+    benchmark = LifecycleFixtureBenchmark(task_count=1)
 
-    # Inline minimal rubric: Rubric(criteria=[StubCriterion()]).  Not
-    # importing the registered ``stub-rubric`` evaluator because that
-    # would drag in evaluator construction boilerplate; we only need
-    # StubCriterion directly.
-    worker = StubWorker(name="researcher", model="openai:gpt-4o")
+    # TrainingStubWorker is the registered stub worker slug; StubWorker
+    # is intentionally unregistered and the orchestration pipeline
+    # rejects unknown worker types.
+    worker = TrainingStubWorker(name="researcher", model="openai:gpt-4o")
 
     from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 
@@ -289,16 +296,24 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
         assert result.passed, f"StubCriterion failed: {result.feedback}"
         assert result.score == 1.0
 
-        # Persist evaluation.
-        eval_record = RunTaskEvaluation(
-            run_id=run.id,
-            definition_task_id=task_desc.task_id,
-            definition_evaluator_id=uuid4(),
-            score=result.score,
-            passed=result.passed,
-            feedback=result.feedback,
-        )
+        # Persist evaluation (look up real evaluator def for FK).
         with get_session() as session:
+            evaluator_def = session.exec(
+                select(ExperimentDefinitionEvaluator).where(
+                    ExperimentDefinitionEvaluator.experiment_definition_id
+                    == persisted.definition_id,
+                    ExperimentDefinitionEvaluator.binding_key == "default",
+                )
+            ).first()
+            assert evaluator_def is not None, "evaluator def missing for binding 'default'"
+            eval_record = RunTaskEvaluation(
+                run_id=run.id,
+                definition_task_id=task_desc.task_id,
+                definition_evaluator_id=evaluator_def.id,
+                score=result.score,
+                passed=result.passed,
+                feedback=result.feedback,
+            )
             session.add(eval_record)
             session.commit()
 

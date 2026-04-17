@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.registry import EVALUATORS, WORKERS
-from ergon_builtins.workers.baselines.stub_worker import StubWorker
+from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
 from tests.integration._fixture_benchmark import LifecycleFixtureBenchmark
 from ergon_core.api import Experiment, Worker
 from ergon_core.api.results import WorkerOutput
@@ -114,7 +114,7 @@ def test_full_lifecycle_with_evaluation():
     # non-zero score without needing a sandbox, so it's the right tool
     # for testing the evaluation *dispatch* plumbing in isolation.
     benchmark = LifecycleFixtureBenchmark(task_count=2)
-    worker = StubWorker(name="test", model="openai:gpt-4o")
+    worker = TrainingStubWorker(name="test", model="openai:gpt-4o")
     rubric = VariedStubRubric()
 
     experiment = Experiment.from_single_worker(

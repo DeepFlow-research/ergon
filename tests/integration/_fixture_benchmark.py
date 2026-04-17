@@ -32,6 +32,7 @@ class LifecycleFixtureBenchmark(Benchmark):
                 task_key=f"lifecycle-task-{i}",
                 instance_key="default",
                 description=f"lifecycle fixture task {i}",
+                evaluator_binding_keys=("default",),
             )
             for i in range(self._task_count)
         ]
