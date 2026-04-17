@@ -88,13 +88,21 @@ jobs:
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # gpt-5.4-nano: OpenAI's current cheapest tool-calling model
-          # ($0.20 / $1.25 per 1M tokens).  Newer than gpt-4o-mini and
-          # much better at multi-step tool use.  If tool-calling quality
-          # on researchrubrics tasks proves marginal, bump to
-          # `openai:gpt-5.4-mini` ($0.75 / $4.50).
-          ERGON_MODEL: openai:gpt-5.4-nano
+          # Route pydantic-ai's OpenAI client through OpenRouter.  The
+          # `openai` SDK (which pydantic-ai uses) reads both vars from
+          # the env — no code change needed, just the right model string
+          # (see ERGON_MODEL).  Using OpenRouter keeps the provider
+          # abstraction so we can swap to Anthropic / Gemini / etc. by
+          # changing one line instead of rewiring auth.
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_BASE_URL: https://openrouter.ai/api/v1
+          # gpt-4o-mini via OpenRouter: $0.15 / $0.60 per 1M tokens,
+          # reliable tool-calling, well-established.  If tool-calling
+          # quality on researchrubrics tasks proves marginal, try
+          # `openai:anthropic/claude-3.5-haiku` (stronger reasoning at
+          # $0.80/$4.00) or `openai:google/gemini-2.0-flash-001`
+          # (cheapest current-gen at $0.10/$0.40).
+          ERGON_MODEL: openai:openai/gpt-4o-mini
           ERGON_BLOB_ROOT: /tmp/ergon-blob
           CI: "true"
         # --timeout=600 per-test is a safety net against a hung E2B
@@ -159,8 +167,9 @@ jobs:
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ERGON_MODEL: openai:gpt-5.4-nano
+          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_BASE_URL: https://openrouter.ai/api/v1
+          ERGON_MODEL: openai:openai/gpt-4o-mini
           ERGON_BLOB_ROOT: /tmp/ergon-blob
           CI: "true"
         # --timeout=900 per-test: Lean sandbox boot + manager→prover→

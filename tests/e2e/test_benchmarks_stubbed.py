@@ -26,9 +26,11 @@ Requires:
   - docker-compose.ci.yml running (postgres + inngest + api)
   - ERGON_DATABASE_URL set to the Postgres instance
   - OPENAI_API_KEY set (managers + sub-agents are real LLM agents).
-    CI runs point ``ERGON_MODEL=openai:gpt-5.4-nano`` — the cheapest
-    current-gen OpenAI model with reliable tool calling ($0.20/$1.25
-    per 1M tokens).  See ``.github/workflows/e2e-benchmarks.yml``.
+    CI populates this from the ``OPENROUTER_API_KEY`` secret and sets
+    ``OPENAI_BASE_URL=https://openrouter.ai/api/v1`` +
+    ``ERGON_MODEL=openai:openai/gpt-4o-mini`` to route through a cheap,
+    reliable tool-calling model.  See
+    ``.github/workflows/e2e-benchmarks.yml``.
   - E2B sandbox available (docker-compose local, or E2B_API_KEY);
     minif2f also requires the ``ergon-minif2f-v1`` Lean 4 template.
 
@@ -87,8 +89,8 @@ def _require_api_keys():
         return
     if os.environ.get("CI", "").lower() in {"1", "true", "yes"}:
         pytest.fail(
-            "OPENAI_API_KEY not set in CI. The workflow wires "
-            "${{ secrets.OPENAI_API_KEY }} through (see "
+            "OPENAI_API_KEY not set in CI. The workflow wires the "
+            "OPENROUTER_API_KEY secret through as OPENAI_API_KEY (see "
             ".github/workflows/e2e-benchmarks.yml). A missing key here "
             "means the secret is not configured on the repo — fix it in "
             "GitHub → Settings → Secrets rather than letting the job skip."
