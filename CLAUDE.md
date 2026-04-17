@@ -58,7 +58,40 @@ pnpm run test:be:e2e    # E2E tests (requires Docker stack)
 
 **Trunk-based development on `main`.** Commit directly to `main` — do not create feature branches or git worktrees. No PRs unless explicitly requested.
 
-When a feature branch is needed (e.g. for a PR review), use the `feature/<name>` prefix. PRs from `feature/*` branches automatically run the full E2B sandbox I/O test suite in CI.
+When a feature branch is needed (e.g. for a PR review), use the `feature/<name>` prefix.
+
+### Expensive E2E CI (`.github/workflows/e2e-benchmarks.yml`)
+
+The `E2E Benchmarks` workflow spins up the full docker-compose stack and burns real LLM + E2B sandbox credits. It is deliberately **not** triggered on every push. Trigger posture:
+
+- `pull_request: types: [opened, reopened, labeled]` — runs on PR creation and whenever the `run-e2e` label is added. Missing `synchronize` on purpose: pushes do **not** refire it.
+- `workflow_dispatch` — manual dispatch from the Actions UI.
+
+Branch protection on `main` requires `e2e-researchrubrics-demo` + `e2e-minif2f-demo` to have reported green *at some point* in the PR's history (`strict: false` — "require branches up to date" is off). A single pass is enough to unblock merge.
+
+**Agent protocol when opening or updating PRs:**
+
+1. **Substantive changes (any PR touching `ergon_core/`, `ergon_builtins/`, `ergon_cli/`, `ergon_infra/`, `tests/e2e/`, `docker-compose.ci.yml`, `Dockerfile`, or the workflow itself):** add the `run-e2e` label immediately after opening the PR so the e2e workflow runs at least once against the PR head:
+   ```bash
+   gh pr edit <num> -R DeepFlow-research/ergon --add-label run-e2e
+   ```
+   Docs-only / README / comment-only / CI-config-that-doesn't-affect-e2e PRs don't need the label.
+
+2. **If the e2e job fails and you push a fix:** the push by itself will **not** re-run the workflow (no `synchronize`). Re-trigger one of these ways:
+   - Remove and re-add the label:
+     ```bash
+     gh pr edit <num> -R DeepFlow-research/ergon --remove-label run-e2e
+     gh pr edit <num> -R DeepFlow-research/ergon --add-label run-e2e
+     ```
+   - Or dispatch manually:
+     ```bash
+     gh workflow run "E2E Benchmarks" -R DeepFlow-research/ergon --ref <branch>
+     ```
+   Repeat until it passes against the current HEAD.
+
+3. **Once it has passed once for a given PR, do not keep re-running it.** Subsequent small commits don't need fresh e2e runs — branch protection's `strict: false` means the original pass still counts. Only re-run if a later commit is itself substantive enough that the prior pass no longer represents the code being merged.
+
+The goal: every merged PR has had at least one successful e2e run against code close to what's being merged, without paying for an e2e run on every commit.
 
 ## Key conventions
 
