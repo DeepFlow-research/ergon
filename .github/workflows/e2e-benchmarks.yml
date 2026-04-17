@@ -1,18 +1,29 @@
 name: E2E Benchmarks
 
 # Expensive: spins up the full docker-compose stack + burns real LLM and
-# E2B sandbox credits.  We explicitly do NOT run this on every push.
-# Coverage posture:
-#   - schedule: daily 06:00 UTC (catches regressions on main automatically —
-#     removes the "I forgot to run it" failure mode)
-#   - pull_request + "run-e2e" label: opt-in when a PR touches LLM/sandbox
-#     code.  Just label the PR instead of remembering to dispatch manually.
-#   - workflow_dispatch: ad-hoc runs from the Actions UI.
+# E2B sandbox credits.  Explicitly does NOT run on every push.
+#
+# Trigger posture (answers "how do we make PRs gated on this check
+# without re-running it on every commit?"):
+#   - pull_request types: [opened, reopened, labeled] — runs ONCE when a
+#     PR is opened.  Notably absent: `synchronize`, which is the event
+#     fired on every push to a PR.  Drop that and pushes stop retriggering.
+#   - labeled + `run-e2e` — the manual "re-run after a big push" knob.
+#     Add / remove / re-add the label on the PR to force another run
+#     without needing the Actions UI.
+#   - workflow_dispatch — ad-hoc manual runs from the Actions UI.
+#
+# Pair this with branch protection configured in GitHub UI:
+#   Settings → Branches → main →
+#     [x] Require status checks to pass before merging
+#     [x] Select e2e-researchrubrics-demo / e2e-minif2f-demo
+#     [ ] Require branches to be up to date before merging  <-- KEY
+# With "up to date" OFF, the single run on PR-opening is enough to unblock
+# merge.  If you push 50 more commits after that, the check stays green
+# against the initial SHA and the merge button stays enabled.
 on:
-  schedule:
-    - cron: "0 6 * * *"
   pull_request:
-    types: [labeled, opened, synchronize, reopened]
+    types: [opened, reopened, labeled]
     paths:
       - "ergon_core/**"
       - "ergon_builtins/**"
@@ -29,14 +40,16 @@ jobs:
     name: "ResearchRubrics demo (real sandbox + LLM)"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Fire on: schedule, manual dispatch, or a PR labeled `run-e2e`.
-    # A bare `feature/*` PR without the label will NOT trigger this job —
-    # that's intentional, since each run costs real E2B + LLM credits.
+    # Gate: run on PR open / reopen, on `run-e2e` label adds (re-run
+    # knob), and on manual dispatch.  Critically we do NOT run on
+    # `synchronize` — that's the per-push event that was burning credits.
     if: >-
-      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+        (github.event.action == 'opened' ||
+         github.event.action == 'reopened' ||
+         (github.event.action == 'labeled' &&
+          github.event.label.name == 'run-e2e')))
     steps:
       - uses: actions/checkout@v4
 
@@ -75,20 +88,13 @@ jobs:
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          # Route pydantic-ai's OpenAI client through OpenRouter.  The
-          # `openai` SDK (which pydantic-ai uses) honors both env vars
-          # automatically — no code changes needed, only the model
-          # string must be an OpenRouter-qualified path (ERGON_MODEL).
-          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENAI_BASE_URL: https://openrouter.ai/api/v1
-          # Cheap-but-capable tool-calling model.  gpt-4o-mini via
-          # OpenRouter is ~$0.15/$0.60 per 1M tokens and has rock-solid
-          # tool-calling behaviour — the manager spawns subtasks and the
-          # researcher uses the sandbox shell, and both need reliable
-          # structured-output from the model.  If this proves too weak
-          # on researchrubrics tasks, bump to
-          # `openai:anthropic/claude-3.5-haiku` (still under $5/1M).
-          ERGON_MODEL: openai:openai/gpt-4o-mini
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # gpt-5.4-nano: OpenAI's current cheapest tool-calling model
+          # ($0.20 / $1.25 per 1M tokens).  Newer than gpt-4o-mini and
+          # much better at multi-step tool use.  If tool-calling quality
+          # on researchrubrics tasks proves marginal, bump to
+          # `openai:gpt-5.4-mini` ($0.75 / $4.50).
+          ERGON_MODEL: openai:gpt-5.4-nano
           ERGON_BLOB_ROOT: /tmp/ergon-blob
           CI: "true"
         # --timeout=600 per-test is a safety net against a hung E2B
@@ -110,14 +116,14 @@ jobs:
     name: "MiniF2F demo (real Lean sandbox + LLM)"
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # Same trigger posture as the researchrubrics job: schedule + label
-    # opt-in + manual dispatch.  Lean template build is slow enough that
-    # we REALLY don't want to pay for it on every push.
+    # Same trigger gate as the researchrubrics job — see its comment.
     if: >-
-      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+        (github.event.action == 'opened' ||
+         github.event.action == 'reopened' ||
+         (github.event.action == 'labeled' &&
+          github.event.label.name == 'run-e2e')))
     steps:
       - uses: actions/checkout@v4
 
@@ -153,9 +159,8 @@ jobs:
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENAI_BASE_URL: https://openrouter.ai/api/v1
-          ERGON_MODEL: openai:openai/gpt-4o-mini
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ERGON_MODEL: openai:gpt-5.4-nano
           ERGON_BLOB_ROOT: /tmp/ergon-blob
           CI: "true"
         # --timeout=900 per-test: Lean sandbox boot + manager→prover→
