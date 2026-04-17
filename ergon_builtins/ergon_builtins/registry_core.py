@@ -38,6 +38,7 @@ from ergon_builtins.workers.baselines.minif2f_react_worker import MiniF2FReActWo
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
+from ergon_builtins.workers.baselines.swebench_worker import SWEBenchReActWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
 from ergon_builtins.workers.research_rubrics.stub_worker import (
     StubResearchRubricsWorker,
@@ -49,6 +50,7 @@ WORKERS: dict[str, type[Worker]] = {
     "smoke-test-worker": SmokeTestWorker,
     "react-v1": ReActWorker,
     "minif2f-react": MiniF2FReActWorker,
+    "swebench-react": SWEBenchReActWorker,
     "manager-researcher": ManagerResearcherWorker,
     "researcher": StubWorker,
     "researchrubrics-stub": StubResearchRubricsWorker,
