@@ -1,0 +1,13 @@
+# Template spec for ergon-swebench-v1.
+#
+# This file is the source of truth for the sandbox's resource config; it is
+# read by `ergon benchmark setup swebench_verified`, which calls the E2B Python
+# SDK's `Template.build()` directly (no CLI, no E2B_ACCESS_TOKEN required —
+# only E2B_API_KEY).  The resulting template_id is persisted to
+# `~/.ergon/sandbox_templates.json`, not back into this file.
+
+dockerfile = "Dockerfile"
+template_name = "ergon-swebench-v1"
+start_cmd = "/bin/bash"
+cpu_count = 4
+memory_mb = 8192   # SWE-Bench repos + harness; 8 GB is a safe default
