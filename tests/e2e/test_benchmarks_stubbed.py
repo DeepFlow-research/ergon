@@ -31,6 +31,16 @@ Lean 4 compile: ``ProofVerificationCriterion`` reads the worker's
 ``final_solution.lean`` and runs ``lake env lean src/verify.lean``.
 Scores 1.0 iff the Lean kernel accepts the proof.
 
+Each suite runs the benchmark **once per test class** via a
+module-scoped fixture (``_researchrubrics_run`` / ``_minif2f_run``),
+and every test in that class asserts a different facet (CLI exit,
+execution rows, evaluation score, summary payload, cohort row) against
+the shared run.  Earlier versions of this file re-ran ``_demo_run()``
+inside every test — that's 5× the LLM credits, 5× the sandbox boot
+time, and enough variance that a single slow run could push a single
+job past the 20-minute timeout (see run 24580074997).  One run, many
+assertions keeps coverage identical and the job budget honest.
+
 Requires:
   - docker-compose.ci.yml running (postgres + inngest + api)
   - ERGON_DATABASE_URL set to the Postgres instance
@@ -52,6 +62,9 @@ coverage (this previously let a no-op "green" demo ship to main).
 """
 
 import os
+import subprocess
+import uuid
+from dataclasses import dataclass
 
 import pytest
 from ergon_core.core.persistence.shared.db import get_engine
@@ -81,18 +94,39 @@ def _get_session() -> Session:
     return Session(get_engine())
 
 
-def _demo_run(cohort: str):
-    return run_benchmark(
-        DEMO_SLUG,
-        worker=DEMO_WORKER,
-        evaluator=DEMO_EVALUATOR,
-        cohort=cohort,
-        limit=1,
-        timeout=DEMO_TIMEOUT,
-    )
+@dataclass
+class DemoRun:
+    """Captured output of a single ``ergon benchmark run`` invocation.
+
+    Tests assert facets (CLI exit, execution rows, evaluation score, ...)
+    against one of these.  Pinning ``run_id`` at fixture time means each
+    test queries *exactly* the run this fixture produced — no racing on
+    ``ORDER BY created_at DESC LIMIT 1`` if fixtures from other suites
+    happen to interleave.
+    """
+
+    process: subprocess.CompletedProcess
+    cohort: str
+    run_id: str | None
 
 
-@pytest.fixture(autouse=True)
+def _capture_latest_run_id() -> str | None:
+    """Return the most-recent ``RunRecord.id``, or ``None`` if table is empty.
+
+    Called immediately after a CLI run so "most recent" unambiguously
+    identifies the run we just kicked off.  Returned as a string so the
+    dataclass stays JSON-serialisable for diagnostic dumps.
+    """
+    with _get_session() as session:
+        latest = session.exec(
+            select(RunRecord)
+            .order_by(RunRecord.created_at.desc())  # type: ignore[union-attr]
+            .limit(1)
+        ).first()
+        return str(latest.id) if latest else None
+
+
+@pytest.fixture(scope="session", autouse=True)
 def _require_api_keys():
     """Require a real LLM key to exercise the manager/researcher ReAct loop.
 
@@ -102,6 +136,13 @@ def _require_api_keys():
     Whichever is present, pydantic-ai's provider resolution reads it
     automatically when the matching model-target prefix (``openrouter:``
     or ``openai:``) is dispatched.
+
+    Session-scoped so the check fires **before** the module-scoped demo
+    fixtures set up.  If it were function-scoped, pytest would spin up
+    the module fixture (i.e. run a full benchmark) *before* running
+    this check, so a missing key would burn an E2B sandbox + LLM credit
+    before skipping.  Session scope guarantees the skip/fail happens
+    first.
 
     Locally (no ``CI`` env var) we skip so developers without keys can
     still run the fast test suite.  Under ``CI=true`` a missing key is
@@ -125,32 +166,57 @@ def _require_api_keys():
     )
 
 
+@pytest.fixture(scope="module")
+def _researchrubrics_run() -> DemoRun:
+    """Run the researchrubrics demo **once** per module; yield to all tests.
+
+    Each test in ``TestResearchRubricsDemo`` asserts a different facet
+    of the same pipeline execution.  Running the full CLI → Inngest →
+    worker → sandbox cycle once and sharing the result:
+
+    - Cuts LLM + E2B spend by 5× versus the previous per-test reruns.
+    - Keeps the researchrubrics job's wall-clock well under its
+      20-minute ceiling (previously we were hitting the per-test 600s
+      safety timeout with zero margin; see run 24580074997).
+    - Preserves "one assertion per test" error localisation — each
+      test still points at exactly one failure mode.
+
+    Cohort name is uuid-suffixed so ``test_cohort_created`` can assert
+    a unique row was written without collisions across CI runs reusing
+    the same Postgres volume.
+    """
+    cohort = f"ci-researchrubrics-{uuid.uuid4().hex[:8]}"
+    result = run_benchmark(
+        DEMO_SLUG,
+        worker=DEMO_WORKER,
+        evaluator=DEMO_EVALUATOR,
+        cohort=cohort,
+        limit=1,
+        timeout=DEMO_TIMEOUT,
+    )
+    return DemoRun(process=result, cohort=cohort, run_id=_capture_latest_run_id())
+
+
 class TestResearchRubricsDemo:
     """Canonical demo: manager+researcher delegation into a real sandbox,
     evaluated by ``stub-rubric`` which asserts the full pipeline works."""
 
-    def test_run_completes(self):
-        result = _demo_run("ci-researchrubrics-demo")
+    def test_run_completes(self, _researchrubrics_run: DemoRun):
+        result = _researchrubrics_run.process
         assert result.returncode == 0, (
             f"CLI exited {result.returncode}:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
         assert "Status:     completed" in result.stdout
 
-    def test_executions_complete(self):
+    def test_executions_complete(self, _researchrubrics_run: DemoRun):
         """Every execution (manager + spawned researcher subtasks) completes."""
-        _demo_run("ci-researchrubrics-exec")
+        run_id = _researchrubrics_run.run_id
+        assert run_id is not None, "fixture failed to capture a RunRecord"
 
         with _get_session() as session:
-            latest_run = session.exec(
-                select(RunRecord)
-                .order_by(RunRecord.created_at.desc())  # type: ignore[union-attr]
-                .limit(1)
-            ).first()
-            assert latest_run is not None
-
             executions = list(
                 session.exec(
-                    select(RunTaskExecution).where(RunTaskExecution.run_id == latest_run.id)
+                    select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
                 ).all()
             )
             assert len(executions) >= 2, (
@@ -163,7 +229,7 @@ class TestResearchRubricsDemo:
                 )
                 assert ex.completed_at is not None
 
-    def test_stub_criterion_scores_one(self):
+    def test_stub_criterion_scores_one(self, _researchrubrics_run: DemoRun):
         """``stub-rubric`` must return score=1.0 on a real pipeline run.
 
         This is the load-bearing assertion of the whole consolidation:
@@ -173,20 +239,17 @@ class TestResearchRubricsDemo:
         regression in that chain flips this to 0.0 with a specific
         feedback reason.
         """
-        _demo_run("ci-researchrubrics-score")
+        run_id = _researchrubrics_run.run_id
+        assert run_id is not None, "fixture failed to capture a RunRecord"
 
         with _get_session() as session:
-            latest_run = session.exec(
-                select(RunRecord)
-                .order_by(RunRecord.created_at.desc())  # type: ignore[union-attr]
-                .limit(1)
-            ).first()
-            assert latest_run is not None
-            assert latest_run.status == RunStatus.COMPLETED
+            run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
+            assert run is not None
+            assert run.status == RunStatus.COMPLETED
 
             evaluations = list(
                 session.exec(
-                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == latest_run.id)
+                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
                 ).all()
             )
             assert len(evaluations) > 0, "Expected at least one evaluation"
@@ -197,25 +260,21 @@ class TestResearchRubricsDemo:
                 )
                 assert ev.passed is True
 
-    def test_summary_json_populated(self):
-        _demo_run("ci-researchrubrics-summary")
+    def test_summary_json_populated(self, _researchrubrics_run: DemoRun):
+        run_id = _researchrubrics_run.run_id
+        assert run_id is not None, "fixture failed to capture a RunRecord"
 
         with _get_session() as session:
-            latest_run = session.exec(
-                select(RunRecord)
-                .order_by(RunRecord.created_at.desc())  # type: ignore[union-attr]
-                .limit(1)
-            ).first()
-            assert latest_run is not None
-            summary = latest_run.parsed_summary()
+            run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
+            assert run is not None
+            summary = run.parsed_summary()
             assert "final_score" in summary
             assert "normalized_score" in summary
             assert "evaluators_count" in summary
 
-    def test_cohort_created(self):
+    def test_cohort_created(self, _researchrubrics_run: DemoRun):
         """Cohort row exists after a demo run."""
-        cohort_name = "ci-cohort-check"
-        _demo_run(cohort_name)
+        cohort_name = _researchrubrics_run.cohort
 
         with _get_session() as session:
             cohort = session.exec(
@@ -233,8 +292,18 @@ MINIF2F_EVALUATOR = "minif2f-rubric"
 MINIF2F_TIMEOUT = 900
 
 
-def _minif2f_run(cohort: str):
-    return run_benchmark(
+@pytest.fixture(scope="module")
+def _minif2f_run() -> DemoRun:
+    """Run the minif2f smoke demo **once** per module; yield to all tests.
+
+    Same rationale as ``_researchrubrics_run`` — one full Lean pipeline
+    execution is shared across all assertions in ``TestMiniF2FDemo``.
+    Lean sandbox boot alone is ~2 minutes, so deduplicating the runs is
+    even more important here; the previous per-test variant was
+    reliably blowing the 25-minute job cap.
+    """
+    cohort = f"ci-minif2f-{uuid.uuid4().hex[:8]}"
+    result = run_benchmark(
         MINIF2F_SLUG,
         worker=MINIF2F_WORKER,
         evaluator=MINIF2F_EVALUATOR,
@@ -242,6 +311,7 @@ def _minif2f_run(cohort: str):
         limit=1,
         timeout=MINIF2F_TIMEOUT,
     )
+    return DemoRun(process=result, cohort=cohort, run_id=_capture_latest_run_id())
 
 
 class TestMiniF2FDemo:
@@ -250,28 +320,22 @@ class TestMiniF2FDemo:
     which compiles the agent's ``final_solution.lean`` with the Lean
     kernel.  Score 1.0 iff the kernel accepts the proof."""
 
-    def test_run_completes(self):
-        result = _minif2f_run("ci-minif2f-demo")
+    def test_run_completes(self, _minif2f_run: DemoRun):
+        result = _minif2f_run.process
         assert result.returncode == 0, (
             f"CLI exited {result.returncode}:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
         assert "Status:     completed" in result.stdout
 
-    def test_executions_complete(self):
+    def test_executions_complete(self, _minif2f_run: DemoRun):
         """Manager + ≥1 spawned prover executions all reach terminal-completed."""
-        _minif2f_run("ci-minif2f-exec")
+        run_id = _minif2f_run.run_id
+        assert run_id is not None, "fixture failed to capture a RunRecord"
 
         with _get_session() as session:
-            latest_run = session.exec(
-                select(RunRecord)
-                .order_by(RunRecord.created_at.desc())  # type: ignore[union-attr]
-                .limit(1)
-            ).first()
-            assert latest_run is not None
-
             executions = list(
                 session.exec(
-                    select(RunTaskExecution).where(RunTaskExecution.run_id == latest_run.id)
+                    select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
                 ).all()
             )
             assert len(executions) >= 2, (
@@ -284,7 +348,7 @@ class TestMiniF2FDemo:
                 )
                 assert ex.completed_at is not None
 
-    def test_proof_verification_scores_one(self):
+    def test_proof_verification_scores_one(self, _minif2f_run: DemoRun):
         """``minif2f-rubric`` must return score=1.0 on the trivial smoke theorem.
 
         This is the load-bearing Lean assertion: if the manager wrote a
@@ -295,20 +359,17 @@ class TestMiniF2FDemo:
         output wiring, sandbox reachability, or the Lean toolchain flips
         this to 0 with a specific feedback reason.
         """
-        _minif2f_run("ci-minif2f-score")
+        run_id = _minif2f_run.run_id
+        assert run_id is not None, "fixture failed to capture a RunRecord"
 
         with _get_session() as session:
-            latest_run = session.exec(
-                select(RunRecord)
-                .order_by(RunRecord.created_at.desc())  # type: ignore[union-attr]
-                .limit(1)
-            ).first()
-            assert latest_run is not None
-            assert latest_run.status == RunStatus.COMPLETED
+            run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
+            assert run is not None
+            assert run.status == RunStatus.COMPLETED
 
             evaluations = list(
                 session.exec(
-                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == latest_run.id)
+                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
                 ).all()
             )
             assert len(evaluations) > 0, "Expected at least one evaluation"
