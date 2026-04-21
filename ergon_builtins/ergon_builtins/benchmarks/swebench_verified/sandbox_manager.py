@@ -10,7 +10,6 @@ pre-built template.
 import logging
 from uuid import UUID
 
-from ergon_core.core.providers.sandbox.event_sink import SandboxEventSink
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
@@ -31,8 +30,8 @@ class SWEBenchSandboxManager(BaseSandboxManager):
     falling back to the mutable template name ``ergon-swebench-v1``.
     """
 
-    def __init__(self, event_sink: SandboxEventSink | None = None) -> None:
-        super().__init__(event_sink=event_sink)
+    def __init__(self) -> None:
+        super().__init__()
         # Instance-level override of BaseSandboxManager.template (ClassVar).
         # Resolved at construction time so registry changes take effect on
         # the next manager re-instantiation.

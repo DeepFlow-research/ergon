@@ -8,7 +8,10 @@ from ergon_core.core.api.cohorts import router as cohorts_router
 from ergon_core.core.api.rollouts import init_service as init_rollout_service
 from ergon_core.core.api.rollouts import router as rollouts_router
 from ergon_core.core.api.runs import router as runs_router
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
+from ergon_core.core.providers.sandbox.event_sink import DashboardEmitterSandboxEventSink
+from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.inngest_registry import ALL_FUNCTIONS
@@ -31,6 +34,21 @@ async def lifespan(app: FastAPI):
             tokenizer_name=settings.default_tokenizer,
         )
     )
+
+    # Wire the dashboard event sink on every sandbox manager subclass.
+    # Import ergon_builtins here (deferred) to avoid a circular import at
+    # module level; ergon_builtins imports ergon_core, not the reverse.
+    from ergon_builtins.registry import SANDBOX_MANAGERS  # noqa: PLC0415
+
+    sink = DashboardEmitterSandboxEventSink(dashboard_emitter)
+    DefaultSandboxManager.set_event_sink(sink)
+    for manager_cls in SANDBOX_MANAGERS.values():
+        manager_cls.set_event_sink(sink)
+    logger.info(
+        "sandbox event sink wired on %d manager subclass(es)",
+        1 + len(SANDBOX_MANAGERS),
+    )
+
     logger.info("ready")
     yield
 
