@@ -13,15 +13,16 @@ MUST NOT call an LLM. MUST NOT make network calls. MUST complete in under 20s
 under normal sandbox conditions.
 """
 
-from __future__ import annotations
-
-from dataclasses import dataclass
+from dataclasses import dataclass  # slopcop: ignore[no-dataclass]
 from typing import Protocol, runtime_checkable
 
 from ergon_core.core.providers.sandbox.manager import AsyncSandbox
 
 
-@dataclass(frozen=True)
+# SubworkerResult is a plain value-object returned from Protocol implementations
+# and constructed with positional args in contract/unit tests; pydantic BaseModel
+# would disallow that pattern without adding boilerplate. No validation needed.
+@dataclass(frozen=True)  # slopcop: ignore[no-dataclass]
 class SubworkerResult:
     """Return payload from one SmokeSubworker.work() call."""
 
@@ -34,5 +35,4 @@ class SubworkerResult:
 class SmokeSubworker(Protocol):
     """The pluggable env-specific leaf."""
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        ...
+    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult: ...
