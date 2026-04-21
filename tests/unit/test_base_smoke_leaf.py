@@ -1,8 +1,6 @@
 """BaseSmokeLeafWorker: runs the subworker, writes files into the sandbox,
 yields a turn, and get_output reflects probe success/failure."""
 
-from __future__ import annotations
-
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
