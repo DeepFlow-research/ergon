@@ -1,10 +1,10 @@
 ---
-status: active
+status: rejected
 opened: 2026-04-18
 author: deepflow-research
 architecture_refs: [docs/architecture/06_builtins.md, docs/architecture/07_testing.md]
 supersedes: []
-superseded_by: null
+superseded_by: docs/rfcs/accepted/2026-04-21-e2e-smoke-coverage-rewrite.md
 ---
 
 # RFC: `FixedDelegationStubWorker` and canonical per-benchmark smoke pattern
