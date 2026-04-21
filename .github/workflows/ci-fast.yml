@@ -62,7 +62,7 @@ jobs:
   unit-tests:
     name: "Unit + state tests (Python)"
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     needs: lint-and-type-check
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +76,9 @@ jobs:
       - name: Run fast test suites with coverage
         env:
           ERGON_DATABASE_URL: "sqlite:///test.db"
+          # Python 3.12+ sys.monitoring backend — 5-10x faster than the default
+          # sys.settrace() tracer for ORM-heavy workloads like SQLAlchemy.
+          COVERAGE_CORE: sysmon
         run: uv run pytest tests/state -v --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
