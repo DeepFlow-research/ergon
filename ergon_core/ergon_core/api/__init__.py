@@ -1,6 +1,7 @@
 """Object-first Ergon public API surface."""
 
 from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion_runtime import CommandResult, CriterionRuntime, SandboxResult
 from ergon_core.api.errors import DependencyError
@@ -16,6 +17,7 @@ from ergon_core.api.worker_context import WorkerContext
 
 __all__ = [
     "Benchmark",
+    "BenchmarkDeps",
     "BenchmarkTask",
     "CommandResult",
     "Criterion",

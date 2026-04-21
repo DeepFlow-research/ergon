@@ -6,7 +6,6 @@ from pathlib import Path
 from ergon_cli.onboarding.env_writer import write_env
 from ergon_cli.onboarding.installer import install_extras
 from ergon_cli.onboarding.profile import (
-    BENCHMARK_DEPS,
     GPUProvider,
     LLMProvider,
     OnboardProfile,
@@ -17,12 +16,15 @@ from ergon_cli.onboarding.prompts import ask_secret, confirm, select_multiple, s
 def handle_onboard(args: Namespace) -> int:  # noqa: ARG001
     print("\nWelcome to Ergon!  Let's get your environment set up.\n")
 
+    # reason: deferred import avoids pulling heavy ergon_builtins deps at CLI startup.
+    from ergon_builtins.registry import BENCHMARKS
+
     profile = OnboardProfile()
 
     # --- Q1: benchmarks -------------------------------------------------------
     profile.benchmarks = select_multiple(
         "Which benchmarks do you want to run?",
-        [(slug, slug) for slug in BENCHMARK_DEPS],
+        [(slug, slug) for slug in sorted(BENCHMARKS)],
     )
 
     # --- Q2: LLM providers ----------------------------------------------------

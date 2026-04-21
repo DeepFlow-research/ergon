@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
 
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
@@ -26,6 +27,10 @@ class ResearchRubricsBenchmark(Benchmark):
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
+    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
+        extras=("ergon-builtins[data]",),
+        optional_keys=("EXA_API_KEY",),
+    )
     required_packages: ClassVar[list[str]] = ["datasets", "huggingface_hub"]
     install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 

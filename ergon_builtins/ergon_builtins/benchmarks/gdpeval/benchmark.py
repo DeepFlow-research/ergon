@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
 from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
 
 from ergon_builtins.benchmarks.gdpeval.loader import (
@@ -31,6 +32,10 @@ class GDPEvalBenchmark(Benchmark):
     """
 
     type_slug: ClassVar[str] = "gdpeval"
+    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
+        e2b=True,
+        extras=("ergon-builtins[data]",),
+    )
     required_packages: ClassVar[list[str]] = ["pandas", "huggingface_hub"]
     install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 

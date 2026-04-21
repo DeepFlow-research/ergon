@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
@@ -30,6 +31,7 @@ class MiniF2FBenchmark(Benchmark):
     """
 
     type_slug: ClassVar[str] = "minif2f"
+    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(e2b=True)
 
     def __init__(
         self,

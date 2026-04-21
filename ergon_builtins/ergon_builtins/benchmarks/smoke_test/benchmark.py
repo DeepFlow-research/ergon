@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
 from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
 
 from ergon_builtins.benchmarks.smoke_test.tasks import (
@@ -20,6 +21,7 @@ from ergon_builtins.benchmarks.smoke_test.tasks import (
 
 class SmokeTestBenchmark(Benchmark):
     type_slug: ClassVar[str] = "smoke-test"
+    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(e2b=True)
 
     def __init__(
         self,
