@@ -74,7 +74,7 @@ class ResearchRubricsBenchmark(Benchmark):
             )
             tasks.append(
                 BenchmarkTask(
-                    task_key=row["sample_id"],
+                    task_slug=row["sample_id"],
                     instance_key="default",
                     description=row["ablated_prompt"],
                     evaluator_binding_keys=("default",),

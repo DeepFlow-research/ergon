@@ -67,7 +67,7 @@ class MiniF2FRubric(Rubric):
         normalized = total_score / self._max_score if self._max_score > 0 else 0.0
 
         return TaskEvaluationResult(
-            task_key=task.task_key,
+            task_slug=task.task_slug,
             score=normalized,
             passed=passed,
             evaluator_name=self.name,

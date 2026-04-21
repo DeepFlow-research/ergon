@@ -11,7 +11,12 @@ from typing import Any
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.types import NodeId, RunId
+from ergon_core.core.persistence.shared.types import (
+    AssignedWorkerSlug,
+    NodeId,
+    RunId,
+    TaskSlug,
+)
 from ergon_core.core.runtime.services.task_management_dto import (
     AddSubtaskCommand,
     CancelTaskCommand,
@@ -78,11 +83,22 @@ class SubtaskLifecycleToolkit:
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
 
         async def add_subtask(
+            task_slug: str,
             description: str,
-            worker_binding_key: str = "researcher",
+            assigned_worker_slug: str = "researcher",
             depends_on: list[str] | None = None,
         ) -> dict[str, object]:
-            """Spawn one subtask under this manager. Optionally blocked by sibling node_ids."""
+            """Spawn one subtask under this manager.
+
+            The ``task_slug`` is a short kebab-case identifier for this
+            subtask. It is persisted verbatim on the graph node and used
+            by observers (dashboard, criteria, tests) to identify this
+            node semantically. Pick a stable, legible slug — it is not
+            auto-generated.
+
+            ``depends_on`` still refers to sibling ``node_id`` strings
+            (real UUIDs from earlier ``add_subtask`` calls), not slugs.
+            """
             try:
                 deps = [NodeId(UUID(s)) for s in (depends_on or [])]
                 with get_session() as session:
@@ -91,8 +107,9 @@ class SubtaskLifecycleToolkit:
                         AddSubtaskCommand(
                             run_id=run_id,
                             parent_node_id=pid,
+                            task_slug=TaskSlug(task_slug),
                             description=description,
-                            worker_binding_key=worker_binding_key,
+                            assigned_worker_slug=AssignedWorkerSlug(assigned_worker_slug),
                             depends_on=deps,
                         ),
                     )
@@ -106,9 +123,12 @@ class SubtaskLifecycleToolkit:
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
 
         async def plan_subtasks(subtasks: list[dict]) -> dict[str, object]:
-            """Atomically create a sub-DAG. Each entry has local_key, description,
-            optional worker_binding_key, optional depends_on (list[str] of other
-            local_keys). Cycles / duplicate / unknown keys are rejected."""
+            """Atomically create a sub-DAG. Each entry has ``task_slug``
+            (kebab-case identifier, persisted verbatim on the graph node),
+            ``description``, optional ``assigned_worker_slug``, and
+            optional ``depends_on`` — a list of sibling ``task_slug``s
+            within this same call. Cycles, duplicate slugs, and unknown
+            slugs are rejected."""
             try:
                 specs = [SubtaskSpec.model_validate(s) for s in subtasks]
                 with get_session() as session:

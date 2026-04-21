@@ -70,7 +70,7 @@ class MiniF2FBenchmark(Benchmark):
             )
             tasks.append(
                 BenchmarkTask(
-                    task_key=problem.name,
+                    task_slug=problem.name,
                     instance_key="default",
                     description=description,
                     evaluator_binding_keys=("default",),

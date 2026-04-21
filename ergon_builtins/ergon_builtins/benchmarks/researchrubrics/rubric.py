@@ -48,7 +48,7 @@ class ResearchRubricsRubric(Rubric):
         results = list(criterion_results)
         if not results:
             return TaskEvaluationResult(
-                task_key=task.task_key,
+                task_slug=task.task_slug,
                 score=0.0,
                 passed=False,
                 evaluator_name=self.name,
@@ -76,7 +76,7 @@ class ResearchRubricsRubric(Rubric):
         normalized_score = (total_score - min_possible) / score_range if score_range > 0 else 0.0
 
         return TaskEvaluationResult(
-            task_key=task.task_key,
+            task_slug=task.task_slug,
             score=normalized_score,
             passed=total_score > 0,
             evaluator_name=self.name,

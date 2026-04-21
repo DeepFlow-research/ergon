@@ -157,7 +157,7 @@ class SWEBenchReActWorker(ReActWorker):
             ("setup_env", spec.setup_env_script),
             ("install_repo", spec.install_repo_script),
         ):
-            logger.info("Running swebench %s for %s", label, task.task_key)
+            logger.info("Running swebench %s for %s", label, task.task_slug)
             result = await self._sandbox.commands.run(
                 f"bash -c {shlex.quote(script)}",
                 timeout=SETUP_TIMEOUT_SEC,
@@ -165,7 +165,7 @@ class SWEBenchReActWorker(ReActWorker):
             if result.exit_code != 0:
                 stdout_tail = (result.stdout or "")[-1000:]
                 raise RuntimeError(
-                    f"swebench {label} failed for {task.task_key}: exit={result.exit_code} "
+                    f"swebench {label} failed for {task.task_slug}: exit={result.exit_code} "
                     f"tail={stdout_tail!r}"
                 )
 

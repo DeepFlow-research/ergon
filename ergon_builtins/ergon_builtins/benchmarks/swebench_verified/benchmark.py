@@ -56,7 +56,7 @@ class SweBenchVerifiedBenchmark(Benchmark):
             payload = SWEBenchTaskPayload.from_instance(instance)
             tasks.append(
                 BenchmarkTask(
-                    task_key=instance.instance_id,
+                    task_slug=instance.instance_id,
                     instance_key="default",
                     description=payload.build_worker_description(),
                     evaluator_binding_keys=("default",),

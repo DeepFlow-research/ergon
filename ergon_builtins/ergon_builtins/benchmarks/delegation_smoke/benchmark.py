@@ -25,7 +25,7 @@ class DelegationSmokeBenchmark(Benchmark):
     def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
         tasks = [
             BenchmarkTask(
-                task_key="manager-task",
+                task_slug="manager-task",
                 instance_key="default",
                 description=(
                     "You are a manager agent. Your job is to delegate research "
