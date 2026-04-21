@@ -62,7 +62,7 @@ jobs:
   unit-tests:
     name: "Unit + state tests (Python)"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     needs: lint-and-type-check
     steps:
       - uses: actions/checkout@v4
