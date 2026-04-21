@@ -236,49 +236,6 @@ class RunResource(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# RunTaskStateEvent
-# ---------------------------------------------------------------------------
-
-
-class RunTaskStateEvent(SQLModel, table=True):
-    __tablename__ = "run_task_state_events"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_task_id: UUID = Field(
-        foreign_key="experiment_definition_tasks.id",
-        index=True,
-    )
-    task_execution_id: UUID | None = Field(
-        default=None,
-        foreign_key="run_task_executions.id",
-    )
-    event_type: str = Field(
-        default="state_change", index=True
-    )  # Literal["state_change"] — str for SQLModel compat
-    old_status: TaskExecutionStatus | None = None
-    new_status: TaskExecutionStatus
-    event_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-    # -- JSON accessor: event_metadata --
-
-    def parsed_event_metadata(self) -> dict[str, object]:
-        return self.__class__._parse_event_metadata(self.event_metadata)
-
-    @classmethod
-    def _parse_event_metadata(cls, data: dict) -> dict[str, object]:
-        if not isinstance(data, dict):
-            raise ValueError(f"event_metadata must be a dict, got {type(data).__name__}")
-        return data
-
-    @model_validator(mode="after")
-    def _validate_event_metadata(self) -> "RunTaskStateEvent":
-        self.__class__._parse_event_metadata(self.event_metadata)
-        return self
-
-
-# ---------------------------------------------------------------------------
 # RunTaskEvaluation
 # ---------------------------------------------------------------------------
 

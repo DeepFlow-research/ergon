@@ -476,7 +476,6 @@ These are all correctly `UUID | None`:
 | `GraphNodeDto.definition_task_id` | DTO mirrors the model |
 | `GraphEdgeDto.definition_dependency_id` | Same |
 | `RunResource.task_execution_id` | Resources can exist at run level |
-| `RunTaskStateEvent.task_execution_id` | State events can fire before execution |
 | `ThreadMessage.task_execution_id` | Messages can exist outside executions |
 | `RunTaskExecution.definition_worker_id` | Worker lookup can fail (no assignment) |
 | `mark_task_failed.execution_id` | Task can fail before execution starts |

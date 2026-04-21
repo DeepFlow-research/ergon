@@ -22,7 +22,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
     RunTaskExecution,
-    RunTaskStateEvent,
     TrainingSession,
 )
 
@@ -48,27 +47,6 @@ class TestRunTaskExecutionStatus:
             status=TaskExecutionStatus.RUNNING,
         )
         assert execution.status == TaskExecutionStatus.RUNNING
-
-
-class TestRunTaskStateEventTypes:
-    def test_accepts_valid_event_type(self):
-        event = RunTaskStateEvent(
-            run_id=uuid4(),
-            definition_task_id=uuid4(),
-            event_type="state_change",
-            new_status=TaskExecutionStatus.COMPLETED,
-        )
-        assert event.event_type == "state_change"
-
-    def test_accepts_valid_old_status(self):
-        event = RunTaskStateEvent(
-            run_id=uuid4(),
-            definition_task_id=uuid4(),
-            event_type="state_change",
-            old_status=TaskExecutionStatus.PENDING,
-            new_status=TaskExecutionStatus.RUNNING,
-        )
-        assert event.old_status == TaskExecutionStatus.PENDING
 
 
 class TestExperimentCohortStatus:
