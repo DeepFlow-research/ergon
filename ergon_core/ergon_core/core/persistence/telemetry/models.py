@@ -117,6 +117,16 @@ class RunTaskExecution(SQLModel, table=True):
     status: TaskExecutionStatus = Field(index=True)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
+    sandbox_id: str | None = Field(
+        default=None,
+        index=False,
+    )
+    """E2B sandbox_id string written by execute_task_fn after sandbox-setup.
+
+    NULL for tasks that ran before this column was added (pre-migration),
+    and for tasks whose sandbox was skipped (SANDBOX_SKIPPED sentinel).
+    The cleanup function treats NULL as 'no sandbox to release'.
+    """
     output_text: str | None = None
     output_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     error_json: dict | None = Field(default=None, sa_column=Column(JSON))

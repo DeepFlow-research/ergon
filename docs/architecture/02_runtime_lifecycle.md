@@ -114,7 +114,7 @@ Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a
 ### 4.1 Known limits
 
 - **Static-sibling failure auto-cancels today.** When a static task (no `parent_node_id`) fails, `propagation.on_task_completed_or_failed` marks its siblings CANCELLED (`execution/propagation.py:515-526`). The intended fractal-OS semantic is that static siblings stay PENDING so a higher-level manager can adapt — matching managed-subtask behavior. Changing this also requires teaching `is_workflow_complete_v2` to terminate on blocked-by-failed chains, otherwise workflows hang. Tracked in `docs/rfcs/active/2026-04-17-static-sibling-failure-semantics.md`.
-- **Cancellation does not release sandboxes.** `cleanup-cancelled-task` updates the execution row but its `release-sandbox` step is a stub (`services/task_cleanup_service.py:53-54`). Cancelled runs leak sandboxes until the E2B idle timeout fires, or until `run-cleanup` terminates the run-level sandbox id. Tracked in `docs/rfcs/active/2026-04-17-cleanup-cancelled-task-release-sandbox.md`.
+- **Cancellation releases the sandbox.** `cleanup_cancelled_task_fn` calls `BaseSandboxManager.terminate_by_sandbox_id` in its `release-sandbox` step when `sandbox_id` is present on the `TaskCancelledEvent`. Tasks that were cancelled before a sandbox was created (dep_invalidated with no execution) emit the event with `sandbox_id=None`; the step is a safe no-op in that case.
 - **`RunTaskStateEvent` is deprecated and unread.** Propagation no longer writes to it (`propagation.py:7-8`). `StateEventsQueries` is the last reader and goes away with the table in `docs/rfcs/active/2026-04-17-delete-run-task-state-event.md`. New code must read state from `RunGraphNode` via `GraphNodeLookup`.
 
 ## 5. Extension points

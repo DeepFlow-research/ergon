@@ -35,6 +35,10 @@ from ergon_core.core.runtime.events.task_events import (
     TaskReadyEvent,
 )
 from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services._cancel_helpers import (
+    _lookup_benchmark_slug,
+    _lookup_sandbox_id,
+)
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.task_management_dto import (
@@ -217,6 +221,8 @@ class TaskManagementService:
                 node_id=command.node_id,
                 execution_id=execution_id,
                 cause="manager_decision",
+                sandbox_id=_lookup_sandbox_id(session, execution_id),
+                benchmark_slug=_lookup_benchmark_slug(session, command.run_id),
             )
             inngest_client.send_sync(
                 inngest.Event(
@@ -558,6 +564,8 @@ class TaskManagementService:
             node_id=node_id,
             execution_id=execution_id,
             cause="downstream_invalidation",
+            sandbox_id=_lookup_sandbox_id(session, execution_id),
+            benchmark_slug=_lookup_benchmark_slug(session, run_id),
         )
         inngest_client.send_sync(
             inngest.Event(

@@ -132,6 +132,22 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             )
         task_sandbox_id = sandbox_result.sandbox_id
 
+        def _persist_sandbox_id() -> None:
+            # reason: deferred to avoid circular import at module level
+            from ergon_core.core.persistence.shared.db import get_session
+
+            # reason: deferred to avoid circular import at module level
+            from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+
+            with get_session() as session:
+                exe = session.get(RunTaskExecution, prepared.execution_id)
+                if exe is not None and exe.sandbox_id is None:
+                    exe.sandbox_id = task_sandbox_id
+                    session.add(exe)
+                    session.commit()
+
+        await ctx.step.run("persist-sandbox-id", _persist_sandbox_id)
+
         if not prepared.worker_type:
             raise ConfigurationError(
                 "Task has no worker_type configured",

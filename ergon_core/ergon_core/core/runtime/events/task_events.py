@@ -119,5 +119,7 @@ class TaskCancelledEvent(InngestEventContract):
     node_id: UUID
     execution_id: UUID | None
     cause: CancelCause
+    sandbox_id: str | None = None  # E2B sandbox_id string; None if task never ran
+    benchmark_slug: str | None = None  # benchmark type slug; None if task never ran
 
     model_config = {"frozen": True, "extra": "allow"}

@@ -20,6 +20,10 @@ from ergon_core.core.persistence.graph.status_conventions import (
     TERMINAL_STATUSES,
 )
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
+from ergon_core.core.runtime.services._cancel_helpers import (
+    _lookup_benchmark_slug,
+    _lookup_sandbox_id,
+)
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.subtask_cancellation_dto import CancelOrphansResult
@@ -94,6 +98,7 @@ class SubtaskCancellationService:
                 if applied:
                     transitioned.append(child_id)
 
+        benchmark_slug = _lookup_benchmark_slug(session, run_id)
         events = [
             TaskCancelledEvent(
                 run_id=run_id,
@@ -101,6 +106,8 @@ class SubtaskCancellationService:
                 node_id=nid,
                 execution_id=_latest_execution_id(session, nid),
                 cause=cause,
+                sandbox_id=_lookup_sandbox_id(session, _latest_execution_id(session, nid)),
+                benchmark_slug=benchmark_slug,
             )
             for nid in transitioned
         ]

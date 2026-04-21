@@ -50,8 +50,7 @@ class TaskCleanupService:
         execution_updated = self._mark_execution_cancelled(session, execution_id)
         session.commit()
 
-        # slopcop: ignore[no-todo-comment] — sandbox teardown, wire when sandbox management exists
-        sandbox_released = False
+        sandbox_released = False  # Sandbox release is handled by the release-sandbox Inngest step.
 
         logger.info(
             "task-cleanup node_id=%s execution_id=%s sandbox=%s",
