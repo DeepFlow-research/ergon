@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 from ergon_builtins.benchmarks.researchrubrics.benchmark import (
     ResearchRubricsBenchmark,
 )
+from ergon_core.api.template_spec import NoSetup, NoSetupSentinel, TemplateSpec
 
 
 class ResearchRubricsVanillaBenchmark(ResearchRubricsBenchmark):
@@ -19,6 +20,7 @@ class ResearchRubricsVanillaBenchmark(ResearchRubricsBenchmark):
     """
 
     type_slug: ClassVar[str] = "researchrubrics-vanilla"
+    template_spec: ClassVar[TemplateSpec | NoSetupSentinel] = NoSetup
 
     def __init__(
         self,

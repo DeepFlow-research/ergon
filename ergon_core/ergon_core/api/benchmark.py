@@ -14,18 +14,21 @@ from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.dependencies import check_packages
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.template_spec import NoSetupSentinel, TemplateSpec, _NoSetupType
 
 
 class Benchmark(ABC):
     """Base class for all benchmarks.
 
-    Subclasses MUST set ``type_slug`` and ``onboarding_deps`` and implement
-    ``build_instances``.  Omitting ``onboarding_deps`` raises ``TypeError``
+    Subclasses MUST set ``type_slug``, ``onboarding_deps``, and
+    ``template_spec``, and implement ``build_instances``.
+    Omitting ``onboarding_deps`` or ``template_spec`` raises ``TypeError``
     at class definition time.
     """
 
     type_slug: ClassVar[str]
     onboarding_deps: ClassVar[BenchmarkDeps]
+    template_spec: ClassVar[TemplateSpec | NoSetupSentinel]
     required_packages: ClassVar[list[str]] = []
     install_hint: ClassVar[str] = ""
 
@@ -42,6 +45,14 @@ class Benchmark(ABC):
                     f"{cls.__qualname__} must declare "
                     f"'onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(...)'. "
                     f"See ergon_core/api/benchmark_deps.py."
+                )
+            spec = getattr(cls, "template_spec", None)  # slopcop: ignore[no-hasattr-getattr]
+            if not isinstance(spec, (TemplateSpec, _NoSetupType)):
+                raise TypeError(
+                    f"{cls.__qualname__} must declare "
+                    f"'template_spec: ClassVar[TemplateSpec | NoSetupSentinel]' "
+                    f"set to either a TemplateSpec instance or NoSetup. "
+                    f"See ergon_core/api/template_spec.py."
                 )
 
     def __init__(

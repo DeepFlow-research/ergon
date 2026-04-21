@@ -11,6 +11,7 @@ from typing import ClassVar
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.template_spec import NoSetupSentinel, TemplateSpec
 
 from ergon_builtins.benchmarks.gdpeval.loader import (
     HF_REPO_ID,
@@ -35,6 +36,14 @@ class GDPEvalBenchmark(Benchmark):
     onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
         e2b=True,
         extras=("ergon-builtins[data]",),
+    )
+    template_spec: ClassVar[TemplateSpec | NoSetupSentinel] = TemplateSpec(
+        runtime_install=(
+            "pdfplumber",
+            "PyPDF2",
+            "reportlab",
+            "pytesseract",
+        ),
     )
     required_packages: ClassVar[list[str]] = ["pandas", "huggingface_hub"]
     install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"

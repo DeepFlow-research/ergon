@@ -10,6 +10,7 @@ from typing import ClassVar
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.template_spec import NoSetup, NoSetupSentinel, TemplateSpec
 
 
 class ResearchRubricsSmokeTestBenchmark(Benchmark):
@@ -17,6 +18,7 @@ class ResearchRubricsSmokeTestBenchmark(Benchmark):
 
     type_slug: ClassVar[str] = "researchrubrics-smoke"
     onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps()
+    template_spec: ClassVar[TemplateSpec | NoSetupSentinel] = NoSetup
 
     def __init__(
         self,

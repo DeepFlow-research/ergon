@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.template_spec import NoSetup, NoSetupSentinel, TemplateSpec
 
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
@@ -31,6 +32,7 @@ class ResearchRubricsBenchmark(Benchmark):
         extras=("ergon-builtins[data]",),
         optional_keys=("EXA_API_KEY",),
     )
+    template_spec: ClassVar[TemplateSpec | NoSetupSentinel] = NoSetup
     required_packages: ClassVar[list[str]] = ["datasets", "huggingface_hub"]
     install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 

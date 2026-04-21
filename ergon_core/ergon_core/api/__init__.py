@@ -13,6 +13,7 @@ from ergon_core.api.results import CriterionResult, TaskEvaluationResult, Worker
 from ergon_core.api.run_resource import RunResourceKind, RunResourceView
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker import Worker
+from ergon_core.api.template_spec import NoSetup, NoSetupSentinel, TemplateSpec
 from ergon_core.api.worker_context import WorkerContext
 
 __all__ = [
@@ -33,7 +34,10 @@ __all__ = [
     "RunResourceKind",
     "RunResourceView",
     "SandboxResult",
+    "NoSetup",
+    "NoSetupSentinel",
     "TaskEvaluationResult",
+    "TemplateSpec",
     "Worker",
     "WorkerContext",
     "WorkerOutput",

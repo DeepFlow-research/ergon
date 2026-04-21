@@ -101,6 +101,11 @@ Benchmark loader → Task instances → Worker
   The two registries being separate means they can drift, and have: the
   `BENCHMARK_DEPS` dict regressed on `swebench-verified` as recently as
   2026-04-17.
+- Every concrete `Benchmark` subclass MUST declare `template_spec` as either a
+  `TemplateSpec` instance or the `NoSetup` sentinel. The `Benchmark` ABC
+  provides no default. Omitting this declaration raises `TypeError` at class
+  definition time and is detected in CI by
+  `tests/state/test_benchmark_contract.py::TestBenchmarkTemplateSpecContract`.
 - Criteria MUST NOT spawn their own sandboxes. A Criterion that
   instantiates a `SandboxManager` directly bypasses the runtime's sandbox
   lifecycle and resource accounting. Enforced by
@@ -122,9 +127,15 @@ Benchmark loader → Task instances → Worker
 - **New Rubric.** Place in `ergon_builtins/evaluators/rubrics/` when
   reusable; alongside the benchmark otherwise. Rubrics bundle Criteria,
   never other Rubrics.
-- **Template setup.** Today the pattern is implicit — some benchmarks ship
-  a pre-built E2B template ID, others install dependencies at sandbox
-  startup, others have no template at all. See section 7.
+- **Template setup.** Template setup is declared via
+  `template_spec: ClassVar[TemplateSpec | NoSetupSentinel]` on the
+  `Benchmark` subclass. Use `NoSetup` for benchmarks with no sandbox,
+  `TemplateSpec(runtime_install=(...))` for packages installed at
+  sandbox-prep time, and
+  `TemplateSpec(e2b_template_id=..., build_recipe_path=...)` for pre-built
+  E2B templates. `ergon benchmark setup <slug>` dispatches off this
+  attribute; the hardcoded `SANDBOX_TEMPLATES` dict is no longer the source
+  of truth.
 - **External registration.** Not supported today. A third-party package
   cannot register a benchmark without editing the registry module.
 
@@ -160,9 +171,9 @@ Known limits and open questions touching this layer:
 - Stub-worker coverage lags the registered benchmark set; the per-benchmark
   stub pattern (stub worker plus stub sandbox manager plus smoke test) is
   not yet uniform.
-- Template setup is implicit — there is no declared shape for "this
-  benchmark needs no template" vs. "this benchmark ships a template ID"
-  vs. "this benchmark installs deps at sandbox startup".
+- Stub-worker coverage lags the registered benchmark set; the per-benchmark
+  stub pattern (stub worker plus stub sandbox manager plus smoke test) is
+  not yet uniform.
 - External benchmark registration has no supported path. Revisit if a
   concrete external use case appears.
 

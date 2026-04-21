@@ -60,20 +60,49 @@ def handle_benchmark(args: Namespace) -> int:
 def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not complex
     """Build and register the E2B sandbox template for *args.slug*.
 
-    Uses the E2B Python SDK's ``Template.build()`` directly instead of shelling
-    out to the ``e2b`` CLI.  The SDK authenticates with ``E2B_API_KEY`` only —
-    no ``E2B_ACCESS_TOKEN`` needed.  (The CLI's separate access-token
-    requirement is specific to its auth flow; the SDK talks to the REST API
-    with the API key.)
+    Dispatches off ``Benchmark.template_spec`` instead of the hardcoded
+    ``SANDBOX_TEMPLATES`` dict. No explicit dispatch table is needed; the spec
+    carries all information.
     """
-
     # reason: deferred to avoid pulling heavy ergon_builtins deps at CLI startup
-    from ergon_builtins.registry_core import SANDBOX_TEMPLATES
+    from ergon_builtins.registry_core import BENCHMARKS
+
+    # reason: deferred alongside BENCHMARKS import above to keep startup cost low
+    from ergon_core.api.template_spec import NoSetup, TemplateSpec, _NoSetupType
 
     slug: str = args.slug
     force: bool = args.force
 
-    # 1. Validate E2B_API_KEY
+    # 1. Look up benchmark class
+    if slug not in BENCHMARKS:
+        available = ", ".join(sorted(BENCHMARKS)) or "(none)"
+        return _fail(f"Error: unknown benchmark slug '{slug}'.\nAvailable slugs: {available}")
+
+    benchmark_cls = BENCHMARKS[slug]
+
+    # 2. Read template_spec
+    spec = benchmark_cls.template_spec
+
+    # 3. NoSetup sentinel — nothing to do
+    if isinstance(spec, _NoSetupType):
+        print(f"Benchmark '{slug}' declares NoSetup: no template build required.")
+        return 0
+
+    if not isinstance(spec, TemplateSpec):
+        return _fail(
+            f"Error: '{slug}'.template_spec is neither TemplateSpec nor NoSetup. Got: {spec!r}"
+        )
+
+    # 4. runtime_install only — deferred to sandbox prep; no build step needed
+    if spec.runtime_install and spec.build_recipe_path is None and spec.e2b_template_id is None:
+        pkgs = ", ".join(spec.runtime_install)
+        print(
+            f"Benchmark '{slug}' installs packages at sandbox-prep time ({pkgs}). "
+            "No template build required."
+        )
+        return 0
+
+    # 5. E2B template required
     if not settings.e2b_api_key:
         return _fail(
             "Error: E2B_API_KEY is not set.\n"
@@ -82,29 +111,33 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
             "Get a key at https://e2b.dev/dashboard"
         )
 
-    # 2. Look up template dir
-    if slug not in SANDBOX_TEMPLATES:
-        available = ", ".join(sorted(SANDBOX_TEMPLATES)) or "(none)"
-        return _fail(f"Error: unknown benchmark slug '{slug}'.\nAvailable slugs: {available}")
+    # 6. No build recipe — verify-only path
+    if spec.build_recipe_path is None:
+        print(
+            f"Benchmark '{slug}' references E2B template '{spec.e2b_template_id}' "
+            "but declares no build_recipe_path. Cannot rebuild automatically.\n"
+            f"Ensure template '{spec.e2b_template_id}' exists in your E2B account."
+        )
+        return 0
 
-    template_dir = SANDBOX_TEMPLATES[slug]
+    template_dir = spec.build_recipe_path
 
-    # 3. Load template spec from e2b.toml.template
+    # 7. Load e2b.toml.template from the recipe directory
     template_spec_path = template_dir / "e2b.toml.template"
     if not template_spec_path.exists():
         return _fail(f"Error: template spec not found at {template_spec_path}")
 
     with open(template_spec_path, "rb") as f:
-        spec = tomllib.load(f)
+        toml_spec = tomllib.load(f)
 
-    template_name = spec.get("template_name")
+    template_name = toml_spec.get("template_name") or spec.e2b_template_id
     if not template_name:
         return _fail(
-            f"Error: 'template_name' not found in {template_spec_path}.\n"
-            "The e2b.toml.template must declare a template_name."
+            f"Error: no template_name in {template_spec_path} and "
+            "no e2b_template_id on TemplateSpec."
         )
 
-    # 4. Idempotency check
+    # 8. Idempotency check
     config = _config_dir()
     registry_path = config / "sandbox_templates.json"
 
@@ -118,11 +151,11 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
         print(f"Template already built: {tid}. Use --force to rebuild.")
         return 0
 
-    # 5. Build via E2B SDK (authenticates with E2B_API_KEY only)
-    cpu_count = int(spec.get("cpu_count", 2))
-    memory_mb = int(spec.get("memory_mb", 8192))
-    start_cmd = spec.get("start_cmd", "/bin/bash")
-    dockerfile_name = spec.get("dockerfile", "Dockerfile")
+    # 9. Build via E2B SDK
+    cpu_count = int(toml_spec.get("cpu_count", 2))
+    memory_mb = int(toml_spec.get("memory_mb", 8192))
+    start_cmd = toml_spec.get("start_cmd", "/bin/bash")
+    dockerfile_name = toml_spec.get("dockerfile", "Dockerfile")
     dockerfile_path = template_dir / dockerfile_name
 
     if not dockerfile_path.exists():
@@ -158,7 +191,7 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
     build_time = round(time.monotonic() - t0, 1)
     template_id = build_info.template_id
 
-    # 6. Persist
+    # 10. Persist
     config.mkdir(parents=True, exist_ok=True)
     existing_templates[slug] = {
         "template_id": template_id,
@@ -169,9 +202,9 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
     with open(registry_path, "w") as f:
         json.dump(existing_templates, f, indent=2)
 
-    # 7. Report
+    # 11. Report
     print(f"\nSuccess! Template ID: {template_id} (build {build_info.build_id}, {build_time}s)")
-    print(f"Now run: `ergon benchmark run {slug} --worker minif2f-react --model <model> --limit 1`")
+    print(f"Now run: `ergon benchmark run {slug} --worker <worker> --model <model> --limit 1`")
     return 0
 
 

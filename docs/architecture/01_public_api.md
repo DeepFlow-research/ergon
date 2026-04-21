@@ -21,7 +21,19 @@ owned by that module.
   (a mapping from `instance_key` to a sequence of `BenchmarkTask`) and declares
   the evaluator binding keys it expects via `evaluator_requirements()`. Carries
   a `type_slug: ClassVar[str]` that is a keyed identifier across the CLI, the
-  onboarding profile, and the benchmark registry — renames are breaking.
+  onboarding profile, and the benchmark registry — renames are breaking. Also
+  carries `template_spec: ClassVar[TemplateSpec | NoSetupSentinel]` (see below)
+  and `onboarding_deps: ClassVar[BenchmarkDeps]`. Both must be declared on
+  every concrete subclass; omission raises `TypeError` at class definition time.
+- **`TemplateSpec`** — frozen Pydantic model describing a benchmark's
+  sandbox-template setup. Fields: `e2b_template_id` (pre-built E2B template
+  name), `build_recipe_path` (path to the `sandbox/` directory containing the
+  `Dockerfile` and `e2b.toml.template`), and `runtime_install` (pip packages
+  installed at sandbox-prep time). All fields are optional and additive.
+- **`NoSetup`** — singleton sentinel value of type `_NoSetupType` (aliased as
+  `NoSetupSentinel`). Assign to `template_spec` to declare that a benchmark
+  has no template setup requirements. Prefer `isinstance(spec, _NoSetupType)`
+  over identity checks.
 - **`BenchmarkTask`** — frozen Pydantic model describing a single unit of work.
   It has two textual surfaces with very different audiences: `description` is
   the only free-text the worker ever sees; `task_payload` is a dict the
@@ -236,6 +248,7 @@ this table; it is here only so contributors can find the files fast.
 | Type | File |
 |------|------|
 | `Benchmark` | `ergon_core/api/benchmark.py` |
+| `TemplateSpec` \| `NoSetup` \| `NoSetupSentinel` | `ergon_core/api/template_spec.py` |
 | `BenchmarkTask` | `ergon_core/api/task_types.py` |
 | `Worker` | `ergon_core/api/worker.py` |
 | `GenerationTurn` | `ergon_core/api/generation.py` |

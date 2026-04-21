@@ -7,11 +7,13 @@ statement; the evaluator receives ``test_patch`` via the task payload.
 
 import logging
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any, ClassVar
 
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.template_spec import NoSetupSentinel, TemplateSpec
 
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
@@ -31,6 +33,10 @@ class SweBenchVerifiedBenchmark(Benchmark):
     onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
         e2b=True,
         extras=("ergon-builtins[data]",),
+    )
+    template_spec: ClassVar[TemplateSpec | NoSetupSentinel] = TemplateSpec(
+        e2b_template_id="ergon-swebench-v1",
+        build_recipe_path=Path(__file__).parent / "sandbox",
     )
 
     def __init__(

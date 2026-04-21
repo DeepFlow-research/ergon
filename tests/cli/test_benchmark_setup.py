@@ -1,4 +1,8 @@
-"""Tests for ``ergon benchmark setup <slug>`` CLI command."""
+"""Tests for ``ergon benchmark setup <slug>`` CLI command.
+
+Covers both the legacy SANDBOX_TEMPLATES-keyed slugs (minif2f, swebench-verified)
+and the new template_spec dispatch paths (NoSetup, runtime_install-only).
+"""
 
 import json
 from pathlib import Path
@@ -84,7 +88,7 @@ def test_error_message_mentions_api_key(
 
 
 # ---------------------------------------------------------------------------
-# 2. Unknown slug
+# 2. Unknown slug — now uses BENCHMARKS registry, not SANDBOX_TEMPLATES
 # ---------------------------------------------------------------------------
 
 
@@ -167,3 +171,62 @@ def test_build_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     rc = setup_benchmark(_make_args())
     assert rc != 0
+
+
+# ---------------------------------------------------------------------------
+# 6. NoSetup path — exits zero without hitting E2B
+# ---------------------------------------------------------------------------
+
+
+def test_nosetup_benchmark_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A benchmark with NoSetup should print a note and return 0."""
+    monkeypatch.setenv("E2B_API_KEY", "test-key")
+    # smoke-test declares NoSetup
+    rc = setup_benchmark(_make_args(slug="smoke-test"))
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "NoSetup" in captured.out
+
+
+def test_nosetup_does_not_require_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """NoSetup benchmarks succeed even without E2B_API_KEY."""
+    from ergon_core.core.settings import settings
+
+    monkeypatch.setattr(settings, "e2b_api_key", "")
+    rc = setup_benchmark(_make_args(slug="smoke-test"))
+    assert rc == 0
+
+
+# ---------------------------------------------------------------------------
+# 7. runtime_install-only path — exits zero with informational message
+# ---------------------------------------------------------------------------
+
+
+def test_runtime_install_only_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A benchmark with only runtime_install should return 0 without building."""
+    monkeypatch.setenv("E2B_API_KEY", "test-key")
+    # gdpeval has TemplateSpec(runtime_install=(...)) and no build_recipe_path
+    rc = setup_benchmark(_make_args(slug="gdpeval"))
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "sandbox-prep" in captured.out or "pdfplumber" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# 8. template_spec dispatch: minif2f full build path
+# ---------------------------------------------------------------------------
+
+
+def test_template_spec_build_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """minif2f has e2b_template_id + build_recipe_path: full build path runs."""
+    monkeypatch.setenv("E2B_API_KEY", "test-key")
+    monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
+    fake = _patch_sdk(monkeypatch)
+
+    rc = setup_benchmark(_make_args(slug="minif2f"))
+    assert rc == 0
+    fake.build.assert_called_once()
