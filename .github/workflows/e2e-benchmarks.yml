@@ -109,7 +109,6 @@ jobs:
         # of the opaque 6-hour GitHub-Actions job cancel.
         run: |
           uv run pytest tests/e2e/test_benchmarks_stubbed.py::TestE2BSandboxBenchmarks -v --timeout=600
-          uv run pytest tests/e2e/test_researchrubrics_smoke_e2b.py::TestResearchRubricsSmokeE2B -v --timeout=600
 
       - name: Dump API logs on failure
         if: failure()

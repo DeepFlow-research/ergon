@@ -18,6 +18,7 @@ dev = [
     "xenon>=0.9.0",
     "radon>=6.0.1",
     "pytest-cov>=5.0.0",
+    "pytest-xdist>=3.8.0",
 ]
 
 [build-system]
@@ -161,6 +162,7 @@ unresolved-attribute = "warn"
 [[tool.ty.overrides]]
 include = [
     "**/core/api/runs.py",
+    "**/core/api/test_harness.py",
     "**/runtime/tracing.py",
     "**/runtime/services/**",
     "**/runtime/execution/**",

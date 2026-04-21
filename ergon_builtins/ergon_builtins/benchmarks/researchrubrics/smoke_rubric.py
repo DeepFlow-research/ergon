@@ -1,19 +1,16 @@
-"""Smoke-test rubric for researchrubrics: stub-report-exists criterion only.
-
-Pairs with ``StubResearchRubricsWorker`` for CI / E2B smoke tests.
-"""
+"""Smoke rubric wrapping ResearchRubricsSmokeCriterion for the canonical 9-subtask smoke."""
 
 from typing import ClassVar
 
 from ergon_core.api.evaluator import Rubric
 
-from ergon_builtins.evaluators.criteria.stub_report_exists import (
-    StubReportExistsCriterion,
+from ergon_builtins.evaluators.criteria.smoke_criterion import (
+    ResearchRubricsSmokeCriterion,
 )
 
 
 class ResearchRubricsSmokeRubric(Rubric):
-    """Rubric that checks the stub worker wrote its report and it has expected fields."""
+    """Rubric wrapping the researchrubrics env smoke criterion."""
 
     type_slug: ClassVar[str] = "researchrubrics-smoke-rubric"
 
@@ -21,8 +18,8 @@ class ResearchRubricsSmokeRubric(Rubric):
         super().__init__(
             name=name,
             criteria=[
-                StubReportExistsCriterion(
-                    name="report-exists-with-sections",
+                ResearchRubricsSmokeCriterion(
+                    name="researchrubrics-smoke",
                     weight=1.0,
                 ),
             ],

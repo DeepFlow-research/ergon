@@ -1,6 +1,7 @@
 """FastAPI application with Inngest webhook registration."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import inngest.fast_api
@@ -63,5 +64,11 @@ app = FastAPI(
 app.include_router(runs_router)
 app.include_router(cohorts_router)
 app.include_router(rollouts_router)
+
+# Test-only harness: mounted in CI + local-e2e only.
+if os.environ.get("ENABLE_TEST_HARNESS") == "1":
+    from ergon_core.core.api.test_harness import router as _test_harness_router  # noqa: PLC0415
+
+    app.include_router(_test_harness_router)
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)

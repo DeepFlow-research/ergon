@@ -17,10 +17,12 @@ from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
+from ergon_builtins.benchmarks.minif2f.smoke_rubric import MiniF2FSmokeRubric
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
+from ergon_builtins.benchmarks.swebench_verified.smoke_rubric import SweBenchSmokeRubric
 from ergon_builtins.benchmarks.researchrubrics.smoke import (
     ResearchRubricsSmokeTestBenchmark,
 )
@@ -44,6 +46,7 @@ from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWo
 from ergon_builtins.workers.research_rubrics.stub_worker import (
     StubResearchRubricsWorker,
 )
+from ergon_builtins.workers.stubs.canonical_smoke_worker import CanonicalSmokeWorker
 
 WORKERS: dict[str, type[Worker]] = {
     "stub-worker": StubWorker,
@@ -55,6 +58,7 @@ WORKERS: dict[str, type[Worker]] = {
     "manager-researcher": ManagerResearcherWorker,
     "researcher": StubWorker,
     "researchrubrics-stub": StubResearchRubricsWorker,
+    "canonical-smoke": CanonicalSmokeWorker,
 }
 
 BENCHMARKS: dict[str, type[Benchmark]] = {
@@ -73,6 +77,8 @@ EVALUATORS: dict[str, type[Evaluator]] = {
     "minif2f-rubric": MiniF2FRubric,
     "swebench-rubric": SWEBenchRubric,
     "researchrubrics-smoke-rubric": ResearchRubricsSmokeRubric,
+    "minif2f-smoke-rubric": MiniF2FSmokeRubric,
+    "swebench-smoke-rubric": SweBenchSmokeRubric,
 }
 
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
