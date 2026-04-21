@@ -15,13 +15,13 @@ from sqlmodel import Session
 META = MutationMeta(actor="test", reason="state-test")
 
 
-async def _add_node(repo: WorkflowGraphRepository, session: Session, run_id, key: str):
+async def _add_node(repo: WorkflowGraphRepository, session: Session, run_id, slug: str):
     return await repo.add_node(
         session,
         run_id,
-        task_key=key,
+        task_slug=slug,
         instance_key="inst-0",
-        description=f"node {key}",
+        description=f"node {slug}",
         status="pending",
         meta=META,
     )

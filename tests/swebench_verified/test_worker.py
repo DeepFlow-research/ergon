@@ -47,7 +47,7 @@ def _fake_task() -> BenchmarkTask:
         "test_patch": "TP",
     }
     return BenchmarkTask(
-        task_key="django__django-1",
+        task_slug="django__django-1",
         instance_key="default",
         description="Fix the thing",
         evaluator_binding_keys=("default",),

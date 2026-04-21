@@ -56,10 +56,10 @@ def _seed_graph_node(
     session: Session,
     run_id: UUID,
     *,
-    task_key: str = "dynamic-task-1",
+    task_slug: str = "dynamic-task-1",
     description: str = "A dynamic task",
     status: str = "pending",
-    assigned_worker_key: str | None = "researcher",
+    assigned_worker_slug: str | None = "researcher",
     instance_key: str = "inst-0",
     definition_task_id: UUID | None = None,
 ) -> RunGraphNode:
@@ -67,10 +67,10 @@ def _seed_graph_node(
         run_id=run_id,
         definition_task_id=definition_task_id,
         instance_key=instance_key,
-        task_key=task_key,
+        task_slug=task_slug,
         description=description,
         status=status,
-        assigned_worker_key=assigned_worker_key,
+        assigned_worker_slug=assigned_worker_slug,
     )
     session.add(node)
     session.flush()
@@ -105,9 +105,9 @@ class TestPrepareGraphNative:
         node = _seed_graph_node(
             session,
             run_id,
-            task_key="research-topic",
+            task_slug="research-topic",
             description="Research quantum computing",
-            assigned_worker_key="researcher",
+            assigned_worker_slug="researcher",
         )
 
         _patch_get_session(monkeypatch, session)
@@ -122,11 +122,11 @@ class TestPrepareGraphNative:
         result = await svc.prepare(command)
 
         assert result.node_id == node.id
-        assert result.task_key == "research-topic"
+        assert result.task_slug == "research-topic"
         assert result.task_description == "Research quantum computing"
         assert result.worker_type == "cloud-llm"
         assert result.model_target == "gpt-4o"
-        assert result.worker_binding_key == "researcher"
+        assert result.assigned_worker_slug == "researcher"
         assert result.execution_id is not None
 
     async def test_creates_execution_row_without_definition_task_id(
@@ -204,17 +204,17 @@ class TestPrepareGraphNativeErrors:
                 )
             )
 
-    async def test_no_assigned_worker_key_raises(
+    async def test_no_assigned_worker_slug_raises(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
         run_id = seed_run(session, def_id)
-        node = _seed_graph_node(session, run_id, assigned_worker_key=None)
+        node = _seed_graph_node(session, run_id, assigned_worker_slug=None)
 
         _patch_get_session(monkeypatch, session)
         svc = TaskExecutionService()
 
-        with pytest.raises(ConfigurationError, match="no assigned_worker_key"):
+        with pytest.raises(ConfigurationError, match="no assigned_worker_slug"):
             await svc.prepare(
                 PrepareTaskExecutionCommand(
                     run_id=run_id,
@@ -230,7 +230,7 @@ class TestPrepareGraphNativeErrors:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
         run_id = seed_run(session, def_id)
         _seed_worker(session, def_id, binding_key="other-worker")
-        node = _seed_graph_node(session, run_id, assigned_worker_key="researcher")
+        node = _seed_graph_node(session, run_id, assigned_worker_slug="researcher")
 
         _patch_get_session(monkeypatch, session)
         svc = TaskExecutionService()
@@ -272,8 +272,8 @@ class TestPrepareDefinition:
             session,
             run_id,
             definition_task_id=task_ids[0],
-            task_key="task-0",
-            assigned_worker_key="researcher",
+            task_slug="task-0",
+            assigned_worker_slug="researcher",
         )
         session.flush()
 
@@ -288,9 +288,9 @@ class TestPrepareDefinition:
             )
         )
 
-        assert result.task_key == "task-0"
+        assert result.task_slug == "task-0"
         assert result.task_description == "Test task 0"
-        assert result.worker_binding_key == "researcher"
+        assert result.assigned_worker_slug == "researcher"
         assert result.worker_type == "cloud-llm"
         assert result.node_id == node.id
         assert result.execution_id is not None
@@ -309,7 +309,7 @@ class TestPrepareDefinition:
                 worker_binding_key="researcher",
             )
         )
-        _seed_graph_node(session, run_id, definition_task_id=task_ids[0], task_key="task-0")
+        _seed_graph_node(session, run_id, definition_task_id=task_ids[0], task_slug="task-0")
         session.flush()
 
         _patch_get_session(monkeypatch, session)

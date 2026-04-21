@@ -148,20 +148,20 @@ async def test_full_lifecycle():
         assert prepared.worker_type is not None
         assert prepared.execution_id is not None
         print(
-            f"[EXEC] Prepared task {prepared.task_key} "
+            f"[EXEC] Prepared task {prepared.task_slug} "
             f"(worker={prepared.worker_type}, model={prepared.model_target})"
         )
 
         # Construct worker from registry (same as worker_execute Inngest fn)
         worker_cls = WORKERS[prepared.worker_type]
         live_worker = worker_cls(
-            name=prepared.worker_binding_key or "worker",
+            name=prepared.assigned_worker_slug or "worker",
             model=prepared.model_target,
         )
 
         # Execute
         task_data = BenchmarkTask(
-            task_key=prepared.task_key,
+            task_slug=prepared.task_slug,
             instance_key="",
             description=prepared.task_description,
         )
@@ -173,7 +173,7 @@ async def test_full_lifecycle():
         )
         result = await _run_worker(live_worker, task_data, ctx)
         assert result.success
-        print(f"[EXEC] Task {prepared.task_key} -> output: {result.output[:50]}")
+        print(f"[EXEC] Task {prepared.task_slug} -> output: {result.output[:50]}")
 
         # Finalize success
         await exec_svc.finalize_success(
@@ -196,7 +196,7 @@ async def test_full_lifecycle():
             )
         )
         print(
-            f"[PROP] Task {task_desc.task_key}: "
+            f"[PROP] Task {task_desc.task_slug}: "
             f"{len(prop_result.ready_tasks)} newly ready, "
             f"terminal={prop_result.workflow_terminal_state}"
         )

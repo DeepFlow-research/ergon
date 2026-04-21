@@ -27,16 +27,16 @@ async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
-    key: str,
+    slug: str,
     *,
     status: str = TaskExecutionStatus.PENDING,
 ):
     return await repo.add_node(
         session,
         run_id,
-        task_key=key,
+        task_slug=slug,
         instance_key="inst-0",
-        description=f"node {key}",
+        description=f"node {slug}",
         status=status,
         meta=META,
     )

@@ -33,7 +33,7 @@ class TaskInspectionService:
         run_id: UUID,
         parent_node_id: UUID,
     ) -> list[SubtaskInfo]:
-        """Direct children of parent_node_id, ordered by task_key.
+        """Direct children of parent_node_id, ordered by task_slug.
 
         Deterministic ordering lets the LLM refer to subtasks by
         position across turns without node_id confusion.
@@ -44,7 +44,7 @@ class TaskInspectionService:
                 RunGraphNode.run_id == run_id,
                 RunGraphNode.parent_node_id == parent_node_id,
             )
-            .order_by(RunGraphNode.task_key, RunGraphNode.id)
+            .order_by(RunGraphNode.task_slug, RunGraphNode.id)
         ).all()
         return [self._hydrate(session, n) for n in nodes]
 
@@ -83,7 +83,7 @@ class TaskInspectionService:
 
         return SubtaskInfo(
             node_id=node.id,
-            task_key=node.task_key,
+            task_slug=node.task_slug,
             description=node.description,
             status=node.status,  # type: ignore[arg-type]
             depends_on=list(deps),

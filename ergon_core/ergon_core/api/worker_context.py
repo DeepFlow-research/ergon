@@ -21,7 +21,7 @@ class WorkerContext(BaseModel):
         description=(
             "ExperimentDefinition.id — the experiment template that governs "
             "this run's worker bindings, evaluator bindings, and benchmark "
-            "config. Used by delegation tools to resolve worker_binding_key "
+            "config. Used by delegation tools to resolve assigned_worker_slug "
             "to worker_type."
         ),
     )

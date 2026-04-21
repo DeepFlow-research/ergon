@@ -56,15 +56,15 @@ def _seed_node(
     session: Session,
     run: RunRecord,
     *,
-    task_key: str = "task",
+    task_slug: str = "task",
     parent_node_id: UUID | None = None,
 ) -> RunGraphNode:
     node = RunGraphNode(
         id=uuid4(),
         run_id=run.id,
         instance_key="inst-0",
-        task_key=task_key,
-        description=task_key,
+        task_slug=task_slug,
+        description=task_slug,
         status="running",
         parent_node_id=parent_node_id,
     )
@@ -154,7 +154,7 @@ class TestListMyResources:
     ):
         _patch_get_session(monkeypatch, session)
         run = _seed_run(session)
-        node = _seed_node(session, run, task_key="me")
+        node = _seed_node(session, run, task_slug="me")
         exe = _seed_execution(session, run, node_id=node.id)
 
         now = _utcnow()
@@ -218,10 +218,10 @@ class TestListChildResources:
         _patch_get_session(monkeypatch, session)
         run = _seed_run(session)
 
-        parent_node = _seed_node(session, run, task_key="parent")
-        child_node = _seed_node(session, run, task_key="child", parent_node_id=parent_node.id)
+        parent_node = _seed_node(session, run, task_slug="parent")
+        child_node = _seed_node(session, run, task_slug="child", parent_node_id=parent_node.id)
         grandchild_node = _seed_node(
-            session, run, task_key="grandchild", parent_node_id=child_node.id
+            session, run, task_slug="grandchild", parent_node_id=child_node.id
         )
 
         _seed_edge(session, run, parent_node, child_node)
@@ -295,10 +295,10 @@ class TestListDescendantResources:
         _patch_get_session(monkeypatch, session)
         run = _seed_run(session)
 
-        root_node = _seed_node(session, run, task_key="root")
-        l1_node = _seed_node(session, run, task_key="l1", parent_node_id=root_node.id)
-        l2_node = _seed_node(session, run, task_key="l2", parent_node_id=l1_node.id)
-        l3_node = _seed_node(session, run, task_key="l3", parent_node_id=l2_node.id)
+        root_node = _seed_node(session, run, task_slug="root")
+        l1_node = _seed_node(session, run, task_slug="l1", parent_node_id=root_node.id)
+        l2_node = _seed_node(session, run, task_slug="l2", parent_node_id=l1_node.id)
+        l3_node = _seed_node(session, run, task_slug="l3", parent_node_id=l2_node.id)
 
         _seed_edge(session, run, root_node, l1_node)
         _seed_edge(session, run, l1_node, l2_node)
@@ -357,8 +357,8 @@ class TestListDescendantResources:
         _patch_get_session(monkeypatch, session)
         run = _seed_run(session)
 
-        node_a = _seed_node(session, run, task_key="a")
-        node_b = _seed_node(session, run, task_key="b", parent_node_id=node_a.id)
+        node_a = _seed_node(session, run, task_slug="a")
+        node_b = _seed_node(session, run, task_slug="b", parent_node_id=node_a.id)
 
         # Bidirectional edges -> cycle
         _seed_edge(session, run, node_a, node_b)
@@ -418,8 +418,8 @@ class TestListRunResources:
         run_a = _seed_run(session)
         run_b = _seed_run(session)
 
-        node_a = _seed_node(session, run_a, task_key="a")
-        node_b = _seed_node(session, run_b, task_key="b")
+        node_a = _seed_node(session, run_a, task_slug="a")
+        node_b = _seed_node(session, run_b, task_slug="b")
 
         exe_a = _seed_execution(session, run_a, node_id=node_a.id)
         exe_b = _seed_execution(session, run_b, node_id=node_b.id)

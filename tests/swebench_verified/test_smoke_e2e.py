@@ -57,7 +57,7 @@ def test_build_instances_strips_gold_patch_and_honors_limit() -> None:
     tasks = instances["default"]
     assert len(tasks) == 1
     task = tasks[0]
-    assert task.task_key == "django__django-1"
+    assert task.task_slug == "django__django-1"
     assert "GOLD_PATCH_MUST_NOT_LEAK" not in task.description
     # The task_payload should also be free of the gold patch
     payload_str = str(task.task_payload)

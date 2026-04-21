@@ -116,19 +116,19 @@ class ExperimentPersistenceService:
                     id=uuid4(),
                     experiment_definition_id=definition_id,
                     instance_id=instance_id,
-                    task_key=task.task_key,
+                    task_slug=task.task_slug,
                     description=task.description,
                     task_payload=dict(task.task_payload),
                     created_at=now,
                 )
-                task_rows_by_key[(instance_key, task.task_key)] = task_row
+                task_rows_by_key[(instance_key, task.task_slug)] = task_row
 
         # resolve parent_task_id after all IDs are assigned
         for instance_key, tasks in instances_map.items():
             for task in tasks:
-                if task.parent_task_key is not None:
-                    child = task_rows_by_key[(instance_key, task.task_key)]
-                    parent = task_rows_by_key[(instance_key, task.parent_task_key)]
+                if task.parent_task_slug is not None:
+                    child = task_rows_by_key[(instance_key, task.task_slug)]
+                    parent = task_rows_by_key[(instance_key, task.parent_task_slug)]
                     child.parent_task_id = parent.id
 
         task_rows = list(task_rows_by_key.values())
@@ -137,13 +137,13 @@ class ExperimentPersistenceService:
         dependency_rows: list[ExperimentDefinitionTaskDependency] = []
         for instance_key, tasks in instances_map.items():
             for task in tasks:
-                task_id = task_rows_by_key[(instance_key, task.task_key)].id
+                task_id = task_rows_by_key[(instance_key, task.task_slug)].id
                 if task_id is None:
-                    raise ValueError(f"Task {task.task_key!r} has no assigned ID")
-                for dep_key in task.dependency_task_keys:
-                    dep_task_id = task_rows_by_key[(instance_key, dep_key)].id
+                    raise ValueError(f"Task {task.task_slug!r} has no assigned ID")
+                for dep_slug in task.dependency_task_slugs:
+                    dep_task_id = task_rows_by_key[(instance_key, dep_slug)].id
                     if dep_task_id is None:
-                        raise ValueError(f"Dependency task {dep_key!r} has no assigned ID")
+                        raise ValueError(f"Dependency task {dep_slug!r} has no assigned ID")
                     dependency_rows.append(
                         ExperimentDefinitionTaskDependency(
                             id=uuid4(),
@@ -173,8 +173,8 @@ class ExperimentPersistenceService:
                 )
         elif experiment.assignments is not None:
             for worker_key, task_ref in experiment.assignments.items():
-                task_keys = [task_ref] if isinstance(task_ref, str) else list(task_ref)
-                for tk in task_keys:
+                task_slugs = [task_ref] if isinstance(task_ref, str) else list(task_ref)
+                for tk in task_slugs:
                     for (inst_key, t_key), task_row in task_rows_by_key.items():
                         if t_key == tk:
                             if task_row.id is None:
@@ -195,10 +195,10 @@ class ExperimentPersistenceService:
         task_evaluator_rows: list[ExperimentDefinitionTaskEvaluator] = []
         for instance_key, tasks in instances_map.items():
             for task in tasks:
-                task_id = task_rows_by_key[(instance_key, task.task_key)].id
+                task_id = task_rows_by_key[(instance_key, task.task_slug)].id
                 if task_id is None:
                     raise ValueError(
-                        f"Task {task.task_key!r} has no assigned ID for evaluator binding"
+                        f"Task {task.task_slug!r} has no assigned ID for evaluator binding"
                     )
                 for eval_key in task.evaluator_binding_keys:
                     task_evaluator_rows.append(

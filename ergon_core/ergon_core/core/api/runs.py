@@ -76,11 +76,11 @@ def _build_task_map(
     # Pass 1: build every node DTO from stored columns
     for node in nodes:
         nid = str(node.id)
-        worker = worker_by_binding.get(node.assigned_worker_key or "")
+        worker = worker_by_binding.get(node.assigned_worker_slug or "")
         started_at, completed_at = task_timestamps.get(node.id, (None, None))
         task_map[nid] = RunTaskDto(
             id=nid,
-            name=node.task_key,
+            name=node.task_slug,
             description=node.description,
             status=node.status,
             parent_id=str(node.parent_node_id) if node.parent_node_id else None,
@@ -89,7 +89,7 @@ def _build_task_map(
             is_leaf=True,
             level=node.level,
             assigned_worker_id=str(worker.id) if worker else None,
-            assigned_worker_name=node.assigned_worker_key,
+            assigned_worker_name=node.assigned_worker_slug,
             started_at=started_at,
             completed_at=completed_at,
         )

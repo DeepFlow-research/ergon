@@ -58,12 +58,12 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         )
 
     worker = worker_cls(
-        name=payload.worker_binding_key,
+        name=payload.assigned_worker_slug,
         model=payload.model_target,
     )
 
     task = BenchmarkTask(
-        task_key=payload.task_key,
+        task_slug=payload.task_slug,
         instance_key=str(payload.execution_id),
         description=payload.task_description,
     )
@@ -161,7 +161,7 @@ async def _persist_context_events(
                 session,
                 run_id=payload.run_id,
                 execution_id=payload.execution_id,
-                worker_binding_key=payload.worker_binding_key,
+                worker_binding_key=payload.assigned_worker_slug,
                 turn=turn,
             )
     except Exception:  # slopcop: ignore[no-broad-except]

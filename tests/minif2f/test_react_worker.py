@@ -46,7 +46,7 @@ def _make_context(task_id: UUID | None = None) -> WorkerContext:
 
 def _make_task() -> BenchmarkTask:
     return BenchmarkTask(
-        task_key="mathd_algebra_123",
+        task_slug="mathd_algebra_123",
         instance_key="default",
         description="prove the theorem",
         evaluator_binding_keys=("default",),

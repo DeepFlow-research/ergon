@@ -29,14 +29,14 @@ async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
-    key: str,
+    slug: str,
 ):
     return await repo.add_node(
         session,
         run_id,
-        task_key=key,
+        task_slug=slug,
         instance_key="inst-0",
-        description=f"node {key}",
+        description=f"node {slug}",
         status="pending",
         meta=META,
     )
@@ -56,7 +56,7 @@ class TestMutationListener:
         assert row.mutation_type == "node.added"
         assert row.target_type == "node"
         assert row.actor == "test-actor"
-        assert row.new_value["task_key"] == "A"
+        assert row.new_value["task_slug"] == "A"
         assert row.new_value["instance_key"] == "inst-0"
 
     async def test_update_node_status_fires_listener(self, session: Session):
@@ -159,5 +159,5 @@ class TestMutationListener:
 
         node = await _add_node(repo, session, run_id, "A")
 
-        assert node.task_key == "A"
+        assert node.task_slug == "A"
         assert len(collected) == 1

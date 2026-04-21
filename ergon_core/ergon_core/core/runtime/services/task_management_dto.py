@@ -6,7 +6,12 @@ swaps at the call boundary.
 
 from pydantic import BaseModel, Field
 
-from ergon_core.core.persistence.shared.types import NodeId, RunId
+from ergon_core.core.persistence.shared.types import (
+    AssignedWorkerSlug,
+    NodeId,
+    RunId,
+    TaskSlug,
+)
 
 
 # ── add_subtask ────────────────────────────────────────────────────────────
@@ -21,8 +26,11 @@ class AddSubtaskCommand(BaseModel):
 
     run_id: RunId
     parent_node_id: NodeId
+    task_slug: TaskSlug = Field(min_length=1)
     description: str = Field(min_length=1)
-    worker_binding_key: str = "researcher"
+    assigned_worker_slug: AssignedWorkerSlug = Field(
+        default=AssignedWorkerSlug("researcher"),
+    )
     depends_on: list[NodeId] = Field(default_factory=list)
 
     model_config = {"frozen": True}
@@ -32,7 +40,7 @@ class AddSubtaskResult(BaseModel):
     """Result snapshot after creating a subtask node."""
 
     node_id: NodeId
-    task_key: str
+    task_slug: TaskSlug
     status: str
 
     model_config = {"frozen": True}
@@ -44,10 +52,12 @@ class AddSubtaskResult(BaseModel):
 class SubtaskSpec(BaseModel):
     """One entry in a plan_subtasks call."""
 
-    local_key: str = Field(min_length=1)
+    task_slug: TaskSlug = Field(min_length=1)
     description: str = Field(min_length=1)
-    worker_binding_key: str = "researcher"
-    depends_on: list[str] = Field(default_factory=list)
+    assigned_worker_slug: AssignedWorkerSlug = Field(
+        default=AssignedWorkerSlug("researcher"),
+    )
+    depends_on: list[TaskSlug] = Field(default_factory=list)
 
     model_config = {"frozen": True}
 
@@ -63,10 +73,10 @@ class PlanSubtasksCommand(BaseModel):
 
 
 class PlanSubtasksResult(BaseModel):
-    """Maps local_key to created node_id plus identifies root tasks."""
+    """Maps task_slug to created node_id plus identifies root tasks."""
 
-    nodes: dict[str, NodeId]
-    roots: list[str]
+    nodes: dict[TaskSlug, NodeId]
+    roots: list[TaskSlug]
 
     model_config = {"frozen": True}
 

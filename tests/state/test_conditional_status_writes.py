@@ -33,7 +33,7 @@ class TestConditionalStatusWrites:
         node = await repo.add_node(
             session,
             run_id,
-            task_key="t1",
+            task_slug="t1",
             instance_key="i0",
             description="test",
             status=COMPLETED,
@@ -56,7 +56,7 @@ class TestConditionalStatusWrites:
         node = await repo.add_node(
             session,
             run_id,
-            task_key="t1",
+            task_slug="t1",
             instance_key="i0",
             description="test",
             status=FAILED,
@@ -79,7 +79,7 @@ class TestConditionalStatusWrites:
         node = await repo.add_node(
             session,
             run_id,
-            task_key="t1",
+            task_slug="t1",
             instance_key="i0",
             description="test",
             status=CANCELLED,
@@ -102,7 +102,7 @@ class TestConditionalStatusWrites:
         node = await repo.add_node(
             session,
             run_id,
-            task_key="t1",
+            task_slug="t1",
             instance_key="i0",
             description="test",
             status=RUNNING,
@@ -128,7 +128,7 @@ class TestConditionalStatusWrites:
         node = await repo.add_node(
             session,
             run_id,
-            task_key="t1",
+            task_slug="t1",
             instance_key="i0",
             description="test",
             status=COMPLETED,
@@ -151,7 +151,7 @@ class TestConditionalStatusWrites:
         node = await repo.add_node(
             session,
             run_id,
-            task_key="t1",
+            task_slug="t1",
             instance_key="i0",
             description="test",
             status=COMPLETED,

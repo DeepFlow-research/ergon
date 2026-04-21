@@ -27,7 +27,7 @@ class TaskDescriptor(BaseModel):
     model_config = {"frozen": True}
 
     task_id: UUID
-    task_key: str
+    task_slug: str
     parent_task_id: UUID | None = None
     node_id: UUID | None = None
 
@@ -66,10 +66,10 @@ class PreparedTaskExecution(BaseModel):
     run_id: UUID
     definition_id: UUID
     task_id: UUID
-    task_key: str
+    task_slug: str
     task_description: str
     benchmark_type: str
-    worker_binding_key: str | None = None
+    assigned_worker_slug: str | None = None
     worker_type: str | None = None
     model_target: str | None = None
     execution_id: UUID

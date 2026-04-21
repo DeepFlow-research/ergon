@@ -14,10 +14,10 @@ class BenchmarkTask(BaseModel):
 
     model_config = {"frozen": True}
 
-    task_key: str
+    task_slug: str
     instance_key: str
     description: str
-    parent_task_key: str | None = None
-    dependency_task_keys: tuple[str, ...] = ()
+    parent_task_slug: str | None = None
+    dependency_task_slugs: tuple[str, ...] = ()
     evaluator_binding_keys: tuple[str, ...] = ()
     task_payload: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]

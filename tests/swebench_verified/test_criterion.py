@@ -16,7 +16,7 @@ from ergon_builtins.benchmarks.swebench_verified.criterion import (
 
 def _task() -> BenchmarkTask:
     return BenchmarkTask(
-        task_key="django__django-1",
+        task_slug="django__django-1",
         instance_key="default",
         description="Fix the thing",
         evaluator_binding_keys=("default",),

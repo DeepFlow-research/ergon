@@ -137,7 +137,7 @@ class TestPreparedTaskExecutionNodeId:
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
-            task_key="test-task",
+            task_slug="test-task",
             task_description="A test task",
             benchmark_type="test",
             execution_id=uuid4(),
@@ -150,7 +150,7 @@ class TestPreparedTaskExecutionNodeId:
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
-            task_key="test-task",
+            task_slug="test-task",
             task_description="A test task",
             benchmark_type="test",
             execution_id=uuid4(),
@@ -163,7 +163,7 @@ class TestTaskDescriptorNodeId:
         nid = uuid4()
         td = TaskDescriptor(
             task_id=uuid4(),
-            task_key="test-task",
+            task_slug="test-task",
             node_id=nid,
         )
         assert td.node_id == nid
@@ -171,7 +171,7 @@ class TestTaskDescriptorNodeId:
     def test_defaults_to_none(self):
         td = TaskDescriptor(
             task_id=uuid4(),
-            task_key="test-task",
+            task_slug="test-task",
         )
         assert td.node_id is None
 

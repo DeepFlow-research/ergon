@@ -48,7 +48,7 @@ def seed_flat_tasks(
                 id=tid,
                 experiment_definition_id=def_id,
                 instance_id=inst_id,
-                task_key=f"task-{i}",
+                task_slug=f"task-{i}",
                 description=f"Test task {i}",
             )
         )

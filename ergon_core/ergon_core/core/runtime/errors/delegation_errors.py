@@ -73,22 +73,22 @@ class TaskAlreadyTerminalError(DelegationError):
 class CycleDetectedError(DelegationError):
     """Raised when plan_subtasks dependency graph contains a cycle."""
 
-    def __init__(self, remaining_keys: list[str]) -> None:
-        super().__init__(f"Cycle detected among keys: {remaining_keys}")
-        self.remaining_keys = remaining_keys
+    def __init__(self, remaining_slugs: list[str]) -> None:
+        super().__init__(f"Cycle detected among task_slugs: {remaining_slugs}")
+        self.remaining_slugs = remaining_slugs
 
 
-class DuplicateLocalKeyError(DelegationError):
-    """Raised when plan_subtasks has duplicate local_key values."""
+class DuplicateTaskSlugError(DelegationError):
+    """Raised when plan_subtasks has duplicate task_slug values."""
 
-    def __init__(self, key: str) -> None:
-        super().__init__(f"Duplicate local_key: {key!r}")
-        self.key = key
+    def __init__(self, task_slug: str) -> None:
+        super().__init__(f"Duplicate task_slug: {task_slug!r}")
+        self.task_slug = task_slug
 
 
-class UnknownLocalKeyError(DelegationError):
-    """Raised when depends_on references a local_key not in the plan."""
+class UnknownTaskSlugError(DelegationError):
+    """Raised when depends_on references a task_slug not in the plan."""
 
-    def __init__(self, unknown: list[str]) -> None:
-        super().__init__(f"Unknown depends_on keys: {unknown}")
-        self.unknown = unknown
+    def __init__(self, slugs: list[str]) -> None:
+        super().__init__(f"Unknown depends_on task_slugs: {slugs}")
+        self.slugs = slugs

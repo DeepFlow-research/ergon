@@ -33,7 +33,7 @@ def _make_context(*, with_node_id: bool = True) -> WorkerContext:
 
 def _make_task() -> BenchmarkTask:
     return BenchmarkTask(
-        task_key="test-task",
+        task_slug="test-task",
         instance_key="default",
         description="Test research question",
     )

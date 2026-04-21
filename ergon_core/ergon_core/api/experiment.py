@@ -64,9 +64,9 @@ class Experiment:
         - every worker validates
         - every evaluator validates
         - required evaluator slots are filled
-        - no duplicate task keys within an instance
-        - parent_task_key and dependency_task_keys reference valid tasks
-        - assignment worker keys and task keys reference valid objects
+        - no duplicate task slugs within an instance
+        - parent_task_slug and dependency_task_slugs reference valid tasks
+        - assignment worker keys and task slugs reference valid objects
         """
         self.benchmark.validate()
         for worker in self.workers.values():
@@ -81,53 +81,55 @@ class Experiment:
             raise ValueError(f"Missing required evaluator bindings: {missing}")
 
         instances = self.benchmark.build_instances()
-        all_task_keys_by_instance: dict[str, set[str]] = {}
+        all_task_slugs_by_instance: dict[str, set[str]] = {}
 
         for instance_key, tasks in instances.items():
-            task_keys: set[str] = set()
+            task_slugs: set[str] = set()
             for task in tasks:
                 if task.instance_key != instance_key:
                     raise ValueError(
-                        f"Task {task.task_key!r} declares instance_key "
+                        f"Task {task.task_slug!r} declares instance_key "
                         f"{task.instance_key!r} but belongs to instance {instance_key!r}"
                     )
-                if task.task_key in task_keys:
+                if task.task_slug in task_slugs:
                     raise ValueError(
-                        f"Duplicate task_key {task.task_key!r} in instance {instance_key!r}"
+                        f"Duplicate task_slug {task.task_slug!r} in instance {instance_key!r}"
                     )
-                task_keys.add(task.task_key)
+                task_slugs.add(task.task_slug)
 
             for task in tasks:
-                if task.parent_task_key is not None and task.parent_task_key not in task_keys:
+                if task.parent_task_slug is not None and task.parent_task_slug not in task_slugs:
                     raise ValueError(
-                        f"Unknown parent_task_key {task.parent_task_key!r} "
+                        f"Unknown parent_task_slug {task.parent_task_slug!r} "
                         f"in instance {instance_key!r}"
                     )
-                for dep_key in task.dependency_task_keys:
-                    if dep_key not in task_keys:
+                for dep_slug in task.dependency_task_slugs:
+                    if dep_slug not in task_slugs:
                         raise ValueError(
-                            f"Unknown dependency_task_key {dep_key!r} for task "
-                            f"{task.task_key!r} in instance {instance_key!r}"
+                            f"Unknown dependency_task_slug {dep_slug!r} for task "
+                            f"{task.task_slug!r} in instance {instance_key!r}"
                         )
                 for eval_key in task.evaluator_binding_keys:
                     if eval_key not in self.evaluators:
                         raise ValueError(
-                            f"Task {task.task_key!r} references undeclared evaluator "
+                            f"Task {task.task_slug!r} references undeclared evaluator "
                             f"binding key {eval_key!r}"
                         )
 
-            all_task_keys_by_instance[instance_key] = task_keys
+            all_task_slugs_by_instance[instance_key] = task_slugs
 
         if self.assignments is not None:
-            all_task_keys_flat = {tk for keys in all_task_keys_by_instance.values() for tk in keys}
+            all_task_slugs_flat = {
+                ts for slugs in all_task_slugs_by_instance.values() for ts in slugs
+            }
             for worker_key, task_ref in self.assignments.items():
                 if worker_key not in self.workers:
                     raise ValueError(f"Assignment references unknown worker key {worker_key!r}")
-                task_keys_list = [task_ref] if isinstance(task_ref, str) else task_ref
-                for tk in task_keys_list:
-                    if tk not in all_task_keys_flat:
+                task_slugs_list = [task_ref] if isinstance(task_ref, str) else task_ref
+                for ts in task_slugs_list:
+                    if ts not in all_task_slugs_flat:
                         raise ValueError(
-                            f"Assignment references unknown task key {tk!r} "
+                            f"Assignment references unknown task_slug {ts!r} "
                             f"for worker {worker_key!r}"
                         )
 

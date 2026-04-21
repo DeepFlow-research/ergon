@@ -42,10 +42,10 @@ class GraphNodeDto(BaseModel):
     run_id: RunId
     definition_task_id: DefinitionId | None
     instance_key: str
-    task_key: str
+    task_slug: str
     description: str
     status: str  # not NodeStatus — DB allows domain-specific statuses (§4.7 in status_conventions)
-    assigned_worker_key: str | None
+    assigned_worker_slug: str | None
     parent_node_id: NodeId | None
     level: int
 
@@ -109,11 +109,11 @@ class NodeAddedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["node.added"] = "node.added"
-    task_key: str
+    task_slug: str
     instance_key: str
     description: str
     status: str
-    assigned_worker_key: str | None
+    assigned_worker_slug: str | None
 
 
 class NodeRemovedMutation(BaseModel):
@@ -122,11 +122,11 @@ class NodeRemovedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["node.removed"] = "node.removed"
-    task_key: str
+    task_slug: str
     instance_key: str
     description: str
     status: str
-    assigned_worker_key: str | None
+    assigned_worker_slug: str | None
 
 
 class NodeStatusChangedMutation(BaseModel):
@@ -144,7 +144,7 @@ class NodeFieldChangedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["node.field_changed"] = "node.field_changed"
-    field: Literal["description", "assigned_worker_key"]
+    field: Literal["description", "assigned_worker_slug"]
     value: str | None
 
 

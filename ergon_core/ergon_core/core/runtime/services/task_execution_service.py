@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 async def _emit_task_status(
     run_id: UUID,
     node_id: UUID | None,
-    task_key: str,
+    task_slug: str,
     new_status: str,
     old_status: str | None = None,
     worker_id: UUID | None = None,
@@ -51,7 +51,7 @@ async def _emit_task_status(
         await dashboard_emitter.task_status_changed(
             run_id=run_id,
             task_id=node_id,
-            task_name=task_key,
+            task_name=task_slug,
             new_status=new_status,
             old_status=old_status,
             assigned_worker_id=worker_id,
@@ -91,10 +91,10 @@ class TaskExecutionService:
                     task_id=command.task_id,
                 )
 
-            worker_binding_key = node.assigned_worker_key
-            if worker_binding_key is None:
+            assigned_worker_slug = node.assigned_worker_slug
+            if assigned_worker_slug is None:
                 raise ConfigurationError(
-                    f"RunGraphNode {command.node_id} has no assigned_worker_key",
+                    f"RunGraphNode {command.node_id} has no assigned_worker_slug",
                     run_id=command.run_id,
                     task_id=command.task_id,
                 )
@@ -102,13 +102,13 @@ class TaskExecutionService:
             worker_row = session.exec(
                 select(ExperimentDefinitionWorker).where(
                     ExperimentDefinitionWorker.experiment_definition_id == command.definition_id,
-                    ExperimentDefinitionWorker.binding_key == worker_binding_key,
+                    ExperimentDefinitionWorker.binding_key == assigned_worker_slug,
                 )
             ).first()
             if worker_row is None:
                 raise ConfigurationError(
                     f"No ExperimentDefinitionWorker with binding_key="
-                    f"'{worker_binding_key}' for definition {command.definition_id}",
+                    f"'{assigned_worker_slug}' for definition {command.definition_id}",
                     run_id=command.run_id,
                     task_id=command.task_id,
                 )
@@ -144,21 +144,21 @@ class TaskExecutionService:
             await _emit_task_status(
                 run_id=command.run_id,
                 node_id=command.node_id,
-                task_key=node.task_key,
+                task_slug=node.task_slug,
                 new_status=TaskExecutionStatus.RUNNING,
                 old_status=None,
                 worker_id=worker_row.id,
-                worker_name=worker_binding_key,
+                worker_name=assigned_worker_slug,
             )
 
             return PreparedTaskExecution(
                 run_id=command.run_id,
                 definition_id=command.definition_id,
                 task_id=command.task_id,
-                task_key=node.task_key,
+                task_slug=node.task_slug,
                 task_description=node.description,
                 benchmark_type=definition.benchmark_type,
-                worker_binding_key=worker_binding_key,
+                assigned_worker_slug=assigned_worker_slug,
                 worker_type=worker_row.worker_type,
                 model_target=worker_row.model_target,
                 execution_id=execution.id,
@@ -188,13 +188,13 @@ class TaskExecutionService:
             )
             assignment = session.exec(assignment_stmt).first()
 
-            worker_binding_key: str | None = None
+            assigned_worker_slug: str | None = None
             worker_type: str | None = None
             model_target: str | None = None
             definition_worker_id: UUID | None = None
 
             if assignment is not None:
-                worker_binding_key = assignment.worker_binding_key
+                assigned_worker_slug = assignment.worker_binding_key
 
                 worker_stmt = select(ExperimentDefinitionWorker).where(
                     ExperimentDefinitionWorker.experiment_definition_id == command.definition_id,
@@ -236,21 +236,21 @@ class TaskExecutionService:
             await _emit_task_status(
                 run_id=command.run_id,
                 node_id=resolved_node_id,
-                task_key=task.task_key,
+                task_slug=task.task_slug,
                 new_status=TaskExecutionStatus.RUNNING,
                 old_status=None,
                 worker_id=definition_worker_id,
-                worker_name=worker_binding_key,
+                worker_name=assigned_worker_slug,
             )
 
             return PreparedTaskExecution(
                 run_id=command.run_id,
                 definition_id=command.definition_id,
                 task_id=command.task_id,
-                task_key=task.task_key,
+                task_slug=task.task_slug,
                 task_description=task.description,
                 benchmark_type=definition.benchmark_type,
-                worker_binding_key=worker_binding_key,
+                assigned_worker_slug=assigned_worker_slug,
                 worker_type=worker_type,
                 model_target=model_target,
                 execution_id=execution.id,
@@ -278,7 +278,7 @@ class TaskExecutionService:
             await _emit_task_status(
                 run_id=execution.run_id,
                 node_id=execution.node_id,
-                task_key=str(execution.definition_task_id or execution.node_id or ""),
+                task_slug=str(execution.definition_task_id or execution.node_id or ""),
                 new_status=TaskExecutionStatus.COMPLETED,
                 old_status=TaskExecutionStatus.RUNNING,
             )
@@ -310,7 +310,7 @@ class TaskExecutionService:
             await _emit_task_status(
                 run_id=command.run_id,
                 node_id=execution.node_id,
-                task_key=str(execution.definition_task_id or execution.node_id or ""),
+                task_slug=str(execution.definition_task_id or execution.node_id or ""),
                 new_status=TaskExecutionStatus.FAILED,
                 old_status=TaskExecutionStatus.RUNNING,
             )

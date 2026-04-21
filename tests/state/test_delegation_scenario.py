@@ -38,7 +38,7 @@ async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
-    key: str,
+    slug: str,
     *,
     status: str = PENDING,
     instance_key: str = "inst-0",
@@ -46,9 +46,9 @@ async def _add_node(
     return await repo.add_node(
         session,
         run_id,
-        task_key=key,
+        task_slug=slug,
         instance_key=instance_key,
-        description=f"node {key}",
+        description=f"node {slug}",
         status=status,
         meta=META,
     )
@@ -85,8 +85,9 @@ class TestFullDelegationScenario:
                 AddSubtaskCommand(
                     run_id=run_id,
                     parent_node_id=parent.id,
+                    task_slug="sub-question-1",
                     description="research sub-question 1",
-                    worker_binding_key="researcher",
+                    assigned_worker_slug="researcher",
                 ),
             )
 
@@ -95,8 +96,9 @@ class TestFullDelegationScenario:
                 AddSubtaskCommand(
                     run_id=run_id,
                     parent_node_id=parent.id,
+                    task_slug="sub-question-2",
                     description="research sub-question 2",
-                    worker_binding_key="researcher",
+                    assigned_worker_slug="researcher",
                 ),
             )
 
@@ -144,8 +146,9 @@ class TestFullDelegationScenario:
                 AddSubtaskCommand(
                     run_id=run_id,
                     parent_node_id=parent.id,
+                    task_slug="sub-question-2-v2",
                     description="research sub-question 2 v2",
-                    worker_binding_key="researcher",
+                    assigned_worker_slug="researcher",
                 ),
             )
 
@@ -174,15 +177,15 @@ class TestFullDelegationScenario:
         assert len(final_graph.nodes) == 4  # parent + child1 + child2(cancelled) + child3
         for node in final_graph.nodes:
             assert node.status in TERMINAL_STATUSES, (
-                f"Node {node.task_key} has non-terminal status: {node.status}"
+                f"Node {node.task_slug} has non-terminal status: {node.status}"
             )
 
         # Specific status checks
-        statuses = {n.task_key: n.status for n in final_graph.nodes}
+        statuses = {n.task_slug: n.status for n in final_graph.nodes}
         assert statuses["manager"] == COMPLETED
-        assert statuses[child1.task_key] == COMPLETED
-        assert statuses[child2.task_key] == CANCELLED
-        assert statuses[child3.task_key] == COMPLETED
+        assert statuses[child1.task_slug] == COMPLETED
+        assert statuses[child2.task_slug] == CANCELLED
+        assert statuses[child3.task_slug] == COMPLETED
 
         # WAL integrity: mutation sequences are contiguous starting from 0
         mutations = graph_repo.get_mutations(session, run_id)
@@ -196,5 +199,5 @@ class TestFullDelegationScenario:
 
         # Verify parent_node_id containment for children
         for node in final_graph.nodes:
-            if node.task_key != "manager":
+            if node.task_slug != "manager":
                 assert node.parent_node_id == parent.id

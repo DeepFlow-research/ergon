@@ -83,7 +83,7 @@ class InngestCriterionExecutor:
                         task_id=self.task_id,
                         execution_id=self.execution_id,
                         task=BenchmarkTask(
-                            task_key="",
+                            task_slug="",
                             instance_key="",
                             description=task_context.task_input,
                         ),

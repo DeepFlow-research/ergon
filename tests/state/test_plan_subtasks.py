@@ -11,8 +11,8 @@ import pytest
 from ergon_core.core.persistence.graph.status_conventions import PENDING
 from ergon_core.core.runtime.errors.delegation_errors import (
     CycleDetectedError,
-    DuplicateLocalKeyError,
-    UnknownLocalKeyError,
+    DuplicateTaskSlugError,
+    UnknownTaskSlugError,
 )
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
@@ -34,7 +34,7 @@ async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
-    key: str,
+    slug: str,
     *,
     status: str = PENDING,
     instance_key: str = "inst-0",
@@ -43,9 +43,9 @@ async def _add_node(
     return await repo.add_node(
         session,
         run_id,
-        task_key=key,
+        task_slug=slug,
         instance_key=instance_key,
-        description=f"node {key}",
+        description=f"node {slug}",
         status=status,
         meta=META,
     )
@@ -54,51 +54,51 @@ async def _add_node(
 class TestPlanSubtasksValidation:
     """Validation-only tests — no DB interaction needed for these."""
 
-    async def test_duplicate_local_key_raises(self, session: Session):
-        """Two specs with the same local_key are rejected."""
+    async def test_duplicate_task_slug_raises(self, session: Session):
+        """Two specs with the same task_slug are rejected."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
         parent = await _add_node(repo, session, run_id, "manager")
 
-        with pytest.raises(DuplicateLocalKeyError) as exc_info:
+        with pytest.raises(DuplicateTaskSlugError) as exc_info:
             await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
                     parent_node_id=parent.id,
                     subtasks=[
-                        SubtaskSpec(local_key="a", description="first"),
-                        SubtaskSpec(local_key="a", description="duplicate"),
+                        SubtaskSpec(task_slug="a", description="first"),
+                        SubtaskSpec(task_slug="a", description="duplicate"),
                     ],
                 ),
             )
-        assert exc_info.value.key == "a"
+        assert exc_info.value.task_slug == "a"
 
     async def test_unknown_depends_on_raises(self, session: Session):
-        """depends_on referencing a key not in the plan is rejected."""
+        """depends_on referencing a slug not in the plan is rejected."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
         parent = await _add_node(repo, session, run_id, "manager")
 
-        with pytest.raises(UnknownLocalKeyError) as exc_info:
+        with pytest.raises(UnknownTaskSlugError) as exc_info:
             await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
                     parent_node_id=parent.id,
                     subtasks=[
-                        SubtaskSpec(local_key="a", description="ok"),
+                        SubtaskSpec(task_slug="a", description="ok"),
                         SubtaskSpec(
-                            local_key="b",
+                            task_slug="b",
                             description="bad dep",
                             depends_on=["nonexistent"],
                         ),
                     ],
                 ),
             )
-        assert "nonexistent" in exc_info.value.unknown
+        assert "nonexistent" in exc_info.value.slugs
 
     async def test_cycle_raises(self, session: Session):
         """A -> B -> A cycle is detected and rejected."""
@@ -114,12 +114,12 @@ class TestPlanSubtasksValidation:
                     run_id=run_id,
                     parent_node_id=parent.id,
                     subtasks=[
-                        SubtaskSpec(local_key="a", description="first", depends_on=["b"]),
-                        SubtaskSpec(local_key="b", description="second", depends_on=["a"]),
+                        SubtaskSpec(task_slug="a", description="first", depends_on=["b"]),
+                        SubtaskSpec(task_slug="b", description="second", depends_on=["a"]),
                     ],
                 ),
             )
-        assert len(exc_info.value.remaining_keys) == 2
+        assert len(exc_info.value.remaining_slugs) == 2
 
 
 class TestPlanSubtasksIntegration:
@@ -143,9 +143,9 @@ class TestPlanSubtasksIntegration:
                     run_id=run_id,
                     parent_node_id=parent.id,
                     subtasks=[
-                        SubtaskSpec(local_key="research", description="do research"),
+                        SubtaskSpec(task_slug="research", description="do research"),
                         SubtaskSpec(
-                            local_key="synthesize",
+                            task_slug="synthesize",
                             description="synthesize results",
                             depends_on=["research"],
                         ),
@@ -157,7 +157,7 @@ class TestPlanSubtasksIntegration:
         assert result.roots == ["research"]
 
         # Verify nodes exist with correct parent
-        for key, nid in result.nodes.items():
+        for slug, nid in result.nodes.items():
             node = repo.get_node(session, run_id=run_id, node_id=nid)
             assert node.parent_node_id == parent.id
             assert node.level == 1
@@ -186,10 +186,10 @@ class TestPlanSubtasksIntegration:
                     run_id=run_id,
                     parent_node_id=parent.id,
                     subtasks=[
-                        SubtaskSpec(local_key="a", description="root a"),
-                        SubtaskSpec(local_key="b", description="root b"),
+                        SubtaskSpec(task_slug="a", description="root a"),
+                        SubtaskSpec(task_slug="b", description="root b"),
                         SubtaskSpec(
-                            local_key="c",
+                            task_slug="c",
                             description="depends on a and b",
                             depends_on=["a", "b"],
                         ),

@@ -234,7 +234,7 @@ async def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
             task_id=task_desc.task_id,
             execution_id=prepared.execution_id,
             task=BenchmarkTask(
-                task_key="smoke-research-001",
+                task_slug="smoke-research-001",
                 instance_key="default",
                 description="smoke test",
             ),
