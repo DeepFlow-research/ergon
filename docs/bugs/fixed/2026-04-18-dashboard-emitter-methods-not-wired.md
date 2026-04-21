@@ -4,7 +4,7 @@ opened: 2026-04-18
 fixed_pr: 17
 priority: P1
 invariant_violated: docs/architecture/05_dashboard.md#invariants
-related_rfc: docs/rfcs/active/2026-04-18-dashboard-event-wiring-enforcement.md
+related_rfc: docs/rfcs/accepted/2026-04-18-dashboard-event-wiring-enforcement.md
 ---
 
 # Bug: 9 of 12 DashboardEmitter methods are defined but never invoked

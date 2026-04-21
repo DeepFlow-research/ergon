@@ -67,3 +67,37 @@ When a feature branch is needed (e.g. for a PR review), use the `feature/<name>`
 - `ty` for type checking (not mypy)
 - New workspace members: add paths in `package.json` and `.github/workflows/ci-fast.yml`
 - `slopcop`: `no-print` is ignored in CLI, infra, rendering, tests, and scripts (see `[tool.slopcop]` in `pyproject.toml`)
+
+## Architecture docs (canonical reference)
+
+Single source of truth on how the system works today: [`docs/architecture/`](docs/architecture/README.md).
+
+Every feature PR either (a) **cites** the architecture section(s) it relies on, or
+(b) **updates** those sections if it changes an invariant, adds an extension point,
+or removes an anti-pattern offender. Cross-cutting changes (artifacts, sandbox
+lifecycle, error propagation) must update `docs/architecture/cross_cutting/`
+explicitly. PRs that break an invariant without updating the doc are NAK'd
+regardless of test state.
+
+## RFCs and bugs
+
+**New feature or architectural change:**
+  1. Pre-RFC brainstorm (optional) → `docs/superpowers/brainstorms/YYYY-MM-DD-<slug>.md` via `superpowers:brainstorming`.
+  2. RFC → `docs/rfcs/active/YYYY-MM-DD-<slug>.md` using [`docs/rfcs/TEMPLATE.md`](docs/rfcs/TEMPLATE.md).
+  3. Plan → `docs/superpowers/plans/YYYY-MM-DD-<slug>.md` via `superpowers:writing-plans`.
+  4. On merge: move RFC `active/` → `accepted/`; update `docs/architecture/` if invariants changed.
+
+**Bug report:**
+  1. File at `docs/bugs/open/YYYY-MM-DD-<slug>.md` using [`docs/bugs/TEMPLATE.md`](docs/bugs/TEMPLATE.md).
+  2. If the fix is non-trivial, promote to an RFC and link it in the bug's `related_rfc` field.
+  3. On merge: move `open/` → `fixed/`, set `fixed_pr` in frontmatter.
+
+**Superpowers skill outputs (these preferences override skill defaults):**
+  - `superpowers:brainstorming` → `docs/superpowers/brainstorms/`
+  - `superpowers:writing-plans` → `docs/superpowers/plans/` (skill default, unchanged)
+  - `superpowers:debugging` → write RCAs into `docs/bugs/open/`; if the fix is non-trivial, follow with an RFC in `docs/rfcs/active/`.
+
+**Status lives in the folder, not the frontmatter.** `ls docs/rfcs/active/`
+and `ls docs/bugs/open/` are the canonical "what's in flight" queries. When an
+RFC is accepted or a bug fixed, move the file — don't just flip a frontmatter
+field.

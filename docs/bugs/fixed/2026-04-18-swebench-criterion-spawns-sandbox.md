@@ -1,7 +1,7 @@
 ---
-status: open
+status: fixed
 opened: 2026-04-18
-fixed_pr: null
+fixed_pr: 16
 priority: P2
 invariant_violated: docs/architecture/06_builtins.md#anti-patterns
 related_rfc: docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md
