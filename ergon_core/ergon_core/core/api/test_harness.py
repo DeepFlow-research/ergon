@@ -184,22 +184,25 @@ def read_run_state(
 #     - Requiring the caller to pass an existing ``experiment_definition_id``
 #       (NOT NULL FK) when seeding — no synthetic definition is created here.
 #
-# ``SeedRunRequest.cohort`` is defaulted so ``json={}`` passes body validation
-# and the secret gate (which runs inside the handler body, after FastAPI's
-# validation phase) can surface 401/500 without 422 noise. Real callers will
-# always pass a cohort string, but defaulting keeps the security-gate contract
-# testable without coupling to request shape.
+# ``SeedRunRequest.cohort`` is defaulted so a body with only the required
+# ``experiment_definition_id`` passes validation and the secret gate (which
+# runs inside the handler body, after FastAPI's validation phase) can surface
+# 401/500 without 422 noise. ``experiment_definition_id`` is required because
+# ``RunRecord.experiment_definition_id`` is a NOT NULL FK to
+# ``experiment_definitions.id`` — no synthetic definition is created here.
+# ``ResetRequest.cohort_prefix`` has no default: reset is destructive, so
+# callers must always specify what to nuke.
 
 
 class SeedRunRequest(BaseModel):
+    experiment_definition_id: UUID
     cohort: str = "_test_"
     status: str = "completed"
     task_slugs: list[str] = []
-    experiment_definition_id: UUID | None = None
 
 
 class ResetRequest(BaseModel):
-    cohort_prefix: str = "ci-smoke-"
+    cohort_prefix: str
 
 
 @router.post("/write/run/seed", status_code=201)
@@ -219,7 +222,7 @@ def seed_run(
         ) from exc
     with Session(get_engine()) as s:
         run = RunRecord(
-            experiment_definition_id=body.experiment_definition_id or UUID(int=0),
+            experiment_definition_id=body.experiment_definition_id,
             status=run_status,
             summary_json={
                 "_test_seeded": True,

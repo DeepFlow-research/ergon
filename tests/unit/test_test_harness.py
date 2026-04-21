@@ -1,9 +1,9 @@
 """Test-harness router: conditional mount, read DTO shape, write-gate secret."""
 
-import os
 from collections.abc import Iterator
 from uuid import uuid4
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -36,98 +36,62 @@ def _null_session_factory() -> Iterator[_NullSession]:
     yield _NullSession()
 
 
-def _build_app_with_harness(*, enabled: bool, secret: str | None = "ci-secret") -> FastAPI:
+def _build_app_with_harness(
+    monkeypatch: pytest.MonkeyPatch, *, enabled: bool, secret: str | None = "ci-secret"
+) -> FastAPI:
     app = FastAPI()
-    prev_enable = os.environ.get("ENABLE_TEST_HARNESS")
-    prev_secret = os.environ.get("TEST_HARNESS_SECRET")
-    try:
-        os.environ["ENABLE_TEST_HARNESS"] = "1" if enabled else "0"
-        if secret is not None:
-            os.environ["TEST_HARNESS_SECRET"] = secret
-        else:
-            os.environ.pop("TEST_HARNESS_SECRET", None)
+    monkeypatch.setenv("ENABLE_TEST_HARNESS", "1" if enabled else "0")
+    if secret is not None:
+        monkeypatch.setenv("TEST_HARNESS_SECRET", secret)
+    else:
+        monkeypatch.delenv("TEST_HARNESS_SECRET", raising=False)
 
-        if enabled:
-            # reason: import after env mutation so module-level gates see ENABLE_TEST_HARNESS=1
-            from ergon_core.core.api.test_harness import get_session_dep, router
+    if enabled:
+        # reason: import after env mutation so module-level gates see ENABLE_TEST_HARNESS=1
+        from ergon_core.core.api.test_harness import get_session_dep, router
 
-            app.include_router(router)
-            app.dependency_overrides[get_session_dep] = _null_session_factory
-    finally:
-        if prev_enable is None:
-            os.environ.pop("ENABLE_TEST_HARNESS", None)
-        else:
-            os.environ["ENABLE_TEST_HARNESS"] = prev_enable
-        if prev_secret is None:
-            os.environ.pop("TEST_HARNESS_SECRET", None)
-        else:
-            os.environ["TEST_HARNESS_SECRET"] = prev_secret
+        app.include_router(router)
+        app.dependency_overrides[get_session_dep] = _null_session_factory
     return app
 
 
-def test_read_endpoint_returns_404_for_unknown_run_id() -> None:
-    app = _build_app_with_harness(enabled=True)
+def test_read_endpoint_returns_404_for_unknown_run_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _build_app_with_harness(monkeypatch, enabled=True)
     client = TestClient(app)
     resp = client.get(f"/api/test/read/run/{uuid4()}/state")
     assert resp.status_code == 404
 
 
-def test_read_endpoint_unmounted_when_disabled() -> None:
-    app = _build_app_with_harness(enabled=False)
+def test_read_endpoint_unmounted_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _build_app_with_harness(monkeypatch, enabled=False)
     client = TestClient(app)
     resp = client.get(f"/api/test/read/run/{uuid4()}/state")
     assert resp.status_code == 404  # unmounted = route doesn't exist
 
 
-def _with_live_secret(secret: str | None) -> None:
-    """Install/clear ``TEST_HARNESS_SECRET`` at request time.
-
-    ``_build_app_with_harness`` restores the pre-test env in its ``finally``,
-    so secret-gate tests that need the var live during the HTTP call must
-    re-install it after app construction. The pytest caller is expected to
-    clean up (tests here use module-local save/restore).
-    """
-    if secret is None:
-        os.environ.pop("TEST_HARNESS_SECRET", None)
-    else:
-        os.environ["TEST_HARNESS_SECRET"] = secret
+def test_seed_requires_secret_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _build_app_with_harness(monkeypatch, enabled=True, secret="ci-secret")
+    client = TestClient(app)
+    resp = client.post(
+        "/api/test/write/run/seed",
+        json={"experiment_definition_id": "00000000-0000-0000-0000-000000000001"},
+    )
+    assert resp.status_code == 401
 
 
-def test_seed_requires_secret_header() -> None:
-    app = _build_app_with_harness(enabled=True, secret="ci-secret")
-    prev = os.environ.get("TEST_HARNESS_SECRET")
-    _with_live_secret("ci-secret")
-    try:
-        client = TestClient(app)
-        resp = client.post("/api/test/write/run/seed", json={})
-        assert resp.status_code == 401
-    finally:
-        _with_live_secret(prev)
+def test_seed_returns_500_when_secret_env_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _build_app_with_harness(monkeypatch, enabled=True, secret=None)
+    client = TestClient(app)
+    resp = client.post(
+        "/api/test/write/run/seed",
+        json={"experiment_definition_id": "00000000-0000-0000-0000-000000000001"},
+        headers={"X-Test-Secret": "anything"},
+    )
+    assert resp.status_code == 500
 
 
-def test_seed_returns_500_when_secret_env_missing() -> None:
-    app = _build_app_with_harness(enabled=True, secret=None)
-    prev = os.environ.get("TEST_HARNESS_SECRET")
-    _with_live_secret(None)
-    try:
-        client = TestClient(app)
-        resp = client.post(
-            "/api/test/write/run/seed",
-            json={},
-            headers={"X-Test-Secret": "anything"},
-        )
-        assert resp.status_code == 500
-    finally:
-        _with_live_secret(prev)
-
-
-def test_reset_requires_secret_header() -> None:
-    app = _build_app_with_harness(enabled=True, secret="ci-secret")
-    prev = os.environ.get("TEST_HARNESS_SECRET")
-    _with_live_secret("ci-secret")
-    try:
-        client = TestClient(app)
-        resp = client.post("/api/test/write/reset", json={})
-        assert resp.status_code == 401
-    finally:
-        _with_live_secret(prev)
+def test_reset_requires_secret_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _build_app_with_harness(monkeypatch, enabled=True, secret="ci-secret")
+    client = TestClient(app)
+    resp = client.post("/api/test/write/reset", json={"cohort_prefix": "ci-smoke-"})
+    assert resp.status_code == 401
