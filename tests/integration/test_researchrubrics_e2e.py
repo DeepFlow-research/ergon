@@ -13,11 +13,8 @@ completes successfully.
 
 import asyncio
 import hashlib
-from contextlib import contextmanager
 from pathlib import Path
-from uuid import uuid4
 
-import pytest
 from ergon_builtins.benchmarks.researchrubrics.smoke import (
     ResearchRubricsSmokeTestBenchmark,
 )
@@ -36,6 +33,7 @@ from ergon_core.api.generation import GenerationTurn, TextPart
 from ergon_core.api.results import CriterionResult, WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
+from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
@@ -249,16 +247,24 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
         assert result.passed, f"Criterion failed: {result.feedback}"
         assert result.score == 1.0
 
-        # Persist evaluation.
-        eval_record = RunTaskEvaluation(
-            run_id=run.id,
-            definition_task_id=task_desc.task_id,
-            definition_evaluator_id=uuid4(),
-            score=result.score,
-            passed=result.passed,
-            feedback=result.feedback,
-        )
+        # Persist evaluation using the real evaluator FK so the FK constraint is satisfied.
         with get_session() as session:
+            evaluator_def = session.exec(
+                select(ExperimentDefinitionEvaluator).where(
+                    ExperimentDefinitionEvaluator.experiment_definition_id
+                    == persisted.definition_id,
+                    ExperimentDefinitionEvaluator.binding_key == "default",
+                )
+            ).first()
+            assert evaluator_def is not None, "evaluator def missing for binding 'default'"
+            eval_record = RunTaskEvaluation(
+                run_id=run.id,
+                definition_task_id=task_desc.task_id,
+                definition_evaluator_id=evaluator_def.id,
+                score=result.score,
+                passed=result.passed,
+                feedback=result.feedback,
+            )
             session.add(eval_record)
             session.commit()
 

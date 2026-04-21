@@ -884,9 +884,28 @@ class WorkflowGraphRepository:
         session.add(row)
         session.flush()
 
+        # Snapshot ORM fields into a detached copy so that coroutines scheduled
+        # via fire-and-forget do not touch the session-bound instance after the
+        # session commits/rolls back (which would raise DetachedInstanceError).
+        row_snapshot = RunGraphMutation(
+            id=row.id,
+            run_id=row.run_id,
+            sequence=row.sequence,
+            mutation_type=row.mutation_type,
+            target_type=row.target_type,
+            target_id=row.target_id,
+            actor=row.actor,
+            old_value=row.old_value,
+            new_value=row.new_value,
+            reason=row.reason,
+            created_at=row.created_at,
+        )
         for listener in self._mutation_listeners:
             try:
-                asyncio.get_event_loop().create_task(listener(row))
+                loop = asyncio.get_running_loop()
+                loop.create_task(listener(row_snapshot))
+            except RuntimeError:
+                logger.debug("No running event loop; skipping mutation listener emit")
             except Exception:  # slopcop: ignore[no-broad-except]
                 logger.warning("Mutation listener failed", exc_info=True)
 

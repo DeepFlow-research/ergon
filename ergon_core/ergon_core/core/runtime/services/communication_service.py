@@ -94,7 +94,12 @@ class CommunicationService:
             "createdAt": message.created_at.isoformat(),
         }
         try:
-            asyncio.get_event_loop().create_task(
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            logger.debug("No running event loop; skipping thread_message_created emit")
+            return response
+        try:
+            loop.create_task(
                 dashboard_emitter.thread_message_created(
                     run_id=request.run_id,
                     thread=thread_dict,

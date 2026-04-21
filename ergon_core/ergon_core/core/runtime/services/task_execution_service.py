@@ -45,11 +45,20 @@ def _emit_task_status(
     worker_id: UUID | None = None,
     worker_name: str | None = None,
 ) -> None:
-    """Fire-and-forget dashboard/task.status_changed from synchronous code."""
+    """Fire-and-forget dashboard/task.status_changed from synchronous code.
+
+    All arguments are plain primitives (no ORM instances) so there is no risk
+    of a DetachedInstanceError when the coroutine is finally executed.
+    """
     if node_id is None:
         return
     try:
-        asyncio.get_event_loop().create_task(
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.debug("No running event loop; skipping task_status_changed emit")
+        return
+    try:
+        loop.create_task(
             dashboard_emitter.task_status_changed(
                 run_id=run_id,
                 task_id=node_id,
@@ -273,11 +282,16 @@ class TaskExecutionService:
                 }
             session.add(execution)
             session.commit()
+            # Capture plain primitives before the session closes to avoid
+            # DetachedInstanceError when the fire-and-forget coroutine runs.
+            _run_id = execution.run_id
+            _node_id = execution.node_id
+            _task_key = str(execution.definition_task_id or execution.node_id or "")
 
         _emit_task_status(
-            run_id=execution.run_id,
-            node_id=execution.node_id,
-            task_key=str(execution.definition_task_id or execution.node_id or ""),
+            run_id=_run_id,
+            node_id=_node_id,
+            task_key=_task_key,
             new_status=TaskExecutionStatus.COMPLETED,
             old_status=TaskExecutionStatus.RUNNING,
         )
@@ -305,11 +319,15 @@ class TaskExecutionService:
                 graph_lookup=graph_lookup,
             )
             session.commit()
+            # Capture plain primitives before the session closes to avoid
+            # DetachedInstanceError when the fire-and-forget coroutine runs.
+            _node_id = execution.node_id
+            _task_key = str(execution.definition_task_id or execution.node_id or "")
 
         _emit_task_status(
             run_id=command.run_id,
-            node_id=execution.node_id,
-            task_key=str(execution.definition_task_id or execution.node_id or ""),
+            node_id=_node_id,
+            task_key=_task_key,
             new_status=TaskExecutionStatus.FAILED,
             old_status=TaskExecutionStatus.RUNNING,
         )

@@ -221,7 +221,7 @@ class TestTaskStatusChangedEmitter:
             ) as mock_asyncio,
         ):
             created: list = []
-            mock_asyncio.get_event_loop.return_value.create_task.side_effect = lambda coro: (
+            mock_asyncio.get_running_loop.return_value.create_task.side_effect = lambda coro: (
                 created.append(coro) or MagicMock()
             )
 
@@ -270,7 +270,7 @@ class TestTaskStatusChangedEmitter:
             ) as mock_asyncio,
         ):
             created: list = []
-            mock_asyncio.get_event_loop.return_value.create_task.side_effect = lambda coro: (
+            mock_asyncio.get_running_loop.return_value.create_task.side_effect = lambda coro: (
                 created.append(coro) or MagicMock()
             )
 
@@ -397,7 +397,7 @@ class TestThreadMessageCreatedEmitter:
             patch("ergon_core.core.runtime.services.communication_service.asyncio") as mock_asyncio,
         ):
             created: list = []
-            mock_asyncio.get_event_loop.return_value.create_task.side_effect = lambda coro: (
+            mock_asyncio.get_running_loop.return_value.create_task.side_effect = lambda coro: (
                 created.append(coro) or MagicMock()
             )
 

@@ -45,11 +45,20 @@ def _add_node(
 
 @pytest.fixture
 def event_loop():
-    """Provide an event loop for tests that need asyncio.get_event_loop()."""
+    """Provide an event loop for tests that need asyncio.get_running_loop()."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     yield loop
     loop.close()
+
+
+def _run_sync_in_loop(loop: asyncio.AbstractEventLoop, fn, *args, **kwargs):
+    """Run a synchronous callable inside the running loop so get_running_loop() succeeds."""
+
+    async def _wrapper():
+        return fn(*args, **kwargs)
+
+    return loop.run_until_complete(_wrapper())
 
 
 class TestMutationListener:
@@ -59,8 +68,7 @@ class TestMutationListener:
         repo.add_mutation_listener(listener)
         run_id = uuid4()
 
-        _add_node(repo, session, run_id, "A")
-        event_loop.run_until_complete(asyncio.sleep(0))
+        _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
 
         assert len(collected) == 1
         row = collected[0]
@@ -78,14 +86,18 @@ class TestMutationListener:
         repo.add_mutation_listener(listener)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "A")
-        event_loop.run_until_complete(asyncio.sleep(0))
+        node = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
         collected.clear()
 
-        repo.update_node_status(
-            session, run_id=run_id, node_id=node.id, new_status="running", meta=META
+        _run_sync_in_loop(
+            event_loop,
+            repo.update_node_status,
+            session,
+            run_id=run_id,
+            node_id=node.id,
+            new_status="running",
+            meta=META,
         )
-        event_loop.run_until_complete(asyncio.sleep(0))
 
         assert len(collected) == 1
         row = collected[0]
@@ -100,12 +112,13 @@ class TestMutationListener:
         repo.add_mutation_listener(listener)
         run_id = uuid4()
 
-        a = _add_node(repo, session, run_id, "A")
-        b = _add_node(repo, session, run_id, "B")
-        event_loop.run_until_complete(asyncio.sleep(0))
+        a = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
+        b = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "B")
         collected.clear()
 
-        edge = repo.add_edge(
+        edge = _run_sync_in_loop(
+            event_loop,
+            repo.add_edge,
             session,
             run_id,
             source_node_id=a.id,
@@ -113,7 +126,6 @@ class TestMutationListener:
             status="pending",
             meta=META,
         )
-        event_loop.run_until_complete(asyncio.sleep(0))
 
         assert len(collected) == 1
         row = collected[0]
@@ -131,11 +143,12 @@ class TestMutationListener:
         repo.add_mutation_listener(listener)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "A")
-        event_loop.run_until_complete(asyncio.sleep(0))
+        node = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
         collected.clear()
 
-        repo.update_node_field(
+        _run_sync_in_loop(
+            event_loop,
+            repo.update_node_field,
             session,
             run_id=run_id,
             node_id=node.id,
@@ -143,7 +156,6 @@ class TestMutationListener:
             value="updated desc",
             meta=META,
         )
-        event_loop.run_until_complete(asyncio.sleep(0))
 
         assert len(collected) == 1
         row = collected[0]
@@ -161,8 +173,7 @@ class TestMutationListener:
         repo.add_mutation_listener(listener_b)
         run_id = uuid4()
 
-        _add_node(repo, session, run_id, "A")
-        event_loop.run_until_complete(asyncio.sleep(0))
+        _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
 
         assert len(collected_a) == 1
         assert len(collected_b) == 1
@@ -179,8 +190,7 @@ class TestMutationListener:
         repo.add_mutation_listener(good_listener)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "A")
-        event_loop.run_until_complete(asyncio.sleep(0))
+        node = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
 
         assert node.task_key == "A"
         assert len(collected) == 1
