@@ -17,7 +17,7 @@ from ergon_core.core.providers.sandbox.manager import (
     DefaultSandboxManager,
 )
 
-from tests.state.fixtures.recording_event_sink import RecordingSandboxEventSink
+from tests.unit.fixtures.recording_event_sink import RecordingSandboxEventSink
 
 
 class _TestManagerA(BaseSandboxManager):

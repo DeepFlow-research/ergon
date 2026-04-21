@@ -60,7 +60,7 @@ jobs:
         run: pnpm -C ergon-dashboard run typecheck
 
   unit-tests:
-    name: "Unit + state tests (Python)"
+    name: "Unit tests (Python)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: lint-and-type-check
@@ -73,10 +73,8 @@ jobs:
       - name: Install project
         run: uv sync --frozen --all-packages --group dev
 
-      - name: Run fast test suites with coverage
-        env:
-          ERGON_DATABASE_URL: "sqlite:///test.db"
-        run: uv run pytest tests/state -v --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
+      - name: Run unit tests
+        run: uv run pytest tests/unit -v --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
