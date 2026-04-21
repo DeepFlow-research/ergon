@@ -35,6 +35,7 @@ from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
+from ergon_builtins.models.stub_constant_backend import resolve_stub
 from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.workers.baselines.manager_researcher_worker import ManagerResearcherWorker
 from ergon_builtins.workers.baselines.minif2f_react_worker import MiniF2FReActWorker
@@ -99,4 +100,5 @@ MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
     "openai": resolve_cloud,
     "anthropic": resolve_cloud,
     "google": resolve_cloud,
+    "stub": resolve_stub,
 }

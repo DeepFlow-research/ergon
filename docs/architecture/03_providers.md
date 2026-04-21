@@ -23,7 +23,7 @@ The providers layer is Ergon's boundary between runtime code and external execut
 
 `_BACKEND_REGISTRY` is a prefix-keyed dispatch table of resolver callables. `resolve_model_target` splits the target on its first colon, dispatches to the resolver, and returns a `ResolvedModel` wrapping either a `pydantic_ai.models.Model` instance or a passthrough string. Unknown prefixes fall through to a passthrough `ResolvedModel` — PydanticAI's own `infer_model` is invoked on use. Backends mutate the registry at import time; the builtins pack registers all four in a single loop at `ergon_builtins/ergon_builtins/registry.py:81`.
 
-The four prefixes registered today are `vllm:*` (local vLLM server via PydanticAI's `OpenAIChatModel`), `openai:*` / `anthropic:*` / `google:*` (passthrough to `infer_model`), and `transformers:*` (custom `TransformersModel` for TRL-trained checkpoints not served over vLLM).
+The prefixes registered today are `vllm:*` (local vLLM server via PydanticAI's `OpenAIChatModel`), `openai:*` / `anthropic:*` / `google:*` (passthrough to `infer_model`), `transformers:*` (custom `TransformersModel` for TRL-trained checkpoints not served over vLLM), and `stub:*` (fixed-marker resolver for zero-cost canary tests via `ergon_builtins/models/stub_constant_backend.py`; the suffix is accepted and ignored so `stub:constant`, `stub:anything` all resolve identically to a constant sentinel and never invoke a real model).
 
 Workers are expected to hold no hardcoded SDK client constructions (`AsyncOpenAI`, `anthropic.Client`, `genai.Client`). This is an invariant (Section 4), not a coincidence, and is currently honored — enforcement is grep discipline.
 
