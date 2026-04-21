@@ -161,6 +161,7 @@ unresolved-attribute = "warn"
 [[tool.ty.overrides]]
 include = [
     "**/core/api/runs.py",
+    "**/core/api/test_harness.py",
     "**/runtime/tracing.py",
     "**/runtime/services/**",
     "**/runtime/execution/**",
