@@ -31,6 +31,16 @@ class SmokeCriterionBase(Criterion):
                 weight=self.weight,
                 feedback=f"smoke criterion failed: {e}",
             )
+        except NotImplementedError:
+            raise
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
+            return CriterionResult(
+                name=self.name,
+                score=0.0,
+                passed=False,
+                weight=self.weight,
+                feedback=f"smoke criterion errored: {type(exc).__name__}: {exc}",
+            )
         return CriterionResult(
             name=self.name,
             score=1.0,
@@ -132,27 +142,30 @@ class SmokeCriterionBase(Criterion):
 
 
 class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
-    """Populated in PR 2 when the researchrubrics subworker lands."""
+    """Researchrubrics env smoke criterion.
+
+    `_verify_env_content` inherits the base's `NotImplementedError` default --
+    PR 2 overrides it with the researchrubrics file-content assertions.
+    """
 
     type_slug = "researchrubrics-smoke-criterion"
 
-    async def _verify_env_content(self, context, children, probes) -> None:  # noqa: ANN001
-        raise NotImplementedError("populated in PR 2")
-
 
 class MiniF2FSmokeCriterion(SmokeCriterionBase):
-    """Populated in PR 3."""
+    """MiniF2F env smoke criterion.
+
+    `_verify_env_content` inherits the base's `NotImplementedError` default --
+    PR 3 overrides it with the minif2f file-content assertions.
+    """
 
     type_slug = "minif2f-smoke-criterion"
 
-    async def _verify_env_content(self, context, children, probes) -> None:  # noqa: ANN001
-        raise NotImplementedError("populated in PR 3")
-
 
 class SweBenchSmokeCriterion(SmokeCriterionBase):
-    """Populated in PR 4."""
+    """SWE-bench env smoke criterion.
+
+    `_verify_env_content` inherits the base's `NotImplementedError` default --
+    PR 4 overrides it with the swebench file-content assertions.
+    """
 
     type_slug = "swebench-smoke-criterion"
-
-    async def _verify_env_content(self, context, children, probes) -> None:  # noqa: ANN001
-        raise NotImplementedError("populated in PR 4")

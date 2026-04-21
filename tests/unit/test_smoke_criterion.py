@@ -101,3 +101,15 @@ async def test_verify_env_content_is_abstract_default() -> None:
     # _verify_env_content is called after structural checks pass; the default raises.
     with pytest.raises(NotImplementedError):
         await crit.evaluate(_eval_context())
+
+
+@pytest.mark.asyncio
+async def test_fails_gracefully_when_puller_raises_unexpected_error() -> None:
+    crit = _patched(_PassthroughCriterion(name="smoke"), _healthy_children(), {})
+    crit._pull_children = AsyncMock(side_effect=RuntimeError("db connection closed"))
+    result = await crit.evaluate(_eval_context())
+    assert result.passed is False
+    assert result.score == 0.0
+    assert "errored" in (result.feedback or "").lower()
+    assert "RuntimeError" in (result.feedback or "")
+    assert "db connection closed" in (result.feedback or "")
