@@ -30,48 +30,30 @@ _HEADERS = {"X-Test-Secret": SECRET}
 _COHORT_PREFIX = "ci-smoke-"
 _COHORT = "ci-smoke-harness-test"
 
-_PROBE_UUID = "00000000-0000-0000-0000-000000000001"
-
-
 # ---------------------------------------------------------------------------
 # Connectivity helpers (extracted to avoid nested try blocks)
 # ---------------------------------------------------------------------------
 
 
-def _probe_api_reachable() -> None:
-    """Raise ``pytest.skip.Exception`` if the API server is not responding."""
-    try:
-        with httpx.Client(timeout=5.0) as client:
-            client.get(f"{API}/health")
-    except (httpx.ConnectError, httpx.ReadTimeout):
-        pytest.skip("API unreachable — skipping harness integration tests")
-
-
-def _harness_detail_ok(probe_resp: httpx.Response) -> bool:
-    """Return True if the 404 body looks like our app's harness 404 (not a missing route)."""
-    detail = probe_resp.json().get("detail", "")
-    return "not found" in detail.lower()
-
-
 def _probe_harness_mounted() -> None:
-    """Raise ``pytest.skip.Exception`` if the test-harness routes are not mounted."""
+    """Skip the session if the API is unreachable or the test-harness is not mounted.
+
+    Probes POST /api/test/write/reset without the secret header:
+      - harness mounted     → 401 (secret gate)
+      - harness not mounted → 404 (route missing)
+      - API unreachable     → ConnectError (caught and skipped)
+    """
     try:
         with httpx.Client(timeout=5.0) as client:
-            probe = client.get(f"{API}/api/test/read/run/{_PROBE_UUID}/state")
+            resp = client.post(f"{API}/api/test/write/reset", json={"cohort_prefix": "probe"})
     except (httpx.ConnectError, httpx.ReadTimeout):
         pytest.skip("API unreachable — skipping harness integration tests")
 
-    if probe.status_code != 404:
-        return  # 200 (?) or other — harness is up
-
-    # 404: distinguish "run not found" (harness mounted) from "route not found".
-    try:
-        ok = _harness_detail_ok(probe)
-    except (ValueError, KeyError):
-        ok = False
-
-    if not ok:
-        pytest.skip("Test harness not mounted — skipping harness integration tests")
+    if resp.status_code != 401:
+        pytest.skip(
+            f"Test harness not mounted (expected 401, got {resp.status_code}) "
+            "— skipping harness integration tests"
+        )
 
 
 def _probe_db_reachable() -> None:
@@ -92,7 +74,6 @@ def _probe_db_reachable() -> None:
 @pytest.fixture(scope="session", autouse=True)
 def _probe_connectivity() -> None:
     """Skip the entire session if the API or database is unreachable."""
-    _probe_api_reachable()
     _probe_harness_mounted()
     _probe_db_reachable()
 
@@ -127,43 +108,52 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         session.refresh(defn)
         defn_id = defn.id
 
-    # ── Step 2: seed a run via POST /api/test/write/run/seed ─────────────────
-    with httpx.Client(timeout=10.0) as client:
-        seed_resp = client.post(
-            f"{API}/api/test/write/run/seed",
-            json={
-                "experiment_definition_id": str(defn_id),
-                "cohort": _COHORT,
-                "status": "completed",
-            },
-            headers=_HEADERS,
-        )
+    try:
+        # ── Step 2: seed a run via POST /api/test/write/run/seed ─────────────────
+        with httpx.Client(timeout=10.0) as client:
+            seed_resp = client.post(
+                f"{API}/api/test/write/run/seed",
+                json={
+                    "experiment_definition_id": str(defn_id),
+                    "cohort": _COHORT,
+                    "status": "completed",
+                },
+                headers=_HEADERS,
+            )
 
-    assert seed_resp.status_code == 201, seed_resp.text
-    run_id = seed_resp.json()["run_id"]
-    assert run_id  # non-empty UUID string
+        assert seed_resp.status_code == 201, seed_resp.text
+        run_id = seed_resp.json()["run_id"]
+        assert run_id  # non-empty UUID string
 
-    # ── Step 3: read state via GET /api/test/read/run/{run_id}/state ─────────
-    with httpx.Client(timeout=10.0) as client:
-        state_resp = client.get(f"{API}/api/test/read/run/{run_id}/state")
+        # ── Step 3: read state via GET /api/test/read/run/{run_id}/state ─────────
+        with httpx.Client(timeout=10.0) as client:
+            state_resp = client.get(f"{API}/api/test/read/run/{run_id}/state")
 
-    assert state_resp.status_code == 200, state_resp.text
-    body = state_resp.json()
-    assert body["run_id"] == run_id
-    assert body["status"] == "completed"
+        assert state_resp.status_code == 200, state_resp.text
+        body = state_resp.json()
+        assert body["run_id"] == run_id
+        assert body["status"] == "completed"
 
-    # ── Step 4: reset via POST /api/test/write/reset ─────────────────────────
-    with httpx.Client(timeout=10.0) as client:
-        reset_resp = client.post(
-            f"{API}/api/test/write/reset",
-            json={"cohort_prefix": _COHORT_PREFIX},
-            headers=_HEADERS,
-        )
+        # ── Step 4: reset via POST /api/test/write/reset ─────────────────────────
+        with httpx.Client(timeout=10.0) as client:
+            reset_resp = client.post(
+                f"{API}/api/test/write/reset",
+                json={"cohort_prefix": _COHORT_PREFIX},
+                headers=_HEADERS,
+            )
 
-    assert reset_resp.status_code == 204, reset_resp.text
+        assert reset_resp.status_code == 204, reset_resp.text
 
-    # ── Step 5: confirm the run is gone ──────────────────────────────────────
-    with httpx.Client(timeout=10.0) as client:
-        gone_resp = client.get(f"{API}/api/test/read/run/{run_id}/state")
+        # ── Step 5: confirm the run is gone ──────────────────────────────────────
+        with httpx.Client(timeout=10.0) as client:
+            gone_resp = client.get(f"{API}/api/test/read/run/{run_id}/state")
 
-    assert gone_resp.status_code == 404, gone_resp.text
+        assert gone_resp.status_code == 404, gone_resp.text
+
+    finally:
+        # ── Cleanup: delete the ExperimentDefinition row to avoid leaks ──────────
+        with get_session() as session:
+            row = session.get(ExperimentDefinition, defn_id)
+            if row is not None:
+                session.delete(row)
+                session.commit()
