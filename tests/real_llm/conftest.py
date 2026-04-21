@@ -1,0 +1,38 @@
+"""Session-level fixtures for the real-LLM tier.
+
+Gates:
+  - ERGON_REAL_LLM=1 must be set (else the entire tier skips).
+  - OPENROUTER_API_KEY must be set (else real-LLM tests skip; stub canary
+    continues to run if it opts in explicitly).
+  - --assume-stack-up flag skips the docker-compose fixture and trusts the
+    developer to have the stack running (pnpm dev:test + postgres + inngest
+    + fastapi).
+
+Session fixtures (docker stack, OpenRouter budget) live here; per-benchmark
+fixtures live inside each test module.
+"""
+
+import os
+
+import pytest
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--assume-stack-up",
+        action="store_true",
+        default=False,
+        help="Skip docker-compose fixture; trust the developer to have the "
+        "full stack (dashboard + backend + postgres + inngest) running.",
+    )
+
+
+@pytest.fixture(scope="session")
+def real_llm_enabled() -> bool:
+    return os.environ.get("ERGON_REAL_LLM") == "1"
+
+
+@pytest.fixture(autouse=True)
+def _skip_if_not_enabled(real_llm_enabled: bool, request: pytest.FixtureRequest) -> None:
+    if request.node.get_closest_marker("real_llm") and not real_llm_enabled:
+        pytest.skip("ERGON_REAL_LLM=1 not set; real-LLM tier is opt-in")
