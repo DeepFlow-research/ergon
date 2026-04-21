@@ -1,32 +1,28 @@
 """Evaluator criterion that runs the SWE-Bench test harness.
 
-``SWEBenchTestCriterion`` spawns a fresh eval sandbox from the swebench
-template, re-runs the repo setup + install script, applies the gold
-``test_patch`` followed by the agent's patch, and then executes the
-official ``spec.eval_script``.  The captured stdout/stderr is written to
-a local tempfile and fed to :func:`swebench.harness.grading.get_eval_report`
-which parses ``FAIL_TO_PASS`` / ``PASS_TO_PASS`` outcomes and decides
-whether the instance is ``resolved``.
+``SWEBenchTestCriterion`` reuses the task's existing sandbox (via the
+``CriterionRuntime`` DI surface), re-runs the repo setup + install script,
+applies the gold ``test_patch`` followed by the agent's patch, and then
+executes the official ``spec.eval_script``.  The captured stdout/stderr is
+written to a local tempfile and fed to
+:func:`swebench.harness.grading.get_eval_report` which parses
+``FAIL_TO_PASS`` / ``PASS_TO_PASS`` outcomes and decides whether the
+instance is ``resolved``.
 
-Empty/whitespace patches short-circuit to score 0 so we never spawn a
-sandbox for work the agent didn't do.
+Empty/whitespace patches short-circuit to score 0 immediately (no sandbox
+access required).
 """
 
 import logging
 import shlex
 import tempfile
-import uuid
 from pathlib import Path
 from typing import Any, ClassVar
-from uuid import UUID
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
 
-from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
-    SWEBenchSandboxManager,
-)
 from ergon_builtins.workers.baselines.swebench_worker import _payload_to_swebench_row
 
 logger = logging.getLogger(__name__)
@@ -63,21 +59,6 @@ def get_eval_report(
     )
 
 
-async def _spawn_eval_sandbox(run_id: UUID) -> Any:  # slopcop: ignore[no-typing-any]
-    """Spin up a fresh eval sandbox from the swebench template.
-
-    Uses a new ``sandbox_key`` distinct from any worker sandbox so the
-    criterion runs in a clean environment.
-    """
-    manager = SWEBenchSandboxManager()
-    sandbox_key = uuid.uuid4()
-    await manager.create(sandbox_key=sandbox_key, run_id=run_id)
-    sandbox = manager.get_sandbox(sandbox_key)
-    if sandbox is None:
-        raise RuntimeError("Failed to acquire eval sandbox after create()")
-    return sandbox
-
-
 def _grade_with_log(
     *,
     spec: Any,  # slopcop: ignore[no-typing-any]
@@ -111,18 +92,6 @@ def _grade_with_log(
         Path(log_path).unlink(missing_ok=True)
 
 
-async def _safe_kill(sandbox: Any) -> None:  # slopcop: ignore[no-typing-any]
-    """Kill the sandbox, swallowing any provider-side errors.
-
-    Broken out of ``evaluate`` so its ``finally:`` isn't nested inside
-    another ``try:``.
-    """
-    try:
-        await sandbox.kill()
-    except Exception as exc:  # slopcop: ignore[no-broad-except]
-        logger.warning("Failed to kill eval sandbox: %s", exc)
-
-
 class SWEBenchTestCriterion(Criterion):
     """Scores 1.0 iff the agent patch resolves FAIL_TO_PASS and doesn't break PASS_TO_PASS."""
 
@@ -153,13 +122,29 @@ class SWEBenchTestCriterion(Criterion):
         row = _payload_to_swebench_row(payload)
         spec = make_test_spec(row)
 
-        sandbox = await _spawn_eval_sandbox(context.run_id)
-        try:
-            return await self._run_and_grade(
-                sandbox=sandbox, spec=spec, payload=payload, patch_text=patch_text
+        if context.runtime is None:
+            raise RuntimeError(
+                "SWEBenchTestCriterion requires a CriterionRuntime; "
+                "none was injected into EvaluationContext."
             )
-        finally:
-            await _safe_kill(sandbox)
+
+        await context.runtime.ensure_sandbox()
+        sandbox = context.runtime.sandbox_manager.get_sandbox(  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]
+            context.run_id
+        )
+        if sandbox is None:
+            return CriterionResult(
+                name=self.name,
+                score=0.0,
+                passed=False,
+                weight=self.weight,
+                feedback="Sandbox unavailable after ensure_sandbox().",
+                metadata={"error": "sandbox_unavailable"},
+            )
+
+        return await self._run_and_grade(
+            sandbox=sandbox, spec=spec, payload=payload, patch_text=patch_text
+        )
 
     async def _run_and_grade(
         self,

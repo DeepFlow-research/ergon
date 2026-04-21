@@ -35,13 +35,32 @@ def _task() -> BenchmarkTask:
     )
 
 
+def _mock_runtime(sandbox: object | None = None) -> MagicMock:
+    """Return a mock CriterionRuntime with sandbox_manager wired up."""
+    mock_sandbox = sandbox or _mock_sandbox()
+    runtime = MagicMock()
+    runtime.ensure_sandbox = AsyncMock()
+    runtime.sandbox_manager = MagicMock()
+    runtime.sandbox_manager.get_sandbox.return_value = mock_sandbox
+    return runtime
+
+
+def _mock_sandbox() -> AsyncMock:
+    sb = AsyncMock()
+    sb.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="log", stderr=""))
+    sb.files.write = AsyncMock()
+    return sb
+
+
 def _ctx(
     *,
     output: str = "PATCH",
     artifacts: dict[str, object] | None = None,
+    runtime: object | None = None,
 ) -> EvaluationContext:
+    run_id = uuid4()
     return EvaluationContext(
-        run_id=uuid4(),
+        run_id=run_id,
         task_id=uuid4(),
         execution_id=uuid4(),
         task=_task(),
@@ -50,6 +69,7 @@ def _ctx(
             success=True,
             artifacts=artifacts if artifacts is not None else {"patch": output},
         ),
+        runtime=runtime,
     )
 
 
@@ -65,16 +85,10 @@ async def test_criterion_returns_score_0_for_empty_patch() -> None:
 
 @pytest.mark.asyncio
 async def test_criterion_scores_1_when_report_resolved() -> None:
-    sandbox = AsyncMock()
-    sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="log", stderr=""))
-    sandbox.files.write = AsyncMock()
-    sandbox.kill = AsyncMock()
+    sandbox = _mock_sandbox()
+    runtime = _mock_runtime(sandbox)
 
     with (
-        patch(
-            "ergon_builtins.benchmarks.swebench_verified.criterion._spawn_eval_sandbox",
-            AsyncMock(return_value=sandbox),
-        ),
         patch(
             "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
             return_value=MagicMock(
@@ -96,25 +110,19 @@ async def test_criterion_scores_1_when_report_resolved() -> None:
         ),
     ):
         crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
-        result = await crit.evaluate(_ctx())
+        result = await crit.evaluate(_ctx(runtime=runtime))
 
     assert result.score == 1.0
     assert result.passed is True
-    sandbox.kill.assert_awaited()
+    runtime.ensure_sandbox.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_criterion_scores_0_when_report_unresolved() -> None:
-    sandbox = AsyncMock()
-    sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="log", stderr=""))
-    sandbox.files.write = AsyncMock()
-    sandbox.kill = AsyncMock()
+    sandbox = _mock_sandbox()
+    runtime = _mock_runtime(sandbox)
 
     with (
-        patch(
-            "ergon_builtins.benchmarks.swebench_verified.criterion._spawn_eval_sandbox",
-            AsyncMock(return_value=sandbox),
-        ),
         patch(
             "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
             return_value=MagicMock(
@@ -136,7 +144,7 @@ async def test_criterion_scores_0_when_report_unresolved() -> None:
         ),
     ):
         crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
-        result = await crit.evaluate(_ctx())
+        result = await crit.evaluate(_ctx(runtime=runtime))
 
     assert result.score == 0.0
     assert result.passed is False
@@ -144,16 +152,10 @@ async def test_criterion_scores_0_when_report_unresolved() -> None:
 
 @pytest.mark.asyncio
 async def test_criterion_applies_test_patch_then_agent_patch() -> None:
-    sandbox = AsyncMock()
-    sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="log", stderr=""))
-    sandbox.files.write = AsyncMock()
-    sandbox.kill = AsyncMock()
+    sandbox = _mock_sandbox()
+    runtime = _mock_runtime(sandbox)
 
     with (
-        patch(
-            "ergon_builtins.benchmarks.swebench_verified.criterion._spawn_eval_sandbox",
-            AsyncMock(return_value=sandbox),
-        ),
         patch(
             "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
             return_value=MagicMock(
@@ -167,7 +169,7 @@ async def test_criterion_applies_test_patch_then_agent_patch() -> None:
         ),
     ):
         crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
-        await crit.evaluate(_ctx())
+        await crit.evaluate(_ctx(runtime=runtime))
 
     # Two files were written to the sandbox: /tmp/test.patch and /tmp/agent.patch,
     # in that order.
@@ -179,3 +181,37 @@ async def test_criterion_applies_test_patch_then_agent_patch() -> None:
     written_contents = {call.args[0]: call.args[1] for call in sandbox.files.write.call_args_list}
     assert b"TP" in written_contents["/tmp/test.patch"]
     assert b"PATCH" in written_contents["/tmp/agent.patch"]
+
+
+@pytest.mark.asyncio
+async def test_criterion_raises_when_no_runtime_injected() -> None:
+    """Without a runtime, evaluate raises RuntimeError (not AttributeError)."""
+    crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
+    ctx = _ctx(output="some patch text", runtime=None)
+    with (
+        patch(
+            "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
+            return_value=MagicMock(install_repo_script="echo", eval_script="echo"),
+        ),
+        pytest.raises(RuntimeError, match="CriterionRuntime"),
+    ):
+        await crit.evaluate(ctx)
+
+
+@pytest.mark.asyncio
+async def test_criterion_returns_sandbox_unavailable_when_get_sandbox_returns_none() -> None:
+    """If runtime.sandbox_manager.get_sandbox returns None, criterion returns error result."""
+    runtime = MagicMock()
+    runtime.ensure_sandbox = AsyncMock()
+    runtime.sandbox_manager.get_sandbox.return_value = None
+
+    with patch(
+        "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
+        return_value=MagicMock(install_repo_script="echo", eval_script="echo"),
+    ):
+        crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
+        result = await crit.evaluate(_ctx(runtime=runtime))
+
+    assert result.score == 0.0
+    assert result.passed is False
+    assert "sandbox_unavailable" in str(result.metadata)
