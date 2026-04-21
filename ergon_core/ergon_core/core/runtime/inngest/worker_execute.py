@@ -66,6 +66,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         task_slug=payload.task_slug,
         instance_key=str(payload.execution_id),
         description=payload.task_description,
+        task_payload=payload.task_payload,
     )
 
     worker_context = WorkerContext(
@@ -75,6 +76,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         execution_id=payload.execution_id,
         sandbox_id=payload.sandbox_id,
         node_id=payload.node_id,
+        metadata=payload.task_payload,
     )
 
     context_event_repo = ContextEventRepository()

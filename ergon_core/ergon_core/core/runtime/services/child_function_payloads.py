@@ -5,7 +5,7 @@ to its child functions. They must allow extra fields because Inngest
 injects `_inngest` metadata into event data.
 """
 
-from typing import ClassVar
+from typing import Any, ClassVar
 from uuid import UUID
 
 from ergon_core.core.runtime.events.base import InngestEventContract
@@ -39,6 +39,7 @@ class WorkerExecuteRequest(InngestEventContract):
     model_target: str | None = None
     benchmark_type: str
     node_id: UUID | None = None
+    task_payload: dict[str, Any] = {}  # slopcop: ignore[no-typing-any]
 
 
 class PersistOutputsRequest(InngestEventContract):

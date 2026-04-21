@@ -118,6 +118,15 @@ class TaskExecutionService:
                 f"Definition {command.definition_id} not found",
             )
 
+            # Look up the originating ExperimentDefinitionTask (if any) to
+            # propagate task_payload through to the worker. command.task_id
+            # is always a UUID (not Optional); the row may not exist for
+            # purely dynamic subtasks, in which case we default to {}.
+            task_row = session.get(ExperimentDefinitionTask, command.task_id)
+            task_payload: dict[str, object] = (
+                dict(task_row.task_payload or {}) if task_row is not None else {}
+            )
+
             execution = RunTaskExecution(
                 run_id=command.run_id,
                 node_id=command.node_id,
@@ -163,6 +172,7 @@ class TaskExecutionService:
                 model_target=worker_row.model_target,
                 execution_id=execution.id,
                 node_id=command.node_id,
+                task_payload=task_payload,
             )
 
     # -- Definition path (static tasks) ---
@@ -255,6 +265,7 @@ class TaskExecutionService:
                 model_target=model_target,
                 execution_id=execution.id,
                 node_id=resolved_node_id,
+                task_payload=dict(task.task_payload or {}),
             )
 
     # -- Finalization (unchanged) ---

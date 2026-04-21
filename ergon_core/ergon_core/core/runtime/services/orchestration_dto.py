@@ -6,6 +6,7 @@ Adapted from ref: definition_id replaces experiment_id.
 
 import sys
 from datetime import datetime
+from typing import Any
 
 if sys.version_info >= (3, 11):
     from enum import StrEnum
@@ -76,6 +77,7 @@ class PreparedTaskExecution(BaseModel):
     node_id: UUID | None = None
     skipped: bool = False
     skip_reason: str | None = None
+    task_payload: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
 
 class FinalizeTaskExecutionCommand(BaseModel):

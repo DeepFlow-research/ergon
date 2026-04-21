@@ -91,6 +91,8 @@ benchmark-run-start ─► workflow/started                               │  f
 
 Three fan-out levels, each owned by a distinct function: `workflow-start` fans out ready tasks, `task-check-evaluators` fans out per-binding evaluator runs, and each evaluator's own criteria are executed as durable steps inside `evaluate-task-run`. The only synchronization point is `is_workflow_complete_v2` / `is_workflow_failed_v2`, which `task-propagate` consults on every terminal to decide whether to emit `workflow/completed` or `workflow/failed`.
 
+Per-task payload propagation: benchmark composition keys (e.g. `toolkit_benchmark`) live on `ExperimentDefinitionTask.task_payload` in Postgres, and the dispatch pipeline carries them verbatim through to the worker. `TaskExecutionService.prepare()` reads the row and populates `PreparedTaskExecution.task_payload`; `execute_task` forwards it into the `WorkerExecuteRequest` it step-invokes; and `worker-execute` publishes it onto both `BenchmarkTask.task_payload` (the benchmark-owned typed container) and `WorkerContext.metadata` (the per-execution runtime state). Workers such as `ReActGenericWorker` rely on `ctx.metadata["toolkit_benchmark"]` for slug resolution, so this chain must stay end-to-end intact — any new DTO hop added between `prepare()` and `worker-execute` has to carry the field through, not default it away.
+
 Dashboard delivery hangs off state mutation (see `05_dashboard.md`); it is not a gating concern for runtime correctness — if the dashboard is down, runs still finish.
 
 ## 4. Invariants

@@ -155,6 +155,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 model_target=prepared.model_target,
                 benchmark_type=prepared.benchmark_type,
                 node_id=prepared.node_id,
+                task_payload=prepared.task_payload,
             ).model_dump(),
         )
 
