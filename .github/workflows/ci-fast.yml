@@ -76,10 +76,13 @@ jobs:
       - name: Run fast test suites with coverage
         env:
           ERGON_DATABASE_URL: "sqlite:///test.db"
-          # Python 3.12+ sys.monitoring backend — 5-10x faster than the default
+          # Python 3.12+ sys.monitoring backend — faster than the default
           # sys.settrace() tracer for ORM-heavy workloads like SQLAlchemy.
           COVERAGE_CORE: sysmon
-        run: uv run pytest tests/state -v --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
+        # pytest-xdist parallelises across runner cores. `--dist=loadfile`
+        # keeps all tests in a single file on one worker, which matches the
+        # module-scoped engine fixture in tests/state/conftest.py.
+        run: uv run pytest tests/state -n auto --dist=loadfile --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
