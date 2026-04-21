@@ -40,7 +40,8 @@ def _skip_if_not_enabled(real_llm_enabled: bool, request: pytest.FixtureRequest)
 
 # Re-export fixtures so pytest discovers them session-wide.
 from tests.real_llm.fixtures.openrouter_budget import (  # noqa: E402, F401
-    _budget_gate,
+    _maybe_enforce_budget,
+    enforce_openrouter_budget,
     openrouter_budget,
 )
 from tests.real_llm.fixtures.harness_client import (  # noqa: E402, F401

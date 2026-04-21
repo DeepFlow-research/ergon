@@ -231,4 +231,5 @@ markers = [
     "e2e: end-to-end tests requiring full Docker stack",
     "integration: integration tests requiring a database but no Docker stack",
     "real_llm: real-LLM end-to-end tests (requires ERGON_REAL_LLM=1 + OPENROUTER_API_KEY)",
+    "real_llm_billing: real-LLM tests that hit OpenRouter and spend budget",
 ]
