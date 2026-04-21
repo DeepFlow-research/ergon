@@ -99,6 +99,21 @@ service semantics; must be rewritten against real Postgres + Inngest:
 |---|---|
 | `test_research_rubrics_toolkit.py` | Uses fake `AsyncSandbox` stub + SQLite session; classify as graph |
 
+**addendum (2026-04-21) — files added to `tests/state/` after initial RFC classification:**
+
+Six files landed in `tests/state/` after this RFC was first drafted (via PRs #11, #13, #14, #15, and earlier). Classification below based on `session` fixture usage and factory imports:
+
+| File | Classification | Rationale |
+|---|---|---|
+| `test_benchmark_contract.py` | **pure → unit** | Zero `session` fixture references; tests ABC contract shape |
+| `test_criterion_runtime_di.py` | **pure → unit** | DI container construction assertions; no DB round-trip |
+| `test_sandbox_event_sink_activation.py` | **pure → unit** | Process-level class setter activation check; uses `RecordingSandboxEventSink` fixture, no DB |
+| `test_dashboard_emitter_wiring.py` | **graph → integration** | 13 `session: Session` references across 8 test classes; exercises emitter wiring through real services |
+| `test_resource_content_api.py` | **graph → integration** | 17 session references; exercises REST API against DB |
+| `test_legacy_wal_absent.py` | **graph → integration** | Uses `session` fixture to probe schema via `pg_tables` / `sqlite_master` — a sentinel test that belongs on the real Postgres tier post-reset |
+
+Updated totals: **14 pure** (→ `tests/unit/`), **30 graph** (→ `tests/integration/`), 44 total files in `tests/state/`.
+
 ### 1.3 CI shape today
 
 `ci-fast.yml` has three jobs:
@@ -233,9 +248,11 @@ tests/
 │   │   └── test_<slug>_smoke.py
 │   └── test_*.py           ← graph/service: real Postgres, real Inngest
 │
-└── e2e/                    ← unchanged
-    ├── conftest.py         ← unchanged
-    └── test_*.py           ← full Docker + optional E2B
+└── e2e/                    ← DELETED in PR 4; rebuilt under companion RFC
+    ├── conftest.py         ← deleted
+    └── test_*.py           ← deleted (full Docker + optional E2B tier to be
+                              redesigned from scratch under companion RFC
+                              `2026-04-21-e2e-smoke-coverage-rewrite.md`)
 ```
 
 ### 3.2 Decision rule for each tier
@@ -678,17 +695,21 @@ Phased into four PRs. Each PR must leave CI green before the next lands.
 
 **PR 3 acceptance gate:** All 27 rewritten tests pass against Postgres in CI. `integration-tests` job is green. `tests/state/` still exists (delete in PR 4).
 
-### PR 4 — Tombstone `tests/state/`, update architecture docs
+### PR 4 — Tombstone `tests/state/` + `tests/e2e/`, update architecture docs
 
 | Step | What | Files touched |
 |---|---|---|
 | 1 | Delete `tests/state/` | DELETE `tests/state/` (entire directory) |
-| 2 | Remove `test:be:state` and `test:be:all` state references from `package.json` | MODIFY `package.json` |
-| 3 | Update `pyproject.toml` testpaths: remove any implicit `tests` catch-all | MODIFY `pyproject.toml` |
-| 4 | Update `docs/architecture/07_testing.md`: remove "under development" hedges, state new invariants as current, remove fast-tier invariant, update code map | MODIFY `docs/architecture/07_testing.md` |
-| 5 | Mark related bugs as fixed if resolved in parallel | MODIFY relevant bug files |
+| 2 | Delete `tests/e2e/` for a clean slate — retired tier is rebuilt from scratch under companion RFC `2026-04-21-e2e-smoke-coverage-rewrite.md` | DELETE `tests/e2e/` (entire directory) |
+| 3 | Remove `test:be:state`, `test:be:e2e`, and `test:be:all` state references from `package.json` | MODIFY `package.json` |
+| 4 | Remove `tests/e2e/` from `pyproject.toml` `testpaths` and `ci-fast.yml` / `e2e-benchmarks.yml`; deactivate `e2e-benchmarks.yml` (keep file, gate with `if: false` or a workflow-disabled sentinel until the companion RFC restores it) | MODIFY `pyproject.toml`, `.github/workflows/ci-fast.yml`, `.github/workflows/e2e-benchmarks.yml` |
+| 5 | Update `pyproject.toml` testpaths: remove any implicit `tests` catch-all | MODIFY `pyproject.toml` |
+| 6 | Update `docs/architecture/07_testing.md`: remove "under development" hedges, state new invariants as current, remove fast-tier invariant, note that e2e tier is temporarily absent pending companion RFC, update code map | MODIFY `docs/architecture/07_testing.md` |
+| 7 | Mark related bugs as fixed if resolved in parallel | MODIFY relevant bug files |
 
-**PR 4 acceptance gate:** `tests/state/` does not exist. `ci-fast.yml` all jobs green. `test:be:fast` runs `tests/unit/` only.
+**PR 4 acceptance gate:** `tests/state/` and `tests/e2e/` do not exist. `ci-fast.yml` all jobs green. `test:be:fast` runs `tests/unit/` only. `e2e-benchmarks.yml` is dormant (does not schedule or run) until the companion e2e-rewrite RFC lands.
+
+**Coverage-gap note:** Between PR 4 landing and the companion e2e-rewrite RFC's first PR landing, main has **zero end-to-end coverage** for the CLI → Inngest → sandbox pipeline. This is an intentional clean-slate tradeoff chosen over gradual displacement. Integration tier (real Postgres + real Inngest) catches most regressions in this window; CLI-surface regressions will not be caught until the companion RFC lands its first smoke.
 
 ---
 
@@ -766,6 +787,7 @@ Phased into four PRs. Each PR must leave CI green before the next lands.
 | File/Directory | Reason |
 |---|---|
 | `tests/state/` (entire directory) | Replaced by `tests/unit/` + `tests/integration/` |
+| `tests/e2e/` (entire directory) | Retired for clean-slate rebuild under companion RFC `2026-04-21-e2e-smoke-coverage-rewrite.md`. `e2e-benchmarks.yml` is disabled (not deleted) in the same PR so the companion RFC can restore it without re-creating the workflow file. |
 
 ---
 
