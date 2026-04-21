@@ -64,18 +64,37 @@ class BaseSandboxManager(ABC):
     _run_ids: dict[UUID, UUID] = {}
     _display_task_ids: dict[UUID, UUID] = {}
     _creation_locks: dict[UUID, asyncio.Lock] = {}
-    _event_sink: SandboxEventSink
+    _event_sink: SandboxEventSink = NoopSandboxEventSink()
 
     def __new__(cls, *args: object, **kwargs: object):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    _event_sink: SandboxEventSink = NoopSandboxEventSink()
+    def __init__(self) -> None:
+        # Sink is configured process-wide via set_event_sink() in app lifespan.
+        # Do not accept event_sink= here; the singleton pattern (see __new__ above)
+        # makes constructor-level sink assignment a last-write-wins stomp on shared
+        # class state. Tests must use set_event_sink() in fixture setup.
+        pass
 
-    def __init__(self, event_sink: SandboxEventSink | None = None):
-        if event_sink is not None:
-            self._event_sink = event_sink
+    @classmethod
+    def set_event_sink(cls, sink: SandboxEventSink) -> None:
+        """Install a process-level event sink on this manager subclass.
+
+        Called once during FastAPI lifespan startup for each concrete subclass.
+        Tests may call this in fixture setup and reset with
+        ``NoopSandboxEventSink()`` in teardown.
+
+        Assigns directly to ``cls._event_sink`` (not to the base class
+        attribute), so each subclass carries its own sink and subclasses can
+        be individually targeted in tests.
+
+        Production callers MUST NOT call this after startup. The only
+        sanctioned call site is inside the ``lifespan`` context manager in
+        ``ergon_core/ergon_core/core/api/app.py``.
+        """
+        cls._event_sink = sink
 
     def _get_raw_sandbox(self, task_id: UUID) -> "AsyncSandbox":
         if task_id not in self._sandboxes:
