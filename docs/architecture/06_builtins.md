@@ -47,6 +47,13 @@ runnable — not a catalog of registered implementations.
     `register_model_backend(prefix, resolver)` at import time.
   - Freeze status: stable API; adding a backend is additive.
 
+- DI factories and tools.
+  - `benchmark_toolkit_composer` is a DI factory that, given a benchmark slug and
+    a `WorkerContext`, returns the union of tools the generic ReAct worker
+    (`react-generic` slug) needs to exercise that benchmark. It is the mechanism
+    by which the real-LLM debug harness (`tests/real_llm/`) drives one worker
+    against all three benchmark sandboxes without per-benchmark specialised workers.
+
 - Onboarding profile.
   - Today a hand-maintained `BENCHMARK_DEPS` dict in
     `ergon_cli/onboarding/profile.py` declares each benchmark's E2B

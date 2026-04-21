@@ -38,6 +38,16 @@ gate and the CI workflow both dispatch by directory.
 | Fast — stub-worker pipeline | `tests/integration/` | SQLite, no Inngest |
 | E2E | `tests/e2e/` | Docker + Inngest + optional E2B |
 | Frontend | `ergon-dashboard/tests/e2e/` | Playwright (not in CI) |
+| real-LLM | `tests/real_llm/` | Docker + Inngest + Postgres + Playwright; opt-in via `ERGON_REAL_LLM=1` + `OPENROUTER_API_KEY`; manual dispatch only (not in CI) |
+
+### real-LLM tier
+
+Optional pytest tier at `tests/real_llm/`, gated by `ERGON_REAL_LLM=1` and
+`OPENROUTER_API_KEY`, runs real Sonnet-class experiments against a full local
+stack (backend + dashboard + Inngest + Postgres) via `docker-compose.real-llm.yml`.
+Assertions combine Postgres state, `/api/test/*` harness endpoints, and
+Playwright dashboard checks. An `OpenRouterBudget` session fixture gates total
+spend. This tier is a bug-hunting instrument; it is not required for CI.
 
 ## 3. Control flow — choosing a tier
 
