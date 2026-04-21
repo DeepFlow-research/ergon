@@ -21,7 +21,7 @@ from sqlmodel import select
 
 
 class WorkflowInitializationService:
-    def initialize(self, command: InitializeWorkflowCommand) -> InitializedWorkflow:
+    async def initialize(self, command: InitializeWorkflowCommand) -> InitializedWorkflow:
         with get_session() as session:
             definition = require_not_none(
                 session.get(ExperimentDefinition, command.definition_id),
@@ -64,7 +64,7 @@ class WorkflowInitializationService:
             session.add(run_record)
             session.commit()
 
-            ready_ids = get_initial_ready_tasks(
+            ready_ids = await get_initial_ready_tasks(
                 session,
                 command.run_id,
                 command.definition_id,

@@ -4,7 +4,6 @@ Verifies that listeners registered via add_mutation_listener() are
 called with the correct RunGraphMutation row after each graph operation.
 """
 
-import asyncio
 from uuid import uuid4
 
 import pytest
@@ -16,7 +15,7 @@ from sqlmodel import Session
 META = MutationMeta(actor="test-actor", reason="listener-test")
 
 
-def _make_collecting_listener() -> tuple[list[RunGraphMutation], "asyncio.Future[None]"]:
+def _make_collecting_listener() -> tuple[list[RunGraphMutation], "object"]:
     """Return (collected_rows, listener_coroutine)."""
     collected: list[RunGraphMutation] = []
 
@@ -26,13 +25,13 @@ def _make_collecting_listener() -> tuple[list[RunGraphMutation], "asyncio.Future
     return collected, listener  # type: ignore[return-value]
 
 
-def _add_node(
+async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
     key: str,
 ):
-    return repo.add_node(
+    return await repo.add_node(
         session,
         run_id,
         task_key=key,
@@ -43,32 +42,14 @@ def _add_node(
     )
 
 
-@pytest.fixture
-def event_loop():
-    """Provide an event loop for tests that need asyncio.get_running_loop()."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
-
-
-def _run_sync_in_loop(loop: asyncio.AbstractEventLoop, fn, *args, **kwargs):
-    """Run a synchronous callable inside the running loop so get_running_loop() succeeds."""
-
-    async def _wrapper():
-        return fn(*args, **kwargs)
-
-    return loop.run_until_complete(_wrapper())
-
-
 class TestMutationListener:
-    def test_add_node_fires_listener(self, session: Session, event_loop: asyncio.AbstractEventLoop):
+    async def test_add_node_fires_listener(self, session: Session):
         collected, listener = _make_collecting_listener()
         repo = WorkflowGraphRepository()
         repo.add_mutation_listener(listener)
         run_id = uuid4()
 
-        _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
+        await _add_node(repo, session, run_id, "A")
 
         assert len(collected) == 1
         row = collected[0]
@@ -78,20 +59,16 @@ class TestMutationListener:
         assert row.new_value["task_key"] == "A"
         assert row.new_value["instance_key"] == "inst-0"
 
-    def test_update_node_status_fires_listener(
-        self, session: Session, event_loop: asyncio.AbstractEventLoop
-    ):
+    async def test_update_node_status_fires_listener(self, session: Session):
         collected, listener = _make_collecting_listener()
         repo = WorkflowGraphRepository()
         repo.add_mutation_listener(listener)
         run_id = uuid4()
 
-        node = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
+        node = await _add_node(repo, session, run_id, "A")
         collected.clear()
 
-        _run_sync_in_loop(
-            event_loop,
-            repo.update_node_status,
+        await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=node.id,
@@ -106,19 +83,17 @@ class TestMutationListener:
         assert row.new_value["status"] == "running"
         assert row.old_value["status"] == "pending"
 
-    def test_add_edge_fires_listener(self, session: Session, event_loop: asyncio.AbstractEventLoop):
+    async def test_add_edge_fires_listener(self, session: Session):
         collected, listener = _make_collecting_listener()
         repo = WorkflowGraphRepository()
         repo.add_mutation_listener(listener)
         run_id = uuid4()
 
-        a = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
-        b = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "B")
+        a = await _add_node(repo, session, run_id, "A")
+        b = await _add_node(repo, session, run_id, "B")
         collected.clear()
 
-        edge = _run_sync_in_loop(
-            event_loop,
-            repo.add_edge,
+        edge = await repo.add_edge(
             session,
             run_id,
             source_node_id=a.id,
@@ -135,20 +110,16 @@ class TestMutationListener:
         assert row.new_value["source_node_id"] == str(a.id)
         assert row.new_value["target_node_id"] == str(b.id)
 
-    def test_update_node_field_fires_listener(
-        self, session: Session, event_loop: asyncio.AbstractEventLoop
-    ):
+    async def test_update_node_field_fires_listener(self, session: Session):
         collected, listener = _make_collecting_listener()
         repo = WorkflowGraphRepository()
         repo.add_mutation_listener(listener)
         run_id = uuid4()
 
-        node = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
+        node = await _add_node(repo, session, run_id, "A")
         collected.clear()
 
-        _run_sync_in_loop(
-            event_loop,
-            repo.update_node_field,
+        await repo.update_node_field(
             session,
             run_id=run_id,
             node_id=node.id,
@@ -163,9 +134,7 @@ class TestMutationListener:
         assert row.new_value["field"] == "description"
         assert row.new_value["value"] == "updated desc"
 
-    def test_multiple_listeners_all_called(
-        self, session: Session, event_loop: asyncio.AbstractEventLoop
-    ):
+    async def test_multiple_listeners_all_called(self, session: Session):
         collected_a, listener_a = _make_collecting_listener()
         collected_b, listener_b = _make_collecting_listener()
         repo = WorkflowGraphRepository()
@@ -173,14 +142,12 @@ class TestMutationListener:
         repo.add_mutation_listener(listener_b)
         run_id = uuid4()
 
-        _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
+        await _add_node(repo, session, run_id, "A")
 
         assert len(collected_a) == 1
         assert len(collected_b) == 1
 
-    def test_failing_listener_does_not_break_mutation(
-        self, session: Session, event_loop: asyncio.AbstractEventLoop
-    ):
+    async def test_failing_listener_does_not_break_mutation(self, session: Session):
         async def bad_listener(row: RunGraphMutation) -> None:
             raise RuntimeError("boom")
 
@@ -190,7 +157,7 @@ class TestMutationListener:
         repo.add_mutation_listener(good_listener)
         run_id = uuid4()
 
-        node = _run_sync_in_loop(event_loop, _add_node, repo, session, run_id, "A")
+        node = await _add_node(repo, session, run_id, "A")
 
         assert node.task_key == "A"
         assert len(collected) == 1

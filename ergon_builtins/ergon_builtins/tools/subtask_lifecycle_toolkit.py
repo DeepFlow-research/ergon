@@ -86,7 +86,7 @@ class SubtaskLifecycleToolkit:
             try:
                 deps = [NodeId(UUID(s)) for s in (depends_on or [])]
                 with get_session() as session:
-                    result = mgmt.add_subtask(
+                    result = await mgmt.add_subtask(
                         session,
                         AddSubtaskCommand(
                             run_id=run_id,
@@ -112,7 +112,7 @@ class SubtaskLifecycleToolkit:
             try:
                 specs = [SubtaskSpec.model_validate(s) for s in subtasks]
                 with get_session() as session:
-                    result = mgmt.plan_subtasks(
+                    result = await mgmt.plan_subtasks(
                         session,
                         PlanSubtasksCommand(
                             run_id=run_id,
@@ -133,7 +133,7 @@ class SubtaskLifecycleToolkit:
             """Cancel a subtask. Any descendants are cancelled via engine cascade."""
             try:
                 with get_session() as session:
-                    result = mgmt.cancel_task(
+                    result = await mgmt.cancel_task(
                         session,
                         CancelTaskCommand(run_id=run_id, node_id=NodeId(UUID(node_id))),
                     )
@@ -155,7 +155,7 @@ class SubtaskLifecycleToolkit:
             """
             try:
                 with get_session() as session:
-                    result = mgmt.refine_task(
+                    result = await mgmt.refine_task(
                         session,
                         RefineTaskCommand(
                             run_id=run_id,
@@ -182,7 +182,7 @@ class SubtaskLifecycleToolkit:
             """
             try:
                 with get_session() as session:
-                    result = mgmt.restart_task(
+                    result = await mgmt.restart_task(
                         session,
                         RestartTaskCommand(
                             run_id=run_id,

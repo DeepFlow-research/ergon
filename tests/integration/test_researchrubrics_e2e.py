@@ -11,7 +11,6 @@ Verifies that RunResource rows exist, the criterion ran, and the run
 completes successfully.
 """
 
-import asyncio
 import hashlib
 from pathlib import Path
 
@@ -134,7 +133,7 @@ class _FakeSandbox:
 # ---------------------------------------------------------------------------
 
 
-def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
+async def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
     """Golden-path E2E: smoke benchmark -> stub worker -> publisher -> criterion."""
     ensure_db()
 
@@ -159,7 +158,7 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
     # ── Create Run + Initialize ────────────────────────────────────
     run = create_run(persisted)
     init_svc = WorkflowInitializationService()
-    initialized = init_svc.initialize(
+    initialized = await init_svc.initialize(
         InitializeWorkflowCommand(
             run_id=run.id,
             definition_id=persisted.definition_id,
@@ -176,7 +175,7 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
     blob_root.mkdir()
 
     for task_desc in initialized.initial_ready_tasks:
-        prepared = exec_svc.prepare(
+        prepared = await exec_svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=run.id,
                 definition_id=persisted.definition_id,
@@ -186,11 +185,9 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
 
         # Write the stub report to the fake sandbox.
         report_content = STUB_REPORT_CONTENT.encode("utf-8")
-        asyncio.run(
-            fake_sandbox.files.write(
-                "/workspace/final_output/report.md",
-                report_content,
-            )
+        await fake_sandbox.files.write(
+            "/workspace/final_output/report.md",
+            report_content,
         )
 
         # Run publisher.sync() against the fake sandbox.
@@ -200,7 +197,7 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
             task_execution_id=prepared.execution_id,
             blob_root=blob_root,
         )
-        created = asyncio.run(publisher.sync())
+        created = await publisher.sync()
         assert len(created) >= 1, "Publisher should have created at least one resource"
         assert created[0].kind == RunResourceKind.REPORT
 
@@ -209,7 +206,7 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
         assert created[0].content_hash == expected_hash
 
         # Finalize the task execution.
-        exec_svc.finalize_success(
+        await exec_svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
                 output_text="Stub report written",
@@ -220,7 +217,7 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
     # ── Propagate ──────────────────────────────────────────────────
     prop_svc = TaskPropagationService()
     for task_desc, prepared in completed_tasks:
-        prop_svc.propagate(
+        await prop_svc.propagate(
             PropagateTaskCompletionCommand(
                 run_id=run.id,
                 definition_id=persisted.definition_id,
@@ -243,7 +240,7 @@ def test_researchrubrics_e2e_offline(tmp_path: Path) -> None:
             ),
             worker_result=WorkerOutput(output="Stub report written"),
         )
-        result = asyncio.run(criterion.evaluate(ctx))
+        result = await criterion.evaluate(ctx)
         assert result.passed, f"Criterion failed: {result.feedback}"
         assert result.score == 1.0
 

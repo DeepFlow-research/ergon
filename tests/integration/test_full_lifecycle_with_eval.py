@@ -7,7 +7,6 @@ Exercises the complete pipeline including evaluation:
 Calls the same services the Inngest functions call, without requiring a live server.
 """
 
-import asyncio
 from uuid import uuid4
 
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
@@ -101,7 +100,7 @@ class InProcessCriterionExecutor:
         return results
 
 
-def test_full_lifecycle_with_evaluation():
+async def test_full_lifecycle_with_evaluation():
     """Prove: construct -> validate -> persist -> run -> execute -> evaluate -> score."""
 
     ensure_db()
@@ -125,7 +124,7 @@ def test_full_lifecycle_with_evaluation():
     print(f"[RUN] Created {run.id}")
 
     init_svc = WorkflowInitializationService()
-    initialized = init_svc.initialize(
+    initialized = await init_svc.initialize(
         InitializeWorkflowCommand(run_id=run.id, definition_id=persisted.definition_id)
     )
     print(f"[INIT] {initialized.total_tasks} tasks, {len(initialized.initial_ready_tasks)} ready")
@@ -135,7 +134,7 @@ def test_full_lifecycle_with_evaluation():
     completed_tasks = []
 
     for task_desc in initialized.initial_ready_tasks:
-        prepared = exec_svc.prepare(
+        prepared = await exec_svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=run.id,
                 definition_id=persisted.definition_id,
@@ -159,8 +158,8 @@ def test_full_lifecycle_with_evaluation():
             execution_id=prepared.execution_id,
             sandbox_id="test-sandbox",
         )
-        result = asyncio.run(_run_worker(live_worker, task_data, ctx))
-        exec_svc.finalize_success(
+        result = await _run_worker(live_worker, task_data, ctx)
+        await exec_svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
                 output_text=result.output,
@@ -172,7 +171,7 @@ def test_full_lifecycle_with_evaluation():
     # ── Propagate ───────────────────────────────────────────────────
     prop_svc = TaskPropagationService()
     for task_desc, prepared, _ in completed_tasks:
-        prop_svc.propagate(
+        await prop_svc.propagate(
             PropagateTaskCompletionCommand(
                 run_id=run.id,
                 definition_id=persisted.definition_id,
@@ -221,13 +220,11 @@ def test_full_lifecycle_with_evaluation():
                 description="",
             )
 
-            service_result = asyncio.run(
-                eval_service.evaluate(
-                    task_context=task_context,
-                    evaluator=evaluator,
-                    task=task_for_eval,
-                    benchmark_name="smoke-test",
-                )
+            service_result = await eval_service.evaluate(
+                task_context=task_context,
+                evaluator=evaluator,
+                task=task_for_eval,
+                benchmark_name="smoke-test",
             )
             eval_result = service_result.result
             print(
@@ -302,10 +299,11 @@ def test_full_lifecycle_with_evaluation():
 
 
 if __name__ == "__main__":
+    import asyncio
     import os
 
     os.environ.setdefault(
         "ERGON_DATABASE_URL",
         "postgresql://ergon_core:ergon_core_dev@localhost:5433/ergon_core_test",
     )
-    test_full_lifecycle_with_evaluation()
+    asyncio.run(test_full_lifecycle_with_evaluation())

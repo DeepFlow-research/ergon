@@ -1,6 +1,5 @@
 """Communication service — manages inter-agent messaging threads."""
 
-import asyncio
 import logging
 from uuid import UUID
 
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 class CommunicationService:
     """Service for managing agent-to-agent communication."""
 
-    def save_message(self, request: CreateMessageRequest) -> MessageResponse:
+    async def save_message(self, request: CreateMessageRequest) -> MessageResponse:
         """Save a new message, creating the thread if it does not exist yet."""
         with get_session() as session:
             thread = self._get_or_create_thread(
@@ -94,20 +93,13 @@ class CommunicationService:
             "createdAt": message.created_at.isoformat(),
         }
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            logger.debug("No running event loop; skipping thread_message_created emit")
-            return response
-        try:
-            loop.create_task(
-                dashboard_emitter.thread_message_created(
-                    run_id=request.run_id,
-                    thread=thread_dict,
-                    message=message_dict,
-                )
+            await dashboard_emitter.thread_message_created(
+                run_id=request.run_id,
+                thread=thread_dict,
+                message=message_dict,
             )
         except Exception:  # slopcop: ignore[no-broad-except]
-            logger.warning("Failed to schedule thread_message_created emit", exc_info=True)
+            logger.warning("Failed to emit thread_message_created", exc_info=True)
 
         return response
 

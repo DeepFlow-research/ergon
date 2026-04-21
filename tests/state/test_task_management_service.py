@@ -36,7 +36,7 @@ from tests.state.mocks import FakeInngestClient
 META = MutationMeta(actor="test", reason="test-setup")
 
 
-def _add_node(
+async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
@@ -48,7 +48,7 @@ def _add_node(
     level: int = 0,
 ):
     """Helper to create a graph node for test setup."""
-    return repo.add_node(
+    return await repo.add_node(
         session,
         run_id,
         task_key=key,
@@ -64,15 +64,15 @@ def _add_node(
 class TestAddSubtask:
     """Tests for add_subtask — the primary subtask creation path."""
 
-    def test_creates_node_under_parent(self, session: Session):
+    async def test_creates_node_under_parent(self, session: Session):
         """add_subtask creates a child node with correct parent linkage."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager", instance_key="bench-1")
+        parent = await _add_node(repo, session, run_id, "manager", instance_key="bench-1")
 
-        result = svc.add_subtask(
+        result = await svc.add_subtask(
             session,
             AddSubtaskCommand(
                 run_id=run_id,
@@ -89,15 +89,15 @@ class TestAddSubtask:
         assert child.parent_node_id == parent.id
         assert child.level == 1
 
-    def test_inherits_instance_key_from_parent(self, session: Session):
+    async def test_inherits_instance_key_from_parent(self, session: Session):
         """Subtask inherits instance_key from parent for benchmark cohort tracking."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager", instance_key="bench-42")
+        parent = await _add_node(repo, session, run_id, "manager", instance_key="bench-42")
 
-        result = svc.add_subtask(
+        result = await svc.add_subtask(
             session,
             AddSubtaskCommand(
                 run_id=run_id,
@@ -110,15 +110,15 @@ class TestAddSubtask:
         child = repo.get_node(session, run_id=run_id, node_id=result.node_id)
         assert child.instance_key == "bench-42"
 
-    def test_generates_dynamic_task_key(self, session: Session):
+    async def test_generates_dynamic_task_key(self, session: Session):
         """Task key is prefixed with 'dynamic:' and has 8-char hex suffix."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager")
+        parent = await _add_node(repo, session, run_id, "manager")
 
-        result = svc.add_subtask(
+        result = await svc.add_subtask(
             session,
             AddSubtaskCommand(
                 run_id=run_id,
@@ -131,16 +131,16 @@ class TestAddSubtask:
         assert result.task_key.startswith("dynamic:")
         assert len(result.task_key) == len("dynamic:") + 8
 
-    def test_wires_dependency_edges(self, session: Session):
+    async def test_wires_dependency_edges(self, session: Session):
         """depends_on creates edges from dependency nodes to the new subtask."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager")
-        dep_node = _add_node(repo, session, run_id, "dep", parent_node_id=parent.id, level=1)
+        parent = await _add_node(repo, session, run_id, "manager")
+        dep_node = await _add_node(repo, session, run_id, "dep", parent_node_id=parent.id, level=1)
 
-        result = svc.add_subtask(
+        result = await svc.add_subtask(
             session,
             AddSubtaskCommand(
                 run_id=run_id,
@@ -155,16 +155,16 @@ class TestAddSubtask:
         assert len(edges) == 1
         assert edges[0].source_node_id == dep_node.id
 
-    def test_mutations_logged(self, session: Session):
+    async def test_mutations_logged(self, session: Session):
         """Both node.added and any edge.added mutations appear in the WAL."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager")
+        parent = await _add_node(repo, session, run_id, "manager")
         seq_before = len(repo.get_mutations(session, run_id))
 
-        svc.add_subtask(
+        await svc.add_subtask(
             session,
             AddSubtaskCommand(
                 run_id=run_id,
@@ -187,20 +187,20 @@ class TestAddSubtask:
 class TestCancelTask:
     """Tests for cancel_task — manager-initiated cancellation."""
 
-    def test_cancels_pending_node(self, session: Session):
+    async def test_cancels_pending_node(self, session: Session):
         """cancel_task transitions a pending node to CANCELLED."""
         fake_inngest = FakeInngestClient()
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "target", status=PENDING)
+        node = await _add_node(repo, session, run_id, "target", status=PENDING)
 
         with patch(
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            result = svc.cancel_task(
+            result = await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=node.id),
             )
@@ -211,40 +211,40 @@ class TestCancelTask:
         updated = repo.get_node(session, run_id=run_id, node_id=node.id)
         assert updated.status == CANCELLED
 
-    def test_cancels_running_node(self, session: Session):
+    async def test_cancels_running_node(self, session: Session):
         """cancel_task works on running nodes too."""
         fake_inngest = FakeInngestClient()
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "target", status=RUNNING)
+        node = await _add_node(repo, session, run_id, "target", status=RUNNING)
 
         with patch(
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            result = svc.cancel_task(
+            result = await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=node.id),
             )
 
         assert result.old_status == RUNNING
 
-    def test_emits_cancelled_event(self, session: Session):
+    async def test_emits_cancelled_event(self, session: Session):
         """cancel_task emits a task/cancelled Inngest event."""
         fake_inngest = FakeInngestClient()
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "target", status=PENDING)
+        node = await _add_node(repo, session, run_id, "target", status=PENDING)
 
         with patch(
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            svc.cancel_task(
+            await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=node.id),
             )
@@ -254,59 +254,59 @@ class TestCancelTask:
         assert cancelled_events[0].data["node_id"] == str(node.id)
         assert cancelled_events[0].data["cause"] == "manager_decision"
 
-    def test_on_completed_node_raises(self, session: Session):
+    async def test_on_completed_node_raises(self, session: Session):
         """cancel_task raises TaskAlreadyTerminalError on completed nodes."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "done", status=COMPLETED)
+        node = await _add_node(repo, session, run_id, "done", status=COMPLETED)
 
         with pytest.raises(TaskAlreadyTerminalError) as exc_info:
-            svc.cancel_task(
+            await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=node.id),
             )
         assert exc_info.value.node_id == node.id
         assert exc_info.value.current_status == COMPLETED
 
-    def test_on_failed_node_raises(self, session: Session):
+    async def test_on_failed_node_raises(self, session: Session):
         """cancel_task raises on already-failed nodes."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "failed", status=FAILED)
+        node = await _add_node(repo, session, run_id, "failed", status=FAILED)
 
         with pytest.raises(TaskAlreadyTerminalError):
-            svc.cancel_task(
+            await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=node.id),
             )
 
-    def test_on_cancelled_node_raises(self, session: Session):
+    async def test_on_cancelled_node_raises(self, session: Session):
         """cancel_task raises on already-cancelled nodes."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "gone", status=CANCELLED)
+        node = await _add_node(repo, session, run_id, "gone", status=CANCELLED)
 
         with pytest.raises(TaskAlreadyTerminalError):
-            svc.cancel_task(
+            await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=node.id),
             )
 
-    def test_counts_non_terminal_descendants(self, session: Session):
+    async def test_counts_non_terminal_descendants(self, session: Session):
         """cascaded_count reflects non-terminal children of the cancelled node."""
         fake_inngest = FakeInngestClient()
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
-        _add_node(
+        parent = await _add_node(repo, session, run_id, "parent", status=RUNNING)
+        await _add_node(
             repo,
             session,
             run_id,
@@ -315,7 +315,7 @@ class TestCancelTask:
             parent_node_id=parent.id,
             level=1,
         )
-        _add_node(
+        await _add_node(
             repo,
             session,
             run_id,
@@ -324,7 +324,7 @@ class TestCancelTask:
             parent_node_id=parent.id,
             level=1,
         )
-        _add_node(
+        await _add_node(
             repo,
             session,
             run_id,
@@ -338,7 +338,7 @@ class TestCancelTask:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            result = svc.cancel_task(
+            result = await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=parent.id),
             )
@@ -346,21 +346,21 @@ class TestCancelTask:
         # child-a (pending) + child-b (running) = 2 non-terminal
         assert result.cascaded_count == 2
 
-    def test_mutation_logged(self, session: Session):
+    async def test_mutation_logged(self, session: Session):
         """cancel_task logs a node.status_changed mutation."""
         fake_inngest = FakeInngestClient()
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "target", status=PENDING)
+        node = await _add_node(repo, session, run_id, "target", status=PENDING)
         seq_before = len(repo.get_mutations(session, run_id))
 
         with patch(
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            svc.cancel_task(
+            await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=node.id),
             )
@@ -376,15 +376,15 @@ class TestCancelTask:
 class TestRefineTask:
     """Tests for refine_task — updating description on pending nodes."""
 
-    def test_updates_description(self, session: Session):
+    async def test_updates_description(self, session: Session):
         """refine_task updates the node description and returns old/new."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "target", status=PENDING)
+        node = await _add_node(repo, session, run_id, "target", status=PENDING)
 
-        result = svc.refine_task(
+        result = await svc.refine_task(
             session,
             RefineTaskCommand(
                 run_id=run_id,
@@ -399,16 +399,16 @@ class TestRefineTask:
         updated = repo.get_node(session, run_id=run_id, node_id=node.id)
         assert updated.description == "improved description"
 
-    def test_on_running_raises(self, session: Session):
+    async def test_on_running_raises(self, session: Session):
         """refine_task raises TaskRunningError on RUNNING nodes only."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "busy", status=RUNNING)
+        node = await _add_node(repo, session, run_id, "busy", status=RUNNING)
 
         with pytest.raises(TaskRunningError) as exc_info:
-            svc.refine_task(
+            await svc.refine_task(
                 session,
                 RefineTaskCommand(
                     run_id=run_id,
@@ -420,7 +420,7 @@ class TestRefineTask:
         assert exc_info.value.current_status == RUNNING
 
     @pytest.mark.parametrize("status", [COMPLETED, FAILED, CANCELLED])
-    def test_on_terminal_allowed(self, session: Session, status: str):
+    async def test_on_terminal_allowed(self, session: Session, status: str):
         """refine_task now accepts COMPLETED / FAILED / CANCELLED nodes.
 
         Supports the edit-then-rerun flow: the manager can update the
@@ -430,9 +430,9 @@ class TestRefineTask:
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, f"node-{status}", status=status)
+        node = await _add_node(repo, session, run_id, f"node-{status}", status=status)
 
-        result = svc.refine_task(
+        result = await svc.refine_task(
             session,
             RefineTaskCommand(
                 run_id=run_id,
@@ -448,16 +448,16 @@ class TestRefineTask:
         # Status must be unchanged — refine does not transition.
         assert updated.status == status
 
-    def test_mutation_logged(self, session: Session):
+    async def test_mutation_logged(self, session: Session):
         """refine_task logs a node.field_changed mutation."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "target", status=PENDING)
+        node = await _add_node(repo, session, run_id, "target", status=PENDING)
         seq_before = len(repo.get_mutations(session, run_id))
 
-        svc.refine_task(
+        await svc.refine_task(
             session,
             RefineTaskCommand(
                 run_id=run_id,

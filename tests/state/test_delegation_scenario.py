@@ -34,7 +34,7 @@ from tests.state.mocks import FakeInngestClient
 META = MutationMeta(actor="test", reason="scenario-setup")
 
 
-def _add_node(
+async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
@@ -43,7 +43,7 @@ def _add_node(
     status: str = PENDING,
     instance_key: str = "inst-0",
 ):
-    return repo.add_node(
+    return await repo.add_node(
         session,
         run_id,
         task_key=key,
@@ -58,7 +58,6 @@ class TestFullDelegationScenario:
     """Manager spawns 2 children, cancels one, spawns replacement,
     all complete -> workflow complete."""
 
-    @pytest.mark.asyncio
     async def test_full_delegation_scenario(self, session: Session):
         fake_inngest = FakeInngestClient()
         graph_repo = WorkflowGraphRepository()
@@ -67,7 +66,7 @@ class TestFullDelegationScenario:
         run_id = uuid4()
 
         # Setup: create parent node (simulating the manager's own node)
-        parent = _add_node(
+        parent = await _add_node(
             graph_repo,
             session,
             run_id,
@@ -81,7 +80,7 @@ class TestFullDelegationScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            child1 = svc.add_subtask(
+            child1 = await svc.add_subtask(
                 session,
                 AddSubtaskCommand(
                     run_id=run_id,
@@ -91,7 +90,7 @@ class TestFullDelegationScenario:
                 ),
             )
 
-            child2 = svc.add_subtask(
+            child2 = await svc.add_subtask(
                 session,
                 AddSubtaskCommand(
                     run_id=run_id,
@@ -111,7 +110,7 @@ class TestFullDelegationScenario:
         assert child2_node.status == PENDING
 
         # -- Step 4: Simulate child1 completing --
-        graph_repo.update_node_status(
+        await graph_repo.update_node_status(
             session,
             run_id=run_id,
             node_id=child1.node_id,
@@ -126,7 +125,7 @@ class TestFullDelegationScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            cancel_result = svc.cancel_task(
+            cancel_result = await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=child2.node_id),
             )
@@ -140,7 +139,7 @@ class TestFullDelegationScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            child3 = svc.add_subtask(
+            child3 = await svc.add_subtask(
                 session,
                 AddSubtaskCommand(
                     run_id=run_id,
@@ -151,7 +150,7 @@ class TestFullDelegationScenario:
             )
 
         # -- Step 7: Simulate replacement completing --
-        graph_repo.update_node_status(
+        await graph_repo.update_node_status(
             session,
             run_id=run_id,
             node_id=child3.node_id,
@@ -160,7 +159,7 @@ class TestFullDelegationScenario:
         )
 
         # -- Step 8: Complete parent --
-        graph_repo.update_node_status(
+        await graph_repo.update_node_status(
             session,
             run_id=run_id,
             node_id=parent.id,

@@ -35,7 +35,7 @@ _PROPAGATION_META = MutationMeta(actor="system:propagation")
 # ---------------------------------------------------------------------------
 
 
-def _update_task_status(
+async def _update_task_status(
     session: Session,
     run_id: UUID,
     task_id: UUID,
@@ -51,7 +51,7 @@ def _update_task_status(
     reason = None
     if event_metadata and "error" in event_metadata:
         reason = str(event_metadata["error"])
-    graph_repo.update_node_status(
+    await graph_repo.update_node_status(
         session,
         run_id=run_id,
         node_id=node_id,
@@ -60,7 +60,7 @@ def _update_task_status(
     )
 
 
-def mark_task_ready(
+async def mark_task_ready(
     session: Session,
     run_id: UUID,
     task_id: UUID,
@@ -68,7 +68,7 @@ def mark_task_ready(
     graph_repo: WorkflowGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> None:
-    _update_task_status(
+    await _update_task_status(
         session,
         run_id,
         task_id,
@@ -78,7 +78,7 @@ def mark_task_ready(
     )
 
 
-def mark_task_running(
+async def mark_task_running(
     session: Session,
     run_id: UUID,
     task_id: UUID,
@@ -87,7 +87,7 @@ def mark_task_running(
     graph_repo: WorkflowGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> None:
-    _update_task_status(
+    await _update_task_status(
         session,
         run_id,
         task_id,
@@ -97,7 +97,7 @@ def mark_task_running(
     )
 
 
-def mark_task_completed(
+async def mark_task_completed(
     session: Session,
     run_id: UUID,
     task_id: UUID,
@@ -106,7 +106,7 @@ def mark_task_completed(
     graph_repo: WorkflowGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> None:
-    _update_task_status(
+    await _update_task_status(
         session,
         run_id,
         task_id,
@@ -116,7 +116,7 @@ def mark_task_completed(
     )
 
 
-def mark_task_failed(
+async def mark_task_failed(
     session: Session,
     run_id: UUID,
     task_id: UUID,
@@ -126,7 +126,7 @@ def mark_task_failed(
     graph_repo: WorkflowGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> None:
-    _update_task_status(
+    await _update_task_status(
         session,
         run_id,
         task_id,
@@ -162,7 +162,7 @@ def get_current_task_status(
     return row
 
 
-def get_initial_ready_tasks(
+async def get_initial_ready_tasks(
     session: Session,
     run_id: UUID,
     definition_id: UUID,
@@ -184,7 +184,7 @@ def get_initial_ready_tasks(
     ready_ids = list(all_task_ids - tasks_with_deps)
 
     for tid in ready_ids:
-        mark_task_ready(
+        await mark_task_ready(
             session,
             run_id,
             tid,
@@ -201,7 +201,7 @@ def get_initial_ready_tasks(
 # ---------------------------------------------------------------------------
 
 
-def on_task_completed(
+async def on_task_completed(
     session: Session,
     run_id: UUID,
     definition_id: UUID,
@@ -212,7 +212,7 @@ def on_task_completed(
     graph_lookup: GraphNodeLookup,
 ) -> list[UUID]:
     """Mark task completed, resolve edges, find and mark newly-ready dependents."""
-    mark_task_completed(
+    await mark_task_completed(
         session,
         run_id,
         task_id,
@@ -251,7 +251,7 @@ def on_task_completed(
             for dep_id in dep_task_ids:
                 edge_id = graph_lookup.edge_id(dep_id, candidate_id)
                 if edge_id:
-                    graph_repo.update_edge_status(
+                    await graph_repo.update_edge_status(
                         session,
                         run_id=run_id,
                         edge_id=edge_id,
@@ -259,7 +259,7 @@ def on_task_completed(
                         meta=_PROPAGATION_META,
                     )
 
-            mark_task_ready(
+            await mark_task_ready(
                 session,
                 run_id,
                 candidate_id,
@@ -300,7 +300,7 @@ def is_workflow_failed(session: Session, run_id: UUID, definition_id: UUID) -> b
 # ---------------------------------------------------------------------------
 
 
-def mark_task_running_by_node(
+async def mark_task_running_by_node(
     session: Session,
     run_id: UUID,
     node_id: UUID,
@@ -308,7 +308,7 @@ def mark_task_running_by_node(
     *,
     graph_repo: WorkflowGraphRepository,
 ) -> None:
-    graph_repo.update_node_status(
+    await graph_repo.update_node_status(
         session,
         run_id=run_id,
         node_id=node_id,
@@ -320,7 +320,7 @@ def mark_task_running_by_node(
     )
 
 
-def mark_task_completed_by_node(
+async def mark_task_completed_by_node(
     session: Session,
     run_id: UUID,
     node_id: UUID,
@@ -328,7 +328,7 @@ def mark_task_completed_by_node(
     *,
     graph_repo: WorkflowGraphRepository,
 ) -> None:
-    graph_repo.update_node_status(
+    await graph_repo.update_node_status(
         session,
         run_id=run_id,
         node_id=node_id,
@@ -340,7 +340,7 @@ def mark_task_completed_by_node(
     )
 
 
-def mark_task_failed_by_node(
+async def mark_task_failed_by_node(
     session: Session,
     run_id: UUID,
     node_id: UUID,
@@ -349,7 +349,7 @@ def mark_task_failed_by_node(
     execution_id: UUID | None = None,
     graph_repo: WorkflowGraphRepository,
 ) -> None:
-    graph_repo.update_node_status(
+    await graph_repo.update_node_status(
         session,
         run_id=run_id,
         node_id=node_id,
@@ -366,7 +366,7 @@ def mark_task_failed_by_node(
 # ---------------------------------------------------------------------------
 
 
-def on_task_completed_by_node(
+async def on_task_completed_by_node(
     session: Session,
     run_id: UUID,
     node_id: UUID,
@@ -381,7 +381,7 @@ def on_task_completed_by_node(
     Walks RunGraphEdge (not ExperimentDefinitionTaskDependency) so it
     works for both static and dynamic tasks.
     """
-    graph_repo.update_node_status(
+    await graph_repo.update_node_status(
         session,
         run_id=run_id,
         node_id=node_id,
@@ -419,7 +419,7 @@ def on_task_completed_by_node(
 
         source_nodes = [session.get(RunGraphNode, e.source_node_id) for e in incoming]
         if all(n is not None and n.status in TERMINAL_STATUSES for n in source_nodes):
-            graph_repo.update_node_status(
+            await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
                 node_id=candidate_id,
@@ -435,7 +435,7 @@ def on_task_completed_by_node(
     return newly_ready
 
 
-def on_task_completed_or_failed(
+async def on_task_completed_or_failed(
     session: Session,
     run_id: UUID,
     node_id: UUID,
@@ -475,7 +475,7 @@ def on_task_completed_or_failed(
 
     edge_status = EDGE_SATISFIED if is_success else EDGE_INVALIDATED
     for edge in outgoing:
-        graph_repo.update_edge_status(
+        await graph_repo.update_edge_status(
             session,
             run_id=run_id,
             edge_id=edge.id,
@@ -512,7 +512,7 @@ def on_task_completed_or_failed(
             if candidate_node.parent_node_id is not None:
                 continue
 
-            graph_repo.update_node_status(
+            await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
                 node_id=candidate_id,
@@ -566,7 +566,7 @@ def on_task_completed_or_failed(
                 if is_pending
                 else f"re-activating cancelled subtask after {node_id}"
             )
-            graph_repo.update_node_status(
+            await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
                 node_id=candidate_id,

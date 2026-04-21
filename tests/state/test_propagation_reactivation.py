@@ -28,7 +28,7 @@ from sqlmodel import Session
 META = MutationMeta(actor="test", reason="test-setup")
 
 
-def _add_node(
+async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
@@ -39,7 +39,7 @@ def _add_node(
     parent_node_id=None,
     level: int = 0,
 ):
-    return repo.add_node(
+    return await repo.add_node(
         session,
         run_id,
         task_key=key,
@@ -55,21 +55,21 @@ def _add_node(
 class TestReactivationOnDepCompletion:
     """CANCELLED managed subtask -> PENDING when all deps are COMPLETED."""
 
-    def test_chain_reactivation(self, session: Session):
+    async def test_chain_reactivation(self, session: Session):
         """D completes, E (CANCELLED managed) re-activates to PENDING."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
+        parent = await _add_node(repo, session, run_id, "manager", status=RUNNING)
         # D is about to transition to COMPLETED (precondition of
         # on_task_completed_or_failed: node is already terminal).
-        d = _add_node(
+        d = await _add_node(
             repo, session, run_id, "D", status=COMPLETED, parent_node_id=parent.id, level=1
         )
-        e = _add_node(
+        e = await _add_node(
             repo, session, run_id, "E", status=CANCELLED, parent_node_id=parent.id, level=1
         )
-        repo.add_edge(
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=d.id,
@@ -79,7 +79,7 @@ class TestReactivationOnDepCompletion:
         )
         session.commit()
 
-        newly_ready, invalidated = on_task_completed_or_failed(
+        newly_ready, invalidated = await on_task_completed_or_failed(
             session,
             run_id,
             d.id,
@@ -92,22 +92,22 @@ class TestReactivationOnDepCompletion:
         e_after = repo.get_node(session, run_id=run_id, node_id=e.id)
         assert e_after.status == PENDING
 
-    def test_fan_in_reactivation(self, session: Session):
+    async def test_fan_in_reactivation(self, session: Session):
         """B completes, F (CANCELLED managed) re-activates because C is also COMPLETED."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
-        b = _add_node(
+        parent = await _add_node(repo, session, run_id, "manager", status=RUNNING)
+        b = await _add_node(
             repo, session, run_id, "B", status=COMPLETED, parent_node_id=parent.id, level=1
         )
-        c = _add_node(
+        c = await _add_node(
             repo, session, run_id, "C", status=COMPLETED, parent_node_id=parent.id, level=1
         )
-        f = _add_node(
+        f = await _add_node(
             repo, session, run_id, "F", status=CANCELLED, parent_node_id=parent.id, level=1
         )
-        repo.add_edge(
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=b.id,
@@ -115,7 +115,7 @@ class TestReactivationOnDepCompletion:
             status=EDGE_PENDING,
             meta=META,
         )
-        repo.add_edge(
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=c.id,
@@ -125,7 +125,7 @@ class TestReactivationOnDepCompletion:
         )
         session.commit()
 
-        newly_ready, _ = on_task_completed_or_failed(
+        newly_ready, _ = await on_task_completed_or_failed(
             session,
             run_id,
             b.id,
@@ -137,21 +137,23 @@ class TestReactivationOnDepCompletion:
         f_after = repo.get_node(session, run_id=run_id, node_id=f.id)
         assert f_after.status == PENDING
 
-    def test_fan_in_waits_for_all_deps(self, session: Session):
+    async def test_fan_in_waits_for_all_deps(self, session: Session):
         """B completes, F (CANCELLED) does NOT re-activate because C is still PENDING."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
-        b = _add_node(
+        parent = await _add_node(repo, session, run_id, "manager", status=RUNNING)
+        b = await _add_node(
             repo, session, run_id, "B", status=COMPLETED, parent_node_id=parent.id, level=1
         )
-        c = _add_node(repo, session, run_id, "C", status=PENDING, parent_node_id=parent.id, level=1)
-        f = _add_node(
+        c = await _add_node(
+            repo, session, run_id, "C", status=PENDING, parent_node_id=parent.id, level=1
+        )
+        f = await _add_node(
             repo, session, run_id, "F", status=CANCELLED, parent_node_id=parent.id, level=1
         )
         for src in (b, c):
-            repo.add_edge(
+            await repo.add_edge(
                 session,
                 run_id,
                 source_node_id=src.id,
@@ -161,7 +163,7 @@ class TestReactivationOnDepCompletion:
             )
         session.commit()
 
-        newly_ready, _ = on_task_completed_or_failed(
+        newly_ready, _ = await on_task_completed_or_failed(
             session,
             run_id,
             b.id,
@@ -173,15 +175,15 @@ class TestReactivationOnDepCompletion:
         f_after = repo.get_node(session, run_id=run_id, node_id=f.id)
         assert f_after.status == CANCELLED
 
-    def test_static_cancelled_does_not_reactivate(self, session: Session):
+    async def test_static_cancelled_does_not_reactivate(self, session: Session):
         """CANCELLED node with parent_node_id=None (static workflow) stays CANCELLED."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
         # Both nodes are static workflow nodes: no parent_node_id.
-        d = _add_node(repo, session, run_id, "D_static", status=COMPLETED)
-        e = _add_node(repo, session, run_id, "E_static", status=CANCELLED)
-        repo.add_edge(
+        d = await _add_node(repo, session, run_id, "D_static", status=COMPLETED)
+        e = await _add_node(repo, session, run_id, "E_static", status=CANCELLED)
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=d.id,
@@ -191,7 +193,7 @@ class TestReactivationOnDepCompletion:
         )
         session.commit()
 
-        newly_ready, _ = on_task_completed_or_failed(
+        newly_ready, _ = await on_task_completed_or_failed(
             session,
             run_id,
             d.id,
@@ -203,17 +205,19 @@ class TestReactivationOnDepCompletion:
         e_after = repo.get_node(session, run_id=run_id, node_id=e.id)
         assert e_after.status == CANCELLED
 
-    def test_pending_still_activates_normally(self, session: Session):
+    async def test_pending_still_activates_normally(self, session: Session):
         """Normal first-activation path unchanged: PENDING target -> PENDING (ready)."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
-        d = _add_node(
+        parent = await _add_node(repo, session, run_id, "manager", status=RUNNING)
+        d = await _add_node(
             repo, session, run_id, "D", status=COMPLETED, parent_node_id=parent.id, level=1
         )
-        e = _add_node(repo, session, run_id, "E", status=PENDING, parent_node_id=parent.id, level=1)
-        repo.add_edge(
+        e = await _add_node(
+            repo, session, run_id, "E", status=PENDING, parent_node_id=parent.id, level=1
+        )
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=d.id,
@@ -223,7 +227,7 @@ class TestReactivationOnDepCompletion:
         )
         session.commit()
 
-        newly_ready, _ = on_task_completed_or_failed(
+        newly_ready, _ = await on_task_completed_or_failed(
             session,
             run_id,
             d.id,
@@ -233,19 +237,19 @@ class TestReactivationOnDepCompletion:
 
         assert e.id in newly_ready
 
-    def test_completed_target_not_reactivated(self, session: Session):
+    async def test_completed_target_not_reactivated(self, session: Session):
         """A COMPLETED target is NOT re-activated (it already ran, output is current)."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
-        d = _add_node(
+        parent = await _add_node(repo, session, run_id, "manager", status=RUNNING)
+        d = await _add_node(
             repo, session, run_id, "D", status=COMPLETED, parent_node_id=parent.id, level=1
         )
-        e = _add_node(
+        e = await _add_node(
             repo, session, run_id, "E", status=COMPLETED, parent_node_id=parent.id, level=1
         )
-        repo.add_edge(
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=d.id,
@@ -255,7 +259,7 @@ class TestReactivationOnDepCompletion:
         )
         session.commit()
 
-        newly_ready, _ = on_task_completed_or_failed(
+        newly_ready, _ = await on_task_completed_or_failed(
             session,
             run_id,
             d.id,
@@ -267,19 +271,19 @@ class TestReactivationOnDepCompletion:
         e_after = repo.get_node(session, run_id=run_id, node_id=e.id)
         assert e_after.status == COMPLETED
 
-    def test_failed_target_not_reactivated(self, session: Session):
+    async def test_failed_target_not_reactivated(self, session: Session):
         """FAILED target stays FAILED — the manager must explicitly restart."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "manager", status=RUNNING)
-        d = _add_node(
+        parent = await _add_node(repo, session, run_id, "manager", status=RUNNING)
+        d = await _add_node(
             repo, session, run_id, "D", status=COMPLETED, parent_node_id=parent.id, level=1
         )
-        e = _add_node(
+        e = await _add_node(
             repo, session, run_id, "E", status="failed", parent_node_id=parent.id, level=1
         )
-        repo.add_edge(
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=d.id,
@@ -289,7 +293,7 @@ class TestReactivationOnDepCompletion:
         )
         session.commit()
 
-        newly_ready, _ = on_task_completed_or_failed(
+        newly_ready, _ = await on_task_completed_or_failed(
             session,
             run_id,
             d.id,

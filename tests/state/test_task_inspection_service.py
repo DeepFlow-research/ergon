@@ -25,7 +25,7 @@ from sqlmodel import Session
 META = MutationMeta(actor="test", reason="test-setup")
 
 
-def _add_node(
+async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
@@ -37,7 +37,7 @@ def _add_node(
     level: int = 0,
 ):
     """Helper to create a graph node for test setup."""
-    return repo.add_node(
+    return await repo.add_node(
         session,
         run_id,
         task_key=key,
@@ -53,14 +53,14 @@ def _add_node(
 class TestListSubtasks:
     """Tests for list_subtasks — direct children query."""
 
-    def test_returns_direct_children_only(self, session: Session):
+    async def test_returns_direct_children_only(self, session: Session):
         """list_subtasks returns only direct children, not grandchildren."""
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
-        child_a = _add_node(
+        parent = await _add_node(repo, session, run_id, "parent", status=RUNNING)
+        child_a = await _add_node(
             repo,
             session,
             run_id,
@@ -69,7 +69,7 @@ class TestListSubtasks:
             parent_node_id=parent.id,
             level=1,
         )
-        child_b = _add_node(
+        child_b = await _add_node(
             repo,
             session,
             run_id,
@@ -79,7 +79,7 @@ class TestListSubtasks:
             level=1,
         )
         # Grandchild should NOT appear
-        _add_node(
+        await _add_node(
             repo,
             session,
             run_id,
@@ -96,15 +96,15 @@ class TestListSubtasks:
         assert child_a.id in result_ids
         assert child_b.id in result_ids
 
-    def test_deterministic_order_by_task_key(self, session: Session):
+    async def test_deterministic_order_by_task_key(self, session: Session):
         """Results are ordered by task_key for stable LLM references."""
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
+        parent = await _add_node(repo, session, run_id, "parent", status=RUNNING)
         # Create in reverse order to verify sorting
-        _add_node(
+        await _add_node(
             repo,
             session,
             run_id,
@@ -113,7 +113,7 @@ class TestListSubtasks:
             parent_node_id=parent.id,
             level=1,
         )
-        _add_node(
+        await _add_node(
             repo,
             session,
             run_id,
@@ -129,26 +129,26 @@ class TestListSubtasks:
         assert results[0].task_key == "aaa-first"
         assert results[1].task_key == "zzz-last"
 
-    def test_empty_children(self, session: Session):
+    async def test_empty_children(self, session: Session):
         """A parent with no children returns an empty list."""
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "lonely", status=RUNNING)
+        parent = await _add_node(repo, session, run_id, "lonely", status=RUNNING)
 
         results = svc.list_subtasks(session, run_id=run_id, parent_node_id=parent.id)
 
         assert results == []
 
-    def test_hydrates_output_for_completed(self, session: Session):
+    async def test_hydrates_output_for_completed(self, session: Session):
         """Completed subtasks include truncated output_text from execution."""
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
-        child = _add_node(
+        parent = await _add_node(repo, session, run_id, "parent", status=RUNNING)
+        child = await _add_node(
             repo,
             session,
             run_id,
@@ -176,14 +176,14 @@ class TestListSubtasks:
         assert results[0].output == "research results here"
         assert results[0].error is None
 
-    def test_hydrates_error_for_failed(self, session: Session):
+    async def test_hydrates_error_for_failed(self, session: Session):
         """Failed subtasks include error message from execution."""
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
-        child = _add_node(
+        parent = await _add_node(repo, session, run_id, "parent", status=RUNNING)
+        child = await _add_node(
             repo,
             session,
             run_id,
@@ -210,14 +210,14 @@ class TestListSubtasks:
         assert results[0].error == "timeout exceeded"
         assert results[0].output is None
 
-    def test_includes_dependency_edges(self, session: Session):
+    async def test_includes_dependency_edges(self, session: Session):
         """depends_on reflects incoming dependency edges."""
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService()
         run_id = uuid4()
 
-        parent = _add_node(repo, session, run_id, "parent", status=RUNNING)
-        dep = _add_node(
+        parent = await _add_node(repo, session, run_id, "parent", status=RUNNING)
+        dep = await _add_node(
             repo,
             session,
             run_id,
@@ -226,7 +226,7 @@ class TestListSubtasks:
             parent_node_id=parent.id,
             level=1,
         )
-        target = _add_node(
+        target = await _add_node(
             repo,
             session,
             run_id,
@@ -236,7 +236,7 @@ class TestListSubtasks:
             level=1,
         )
 
-        repo.add_edge(
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=dep.id,

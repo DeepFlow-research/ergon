@@ -1,6 +1,5 @@
 """Task execution lifecycle: prepare, finalize success, finalize failure."""
 
-import asyncio
 import logging
 from uuid import UUID
 
@@ -36,7 +35,7 @@ from sqlmodel import Session, select
 logger = logging.getLogger(__name__)
 
 
-def _emit_task_status(
+async def _emit_task_status(
     run_id: UUID,
     node_id: UUID | None,
     task_key: str,
@@ -45,46 +44,37 @@ def _emit_task_status(
     worker_id: UUID | None = None,
     worker_name: str | None = None,
 ) -> None:
-    """Fire-and-forget dashboard/task.status_changed from synchronous code.
-
-    All arguments are plain primitives (no ORM instances) so there is no risk
-    of a DetachedInstanceError when the coroutine is finally executed.
-    """
+    """Emit dashboard/task.status_changed. All arguments are plain primitives."""
     if node_id is None:
         return
     try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        logger.debug("No running event loop; skipping task_status_changed emit")
-        return
-    try:
-        loop.create_task(
-            dashboard_emitter.task_status_changed(
-                run_id=run_id,
-                task_id=node_id,
-                task_name=task_key,
-                new_status=new_status,
-                old_status=old_status,
-                assigned_worker_id=worker_id,
-                assigned_worker_name=worker_name,
-            )
+        await dashboard_emitter.task_status_changed(
+            run_id=run_id,
+            task_id=node_id,
+            task_name=task_key,
+            new_status=new_status,
+            old_status=old_status,
+            assigned_worker_id=worker_id,
+            assigned_worker_name=worker_name,
         )
     except Exception:  # slopcop: ignore[no-broad-except]
-        logger.warning("Failed to schedule task_status_changed emit", exc_info=True)
+        logger.warning("Failed to emit task_status_changed", exc_info=True)
 
 
 class TaskExecutionService:
     def __init__(self) -> None:
         self._graph_repo = WorkflowGraphRepository()
 
-    def prepare(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
+    async def prepare(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
         if command.node_id is not None:
-            return self._prepare_graph_native(command)
-        return self._prepare_definition(command)
+            return await self._prepare_graph_native(command)
+        return await self._prepare_definition(command)
 
     # -- Graph-native path (dynamic tasks) ---
 
-    def _prepare_graph_native(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
+    async def _prepare_graph_native(
+        self, command: PrepareTaskExecutionCommand
+    ) -> PreparedTaskExecution:
         with get_session() as session:
             node = session.get(RunGraphNode, command.node_id)
             if node is None:
@@ -139,7 +129,7 @@ class TaskExecutionService:
             session.add(execution)
             session.flush()
 
-            self._graph_repo.update_node_status(
+            await self._graph_repo.update_node_status(
                 session,
                 run_id=command.run_id,
                 node_id=command.node_id,
@@ -151,7 +141,7 @@ class TaskExecutionService:
             )
             session.commit()
 
-            _emit_task_status(
+            await _emit_task_status(
                 run_id=command.run_id,
                 node_id=command.node_id,
                 task_key=node.task_key,
@@ -177,7 +167,9 @@ class TaskExecutionService:
 
     # -- Definition path (static tasks) ---
 
-    def _prepare_definition(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
+    async def _prepare_definition(
+        self, command: PrepareTaskExecutionCommand
+    ) -> PreparedTaskExecution:
         with get_session() as session:
             task = require_not_none(
                 session.get(ExperimentDefinitionTask, command.task_id),
@@ -231,7 +223,7 @@ class TaskExecutionService:
             session.add(execution)
             session.flush()
 
-            mark_task_running(
+            await mark_task_running(
                 session,
                 command.run_id,
                 command.task_id,
@@ -241,7 +233,7 @@ class TaskExecutionService:
             )
             session.commit()
 
-            _emit_task_status(
+            await _emit_task_status(
                 run_id=command.run_id,
                 node_id=resolved_node_id,
                 task_key=task.task_key,
@@ -267,7 +259,7 @@ class TaskExecutionService:
 
     # -- Finalization (unchanged) ---
 
-    def finalize_success(self, command: FinalizeTaskExecutionCommand) -> None:
+    async def finalize_success(self, command: FinalizeTaskExecutionCommand) -> None:
         with get_session() as session:
             execution = require_not_none(
                 session.get(RunTaskExecution, command.execution_id),
@@ -282,21 +274,16 @@ class TaskExecutionService:
                 }
             session.add(execution)
             session.commit()
-            # Capture plain primitives before the session closes to avoid
-            # DetachedInstanceError when the fire-and-forget coroutine runs.
-            _run_id = execution.run_id
-            _node_id = execution.node_id
-            _task_key = str(execution.definition_task_id or execution.node_id or "")
 
-        _emit_task_status(
-            run_id=_run_id,
-            node_id=_node_id,
-            task_key=_task_key,
-            new_status=TaskExecutionStatus.COMPLETED,
-            old_status=TaskExecutionStatus.RUNNING,
-        )
+            await _emit_task_status(
+                run_id=execution.run_id,
+                node_id=execution.node_id,
+                task_key=str(execution.definition_task_id or execution.node_id or ""),
+                new_status=TaskExecutionStatus.COMPLETED,
+                old_status=TaskExecutionStatus.RUNNING,
+            )
 
-    def finalize_failure(self, command: FailTaskExecutionCommand) -> None:
+    async def finalize_failure(self, command: FailTaskExecutionCommand) -> None:
         with get_session() as session:
             execution = require_not_none(
                 session.get(RunTaskExecution, command.execution_id),
@@ -309,7 +296,7 @@ class TaskExecutionService:
 
             graph_repo = WorkflowGraphRepository()
             graph_lookup = GraphNodeLookup(session, command.run_id)
-            mark_task_failed(
+            await mark_task_failed(
                 session,
                 command.run_id,
                 command.task_id,
@@ -319,18 +306,14 @@ class TaskExecutionService:
                 graph_lookup=graph_lookup,
             )
             session.commit()
-            # Capture plain primitives before the session closes to avoid
-            # DetachedInstanceError when the fire-and-forget coroutine runs.
-            _node_id = execution.node_id
-            _task_key = str(execution.definition_task_id or execution.node_id or "")
 
-        _emit_task_status(
-            run_id=command.run_id,
-            node_id=_node_id,
-            task_key=_task_key,
-            new_status=TaskExecutionStatus.FAILED,
-            old_status=TaskExecutionStatus.RUNNING,
-        )
+            await _emit_task_status(
+                run_id=command.run_id,
+                node_id=execution.node_id,
+                task_key=str(execution.definition_task_id or execution.node_id or ""),
+                new_status=TaskExecutionStatus.FAILED,
+                old_status=TaskExecutionStatus.RUNNING,
+            )
 
     # -- Helpers ---
 

@@ -9,7 +9,6 @@ The repository does NOT validate status transitions or authorization.
 Those are the experiment layer's responsibility.
 """
 
-import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -265,7 +264,7 @@ class WorkflowGraphRepository:
 
     # ── Node operations ─────────────────────────────────────
 
-    def add_node(  # slopcop: ignore[max-function-params]
+    async def add_node(  # slopcop: ignore[max-function-params]
         self,
         session: Session,
         run_id: UUID,
@@ -300,7 +299,7 @@ class WorkflowGraphRepository:
         session.add(node)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="node.added",
@@ -312,7 +311,7 @@ class WorkflowGraphRepository:
         )
         return _to_node_dto(node)
 
-    def remove_node(
+    async def remove_node(
         self,
         session: Session,
         *,
@@ -334,7 +333,7 @@ class WorkflowGraphRepository:
             ).all()
         )
         for edge in connected:
-            self.remove_edge(
+            await self.remove_edge(
                 session,
                 run_id=run_id,
                 edge_id=edge.id,
@@ -347,7 +346,7 @@ class WorkflowGraphRepository:
         session.add(node)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="node.removed",
@@ -358,7 +357,7 @@ class WorkflowGraphRepository:
             new_value=_node_removed_snapshot(node),
         )
 
-    def update_node_status(
+    async def update_node_status(
         self,
         session: Session,
         *,
@@ -388,7 +387,7 @@ class WorkflowGraphRepository:
         session.add(node)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="node.status_changed",
@@ -400,7 +399,7 @@ class WorkflowGraphRepository:
         )
         return True
 
-    def update_node_field(
+    async def update_node_field(
         self,
         session: Session,
         *,
@@ -422,7 +421,7 @@ class WorkflowGraphRepository:
         session.add(node)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="node.field_changed",
@@ -436,7 +435,7 @@ class WorkflowGraphRepository:
 
     # ── Edge operations ─────────────────────────────────────
 
-    def add_edge(
+    async def add_edge(
         self,
         session: Session,
         run_id: UUID,
@@ -462,7 +461,7 @@ class WorkflowGraphRepository:
         session.add(edge)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="edge.added",
@@ -474,7 +473,7 @@ class WorkflowGraphRepository:
         )
         return _to_edge_dto(edge)
 
-    def remove_edge(
+    async def remove_edge(
         self,
         session: Session,
         *,
@@ -491,7 +490,7 @@ class WorkflowGraphRepository:
         session.add(edge)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="edge.removed",
@@ -502,7 +501,7 @@ class WorkflowGraphRepository:
             new_value=_edge_removed_snapshot(edge),
         )
 
-    def update_edge_status(
+    async def update_edge_status(
         self,
         session: Session,
         *,
@@ -519,7 +518,7 @@ class WorkflowGraphRepository:
         session.add(edge)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="edge.status_changed",
@@ -533,7 +532,7 @@ class WorkflowGraphRepository:
 
     # ── Annotation operations ───────────────────────────────
 
-    def set_annotation(
+    async def set_annotation(
         self,
         session: Session,
         run_id: UUID,
@@ -559,7 +558,7 @@ class WorkflowGraphRepository:
         session.add(row)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="annotation.set",
@@ -645,7 +644,7 @@ class WorkflowGraphRepository:
                 latest[row.namespace] = dict(row.payload)
         return latest
 
-    def delete_annotation(
+    async def delete_annotation(
         self,
         session: Session,
         run_id: UUID,
@@ -672,7 +671,7 @@ class WorkflowGraphRepository:
         session.add(row)
         session.flush()
 
-        self._log_mutation(
+        await self._log_mutation(
             session,
             run_id,
             mutation_type="annotation.deleted",
@@ -856,7 +855,7 @@ class WorkflowGraphRepository:
         last = session.exec(stmt).first()
         return (last + 1) if last is not None else 0
 
-    def _log_mutation(
+    async def _log_mutation(
         self,
         session: Session,
         run_id: UUID,
@@ -884,28 +883,9 @@ class WorkflowGraphRepository:
         session.add(row)
         session.flush()
 
-        # Snapshot ORM fields into a detached copy so that coroutines scheduled
-        # via fire-and-forget do not touch the session-bound instance after the
-        # session commits/rolls back (which would raise DetachedInstanceError).
-        row_snapshot = RunGraphMutation(
-            id=row.id,
-            run_id=row.run_id,
-            sequence=row.sequence,
-            mutation_type=row.mutation_type,
-            target_type=row.target_type,
-            target_id=row.target_id,
-            actor=row.actor,
-            old_value=row.old_value,
-            new_value=row.new_value,
-            reason=row.reason,
-            created_at=row.created_at,
-        )
         for listener in self._mutation_listeners:
             try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(listener(row_snapshot))
-            except RuntimeError:
-                logger.debug("No running event loop; skipping mutation listener emit")
+                await listener(row)
             except Exception:  # slopcop: ignore[no-broad-except]
                 logger.warning("Mutation listener failed", exc_info=True)
 

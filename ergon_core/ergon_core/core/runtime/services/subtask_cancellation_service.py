@@ -47,7 +47,7 @@ class SubtaskCancellationService:
     def __init__(self, graph_repo: WorkflowGraphRepository | None = None) -> None:
         self._graph_repo = graph_repo or WorkflowGraphRepository()
 
-    def cancel_orphans(
+    async def cancel_orphans(
         self,
         session: Session,
         *,
@@ -83,7 +83,7 @@ class SubtaskCancellationService:
 
                 if child_status in TERMINAL_STATUSES:
                     continue
-                applied = self._graph_repo.update_node_status(
+                applied = await self._graph_repo.update_node_status(
                     session,
                     run_id=run_id,
                     node_id=child_id,

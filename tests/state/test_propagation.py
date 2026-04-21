@@ -47,14 +47,14 @@ def _init_graph(session: Session, run_id, def_id):
 
 
 class TestDiamondFanIn:
-    def test_diamond_fan_in_waits_for_all_deps(self, session: Session):
+    async def test_diamond_fan_in_waits_for_all_deps(self, session: Session):
         """D should only become ready when BOTH B and C are completed."""
         def_id, _, task_ids, _ = seed_diamond(session)
         a, b, c, d = task_ids
         run_id = seed_run(session, def_id)
         repo, lookup = _init_graph(session, run_id, def_id)
 
-        ready = get_initial_ready_tasks(
+        ready = await get_initial_ready_tasks(
             session,
             run_id,
             def_id,
@@ -63,7 +63,7 @@ class TestDiamondFanIn:
         )
         assert set(ready) == {a}
 
-        after_a = on_task_completed(
+        after_a = await on_task_completed(
             session,
             run_id,
             def_id,
@@ -74,7 +74,7 @@ class TestDiamondFanIn:
         )
         assert set(after_a) == {b, c}
 
-        after_b = on_task_completed(
+        after_b = await on_task_completed(
             session,
             run_id,
             def_id,
@@ -85,7 +85,7 @@ class TestDiamondFanIn:
         )
         assert d not in after_b
 
-        after_c = on_task_completed(
+        after_c = await on_task_completed(
             session,
             run_id,
             def_id,
@@ -98,13 +98,13 @@ class TestDiamondFanIn:
 
 
 class TestChainPropagation:
-    def test_chain_propagation_step_by_step(self, session: Session):
+    async def test_chain_propagation_step_by_step(self, session: Session):
         def_id, _, task_ids, _ = seed_chain(session, 3)
         a, b, c = task_ids
         run_id = seed_run(session, def_id)
         repo, lookup = _init_graph(session, run_id, def_id)
 
-        ready = get_initial_ready_tasks(
+        ready = await get_initial_ready_tasks(
             session,
             run_id,
             def_id,
@@ -113,7 +113,7 @@ class TestChainPropagation:
         )
         assert set(ready) == {a}
 
-        after_a = on_task_completed(
+        after_a = await on_task_completed(
             session,
             run_id,
             def_id,
@@ -124,7 +124,7 @@ class TestChainPropagation:
         )
         assert set(after_a) == {b}
 
-        after_b = on_task_completed(
+        after_b = await on_task_completed(
             session,
             run_id,
             def_id,
@@ -135,7 +135,7 @@ class TestChainPropagation:
         )
         assert set(after_b) == {c}
 
-        after_c = on_task_completed(
+        after_c = await on_task_completed(
             session,
             run_id,
             def_id,
@@ -150,12 +150,12 @@ class TestChainPropagation:
 
 
 class TestFlatTasks:
-    def test_flat_tasks_all_initially_ready(self, session: Session):
+    async def test_flat_tasks_all_initially_ready(self, session: Session):
         def_id, _, task_ids = seed_flat_tasks(session, 3)
         run_id = seed_run(session, def_id)
         repo, lookup = _init_graph(session, run_id, def_id)
 
-        ready = get_initial_ready_tasks(
+        ready = await get_initial_ready_tasks(
             session,
             run_id,
             def_id,
@@ -166,12 +166,12 @@ class TestFlatTasks:
 
 
 class TestFailureDetection:
-    def test_is_workflow_failed_when_any_task_fails(self, session: Session):
+    async def test_is_workflow_failed_when_any_task_fails(self, session: Session):
         def_id, _, task_ids = seed_flat_tasks(session, 3)
         run_id = seed_run(session, def_id)
         repo, lookup = _init_graph(session, run_id, def_id)
 
-        mark_task_completed(
+        await mark_task_completed(
             session,
             run_id,
             task_ids[0],
@@ -179,7 +179,7 @@ class TestFailureDetection:
             graph_repo=repo,
             graph_lookup=lookup,
         )
-        mark_task_failed(
+        await mark_task_failed(
             session,
             run_id,
             task_ids[1],
@@ -194,12 +194,12 @@ class TestFailureDetection:
 
 
 class TestCompletionRequiresAll:
-    def test_is_workflow_complete_requires_all_tasks(self, session: Session):
+    async def test_is_workflow_complete_requires_all_tasks(self, session: Session):
         def_id, _, task_ids = seed_flat_tasks(session, 3)
         run_id = seed_run(session, def_id)
         repo, lookup = _init_graph(session, run_id, def_id)
 
-        mark_task_completed(
+        await mark_task_completed(
             session,
             run_id,
             task_ids[0],
@@ -207,7 +207,7 @@ class TestCompletionRequiresAll:
             graph_repo=repo,
             graph_lookup=lookup,
         )
-        mark_task_completed(
+        await mark_task_completed(
             session,
             run_id,
             task_ids[1],
@@ -223,13 +223,13 @@ class TestCompletionRequiresAll:
 class TestGraphStateVerification:
     """Verify that state is written to RunGraphNode and RunGraphMutation."""
 
-    def test_graph_nodes_have_correct_status(self, session: Session):
+    async def test_graph_nodes_have_correct_status(self, session: Session):
         def_id, _, task_ids, _ = seed_chain(session, 2)
         a, b = task_ids
         run_id = seed_run(session, def_id)
         repo, lookup = _init_graph(session, run_id, def_id)
 
-        on_task_completed(
+        await on_task_completed(
             session,
             run_id,
             def_id,
@@ -257,12 +257,12 @@ class TestGraphStateVerification:
         assert node_b is not None
         assert node_b.status == TaskExecutionStatus.PENDING
 
-    def test_mutations_are_logged(self, session: Session):
+    async def test_mutations_are_logged(self, session: Session):
         def_id, _, task_ids = seed_flat_tasks(session, 1)
         run_id = seed_run(session, def_id)
         repo, lookup = _init_graph(session, run_id, def_id)
 
-        mark_task_completed(
+        await mark_task_completed(
             session,
             run_id,
             task_ids[0],
@@ -284,13 +284,13 @@ class TestGraphStateVerification:
         last = mutations[-1]
         assert last.new_value["status"] == TaskExecutionStatus.COMPLETED
 
-    def test_edge_status_updated_on_dependency_resolution(self, session: Session):
+    async def test_edge_status_updated_on_dependency_resolution(self, session: Session):
         def_id, _, task_ids, _ = seed_chain(session, 2)
         a, b = task_ids
         run_id = seed_run(session, def_id)
         repo, lookup = _init_graph(session, run_id, def_id)
 
-        on_task_completed(
+        await on_task_completed(
             session,
             run_id,
             def_id,

@@ -62,8 +62,8 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
 
     svc = TaskExecutionService()
 
-    def _prepare() -> PreparedTaskExecution:
-        return svc.prepare(
+    async def _prepare() -> PreparedTaskExecution:
+        return await svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
@@ -176,7 +176,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             ).model_dump(),
         )
 
-        svc.finalize_success(
+        await svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
                 output_text=worker_result.output_text,
@@ -231,7 +231,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
         error_msg = str(exc)
         logger.exception("task-execute failed task_id=%s: %s", payload.task_id, error_msg)
 
-        svc.finalize_failure(
+        await svc.finalize_failure(
             FailTaskExecutionCommand(
                 execution_id=prepared.execution_id,
                 run_id=payload.run_id,

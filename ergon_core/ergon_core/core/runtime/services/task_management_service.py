@@ -114,7 +114,7 @@ class TaskManagementService:
 
     # ── add_subtask ──────────────────────────────────────────
 
-    def add_subtask(
+    async def add_subtask(
         self,
         session: Session,
         command: AddSubtaskCommand,
@@ -132,7 +132,7 @@ class TaskManagementService:
             session, run_id=command.run_id, node_id=command.parent_node_id
         )
 
-        node = self._graph_repo.add_node(
+        node = await self._graph_repo.add_node(
             session,
             command.run_id,
             task_key=task_key,
@@ -146,7 +146,7 @@ class TaskManagementService:
         )
 
         for dep_node_id in command.depends_on:
-            self._graph_repo.add_edge(
+            await self._graph_repo.add_edge(
                 session,
                 command.run_id,
                 source_node_id=dep_node_id,
@@ -172,7 +172,7 @@ class TaskManagementService:
 
     # ── cancel_task ──────────────────────────────────────────
 
-    def cancel_task(
+    async def cancel_task(
         self,
         session: Session,
         command: CancelTaskCommand,
@@ -193,7 +193,7 @@ class TaskManagementService:
         # a concurrent cascade could transition the node between our get_node
         # and our update_node_status. The guard makes this a harmless no-op
         # rather than a double-write.
-        applied = self._graph_repo.update_node_status(
+        applied = await self._graph_repo.update_node_status(
             session,
             run_id=command.run_id,
             node_id=command.node_id,
@@ -218,7 +218,7 @@ class TaskManagementService:
                 execution_id=execution_id,
                 cause="manager_decision",
             )
-            inngest_client.send_sync(
+            await inngest_client.send(
                 inngest.Event(
                     name=TaskCancelledEvent.name,
                     data=event.model_dump(mode="json"),
@@ -240,7 +240,7 @@ class TaskManagementService:
 
     # ── plan_subtasks ────────────────────────────────────────
 
-    def plan_subtasks(
+    async def plan_subtasks(
         self,
         session: Session,
         command: PlanSubtasksCommand,
@@ -264,7 +264,7 @@ class TaskManagementService:
             node_uuid = uuid4()
             task_key = f"{_DYNAMIC_TASK_KEY_PREFIX}{node_uuid.hex[:8]}"
 
-            node = self._graph_repo.add_node(
+            node = await self._graph_repo.add_node(
                 session,
                 command.run_id,
                 task_key=task_key,
@@ -285,7 +285,7 @@ class TaskManagementService:
             target_id = key_to_node_id[spec.local_key]
             for dep_key in spec.depends_on:
                 source_id = key_to_node_id[dep_key]
-                self._graph_repo.add_edge(
+                await self._graph_repo.add_edge(
                     session,
                     command.run_id,
                     source_node_id=source_id,
@@ -298,7 +298,7 @@ class TaskManagementService:
 
         definition_id = self._resolve_definition_id(session, command.run_id)
         for root_key in roots:
-            self._dispatch_task_ready(
+            await self._dispatch_task_ready(
                 run_id=command.run_id,
                 definition_id=definition_id,
                 node_id=key_to_node_id[root_key],
@@ -318,7 +318,7 @@ class TaskManagementService:
 
     # ── refine_task ──────────────────────────────────────────
 
-    def refine_task(
+    async def refine_task(
         self,
         session: Session,
         command: RefineTaskCommand,
@@ -340,7 +340,7 @@ class TaskManagementService:
         if node.status == RUNNING:
             raise TaskRunningError(command.node_id, node.status)
 
-        self._graph_repo.update_node_field(
+        await self._graph_repo.update_node_field(
             session,
             run_id=command.run_id,
             node_id=command.node_id,
@@ -363,7 +363,7 @@ class TaskManagementService:
 
     # ── restart_task ─────────────────────────────────────────
 
-    def restart_task(
+    async def restart_task(
         self,
         session: Session,
         command: RestartTaskCommand,
@@ -389,7 +389,7 @@ class TaskManagementService:
 
         # Phase 2 hook: invalidate downstream targets before resetting own
         # edges. Currently a no-op; replaced in Phase 2.
-        invalidated_node_ids = self._invalidate_downstream(
+        invalidated_node_ids = await self._invalidate_downstream(
             session,
             run_id=command.run_id,
             node_id=command.node_id,
@@ -401,7 +401,7 @@ class TaskManagementService:
         )
         for edge in outgoing:
             if edge.status != EDGE_PENDING:
-                self._graph_repo.update_edge_status(
+                await self._graph_repo.update_edge_status(
                     session,
                     run_id=command.run_id,
                     edge_id=edge.id,
@@ -412,7 +412,7 @@ class TaskManagementService:
         # Reset the node itself. only_if_not_terminal=False because we
         # explicitly want to transition terminal -> pending here; the
         # check above already rejected non-terminal inputs.
-        self._graph_repo.update_node_status(
+        await self._graph_repo.update_node_status(
             session,
             run_id=command.run_id,
             node_id=command.node_id,
@@ -424,7 +424,7 @@ class TaskManagementService:
         session.commit()
 
         definition_id = self._resolve_definition_id(session, command.run_id)
-        self._dispatch_task_ready(
+        await self._dispatch_task_ready(
             run_id=command.run_id,
             definition_id=definition_id,
             node_id=command.node_id,
@@ -445,7 +445,7 @@ class TaskManagementService:
 
     # ── Internal helpers ─────────────────────────────────────
 
-    def _invalidate_downstream(
+    async def _invalidate_downstream(
         self,
         session: Session,
         *,
@@ -500,10 +500,10 @@ class TaskManagementService:
                     # Stale output — cancel, reset incoming edges (so
                     # other fan-in parents re-satisfy them on their next
                     # completion), reset outgoing edges, then recurse.
-                    self._cancel_for_invalidation(session, run_id=run_id, node_id=target_id)
+                    await self._cancel_for_invalidation(session, run_id=run_id, node_id=target_id)
                     invalidated.append(target_id)
-                    self._reset_incoming_edges(session, run_id=run_id, node_id=target_id)
-                    self._reset_outgoing_edges(session, run_id=run_id, node_id=target_id)
+                    await self._reset_incoming_edges(session, run_id=run_id, node_id=target_id)
+                    await self._reset_outgoing_edges(session, run_id=run_id, node_id=target_id)
                     stack.append(target_id)
                 elif target.status in TERMINAL_STATUSES:
                     # FAILED or CANCELLED — no stale output, no recursion.
@@ -517,13 +517,13 @@ class TaskManagementService:
                     # siblings must re-satisfy them before the target
                     # re-activates. Do NOT recurse into outgoing: the
                     # target never completed, so no stale downstream.
-                    self._cancel_for_invalidation(session, run_id=run_id, node_id=target_id)
+                    await self._cancel_for_invalidation(session, run_id=run_id, node_id=target_id)
                     invalidated.append(target_id)
-                    self._reset_incoming_edges(session, run_id=run_id, node_id=target_id)
+                    await self._reset_incoming_edges(session, run_id=run_id, node_id=target_id)
 
         return invalidated
 
-    def _cancel_for_invalidation(
+    async def _cancel_for_invalidation(
         self,
         session: Session,
         *,
@@ -538,7 +538,7 @@ class TaskManagementService:
         stale output to flush), so the only terminal status we will
         overwrite here is COMPLETED — which is the whole point.
         """
-        self._graph_repo.update_node_status(
+        await self._graph_repo.update_node_status(
             session,
             run_id=run_id,
             node_id=node_id,
@@ -559,14 +559,14 @@ class TaskManagementService:
             execution_id=execution_id,
             cause="downstream_invalidation",
         )
-        inngest_client.send_sync(
+        await inngest_client.send(
             inngest.Event(
                 name=TaskCancelledEvent.name,
                 data=event.model_dump(mode="json"),
             )
         )
 
-    def _reset_outgoing_edges(
+    async def _reset_outgoing_edges(
         self,
         session: Session,
         *,
@@ -582,7 +582,7 @@ class TaskManagementService:
         outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, node_id=node_id)
         for edge in outgoing:
             if edge.status != EDGE_PENDING:
-                self._graph_repo.update_edge_status(
+                await self._graph_repo.update_edge_status(
                     session,
                     run_id=run_id,
                     edge_id=edge.id,
@@ -593,7 +593,7 @@ class TaskManagementService:
                     ),
                 )
 
-    def _reset_incoming_edges(
+    async def _reset_incoming_edges(
         self,
         session: Session,
         *,
@@ -615,7 +615,7 @@ class TaskManagementService:
         incoming = self._graph_repo.get_incoming_edges(session, run_id=run_id, node_id=node_id)
         for edge in incoming:
             if edge.status != EDGE_PENDING:
-                self._graph_repo.update_edge_status(
+                await self._graph_repo.update_edge_status(
                     session,
                     run_id=run_id,
                     edge_id=edge.id,
@@ -688,21 +688,21 @@ class TaskManagementService:
             return DYNAMIC_TASK_SENTINEL_ID
         return run.experiment_definition_id
 
-    def _dispatch_task_ready(
+    async def _dispatch_task_ready(
         self,
         *,
         run_id: UUID,
         definition_id: UUID,
         node_id: UUID,
     ) -> None:
-        """Fire task/ready Inngest event synchronously (after commit)."""
+        """Fire task/ready Inngest event (after commit)."""
         event = TaskReadyEvent(
             run_id=run_id,
             definition_id=definition_id,
             task_id=DYNAMIC_TASK_SENTINEL_ID,
             node_id=node_id,
         )
-        inngest_client.send_sync(
+        await inngest_client.send(
             inngest.Event(
                 name=TaskReadyEvent.name,
                 data=event.model_dump(mode="json"),

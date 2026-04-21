@@ -23,7 +23,7 @@ from sqlmodel import Session, select
 META = MutationMeta(actor="test", reason="graph-native-test")
 
 
-def _add_node(
+async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
@@ -31,7 +31,7 @@ def _add_node(
     *,
     status: str = TaskExecutionStatus.PENDING,
 ):
-    return repo.add_node(
+    return await repo.add_node(
         session,
         run_id,
         task_key=key,
@@ -43,14 +43,14 @@ def _add_node(
 
 
 class TestOnTaskCompletedByNode:
-    def test_finds_dependents_via_edges(self, session: Session):
+    async def test_finds_dependents_via_edges(self, session: Session):
         """A -> B edge. Complete A. B should appear in newly-ready."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        a = _add_node(repo, session, run_id, "A")
-        b = _add_node(repo, session, run_id, "B")
-        repo.add_edge(
+        a = await _add_node(repo, session, run_id, "A")
+        b = await _add_node(repo, session, run_id, "B")
+        await repo.add_edge(
             session,
             run_id,
             source_node_id=a.id,
@@ -61,121 +61,125 @@ class TestOnTaskCompletedByNode:
         session.flush()
 
         execution_id = uuid4()
-        newly_ready = on_task_completed_by_node(
+        newly_ready = await on_task_completed_by_node(
             session, run_id, a.id, execution_id, graph_repo=repo
         )
 
         assert b.id in newly_ready
 
-    def test_multiple_dependencies_waits_for_all(self, session: Session):
+    async def test_multiple_dependencies_waits_for_all(self, session: Session):
         """A -> C, B -> C. Complete A alone: C not ready. Then complete B: C ready."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        a = _add_node(repo, session, run_id, "A")
-        b = _add_node(repo, session, run_id, "B")
-        c = _add_node(repo, session, run_id, "C")
-        repo.add_edge(
+        a = await _add_node(repo, session, run_id, "A")
+        b = await _add_node(repo, session, run_id, "B")
+        c = await _add_node(repo, session, run_id, "C")
+        await repo.add_edge(
             session, run_id, source_node_id=a.id, target_node_id=c.id, status="pending", meta=META
         )
-        repo.add_edge(
+        await repo.add_edge(
             session, run_id, source_node_id=b.id, target_node_id=c.id, status="pending", meta=META
         )
         session.flush()
 
-        after_a = on_task_completed_by_node(session, run_id, a.id, uuid4(), graph_repo=repo)
+        after_a = await on_task_completed_by_node(session, run_id, a.id, uuid4(), graph_repo=repo)
         assert c.id not in after_a
 
-        after_b = on_task_completed_by_node(session, run_id, b.id, uuid4(), graph_repo=repo)
+        after_b = await on_task_completed_by_node(session, run_id, b.id, uuid4(), graph_repo=repo)
         assert c.id in after_b
 
-    def test_skips_non_pending_candidates(self, session: Session):
+    async def test_skips_non_pending_candidates(self, session: Session):
         """A -> B where B is already RUNNING. Complete A. B should NOT appear."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        a = _add_node(repo, session, run_id, "A")
-        b = _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.RUNNING)
-        repo.add_edge(
+        a = await _add_node(repo, session, run_id, "A")
+        b = await _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.RUNNING)
+        await repo.add_edge(
             session, run_id, source_node_id=a.id, target_node_id=b.id, status="pending", meta=META
         )
         session.flush()
 
-        newly_ready = on_task_completed_by_node(session, run_id, a.id, uuid4(), graph_repo=repo)
+        newly_ready = await on_task_completed_by_node(
+            session, run_id, a.id, uuid4(), graph_repo=repo
+        )
         assert b.id not in newly_ready
 
-    def test_leaf_node_returns_empty(self, session: Session):
+    async def test_leaf_node_returns_empty(self, session: Session):
         """Complete a node with no outgoing edges. Returns empty list."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        a = _add_node(repo, session, run_id, "A")
+        a = await _add_node(repo, session, run_id, "A")
         session.flush()
 
-        newly_ready = on_task_completed_by_node(session, run_id, a.id, uuid4(), graph_repo=repo)
+        newly_ready = await on_task_completed_by_node(
+            session, run_id, a.id, uuid4(), graph_repo=repo
+        )
         assert newly_ready == []
 
 
 class TestIsWorkflowCompleteV2:
-    def test_treats_cancelled_as_terminal(self, session: Session):
+    async def test_treats_cancelled_as_terminal(self, session: Session):
         """COMPLETED + COMPLETED + CANCELLED -> workflow complete."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
-        _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.COMPLETED)
-        _add_node(repo, session, run_id, "C", status="cancelled")
+        await _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
+        await _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.COMPLETED)
+        await _add_node(repo, session, run_id, "C", status="cancelled")
         session.flush()
 
         assert is_workflow_complete_v2(session, run_id) is True
 
-    def test_running_node_means_not_complete(self, session: Session):
+    async def test_running_node_means_not_complete(self, session: Session):
         """COMPLETED + RUNNING -> not complete."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
-        _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.RUNNING)
+        await _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
+        await _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.RUNNING)
         session.flush()
 
         assert is_workflow_complete_v2(session, run_id) is False
 
 
 class TestIsWorkflowFailedV2:
-    def test_cancelled_is_not_failed(self, session: Session):
+    async def test_cancelled_is_not_failed(self, session: Session):
         """COMPLETED + CANCELLED -> not failed."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
-        _add_node(repo, session, run_id, "B", status="cancelled")
+        await _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
+        await _add_node(repo, session, run_id, "B", status="cancelled")
         session.flush()
 
         assert is_workflow_failed_v2(session, run_id) is False
 
-    def test_failed_node_means_workflow_failed(self, session: Session):
+    async def test_failed_node_means_workflow_failed(self, session: Session):
         """COMPLETED + FAILED -> failed."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
-        _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.FAILED)
+        await _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.COMPLETED)
+        await _add_node(repo, session, run_id, "B", status=TaskExecutionStatus.FAILED)
         session.flush()
 
         assert is_workflow_failed_v2(session, run_id) is True
 
 
 class TestMarkTaskCompletedByNode:
-    def test_updates_status_and_logs_mutation(self, session: Session):
+    async def test_updates_status_and_logs_mutation(self, session: Session):
         """Create a RUNNING node, mark completed, verify status + WAL entry."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        node = _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.RUNNING)
+        node = await _add_node(repo, session, run_id, "A", status=TaskExecutionStatus.RUNNING)
         session.flush()
 
         execution_id = uuid4()
-        mark_task_completed_by_node(session, run_id, node.id, execution_id, graph_repo=repo)
+        await mark_task_completed_by_node(session, run_id, node.id, execution_id, graph_repo=repo)
         session.flush()
 
         row = session.get(RunGraphNode, node.id)

@@ -46,7 +46,7 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
     span_start = datetime.now(UTC)
 
     svc = TaskPropagationService()
-    propagation = svc.propagate(
+    propagation = await svc.propagate(
         PropagateTaskCompletionCommand(
             run_id=payload.run_id,
             definition_id=payload.definition_id,
@@ -151,7 +151,7 @@ async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult
     )
 
     svc = TaskPropagationService()
-    propagation = svc.propagate_failure(
+    propagation = await svc.propagate_failure(
         PropagateTaskCompletionCommand(
             run_id=payload.run_id,
             definition_id=payload.definition_id,
