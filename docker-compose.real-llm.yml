@@ -1,0 +1,60 @@
+# docker-compose.real-llm.yml
+#
+# Full stack overlay for the real-LLM pytest tier at tests/real_llm/.
+# Mirrors docker-compose.ci.yml but adds the frontend dashboard on port 3101
+# and enables the test harness endpoints (ENABLE_TEST_HARNESS=1).
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ergon
+      POSTGRES_PASSWORD: ergon
+      POSTGRES_DB: ergon
+    ports: ["5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ergon"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+  inngest:
+    image: inngest/inngest:latest
+    command: >
+      inngest dev --no-discovery
+      -u http://api:9000/api/inngest
+    ports: ["8288:8288"]
+    environment:
+      - INNGEST_DEV=1
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - ERGON_DATABASE_URL=postgresql://ergon:ergon@postgres:5432/ergon
+      - INNGEST_DEV=1
+      - INNGEST_EVENT_KEY=dev
+      - INNGEST_API_BASE_URL=http://inngest:8288
+      - ENABLE_TEST_HARNESS=1
+      - TEST_HARNESS_SECRET=real-llm-secret
+      - ERGON_API_BASE_URL=http://api:9000
+      - OTEL_TRACES_ENABLED=false
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports: ["9000:9000"]
+    command: uvicorn ergon_core.core.api.app:app --host 0.0.0.0 --port 9000
+
+  dashboard:
+    build:
+      context: ergon-dashboard
+      dockerfile: Dockerfile
+    environment:
+      - ERGON_API_BASE_URL=http://api:9000
+      - NEXT_PUBLIC_ENABLE_TEST_HARNESS=1
+    depends_on:
+      - api
+    ports: ["3101:3000"]
+    command: pnpm run dev
