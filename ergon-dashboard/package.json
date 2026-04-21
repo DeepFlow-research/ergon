@@ -13,7 +13,7 @@
     "generate:contracts:rest": "openapi-zod-client ./src/generated/rest/openapi.json -o ./src/generated/rest/contracts.ts --export-schemas && node ./scripts/generate-rest-contracts.mjs",
     "generate:contracts:events": "node ./scripts/generate-event-contracts.mjs",
     "generate:contracts": "pnpm run generate:contracts:schemas && pnpm run generate:contracts:rest && pnpm run generate:contracts:events",
-    "test:contracts": "tsx --test tests/contracts/contracts.test.ts",
+    "test:contracts": "tsx --test tests/contracts/contracts.test.ts && tsx --test src/features/graph/contracts/graphMutations.test.ts",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:live": "PLAYWRIGHT_LIVE=1 playwright test tests/e2e/live.smoke.spec.ts"
