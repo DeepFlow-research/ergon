@@ -27,7 +27,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunResource,
     RunTaskEvaluation,
     RunTaskExecution,
-    RunTaskStateEvent,
 )
 from sqlmodel import SQLModel, desc, select
 
@@ -259,55 +258,6 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
 
 
 # ---------------------------------------------------------------------------
-# State Events
-# ---------------------------------------------------------------------------
-
-
-class StateEventsQueries(BaseQueries[RunTaskStateEvent]):
-    def __init__(self) -> None:
-        super().__init__(RunTaskStateEvent)
-
-    def list_by_run(self, run_id: UUID) -> list[RunTaskStateEvent]:
-        with get_session() as session:
-            stmt = (
-                select(RunTaskStateEvent)
-                .where(RunTaskStateEvent.run_id == run_id)
-                .order_by(RunTaskStateEvent.created_at)
-            )
-            return list(session.exec(stmt).all())
-
-    def get_by_task(self, run_id: UUID, definition_task_id: UUID) -> list[RunTaskStateEvent]:
-        with get_session() as session:
-            stmt = (
-                select(RunTaskStateEvent)
-                .where(
-                    RunTaskStateEvent.run_id == run_id,
-                    RunTaskStateEvent.definition_task_id == definition_task_id,
-                )
-                .order_by(RunTaskStateEvent.created_at)
-            )
-            return list(session.exec(stmt).all())
-
-    def get_latest_status(self, run_id: UUID, definition_task_id: UUID) -> str | None:
-        events = self.get_by_task(run_id, definition_task_id)
-        if not events:
-            return None
-        return events[-1].new_status
-
-    def get_by_event_type(self, run_id: UUID, event_type: str) -> list[RunTaskStateEvent]:
-        with get_session() as session:
-            stmt = (
-                select(RunTaskStateEvent)
-                .where(
-                    RunTaskStateEvent.run_id == run_id,
-                    RunTaskStateEvent.event_type == event_type,
-                )
-                .order_by(RunTaskStateEvent.created_at)
-            )
-            return list(session.exec(stmt).all())
-
-
-# ---------------------------------------------------------------------------
 # Evaluations
 # ---------------------------------------------------------------------------
 
@@ -472,7 +422,6 @@ class Queries:
     runs: RunsQueries
     definitions: DefinitionsQueries
     task_executions: TaskExecutionsQueries
-    state_events: StateEventsQueries
     evaluations: EvaluationsQueries
     resources: ResourcesQueries
 
@@ -480,7 +429,6 @@ class Queries:
         self.runs = RunsQueries()
         self.definitions = DefinitionsQueries()
         self.task_executions = TaskExecutionsQueries()
-        self.state_events = StateEventsQueries()
         self.evaluations = EvaluationsQueries()
         self.resources = ResourcesQueries()
 

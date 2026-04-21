@@ -221,8 +221,7 @@ class TestCompletionRequiresAll:
 
 
 class TestGraphStateVerification:
-    """Verify that state is written to RunGraphNode and RunGraphMutation,
-    not to RunTaskStateEvent."""
+    """Verify that state is written to RunGraphNode and RunGraphMutation."""
 
     def test_graph_nodes_have_correct_status(self, session: Session):
         def_id, _, task_ids, _ = seed_chain(session, 2)

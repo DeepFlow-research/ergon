@@ -10,21 +10,20 @@
 
 Ergon currently has two independent DAG state representations that don't share writes.
 
-### System A: Propagation Layer
+### System A: Propagation Layer (legacy — table dropped)
 
-**Files:** `propagation.py`, `RunTaskStateEvent` model
+**Files:** `propagation.py`
 
-This is what the Inngest runtime actually uses. `get_current_task_status()` reads the latest `RunTaskStateEvent` row. `on_task_completed()` checks dependent readiness. `is_workflow_complete()` checks terminal state.
+This was what the Inngest runtime used. The `RunTaskStateEvent` table and its
+`run_task_state_events` schema have been dropped. State is now tracked
+exclusively via the Graph Layer (System B).
 
-**What it captures:**
+**What it captured (historical):**
 - Every task status transition (PENDING → RUNNING → COMPLETED/FAILED)
 - Old status, new status, execution ID, error metadata
 - `created_at` timestamps on each event
-- Fully reconstructable: replay events in `created_at` order → exact task state at any point
 
-**What it doesn't capture:**
-- Nothing about what happened *inside* a task execution (turns, tool calls, intermediate agent state)
-- No connection to the graph layer's mutation log
+**Superseded by:** `RunGraphMutation` / `RunGraphNode` (System B).
 
 ### System B: Graph Layer
 
@@ -43,7 +42,10 @@ The more sophisticated system — append-only mutation WAL with sequence numbers
 - Full old/new value diffs with actor and reason
 - Point-in-time reconstruction at any mutation sequence number
 
-**The problem:** The Inngest functions (`execute_task_fn`, `propagate_task_fn`) write to System A (`RunTaskStateEvent` via `propagation.py`) but **never write to System B** (`RunGraphMutation`). The graph repository exists and is well-designed, but the runtime doesn't route execution state through it. Reconstruction from PG requires replaying both systems independently and hoping they agree.
+**The problem (resolved):** Previously, the Inngest functions wrote to System A
+(`RunTaskStateEvent`) but not to System B (`RunGraphMutation`). The
+`RunTaskStateEvent` table has since been dropped. System B is now the
+sole state source.
 
 ---
 
@@ -53,7 +55,6 @@ The more sophisticated system — append-only mutation WAL with sequence numbers
 
 | Table | What's there |
 |-------|-------------|
-| `run_task_state_events` | PENDING → RUNNING → COMPLETED for each, with timestamps |
 | `run_task_executions` | started_at, completed_at, output_text, status=COMPLETED |
 | `run_generation_turns` | All turns: raw_request, raw_response, tool_calls, tool_results, logprobs |
 | `run_actions` | Each action with started_at, completed_at, action_type, input/output |
@@ -64,7 +65,6 @@ The more sophisticated system — append-only mutation WAL with sequence numbers
 
 | Table | What's there |
 |-------|-------------|
-| `run_task_state_events` | PENDING → RUNNING (written by `prepare` step before worker started) |
 | `run_task_executions` | status=RUNNING, started_at set, completed_at=NULL |
 
 Then, after the `except` block fires:
@@ -72,7 +72,6 @@ Then, after the `except` block fires:
 | Table | What's written on failure |
 |-------|--------------------------|
 | `run_task_executions` | status=FAILED, completed_at=now, error_json={"message": ...} |
-| `run_task_state_events` | RUNNING → FAILED with error in metadata |
 
 ### Task 7's 10 turns of work: **LOST** ✗
 
@@ -97,7 +96,7 @@ The "lossless per-turn records" are only lossless if the worker completes succes
 
 ### Tasks 8–10 (never started): Correctly absent ✓
 
-If they depended on task 7: no `RunTaskStateEvent` rows exist (they were never marked ready). If independent of 7: they have a PENDING event and may have started/completed on their own timeline. The propagation layer handles this correctly.
+If they depended on task 7: they were never marked ready. If independent of 7: they may have started/completed on their own timeline. The propagation layer handles this correctly via `RunGraphNode` status.
 
 ---
 
@@ -163,16 +162,15 @@ This is not the actual prompt the agent saw. For on-policy RL training and for t
 
 **Side effect:** Once turns are written incrementally, `created_at` on each turn naturally reflects actual wall time, closing gap §3a for free.
 
-### 4.2 Unify State Systems [High]
+### 4.2 Unify State Systems [Resolved]
 
-**Problem:** Propagation layer and graph layer are parallel systems with no shared writes.
+**Problem (resolved):** Propagation layer and graph layer were parallel systems
+with no shared writes.
 
-**Fix options:**
-
-- **A) Dual-write:** Every `mark_task_running()`, `mark_task_completed()`, `mark_task_failed()` also calls `graph_repo.update_node_status()` in the same transaction. One source of truth, two views. Smallest change.
-- **B) Graph-primary:** Drop `RunTaskStateEvent` as the execution state source. Propagation functions query `RunGraphNode.status` directly. The graph mutation log becomes the single WAL. Cleaner, bigger refactor.
-
-**Recommendation:** Option A first (can be done in a day), migrate to Option B when the graph layer is proven in production. The important thing for the paper is that *one* WAL captures everything — the graph mutation log with its sequence numbers and point-in-time queries is the better WAL, so route execution state through it.
+**Resolution:** `RunTaskStateEvent` and its `run_task_state_events` table have
+been dropped (migration `307fcca3a621_drop_run_task_state_events`). The graph
+mutation log (`RunGraphMutation` / `RunGraphNode`) is now the single source of
+truth for task state.
 
 ### 4.3 Populate `raw_request` [Medium]
 
@@ -225,7 +223,7 @@ On API restart, `poll()` can reconstruct batch state from PG instead of returnin
 | § | Fix | Priority | Addressed by |
 |---|---|---|---|
 | 4.1 | Incremental turn persistence | Critical | `02_INCREMENTAL_PERSISTENCE.md` — async generator workers, per-yield PG writes |
-| 4.2 | Unify state systems | High | `STATE_UNIFICATION_PLAN.md` — graph WAL as single source |
+| 4.2 | Unify state systems | Resolved | `RunTaskStateEvent` dropped; graph WAL is single source |
 | 4.3 | Populate `raw_request` | Medium | `02_INCREMENTAL_PERSISTENCE.md` §6.2 + §11 (prompt fidelity fix) |
 | 4.4 | Batch state to PG | Medium | Inline spec below — standalone small PR, ~1 day |
 | 4.5 | Thread ↔ Execution FK | Low | Inline spec below — single column addition, ~half day |
@@ -254,11 +252,9 @@ Phase 2: 01_ INLINE FIXES (can overlap with Phase 1) (1.5 days)
   ├── §4.5 Thread ↔ Execution FK
   └── Tests
 
-Phase 3: STATE_UNIFICATION (can overlap with Phase 2) (3-4 days)
-  ├── Dual-write: propagation → graph mutation log
-  ├── Read migration: queries use graph layer
-  ├── Drop RunTaskStateEvent writes
-  └── Tests
+Phase 3: STATE_UNIFICATION (complete)
+  ├── RunTaskStateEvent table dropped (migration 307fcca3a621)
+  └── Graph WAL is sole state source
 
 Phase 4: 03_ WORKFLOW RESUMPTION (5-7 days)
   ├── Level 1: DAG-aware restart (resume_workflow_fn, RunResumeEvent)
@@ -388,8 +384,8 @@ def reconstruct_run_state(session: Session, run_id: UUID, at_time: datetime) -> 
     mutations = get_mutations_before(session, run_id, at_time)
     graph = replay_mutations(mutations)  # nodes, edges, statuses
 
-    # 2. Per-task execution state — from state events
-    task_states = get_state_events_before(session, run_id, at_time)
+    # 2. Per-task execution state — from graph layer
+    task_states = get_graph_nodes_before(session, run_id, at_time)
     # Each task: which status, which execution, when
 
     # 3. Per-turn agent behavior — from generation turns

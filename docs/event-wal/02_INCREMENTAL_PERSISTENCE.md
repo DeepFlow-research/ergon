@@ -400,11 +400,6 @@ status: str  →  status: RunStatus
 # RunTaskExecution
 status: str  →  status: TaskExecutionStatus
 
-# RunTaskStateEvent
-new_status: str                →  new_status: TaskExecutionStatus
-old_status: str | None         →  old_status: TaskExecutionStatus | None
-event_type: str                →  event_type: Literal["state_change"]
-
 # ExperimentCohort
 status: str  →  status: ExperimentCohortStatus
 
@@ -887,7 +882,6 @@ ergon_core/ergon_core/core/persistence/telemetry/models.py
     + RunGenerationTurn.execution_outcome: ExecutionOutcome | None
     ~ RunRecord.status: str → RunStatus
     ~ RunTaskExecution.status: str → TaskExecutionStatus
-    ~ RunTaskStateEvent.new_status/old_status/event_type: tightened
     ~ ExperimentCohort.status: str → ExperimentCohortStatus
     + TrainingSession: needs TrainingStatus enum
     ~ RunGenerationTurn: tighten bare list types on JSON columns
