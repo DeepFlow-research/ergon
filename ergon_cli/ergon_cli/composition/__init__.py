@@ -66,11 +66,11 @@ def _build_manager_researcher_experiment(
     manager = manager_cls(name="manager-researcher", model=model)
     researcher = researcher_cls(name="researcher", model=model)
 
-    # Collect all task keys so we can explicitly assign the manager to them.
+    # Collect all task slugs so we can explicitly assign the manager to them.
     # The persistence service only auto-assigns when there is exactly 1 worker;
     # with 2 workers we must provide explicit assignments.
     instances = benchmark.build_instances()
-    all_task_keys = [task.task_key for tasks in instances.values() for task in tasks]
+    all_task_slugs = [task.task_slug for tasks in instances.values() for task in tasks]
 
     return Experiment(
         benchmark=benchmark,
@@ -79,7 +79,7 @@ def _build_manager_researcher_experiment(
             "researcher": researcher,
         },
         evaluators={"default": evaluator},
-        assignments={"manager-researcher": all_task_keys},
+        assignments={"manager-researcher": all_task_slugs},
     )
 
 
@@ -126,7 +126,7 @@ def _build_researchrubrics_experiment(
     researcher = researcher_cls(name="researchrubrics-researcher", model=model)
 
     instances = benchmark.build_instances()
-    all_task_keys = [task.task_key for tasks in instances.values() for task in tasks]
+    all_task_slugs = [task.task_slug for tasks in instances.values() for task in tasks]
 
     return Experiment(
         benchmark=benchmark,
@@ -135,7 +135,7 @@ def _build_researchrubrics_experiment(
             "researchrubrics-researcher": researcher,
         },
         evaluators={"default": evaluator},
-        assignments={"researchrubrics-manager": all_task_keys},
+        assignments={"researchrubrics-manager": all_task_slugs},
     )
 
 
