@@ -49,6 +49,11 @@ Assertions combine Postgres state, `/api/test/*` harness endpoints, and
 Playwright dashboard checks. An `OpenRouterBudget` session fixture gates total
 spend. This tier is a bug-hunting instrument; it is not required for CI.
 
+`GET /health` on the FastAPI app (`ergon_core/core/api/app.py`) is the canonical
+liveness endpoint: trivial 200 + `{"status": "ok"}` used by the stack fixture's
+`_wait_for` to decide the backend is ready. It does not check the DB — booting
+past lifespan is out of scope for liveness.
+
 ## 3. Control flow — choosing a tier
 
 ```

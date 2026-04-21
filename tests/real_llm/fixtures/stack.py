@@ -18,10 +18,12 @@ def _wait_for(url: str, timeout: float) -> None:
     while time.monotonic() < deadline:
         try:
             with httpx.Client(timeout=2.0) as client:
-                client.get(url)
-            return
+                r = client.get(url)
+            if 200 <= r.status_code < 300:
+                return
         except (httpx.ConnectError, httpx.ReadTimeout):
-            time.sleep(2.0)
+            pass
+        time.sleep(2.0)
     raise RuntimeError(f"timed out waiting for {url}")
 
 

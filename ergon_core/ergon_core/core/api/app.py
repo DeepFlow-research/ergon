@@ -61,6 +61,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Liveness probe: process is up and serving HTTP.
+
+    Deliberately trivial — no DB check, no dependency injection. The
+    real-LLM stack fixture and any operator-facing liveness probe poll
+    this endpoint to decide the backend is ready to accept requests.
+    """
+    return {"status": "ok"}
+
+
 app.include_router(runs_router)
 app.include_router(cohorts_router)
 app.include_router(rollouts_router)
