@@ -36,3 +36,19 @@ def real_llm_enabled() -> bool:
 def _skip_if_not_enabled(real_llm_enabled: bool, request: pytest.FixtureRequest) -> None:
     if request.node.get_closest_marker("real_llm") and not real_llm_enabled:
         pytest.skip("ERGON_REAL_LLM=1 not set; real-LLM tier is opt-in")
+
+
+# Re-export fixtures so pytest discovers them session-wide.
+from tests.real_llm.fixtures.openrouter_budget import (  # noqa: E402, F401
+    _budget_gate,
+    openrouter_budget,
+)
+from tests.real_llm.fixtures.harness_client import (  # noqa: E402, F401
+    BackendHarnessClient,
+    harness_client,
+)
+from tests.real_llm.fixtures.playwright_client import (  # noqa: E402, F401
+    playwright_browser,
+    playwright_context,
+)
+from tests.real_llm.fixtures.stack import real_llm_stack  # noqa: E402, F401
