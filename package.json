@@ -8,7 +8,7 @@
     "check:be:slopcop": "uv run slopcop ergon_core ergon_builtins ergon_cli ergon_infra",
     "check:be:complexity": "uv run xenon --max-absolute F --max-modules E --max-average C ergon_core ergon_builtins ergon_cli ergon_infra",
     "check:be": "pnpm run check:be:lint && pnpm run check:be:fmt && pnpm run check:be:type && pnpm run check:be:slopcop && pnpm run check:be:complexity",
-    "test:be:state": "uv run pytest tests/state -q",
+    "test:be:state": "uv run pytest tests/state tests/contract -q",
     "test:be:coverage": "uv run pytest tests/state tests/integration --cov=ergon_core --cov=ergon_builtins --cov-report=term-missing --cov-report=xml:coverage.xml",
     "test:be:integration": "uv run pytest tests/integration -v",
     "test:be:all": "pnpm run test:be:state && pnpm run test:be:integration",
