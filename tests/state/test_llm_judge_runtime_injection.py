@@ -25,7 +25,7 @@ def _make_eval_context(
         task_id=uuid4(),
         execution_id=uuid4(),
         task=BenchmarkTask(
-            task_key="test",
+            task_slug="test",
             instance_key="default",
             description="What is quantum computing?",
         ),

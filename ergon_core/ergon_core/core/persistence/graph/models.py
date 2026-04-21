@@ -56,9 +56,9 @@ class RunGraphNode(SQLModel, table=True):
     instance_key: str
 
     # Identifies the task slot in the experiment template (e.g.
-    # 'research-av-safety'). For dynamically spawned tasks, a generated
-    # key like 'dynamic-abc123'.
-    task_key: str = Field(index=True)
+    # 'research-av-safety') OR the caller-chosen slug for a
+    # dynamically-spawned subtask. Required at creation, persisted verbatim.
+    task_slug: str = Field(index=True)
     description: str
 
     # Free-form string, not an enum. The experiment layer owns domain-specific
@@ -66,10 +66,8 @@ class RunGraphNode(SQLModel, table=True):
     # experiments can define different lifecycles without core schema changes.
     status: str = Field(index=True)
 
-    # Kept on the core row (not in annotations) because the execution runtime
-    # needs it for task dispatch routing. Everything else experiment-specific
-    # (payload, contracts, criteria) goes in annotations.
-    assigned_worker_key: str | None = None
+    # WORKERS-registry slug, e.g. "researcher", "smoke-test-worker".
+    assigned_worker_slug: str | None = None
 
     # Containment: self-referential FK to the spawning node.
     # NULL for definition-seeded roots; set for every dynamic subtask.

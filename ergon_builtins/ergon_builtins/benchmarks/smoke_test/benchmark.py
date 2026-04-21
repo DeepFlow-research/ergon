@@ -50,7 +50,7 @@ class SmokeTestBenchmark(Benchmark):
 
         tasks = [
             BenchmarkTask(
-                task_key=f"task_{i}",
+                task_slug=f"task_{i}",
                 instance_key="default",
                 description=f"Smoke test task {i}",
                 evaluator_binding_keys=("default",),

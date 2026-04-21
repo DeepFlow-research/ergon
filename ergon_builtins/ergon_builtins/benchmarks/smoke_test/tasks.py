@@ -17,7 +17,7 @@ from ergon_core.api.task_types import BenchmarkTask
 def single_task(instance_key: str = "default") -> list[BenchmarkTask]:
     return [
         BenchmarkTask(
-            task_key="root",
+            task_slug="root",
             instance_key=instance_key,
             description="Single smoke test task",
             evaluator_binding_keys=("default",),
@@ -28,23 +28,23 @@ def single_task(instance_key: str = "default") -> list[BenchmarkTask]:
 def linear_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
     return [
         BenchmarkTask(
-            task_key="step_1",
+            task_slug="step_1",
             instance_key=instance_key,
             description="First step",
             evaluator_binding_keys=("default",),
         ),
         BenchmarkTask(
-            task_key="step_2",
+            task_slug="step_2",
             instance_key=instance_key,
             description="Second step",
-            dependency_task_keys=("step_1",),
+            dependency_task_slugs=("step_1",),
             evaluator_binding_keys=("default",),
         ),
         BenchmarkTask(
-            task_key="step_3",
+            task_slug="step_3",
             instance_key=instance_key,
             description="Third step",
-            dependency_task_keys=("step_2",),
+            dependency_task_slugs=("step_2",),
             evaluator_binding_keys=("default",),
         ),
     ]
@@ -53,19 +53,19 @@ def linear_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
 def parallel_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
     return [
         BenchmarkTask(
-            task_key="task_a",
+            task_slug="task_a",
             instance_key=instance_key,
             description="Parallel task A",
             evaluator_binding_keys=("default",),
         ),
         BenchmarkTask(
-            task_key="task_b",
+            task_slug="task_b",
             instance_key=instance_key,
             description="Parallel task B",
             evaluator_binding_keys=("default",),
         ),
         BenchmarkTask(
-            task_key="task_c",
+            task_slug="task_c",
             instance_key=instance_key,
             description="Parallel task C",
             evaluator_binding_keys=("default",),
@@ -76,27 +76,27 @@ def parallel_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
 def diamond_tasks(instance_key: str = "default") -> list[BenchmarkTask]:
     return [
         BenchmarkTask(
-            task_key="start",
+            task_slug="start",
             instance_key=instance_key,
             description="Diamond start",
         ),
         BenchmarkTask(
-            task_key="left",
+            task_slug="left",
             instance_key=instance_key,
             description="Left branch",
-            dependency_task_keys=("start",),
+            dependency_task_slugs=("start",),
         ),
         BenchmarkTask(
-            task_key="right",
+            task_slug="right",
             instance_key=instance_key,
             description="Right branch",
-            dependency_task_keys=("start",),
+            dependency_task_slugs=("start",),
         ),
         BenchmarkTask(
-            task_key="join",
+            task_slug="join",
             instance_key=instance_key,
             description="Diamond join",
-            dependency_task_keys=("left", "right"),
+            dependency_task_slugs=("left", "right"),
             evaluator_binding_keys=("default",),
         ),
     ]

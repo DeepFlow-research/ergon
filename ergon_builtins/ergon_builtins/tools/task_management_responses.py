@@ -8,7 +8,7 @@ from pydantic import BaseModel
 class AddTaskResponse(BaseModel):
     success: bool
     node_id: UUID | None = None
-    task_key: str | None = None
+    task_slug: str | None = None
     error: str | None = None
 
 

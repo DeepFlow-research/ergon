@@ -36,7 +36,7 @@ class WorkflowInitializationService:
             task_descriptors = [
                 TaskDescriptor(
                     task_id=t.id,
-                    task_key=t.task_key,
+                    task_slug=t.task_slug,
                     parent_task_id=t.parent_task_id,
                 )
                 for t in all_tasks

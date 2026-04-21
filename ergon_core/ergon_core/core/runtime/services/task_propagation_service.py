@@ -82,7 +82,7 @@ class TaskPropagationService:
                     ready_descriptors.append(
                         TaskDescriptor(
                             task_id=rn.definition_task_id or DYNAMIC_TASK_SENTINEL_ID,
-                            task_key=rn.task_key,
+                            task_slug=rn.task_slug,
                             node_id=ready_node_id,
                         )
                     )

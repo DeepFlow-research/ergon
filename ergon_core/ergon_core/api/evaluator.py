@@ -85,7 +85,7 @@ class Rubric(Evaluator):
         results = list(criterion_results)
         if not results:
             return TaskEvaluationResult(
-                task_key=task.task_key,
+                task_slug=task.task_slug,
                 score=0.0,
                 passed=False,
                 evaluator_name=self.name,
@@ -101,7 +101,7 @@ class Rubric(Evaluator):
 
         all_passed = all(r.passed for r in results)
         return TaskEvaluationResult(
-            task_key=task.task_key,
+            task_slug=task.task_slug,
             score=weighted_score,
             passed=all_passed,
             evaluator_name=self.name,

@@ -7,7 +7,7 @@ subtask mutations; read-only queries live in TaskInspectionService.
 
 import logging
 from collections import deque
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import inngest
 from ergon_core.core.dashboard.emitter import dashboard_emitter
@@ -20,14 +20,15 @@ from ergon_core.core.persistence.graph.status_conventions import (
     RUNNING,
     TERMINAL_STATUSES,
 )
+from ergon_core.core.persistence.shared.types import NodeId, TaskSlug
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.errors.delegation_errors import (
     CycleDetectedError,
-    DuplicateLocalKeyError,
+    DuplicateTaskSlugError,
     TaskAlreadyTerminalError,
     TaskNotTerminalError,
     TaskRunningError,
-    UnknownLocalKeyError,
+    UnknownTaskSlugError,
 )
 from ergon_core.core.runtime.events.task_events import (
     DYNAMIC_TASK_SENTINEL_ID,
@@ -55,7 +56,6 @@ from sqlmodel import Session, select
 logger = logging.getLogger(__name__)
 
 _MANAGER_META = MutationMeta(actor="manager-worker", reason="manager_decision")
-_DYNAMIC_TASK_KEY_PREFIX = "dynamic:"
 
 
 def _count_non_terminal_descendants(session: Session, run_id: UUID, node_id: UUID) -> int:
@@ -125,8 +125,7 @@ class TaskManagementService:
         is queryable without edge traversal. Wires depends_on as
         dependency edges (source=dep, target=new_node).
         """
-        node_uuid = uuid4()
-        task_key = f"{_DYNAMIC_TASK_KEY_PREFIX}{node_uuid.hex[:8]}"
+        task_slug = command.task_slug
 
         parent = self._graph_repo.get_node(
             session, run_id=command.run_id, node_id=command.parent_node_id
@@ -135,11 +134,11 @@ class TaskManagementService:
         node = await self._graph_repo.add_node(
             session,
             command.run_id,
-            task_key=task_key,
+            task_slug=task_slug,
             instance_key=parent.instance_key,
             description=command.description,
             status=PENDING,
-            assigned_worker_key=command.worker_binding_key,
+            assigned_worker_slug=command.assigned_worker_slug,
             parent_node_id=command.parent_node_id,
             level=parent.level + 1,
             meta=_MANAGER_META,
@@ -158,15 +157,15 @@ class TaskManagementService:
         session.commit()
 
         logger.info(
-            "add_subtask: created node %s (key=%s) under parent %s",
+            "add_subtask: created node %s (slug=%s) under parent %s",
             node.id,
-            task_key,
+            task_slug,
             command.parent_node_id,
         )
 
         return AddSubtaskResult(
             node_id=node.id,
-            task_key=task_key,
+            task_slug=task_slug,
             status=PENDING,
         )
 
@@ -257,34 +256,33 @@ class TaskManagementService:
             session, run_id=command.run_id, node_id=command.parent_node_id
         )
 
-        key_to_node_id: dict[str, UUID] = {}
-        roots: list[str] = []
+        slug_to_node_id: dict[TaskSlug, NodeId] = {}
+        roots: list[TaskSlug] = []
 
         for spec in command.subtasks:
-            node_uuid = uuid4()
-            task_key = f"{_DYNAMIC_TASK_KEY_PREFIX}{node_uuid.hex[:8]}"
+            task_slug = spec.task_slug
 
             node = await self._graph_repo.add_node(
                 session,
                 command.run_id,
-                task_key=task_key,
+                task_slug=task_slug,
                 instance_key=parent.instance_key,
                 description=spec.description,
                 status=PENDING,
-                assigned_worker_key=spec.worker_binding_key,
+                assigned_worker_slug=spec.assigned_worker_slug,
                 parent_node_id=command.parent_node_id,
                 level=parent.level + 1,
                 meta=_MANAGER_META,
             )
-            key_to_node_id[spec.local_key] = node.id
+            slug_to_node_id[spec.task_slug] = node.id
 
             if not spec.depends_on:
-                roots.append(spec.local_key)
+                roots.append(spec.task_slug)
 
         for spec in command.subtasks:
-            target_id = key_to_node_id[spec.local_key]
-            for dep_key in spec.depends_on:
-                source_id = key_to_node_id[dep_key]
+            target_id = slug_to_node_id[spec.task_slug]
+            for dep_slug in spec.depends_on:
+                source_id = slug_to_node_id[dep_slug]
                 await self._graph_repo.add_edge(
                     session,
                     command.run_id,
@@ -297,11 +295,11 @@ class TaskManagementService:
         session.commit()
 
         definition_id = self._resolve_definition_id(session, command.run_id)
-        for root_key in roots:
+        for root_slug in roots:
             await self._dispatch_task_ready(
                 run_id=command.run_id,
                 definition_id=definition_id,
-                node_id=key_to_node_id[root_key],
+                node_id=slug_to_node_id[root_slug],
             )
 
         logger.info(
@@ -312,7 +310,7 @@ class TaskManagementService:
         )
 
         return PlanSubtasksResult(
-            nodes=key_to_node_id,
+            nodes=slug_to_node_id,
             roots=roots,
         )
 
@@ -627,42 +625,42 @@ class TaskManagementService:
                 )
 
     def _validate_plan(self, subtasks: list[SubtaskSpec]) -> None:
-        """Check for duplicate keys, unknown references, and cycles."""
-        keys = self._check_no_duplicate_keys(subtasks)
-        self._check_no_unknown_deps(subtasks, keys)
+        """Check for duplicate slugs, unknown references, and cycles."""
+        slugs = self._check_no_duplicate_slugs(subtasks)
+        self._check_no_unknown_deps(subtasks, slugs)
         self._check_no_cycles(subtasks)
 
     @staticmethod
-    def _check_no_duplicate_keys(subtasks: list[SubtaskSpec]) -> set[str]:
-        """Return the set of local_keys, raising on duplicates."""
-        keys: set[str] = set()
+    def _check_no_duplicate_slugs(subtasks: list[SubtaskSpec]) -> set[TaskSlug]:
+        """Return the set of task_slugs, raising on duplicates."""
+        slugs: set[TaskSlug] = set()
         for spec in subtasks:
-            if spec.local_key in keys:
-                raise DuplicateLocalKeyError(spec.local_key)
-            keys.add(spec.local_key)
-        return keys
+            if spec.task_slug in slugs:
+                raise DuplicateTaskSlugError(spec.task_slug)
+            slugs.add(spec.task_slug)
+        return slugs
 
     @staticmethod
-    def _check_no_unknown_deps(subtasks: list[SubtaskSpec], keys: set[str]) -> None:
-        """Raise if any depends_on references a key not in the plan."""
-        all_deps: set[str] = set()
+    def _check_no_unknown_deps(subtasks: list[SubtaskSpec], slugs: set[TaskSlug]) -> None:
+        """Raise if any depends_on references a task_slug not in the plan."""
+        all_deps: set[TaskSlug] = set()
         for spec in subtasks:
             all_deps.update(spec.depends_on)
-        unknown = sorted(all_deps - keys)
+        unknown = sorted(all_deps - slugs)
         if unknown:
-            raise UnknownLocalKeyError(unknown)
+            raise UnknownTaskSlugError(unknown)
 
     @staticmethod
     def _check_no_cycles(subtasks: list[SubtaskSpec]) -> None:
-        """Kahn's algorithm for cycle detection on the local_key graph."""
-        in_degree: dict[str, int] = {spec.local_key: 0 for spec in subtasks}
-        adj: dict[str, list[str]] = {spec.local_key: [] for spec in subtasks}
+        """Kahn's algorithm for cycle detection on the task_slug graph."""
+        in_degree: dict[TaskSlug, int] = {spec.task_slug: 0 for spec in subtasks}
+        adj: dict[TaskSlug, list[TaskSlug]] = {spec.task_slug: [] for spec in subtasks}
         for spec in subtasks:
             for dep in spec.depends_on:
-                adj[dep].append(spec.local_key)
-                in_degree[spec.local_key] += 1
+                adj[dep].append(spec.task_slug)
+                in_degree[spec.task_slug] += 1
 
-        queue = deque(k for k, d in in_degree.items() if d == 0)
+        queue = deque(slug for slug, d in in_degree.items() if d == 0)
         visited = 0
         while queue:
             node = queue.popleft()
@@ -673,7 +671,7 @@ class TaskManagementService:
                     queue.append(neighbor)
 
         if visited < len(subtasks):
-            remaining = [k for k, d in in_degree.items() if d > 0]
+            remaining = [slug for slug, d in in_degree.items() if d > 0]
             raise CycleDetectedError(remaining)
 
     def _resolve_definition_id(self, session: Session, run_id: UUID) -> UUID:

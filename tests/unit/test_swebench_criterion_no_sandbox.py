@@ -40,7 +40,7 @@ def _task_payload() -> dict:
 
 def _task() -> BenchmarkTask:
     return BenchmarkTask(
-        task_key="swe-001",
+        task_slug="swe-001",
         instance_key="default",
         description="Fix the bug",
         task_payload=_task_payload(),

@@ -91,7 +91,7 @@ class InProcessCriterionExecutor:
                 run_id=task_context.run_id,
                 task_id=uuid4(),
                 execution_id=uuid4(),
-                task=BenchmarkTask(task_key="", instance_key="", description=""),
+                task=BenchmarkTask(task_slug="", instance_key="", description=""),
                 worker_result=WR(output=task_context.agent_reasoning),
                 sandbox_id=None,
             )
@@ -144,11 +144,11 @@ async def test_full_lifecycle_with_evaluation():
         assert prepared.worker_type is not None
         worker_cls = WORKERS[prepared.worker_type]
         live_worker = worker_cls(
-            name=prepared.worker_binding_key or "w",
+            name=prepared.assigned_worker_slug or "w",
             model=prepared.model_target,
         )
         task_data = BenchmarkTask(
-            task_key=prepared.task_key,
+            task_slug=prepared.task_slug,
             instance_key="",
             description=prepared.task_description,
         )
@@ -166,7 +166,7 @@ async def test_full_lifecycle_with_evaluation():
             )
         )
         completed_tasks.append((task_desc, prepared, result))
-        print(f"[EXEC] Task {prepared.task_key} completed")
+        print(f"[EXEC] Task {prepared.task_slug} completed")
 
     # ── Propagate ───────────────────────────────────────────────────
     prop_svc = TaskPropagationService()
@@ -193,7 +193,7 @@ async def test_full_lifecycle_with_evaluation():
             )
         )
         print(
-            f"[EVAL] Task {task_desc.task_key}: "
+            f"[EVAL] Task {task_desc.task_slug}: "
             f"{dispatch.evaluators_found} evaluators found, "
             f"{len(dispatch.valid_evaluators)} valid"
         )
@@ -215,7 +215,7 @@ async def test_full_lifecycle_with_evaluation():
                 agent_reasoning=worker_result.output,
             )
             task_for_eval = BenchmarkTask(
-                task_key=task_desc.task_key,
+                task_slug=task_desc.task_slug,
                 instance_key="",
                 description="",
             )

@@ -73,7 +73,7 @@ class GDPEvalBenchmark(Benchmark):
 
             tasks.append(
                 BenchmarkTask(
-                    task_key=task_id,
+                    task_slug=task_id,
                     instance_key="default",
                     description=description,
                     evaluator_binding_keys=("default",),

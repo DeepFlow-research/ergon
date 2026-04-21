@@ -54,8 +54,8 @@ def test_build_instances_yields_one_task_per_row() -> None:
     assert set(instances.keys()) == {"default"}
     tasks = instances["default"]
     assert len(tasks) == 2
-    assert tasks[0].task_key == "django__django-1"
-    assert tasks[1].task_key == "sympy__sympy-2"
+    assert tasks[0].task_slug == "django__django-1"
+    assert tasks[1].task_slug == "sympy__sympy-2"
 
 
 def test_limit_truncates() -> None:
@@ -67,7 +67,7 @@ def test_limit_truncates() -> None:
         tasks = benchmark.build_instances()["default"]
 
     assert len(tasks) == 1
-    assert tasks[0].task_key == "django__django-1"
+    assert tasks[0].task_slug == "django__django-1"
 
 
 def test_task_description_excludes_test_patch_and_gold_patch() -> None:

@@ -152,7 +152,7 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
     )
 
     task = BenchmarkTask(
-        task_key="",
+        task_slug="",
         instance_key="",
         description="",
     )

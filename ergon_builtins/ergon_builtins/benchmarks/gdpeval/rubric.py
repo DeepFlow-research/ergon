@@ -193,7 +193,7 @@ class StagedRubric(Rubric):
             metadata["rationale"] = self.rationale
 
         return TaskEvaluationResult(
-            task_key=task.task_key,
+            task_slug=task.task_slug,
             score=normalized,
             passed=failed_gate is None,
             evaluator_name=self.name,

@@ -75,17 +75,17 @@ async def _seed_node(
     repo: WorkflowGraphRepository,
     run_id,
     *,
-    task_key: str = "task-0",
-    worker_key: str = "w",
+    task_slug: str = "task-0",
+    worker_slug: str = "w",
 ) -> RunGraphNode:
     return await repo.add_node(
         session,
         run_id,
-        task_key=task_key,
+        task_slug=task_slug,
         instance_key="inst-0",
         description="test node",
         status=PENDING,
-        assigned_worker_key=worker_key,
+        assigned_worker_slug=worker_slug,
         meta=META,
     )
 
@@ -205,7 +205,7 @@ class TestTaskStatusChangedEmitter:
 
         worker = _seed_worker(session, def_id)
         repo = WorkflowGraphRepository()
-        node = await _seed_node(session, repo, run_id, worker_key=worker.binding_key)
+        node = await _seed_node(session, repo, run_id, worker_slug=worker.binding_key)
         session.add(
             RunRecord(id=run_id, experiment_definition_id=def_id, status=RunStatus.EXECUTING)
         )

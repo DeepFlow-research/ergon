@@ -35,7 +35,7 @@ class ResearchRubricsSmokeTestBenchmark(Benchmark):
     def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
         tasks = [
             BenchmarkTask(
-                task_key="smoke-research-001",
+                task_slug="smoke-research-001",
                 instance_key="default",
                 description=(
                     "Write a brief research report about E2B sandbox integration testing."

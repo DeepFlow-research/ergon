@@ -39,11 +39,11 @@ class TrainingStubWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
-        for turn in _build_synthetic_turns(task.task_key):
+        for turn in _build_synthetic_turns(task.task_slug):
             yield turn
 
 
-def _build_synthetic_turns(task_key: str) -> list[GenerationTurn]:
+def _build_synthetic_turns(task_slug: str) -> list[GenerationTurn]:
     """Generate 2-3 fake turns with synthetic logprobs."""
     num_turns = random.randint(2, 3)
     turns: list[GenerationTurn] = []
@@ -66,7 +66,7 @@ def _build_synthetic_turns(task_key: str) -> list[GenerationTurn]:
                     ToolCallPart(
                         tool_name="stub_tool",
                         tool_call_id=f"call_{i}",
-                        args={"turn": i, "task": task_key},
+                        args={"turn": i, "task": task_slug},
                     )
                 ],
             )
@@ -74,7 +74,7 @@ def _build_synthetic_turns(task_key: str) -> list[GenerationTurn]:
                 ToolReturnPart(
                     tool_call_id=f"call_{i}",
                     tool_name="stub_tool",
-                    content=f"Tool result for turn {i} of {task_key}",
+                    content=f"Tool result for turn {i} of {task_slug}",
                 )
             ]
         else:
@@ -85,7 +85,7 @@ def _build_synthetic_turns(task_key: str) -> list[GenerationTurn]:
             tool_results = []
 
         messages_in: list[ModelRequestPart] = (
-            [UserPromptPart(content=f"Task: Synthetic task {task_key}")] if i == 0 else []
+            [UserPromptPart(content=f"Task: Synthetic task {task_slug}")] if i == 0 else []
         )
 
         turns.append(

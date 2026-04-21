@@ -22,5 +22,5 @@ class StubWorker(Worker):
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
         yield GenerationTurn(
-            response_parts=[TextPart(content=f"Stub output for {task.task_key}")],
+            response_parts=[TextPart(content=f"Stub output for {task.task_slug}")],
         )

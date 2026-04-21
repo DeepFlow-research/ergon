@@ -32,9 +32,9 @@ class WorkerExecuteRequest(InngestEventContract):
     task_id: UUID
     execution_id: UUID
     sandbox_id: str
-    task_key: str
+    task_slug: str
     task_description: str
-    worker_binding_key: str
+    assigned_worker_slug: str
     worker_type: str
     model_target: str | None = None
     benchmark_type: str

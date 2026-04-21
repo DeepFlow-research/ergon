@@ -83,11 +83,11 @@ def _assert_status(
     nodes: dict,
     expected: dict[str, str],
 ) -> None:
-    """Bulk-assert statuses by local_key, re-reading fresh from DB."""
-    for key, expected_status in expected.items():
-        node = repo.get_node(session, run_id=run_id, node_id=nodes[key])
+    """Bulk-assert statuses by task_slug, re-reading fresh from DB."""
+    for slug, expected_status in expected.items():
+        node = repo.get_node(session, run_id=run_id, node_id=nodes[slug])
         assert node.status == expected_status, (
-            f"{key}: expected {expected_status!r}, got {node.status!r}"
+            f"{slug}: expected {expected_status!r}, got {node.status!r}"
         )
 
 
@@ -117,7 +117,7 @@ class TestManagerDAGScenario:
         manager = await repo.add_node(
             session,
             run_id,
-            task_key="manager",
+            task_slug="manager",
             instance_key="bench-1",
             description="manager agent",
             status=RUNNING,
@@ -139,10 +139,10 @@ class TestManagerDAGScenario:
                     run_id=run_id,
                     parent_node_id=manager.id,
                     subtasks=[
-                        SubtaskSpec(local_key="A", description="diamond root"),
-                        SubtaskSpec(local_key="B", description="left arm", depends_on=["A"]),
-                        SubtaskSpec(local_key="C", description="right arm", depends_on=["A"]),
-                        SubtaskSpec(local_key="F", description="join", depends_on=["B", "C"]),
+                        SubtaskSpec(task_slug="A", description="diamond root"),
+                        SubtaskSpec(task_slug="B", description="left arm", depends_on=["A"]),
+                        SubtaskSpec(task_slug="C", description="right arm", depends_on=["A"]),
+                        SubtaskSpec(task_slug="F", description="join", depends_on=["B", "C"]),
                     ],
                 ),
             )
@@ -152,9 +152,9 @@ class TestManagerDAGScenario:
                     run_id=run_id,
                     parent_node_id=manager.id,
                     subtasks=[
-                        SubtaskSpec(local_key="D", description="chain head"),
-                        SubtaskSpec(local_key="E", description="chain mid", depends_on=["D"]),
-                        SubtaskSpec(local_key="G", description="chain tail", depends_on=["E"]),
+                        SubtaskSpec(task_slug="D", description="chain head"),
+                        SubtaskSpec(task_slug="E", description="chain mid", depends_on=["D"]),
+                        SubtaskSpec(task_slug="G", description="chain tail", depends_on=["E"]),
                     ],
                 ),
             )
@@ -164,7 +164,7 @@ class TestManagerDAGScenario:
                     run_id=run_id,
                     parent_node_id=manager.id,
                     subtasks=[
-                        SubtaskSpec(local_key="H", description="independent leaf"),
+                        SubtaskSpec(task_slug="H", description="independent leaf"),
                     ],
                 ),
             )
@@ -371,7 +371,7 @@ class TestManagerDAGScenario:
         assert len(graph.nodes) == 9  # manager + 8 children
 
         # Every node terminal, zero FAILED.
-        statuses = {n.task_key: n.status for n in graph.nodes}
+        statuses = {n.task_slug: n.status for n in graph.nodes}
         for key, status in statuses.items():
             assert status in TERMINAL_STATUSES, f"{key} not terminal: {status}"
             assert status != FAILED, f"{key} unexpectedly FAILED"

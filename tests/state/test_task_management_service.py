@@ -40,7 +40,7 @@ async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
-    key: str,
+    slug: str,
     *,
     status: str = PENDING,
     instance_key: str = "inst-0",
@@ -51,9 +51,9 @@ async def _add_node(
     return await repo.add_node(
         session,
         run_id,
-        task_key=key,
+        task_slug=slug,
         instance_key=instance_key,
-        description=f"node {key}",
+        description=f"node {slug}",
         status=status,
         parent_node_id=parent_node_id,
         level=level,
@@ -77,14 +77,15 @@ class TestAddSubtask:
             AddSubtaskCommand(
                 run_id=run_id,
                 parent_node_id=parent.id,
+                task_slug="research-quantum",
                 description="research quantum computing",
-                worker_binding_key="researcher",
+                assigned_worker_slug="researcher",
             ),
         )
 
         child = repo.get_node(session, run_id=run_id, node_id=result.node_id)
         assert child.description == "research quantum computing"
-        assert child.assigned_worker_key == "researcher"
+        assert child.assigned_worker_slug == "researcher"
         assert child.status == PENDING
         assert child.parent_node_id == parent.id
         assert child.level == 1
@@ -102,16 +103,17 @@ class TestAddSubtask:
             AddSubtaskCommand(
                 run_id=run_id,
                 parent_node_id=parent.id,
+                task_slug="child-task",
                 description="child task",
-                worker_binding_key="worker-a",
+                assigned_worker_slug="worker-a",
             ),
         )
 
         child = repo.get_node(session, run_id=run_id, node_id=result.node_id)
         assert child.instance_key == "bench-42"
 
-    async def test_generates_dynamic_task_key(self, session: Session):
-        """Task key is prefixed with 'dynamic:' and has 8-char hex suffix."""
+    async def test_task_slug_persisted_verbatim(self, session: Session):
+        """The caller-supplied task_slug is persisted verbatim on the node."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
@@ -123,13 +125,15 @@ class TestAddSubtask:
             AddSubtaskCommand(
                 run_id=run_id,
                 parent_node_id=parent.id,
+                task_slug="my-dynamic-child",
                 description="dynamic child",
-                worker_binding_key="w",
+                assigned_worker_slug="w",
             ),
         )
 
-        assert result.task_key.startswith("dynamic:")
-        assert len(result.task_key) == len("dynamic:") + 8
+        assert result.task_slug == "my-dynamic-child"
+        child = repo.get_node(session, run_id=run_id, node_id=result.node_id)
+        assert child.task_slug == "my-dynamic-child"
 
     async def test_wires_dependency_edges(self, session: Session):
         """depends_on creates edges from dependency nodes to the new subtask."""
@@ -145,8 +149,9 @@ class TestAddSubtask:
             AddSubtaskCommand(
                 run_id=run_id,
                 parent_node_id=parent.id,
+                task_slug="depends-on-dep",
                 description="depends on dep",
-                worker_binding_key="w",
+                assigned_worker_slug="w",
                 depends_on=[dep_node.id],
             ),
         )
@@ -169,8 +174,9 @@ class TestAddSubtask:
             AddSubtaskCommand(
                 run_id=run_id,
                 parent_node_id=parent.id,
+                task_slug="child-slug",
                 description="child",
-                worker_binding_key="w",
+                assigned_worker_slug="w",
             ),
         )
 

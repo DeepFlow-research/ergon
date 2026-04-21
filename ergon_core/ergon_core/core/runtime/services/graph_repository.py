@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 # Only fields the execution runtime needs for dispatch live on the core row.
 # Everything experiment-specific (payload, contracts, criteria, budgets)
 # goes in annotations so the core schema stays domain-agnostic.
-_UPDATABLE_NODE_FIELDS = frozenset({"description", "assigned_worker_key"})
+_UPDATABLE_NODE_FIELDS = frozenset({"description", "assigned_worker_slug"})
 
 
 class WorkflowGraphRepository:
@@ -154,10 +154,10 @@ class WorkflowGraphRepository:
                     run_id=run_id,
                     definition_task_id=task.id,
                     instance_key=instance_key_by_id[task.instance_id],
-                    task_key=task.task_key,
+                    task_slug=task.task_slug,
                     description=task.description,
                     status=initial_node_status,
-                    assigned_worker_key=worker_by_task.get(task.id),
+                    assigned_worker_slug=worker_by_task.get(task.id),
                     created_at=now,
                     updated_at=now,
                 )
@@ -269,11 +269,11 @@ class WorkflowGraphRepository:
         session: Session,
         run_id: UUID,
         *,
-        task_key: str,
+        task_slug: str,
         instance_key: str,
         description: str,
         status: str,
-        assigned_worker_key: str | None = None,
+        assigned_worker_slug: str | None = None,
         parent_node_id: UUID | None = None,
         level: int = 0,
         meta: MutationMeta,
@@ -287,10 +287,10 @@ class WorkflowGraphRepository:
         node = RunGraphNode(
             run_id=run_id,
             instance_key=instance_key,
-            task_key=task_key,
+            task_slug=task_slug,
             description=description,
             status=status,
-            assigned_worker_key=assigned_worker_key,
+            assigned_worker_slug=assigned_worker_slug,
             parent_node_id=parent_node_id,
             level=level,
             created_at=now,
@@ -926,10 +926,10 @@ def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
         run_id=row.run_id,
         definition_task_id=row.definition_task_id,
         instance_key=row.instance_key,
-        task_key=row.task_key,
+        task_slug=row.task_slug,
         description=row.description,
         status=row.status,
-        assigned_worker_key=row.assigned_worker_key,
+        assigned_worker_slug=row.assigned_worker_slug,
         parent_node_id=row.parent_node_id,
         level=row.level,
     )
@@ -975,11 +975,11 @@ def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationDto:
 
 def _node_removed_snapshot(node: RunGraphNode) -> NodeRemovedMutation:
     return NodeRemovedMutation(
-        task_key=node.task_key,
+        task_slug=node.task_slug,
         instance_key=node.instance_key,
         description=node.description,
         status=node.status,
-        assigned_worker_key=node.assigned_worker_key,
+        assigned_worker_slug=node.assigned_worker_slug,
     )
 
 
@@ -993,11 +993,11 @@ def _edge_removed_snapshot(edge: RunGraphEdge) -> EdgeRemovedMutation:
 
 def _node_snapshot(node: RunGraphNode) -> NodeAddedMutation:
     return NodeAddedMutation(
-        task_key=node.task_key,
+        task_slug=node.task_slug,
         instance_key=node.instance_key,
         description=node.description,
         status=node.status,
-        assigned_worker_key=node.assigned_worker_key,
+        assigned_worker_slug=node.assigned_worker_slug,
     )
 
 

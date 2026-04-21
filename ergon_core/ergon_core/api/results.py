@@ -39,7 +39,7 @@ class TaskEvaluationResult(BaseModel):
 
     model_config = {"frozen": True}
 
-    task_key: str
+    task_slug: str
     score: float
     passed: bool
     evaluator_name: str

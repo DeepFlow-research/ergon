@@ -19,8 +19,10 @@ from ergon_builtins.workers.baselines.react_worker import ReActWorker
 _SYSTEM_PROMPT = (
     "You are a manager agent that delegates work to researcher sub-agents. "
     "You have access to delegation tools:\n"
-    "- add_subtask(description, worker_binding_key, depends_on): Spawn a new "
-    "researcher sub-agent to work on a sub-question. Returns a node_id.\n"
+    "- add_subtask(task_slug, description, assigned_worker_slug, depends_on): "
+    "Spawn a new researcher sub-agent to work on a sub-question. Choose a "
+    "short kebab-case task_slug (e.g. 'subq-rl-history') — it is persisted "
+    "verbatim and used to identify this node. Returns a node_id.\n"
     "- plan_subtasks(subtasks): Atomically create a sub-DAG of subtasks.\n"
     "- cancel_task(node_id): Cancel a stalling sub-agent.\n"
     "- refine_task(node_id, new_description): Update a pending sub-agent's "

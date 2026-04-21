@@ -29,7 +29,7 @@ async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
-    key: str,
+    slug: str,
     *,
     status: str = PENDING,
     instance_key: str = "inst-0",
@@ -40,9 +40,9 @@ async def _add_node(
     return await repo.add_node(
         session,
         run_id,
-        task_key=key,
+        task_slug=slug,
         instance_key=instance_key,
-        description=f"node {key}",
+        description=f"node {slug}",
         status=status,
         parent_node_id=parent_node_id,
         level=level,
@@ -96,8 +96,8 @@ class TestListSubtasks:
         assert child_a.id in result_ids
         assert child_b.id in result_ids
 
-    async def test_deterministic_order_by_task_key(self, session: Session):
-        """Results are ordered by task_key for stable LLM references."""
+    async def test_deterministic_order_by_task_slug(self, session: Session):
+        """Results are ordered by task_slug for stable LLM references."""
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService()
         run_id = uuid4()
@@ -126,8 +126,8 @@ class TestListSubtasks:
         results = svc.list_subtasks(session, run_id=run_id, parent_node_id=parent.id)
 
         assert len(results) == 2
-        assert results[0].task_key == "aaa-first"
-        assert results[1].task_key == "zzz-last"
+        assert results[0].task_slug == "aaa-first"
+        assert results[1].task_slug == "zzz-last"
 
     async def test_empty_children(self, session: Session):
         """A parent with no children returns an empty list."""

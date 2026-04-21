@@ -13,7 +13,7 @@ class SubtaskInfo(BaseModel):
     """A snapshot of one subtask suitable for the manager to reason over."""
 
     node_id: NodeId
-    task_key: str
+    task_slug: str
     description: str
     status: SubtaskStatus
     depends_on: list[NodeId]

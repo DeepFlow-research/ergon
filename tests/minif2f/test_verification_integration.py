@@ -61,7 +61,7 @@ def _reset_sandbox_singleton():
 
 def _make_task() -> BenchmarkTask:
     return BenchmarkTask(
-        task_key="mathd_algebra_176",
+        task_slug="mathd_algebra_176",
         instance_key="default",
         description=("theorem mathd_algebra_176 (x : ℝ) : (x + 1) ^ 2 * x = x ^ 3 + 2 * x ^ 2 + x"),
         evaluator_binding_keys=("default",),
