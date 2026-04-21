@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import inngest
 from ergon_core.core.dashboard import emit_cohort_updated_for_run
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
@@ -46,6 +47,20 @@ async def complete_workflow_fn(ctx: inngest.Context) -> WorkflowCompleteResult:
     )
 
     await emit_cohort_updated_for_run(payload.run_id)
+
+    with get_session() as _session:
+        _run = _session.get(RunRecord, payload.run_id)
+        _duration = (
+            (_run.completed_at - _run.started_at).total_seconds()
+            if _run and _run.started_at and _run.completed_at
+            else 0.0
+        )
+    await dashboard_emitter.workflow_completed(
+        run_id=payload.run_id,
+        status="completed",
+        duration_seconds=_duration,
+        final_score=finalized.final_score,
+    )
 
     await inngest_client.send(
         inngest.Event(
