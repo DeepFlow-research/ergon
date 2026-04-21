@@ -87,7 +87,7 @@ async def test_harness_canary_smoke_stub(
     run_id = _latest_run_id_since(before)
 
     # Poll the harness until terminal.
-    state = harness_client.wait_for_terminal(run_id, timeout_s=120)
+    state = await harness_client.wait_for_terminal(run_id, timeout_s=120)
     assert state["status"] == "completed", f"run did not complete: {state}"
     assert len(state.get("graph_nodes", [])) >= 1
 
