@@ -43,9 +43,9 @@ async def _cancel_orphans_for(
     """Two durable steps: scan-and-cancel, then emit events."""
     svc = SubtaskCancellationService()
 
-    def _scan_and_cancel() -> dict:
+    async def _scan_and_cancel() -> dict:
         with get_session() as session:
-            result = svc.cancel_orphans(
+            result = await svc.cancel_orphans(
                 session,
                 run_id=run_id,
                 definition_id=definition_id,

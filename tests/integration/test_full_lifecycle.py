@@ -6,8 +6,6 @@ directly to simulate the event-driven flow:
   -> propagate -> finalize workflow -> verify telemetry
 """
 
-import asyncio
-
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.registry import WORKERS
@@ -68,7 +66,7 @@ async def _run_worker(worker: Worker, task: BenchmarkTask, ctx: WorkerContext) -
     return worker.get_output(ctx)
 
 
-def test_full_lifecycle():
+async def test_full_lifecycle():
     """Prove: construct -> validate -> persist -> run -> execute -> complete."""
 
     ensure_db()
@@ -113,7 +111,7 @@ def test_full_lifecycle():
 
     # ── Phase B: Initialize Workflow ────────────────────────────────
     init_svc = WorkflowInitializationService()
-    initialized = init_svc.initialize(
+    initialized = await init_svc.initialize(
         InitializeWorkflowCommand(
             run_id=run.id,
             definition_id=persisted.definition_id,
@@ -139,7 +137,7 @@ def test_full_lifecycle():
 
     for task_desc in initialized.initial_ready_tasks:
         # Prepare
-        prepared = exec_svc.prepare(
+        prepared = await exec_svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=run.id,
                 definition_id=persisted.definition_id,
@@ -173,12 +171,12 @@ def test_full_lifecycle():
             execution_id=prepared.execution_id,
             sandbox_id="test-sandbox",
         )
-        result = asyncio.run(_run_worker(live_worker, task_data, ctx))
+        result = await _run_worker(live_worker, task_data, ctx)
         assert result.success
         print(f"[EXEC] Task {prepared.task_key} -> output: {result.output[:50]}")
 
         # Finalize success
-        exec_svc.finalize_success(
+        await exec_svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
                 output_text=result.output,
@@ -189,7 +187,7 @@ def test_full_lifecycle():
     # ── Phase B: Propagate Completions ──────────────────────────────
     prop_svc = TaskPropagationService()
     for task_desc, prepared in completed_executions:
-        prop_result = prop_svc.propagate(
+        prop_result = await prop_svc.propagate(
             PropagateTaskCompletionCommand(
                 run_id=run.id,
                 definition_id=persisted.definition_id,
@@ -241,10 +239,11 @@ def test_full_lifecycle():
 
 
 if __name__ == "__main__":
+    import asyncio
     import os
 
     os.environ.setdefault(
         "ERGON_DATABASE_URL",
         "postgresql://ergon_core:ergon_core_dev@localhost:5433/ergon_core_test",
     )
-    test_full_lifecycle()
+    asyncio.run(test_full_lifecycle())

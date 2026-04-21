@@ -30,7 +30,7 @@ class TaskPropagationService:
     because the caller (an Inngest step function) may retry independently.
     """
 
-    def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+    async def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
         """Handle successful task completion: satisfy deps, cascade invalidations.
 
         Returns newly-ready tasks (for scheduling) and invalidated targets
@@ -55,7 +55,7 @@ class TaskPropagationService:
             # Mark the triggering node as COMPLETED before propagating edges.
             # on_task_completed_or_failed only updates edges and downstream
             # candidates — the node's own status must be set by the caller.
-            graph_repo.update_node_status(
+            await graph_repo.update_node_status(
                 session,
                 run_id=command.run_id,
                 node_id=node_id,
@@ -67,7 +67,7 @@ class TaskPropagationService:
                 only_if_not_terminal=True,
             )
 
-            newly_ready_node_ids, invalidated_node_ids = on_task_completed_or_failed(
+            newly_ready_node_ids, invalidated_node_ids = await on_task_completed_or_failed(
                 session,
                 command.run_id,
                 node_id,
@@ -102,7 +102,7 @@ class TaskPropagationService:
                 workflow_terminal_state=terminal,
             )
 
-    def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+    async def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
         """Handle task failure: invalidate downstream deps, detect workflow terminal.
 
         Unlike propagate(), never produces newly-ready tasks — a failed source
@@ -119,7 +119,7 @@ class TaskPropagationService:
             invalidated_node_ids: list[UUID] = []
             if node_id is not None:
                 # Mark the triggering node as FAILED before propagating edges.
-                graph_repo.update_node_status(
+                await graph_repo.update_node_status(
                     session,
                     run_id=command.run_id,
                     node_id=node_id,
@@ -131,7 +131,7 @@ class TaskPropagationService:
                     only_if_not_terminal=True,
                 )
 
-                _ready, invalidated_node_ids = on_task_completed_or_failed(
+                _ready, invalidated_node_ids = await on_task_completed_or_failed(
                     session,
                     command.run_id,
                     node_id,

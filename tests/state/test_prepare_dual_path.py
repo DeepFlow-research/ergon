@@ -96,7 +96,7 @@ def _patch_get_session(monkeypatch: pytest.MonkeyPatch, session: Session) -> Non
 
 
 class TestPrepareGraphNative:
-    def test_returns_correct_prepared_execution(
+    async def test_returns_correct_prepared_execution(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
@@ -119,7 +119,7 @@ class TestPrepareGraphNative:
             task_id=task_ids[0],
             node_id=node.id,
         )
-        result = svc.prepare(command)
+        result = await svc.prepare(command)
 
         assert result.node_id == node.id
         assert result.task_key == "research-topic"
@@ -129,7 +129,7 @@ class TestPrepareGraphNative:
         assert result.worker_binding_key == "researcher"
         assert result.execution_id is not None
 
-    def test_creates_execution_row_without_definition_task_id(
+    async def test_creates_execution_row_without_definition_task_id(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
@@ -140,7 +140,7 @@ class TestPrepareGraphNative:
         _patch_get_session(monkeypatch, session)
         svc = TaskExecutionService()
 
-        result = svc.prepare(
+        result = await svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=run_id,
                 definition_id=def_id,
@@ -155,7 +155,7 @@ class TestPrepareGraphNative:
         assert execution.node_id == node.id
         assert execution.status == TaskExecutionStatus.RUNNING
 
-    def test_marks_graph_node_running(
+    async def test_marks_graph_node_running(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
@@ -166,7 +166,7 @@ class TestPrepareGraphNative:
         _patch_get_session(monkeypatch, session)
         svc = TaskExecutionService()
 
-        svc.prepare(
+        await svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=run_id,
                 definition_id=def_id,
@@ -185,7 +185,7 @@ class TestPrepareGraphNative:
 
 
 class TestPrepareGraphNativeErrors:
-    def test_nonexistent_node_raises(
+    async def test_nonexistent_node_raises(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
@@ -195,7 +195,7 @@ class TestPrepareGraphNativeErrors:
         svc = TaskExecutionService()
 
         with pytest.raises(ConfigurationError, match="not found"):
-            svc.prepare(
+            await svc.prepare(
                 PrepareTaskExecutionCommand(
                     run_id=run_id,
                     definition_id=def_id,
@@ -204,7 +204,7 @@ class TestPrepareGraphNativeErrors:
                 )
             )
 
-    def test_no_assigned_worker_key_raises(
+    async def test_no_assigned_worker_key_raises(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
@@ -215,7 +215,7 @@ class TestPrepareGraphNativeErrors:
         svc = TaskExecutionService()
 
         with pytest.raises(ConfigurationError, match="no assigned_worker_key"):
-            svc.prepare(
+            await svc.prepare(
                 PrepareTaskExecutionCommand(
                     run_id=run_id,
                     definition_id=def_id,
@@ -224,7 +224,7 @@ class TestPrepareGraphNativeErrors:
                 )
             )
 
-    def test_no_matching_worker_raises(
+    async def test_no_matching_worker_raises(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
@@ -236,7 +236,7 @@ class TestPrepareGraphNativeErrors:
         svc = TaskExecutionService()
 
         with pytest.raises(ConfigurationError, match="No ExperimentDefinitionWorker"):
-            svc.prepare(
+            await svc.prepare(
                 PrepareTaskExecutionCommand(
                     run_id=run_id,
                     definition_id=def_id,
@@ -252,7 +252,7 @@ class TestPrepareGraphNativeErrors:
 
 
 class TestPrepareDefinition:
-    def test_returns_correct_prepared_execution(
+    async def test_returns_correct_prepared_execution(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, inst_id, task_ids = seed_flat_tasks(session, 1)
@@ -280,7 +280,7 @@ class TestPrepareDefinition:
         _patch_get_session(monkeypatch, session)
         svc = TaskExecutionService()
 
-        result = svc.prepare(
+        result = await svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=run_id,
                 definition_id=def_id,
@@ -295,7 +295,7 @@ class TestPrepareDefinition:
         assert result.node_id == node.id
         assert result.execution_id is not None
 
-    def test_creates_execution_with_definition_task_id(
+    async def test_creates_execution_with_definition_task_id(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, inst_id, task_ids = seed_flat_tasks(session, 1)
@@ -315,7 +315,7 @@ class TestPrepareDefinition:
         _patch_get_session(monkeypatch, session)
         svc = TaskExecutionService()
 
-        result = svc.prepare(
+        result = await svc.prepare(
             PrepareTaskExecutionCommand(
                 run_id=run_id,
                 definition_id=def_id,
@@ -335,7 +335,7 @@ class TestPrepareDefinition:
 
 
 class TestAttemptNumbering:
-    def test_graph_native_increments_attempt(
+    async def test_graph_native_increments_attempt(
         self, session: Session, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def_id, _, task_ids = seed_flat_tasks(session, 1)
@@ -353,7 +353,7 @@ class TestAttemptNumbering:
             node_id=node.id,
         )
 
-        r1 = svc.prepare(command)
+        r1 = await svc.prepare(command)
         exec1 = session.get(RunTaskExecution, r1.execution_id)
         assert exec1 is not None
         assert exec1.attempt_number == 1
@@ -363,7 +363,7 @@ class TestAttemptNumbering:
         session.add(node)
         session.flush()
 
-        r2 = svc.prepare(command)
+        r2 = await svc.prepare(command)
         exec2 = session.get(RunTaskExecution, r2.execution_id)
         assert exec2 is not None
         assert exec2.attempt_number == 2

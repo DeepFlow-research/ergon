@@ -70,7 +70,7 @@ def _seed_worker(session: Session, def_id, *, binding_key: str = "w") -> Experim
     return w
 
 
-def _seed_node(
+async def _seed_node(
     session: Session,
     repo: WorkflowGraphRepository,
     run_id,
@@ -78,7 +78,7 @@ def _seed_node(
     task_key: str = "task-0",
     worker_key: str = "w",
 ) -> RunGraphNode:
-    return repo.add_node(
+    return await repo.add_node(
         session,
         run_id,
         task_key=task_key,
@@ -119,7 +119,7 @@ class TestWorkflowStartedEmitter:
         assert kwargs["total_tasks"] == 4
         assert kwargs["total_leaf_tasks"] == 3
 
-    def test_workflow_started_wired_in_start_workflow(self, session: Session):
+    async def test_workflow_started_wired_in_start_workflow(self, session: Session):
         """WorkflowInitializationService.initialize() is the trigger for workflow_started."""
         def_id, _, _ = seed_flat_tasks(session, 2)
         run_id = uuid4()
@@ -131,7 +131,7 @@ class TestWorkflowStartedEmitter:
             return_value=_fake_session_ctx(session),
         ):
             svc = WorkflowInitializationService()
-            initialized = svc.initialize(
+            initialized = await svc.initialize(
                 InitializeWorkflowCommand(run_id=run_id, definition_id=def_id)
             )
 
@@ -198,14 +198,14 @@ class TestWorkflowCompletedEmitter:
 
 
 class TestTaskStatusChangedEmitter:
-    def test_status_changed_emitted_on_prepare_graph_native(self, session: Session):
+    async def test_status_changed_emitted_on_prepare_graph_native(self, session: Session):
         """TaskExecutionService.prepare() fires task_status_changed for graph-native tasks."""
         def_id, _, _ = seed_flat_tasks(session, 1)
         run_id = uuid4()
 
         worker = _seed_worker(session, def_id)
         repo = WorkflowGraphRepository()
-        node = _seed_node(session, repo, run_id, worker_key=worker.binding_key)
+        node = await _seed_node(session, repo, run_id, worker_key=worker.binding_key)
         session.add(
             RunRecord(id=run_id, experiment_definition_id=def_id, status=RunStatus.EXECUTING)
         )
@@ -216,21 +216,18 @@ class TestTaskStatusChangedEmitter:
                 "ergon_core.core.runtime.services.task_execution_service.get_session",
                 return_value=_fake_session_ctx(session),
             ),
-            patch(
-                "ergon_core.core.runtime.services.task_execution_service.asyncio"
-            ) as mock_asyncio,
+            patch.object(
+                dashboard_emitter,
+                "task_status_changed",
+                new_callable=AsyncMock,
+            ) as mock_emit,
         ):
-            created: list = []
-            mock_asyncio.get_event_loop.return_value.create_task.side_effect = lambda coro: (
-                created.append(coro) or MagicMock()
-            )
-
             from ergon_core.core.runtime.services.orchestration_dto import (
                 PrepareTaskExecutionCommand,
             )
 
             svc = TaskExecutionService()
-            result = svc.prepare(
+            result = await svc.prepare(
                 PrepareTaskExecutionCommand(
                     run_id=run_id,
                     definition_id=def_id,
@@ -240,9 +237,9 @@ class TestTaskStatusChangedEmitter:
             )
 
         assert result.node_id == node.id
-        assert len(created) == 1, "Expected one asyncio task created for task_status_changed"
+        mock_emit.assert_called_once()
 
-    def test_status_changed_emitted_on_finalize_success(self, session: Session):
+    async def test_status_changed_emitted_on_finalize_success(self, session: Session):
         """finalize_success fires task_status_changed → COMPLETED."""
         def_id, _, _ = seed_flat_tasks(session, 1)
         run_id = uuid4()
@@ -265,21 +262,18 @@ class TestTaskStatusChangedEmitter:
                 "ergon_core.core.runtime.services.task_execution_service.get_session",
                 return_value=_fake_session_ctx(session),
             ),
-            patch(
-                "ergon_core.core.runtime.services.task_execution_service.asyncio"
-            ) as mock_asyncio,
+            patch.object(
+                dashboard_emitter,
+                "task_status_changed",
+                new_callable=AsyncMock,
+            ) as mock_emit,
         ):
-            created: list = []
-            mock_asyncio.get_event_loop.return_value.create_task.side_effect = lambda coro: (
-                created.append(coro) or MagicMock()
-            )
-
             svc = TaskExecutionService()
-            svc.finalize_success(
+            await svc.finalize_success(
                 FinalizeTaskExecutionCommand(execution_id=exe.id, output_text="done")
             )
 
-        assert len(created) == 1, "Expected task_status_changed emit for finalize_success"
+        mock_emit.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -385,8 +379,8 @@ class TestResourcePublishedEmitter:
 
 
 class TestThreadMessageCreatedEmitter:
-    def test_thread_message_created_called_on_save_message(self, session: Session):
-        """CommunicationService.save_message() schedules thread_message_created."""
+    async def test_thread_message_created_called_on_save_message(self, session: Session):
+        """CommunicationService.save_message() awaits thread_message_created."""
         run_id = uuid4()
 
         with (
@@ -394,15 +388,14 @@ class TestThreadMessageCreatedEmitter:
                 "ergon_core.core.runtime.services.communication_service.get_session",
                 return_value=_fake_session_ctx(session),
             ),
-            patch("ergon_core.core.runtime.services.communication_service.asyncio") as mock_asyncio,
+            patch.object(
+                dashboard_emitter,
+                "thread_message_created",
+                new_callable=AsyncMock,
+            ) as mock_emit,
         ):
-            created: list = []
-            mock_asyncio.get_event_loop.return_value.create_task.side_effect = lambda coro: (
-                created.append(coro) or MagicMock()
-            )
-
             svc = CommunicationService()
-            response = svc.save_message(
+            response = await svc.save_message(
                 CreateMessageRequest(
                     run_id=run_id,
                     from_agent_id="agent-a",
@@ -413,4 +406,4 @@ class TestThreadMessageCreatedEmitter:
             )
 
         assert response.run_id == run_id
-        assert len(created) == 1, "Expected one thread_message_created task scheduled"
+        mock_emit.assert_called_once()

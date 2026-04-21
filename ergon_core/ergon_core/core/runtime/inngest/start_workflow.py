@@ -37,7 +37,7 @@ async def start_workflow_fn(ctx: inngest.Context) -> WorkflowStartResult:
     span_start = datetime.now(UTC)
 
     svc = WorkflowInitializationService()
-    initialized = svc.initialize(
+    initialized = await svc.initialize(
         InitializeWorkflowCommand(
             run_id=payload.run_id,
             definition_id=payload.definition_id,

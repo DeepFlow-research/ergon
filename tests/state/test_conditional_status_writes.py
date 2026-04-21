@@ -26,11 +26,11 @@ META = MutationMeta(actor="test", reason="test")
 
 
 class TestConditionalStatusWrites:
-    def test_guard_blocks_write_on_completed_node(self, session: Session) -> None:
+    async def test_guard_blocks_write_on_completed_node(self, session: Session) -> None:
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        node = repo.add_node(
+        node = await repo.add_node(
             session,
             run_id,
             task_key="t1",
@@ -39,7 +39,7 @@ class TestConditionalStatusWrites:
             status=COMPLETED,
             meta=META,
         )
-        result = repo.update_node_status(
+        result = await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=node.id,
@@ -49,11 +49,11 @@ class TestConditionalStatusWrites:
         )
         assert result is False
 
-    def test_guard_blocks_write_on_failed_node(self, session: Session) -> None:
+    async def test_guard_blocks_write_on_failed_node(self, session: Session) -> None:
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        node = repo.add_node(
+        node = await repo.add_node(
             session,
             run_id,
             task_key="t1",
@@ -62,7 +62,7 @@ class TestConditionalStatusWrites:
             status=FAILED,
             meta=META,
         )
-        result = repo.update_node_status(
+        result = await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=node.id,
@@ -72,11 +72,11 @@ class TestConditionalStatusWrites:
         )
         assert result is False
 
-    def test_guard_blocks_write_on_cancelled_node(self, session: Session) -> None:
+    async def test_guard_blocks_write_on_cancelled_node(self, session: Session) -> None:
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        node = repo.add_node(
+        node = await repo.add_node(
             session,
             run_id,
             task_key="t1",
@@ -85,7 +85,7 @@ class TestConditionalStatusWrites:
             status=CANCELLED,
             meta=META,
         )
-        result = repo.update_node_status(
+        result = await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=node.id,
@@ -95,11 +95,11 @@ class TestConditionalStatusWrites:
         )
         assert result is False
 
-    def test_guard_allows_write_on_running_node(self, session: Session) -> None:
+    async def test_guard_allows_write_on_running_node(self, session: Session) -> None:
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        node = repo.add_node(
+        node = await repo.add_node(
             session,
             run_id,
             task_key="t1",
@@ -108,7 +108,7 @@ class TestConditionalStatusWrites:
             status=RUNNING,
             meta=META,
         )
-        result = repo.update_node_status(
+        result = await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=node.id,
@@ -120,12 +120,12 @@ class TestConditionalStatusWrites:
         refreshed = repo.get_node(session, run_id=run_id, node_id=node.id)
         assert refreshed.status == CANCELLED
 
-    def test_unconditional_write_still_works(self, session: Session) -> None:
+    async def test_unconditional_write_still_works(self, session: Session) -> None:
         """Without the guard, writes proceed even on terminal nodes."""
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        node = repo.add_node(
+        node = await repo.add_node(
             session,
             run_id,
             task_key="t1",
@@ -135,7 +135,7 @@ class TestConditionalStatusWrites:
             meta=META,
         )
         # Default only_if_not_terminal=False: unconditional
-        result = repo.update_node_status(
+        result = await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=node.id,
@@ -144,11 +144,11 @@ class TestConditionalStatusWrites:
         )
         assert result is True
 
-    def test_guard_does_not_emit_mutation_on_blocked_write(self, session: Session) -> None:
+    async def test_guard_does_not_emit_mutation_on_blocked_write(self, session: Session) -> None:
         repo = WorkflowGraphRepository()
         run_id = uuid4()
 
-        node = repo.add_node(
+        node = await repo.add_node(
             session,
             run_id,
             task_key="t1",
@@ -160,7 +160,7 @@ class TestConditionalStatusWrites:
         mutations_before = repo.get_mutations(session, run_id)
         count_before = len(mutations_before)
 
-        repo.update_node_status(
+        await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=node.id,

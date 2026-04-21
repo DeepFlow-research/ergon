@@ -30,7 +30,7 @@ from tests.state.mocks import FakeInngestClient
 META = MutationMeta(actor="test", reason="test-setup")
 
 
-def _add_node(
+async def _add_node(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
@@ -40,7 +40,7 @@ def _add_node(
     instance_key: str = "inst-0",
 ):
     """Helper to create a graph node for test setup."""
-    return repo.add_node(
+    return await repo.add_node(
         session,
         run_id,
         task_key=key,
@@ -54,15 +54,15 @@ def _add_node(
 class TestPlanSubtasksValidation:
     """Validation-only tests — no DB interaction needed for these."""
 
-    def test_duplicate_local_key_raises(self, session: Session):
+    async def test_duplicate_local_key_raises(self, session: Session):
         """Two specs with the same local_key are rejected."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
-        parent = _add_node(repo, session, run_id, "manager")
+        parent = await _add_node(repo, session, run_id, "manager")
 
         with pytest.raises(DuplicateLocalKeyError) as exc_info:
-            svc.plan_subtasks(
+            await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
@@ -75,15 +75,15 @@ class TestPlanSubtasksValidation:
             )
         assert exc_info.value.key == "a"
 
-    def test_unknown_depends_on_raises(self, session: Session):
+    async def test_unknown_depends_on_raises(self, session: Session):
         """depends_on referencing a key not in the plan is rejected."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
-        parent = _add_node(repo, session, run_id, "manager")
+        parent = await _add_node(repo, session, run_id, "manager")
 
         with pytest.raises(UnknownLocalKeyError) as exc_info:
-            svc.plan_subtasks(
+            await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
@@ -100,15 +100,15 @@ class TestPlanSubtasksValidation:
             )
         assert "nonexistent" in exc_info.value.unknown
 
-    def test_cycle_raises(self, session: Session):
+    async def test_cycle_raises(self, session: Session):
         """A -> B -> A cycle is detected and rejected."""
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
-        parent = _add_node(repo, session, run_id, "manager")
+        parent = await _add_node(repo, session, run_id, "manager")
 
         with pytest.raises(CycleDetectedError) as exc_info:
-            svc.plan_subtasks(
+            await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
@@ -125,19 +125,19 @@ class TestPlanSubtasksValidation:
 class TestPlanSubtasksIntegration:
     """Integration tests that verify nodes and edges are created correctly."""
 
-    def test_creates_nodes_and_edges(self, session: Session):
+    async def test_creates_nodes_and_edges(self, session: Session):
         """plan_subtasks creates all nodes with correct parent linkage and dep edges."""
         fake_inngest = FakeInngestClient()
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
-        parent = _add_node(repo, session, run_id, "manager", instance_key="bench-1")
+        parent = await _add_node(repo, session, run_id, "manager", instance_key="bench-1")
 
         with patch(
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            result = svc.plan_subtasks(
+            result = await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
@@ -168,19 +168,19 @@ class TestPlanSubtasksIntegration:
         assert len(edges) == 1
         assert edges[0].source_node_id == result.nodes["research"]
 
-    def test_dispatches_root_tasks(self, session: Session):
+    async def test_dispatches_root_tasks(self, session: Session):
         """Roots (tasks with no depends_on) get task/ready events dispatched."""
         fake_inngest = FakeInngestClient()
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
-        parent = _add_node(repo, session, run_id, "manager")
+        parent = await _add_node(repo, session, run_id, "manager")
 
         with patch(
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            result = svc.plan_subtasks(
+            result = await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
@@ -206,19 +206,19 @@ class TestPlanSubtasksIntegration:
         assert str(result.nodes["a"]) in dispatched_node_ids
         assert str(result.nodes["b"]) in dispatched_node_ids
 
-    def test_empty_plan_is_noop(self, session: Session):
+    async def test_empty_plan_is_noop(self, session: Session):
         """An empty subtasks list creates no nodes."""
         fake_inngest = FakeInngestClient()
         repo = WorkflowGraphRepository()
         svc = TaskManagementService(graph_repo=repo)
         run_id = uuid4()
-        parent = _add_node(repo, session, run_id, "manager")
+        parent = await _add_node(repo, session, run_id, "manager")
 
         with patch(
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake_inngest,
         ):
-            result = svc.plan_subtasks(
+            result = await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,

@@ -54,7 +54,7 @@ from tests.state.mocks import FakeInngestClient
 META = MutationMeta(actor="test", reason="scenario-setup")
 
 
-def _complete(
+async def _complete(
     repo: WorkflowGraphRepository,
     session: Session,
     run_id,
@@ -66,14 +66,14 @@ def _complete(
     calls graph_repo.update_node_status(COMPLETED) followed by
     propagation.on_task_completed_or_failed.
     """
-    repo.update_node_status(
+    await repo.update_node_status(
         session,
         run_id=run_id,
         node_id=node_id,
         new_status=COMPLETED,
         meta=MutationMeta(actor="worker", reason="task completed"),
     )
-    return on_task_completed_or_failed(session, run_id, node_id, COMPLETED, graph_repo=repo)
+    return await on_task_completed_or_failed(session, run_id, node_id, COMPLETED, graph_repo=repo)
 
 
 def _assert_status(
@@ -107,7 +107,6 @@ def _edges_by_target(
 class TestManagerDAGScenario:
     """The full 15-step acceptance scenario."""
 
-    @pytest.mark.asyncio
     async def test_full_15_step_scenario(self, session: Session):
         fake = FakeInngestClient()
         repo = WorkflowGraphRepository()
@@ -115,7 +114,7 @@ class TestManagerDAGScenario:
         run_id = uuid4()
 
         # Manager bootstraps itself as RUNNING at level 0.
-        manager = repo.add_node(
+        manager = await repo.add_node(
             session,
             run_id,
             task_key="manager",
@@ -134,7 +133,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            graph1_result = svc.plan_subtasks(
+            graph1_result = await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
@@ -147,7 +146,7 @@ class TestManagerDAGScenario:
                     ],
                 ),
             )
-            graph2_result = svc.plan_subtasks(
+            graph2_result = await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
@@ -159,7 +158,7 @@ class TestManagerDAGScenario:
                     ],
                 ),
             )
-            leaf_result = svc.plan_subtasks(
+            leaf_result = await svc.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=run_id,
@@ -187,7 +186,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            newly_ready, _ = _complete(repo, session, run_id, nodes["A"])
+            newly_ready, _ = await _complete(repo, session, run_id, nodes["A"])
 
         assert set(newly_ready) == {nodes["B"], nodes["C"]}
         _assert_status(
@@ -199,7 +198,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            newly_ready, _ = _complete(repo, session, run_id, nodes["B"])
+            newly_ready, _ = await _complete(repo, session, run_id, nodes["B"])
 
         assert nodes["F"] not in newly_ready
         # F's incoming edges: B→F SATISFIED, C→F still PENDING.
@@ -212,7 +211,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            newly_ready, _ = _complete(repo, session, run_id, nodes["C"])
+            newly_ready, _ = await _complete(repo, session, run_id, nodes["C"])
         assert nodes["F"] in newly_ready
         _assert_status(repo, session, run_id, nodes, {"F": PENDING, "C": COMPLETED})
 
@@ -221,7 +220,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            _complete(repo, session, run_id, nodes["F"])
+            await _complete(repo, session, run_id, nodes["F"])
         _assert_status(
             repo,
             session,
@@ -235,13 +234,13 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            newly_ready, _ = _complete(repo, session, run_id, nodes["D"])
+            newly_ready, _ = await _complete(repo, session, run_id, nodes["D"])
         assert nodes["E"] in newly_ready
         assert nodes["G"] not in newly_ready
         _assert_status(repo, session, run_id, nodes, {"D": COMPLETED, "E": PENDING, "G": PENDING})
 
         # -- Step 7: E starts running --
-        repo.update_node_status(
+        await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=nodes["E"],
@@ -256,13 +255,15 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            svc.cancel_task(
+            await svc.cancel_task(
                 session,
                 CancelTaskCommand(run_id=run_id, node_id=nodes["E"]),
             )
             # The on_task_completed_or_failed call is what invalidates
             # outgoing edges on a failure/cancel — mirror the engine.
-            on_task_completed_or_failed(session, run_id, nodes["E"], CANCELLED, graph_repo=repo)
+            await on_task_completed_or_failed(
+                session, run_id, nodes["E"], CANCELLED, graph_repo=repo
+            )
 
         _assert_status(repo, session, run_id, nodes, {"E": CANCELLED, "G": PENDING})
         g_edges = _edges_by_target(repo, session, run_id, nodes["G"])
@@ -273,7 +274,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            result = svc.restart_task(
+            result = await svc.restart_task(
                 session,
                 RestartTaskCommand(run_id=run_id, node_id=nodes["E"]),
             )
@@ -291,7 +292,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            newly_ready, _ = _complete(repo, session, run_id, nodes["E"])
+            newly_ready, _ = await _complete(repo, session, run_id, nodes["E"])
         assert nodes["G"] in newly_ready
         _assert_status(repo, session, run_id, nodes, {"E": COMPLETED, "G": PENDING})
 
@@ -300,7 +301,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            _complete(repo, session, run_id, nodes["G"])
+            await _complete(repo, session, run_id, nodes["G"])
         _assert_status(
             repo, session, run_id, nodes, {"D": COMPLETED, "E": COMPLETED, "G": COMPLETED}
         )
@@ -312,7 +313,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            restart_result = svc.restart_task(
+            restart_result = await svc.restart_task(
                 session,
                 RestartTaskCommand(run_id=run_id, node_id=nodes["B"]),
             )
@@ -336,7 +337,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            newly_ready, _ = _complete(repo, session, run_id, nodes["B"])
+            newly_ready, _ = await _complete(repo, session, run_id, nodes["B"])
 
         assert nodes["F"] in newly_ready
         _assert_status(repo, session, run_id, nodes, {"B": COMPLETED, "F": PENDING})
@@ -346,7 +347,7 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            _complete(repo, session, run_id, nodes["F"])
+            await _complete(repo, session, run_id, nodes["F"])
         _assert_status(repo, session, run_id, nodes, {"F": COMPLETED})
 
         # -- Step 15: H completes, manager completes. All terminal, zero FAILED. --
@@ -354,9 +355,9 @@ class TestManagerDAGScenario:
             "ergon_core.core.runtime.services.task_management_service.inngest_client",
             fake,
         ):
-            _complete(repo, session, run_id, nodes["H"])
+            await _complete(repo, session, run_id, nodes["H"])
 
-        repo.update_node_status(
+        await repo.update_node_status(
             session,
             run_id=run_id,
             node_id=manager.id,
