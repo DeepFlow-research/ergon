@@ -51,6 +51,9 @@ async def test_harness_canary_smoke_stub(
     # Timestamp the boundary so we can filter for a run created *after* this point.
     before = datetime.now(timezone.utc)
 
+    # The `_override_database_url` autouse fixture (tests/real_llm/fixtures/database.py)
+    # pins ERGON_DATABASE_URL in the parent pytest process to the compose overlay;
+    # the subprocess inherits it via os.environ.  Default retained for documentation.
     env = {
         **os.environ,
         "ERGON_DATABASE_URL": os.environ.get(
