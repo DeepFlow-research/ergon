@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.runtime.events.task_events import (
     TaskReadyEvent,
     WorkflowStartedEvent,
@@ -57,6 +58,15 @@ async def start_workflow_fn(ctx: inngest.Context) -> WorkflowStartResult:
 
     if events:
         await inngest_client.send(events)
+
+    await dashboard_emitter.workflow_started(
+        run_id=payload.run_id,
+        experiment_id=payload.definition_id,
+        workflow_name=initialized.benchmark_type,
+        task_tree={},
+        total_tasks=initialized.total_tasks,
+        total_leaf_tasks=initialized.total_tasks - initialized.total_root_tasks,
+    )
 
     result = WorkflowStartResult(
         run_id=payload.run_id,

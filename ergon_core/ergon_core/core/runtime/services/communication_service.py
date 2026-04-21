@@ -1,7 +1,10 @@
 """Communication service — manages inter-agent messaging threads."""
 
+import asyncio
+import logging
 from uuid import UUID
 
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
 from ergon_core.core.runtime.services.communication_schemas import (
@@ -12,6 +15,8 @@ from ergon_core.core.runtime.services.communication_schemas import (
 )
 from ergon_core.core.utils import utcnow
 from sqlmodel import func, select
+
+logger = logging.getLogger(__name__)
 
 
 class CommunicationService:
@@ -54,7 +59,7 @@ class CommunicationService:
             session.refresh(message)
             session.refresh(thread)
 
-            return MessageResponse(
+            response = MessageResponse(
                 message_id=message.id,
                 thread_id=thread.id,
                 run_id=message.run_id,
@@ -66,6 +71,40 @@ class CommunicationService:
                 task_execution_id=message.task_execution_id,
                 created_at=message.created_at,
             )
+
+        thread_dict = {
+            "id": str(thread.id),
+            "runId": str(thread.run_id),
+            "topic": thread.topic,
+            "agentAId": thread.agent_a_id,
+            "agentBId": thread.agent_b_id,
+            "createdAt": thread.created_at.isoformat(),
+            "updatedAt": thread.updated_at.isoformat(),
+            "messages": [],
+        }
+        message_dict = {
+            "id": str(message.id),
+            "threadId": str(message.thread_id),
+            "threadTopic": thread.topic,
+            "runId": str(message.run_id),
+            "fromAgentId": message.from_agent_id,
+            "toAgentId": message.to_agent_id,
+            "content": message.content,
+            "sequenceNum": message.sequence_num,
+            "createdAt": message.created_at.isoformat(),
+        }
+        try:
+            asyncio.get_event_loop().create_task(
+                dashboard_emitter.thread_message_created(
+                    run_id=request.run_id,
+                    thread=thread_dict,
+                    message=message_dict,
+                )
+            )
+        except Exception:  # slopcop: ignore[no-broad-except]
+            logger.warning("Failed to schedule thread_message_created emit", exc_info=True)
+
+        return response
 
     def get_thread_messages(self, thread_id: UUID) -> list[MessageResponse]:
         """Return all messages in a thread ordered by sequence number."""

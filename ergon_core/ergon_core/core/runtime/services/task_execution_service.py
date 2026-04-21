@@ -1,7 +1,10 @@
 """Task execution lifecycle: prepare, finalize success, finalize failure."""
 
+import asyncio
+import logging
 from uuid import UUID
 
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -29,6 +32,36 @@ from ergon_core.core.runtime.services.orchestration_dto import (
 from ergon_core.core.utils import require_not_none, utcnow
 from sqlalchemy import func
 from sqlmodel import Session, select
+
+logger = logging.getLogger(__name__)
+
+
+def _emit_task_status(
+    run_id: UUID,
+    node_id: UUID | None,
+    task_key: str,
+    new_status: str,
+    old_status: str | None = None,
+    worker_id: UUID | None = None,
+    worker_name: str | None = None,
+) -> None:
+    """Fire-and-forget dashboard/task.status_changed from synchronous code."""
+    if node_id is None:
+        return
+    try:
+        asyncio.get_event_loop().create_task(
+            dashboard_emitter.task_status_changed(
+                run_id=run_id,
+                task_id=node_id,
+                task_name=task_key,
+                new_status=new_status,
+                old_status=old_status,
+                assigned_worker_id=worker_id,
+                assigned_worker_name=worker_name,
+            )
+        )
+    except Exception:  # slopcop: ignore[no-broad-except]
+        logger.warning("Failed to schedule task_status_changed emit", exc_info=True)
 
 
 class TaskExecutionService:
@@ -108,6 +141,16 @@ class TaskExecutionService:
                 ),
             )
             session.commit()
+
+            _emit_task_status(
+                run_id=command.run_id,
+                node_id=command.node_id,
+                task_key=node.task_key,
+                new_status=TaskExecutionStatus.RUNNING,
+                old_status=None,
+                worker_id=worker_row.id,
+                worker_name=worker_binding_key,
+            )
 
             return PreparedTaskExecution(
                 run_id=command.run_id,
@@ -189,6 +232,16 @@ class TaskExecutionService:
             )
             session.commit()
 
+            _emit_task_status(
+                run_id=command.run_id,
+                node_id=resolved_node_id,
+                task_key=task.task_key,
+                new_status=TaskExecutionStatus.RUNNING,
+                old_status=None,
+                worker_id=definition_worker_id,
+                worker_name=worker_binding_key,
+            )
+
             return PreparedTaskExecution(
                 run_id=command.run_id,
                 definition_id=command.definition_id,
@@ -221,6 +274,14 @@ class TaskExecutionService:
             session.add(execution)
             session.commit()
 
+        _emit_task_status(
+            run_id=execution.run_id,
+            node_id=execution.node_id,
+            task_key=str(execution.definition_task_id or execution.node_id or ""),
+            new_status=TaskExecutionStatus.COMPLETED,
+            old_status=TaskExecutionStatus.RUNNING,
+        )
+
     def finalize_failure(self, command: FailTaskExecutionCommand) -> None:
         with get_session() as session:
             execution = require_not_none(
@@ -244,6 +305,14 @@ class TaskExecutionService:
                 graph_lookup=graph_lookup,
             )
             session.commit()
+
+        _emit_task_status(
+            run_id=command.run_id,
+            node_id=execution.node_id,
+            task_key=str(execution.definition_task_id or execution.node_id or ""),
+            new_status=TaskExecutionStatus.FAILED,
+            old_status=TaskExecutionStatus.RUNNING,
+        )
 
     # -- Helpers ---
 

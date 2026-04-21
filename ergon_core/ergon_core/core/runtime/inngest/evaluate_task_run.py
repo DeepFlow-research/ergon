@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 import inngest
 from ergon_builtins.registry import EVALUATORS, SANDBOX_MANAGERS
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import get_session
@@ -180,8 +181,38 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         )
         session.add(evaluation)
         session.commit()
+        session.refresh(evaluation)
     finally:
         session.close()
+
+    evaluation_dict = {
+        "id": str(evaluation.id),
+        "runId": str(run_id),
+        "taskId": str(task_id),
+        "totalScore": result.score,
+        "maxScore": summary.max_score,
+        "normalizedScore": summary.normalized_score,
+        "stagesEvaluated": summary.stages_evaluated,
+        "stagesPassed": summary.stages_passed,
+        "failedGate": None,
+        "createdAt": evaluation.created_at.isoformat(),
+        "criterionResults": [
+            {
+                "criterionName": cr.criterion_name,
+                "criterionType": cr.criterion_type,
+                "score": cr.score,
+                "maxScore": cr.max_score,
+                "passed": cr.passed,
+                "feedback": cr.feedback,
+            }
+            for cr in summary.criterion_results
+        ],
+    }
+    await dashboard_emitter.task_evaluation_updated(
+        run_id=run_id,
+        task_id=task_id,
+        evaluation=evaluation_dict,
+    )
 
     get_trace_sink().emit_span(
         CompletedSpan(

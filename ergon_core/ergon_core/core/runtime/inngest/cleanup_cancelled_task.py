@@ -9,6 +9,7 @@ import logging
 
 import inngest
 
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.task_cleanup_dto import CleanupResult
@@ -57,4 +58,8 @@ async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> dict:
             )
         return result.model_dump(mode="json")
 
-    return await ctx.step.run("update-db-rows", _update_db_rows)
+    cleanup_result = await ctx.step.run("update-db-rows", _update_db_rows)
+
+    await dashboard_emitter.task_cancelled(payload)
+
+    return cleanup_result

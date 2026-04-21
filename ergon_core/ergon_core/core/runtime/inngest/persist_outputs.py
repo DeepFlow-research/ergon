@@ -16,6 +16,7 @@ from ergon_builtins.registry import SANDBOX_MANAGERS
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import RunResource, RunResourceKind
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.providers.sandbox.manager import (
     BaseSandboxManager,
     DefaultSandboxManager,
@@ -95,6 +96,7 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
     # dedup-able, append-only record.  Once every consumer reads via the
     # publisher, this loop can go away.
     resource_ids: list[UUID] = []
+    new_resources: list[RunResource] = []
     with get_session() as session:
         for file_info in downloaded.files:
             resource = RunResource(
@@ -110,8 +112,21 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
             )
             session.add(resource)
             resource_ids.append(resource.id)
+            new_resources.append(resource)
 
         session.commit()
+
+    for resource in new_resources:
+        await dashboard_emitter.resource_published(
+            run_id=run_id,
+            task_id=task_id,
+            task_execution_id=execution_id,
+            resource_id=resource.id,
+            resource_name=resource.name,
+            mime_type=resource.mime_type,
+            size_bytes=resource.size_bytes,
+            file_path=resource.file_path,
+        )
 
     logger.info(
         "persist-outputs registered %d resources for run_id=%s",
