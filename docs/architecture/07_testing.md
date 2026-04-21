@@ -49,6 +49,23 @@ Assertions combine Postgres state, `/api/test/*` harness endpoints, and
 Playwright dashboard checks. An `OpenRouterBudget` session fixture gates total
 spend. This tier is a bug-hunting instrument; it is not required for CI.
 
+Host-side port assumptions (published by `docker-compose.real-llm.yml`):
+
+| Service   | Host address             | Container |
+|-----------|--------------------------|-----------|
+| API       | `http://127.0.0.1:9000`  | `9000`    |
+| Dashboard | `http://127.0.0.1:3101`  | `3000`    |
+| Postgres  | `127.0.0.1:5433`         | `5432`    |
+| Inngest   | `http://127.0.0.1:8288`  | `8288`    |
+
+Any host-side subprocess launched from a real-LLM test (notably the
+`uv run ergon benchmark run ...` canary in
+`tests/real_llm/benchmarks/test_smoke_stub.py`) must target these
+addresses. In particular, Inngest is published on host port **8288**,
+not 8289 — the 8289 value in `.github/workflows/e2e-benchmarks.yml`
+belongs to the CI overlay (`docker-compose.ci.yml` maps `8289:8288`)
+and must not be assumed on developer machines.
+
 ## 3. Control flow — choosing a tier
 
 ```

@@ -18,6 +18,33 @@ import pytest
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 
 
+def _subprocess_env() -> dict[str, str]:
+    """Env dict passed to the canary's ``uv run ergon ...`` subprocess.
+
+    Targets the host-side addresses published by
+    ``docker-compose.real-llm.yml``:
+
+    - Postgres: ``127.0.0.1:5433`` (maps to container 5432)
+    - Inngest:  ``127.0.0.1:8288`` (maps to container 8288)
+
+    The Inngest default intentionally differs from
+    ``Settings.inngest_api_base_url`` (which targets ``localhost:8289``,
+    the CI overlay's mapping). See
+    ``docs/bugs/open/2026-04-21-inngest-port-mismatch.md``.
+    """
+    return {
+        **os.environ,
+        "ERGON_DATABASE_URL": os.environ.get(
+            "ERGON_DATABASE_URL",
+            "postgresql://ergon:ergon@127.0.0.1:5433/ergon",
+        ),
+        "INNGEST_API_BASE_URL": os.environ.get(
+            "INNGEST_API_BASE_URL",
+            "http://127.0.0.1:8288",
+        ),
+    }
+
+
 def _latest_run_id_since(since: datetime) -> str:
     """Query the most recent RunRecord created at or after `since`."""
     # reason: deferred to avoid DB + heavy builtins import at pytest-collect time
@@ -51,13 +78,7 @@ async def test_harness_canary_smoke_stub(
     # Timestamp the boundary so we can filter for a run created *after* this point.
     before = datetime.now(timezone.utc)
 
-    env = {
-        **os.environ,
-        "ERGON_DATABASE_URL": os.environ.get(
-            "ERGON_DATABASE_URL",
-            "postgresql://ergon:ergon@127.0.0.1:5433/ergon",
-        ),
-    }
+    env = _subprocess_env()
     result = subprocess.run(
         [
             "uv",

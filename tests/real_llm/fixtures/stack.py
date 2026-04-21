@@ -1,4 +1,17 @@
-"""docker-compose up/down session fixture with --assume-stack-up flag."""
+"""docker-compose up/down session fixture with --assume-stack-up flag.
+
+Host-side port assumptions (mirrors ``docker-compose.real-llm.yml``):
+
+- API:       ``127.0.0.1:9000`` (maps to container 9000)
+- Dashboard: ``127.0.0.1:3101`` (maps to container 3000)
+- Postgres:  ``127.0.0.1:5433`` (maps to container 5432)
+- Inngest:   ``127.0.0.1:8288`` (maps to container 8288)
+
+The Inngest host port differs from the CI overlay
+(``docker-compose.ci.yml`` maps ``8289:8288``); host-side canary
+subprocesses must target ``8288`` here. See
+``docs/bugs/open/2026-04-21-inngest-port-mismatch.md``.
+"""
 
 import subprocess
 import time
@@ -10,6 +23,7 @@ import pytest
 _COMPOSE_FILE = "docker-compose.real-llm.yml"
 _API_URL = "http://127.0.0.1:9000"
 _DASHBOARD_URL = "http://127.0.0.1:3101"
+_INNGEST_URL = "http://127.0.0.1:8288"
 _UP_TIMEOUT_S = 120
 
 
