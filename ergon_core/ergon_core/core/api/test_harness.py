@@ -25,6 +25,7 @@ from sqlmodel import Session, select
 
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
+from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
@@ -167,3 +168,87 @@ def read_run_state(
         evaluations=evaluations,
         resource_count=resource_count,
     )
+
+
+# ---------------------------------------------------------------------------
+# Write endpoints (Task 7) — gated on X-Test-Secret
+# ---------------------------------------------------------------------------
+#
+# Schema reality vs. spec:
+#   The RFC/plan speaks of ``RunRecord.cohort: str`` and ``metadata``. The
+#   actual model has ``cohort_id: UUID | None`` (FK) and ``summary_json: dict``.
+#   We bridge by:
+#     - Recording the test "cohort tag" as a string inside ``summary_json``
+#       under ``_test_cohort`` so reset can match by prefix.
+#     - Marking seeded rows with ``summary_json["_test_seeded"] = True``.
+#     - Requiring the caller to pass an existing ``experiment_definition_id``
+#       (NOT NULL FK) when seeding — no synthetic definition is created here.
+#
+# ``SeedRunRequest.cohort`` is defaulted so ``json={}`` passes body validation
+# and the secret gate (which runs inside the handler body, after FastAPI's
+# validation phase) can surface 401/500 without 422 noise. Real callers will
+# always pass a cohort string, but defaulting keeps the security-gate contract
+# testable without coupling to request shape.
+
+
+class SeedRunRequest(BaseModel):
+    cohort: str = "_test_"
+    status: str = "completed"
+    task_slugs: list[str] = []
+    experiment_definition_id: UUID | None = None
+
+
+class ResetRequest(BaseModel):
+    cohort_prefix: str = "ci-smoke-"
+
+
+@router.post("/write/run/seed", status_code=201)
+def seed_run(
+    body: SeedRunRequest,
+    x_test_secret: Annotated[str | None, Header(alias="X-Test-Secret")] = None,
+) -> dict:
+    _require_secret(x_test_secret)
+    # Map spec string ``status`` onto the RunStatus StrEnum; unknown strings
+    # are rejected as 422-equivalent 400s so bad tests fail loud.
+    try:
+        run_status = RunStatus(body.status)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"unknown run status: {body.status!r}",
+        ) from exc
+    with Session(get_engine()) as s:
+        run = RunRecord(
+            experiment_definition_id=body.experiment_definition_id or UUID(int=0),
+            status=run_status,
+            summary_json={
+                "_test_seeded": True,
+                "_test_cohort": body.cohort,
+                "_test_task_slugs": body.task_slugs,
+            },
+        )
+        s.add(run)
+        s.commit()
+        s.refresh(run)
+        return {"run_id": str(run.id)}
+
+
+@router.post("/write/reset", status_code=204)
+def reset_test_rows(
+    body: ResetRequest,
+    x_test_secret: Annotated[str | None, Header(alias="X-Test-Secret")] = None,
+) -> None:
+    _require_secret(x_test_secret)
+    with Session(get_engine()) as s:
+        # Cannot SQL-filter on JSON prefix portably; load seeded rows and
+        # filter in Python. Bounded by the seed endpoint being test-only.
+        candidates = list(s.exec(select(RunRecord)).all())
+        for r in candidates:
+            meta = r.summary_json or {}
+            if not meta.get("_test_seeded"):
+                continue
+            tag = meta.get("_test_cohort")
+            if isinstance(tag, str) and tag.startswith(body.cohort_prefix):
+                s.delete(r)
+        s.commit()
+    return None

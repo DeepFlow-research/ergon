@@ -77,3 +77,57 @@ def test_read_endpoint_unmounted_when_disabled() -> None:
     client = TestClient(app)
     resp = client.get(f"/api/test/read/run/{uuid4()}/state")
     assert resp.status_code == 404  # unmounted = route doesn't exist
+
+
+def _with_live_secret(secret: str | None) -> None:
+    """Install/clear ``TEST_HARNESS_SECRET`` at request time.
+
+    ``_build_app_with_harness`` restores the pre-test env in its ``finally``,
+    so secret-gate tests that need the var live during the HTTP call must
+    re-install it after app construction. The pytest caller is expected to
+    clean up (tests here use module-local save/restore).
+    """
+    if secret is None:
+        os.environ.pop("TEST_HARNESS_SECRET", None)
+    else:
+        os.environ["TEST_HARNESS_SECRET"] = secret
+
+
+def test_seed_requires_secret_header() -> None:
+    app = _build_app_with_harness(enabled=True, secret="ci-secret")
+    prev = os.environ.get("TEST_HARNESS_SECRET")
+    _with_live_secret("ci-secret")
+    try:
+        client = TestClient(app)
+        resp = client.post("/api/test/write/run/seed", json={})
+        assert resp.status_code == 401
+    finally:
+        _with_live_secret(prev)
+
+
+def test_seed_returns_500_when_secret_env_missing() -> None:
+    app = _build_app_with_harness(enabled=True, secret=None)
+    prev = os.environ.get("TEST_HARNESS_SECRET")
+    _with_live_secret(None)
+    try:
+        client = TestClient(app)
+        resp = client.post(
+            "/api/test/write/run/seed",
+            json={},
+            headers={"X-Test-Secret": "anything"},
+        )
+        assert resp.status_code == 500
+    finally:
+        _with_live_secret(prev)
+
+
+def test_reset_requires_secret_header() -> None:
+    app = _build_app_with_harness(enabled=True, secret="ci-secret")
+    prev = os.environ.get("TEST_HARNESS_SECRET")
+    _with_live_secret("ci-secret")
+    try:
+        client = TestClient(app)
+        resp = client.post("/api/test/write/reset", json={})
+        assert resp.status_code == 401
+    finally:
+        _with_live_secret(prev)
