@@ -6,11 +6,17 @@ that ``EvaluationContext`` (also in ``api/``) can type it without dragging
 in the core runtime package (which would cause a circular import).
 """
 
-from typing import Protocol, TypeVar
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from pydantic import BaseModel, Field
 
 T = TypeVar("T", bound=BaseModel)
+
+if TYPE_CHECKING:
+    from sqlmodel import Session
+
+    from ergon_core.api.run_resource import RunResourceView
+    from ergon_core.core.providers.sandbox.event_sink import SandboxEventSink
 
 __all__ = ["CommandResult", "CriterionRuntime", "SandboxResult"]
 
@@ -52,8 +58,13 @@ class CriterionRuntime(Protocol):
     cleanup) on behalf of the criterion and exposes a small set of
     primitives the criterion calls to gather evidence.  A criterion that
     doesn't need sandbox access or a judge simply ignores it.
+
+    Surface-area constraint: this Protocol is narrowly scoped to sandbox
+    lifecycle, resource I/O, and event emission.  It should not grow into
+    a generic service locator.
     """
 
+    # ── sandbox lifecycle ─────────────────────────────────────────────
     async def ensure_sandbox(self) -> None: ...
     async def upload_files(self, files: list[dict]) -> None: ...
     async def write_file(self, path: str, content: bytes) -> None: ...
@@ -61,3 +72,13 @@ class CriterionRuntime(Protocol):
     async def execute_code(self, code: str) -> SandboxResult: ...
     async def call_llm_judge(self, messages: list, response_type: type[T]) -> T: ...
     async def cleanup(self) -> None: ...
+
+    # ── resource I/O ──────────────────────────────────────────────────
+    async def read_resource(self, name: str) -> bytes: ...
+    async def list_resources(self) -> "list[RunResourceView]": ...
+
+    # ── DB access ─────────────────────────────────────────────────────
+    def db_read_session(self) -> "Session": ...
+
+    # ── event emission ────────────────────────────────────────────────
+    def event_sink(self) -> "SandboxEventSink": ...

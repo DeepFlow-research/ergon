@@ -73,6 +73,8 @@ class InngestCriterionExecutor:
                 runtime = DefaultCriterionRuntime(
                     context=criterion_context,
                     sandbox_manager=self.sandbox_manager,
+                    run_id=task_context.run_id,
+                    task_id=self.task_id,
                 )
 
                 if isinstance(criterion, Criterion):
