@@ -40,7 +40,7 @@ class MiniF2FSandboxManager(BaseSandboxManager):
         # the next manager re-instantiation.
         self.template = resolve_template()
 
-    async def _create_directory_structure(self, sandbox: AsyncSandbox, sandbox_key: UUID) -> None:
+    async def _create_directory_structure(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         """Ensure workspace dirs exist and are writable by the sandbox user.
 
         The base class uses ``sandbox.run_code`` (the E2B code-interpreter
@@ -63,14 +63,14 @@ class MiniF2FSandboxManager(BaseSandboxManager):
         try:
             await sandbox.files.write("/tools/mathlib_project/src/.ergon_probe", b"ok")
         except Exception as exc:  # slopcop: ignore[no-broad-except]
-            await self.terminate(sandbox_key)
+            await self.terminate(task_id)
             raise RuntimeError(
                 f"MiniF2F sandbox /tools/mathlib_project/src not writable "
-                f"for sandbox_key={sandbox_key}: {exc}"
+                f"for task_id={task_id}: {exc}"
             ) from exc
         logger.debug(
-            "MiniF2F dir setup for sandbox_key=%s: mkdir exit=%d",
-            sandbox_key,
+            "MiniF2F dir setup for task_id=%s: mkdir exit=%d",
+            task_id,
             result.exit_code,
         )
 

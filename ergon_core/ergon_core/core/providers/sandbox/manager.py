@@ -62,7 +62,6 @@ class BaseSandboxManager(ABC):
     _file_registries: dict[UUID, dict[str, str]] = {}
     _created_files_registry: dict[UUID, set[str]] = {}
     _run_ids: dict[UUID, UUID] = {}
-    _display_task_ids: dict[UUID, UUID] = {}
     _creation_locks: dict[UUID, asyncio.Lock] = {}
     _event_sink: SandboxEventSink = NoopSandboxEventSink()
 
@@ -103,12 +102,9 @@ class BaseSandboxManager(ABC):
             )
         return self._sandboxes[task_id]
 
-    def _get_display_task_id(self, sandbox_key: UUID) -> UUID:
-        return self._display_task_ids.get(sandbox_key, sandbox_key)
-
     async def _emit_wal_entry(  # slopcop: ignore[max-function-params]
         self,
-        sandbox_key: UUID,
+        task_id: UUID,
         command: str,
         stdout: str | None = None,
         stderr: str | None = None,
@@ -116,9 +112,9 @@ class BaseSandboxManager(ABC):
         started_at: float | None = None,
         duration_ms: int | None = None,
         sandbox_id: str | None = None,
-        task_id: UUID | None = None,
+        override_task_id: UUID | None = None,
     ) -> None:
-        raw_sandbox = self._sandboxes.get(sandbox_key)
+        raw_sandbox = self._sandboxes.get(task_id)
         resolved_sandbox_id = sandbox_id or (raw_sandbox.sandbox_id if raw_sandbox else None)
         if resolved_sandbox_id is None:
             return
@@ -128,10 +124,10 @@ class BaseSandboxManager(ABC):
             resolved_duration_ms = int((time.time() - started_at) * 1000)
 
         max_len = settings.otel_stdout_stderr_max_length
-        resolved_run_id = self._run_ids.get(sandbox_key, sandbox_key)
+        resolved_run_id = self._run_ids.get(task_id, task_id)
         await self._event_sink.sandbox_command(
             run_id=resolved_run_id,
-            task_id=task_id or self._get_display_task_id(sandbox_key),
+            task_id=override_task_id or task_id,
             sandbox_id=resolved_sandbox_id,
             command=_truncate(command, 512) or command,
             stdout=_truncate(coerce_text(stdout), max_len),
@@ -146,7 +142,7 @@ class BaseSandboxManager(ABC):
         if task_id not in self._created_files_registry:
             self._created_files_registry[task_id] = set()
 
-    async def _create_directory_structure(self, sandbox: AsyncSandbox, sandbox_key: UUID) -> None:
+    async def _create_directory_structure(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         create_dirs_code = """
 import os
 import stat
@@ -181,7 +177,7 @@ if created:
         dir_result = await sandbox.run_code(create_dirs_code, language="python")
 
         if dir_result.error:
-            await self.terminate(sandbox_key)
+            await self.terminate(task_id)
             raise RuntimeError(f"Failed to create directories: {dir_result.error}")
 
         try:
@@ -197,11 +193,11 @@ if created:
             except Exception:  # slopcop: ignore[no-broad-except]
                 logger.warning(
                     "Failed to clean up test files in sandbox %s",
-                    sandbox_key,
+                    task_id,
                     exc_info=True,
                 )
         except Exception as e:  # slopcop: ignore[no-broad-except]
-            await self.terminate(sandbox_key)
+            await self.terminate(task_id)
             raise RuntimeError(
                 f"Directories created but not writable. "
                 f"Python output: {dir_result.logs.stdout if dir_result.logs else 'N/A'}, Error: {e}"
@@ -230,11 +226,10 @@ if created:
 
     async def create(
         self,
-        sandbox_key: UUID,
+        task_id: UUID,
         run_id: UUID,
         timeout_minutes: int = 30,
         envs: dict[str, str] | None = None,
-        display_task_id: UUID | None = None,
     ) -> str:
         """Create a new E2B sandbox, set up directories, install deps."""
         if AsyncSandbox is None:
@@ -243,11 +238,10 @@ if created:
                 "Install it with: pip install e2b-code-interpreter"
             )
 
-        display_task_id = display_task_id or sandbox_key
-        lock = self._creation_locks.setdefault(sandbox_key, asyncio.Lock())
+        lock = self._creation_locks.setdefault(task_id, asyncio.Lock())
         async with lock:
-            if sandbox_key in self._sandboxes:
-                return self._sandboxes[sandbox_key].sandbox_id
+            if task_id in self._sandboxes:
+                return self._sandboxes[task_id].sandbox_id
 
             if not settings.e2b_api_key:
                 raise ValueError(
@@ -267,35 +261,32 @@ if created:
                     create_kwargs["template"] = self.template
                 sandbox = await AsyncSandbox.create(**create_kwargs)
             except Exception as e:  # slopcop: ignore[no-broad-except]
-                raise RuntimeError(
-                    f"Failed to create sandbox for sandbox_key={sandbox_key}: {e}"
-                ) from e
+                raise RuntimeError(f"Failed to create sandbox for task_id={task_id}: {e}") from e
 
             if not sandbox:
                 raise RuntimeError("Sandbox object is None after creation")
 
-            self._sandboxes[sandbox_key] = sandbox
-            self._ensure_registries(sandbox_key)
-            self._run_ids[sandbox_key] = run_id
-            self._display_task_ids[sandbox_key] = display_task_id
+            self._sandboxes[task_id] = sandbox
+            self._ensure_registries(task_id)
+            self._run_ids[task_id] = run_id
 
             await self._event_sink.sandbox_created(
                 run_id=run_id,
-                task_id=display_task_id,
+                task_id=task_id,
                 sandbox_id=sandbox.sandbox_id,
                 timeout_minutes=timeout_minutes,
             )
             await self._emit_wal_entry(
-                sandbox_key,
+                task_id,
                 command="sandbox.created",
                 stdout=f"sandbox_id={sandbox.sandbox_id}\ntimeout={timeout_minutes}m",
                 exit_code=0,
                 duration_ms=0,
             )
 
-            await self._create_directory_structure(sandbox, sandbox_key)
-            await self._install_dependencies(sandbox, display_task_id)
-            await self._verify_setup(sandbox, display_task_id)
+            await self._create_directory_structure(sandbox, task_id)
+            await self._install_dependencies(sandbox, task_id)
+            await self._verify_setup(sandbox, task_id)
 
             return sandbox.sandbox_id
 
@@ -438,11 +429,9 @@ if created:
             self._file_registries.pop(task_id, None)
             self._created_files_registry.pop(task_id, None)
             self._run_ids.pop(task_id, None)
-            self._display_task_ids.pop(task_id, None)
             return
 
         sandbox_id = sandbox.sandbox_id
-        display_task_id = self._get_display_task_id(task_id)
         try:
             await sandbox.kill()
         except Exception as e:  # slopcop: ignore[no-broad-except]
@@ -452,10 +441,9 @@ if created:
             self._file_registries.pop(task_id, None)
             self._created_files_registry.pop(task_id, None)
             self._run_ids.pop(task_id, None)
-            self._display_task_ids.pop(task_id, None)
 
             await self._event_sink.sandbox_closed(
-                task_id=display_task_id,
+                task_id=task_id,
                 sandbox_id=sandbox_id,
                 reason=reason,
             )
@@ -466,7 +454,7 @@ if created:
                 exit_code=0,
                 duration_ms=0,
                 sandbox_id=sandbox_id,
-                task_id=display_task_id,
+                override_task_id=task_id,
             )
 
     @staticmethod
@@ -501,11 +489,10 @@ class DefaultSandboxManager(BaseSandboxManager):
 
     async def create(
         self,
-        sandbox_key: UUID,
+        task_id: UUID,
         run_id: UUID,
         timeout_minutes: int = 30,
         envs: dict[str, str] | None = None,
-        display_task_id: UUID | None = None,
     ) -> str:
         if not settings.e2b_api_key:
             # Deferred: avoid a circular import between providers and runtime events.
@@ -513,15 +500,14 @@ class DefaultSandboxManager(BaseSandboxManager):
 
             logger.info(
                 "E2B_API_KEY not set — skipping sandbox creation for task %s (stub mode)",
-                sandbox_key,
+                task_id,
             )
             return SANDBOX_SKIPPED
         return await super().create(
-            sandbox_key,
+            task_id,
             run_id=run_id,
             timeout_minutes=timeout_minutes,
             envs=envs,
-            display_task_id=display_task_id,
         )
 
     async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:

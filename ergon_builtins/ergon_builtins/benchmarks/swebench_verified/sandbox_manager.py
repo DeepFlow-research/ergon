@@ -37,7 +37,7 @@ class SWEBenchSandboxManager(BaseSandboxManager):
         # the next manager re-instantiation.
         self.template = resolve_template()
 
-    async def _create_directory_structure(self, sandbox: AsyncSandbox, sandbox_key: UUID) -> None:
+    async def _create_directory_structure(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         """Ensure workspace dirs exist and are writable by the sandbox user.
 
         The base class uses ``sandbox.run_code`` (the E2B code-interpreter
@@ -50,8 +50,8 @@ class SWEBenchSandboxManager(BaseSandboxManager):
             timeout=30,
         )
         logger.debug(
-            "SWE-Bench dir setup for sandbox_key=%s: mkdir exit=%d",
-            sandbox_key,
+            "SWE-Bench dir setup for task_id=%s: mkdir exit=%d",
+            task_id,
             result.exit_code,
         )
 

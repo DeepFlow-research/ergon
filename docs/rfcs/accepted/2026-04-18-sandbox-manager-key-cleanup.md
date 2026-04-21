@@ -1,5 +1,5 @@
 ---
-status: active
+status: accepted
 opened: 2026-04-18
 author: deepflow-research
 architecture_refs:

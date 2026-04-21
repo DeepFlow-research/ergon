@@ -32,9 +32,10 @@ def __new__(cls, *args, **kwargs):
 
 — every re-construction of the same subclass returns the SAME instance and re-runs
 `__init__`, so any second construction with a different `event_sink=` silently replaces
-the first. Class-level state dicts (`_sandboxes`, `_run_ids`, `_display_task_ids`,
+the first. Class-level state dicts (`_sandboxes`, `_run_ids`,
 `_creation_locks` at `manager.py:61-66`) are also shared, so all tasks funneled through
 any construction site operate on the same cross-context registries.
+(`_display_task_ids` was removed by `docs/rfcs/accepted/2026-04-18-sandbox-manager-key-cleanup.md`; the remaining five dicts are still addressed by the process-state RFC.)
 
 No production site hits this today: all 5 construction sites
 (`ergon_builtins/workers/baselines/minif2f_react_worker.py:111`,

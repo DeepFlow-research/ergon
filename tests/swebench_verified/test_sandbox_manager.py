@@ -28,7 +28,6 @@ def _reset_sandbox_singleton() -> None:
     BaseSandboxManager._sandboxes = {}
     BaseSandboxManager._creation_locks = {}
     BaseSandboxManager._run_ids = {}
-    BaseSandboxManager._display_task_ids = {}
     BaseSandboxManager._file_registries = {}
     BaseSandboxManager._created_files_registry = {}
     yield
@@ -126,7 +125,7 @@ async def test_create_threads_template_kwarg_to_e2b_sdk(
     mgr = SWEBenchSandboxManager()
     assert mgr.template == "tmpl_pin_sw"
 
-    sandbox_id = await mgr.create(sandbox_key=uuid4(), run_id=uuid4(), timeout_minutes=5)
+    sandbox_id = await mgr.create(task_id=uuid4(), run_id=uuid4(), timeout_minutes=5)
     assert sandbox_id == "sbx_fake_sw001"
 
     # Verify AsyncSandbox.create was called with template=tmpl_pin_sw.
@@ -177,4 +176,4 @@ async def test_verify_setup_raises_when_git_missing(
 
     mgr = SWEBenchSandboxManager()
     with pytest.raises(RuntimeError, match="SWE-Bench sandbox smoke check failed"):
-        await mgr.create(sandbox_key=uuid4(), run_id=uuid4())
+        await mgr.create(task_id=uuid4(), run_id=uuid4())

@@ -105,7 +105,6 @@ async def _create_sandbox(
         run_id=run_id,
         timeout_minutes=30,
         envs=envs,
-        display_task_id=task_id,
     )
 
     if input_resource_ids:

@@ -74,9 +74,9 @@ async def _setup_runtime(
     run_id,
 ) -> DefaultCriterionRuntime:
     """Spin up a sandbox and wrap it in a DefaultCriterionRuntime."""
-    # Use run_id as the sandbox_key so get_sandbox(run_id) works.
+    # Use run_id as the task_id so get_sandbox(run_id) works.
     await sandbox_manager.create(
-        sandbox_key=run_id,
+        task_id=run_id,
         run_id=run_id,
         timeout_minutes=10,
     )

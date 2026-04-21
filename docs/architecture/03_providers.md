@@ -39,7 +39,7 @@ Three lifecycle hooks are defined for subclasses:
 - `_install_dependencies` — abstract today; expected to become optional with a concrete no-op default (tracked by the process-state RFC below).
 - `_verify_setup` — concrete no-op; override to raise on template/env mismatch.
 
-`create()` takes a sandbox key, run id, timeout, envs, and display-task id. The `sandbox_key` / `task_id` / `display_task_id` triplet is **debt**: in every current call site they collapse to one value, except the SWE-Bench evaluator criterion which spawns a fresh `uuid4()`. The three-parameter shape is kept because it appears in every caller; collapse is scoped in `docs/rfcs/active/2026-04-18-sandbox-manager-key-cleanup.md`.
+`create()` takes a `task_id`, `run_id`, `timeout_minutes`, and `envs`. The former `sandbox_key` / `display_task_id` triplet has been collapsed to a single `task_id`; see `docs/rfcs/accepted/2026-04-18-sandbox-manager-key-cleanup.md`.
 
 `event_sink` is a **constructor** parameter, not a `create()` kwarg. Because the subclass is a singleton, the first construction wins; subsequent constructions with a non-None `event_sink` silently overwrite the shared instance's sink. That stomp is a latent race tracked in `docs/bugs/open/2026-04-18-sandbox-manager-shared-state-race.md` (P3); the fix direction is a class-level `set_event_sink()` setter called once at app init.
 
@@ -90,7 +90,7 @@ Worker.execute()
     |       (prefix dispatch; 4 backends + fallthrough to infer_model)
     |
     +-> ManagerClass()                    (singleton; returns cached instance)
-    |   ManagerClass().create(sandbox_key=task_id, run_id=run_id, ...)
+    |   ManagerClass().create(task_id, run_id=run_id, ...)
     |       +-> per-key asyncio.Lock, idempotent on existing sandbox
     |       +-> AsyncSandbox.create(template=<pinned>, ...)
     |       +-> register in class-level state
@@ -119,7 +119,7 @@ Worker.execute()
 Movement of data across this diagram:
 
 - **Model id (string) flows down** into `resolve_model_target` and emerges as a `ResolvedModel`. No model object escapes back up — the worker owns it for its lifetime.
-- **`sandbox_key` flows into `create`**; the returned E2B `sandbox_id` is persisted on the execution row. That id is the durable link criteria use — for in-process reconnect or cross-process teardown.
+- **`task_id` flows into `create`**; the returned E2B `sandbox_id` is persisted on the execution row. That id is the durable link criteria use — for in-process reconnect or cross-process teardown.
 - **Sandbox bytes flow out** via the resource publisher, which writes once to the content-addressed blob store and records a `run_resources` row. The blob store is the single source of truth for cross-process data; the DB row is an index.
 - **Events flow out** via `SandboxEventSink` — currently unwired on the live path (Section 2.4).
 
@@ -128,7 +128,7 @@ Movement of data across this diagram:
 1. **One entry point to LLM resolution.** Every model reference goes through `resolve_model_target`. Enforced by grep discipline and review; no runtime check.
 2. **Backends register at import time.** `register_model_backend` must be called before any caller hits `resolve_model_target`. Enforced by the builtins pack running its registration loop at import, before any worker module imports.
 3. **Singleton managers hold authoritative sandbox state.** A subclass's class-level state is the only source of truth for in-process reconnect. Enforced by `__new__` caching the instance and `get_sandbox` reading the class dict. Applies only within a single Python process; cross-process actors must use `terminate_by_sandbox_id` or provision their own sandbox.
-4. **Sandbox lifecycle is per-task.** Enforced by `create` accepting `sandbox_key` and by the worker runtime persisting `sandbox_id` on the execution row.
+4. **Sandbox lifecycle is per-task.** Enforced by `create` accepting `task_id` and by the worker runtime persisting `sandbox_id` on the execution row.
 5. **Sandbox lives across evaluator fan-out.** Teardown runs at the end of `check_evaluators`, not at worker completion, not in `finalize_success`. Enforced by the evaluator harness, not by the manager itself.
 6. **Resource publication is content-addressed.** The publisher hashes before storing and is the single writer to `<ERGON_BLOB_ROOT>`. Repeated `sync()` calls against unchanged bytes are no-ops.
 
@@ -139,7 +139,7 @@ Movement of data across this diagram:
 - **On-crash sandbox leak.** Sandbox cleanup is best-effort. If `check_evaluators` crashes before teardown, the remote E2B sandbox leaks until E2B's 30-minute idle timeout fires. Acceptable: the E2B timeout is the canonical safety net.
 - **Class-dict unbounded growth.** Manager class-level state is cleared only inside `terminate()`. Any task that never reaches `terminate()` leaks its entries for the process lifetime. Acceptable for research workloads with bounded process lifetimes.
 - **Blob store has no GC.** The publisher writes under the blob root and never deletes. Tracked as P4 in `docs/bugs/open/2026-04-18-blob-store-no-gc.md`.
-- **Key-triplet debt.** `sandbox_key` / `task_id` / `display_task_id` collapse to one value in every production call site.
+- **Key-triplet debt resolved.** Collapsed to `task_id` in `docs/rfcs/accepted/2026-04-18-sandbox-manager-key-cleanup.md`.
 - **No `reconnect()` method.** Cross-process criteria must spawn their own sandbox (see `ergon_builtins/benchmarks/swebench_verified/criterion.py:66`).
 
 ## 5. Extension points
@@ -183,7 +183,7 @@ Active RFCs relevant to the providers layer:
 
 - `docs/rfcs/active/2026-04-17-sandbox-event-sink-activation.md` — install the event sink via a class-level setter at app init.
 - `docs/rfcs/active/2026-04-18-sandbox-manager-process-state.md` — reform class-level state so rollout paths stop depending on a single Python process; owns the class-dict growth limit, criterion reconnect, and the shared-state race.
-- `docs/rfcs/active/2026-04-18-sandbox-manager-key-cleanup.md` — collapse the `sandbox_key` / `task_id` / `display_task_id` triplet.
+- `docs/rfcs/accepted/2026-04-18-sandbox-manager-key-cleanup.md` — collapsed the `sandbox_key` / `task_id` / `display_task_id` triplet to a single `task_id` (landed).
 - `docs/rfcs/active/2026-04-18-dashboard-event-wiring-enforcement.md` — wire the remaining `DashboardEmitter` methods or delete them, with a lint guard.
 - `docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md` — expose `get_sandbox()` and `read_resource(name)` through `CriterionRuntime`.
 - `docs/rfcs/active/2026-04-17-sandbox-lifetime-covers-criteria.md` — formalize the sandbox-timeout invariant (sandbox timeout >= `task_timeout + max_criterion_timeout`).

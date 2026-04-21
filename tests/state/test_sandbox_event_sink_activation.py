@@ -76,7 +76,6 @@ def recording_default_manager(monkeypatch):
     DefaultSandboxManager.set_event_sink(NoopSandboxEventSink())
     DefaultSandboxManager._sandboxes.clear()
     DefaultSandboxManager._run_ids.clear()
-    DefaultSandboxManager._display_task_ids.clear()
     DefaultSandboxManager._file_registries.clear()
     DefaultSandboxManager._created_files_registry.clear()
     DefaultSandboxManager._creation_locks.clear()
@@ -108,7 +107,7 @@ async def test_sandbox_created_emits_to_sink(
     monkeypatch.setattr(manager, "_verify_setup", AsyncMock())
 
     await manager.create(
-        sandbox_key=task_id,
+        task_id=task_id,
         run_id=run_id,
         timeout_minutes=5,
     )
@@ -133,7 +132,6 @@ async def test_sandbox_closed_emits_to_sink(
 
     manager._sandboxes[task_id] = _FakeSandbox()
     manager._run_ids[task_id] = uuid4()
-    manager._display_task_ids[task_id] = task_id
 
     await manager.terminate(task_id, reason="completed")
 
