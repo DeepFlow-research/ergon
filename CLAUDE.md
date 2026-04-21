@@ -56,9 +56,7 @@ pnpm run test:be:e2e    # E2E tests (requires Docker stack)
 
 ## Git workflow
 
-**Trunk-based development on `main`.** Commit directly to `main` — do not create feature branches or git worktrees. No PRs unless explicitly requested.
-
-When a feature branch is needed (e.g. for a PR review), use the `feature/<name>` prefix. PRs from `feature/*` branches automatically run the full E2B sandbox I/O test suite in CI.
+**PR-based development.** All changes land via pull request against `main` — direct commits to `main` are prohibited. Branch with the `feature/<name>` prefix; PRs from `feature/*` branches automatically run the full E2B sandbox I/O test suite in CI.
 
 ## Key conventions
 
@@ -72,12 +70,13 @@ When a feature branch is needed (e.g. for a PR review), use the `feature/<name>`
 
 Single source of truth on how the system works today: [`docs/architecture/`](docs/architecture/README.md).
 
-Every feature PR either (a) **cites** the architecture section(s) it relies on, or
-(b) **updates** those sections if it changes an invariant, adds an extension point,
-or removes an anti-pattern offender. Cross-cutting changes (artifacts, sandbox
-lifecycle, error propagation) must update `docs/architecture/cross_cutting/`
-explicitly. PRs that break an invariant without updating the doc are NAK'd
-regardless of test state.
+Every feature PR **MUST update** `docs/architecture/` to reflect the new state.
+At minimum, cite the section(s) the change relies on; if it adds, removes, or
+modifies any public API, extension point, invariant, or anti-pattern offender,
+update those sections in the same PR — a follow-up docs PR is not acceptable.
+Cross-cutting changes (artifacts, sandbox lifecycle, error propagation) must
+update `docs/architecture/cross_cutting/` explicitly. PRs that leave the
+architecture docs out of date are NAK'd regardless of test state.
 
 ## RFCs and bugs
 
