@@ -1,10 +1,11 @@
 """Build Experiment from CLI args using registry lookups."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.experiment import Experiment
+from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker import Worker
 
 
@@ -15,6 +16,7 @@ def build_experiment(
     evaluator_slug: str = "stub-rubric",
     workflow: str = "single",
     limit: int | None = None,
+    toolkit_benchmark: str | None = None,
 ) -> Experiment:
     # Deferred: CLI startup cost
     from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
@@ -24,6 +26,8 @@ def build_experiment(
     evaluator_cls = EVALUATORS[evaluator_slug]
 
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
+    if toolkit_benchmark is not None:
+        _inject_toolkit_benchmark(benchmark, toolkit_benchmark)
     evaluator = evaluator_cls(name="evaluator")
 
     # Composition is driven by the explicit worker selection first; the
@@ -159,3 +163,34 @@ def _construct_benchmark(cls, workflow: str, limit: int | None):
 
     # Bare constructor
     return cls()
+
+
+def _inject_toolkit_benchmark(benchmark: Benchmark, toolkit_benchmark: str) -> None:
+    """Wrap benchmark.build_instances so every returned task carries toolkit_benchmark.
+
+    BenchmarkTask is a frozen Pydantic model, so direct mutation is not
+    possible.  Instead we wrap the benchmark's build_instances method once:
+    the wrapper creates new task objects via model_copy(update={...}) with
+    toolkit_benchmark merged into task_payload.  The original method is
+    preserved as the delegate so the wrapping is idempotent-safe.
+    """
+    original_build = benchmark.build_instances
+
+    def _patched_build_instances():
+        raw: Mapping[str, Sequence[BenchmarkTask]] = original_build()
+        return {
+            key: [
+                task.model_copy(
+                    update={
+                        "task_payload": {
+                            **task.task_payload,
+                            "toolkit_benchmark": toolkit_benchmark,
+                        }
+                    }
+                )
+                for task in tasks
+            ]
+            for key, tasks in raw.items()
+        }
+
+    benchmark.build_instances = _patched_build_instances  # type: ignore[method-assign]  # ty: ignore[invalid-assignment]

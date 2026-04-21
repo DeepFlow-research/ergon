@@ -48,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Cohort name to group this run under (auto-generated from slug if omitted)",
     )
+    run_parser.add_argument(
+        "--toolkit-benchmark",
+        default=None,
+        help="When --worker=react-generic, which benchmark's toolkit to compose.",
+    )
 
     run = sub.add_parser("run", help="Run management")
     run_sub = run.add_subparsers(dest="run_action")
