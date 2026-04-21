@@ -10,6 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.dependencies import check_packages
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.task_types import BenchmarkTask
@@ -18,12 +19,30 @@ from ergon_core.api.task_types import BenchmarkTask
 class Benchmark(ABC):
     """Base class for all benchmarks.
 
-    Subclasses must set ``type_slug`` and implement ``build_instances``.
+    Subclasses MUST set ``type_slug`` and ``onboarding_deps`` and implement
+    ``build_instances``.  Omitting ``onboarding_deps`` raises ``TypeError``
+    at class definition time.
     """
 
     type_slug: ClassVar[str]
+    onboarding_deps: ClassVar[BenchmarkDeps]
     required_packages: ClassVar[list[str]] = []
     install_hint: ClassVar[str] = ""
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:  # slopcop: ignore[no-typing-any]
+        super().__init_subclass__(**kwargs)
+        # Only enforce on concrete classes (those that also define type_slug).
+        # Abstract intermediate subclasses may omit the field.
+        abstract = getattr(cls, "__abstractmethods__", None)  # slopcop: ignore[no-hasattr-getattr]
+        has_slug = hasattr(cls, "type_slug")  # slopcop: ignore[no-hasattr-getattr]
+        if not abstract and has_slug:
+            deps = getattr(cls, "onboarding_deps", None)  # slopcop: ignore[no-hasattr-getattr]
+            if not isinstance(deps, BenchmarkDeps):
+                raise TypeError(
+                    f"{cls.__qualname__} must declare "
+                    f"'onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(...)'. "
+                    f"See ergon_core/api/benchmark_deps.py."
+                )
 
     def __init__(
         self,

@@ -128,3 +128,48 @@ class TestRequiredExtras:
         )
         extras = p.required_extras()
         assert extras == sorted(extras)
+
+
+class TestPreviouslyMissingBenchmarks:
+    """Regression: delegation-smoke and researchrubrics-smoke were absent
+    from BENCHMARK_DEPS before this RFC. Verify they now appear in the
+    onboarding wizard choices and produce correct deps."""
+
+    def test_delegation_smoke_has_no_e2b(self) -> None:
+        p = OnboardProfile(benchmarks=["delegation-smoke"])
+        assert "E2B_API_KEY" not in p.required_keys()
+        assert p.required_extras() == []
+
+    def test_researchrubrics_smoke_has_no_e2b(self) -> None:
+        p = OnboardProfile(benchmarks=["researchrubrics-smoke"])
+        assert "E2B_API_KEY" not in p.required_keys()
+        assert p.required_extras() == []
+
+    def test_researchrubrics_ablated_needs_data_extra(self) -> None:
+        p = OnboardProfile(benchmarks=["researchrubrics-ablated"])
+        assert "ergon-builtins[data]" in p.required_extras()
+
+    def test_researchrubrics_vanilla_needs_data_extra(self) -> None:
+        p = OnboardProfile(benchmarks=["researchrubrics-vanilla"])
+        assert "ergon-builtins[data]" in p.required_extras()
+
+
+class TestOnboardingWizardSeesAllBenchmarks:
+    """The wizard must offer all registered benchmarks, not just the old 5."""
+
+    def test_wizard_sees_nine_slugs(self) -> None:
+        from ergon_builtins.registry import BENCHMARKS
+
+        # All nine registered slugs must be visible
+        expected = {
+            "smoke-test",
+            "minif2f",
+            "delegation-smoke",
+            "researchrubrics-smoke",
+            "swebench-verified",
+            "gdpeval",
+            "researchrubrics",
+            "researchrubrics-ablated",
+            "researchrubrics-vanilla",
+        }
+        assert expected <= set(BENCHMARKS.keys())

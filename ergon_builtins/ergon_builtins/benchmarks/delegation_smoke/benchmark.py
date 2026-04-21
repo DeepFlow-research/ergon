@@ -8,11 +8,13 @@ from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
 from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
 
 
 class DelegationSmokeBenchmark(Benchmark):
     type_slug: ClassVar[str] = "delegation-smoke"
+    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps()
 
     def __init__(self, *, limit: int | None = None) -> None:
         super().__init__(

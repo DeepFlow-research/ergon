@@ -12,17 +12,29 @@ class _FakeArgs:
 
 class TestOnboardWizard:
     def test_minimal_flow_cloud_only(self, tmp_path: Path, monkeypatch: object) -> None:
-        """User picks smoke-test, OpenAI, no training."""
+        """User picks smoke-test, OpenAI, no training.
+
+        Sorted benchmark order (9 slugs):
+          1. delegation-smoke
+          2. gdpeval
+          3. minif2f
+          4. researchrubrics
+          5. researchrubrics-ablated
+          6. researchrubrics-smoke
+          7. researchrubrics-vanilla
+          8. smoke-test
+          9. swebench-verified
+        """
         env_path = tmp_path / ".env"
         monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
 
         # Sequence of user inputs the wizard will consume:
-        #   1. select_multiple (benchmarks): "1" = smoke-test
+        #   1. select_multiple (benchmarks): "8" = smoke-test
         #   2. select_multiple (LLM providers): "1" = openai
         #   3. confirm (training): "n"
         #   4. ask_secret (OPENAI_API_KEY): "sk-test"
         #   5. ask_secret (E2B_API_KEY): "e2b-test"
-        inputs = iter(["1", "1", "n", "sk-test", "e2b-test"])
+        inputs = iter(["8", "1", "n", "sk-test", "e2b-test"])
 
         with (
             patch("builtins.input", side_effect=lambda *_a, **_kw: next(inputs)),
@@ -43,7 +55,7 @@ class TestOnboardWizard:
         monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
 
         # Sequence:
-        #   1. benchmarks: "2" = minif2f
+        #   1. benchmarks: "3" = minif2f
         #   2. LLM providers: "2" = anthropic
         #   3. training: "y"
         #   4. local GPU: "n"
@@ -51,7 +63,7 @@ class TestOnboardWizard:
         #   6. ask_secret (ANTHROPIC_API_KEY): "sk-ant"
         #   7. ask_secret (E2B_API_KEY): "e2b-key"
         #   8. ask_secret (SHADEFORM_API_KEY): "sf-key"
-        inputs = iter(["2", "2", "y", "n", "1", "sk-ant", "e2b-key", "sf-key"])
+        inputs = iter(["3", "2", "y", "n", "1", "sk-ant", "e2b-key", "sf-key"])
 
         with (
             patch("builtins.input", side_effect=lambda *_a, **_kw: next(inputs)),

@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
 
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
@@ -27,6 +28,10 @@ class SweBenchVerifiedBenchmark(Benchmark):
     """Benchmark backed by SWE-Bench Verified (500 curated instances)."""
 
     type_slug: ClassVar[str] = "swebench-verified"
+    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
+        e2b=True,
+        extras=("ergon-builtins[data]",),
+    )
 
     def __init__(
         self,

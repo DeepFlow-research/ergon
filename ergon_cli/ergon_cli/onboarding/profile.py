@@ -1,12 +1,10 @@
-"""OnboardProfile: user choices -> required keys and pip extras.
-
-The BENCHMARK_DEPS dict is the single source of truth for what each benchmark
-needs.  Keep it aligned with registry_core.py / registry.py.
-"""
+"""OnboardProfile: user choices -> required keys and pip extras."""
 
 from enum import Enum
 
 from pydantic import BaseModel, Field
+
+from ergon_core.api.benchmark_deps import BenchmarkDeps  # noqa: F401 — re-exported for CLI callers
 
 
 class LLMProvider(str, Enum):
@@ -37,25 +35,6 @@ GPU_PROVIDER_KEY_MAP: dict[GPUProvider, str] = {
 }
 
 
-class BenchmarkDeps(BaseModel):
-    """What a single benchmark requires beyond the base install."""
-
-    e2b: bool = False
-    extras: list[str] = Field(default_factory=list)
-    optional_keys: list[str] = Field(default_factory=list)
-
-
-BENCHMARK_DEPS: dict[str, BenchmarkDeps] = {
-    "smoke-test": BenchmarkDeps(e2b=True),
-    "minif2f": BenchmarkDeps(e2b=True),
-    "gdpeval": BenchmarkDeps(e2b=True, extras=["ergon-builtins[data]"]),
-    "researchrubrics": BenchmarkDeps(
-        extras=["ergon-builtins[data]"], optional_keys=["EXA_API_KEY"]
-    ),
-    "swebench-verified": BenchmarkDeps(e2b=True, extras=["ergon-builtins[data]"]),
-}
-
-
 class OnboardProfile(BaseModel):
     """Captures every user choice made during onboarding."""
 
@@ -68,18 +47,23 @@ class OnboardProfile(BaseModel):
 
     def required_keys(self) -> dict[str, str]:
         """Return {env_var: human_reason} derived purely from user choices."""
+        # reason: deferred import avoids circular dep at CLI startup; registry
+        # depends on ergon_builtins which depends on ergon_core.
+        from ergon_builtins.registry import BENCHMARKS
+
         result: dict[str, str] = {}
 
         for provider in self.llm_providers:
             env_var = PROVIDER_KEY_MAP[provider]
             result[env_var] = f"{provider.value} API access"
 
-        if any(BENCHMARK_DEPS.get(b, BenchmarkDeps()).e2b for b in self.benchmarks):
+        if any(BENCHMARKS[b].onboarding_deps.e2b for b in self.benchmarks if b in BENCHMARKS):
             result["E2B_API_KEY"] = "Sandboxed code execution for selected benchmarks"
 
         for b in self.benchmarks:
-            for k in BENCHMARK_DEPS.get(b, BenchmarkDeps()).optional_keys:
-                result.setdefault(k, f"Optional for {b}")
+            if b in BENCHMARKS:
+                for k in BENCHMARKS[b].onboarding_deps.optional_keys:
+                    result.setdefault(k, f"Optional for {b}")
 
         if self.gpu_provider and self.gpu_provider != GPUProvider.LOCAL:
             env_var = GPU_PROVIDER_KEY_MAP[self.gpu_provider]
@@ -89,10 +73,15 @@ class OnboardProfile(BaseModel):
 
     def required_extras(self) -> list[str]:
         """Pip extras to install based on choices."""
+        # reason: deferred import avoids circular dep at CLI startup; registry
+        # depends on ergon_builtins which depends on ergon_core.
+        from ergon_builtins.registry import BENCHMARKS
+
         extras: set[str] = set()
         for b in self.benchmarks:
-            for e in BENCHMARK_DEPS.get(b, BenchmarkDeps()).extras:
-                extras.add(e)
+            if b in BENCHMARKS:
+                for e in BENCHMARKS[b].onboarding_deps.extras:
+                    extras.add(e)
         if self.training:
             extras.add("ergon-infra[training]")
         if self.gpu_provider and self.gpu_provider != GPUProvider.LOCAL:
