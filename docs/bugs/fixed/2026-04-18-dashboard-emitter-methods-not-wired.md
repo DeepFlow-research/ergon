@@ -1,7 +1,7 @@
 ---
 status: fixed
 opened: 2026-04-18
-fixed_pr: TBD
+fixed_pr: 17
 priority: P1
 invariant_violated: docs/architecture/05_dashboard.md#invariants
 related_rfc: docs/rfcs/active/2026-04-18-dashboard-event-wiring-enforcement.md
