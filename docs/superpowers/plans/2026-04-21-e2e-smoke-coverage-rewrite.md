@@ -14,7 +14,8 @@
 - Parent project RFC (prerequisites): `docs/rfcs/active/2026-04-18-testing-posture-reset.md`
 
 **Prerequisites gating:**
-- **PR 1 of this plan** can land any time after the RFC itself is merged. It does not touch `tests/e2e/`.
+- **PR 0 of this plan** is a standalone engine rename (no dependencies) — must merge before PR 1 branch is created.
+- **PR 1 of this plan** requires PR 0 merged. It does not touch `tests/e2e/`.
 - **PR 2–4 of this plan** require these reset-RFC PRs to have merged first:
   - Reset RFC PR 2 (Docker layer caching) — required for 5-min CI budget.
   - Reset RFC PR 3 (`tests/integration/` real-Postgres infrastructure) — the pytest driver reuses this stack.
@@ -32,7 +33,7 @@
 | `ergon_builtins/ergon_builtins/workers/stubs/__init__.py` | Package marker (new subdir) |
 | `ergon_builtins/ergon_builtins/workers/stubs/smoke_subworker.py` | `SmokeSubworker` Protocol + `SubworkerResult` dataclass |
 | `ergon_builtins/ergon_builtins/workers/stubs/base_smoke_leaf.py` | `BaseSmokeLeafWorker` — shared glue from subworker to resource publish |
-| `ergon_builtins/ergon_builtins/workers/stubs/canonical_smoke_worker.py` | `CanonicalSmokeWorker` + `EXPECTED_SUBTASK_KEYS` constant |
+| `ergon_builtins/ergon_builtins/workers/stubs/canonical_smoke_worker.py` | `CanonicalSmokeWorker` + `EXPECTED_SUBTASK_SLUGS` constant |
 | `ergon_builtins/ergon_builtins/evaluators/criteria/smoke_criterion.py` | `SmokeCriterionBase` abstract + 3 env-specific subclasses |
 | `ergon_builtins/ergon_builtins/benchmarks/researchrubrics/smoke_subworker.py` | `ResearchRubricsSmokeSubworker` + `ResearchRubricsSmokeLeafWorker` |
 | `ergon_builtins/ergon_builtins/benchmarks/minif2f/smoke_subworker.py` | `MiniF2FSmokeSubworker` + `MiniF2FSmokeLeafWorker` |
@@ -101,6 +102,384 @@
 
 ---
 
+# PR 0 — Engine rename: `TaskSlug` + `AssignedWorkerSlug`
+
+**PR branch:** `feature/engine-task-slug-rename`
+
+**Goal:** Make dynamic-subtask identity durable and caller-controllable. Add `TaskSlug` and `AssignedWorkerSlug` `NewType` aliases. Rename `task_key` → `task_slug` on both the experiment-definition and run-graph models. Rename `worker_binding_key` (DTO) / `assigned_worker_key` (graph column) → `assigned_worker_slug` end-to-end. Drop the auto-generated `dynamic:<hex>` prefix — `plan_subtasks` and `add_subtask` now require a caller-supplied `task_slug`.
+
+**Motivation:** Currently `SubtaskSpec.local_key` is used only for in-call dep resolution and then discarded. The persisted `task_key` is engine-generated (`dynamic:<hex>`) and opaque. External observers — smoke criteria, tests, dashboards — cannot identify dynamically-spawned nodes semantically. Collapsing the two into a single caller-chosen, persisted slug is the prerequisite for PR 1's criterion to assert topology by name (`d_root`, `d_left`, …). The rename also fixes existing semantic noise: the values stored in these fields are already slugs (`"researcher"`, `"research-av-safety"`), not opaque keys.
+
+**Scope:** Mechanical rename across DTOs, service layer, repositories, graph + definition models, one Alembic migration, `SubtaskLifecycleToolkit`, both manager workers, and all tests referencing the old names. Runtime behaviour is otherwise unchanged.
+
+**PR 0 acceptance gate:**
+- `pnpm run check:fast` green
+- `uv run pytest tests/state tests/unit -x` green
+- Alembic migration applies + reverses cleanly (`alembic upgrade head && alembic downgrade -1 && alembic upgrade head`)
+- `grep -rn "task_key\|worker_binding_key\|assigned_worker_key\|local_key" ergon_core/ ergon_builtins/ tests/ --include="*.py"` returns zero matches (except inside the new Alembic migration)
+- PR 0 MUST merge before `feature/smoke-shared-infra` is branched
+
+---
+
+## Task PR0.A — Branch setup for PR 0
+
+**Files:** none (environment prep).
+
+- [ ] **Step A.1: Verify clean baseline**
+
+```bash
+cd /Users/charliemasters/Desktop/synced_vm_002/ergon
+git checkout main
+git pull origin main
+uv sync --all-packages --group dev
+uv run pytest tests/state tests/unit -x
+pnpm run check:fast
+```
+
+Expected: all green. Stop and fix any failures before starting.
+
+- [ ] **Step A.2: Create PR 0 branch**
+
+```bash
+git checkout -b feature/engine-task-slug-rename
+```
+
+Expected: on `feature/engine-task-slug-rename`, clean working tree.
+
+---
+
+## Task PR0.B — `TaskSlug` + `AssignedWorkerSlug` NewTypes
+
+**Files:**
+- Modify: `ergon_core/ergon_core/core/persistence/shared/types.py`
+- Test: none — `NewType` aliases are erased at runtime; downstream call-site tests provide coverage.
+
+- [ ] **Step B.1: Add the NewTypes and drop `WorkerBindingKey`**
+
+Edit `shared/types.py` so it reads:
+
+```python
+"""Shared type aliases for stringly-typed identifiers.
+
+NewType aliases are erased at runtime but catch cross-field
+misassignment in type checkers (e.g., passing a task_slug where a
+node_id is expected).
+"""
+
+from typing import NewType
+from uuid import UUID
+
+# ── String aliases ────────────────────────────────────────────────
+TaskSlug = NewType("TaskSlug", str)
+AssignedWorkerSlug = NewType("AssignedWorkerSlug", str)
+BenchmarkSlug = NewType("BenchmarkSlug", str)
+
+# ── UUID aliases ──────────────────────────────────────────────────
+RunId = NewType("RunId", UUID)
+NodeId = NewType("NodeId", UUID)
+DefinitionId = NewType("DefinitionId", UUID)
+ExecutionId = NewType("ExecutionId", UUID)
+EdgeId = NewType("EdgeId", UUID)
+```
+
+- [ ] **Step B.2: Commit**
+
+```bash
+git add ergon_core/ergon_core/core/persistence/shared/types.py
+git commit -m "refactor(types): add TaskSlug, rename WorkerBindingKey -> AssignedWorkerSlug"
+```
+
+The next tasks will progressively break `ty` and imports of `WorkerBindingKey` until the rename lands across call-sites — this is expected.
+
+---
+
+## Task PR0.C — Rename graph + definition columns; Alembic migration
+
+**Files:**
+- Modify: `ergon_core/ergon_core/core/persistence/graph/models.py`
+- Modify: `ergon_core/ergon_core/core/persistence/definitions/models.py`
+- Create: `ergon_core/migrations/versions/<hash>_rename_task_key_to_task_slug.py`
+
+- [ ] **Step C.1: Rename fields on `RunGraphNode`**
+
+Edit `graph/models.py` around lines 58–72 — keep all surrounding fields, change only these two:
+
+```python
+# Identifies the task slot in the experiment template (e.g.
+# 'research-av-safety') OR the caller-chosen slug for a
+# dynamically-spawned subtask. Required at creation, persisted verbatim.
+task_slug: str = Field(index=True)          # was: task_key
+description: str
+...
+# WORKERS-registry slug, e.g. "researcher", "smoke-test-worker".
+assigned_worker_slug: str | None = None     # was: assigned_worker_key
+```
+
+- [ ] **Step C.2: Rename on `ExperimentDefinitionTask`**
+
+Edit `definitions/models.py:172`:
+
+```python
+task_slug: str = Field(index=True)          # was: task_key
+```
+
+- [ ] **Step C.3: Generate Alembic migration skeleton**
+
+```bash
+cd ergon/ergon_core
+uv run alembic revision -m "rename task_key to task_slug and assigned_worker_key to assigned_worker_slug"
+```
+
+- [ ] **Step C.4: Fill migration body**
+
+Replace the generated `upgrade`/`downgrade` with:
+
+```python
+def upgrade() -> None:
+    op.alter_column("run_graph_nodes", "task_key", new_column_name="task_slug")
+    op.alter_column(
+        "run_graph_nodes",
+        "assigned_worker_key",
+        new_column_name="assigned_worker_slug",
+    )
+    op.alter_column(
+        "experiment_definition_tasks",
+        "task_key",
+        new_column_name="task_slug",
+    )
+
+
+def downgrade() -> None:
+    op.alter_column(
+        "experiment_definition_tasks",
+        "task_slug",
+        new_column_name="task_key",
+    )
+    op.alter_column(
+        "run_graph_nodes",
+        "assigned_worker_slug",
+        new_column_name="assigned_worker_key",
+    )
+    op.alter_column("run_graph_nodes", "task_slug", new_column_name="task_key")
+```
+
+- [ ] **Step C.5: Round-trip the migration**
+
+```bash
+uv run alembic upgrade head
+uv run alembic downgrade -1
+uv run alembic upgrade head
+```
+
+Expected: clean output; dev DB ends on the new head.
+
+- [ ] **Step C.6: Commit**
+
+```bash
+git add ergon_core/ergon_core/core/persistence/graph/models.py \
+        ergon_core/ergon_core/core/persistence/definitions/models.py \
+        ergon_core/migrations/versions/*rename_task_key*.py
+git commit -m "refactor(persistence): rename task_key->task_slug, assigned_worker_key->assigned_worker_slug"
+```
+
+---
+
+## Task PR0.D — DTOs + `plan_subtasks` + `add_subtask` service updates
+
+**Files:**
+- Modify: `ergon_core/ergon_core/core/runtime/services/task_management_dto.py`
+- Modify: `ergon_core/ergon_core/core/runtime/services/task_management_service.py`
+- Modify: `ergon_core/ergon_core/core/persistence/graph/repository.py` (or wherever `add_node` lives — grep to confirm)
+- Modify: `tests/state/test_plan_subtasks.py`
+- Modify: `tests/state/test_task_management_service.py`
+
+- [ ] **Step D.1: Update DTOs**
+
+Edit `task_management_dto.py`:
+
+```python
+from ergon_core.core.persistence.shared.types import (
+    AssignedWorkerSlug, NodeId, RunId, TaskSlug,
+)
+
+class SubtaskSpec(BaseModel):
+    task_slug: TaskSlug = Field(min_length=1)            # was: local_key
+    description: str = Field(min_length=1)
+    assigned_worker_slug: AssignedWorkerSlug = Field(
+        default=AssignedWorkerSlug("researcher"),
+    )                                                     # was: worker_binding_key
+    depends_on: list[TaskSlug] = Field(default_factory=list)
+    model_config = {"frozen": True}
+
+
+class PlanSubtasksCommand(BaseModel):
+    run_id: RunId
+    parent_node_id: NodeId
+    subtasks: list[SubtaskSpec]
+
+
+class PlanSubtasksResult(BaseModel):
+    nodes: dict[TaskSlug, NodeId]                         # was: dict[str, NodeId] (keyed by local_key)
+    roots: list[TaskSlug]
+
+
+class AddSubtaskCommand(BaseModel):
+    run_id: RunId
+    parent_node_id: NodeId
+    task_slug: TaskSlug = Field(min_length=1)             # NEW — mandatory
+    description: str
+    assigned_worker_slug: AssignedWorkerSlug = Field(
+        default=AssignedWorkerSlug("researcher"),
+    )                                                     # was: worker_binding_key
+    depends_on: list[NodeId] = Field(default_factory=list)
+```
+
+(Preserve any other pre-existing fields on these classes.)
+
+- [ ] **Step D.2: Update `plan_subtasks` and `add_subtask` in service**
+
+Edit `task_management_service.py`:
+
+- Delete the `_DYNAMIC_TASK_KEY_PREFIX = "dynamic:"` constant (line 58).
+- At both sites that currently do `task_key = f"{_DYNAMIC_TASK_KEY_PREFIX}{node_uuid.hex[:8]}"` (lines 129 and 265), replace with `task_slug = spec.task_slug` (in `plan_subtasks`) and `task_slug = command.task_slug` (in `add_subtask`).
+- Pass `task_slug=task_slug, assigned_worker_slug=spec.assigned_worker_slug` to `add_node`.
+- In `plan_subtasks`, rename the local `key_to_node_id: dict[str, UUID]` → `slug_to_node_id: dict[TaskSlug, NodeId]`, keyed by `spec.task_slug`. The second loop iterates `spec.depends_on` (now `list[TaskSlug]`) and looks up each in `slug_to_node_id`.
+- `PlanSubtasksResult(nodes=slug_to_node_id, roots=roots)` — `roots` is `list[TaskSlug]`.
+
+- [ ] **Step D.3: Update `add_node` signature**
+
+Grep for `def add_node(` in `ergon_core/core/persistence/graph/`:
+
+```bash
+grep -n "def add_node" ergon_core/ergon_core/core/persistence/graph/*.py
+```
+
+In whichever file, rename the parameters:
+- `task_key: str` → `task_slug: str`
+- `assigned_worker_key: ...` → `assigned_worker_slug: ...`
+
+Update all call-sites in `task_management_service.py` and any other in-repo callers (grep `add_node(` in `ergon_core/`).
+
+- [ ] **Step D.4: Update state tests that reference old field names**
+
+Edit `tests/state/test_plan_subtasks.py` and `tests/state/test_task_management_service.py` — replace `local_key=` with `task_slug=`, `worker_binding_key=` with `assigned_worker_slug=`, `task_key=` with `task_slug=`, and adjust any result-dict accesses (`result.nodes["foo"]` stays unchanged in shape but the dict is now typed `dict[TaskSlug, NodeId]`).
+
+- [ ] **Step D.5: Run state tests**
+
+```bash
+uv run pytest tests/state/test_plan_subtasks.py tests/state/test_task_management_service.py -x
+```
+
+Expected: all pass.
+
+- [ ] **Step D.6: Commit**
+
+```bash
+git add ergon_core/ tests/state/test_plan_subtasks.py tests/state/test_task_management_service.py
+git commit -m "refactor(runtime): collapse local_key/task_key into task_slug on SubtaskSpec + AddSubtaskCommand"
+```
+
+---
+
+## Task PR0.E — `SubtaskLifecycleToolkit` + manager workers
+
+**Files:**
+- Modify: `ergon_builtins/ergon_builtins/tools/subtask_lifecycle_toolkit.py`
+- Modify: `ergon_builtins/ergon_builtins/workers/baselines/manager_researcher_worker.py`
+- Modify: `ergon_builtins/ergon_builtins/workers/research_rubrics/manager_worker.py`
+- Modify: `tests/state/test_subtask_lifecycle_toolkit.py`
+- Modify: `tests/state/test_research_rubrics_workers.py`
+- Modify: `tests/state/test_manager_dag_scenario.py`
+- Modify: `tests/state/test_delegation_scenario.py`
+
+- [ ] **Step E.1: Toolkit — expose `task_slug` to the LLM**
+
+In `subtask_lifecycle_toolkit.py`:
+
+- `add_subtask(description, worker_binding_key="researcher", depends_on=None)` → `add_subtask(task_slug: str, description: str, assigned_worker_slug: str = "researcher", depends_on: list[str] | None = None)`. `depends_on` here still refers to sibling `NodeId` strings (the LLM passes real UUIDs it got from earlier calls).
+- Docstring: "The `task_slug` is a short kebab-case identifier for this subtask. It is persisted verbatim and used by observers (dashboard, criteria, tests) to identify this node."
+- Build `AddSubtaskCommand(task_slug=TaskSlug(task_slug), description=description, assigned_worker_slug=AssignedWorkerSlug(assigned_worker_slug), depends_on=deps, ...)`.
+
+- `plan_subtasks(subtasks)` — each entry's `local_key` is renamed to `task_slug` in the dict the LLM supplies. Docstring: "Each entry has `task_slug` (kebab-case identifier, persisted verbatim), `description`, optional `assigned_worker_slug`, optional `depends_on` (list of sibling `task_slug`s within this call)." `SubtaskSpec.model_validate(s)` continues to work because the DTO field renames match the dict keys.
+
+- [ ] **Step E.2: Manager workers — update prompt text and any static call-sites**
+
+In `manager_researcher_worker.py` and `research_rubrics/manager_worker.py`:
+- Replace any prompt text referencing `local_key` or `worker_binding_key` with `task_slug` / `assigned_worker_slug`.
+- If there are non-LLM call-sites that build `SubtaskSpec` directly, update fields.
+
+- [ ] **Step E.3: Update toolkit + scenario tests**
+
+Sweep `tests/state/test_subtask_lifecycle_toolkit.py`, `test_manager_dag_scenario.py`, `test_delegation_scenario.py`, `test_research_rubrics_workers.py` for any of: `local_key`, `worker_binding_key`, `task_key`, `assigned_worker_key`. Replace with the new names.
+
+- [ ] **Step E.4: Run full unit + state suite**
+
+```bash
+uv run pytest tests/unit tests/state -x
+```
+
+Expected: all pass. Any failure must be a call-site missed in the sweep — fix it.
+
+- [ ] **Step E.5: Commit**
+
+```bash
+git add ergon_builtins/ tests/state/
+git commit -m "refactor(builtins): plumb task_slug through toolkit and manager workers"
+```
+
+---
+
+## Task PR0.F — Grep sweep + push PR 0
+
+**Files:** various (clean-up pass).
+
+- [ ] **Step F.1: Verify no references to the old names remain**
+
+```bash
+grep -rn "task_key\|worker_binding_key\|assigned_worker_key\|local_key" \
+    ergon_core/ ergon_builtins/ tests/ --include="*.py" \
+  | grep -v "migrations/versions/.*rename_task_key"
+```
+
+Expected: zero matches. If any remain, fix them and re-commit before pushing.
+
+- [ ] **Step F.2: Run full check:fast**
+
+```bash
+pnpm run check:fast
+```
+
+Expected: green.
+
+- [ ] **Step F.3: Push and open PR 0**
+
+```bash
+git push -u origin feature/engine-task-slug-rename
+gh pr create --title "refactor: collapse local_key/task_key into caller-chosen task_slug" --body "$(cat <<'EOF'
+## Summary
+- Adds `TaskSlug` and `AssignedWorkerSlug` `NewType` aliases in `shared/types.py`
+- Renames `task_key` → `task_slug` on `RunGraphNode` and `ExperimentDefinitionTask`
+- Renames `worker_binding_key` (DTO) / `assigned_worker_key` (model column) → `assigned_worker_slug`
+- Makes `task_slug` a caller-mandatory, persisted slug on both `plan_subtasks` and `add_subtask`
+- Drops the auto-generated `dynamic:<hex>` prefix
+- One Alembic migration (renames three columns; reverses cleanly)
+
+Prerequisite for `docs/superpowers/plans/2026-04-21-e2e-smoke-coverage-rewrite.md` PR 1.
+
+## Test plan
+- [x] `uv run pytest tests/state tests/unit -x`
+- [x] `pnpm run check:fast`
+- [x] `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`
+EOF
+)"
+```
+
+- [ ] **Step F.4: Block on PR 0 merging before starting PR 1**
+
+Once PR 0 merges to `main`, proceed to `## Task 0` below. If PR 0 is blocked on review, pause the plan.
+
+---
+
 ## Task 0 — Confirm prerequisites and set up PR 1 branch
 
 **Files:** none (environment check).
@@ -125,7 +504,16 @@ git log --oneline origin/main -3 | grep -F "e2e smoke coverage rewrite"
 
 Expected: the RFC commit (`d256059` or its equivalent) is visible on `origin/main`.
 
-- [ ] **Step 0.3: Create PR 1 feature branch**
+- [ ] **Step 0.3: Verify PR 0 (engine rename) is merged on main**
+
+```bash
+grep -n "TaskSlug\|AssignedWorkerSlug" ergon_core/ergon_core/core/persistence/shared/types.py
+grep -n "task_slug" ergon_core/ergon_core/core/runtime/services/task_management_dto.py | head -5
+```
+
+Expected: both greps produce matches. If they don't, PR 0 hasn't merged yet — pause the plan until it does. PR 1 depends on the renamed fields.
+
+- [ ] **Step 0.4: Create PR 1 feature branch**
 
 ```bash
 git checkout main
@@ -275,16 +663,29 @@ git commit -m "feat(smoke): SmokeSubworker Protocol + SubworkerResult"
 - Create: `ergon_builtins/ergon_builtins/workers/stubs/base_smoke_leaf.py`
 - Test: `tests/unit/test_base_smoke_leaf.py`
 
+**Context for the implementer:** `BaseSmokeLeafWorker` is a real `Worker` subclass (see [`ergon_core/api/worker.py`](../../ergon_core/ergon_core/api/worker.py) and reference pattern at [`smoke_test_worker.py`](../../ergon_builtins/ergon_builtins/workers/baselines/smoke_test_worker.py)). It must:
+
+1. Inherit `ergon_core.api.Worker` and define `type_slug`.
+2. Implement `execute(self, task, *, context) -> AsyncGenerator[GenerationTurn, None]` — an async generator that yields at least once.
+3. Acquire the sandbox via `AsyncSandbox.connect(sandbox_id=context.sandbox_id)` — **not** `ctx.acquire_sandbox()`. That method does not exist.
+4. Write its output files under `/workspace/final_output/` inside the sandbox. The runtime's `persist_outputs_fn` (Inngest post-execute step) will pick them up and create `RunResource` rows automatically — do NOT call `publish_resource`; that API does not exist.
+5. Yield a `GenerationTurn` describing what happened.
+6. Override `get_output(context) -> WorkerOutput` to report probe success/failure via structured metadata.
+
+Uniqueness: since multiple leaves may share a sandbox root if the engine re-uses sandboxes, filenames are prefixed with `context.node_id.hex[:8]` to avoid collisions.
+
 - [ ] **Step 2.1: Write failing test with a fake subworker**
 
 ```python
 # tests/unit/test_base_smoke_leaf.py
-"""BaseSmokeLeafWorker: delegates to subworker_cls, publishes resource, returns WorkerResult."""
+"""BaseSmokeLeafWorker: runs the subworker, writes files into the sandbox,
+yields a turn, and get_output reflects probe success/failure."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -292,54 +693,78 @@ from ergon_builtins.workers.stubs.base_smoke_leaf import BaseSmokeLeafWorker
 from ergon_builtins.workers.stubs.smoke_subworker import SubworkerResult
 
 
-class _FakeSubworker:
+class _OkSubworker:
     async def work(self, node_id, sandbox):  # noqa: ANN001
+        await sandbox.files.write(f"/workspace/final_output/{node_id}.txt", "hi")
         return SubworkerResult(
-            file_path=f"/tmp/{node_id}.txt",
+            file_path=f"/workspace/final_output/{node_id}.txt",
             probe_stdout="ok\n",
             probe_exit_code=0,
         )
 
 
-class _LeafForTest(BaseSmokeLeafWorker):
-    subworker_cls = _FakeSubworker  # type: ignore[assignment]
+class _OkLeaf(BaseSmokeLeafWorker):
+    type_slug = "smoke-leaf-test-ok"
+    subworker_cls = _OkSubworker  # type: ignore[assignment]
 
 
-@pytest.mark.asyncio
-async def test_leaf_publishes_resource_and_returns_success() -> None:
-    sandbox = MagicMock()
-    ctx = SimpleNamespace(
-        task_key="d_root",
-        acquire_sandbox=AsyncMock(return_value=sandbox),
-        publish_resource=AsyncMock(),
+def _ctx(node_id: UUID) -> SimpleNamespace:
+    return SimpleNamespace(
+        run_id=uuid4(),
+        definition_id=None,
+        task_id=uuid4(),
+        execution_id=uuid4(),
+        sandbox_id="sb-test",
+        node_id=node_id,
+        metadata={},
     )
 
-    leaf = _LeafForTest()
-    result = await leaf.execute(ctx)
 
-    assert result.success is True
-    ctx.publish_resource.assert_awaited_once()
-    kwargs = ctx.publish_resource.await_args.kwargs
-    assert kwargs["path"] == "/tmp/d_root.txt"
-    assert kwargs["metadata"]["probe_exit_code"] == 0
+@pytest.mark.asyncio
+async def test_leaf_writes_file_yields_turn_and_reports_success() -> None:
+    fake_sandbox = MagicMock()
+    fake_sandbox.files.write = AsyncMock()
+
+    with patch(
+        "ergon_builtins.workers.stubs.base_smoke_leaf.AsyncSandbox.connect",
+        AsyncMock(return_value=fake_sandbox),
+    ):
+        node_id = UUID("00000000-0000-0000-0000-0000000000aa")
+        leaf = _OkLeaf(name="ok")
+        ctx = _ctx(node_id)
+
+        turns = [turn async for turn in leaf.execute(task=None, context=ctx)]
+
+    assert len(turns) >= 1
+    fake_sandbox.files.write.assert_awaited()  # subworker wrote at least one file
+    output = leaf.get_output(ctx)
+    assert output.success is True
+    assert output.metadata["probe_exit_code"] == 0
 
 
 @pytest.mark.asyncio
-async def test_leaf_returns_failure_when_probe_nonzero() -> None:
+async def test_leaf_reports_failure_when_probe_nonzero() -> None:
     class _FailSubworker:
         async def work(self, node_id, sandbox):  # noqa: ANN001
-            return SubworkerResult("/tmp/x", "err", 1)
+            return SubworkerResult(f"/workspace/final_output/{node_id}.txt", "err", 1)
 
     class _FailLeaf(BaseSmokeLeafWorker):
+        type_slug = "smoke-leaf-test-fail"
         subworker_cls = _FailSubworker  # type: ignore[assignment]
 
-    ctx = SimpleNamespace(
-        task_key="l_1",
-        acquire_sandbox=AsyncMock(return_value=MagicMock()),
-        publish_resource=AsyncMock(),
-    )
-    result = await _FailLeaf().execute(ctx)
-    assert result.success is False
+    fake_sandbox = MagicMock()
+    fake_sandbox.files.write = AsyncMock()
+
+    with patch(
+        "ergon_builtins.workers.stubs.base_smoke_leaf.AsyncSandbox.connect",
+        AsyncMock(return_value=fake_sandbox),
+    ):
+        node_id = UUID("00000000-0000-0000-0000-0000000000bb")
+        leaf = _FailLeaf(name="fail")
+        ctx = _ctx(node_id)
+        _ = [t async for t in leaf.execute(task=None, context=ctx)]
+
+    assert leaf.get_output(ctx).success is False
 ```
 
 - [ ] **Step 2.2: Run — expect module-missing**
@@ -354,55 +779,90 @@ Expected: FAIL with `ModuleNotFoundError`.
 
 ```python
 # ergon_builtins/ergon_builtins/workers/stubs/base_smoke_leaf.py
-"""Shared glue between any SmokeSubworker and the resource-publish pipeline."""
+"""Shared glue between any SmokeSubworker and the Ergon Worker ABC.
+
+Subclasses set ``type_slug`` and ``subworker_cls``. The base class handles
+sandbox attach, delegation to the subworker, and reporting success/failure via
+``get_output``. Output files land under ``/workspace/final_output/`` where the
+runtime's persist_outputs step creates RunResource rows for them.
+"""
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from typing import ClassVar
 
-from ergon_core.api import Worker, WorkerContext, WorkerResult
-from ergon_core.core.persistence.telemetry.models import RunResourceKind
+from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext
+from ergon_core.api.generation import GenerationTurn, TextPart
+from ergon_core.api.results import WorkerOutput
 
-from ergon_builtins.workers.stubs.smoke_subworker import SmokeSubworker
+from ergon_builtins.workers.stubs.smoke_subworker import (
+    SmokeSubworker,
+    SubworkerResult,
+)
 
 
 class BaseSmokeLeafWorker(Worker):
-    """Subclasses set `subworker_cls: type[SmokeSubworker]`.
-
-    Runtime flow:
-      1. Acquire sandbox from ctx.
-      2. Instantiate subworker_cls, call .work().
-      3. Publish a RunResource with the file + probe stdout/exit-code as metadata.
-      4. Return WorkerResult(success=(exit_code == 0)).
-
-    The subworker is constructed per-execute so it can hold per-call state if needed.
-    """
+    """Abstract base. Subclasses set `subworker_cls: type[SmokeSubworker]`."""
 
     subworker_cls: ClassVar[type[SmokeSubworker]]
 
-    async def execute(self, ctx: WorkerContext) -> WorkerResult:
-        sandbox = await ctx.acquire_sandbox()
-        subworker = self.subworker_cls()
-        result = await subworker.work(node_id=ctx.task_key, sandbox=sandbox)
+    def __init__(self, *, name: str, model: str | None = None) -> None:
+        super().__init__(name=name, model=model)
+        self._last_result: SubworkerResult | None = None
 
-        await ctx.publish_resource(
-            kind=RunResourceKind.ARTIFACT,
-            path=result.file_path,
+    async def execute(
+        self,
+        task: BenchmarkTask,
+        *,
+        context: WorkerContext,
+    ) -> AsyncGenerator[GenerationTurn, None]:
+        sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
+        node_hex = (context.node_id.hex[:8] if context.node_id else "unknown")
+        subworker = self.subworker_cls()
+        result = await subworker.work(node_id=node_hex, sandbox=sandbox)
+        self._last_result = result
+
+        yield GenerationTurn(
+            response_parts=[
+                TextPart(
+                    content=(
+                        f"smoke-leaf node={node_hex} "
+                        f"file={result.file_path} "
+                        f"probe_exit={result.probe_exit_code}"
+                    ),
+                ),
+            ],
+        )
+
+    def get_output(self, context: WorkerContext) -> WorkerOutput:
+        r = self._last_result
+        if r is None:
+            return WorkerOutput(output="", success=False, metadata={"error": "no_result"})
+        return WorkerOutput(
+            output=r.probe_stdout,
+            success=r.probe_exit_code == 0,
             metadata={
-                "probe_stdout": result.probe_stdout,
-                "probe_exit_code": result.probe_exit_code,
+                "probe_exit_code": r.probe_exit_code,
+                "file_path": r.file_path,
             },
         )
-        return WorkerResult(success=result.probe_exit_code == 0)
 ```
 
-- [ ] **Step 2.4: Confirm `Worker`, `WorkerContext`, `WorkerResult`, `RunResourceKind` import paths exist**
+- [ ] **Step 2.4: Confirm imports resolve**
 
 ```bash
-uv run python -c "from ergon_core.api import Worker, WorkerContext, WorkerResult; from ergon_core.core.persistence.telemetry.models import RunResourceKind; print('ok')"
+uv run python -c "
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext
+from ergon_core.api.generation import GenerationTurn, TextPart
+from ergon_core.api.results import WorkerOutput
+from e2b_code_interpreter import AsyncSandbox
+print('ok')
+"
 ```
 
-Expected: `ok`. If any import fails, search `ergon_core/` for the correct module path and adjust.
+Expected: `ok`. If anything fails, grep `ergon_core/api/__init__.py` for the right re-export.
 
 - [ ] **Step 2.5: Run tests**
 
@@ -417,85 +877,114 @@ Expected: PASS 2/2.
 ```bash
 git add ergon_builtins/ergon_builtins/workers/stubs/base_smoke_leaf.py \
         tests/unit/test_base_smoke_leaf.py
-git commit -m "feat(smoke): BaseSmokeLeafWorker publishes resource + returns success"
+git commit -m "feat(smoke): BaseSmokeLeafWorker as real Worker subclass (async gen + get_output)"
 ```
 
 ---
 
-## Task 3 — `CanonicalSmokeWorker` + `EXPECTED_SUBTASK_KEYS`
+## Task 3 — `CanonicalSmokeWorker` + `EXPECTED_SUBTASK_SLUGS`
 
 **Files:**
 - Create: `ergon_builtins/ergon_builtins/workers/stubs/canonical_smoke_worker.py`
 - Test: `tests/unit/test_canonical_smoke_worker.py`
 
-- [ ] **Step 3.1: Write failing test for topology**
+**Context for the implementer:** `CanonicalSmokeWorker` is a real `Worker` subclass that declares a 9-node DAG atomically by calling `TaskManagementService.plan_subtasks` directly — **no LLM**. After PR 0, `SubtaskSpec.task_slug` is caller-supplied and persisted, so this worker can name each subtask (`d_root`, `d_left`, …) and have the names survive into the DB for the criterion and dashboard to observe.
+
+The runtime dispatches the roots automatically when `plan_subtasks` returns. This worker does **not** need to `wait_all` — the Ergon engine handles child execution and completion propagation; the parent's `execute` completes after the plan is submitted and the initial "plan summary" turn is yielded. Child completion/failure surfaces as run-level state that the criterion reads from Postgres.
+
+Critical API facts (see [`task_management_service.py`](../../ergon_core/ergon_core/core/runtime/services/task_management_service.py) and [`task_management_dto.py`](../../ergon_core/ergon_core/core/runtime/services/task_management_dto.py)):
+- `SubtaskSpec` takes `task_slug`, `description`, `assigned_worker_slug`, `depends_on: list[TaskSlug]`.
+- `PlanSubtasksCommand(run_id, parent_node_id, subtasks)` wraps the batch.
+- `TaskManagementService().plan_subtasks(session, command)` returns `PlanSubtasksResult(nodes: dict[TaskSlug, NodeId], roots: list[TaskSlug])`.
+- The session is obtained via `from ergon_core.core.persistence.shared.db import get_session` using a `with get_session() as session:` block, mirroring the pattern in [`subtask_lifecycle_toolkit.py`](../../ergon_builtins/ergon_builtins/tools/subtask_lifecycle_toolkit.py).
+
+- [ ] **Step 3.1: Write failing test for topology constant**
 
 ```python
 # tests/unit/test_canonical_smoke_worker.py
-"""CanonicalSmokeWorker: declares hardcoded 9-subtask topology via add_subtask."""
+"""CanonicalSmokeWorker: plans a hardcoded 9-node DAG via plan_subtasks."""
 
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID, uuid4
 
 import pytest
 
 from ergon_builtins.workers.stubs.canonical_smoke_worker import (
-    EXPECTED_SUBTASK_KEYS,
+    EXPECTED_SUBTASK_SLUGS,
     CanonicalSmokeWorker,
 )
 
 
-def test_expected_keys_constant_shape() -> None:
-    assert EXPECTED_SUBTASK_KEYS == (
+def test_expected_slugs_constant_shape() -> None:
+    assert EXPECTED_SUBTASK_SLUGS == (
         "d_root", "d_left", "d_right", "d_join",
         "l_1", "l_2", "l_3",
         "s_a", "s_b",
     )
-    assert len(EXPECTED_SUBTASK_KEYS) == 9
-    assert len(set(EXPECTED_SUBTASK_KEYS)) == 9
+    assert len(EXPECTED_SUBTASK_SLUGS) == 9
+    assert len(set(EXPECTED_SUBTASK_SLUGS)) == 9
 
 
 @pytest.mark.asyncio
-async def test_execute_calls_add_subtask_nine_times_with_correct_deps() -> None:
-    issued_ids: list[str] = []
-    calls: list[dict] = []
+async def test_execute_calls_plan_subtasks_with_correct_topology() -> None:
+    captured_command = {}
 
-    async def fake_add_subtask(**kwargs):
-        handle_id = f"handle-{kwargs['task_key']}"
-        issued_ids.append(handle_id)
-        calls.append(kwargs)
-        return handle_id
+    async def fake_plan_subtasks(session, command):
+        captured_command["cmd"] = command
+        nodes = {spec.task_slug: uuid4() for spec in command.subtasks}
+        roots = [spec.task_slug for spec in command.subtasks if not spec.depends_on]
+        return SimpleNamespace(nodes=nodes, roots=roots)
 
-    completed_results = [
-        SimpleNamespace(task_key=k, status="completed") for k in EXPECTED_SUBTASK_KEYS
-    ]
+    fake_service = MagicMock()
+    fake_service.plan_subtasks = AsyncMock(side_effect=fake_plan_subtasks)
 
-    ctx = SimpleNamespace(
-        add_subtask=fake_add_subtask,
-        wait_all=AsyncMock(return_value=completed_results),
-        emit_turn=AsyncMock(),
-    )
+    # Stub get_session() as a context manager yielding a dummy session
+    class _DummySessionCtx:
+        def __enter__(self): return MagicMock()
+        def __exit__(self, *a): return False
 
-    result = await CanonicalSmokeWorker().execute(ctx)
+    with (
+        patch(
+            "ergon_builtins.workers.stubs.canonical_smoke_worker.TaskManagementService",
+            return_value=fake_service,
+        ),
+        patch(
+            "ergon_builtins.workers.stubs.canonical_smoke_worker.get_session",
+            return_value=_DummySessionCtx(),
+        ),
+    ):
+        parent_node = UUID("00000000-0000-0000-0000-00000000dead")
+        ctx = SimpleNamespace(
+            run_id=uuid4(),
+            definition_id=None,
+            task_id=uuid4(),
+            execution_id=uuid4(),
+            sandbox_id="sb",
+            node_id=parent_node,
+            metadata={},
+        )
+        worker = CanonicalSmokeWorker(name="smoke")
+        turns = [t async for t in worker.execute(task=None, context=ctx)]
 
-    assert len(calls) == 9
-    by_key = {c["task_key"]: c for c in calls}
-    assert by_key["d_root"]["depends_on"] == []
-    assert by_key["d_left"]["depends_on"] == ["handle-d_root"]
-    assert by_key["d_right"]["depends_on"] == ["handle-d_root"]
-    assert sorted(by_key["d_join"]["depends_on"]) == [
-        "handle-d_left", "handle-d_right",
-    ]
-    assert by_key["l_1"]["depends_on"] == []
-    assert by_key["l_2"]["depends_on"] == ["handle-l_1"]
-    assert by_key["l_3"]["depends_on"] == ["handle-l_2"]
-    assert by_key["s_a"]["depends_on"] == []
-    assert by_key["s_b"]["depends_on"] == []
-    for c in calls:
-        assert c["worker"] == "smoke-leaf"
-    assert result.success is True
+    assert len(turns) >= 1
+    cmd = captured_command["cmd"]
+    assert cmd.parent_node_id == parent_node
+    slugs = {s.task_slug: s for s in cmd.subtasks}
+    assert set(slugs) == set(EXPECTED_SUBTASK_SLUGS)
+    assert slugs["d_root"].depends_on == []
+    assert slugs["d_left"].depends_on == ["d_root"]
+    assert slugs["d_right"].depends_on == ["d_root"]
+    assert sorted(slugs["d_join"].depends_on) == ["d_left", "d_right"]
+    assert slugs["l_1"].depends_on == []
+    assert slugs["l_2"].depends_on == ["l_1"]
+    assert slugs["l_3"].depends_on == ["l_2"]
+    assert slugs["s_a"].depends_on == []
+    assert slugs["s_b"].depends_on == []
+    for spec in cmd.subtasks:
+        assert spec.assigned_worker_slug == "smoke-leaf"
 ```
 
 - [ ] **Step 3.2: Run — expect module-missing**
@@ -504,7 +993,7 @@ async def test_execute_calls_add_subtask_nine_times_with_correct_deps() -> None:
 uv run pytest tests/unit/test_canonical_smoke_worker.py -v
 ```
 
-Expected: FAIL with import error.
+Expected: FAIL with `ModuleNotFoundError`.
 
 - [ ] **Step 3.3: Implement the worker**
 
@@ -512,79 +1001,111 @@ Expected: FAIL with import error.
 # ergon_builtins/ergon_builtins/workers/stubs/canonical_smoke_worker.py
 """Canonical smoke parent worker.
 
-Always spawns the same 9-subtask graph regardless of env:
+Always plans the same 9-subtask graph regardless of env:
 
     Diamond (4):           Line (3):           Singletons (2):
-          d_root           l_1 → l_2 → l_3          s_a    s_b
-          /     \
+          d_root           l_1 -> l_2 -> l_3         s_a    s_b
+          /     \\
       d_left   d_right
-          \     /
+          \\     /
           d_join
 
 Determinism is the point: a graph regression either surfaces identically in
-every env's smoke, or doesn't exist. Subtask work is env-specific via the
-composition binding `smoke-leaf`.
+every env's smoke, or doesn't exist. The leaf work is env-specific via the
+composition binding `smoke-leaf`. The worker calls plan_subtasks directly
+(no LLM) so the topology is fixed by code, not model behaviour.
 """
 
 from __future__ import annotations
 
-from ergon_core.api import Worker, WorkerContext, WorkerResult
-from ergon_core.core.persistence.shared.enums import TaskStatus
+from collections.abc import AsyncGenerator
 
-EXPECTED_SUBTASK_KEYS: tuple[str, ...] = (
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext
+from ergon_core.api.generation import GenerationTurn, TextPart
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.types import (
+    AssignedWorkerSlug,
+    NodeId,
+    RunId,
+    TaskSlug,
+)
+from ergon_core.core.runtime.services.task_management_dto import (
+    PlanSubtasksCommand,
+    SubtaskSpec,
+)
+from ergon_core.core.runtime.services.task_management_service import (
+    TaskManagementService,
+)
+
+EXPECTED_SUBTASK_SLUGS: tuple[str, ...] = (
     "d_root", "d_left", "d_right", "d_join",
     "l_1", "l_2", "l_3",
     "s_a", "s_b",
 )
 
 
+def _build_specs() -> list[SubtaskSpec]:
+    leaf = AssignedWorkerSlug("smoke-leaf")
+
+    def spec(slug: str, description: str, deps: list[str]) -> SubtaskSpec:
+        return SubtaskSpec(
+            task_slug=TaskSlug(slug),
+            description=description,
+            assigned_worker_slug=leaf,
+            depends_on=[TaskSlug(d) for d in deps],
+        )
+
+    return [
+        spec("d_root", "Diamond root", []),
+        spec("d_left", "Diamond left arm", ["d_root"]),
+        spec("d_right", "Diamond right arm", ["d_root"]),
+        spec("d_join", "Diamond join", ["d_left", "d_right"]),
+        spec("l_1", "Line node 1", []),
+        spec("l_2", "Line node 2", ["l_1"]),
+        spec("l_3", "Line node 3", ["l_2"]),
+        spec("s_a", "Singleton A", []),
+        spec("s_b", "Singleton B", []),
+    ]
+
+
 class CanonicalSmokeWorker(Worker):
     """Shared parent for every env's canonical smoke."""
 
-    async def execute(self, ctx: WorkerContext) -> WorkerResult:
-        d_root = await ctx.add_subtask(
-            task_key="d_root", worker="smoke-leaf", depends_on=[],
-        )
-        d_left = await ctx.add_subtask(
-            task_key="d_left", worker="smoke-leaf", depends_on=[d_root],
-        )
-        d_right = await ctx.add_subtask(
-            task_key="d_right", worker="smoke-leaf", depends_on=[d_root],
-        )
-        d_join = await ctx.add_subtask(
-            task_key="d_join", worker="smoke-leaf", depends_on=[d_left, d_right],
-        )
+    type_slug = "canonical-smoke"
 
-        l_1 = await ctx.add_subtask(
-            task_key="l_1", worker="smoke-leaf", depends_on=[],
-        )
-        l_2 = await ctx.add_subtask(
-            task_key="l_2", worker="smoke-leaf", depends_on=[l_1],
-        )
-        l_3 = await ctx.add_subtask(
-            task_key="l_3", worker="smoke-leaf", depends_on=[l_2],
-        )
+    def __init__(self, *, name: str = "canonical-smoke", model: str | None = None) -> None:
+        super().__init__(name=name, model=model)
 
-        s_a = await ctx.add_subtask(
-            task_key="s_a", worker="smoke-leaf", depends_on=[],
+    async def execute(
+        self,
+        task: BenchmarkTask,
+        *,
+        context: WorkerContext,
+    ) -> AsyncGenerator[GenerationTurn, None]:
+        assert context.node_id is not None, "CanonicalSmokeWorker requires node_id"
+        service = TaskManagementService()
+        command = PlanSubtasksCommand(
+            run_id=RunId(context.run_id),
+            parent_node_id=NodeId(context.node_id),
+            subtasks=_build_specs(),
         )
-        s_b = await ctx.add_subtask(
-            task_key="s_b", worker="smoke-leaf", depends_on=[],
-        )
+        with get_session() as session:
+            result = await service.plan_subtasks(session, command)
 
-        results = await ctx.wait_all(
-            [d_root, d_left, d_right, d_join, l_1, l_2, l_3, s_a, s_b]
+        summary = "\n".join(
+            f"{slug}: planned (node_id={result.nodes[TaskSlug(slug)]})"
+            for slug in EXPECTED_SUBTASK_SLUGS
         )
-
-        summary = "\n".join(f"{r.task_key}: {r.status}" for r in results)
-        await ctx.emit_turn(text=summary)
-
-        all_completed = all(
-            getattr(r.status, "name", r.status) in ("COMPLETED", "completed")
-            or r.status == TaskStatus.COMPLETED
-            for r in results
+        yield GenerationTurn(
+            response_parts=[
+                TextPart(
+                    content=(
+                        "canonical-smoke planned 9 subtasks "
+                        f"(roots={sorted(result.roots)}):\n{summary}"
+                    ),
+                ),
+            ],
         )
-        return WorkerResult(success=all_completed)
 ```
 
 - [ ] **Step 3.4: Run tests**
@@ -600,116 +1121,139 @@ Expected: PASS 2/2.
 ```bash
 git add ergon_builtins/ergon_builtins/workers/stubs/canonical_smoke_worker.py \
         tests/unit/test_canonical_smoke_worker.py
-git commit -m "feat(smoke): CanonicalSmokeWorker with hardcoded 9-node diamond+line+singletons topology"
+git commit -m "feat(smoke): CanonicalSmokeWorker plans 9-node DAG via plan_subtasks (no LLM)"
 ```
 
 ---
 
 ## Task 4 — `SmokeCriterionBase` abstract + 3 env subclasses (skeletons only)
 
-This task lands the abstract + stub subclasses; per-env content assertions land in PRs 2–4 alongside their env subworkers. Leaving the subclass bodies as `raise NotImplementedError` keeps wiring visible now without committing to env-specific content assertions before the env subworker exists.
+This task lands the abstract + stub subclasses; per-env content assertions land in PRs 2–4 alongside their env subworkers.
 
 **Files:**
 - Create: `ergon_builtins/ergon_builtins/evaluators/criteria/smoke_criterion.py`
 - Test: `tests/unit/test_smoke_criterion.py`
 
-- [ ] **Step 4.1: Write failing test for structural assertions**
+**Context for the implementer:** The real `Criterion` API ([`ergon_core/api/criterion.py`](../../ergon_core/ergon_core/api/criterion.py)) takes `evaluate(context: EvaluationContext) -> CriterionResult`. `EvaluationContext` is thin: `run_id`, `task_id`, `execution_id`, `task`, `worker_result`, `sandbox_id`, `metadata`, `runtime`. It does **not** pre-collect graph nodes or resources — criteria own their own data-pulling.
+
+To verify the 9-subtask DAG this criterion must:
+1. Open a DB session (`from ergon_core.core.persistence.shared.db import get_session`).
+2. Find the parent `RunGraphNode` (the smoke worker's own node) via `task_execution_id == context.execution_id` using the graph repository — grep `ergon_core/core/persistence/graph/` for the repository and its query methods; follow the existing idiom in [`task_management_service.py`](../../ergon_core/ergon_core/core/runtime/services/task_management_service.py).
+3. Query its direct children (where `parent_node_id == smoke_node.id`).
+4. Verify children's `task_slug` set equals `EXPECTED_SUBTASK_SLUGS` and every child's status is a terminal-completed state.
+5. Query `RunResource` rows for this `run_id`, correlate to the 9 child executions, verify each has a non-empty `content_hash` and the probe artifact parses to `exit_code == 0`.
+
+**Reference criteria for idiom:**
+- [`sandbox_file_check.py`](../../ergon_builtins/ergon_builtins/evaluators/criteria/sandbox_file_check.py) — sandbox read pattern via `AsyncSandbox.connect`.
+- [`stub_criterion.py`](../../ergon_builtins/ergon_builtins/evaluators/criteria/stub_criterion.py) — minimal `CriterionResult` construction.
+- [`sandbox_resource_file_check.py`](../../ergon_builtins/ergon_builtins/evaluators/criteria/) or similar (grep) — RunResource + DB-pull idiom, if one exists.
+
+The leaf worker writes `/workspace/final_output/probe_<node_hex>.json` (JSON containing `{"exit_code": int, "stdout": str}`) — matching Task 2's contract. The criterion reads probe exit codes by downloading the RunResource blob or re-connecting to each child's sandbox; choose the simpler path once existing idioms are clear.
+
+- [ ] **Step 4.1: Write failing test with mocked repo + resource lookups**
 
 ```python
 # tests/unit/test_smoke_criterion.py
-"""SmokeCriterionBase: shared structural asserts; subclass fills env content assert."""
+"""SmokeCriterionBase: structural + probe checks via DB lookups.
+
+All DB-pulling methods on the base class are monkeypatched in these tests
+so the unit tests stay self-contained. Integration-level coverage (real
+Postgres, real RunResources) lives in the PR 2+ pytest suite.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from uuid import UUID, uuid4
 
 import pytest
 
-from ergon_builtins.evaluators.criteria.smoke_criterion import (
-    SmokeCriterionBase,
-)
-from ergon_builtins.workers.stubs.canonical_smoke_worker import EXPECTED_SUBTASK_KEYS
+from ergon_builtins.evaluators.criteria.smoke_criterion import SmokeCriterionBase
+from ergon_builtins.workers.stubs.canonical_smoke_worker import EXPECTED_SUBTASK_SLUGS
 
 
-@dataclass
-class _FakeResource:
-    task_key: str
-    id: str
-    content_hash: str
-    metadata: dict
-    content: bytes = b""
+def _healthy_children() -> list[SimpleNamespace]:
+    return [
+        SimpleNamespace(task_slug=s, status="completed", id=uuid4())
+        for s in EXPECTED_SUBTASK_SLUGS
+    ]
+
+
+def _healthy_probes() -> dict[UUID, dict]:
+    return {}  # override per test via the pulled-children list
 
 
 class _PassthroughCriterion(SmokeCriterionBase):
-    async def _verify_env_content(self, ctx) -> None:  # noqa: ANN001
+    type_slug = "smoke-passthrough-test"
+
+    async def _verify_env_content(self, context, children, probes) -> None:  # noqa: ANN001
         return
 
 
-def _ctx_with_full_graph_and_resources() -> SimpleNamespace:
-    nodes = [SimpleNamespace(task_key="ROOT", level=0)]
-    nodes += [
-        SimpleNamespace(task_key=k, level=1) for k in EXPECTED_SUBTASK_KEYS
-    ]
-    resources = [
-        _FakeResource(
-            task_key=k, id=f"r-{k}", content_hash="h",
-            metadata={"probe_exit_code": 0, "probe_stdout": "ok\n"},
-        )
-        for k in EXPECTED_SUBTASK_KEYS
-    ]
+def _patched(crit, children, probes_by_child_id):
+    crit._pull_children = AsyncMock(return_value=children)
+    crit._pull_probe_results = AsyncMock(return_value=probes_by_child_id)
+    return crit
+
+
+def _eval_context() -> SimpleNamespace:
     return SimpleNamespace(
-        graph_nodes=nodes,
-        resources=SimpleNamespace(all=lambda: resources),
+        run_id=uuid4(), task_id=uuid4(), execution_id=uuid4(),
+        task=None, worker_result=None, sandbox_id="sb", metadata={}, runtime=None,
     )
 
 
 @pytest.mark.asyncio
-async def test_criterion_passes_with_canonical_graph_and_resources() -> None:
-    score = await _PassthroughCriterion().evaluate(_ctx_with_full_graph_and_resources())
-    assert score.value == 1.0
+async def test_passes_with_canonical_graph_and_probes() -> None:
+    children = _healthy_children()
+    probes = {c.id: {"exit_code": 0, "stdout": "ok"} for c in children}
+    crit = _patched(_PassthroughCriterion(name="smoke"), children, probes)
+    result = await crit.evaluate(_eval_context())
+    assert result.passed is True and result.score == 1.0
 
 
 @pytest.mark.asyncio
-async def test_criterion_fails_when_graph_shape_differs() -> None:
-    ctx = _ctx_with_full_graph_and_resources()
-    ctx.graph_nodes = ctx.graph_nodes[:-1]  # drop s_b
-    score = await _PassthroughCriterion().evaluate(ctx)
-    assert score.value == 0.0
-    assert "graph shape" in score.reason.lower()
+async def test_fails_when_graph_shape_differs() -> None:
+    children = _healthy_children()[:-1]  # drop s_b
+    probes = {c.id: {"exit_code": 0, "stdout": "ok"} for c in children}
+    crit = _patched(_PassthroughCriterion(name="smoke"), children, probes)
+    result = await crit.evaluate(_eval_context())
+    assert result.passed is False
+    assert "graph shape" in (result.feedback or "").lower()
 
 
 @pytest.mark.asyncio
-async def test_criterion_fails_when_resource_count_wrong() -> None:
-    ctx = _ctx_with_full_graph_and_resources()
-    ctx.resources = SimpleNamespace(all=lambda: list(ctx.resources.all())[:-1])
-    score = await _PassthroughCriterion().evaluate(ctx)
-    assert score.value == 0.0
-    assert "9 resources" in score.reason
+async def test_fails_when_child_not_completed() -> None:
+    children = _healthy_children()
+    children[0].status = "failed"
+    probes = {c.id: {"exit_code": 0, "stdout": "ok"} for c in children}
+    crit = _patched(_PassthroughCriterion(name="smoke"), children, probes)
+    result = await crit.evaluate(_eval_context())
+    assert result.passed is False
+    assert "not completed" in (result.feedback or "").lower()
 
 
 @pytest.mark.asyncio
-async def test_criterion_fails_when_probe_nonzero() -> None:
-    ctx = _ctx_with_full_graph_and_resources()
-    resources = list(ctx.resources.all())
-    resources[0].metadata["probe_exit_code"] = 1
-    ctx.resources = SimpleNamespace(all=lambda: resources)
-    score = await _PassthroughCriterion().evaluate(ctx)
-    assert score.value == 0.0
-    assert "probe" in score.reason.lower()
+async def test_fails_when_probe_exit_nonzero() -> None:
+    children = _healthy_children()
+    probes = {c.id: {"exit_code": 0, "stdout": "ok"} for c in children}
+    probes[children[0].id] = {"exit_code": 1, "stdout": "boom"}
+    crit = _patched(_PassthroughCriterion(name="smoke"), children, probes)
+    result = await crit.evaluate(_eval_context())
+    assert result.passed is False
+    assert "probe" in (result.feedback or "").lower()
 
 
 @pytest.mark.asyncio
-async def test_verify_env_content_is_abstract() -> None:
-    from ergon_builtins.evaluators.criteria.smoke_criterion import (
-        SmokeCriterionBase as Base,
-    )
+async def test_verify_env_content_is_abstract_default() -> None:
+    class Subclass(SmokeCriterionBase):
+        type_slug = "smoke-abstract-test"
 
-    class Subclass(Base):
-        pass
-
+    crit = _patched(Subclass(name="smoke"), _healthy_children(), {})
+    # _verify_env_content is called after structural checks pass; the default raises.
     with pytest.raises(NotImplementedError):
-        await Subclass()._verify_env_content(SimpleNamespace())
+        await crit.evaluate(_eval_context())
 ```
 
 - [ ] **Step 4.2: Run — expect module-missing**
@@ -718,86 +1262,161 @@ async def test_verify_env_content_is_abstract() -> None:
 uv run pytest tests/unit/test_smoke_criterion.py -v
 ```
 
-Expected: FAIL with import error.
+Expected: FAIL with `ModuleNotFoundError`.
 
-- [ ] **Step 4.3: Implement the abstract base + env subclasses**
+- [ ] **Step 4.3: Implement abstract base + env subclass stubs**
 
 ```python
 # ergon_builtins/ergon_builtins/evaluators/criteria/smoke_criterion.py
-"""Shared smoke criterion: structural + probe checks; env subclass adds content."""
+"""Shared smoke criterion: structural + probe checks; env subclass adds content.
+
+The base class owns all data-pulling (children, probe artifacts). Subclasses
+implement `_verify_env_content` to check env-specific file contents.
+"""
 
 from __future__ import annotations
 
-from ergon_core.api import Criterion, CriterionContext, Score
+from typing import Any
+from uuid import UUID
 
-from ergon_builtins.workers.stubs.canonical_smoke_worker import EXPECTED_SUBTASK_KEYS
+from ergon_core.api import Criterion, CriterionResult, EvaluationContext
+
+from ergon_builtins.workers.stubs.canonical_smoke_worker import EXPECTED_SUBTASK_SLUGS
 
 
 class SmokeCriterionBase(Criterion):
-    async def evaluate(self, ctx: CriterionContext) -> Score:
-        try:
-            self._assert_graph_shape(ctx)
-            self._assert_resources_present(ctx)
-            self._assert_probes_succeeded(ctx)
-            await self._verify_env_content(ctx)
-        except AssertionError as e:
-            return Score(value=0.0, reason=f"smoke criterion failed: {e}")
-        return Score(value=1.0, reason="canonical smoke passed")
+    """Structural + probe-success checks shared by every env's smoke criterion."""
 
-    def _assert_graph_shape(self, ctx: CriterionContext) -> None:
-        actual = {n.task_key for n in ctx.graph_nodes if n.level > 0}
-        expected = set(EXPECTED_SUBTASK_KEYS)
+    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
+        try:
+            children = await self._pull_children(context)
+            self._assert_graph_shape(children)
+            self._assert_children_completed(children)
+            probes = await self._pull_probe_results(context, children)
+            self._assert_probes_succeeded(probes, children)
+            await self._verify_env_content(context, children, probes)
+        except AssertionError as e:
+            return CriterionResult(
+                name=self.name,
+                score=0.0,
+                passed=False,
+                weight=self.weight,
+                feedback=f"smoke criterion failed: {e}",
+            )
+        return CriterionResult(
+            name=self.name,
+            score=1.0,
+            passed=True,
+            weight=self.weight,
+            feedback="canonical smoke passed",
+        )
+
+    # -- pullers (overridable; tests monkeypatch these) --------------------
+
+    async def _pull_children(self, context: EvaluationContext) -> list[Any]:
+        """Return direct-child RunGraphNodes of the smoke parent.
+
+        Opens a session, finds the parent node by
+        `task_execution_id == context.execution_id`, and returns its
+        direct children (one row per subtask). Each row must expose
+        `task_slug`, `status`, and `id`.
+
+        Use the graph repository in `ergon_core/core/persistence/graph/`
+        — grep for the method name; mirror the pattern in
+        `task_management_service.py`.
+        """
+        raise NotImplementedError(
+            "_pull_children: port the graph-repo call from task_management_service.py",
+        )
+
+    async def _pull_probe_results(
+        self, context: EvaluationContext, children: list[Any],
+    ) -> dict[UUID, dict[str, Any]]:
+        """Return `{child_node_id: {"exit_code": int, "stdout": str}}`.
+
+        Strategy: for each child, locate its probe artifact via `RunResource`
+        (kind=ARTIFACT, name matches `probe_*.json`), download the blob,
+        and parse JSON. See `sandbox_file_check.py` for a blob-reading
+        idiom; grep `ergon_core/` for the RunResource repository API.
+        """
+        raise NotImplementedError(
+            "_pull_probe_results: read probe_*.json RunResources for each child",
+        )
+
+    # -- structural assertions --------------------------------------------
+
+    def _assert_graph_shape(self, children: list[Any]) -> None:
+        actual = {c.task_slug for c in children}
+        expected = set(EXPECTED_SUBTASK_SLUGS)
         assert actual == expected, (
             f"graph shape mismatch: actual={sorted(actual)} expected={sorted(expected)}"
         )
 
-    def _assert_resources_present(self, ctx: CriterionContext) -> None:
-        resources = list(ctx.resources.all())
-        assert len(resources) == 9, f"expected 9 resources, got {len(resources)}"
-        for r in resources:
-            assert r.content_hash, f"resource {r.id} has empty content hash"
-
-    def _assert_probes_succeeded(self, ctx: CriterionContext) -> None:
-        for r in ctx.resources.all():
-            exit_code = r.metadata.get("probe_exit_code")
-            assert exit_code == 0, (
-                f"probe for {r.task_key} exited {exit_code}, stdout={r.metadata.get('probe_stdout', '')!r}"
+    def _assert_children_completed(self, children: list[Any]) -> None:
+        for c in children:
+            status = getattr(c.status, "name", c.status)
+            assert str(status).lower() == "completed", (
+                f"child {c.task_slug} not completed (status={status!r})"
             )
 
-    async def _verify_env_content(self, ctx: CriterionContext) -> None:
+    def _assert_probes_succeeded(
+        self, probes: dict[UUID, dict[str, Any]], children: list[Any],
+    ) -> None:
+        for c in children:
+            probe = probes.get(c.id, {})
+            code = probe.get("exit_code")
+            assert code == 0, (
+                f"probe for {c.task_slug} exited {code}, "
+                f"stdout={probe.get('stdout', '')!r}"
+            )
+
+    # -- env-specific hook ------------------------------------------------
+
+    async def _verify_env_content(
+        self,
+        context: EvaluationContext,
+        children: list[Any],
+        probes: dict[UUID, dict[str, Any]],
+    ) -> None:
         raise NotImplementedError(
-            "Subclasses must implement env-specific content verification"
+            "Subclasses must implement env-specific content verification",
         )
 
 
 class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
     """Populated in PR 2 when the researchrubrics subworker lands."""
 
-    async def _verify_env_content(self, ctx: CriterionContext) -> None:
+    type_slug = "researchrubrics-smoke-criterion"
+
+    async def _verify_env_content(self, context, children, probes) -> None:
         raise NotImplementedError("populated in PR 2")
 
 
 class MiniF2FSmokeCriterion(SmokeCriterionBase):
     """Populated in PR 3."""
 
-    async def _verify_env_content(self, ctx: CriterionContext) -> None:
+    type_slug = "minif2f-smoke-criterion"
+
+    async def _verify_env_content(self, context, children, probes) -> None:
         raise NotImplementedError("populated in PR 3")
 
 
 class SweBenchSmokeCriterion(SmokeCriterionBase):
     """Populated in PR 4."""
 
-    async def _verify_env_content(self, ctx: CriterionContext) -> None:
+    type_slug = "swebench-smoke-criterion"
+
+    async def _verify_env_content(self, context, children, probes) -> None:
         raise NotImplementedError("populated in PR 4")
 ```
 
-- [ ] **Step 4.4: Confirm `Criterion`, `CriterionContext`, `Score` import path**
+- [ ] **Step 4.4: Confirm Criterion imports resolve**
 
 ```bash
-uv run python -c "from ergon_core.api import Criterion, CriterionContext, Score; print('ok')"
+uv run python -c "from ergon_core.api import Criterion, CriterionResult, EvaluationContext; print('ok')"
 ```
 
-Expected: `ok`. If not, grep `ergon_core/` for the correct re-export path and adjust.
+Expected: `ok`.
 
 - [ ] **Step 4.5: Run tests**
 
@@ -814,6 +1433,8 @@ git add ergon_builtins/ergon_builtins/evaluators/criteria/smoke_criterion.py \
         tests/unit/test_smoke_criterion.py
 git commit -m "feat(smoke): SmokeCriterionBase with structural + probe checks; 3 env subclass stubs"
 ```
+
+**Known follow-up for PR 2:** `_pull_children` and `_pull_probe_results` currently `NotImplementedError` — PR 2's first task wires them up against the real repos before adding the researchrubrics content check. They are deliberately unimplemented here so their shape can be validated against a real integration run before committing to an idiom.
 
 ---
 
@@ -1025,10 +1646,10 @@ router = APIRouter(prefix="/api/test", tags=["test-harness"])
 
 
 class TestGraphNodeDto(BaseModel):
-    task_key: str
+    task_slug: str
     level: int
     status: str
-    parent_task_key: str | None
+    parent_task_slug: str | None
 
 
 class TestEvaluationDto(BaseModel):
@@ -1039,7 +1660,7 @@ class TestEvaluationDto(BaseModel):
 class TestGraphMutationDto(BaseModel):
     sequence: int
     mutation_type: str
-    target_task_key: str | None
+    target_task_slug: str | None
 
 
 class TestRunStateDto(BaseModel):
@@ -1078,11 +1699,11 @@ def read_run_state(run_id: UUID) -> TestRunStateDto:
         node_by_id = {n.id: n for n in nodes}
         node_dtos = [
             TestGraphNodeDto(
-                task_key=n.task_key,
+                task_slug=n.task_slug,
                 level=n.level,
                 status=getattr(n.status, "value", str(n.status)),
-                parent_task_key=(
-                    node_by_id[n.parent_id].task_key
+                parent_task_slug=(
+                    node_by_id[n.parent_id].task_slug
                     if getattr(n, "parent_id", None) and n.parent_id in node_by_id
                     else None
                 ),
@@ -1099,8 +1720,8 @@ def read_run_state(run_id: UUID) -> TestRunStateDto:
             TestGraphMutationDto(
                 sequence=m.sequence,
                 mutation_type=str(m.mutation_type),
-                target_task_key=(
-                    node_by_id[m.target_id].task_key
+                target_task_slug=(
+                    node_by_id[m.target_id].task_slug
                     if getattr(m, "target_id", None) and m.target_id in node_by_id
                     else None
                 ),
@@ -1208,7 +1829,7 @@ Append to `ergon_core/ergon_core/core/api/test_harness.py`:
 class SeedRunRequest(BaseModel):
     cohort: str
     status: str = "completed"
-    task_keys: list[str] = []
+    task_slugs: list[str] = []
 
 
 class ResetRequest(BaseModel):
@@ -1491,10 +2112,10 @@ Note: The existing `ergon-dashboard/tests/helpers/harnessClient.ts` talks to **d
 import type { APIRequestContext } from "@playwright/test";
 
 export interface TestGraphNodeDto {
-  task_key: string;
+  task_slug: string;
   level: number;
   status: string;
-  parent_task_key: string | null;
+  parent_task_slug: string | null;
 }
 
 export interface TestEvaluationDto {
@@ -1505,7 +2126,7 @@ export interface TestEvaluationDto {
 export interface TestGraphMutationDto {
   sequence: number;
   mutation_type: string;
-  target_task_key: string | null;
+  target_task_slug: string | null;
 }
 
 export interface TestRunStateDto {
@@ -1842,7 +2463,7 @@ async def test_researchrubrics_criterion_passes_with_markdown_and_digit_wc() -> 
     ctx = _ctx_with_full_graph_and_resources()
     resources = list(ctx.resources.all())
     for r in resources:
-        r.content = f"# Report {r.task_key}\n\nFinding: x.\n".encode()
+        r.content = f"# Report {r.task_slug}\n\nFinding: x.\n".encode()
         r.metadata["probe_stdout"] = "3 /tmp/x.md\n"
     ctx.resources = SimpleNamespace(all=lambda: resources)
 
@@ -1877,7 +2498,7 @@ async def test_researchrubrics_criterion_fails_non_digit_wc_output() -> None:
     ctx = _ctx_with_full_graph_and_resources()
     resources = list(ctx.resources.all())
     for r in resources:
-        r.content = f"# Report {r.task_key}\n".encode()
+        r.content = f"# Report {r.task_slug}\n".encode()
         r.metadata["probe_stdout"] = "hello world\n"
     ctx.resources = SimpleNamespace(all=lambda: resources)
 
@@ -1901,13 +2522,13 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
     async def _verify_env_content(self, ctx: CriterionContext) -> None:
         for r in ctx.resources.all():
             text = r.content.decode("utf-8")
-            assert text.startswith(f"# Report {r.task_key}"), (
-                f"{r.task_key}: missing expected markdown header"
+            assert text.startswith(f"# Report {r.task_slug}"), (
+                f"{r.task_slug}: missing expected markdown header"
             )
             wc_output = r.metadata["probe_stdout"].strip()
             first_token = wc_output.split()[0] if wc_output else ""
             assert first_token.isdigit(), (
-                f"{r.task_key}: wc -l probe did not return a number, got {wc_output!r}"
+                f"{r.task_slug}: wc -l probe did not return a number, got {wc_output!r}"
             )
 ```
 
@@ -2282,7 +2903,7 @@ from ergon_core.core.persistence.telemetry.models import (
 from tests.e2e.conftest import run_benchmark, wait_for_terminal
 
 ENV = "researchrubrics"
-EXPECTED_SUBTASK_KEYS = (
+EXPECTED_SUBTASK_SLUGS = (
     "d_root", "d_left", "d_right", "d_join",
     "l_1", "l_2", "l_3",
     "s_a", "s_b",
@@ -2316,10 +2937,10 @@ def test_canonical_smoke_passes(screenshot_dir: Path) -> None:
         nodes = s.exec(
             select(RunGraphNode).where(RunGraphNode.run_id == run_id)
         ).all()
-        subtask_keys = sorted(n.task_key for n in nodes if n.level > 0)
-        assert subtask_keys == sorted(EXPECTED_SUBTASK_KEYS), subtask_keys
+        subtask_slugs = sorted(n.task_slug for n in nodes if n.level > 0)
+        assert subtask_slugs == sorted(EXPECTED_SUBTASK_SLUGS), subtask_slugs
         for n in nodes:
-            assert n.status == TaskStatus.COMPLETED, f"{n.task_key}: {n.status}"
+            assert n.status == TaskStatus.COMPLETED, f"{n.task_slug}: {n.status}"
 
         muts = s.exec(
             select(RunGraphMutation)
@@ -2335,7 +2956,7 @@ def test_canonical_smoke_passes(screenshot_dir: Path) -> None:
         ).all()
         assert len(resources) == 9, len(resources)
         for r in resources:
-            assert r.content_hash, f"{r.task_key}: empty hash"
+            assert r.content_hash, f"{r.task_slug}: empty hash"
 
         evals = s.exec(
             select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
@@ -2900,7 +3521,7 @@ async def test_minif2f_criterion_passes_with_theorem_text() -> None:
     resources = list(ctx.resources.all())
     for r in resources:
         r.content = (
-            f"-- canonical smoke proof for {r.task_key}\n"
+            f"-- canonical smoke proof for {r.task_slug}\n"
             "theorem smoke_trivial : 1 + 1 = 2 := by norm_num\n"
         ).encode()
     ctx.resources = SimpleNamespace(all=lambda: resources)
@@ -2936,7 +3557,7 @@ class MiniF2FSmokeCriterion(SmokeCriterionBase):
         for r in ctx.resources.all():
             text = r.content.decode("utf-8")
             assert "theorem smoke_trivial" in text, (
-                f"{r.task_key}: missing Lean theorem declaration"
+                f"{r.task_slug}: missing Lean theorem declaration"
             )
 ```
 
@@ -3057,7 +3678,7 @@ from ergon_core.core.persistence.telemetry.models import (
 from tests.e2e.conftest import run_benchmark, wait_for_terminal
 
 ENV = "minif2f"
-EXPECTED_SUBTASK_KEYS = (
+EXPECTED_SUBTASK_SLUGS = (
     "d_root", "d_left", "d_right", "d_join",
     "l_1", "l_2", "l_3",
     "s_a", "s_b",
@@ -3087,10 +3708,10 @@ def test_canonical_smoke_passes(screenshot_dir: Path) -> None:
         nodes = s.exec(
             select(RunGraphNode).where(RunGraphNode.run_id == run_id)
         ).all()
-        subtask_keys = sorted(n.task_key for n in nodes if n.level > 0)
-        assert subtask_keys == sorted(EXPECTED_SUBTASK_KEYS), subtask_keys
+        subtask_slugs = sorted(n.task_slug for n in nodes if n.level > 0)
+        assert subtask_slugs == sorted(EXPECTED_SUBTASK_SLUGS), subtask_slugs
         for n in nodes:
-            assert n.status == TaskStatus.COMPLETED, f"{n.task_key}: {n.status}"
+            assert n.status == TaskStatus.COMPLETED, f"{n.task_slug}: {n.status}"
 
         muts = s.exec(
             select(RunGraphMutation)
@@ -3406,7 +4027,7 @@ async def test_swebench_criterion_passes_with_pytest_collection() -> None:
     resources = list(ctx.resources.all())
     for r in resources:
         r.content = (
-            f"# canonical smoke artifact {r.task_key}\n"
+            f"# canonical smoke artifact {r.task_slug}\n"
             "def test_smoke_noop() -> None: assert 1+1 == 2\n"
         ).encode()
         r.metadata["probe_stdout"] = "collected 1 item\ntest_smoke_noop\n"
@@ -3444,11 +4065,11 @@ class SweBenchSmokeCriterion(SmokeCriterionBase):
         for r in ctx.resources.all():
             text = r.content.decode("utf-8")
             assert "def test_smoke_noop" in text, (
-                f"{r.task_key}: missing pytest function"
+                f"{r.task_slug}: missing pytest function"
             )
             collect_output = r.metadata.get("probe_stdout", "")
             assert "test_smoke_noop" in collect_output, (
-                f"{r.task_key}: pytest did not collect test_smoke_noop"
+                f"{r.task_slug}: pytest did not collect test_smoke_noop"
             )
 ```
 
@@ -3563,7 +4184,7 @@ from ergon_core.core.persistence.telemetry.models import (
 from tests.e2e.conftest import run_benchmark, wait_for_terminal
 
 ENV = "swebench-verified"
-EXPECTED_SUBTASK_KEYS = (
+EXPECTED_SUBTASK_SLUGS = (
     "d_root", "d_left", "d_right", "d_join",
     "l_1", "l_2", "l_3",
     "s_a", "s_b",
@@ -3593,10 +4214,10 @@ def test_canonical_smoke_passes(screenshot_dir: Path) -> None:
         nodes = s.exec(
             select(RunGraphNode).where(RunGraphNode.run_id == run_id)
         ).all()
-        subtask_keys = sorted(n.task_key for n in nodes if n.level > 0)
-        assert subtask_keys == sorted(EXPECTED_SUBTASK_KEYS), subtask_keys
+        subtask_slugs = sorted(n.task_slug for n in nodes if n.level > 0)
+        assert subtask_slugs == sorted(EXPECTED_SUBTASK_SLUGS), subtask_slugs
         for n in nodes:
-            assert n.status == TaskStatus.COMPLETED, f"{n.task_key}: {n.status}"
+            assert n.status == TaskStatus.COMPLETED, f"{n.task_slug}: {n.status}"
 
         muts = s.exec(
             select(RunGraphMutation)
