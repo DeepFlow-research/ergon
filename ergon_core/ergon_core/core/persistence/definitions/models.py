@@ -169,7 +169,7 @@ class ExperimentDefinitionTask(SQLModel, table=True):
         foreign_key="experiment_definition_instances.id",
         index=True,
     )
-    task_key: str = Field(index=True)
+    task_slug: str = Field(index=True)
     parent_task_id: UUID | None = Field(
         default=None,
         foreign_key="experiment_definition_tasks.id",
