@@ -256,6 +256,29 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
             session.refresh(existing)
             return existing
 
+    def get_task_payload(
+        self,
+        task_execution_id: UUID,
+    ) -> dict[str, Any] | None:  # slopcop: ignore[no-typing-any]
+        """Return the immutable task_payload for a task execution.
+
+        Joins ``run_task_executions`` → ``experiment_definition_tasks``.
+        Returns ``None`` if the execution row does not exist or its
+        ``definition_task_id`` points at nothing (run-scoped tasks that
+        weren't tied to a definition — should not happen in normal
+        benchmark flow).
+        """
+        with get_session() as session:
+            stmt = (
+                select(ExperimentDefinitionTask.task_payload)
+                .join(
+                    RunTaskExecution,
+                    RunTaskExecution.definition_task_id == ExperimentDefinitionTask.id,
+                )
+                .where(RunTaskExecution.id == task_execution_id)
+            )
+            return session.exec(stmt).first()
+
 
 # ---------------------------------------------------------------------------
 # Evaluations
