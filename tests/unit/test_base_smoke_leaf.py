@@ -48,7 +48,7 @@ async def test_leaf_writes_file_yields_turn_and_reports_success() -> None:
         AsyncMock(return_value=fake_sandbox),
     ):
         node_id = UUID("00000000-0000-0000-0000-0000000000aa")
-        leaf = _OkLeaf(name="ok")
+        leaf = _OkLeaf(name="ok", model=None)
         ctx = _ctx(node_id)
 
         turns = [turn async for turn in leaf.execute(task=None, context=ctx)]
@@ -78,7 +78,7 @@ async def test_leaf_reports_failure_when_probe_nonzero() -> None:
         AsyncMock(return_value=fake_sandbox),
     ):
         node_id = UUID("00000000-0000-0000-0000-0000000000bb")
-        leaf = _FailLeaf(name="fail")
+        leaf = _FailLeaf(name="fail", model=None)
         ctx = _ctx(node_id)
         _ = [t async for t in leaf.execute(task=None, context=ctx)]
 

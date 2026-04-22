@@ -50,7 +50,7 @@ class TestResearcherWorker:
             ResearchRubricsResearcherWorker,
         )
 
-        worker = ResearchRubricsResearcherWorker(name="test-researcher")
+        worker = ResearchRubricsResearcherWorker(name="test-researcher", model=None)
         assert worker.type_slug == "researchrubrics-researcher"
         assert worker.tools == []
 
@@ -121,7 +121,7 @@ class TestManagerWorker:
             ResearchRubricsManagerWorker,
         )
 
-        worker = ResearchRubricsManagerWorker(name="test-manager")
+        worker = ResearchRubricsManagerWorker(name="test-manager", model=None)
         assert worker.type_slug == "researchrubrics-manager"
         assert worker.tools == []
 

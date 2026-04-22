@@ -52,7 +52,7 @@ class ManagerResearcherWorker(ReActWorker):
         self,
         *,
         name: str,
-        model: str | None = None,
+        model: str | None,
     ) -> None:
         super().__init__(
             name=name,

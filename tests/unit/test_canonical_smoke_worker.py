@@ -68,7 +68,7 @@ async def test_execute_calls_plan_subtasks_with_correct_topology() -> None:
             node_id=parent_node,
             metadata={},
         )
-        worker = CanonicalSmokeWorker(name="smoke")
+        worker = CanonicalSmokeWorker(name="smoke", model=None)
         turns = [t async for t in worker.execute(task=None, context=ctx)]
 
     assert len(turns) >= 1

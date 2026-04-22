@@ -18,7 +18,7 @@ MARKER_CONTENT = "smoke-test-marker"
 class SmokeTestWorker(Worker):
     type_slug = "smoke-test-worker"
 
-    def __init__(self, *, name: str = "smoke-test", model: str | None = None) -> None:
+    def __init__(self, *, name: str = "smoke-test", model: str | None) -> None:
         super().__init__(name=name, model=model)
 
     async def execute(

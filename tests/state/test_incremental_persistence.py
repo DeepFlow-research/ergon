@@ -213,7 +213,7 @@ def test_get_output_reads_last_turn(session: Session):
         async def execute(self, task, *, context):
             yield  # type: ignore[misc]
 
-    worker = _TestWorker(name="test")
+    worker = _TestWorker(name="test", model=None)
     ctx = WorkerContext(
         run_id=run_id,
         task_id=task_ids[0],

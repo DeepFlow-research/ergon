@@ -25,7 +25,7 @@ class BaseSmokeLeafWorker(Worker):
 
     subworker_cls: ClassVar[type[SmokeSubworker]]
 
-    def __init__(self, *, name: str, model: str | None = None) -> None:
+    def __init__(self, *, name: str, model: str | None) -> None:
         super().__init__(name=name, model=model)
         self._last_result: SubworkerResult | None = None
 

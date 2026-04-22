@@ -56,7 +56,7 @@ class StubResearchRubricsWorker(Worker):
         self,
         *,
         name: str = "researchrubrics-stub",
-        model: str | None = None,
+        model: str | None,
     ) -> None:
         super().__init__(name=name, model=model)
 

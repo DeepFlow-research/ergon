@@ -31,7 +31,7 @@ class Worker(ABC):
         self,
         *,
         name: str,
-        model: str | None = None,
+        model: str | None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.name = name

@@ -76,7 +76,7 @@ class CanonicalSmokeWorker(Worker):
 
     type_slug = "canonical-smoke"
 
-    def __init__(self, *, name: str = "canonical-smoke", model: str | None = None) -> None:
+    def __init__(self, *, name: str = "canonical-smoke", model: str | None) -> None:
         super().__init__(name=name, model=model)
 
     async def execute(

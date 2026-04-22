@@ -30,7 +30,7 @@ from ergon_core.api.generation import (
 class TrainingStubWorker(Worker):
     type_slug = "training-stub"
 
-    def __init__(self, *, name: str = "training-stub", model: str | None = None) -> None:
+    def __init__(self, *, name: str = "training-stub", model: str | None) -> None:
         super().__init__(name=name, model=model)
 
     async def execute(
