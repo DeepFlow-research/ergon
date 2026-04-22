@@ -277,7 +277,10 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
                 )
                 .where(RunTaskExecution.id == task_execution_id)
             )
-            return session.exec(stmt).first()
+            result = session.exec(stmt).first()
+            if result is None:
+                return None
+            return dict(result)
 
 
 # ---------------------------------------------------------------------------
