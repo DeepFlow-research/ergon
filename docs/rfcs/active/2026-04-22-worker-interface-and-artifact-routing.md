@@ -687,36 +687,37 @@ None. No DB schema changes. `RunResource` already has the
 
 ## Open questions
 
-These are the remaining plan-level decisions. The rest have been
-absorbed into the proposal above (MiniF2F proof filename is
+All three resolved during plan execution on branch
+`feature/real-llm-harness-infra` (PR #27). The rest had been absorbed
+into the proposal above (MiniF2F proof filename is
 `final_solution.lean`; `get_task_payload` takes `session: Session`
 mirroring its siblings; the base `Worker` class also drops its
 `model` default).
 
-1. **Non-benchmark-specific workers' kwarg shape.** With the factory
-   call site growing `task_id=` and `sandbox_id=` (see Proposal §1),
-   every registered worker — including `StubWorker`,
-   `TrainingStubWorker`, `SmokeTestWorker`, `ManagerResearcherWorker`,
-   `StubResearchRubricsWorker`, `CanonicalSmokeWorker` — must accept
-   those kwargs. Two options: (a) add `task_id` / `sandbox_id` kwargs
-   (ignored) to every subclass `__init__`; (b) wrap each bare class
-   in a thin factory closure that strips the extras. Plan writer picks;
-   (b) is lower-ripple.
+1. **Non-benchmark-specific workers' kwarg shape.** **Resolved —
+   option (b).** Every bare worker class
+   (`StubWorker`, `TrainingStubWorker`, `SmokeTestWorker`,
+   `ManagerResearcherWorker`, `StubResearchRubricsWorker`,
+   `CanonicalSmokeWorker`, `ResearchRubricsManagerWorker`,
+   `ResearchRubricsResearcherWorker`) is wrapped in the `_plain(cls)`
+   factory closure in `ergon_builtins/registry_core.py` and re-used
+   from `registry_data.py`. The closure accepts the registry's
+   uniform `(name, model, task_id, sandbox_id)` signature and
+   forwards only `(name, model)` to the underlying `__init__`.
+   Subclasses never learn about `task_id` / `sandbox_id`.
 
-2. **`ensure_sandbox()` idempotence check.** Today the worker-execute
-   step creates the sandbox, and the criterion calls `ensure_sandbox()`
-   again (should reconnect, not re-provision). Moving setup scripts
-   into `BaseSandboxManager.create()` — which in turn calls
-   `_install_dependencies` — means a second `ensure_sandbox()` must
-   NOT re-run `setup_env_script` / `install_repo_script` against an
-   already-configured SWE-Bench sandbox. Plan writer adds a regression
-   test that calls `ensure_sandbox()` twice and asserts
+2. **`ensure_sandbox()` idempotence check.** **Resolved.** Regression
+   test landed at
+   `tests/unit/sandbox/test_ensure_sandbox_idempotence.py` — patches
+   `AsyncSandbox`, calls `ensure_sandbox()` three times, and asserts
    `_install_dependencies` runs exactly once.
 
-3. **Do we need a `read_resource_text` convenience?** Most criteria
-   immediately do `.decode()` after `read_resource`. A `read_resource_text`
-   helper is cheap but grows the Protocol surface. Lean: leave it off;
-   callers decode.
+3. **Do we need a `read_resource_text` convenience?** **Resolved —
+   no.** `CriterionRuntime.read_resource` returns `bytes`; criteria
+   decode at the call site (e.g.
+   `raw.decode("utf-8", errors="replace")` in
+   `ProofVerificationCriterion._extract_proof`). The Protocol stays
+   at 12 methods with the new `get_all_files_for_task` addition.
 
 ## On acceptance
 
