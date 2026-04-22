@@ -1,7 +1,5 @@
 """Ensure the public ``Tool`` alias is exported from ``ergon_core.api``."""
 
-from typing import get_type_hints
-
 
 def test_tool_is_reexported_from_api_root() -> None:
     from ergon_core.api import Tool  # noqa: F401 — import is the assertion
