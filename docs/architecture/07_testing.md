@@ -13,19 +13,18 @@ for narrower-surface-at-right-layer.
 
 ## 2. Core abstractions
 
-Three tiers, separated by filesystem path (not pytest markers):
+Four tiers, separated by filesystem path (not pytest markers):
 
-- **Fast tier** — in-memory SQLite, direct service-class calls, no Inngest,
-  no Docker. Covers graph propagation, context assembly, repository
-  behavior, RL extraction, state-machine scenarios, and pure-logic
-  helpers. Lives at `tests/state/` today; `tests/unit/` sits alongside
-  it for pure-logic tests (no DB, no fixtures).
+- **Unit tier** (`tests/unit/`) — pure-logic tests: validators, Pydantic
+  model construction, contract tests, mocked-SDK CLI flows. No I/O, no
+  DB, no fixtures. Fastest possible signal.
 - **Integration tier** (`tests/integration/`) — real Postgres + real
   Inngest dev server via the `docker-compose.ci.yml` stack. Tests drive
   the production event seam (`inngest_client.send(...)`), then block on
   durable Inngest processing, then assert terminal state via ORM reads.
   Direct service-class calls that bypass the Inngest layer are banned in
-  this tier.
+  this tier. Benchmark-specific sandbox integration (MiniF2F, SWE-Bench
+  Verified) lives in `tests/integration/<benchmark>/` subdirectories.
 - **E2E tier** (`tests/e2e/`) — full Docker stack: Postgres, Inngest dev
   server, FastAPI app. `StubWorker` + `StubRubric` by default; real E2B
   enabled on `feature/*` branches.
@@ -39,9 +38,9 @@ gate and the CI workflow both dispatch by directory.
 
 | Tier | Location | Infra |
 |------|----------|-------|
-| Fast — pure logic | `tests/unit/` | None — no I/O, no fixtures |
-| Fast — graph/service | `tests/state/` | SQLite, no Inngest |
+| Unit — pure logic | `tests/unit/` | None — no I/O, no fixtures |
 | Integration — stub-worker pipeline | `tests/integration/` | Postgres + Inngest dev server (docker-compose.ci.yml) |
+| Integration — benchmark sandboxes | `tests/integration/minif2f/`, `tests/integration/swebench_verified/` | Real E2B template (opt-in; skipped when template/API key absent) |
 | E2E | `tests/e2e/` | Docker + Inngest + optional E2B |
 | Frontend | `ergon-dashboard/tests/e2e/` | Playwright (not in CI) |
 | real-LLM | `tests/real_llm/` | Docker + Inngest + Postgres + Playwright; opt-in via `ERGON_REAL_LLM=1` + `OPENROUTER_API_KEY`; manual dispatch only (not in CI) |
@@ -58,27 +57,28 @@ spend. This tier is a bug-hunting instrument; it is not required for CI.
 ## 3. Control flow — choosing a tier
 
 ```
-Pure function / validator / Pydantic model?
-    yes -> fast tier
+Pure function / validator / Pydantic model / mocked SDK?
+    yes -> tests/unit/
     no  -> next
 
-Drives graph state or service-class behavior, no Inngest runtime?
-    yes -> fast tier
+Drives graph state, persists via ORM, or dispatches an Inngest event?
+    yes -> tests/integration/
     no  -> next
 
-Needs Docker, Inngest dev server, or a sandbox?
+Needs Docker stack, real E2B sandbox, or a full FastAPI server?
     yes -> tests/e2e/ (feature-branch CI only)
 ```
 
 The canonical local gate is `pnpm run check:fast && pnpm run test:be:fast`.
-CI mirrors it for the fast tier; the e2e workflow runs on
-`workflow_dispatch` or `feature/*` branches only.
+CI mirrors it for the unit tier; the integration job brings up
+`docker-compose.ci.yml` and the e2e workflow runs on `workflow_dispatch`
+or `feature/*` branches only.
 
 ## 4. Invariants
 
-- The fast tier must stay fast enough to be the "ready for review" gate.
-  If it needs Docker, Postgres, or an Inngest runtime, it does not belong
-  in the fast tier.
+- The unit tier must stay fast enough to be the "ready for review" gate.
+  If a test needs Docker, Postgres, or an Inngest runtime, it does not
+  belong in `tests/unit/`.
 - Tier boundaries are filesystem paths. No pytest markers.
 - **Integration tests MUST drive through Inngest events.** Direct
   service-class calls that bypass the event seam are banned in
@@ -102,11 +102,12 @@ CI mirrors it for the fast tier; the e2e workflow runs on
 
 ## 5. Extension points
 
-- **New unit-level test** — place alongside the code under test, or in
-  the fast tier. No I/O fixtures.
-- **New integration test** — fast tier today. Drive through service
-  classes. Post-reset, drive through the Inngest event API against real
-  Postgres.
+- **New unit-level test** — place under `tests/unit/`. No I/O fixtures,
+  no DB, no live services; mock SDK boundaries.
+- **New integration test** — place under `tests/integration/`. Drive
+  through the Inngest event API against real Postgres; assert via ORM
+  reads. Benchmark-specific sandbox tests go under
+  `tests/integration/<benchmark>/`.
 - **New e2e test** — `tests/e2e/`. Must run against the Docker + E2B
   stack. Feature-branch CI gate.
 - **New Playwright test** — `ergon-dashboard/tests/e2e/`. Wiring into CI
@@ -119,59 +120,52 @@ CI mirrors it for the fast tier; the e2e workflow runs on
 
 - **State-machine assertions via direct DB writes.** Tests must drive
   the same path production takes.
-- **Pushing a Postgres-requiring test into the fast tier.** Breaks the
+- **Pushing a Postgres-requiring test into the unit tier.** Breaks the
   speed guarantee the tier is built around.
+- **Reviving in-memory SQLite for graph/persistence coverage.** The
+  SQLite-backed `tests/state/` tier has been deleted; it diverged from
+  Postgres semantics and masked persistence bugs. Graph and persistence
+  coverage lives in `tests/integration/` against real Postgres.
 - **Reading `RunTaskStateEvent` from any test.** Deprecated table.
 - **Integration-tier tests that skip Inngest when production does not.**
-  _Resolved for `tests/integration/` as of the posture-reset landing_:
-  the former `test_full_lifecycle.py` / `test_full_lifecycle_with_eval.py`
-  variants that called service classes directly (with an
-  `InProcessCriterionExecutor` stand-in for `step.run`) have been
-  rewritten to dispatch through `Experiment.run()` →
-  `inngest_client.send(...)` and assert terminal state via ORM reads.
-  New integration tests must follow the same pattern. The same
-  anti-pattern historically applied to `tests/state/`; the larger
-  migration of those files to real Postgres + Inngest is tracked by
-  `docs/rfcs/active/2026-04-18-testing-posture-reset.md`.
+  All integration tests must drive through `inngest_client.send(...)`
+  (typically via `Experiment.run()`), wait for Inngest to durably
+  process, then assert via ORM reads. Direct service-class calls that
+  bypass the event seam are banned.
 - **Mocking the LLM in e2e.** Defeats the purpose of the tier.
 
 ## 7. Follow-ups
 
-The system owner has decided to retire the fast tier in favor of a single
-real-infrastructure integration tier (Postgres + Inngest dev server +
-stub workers), keeping a pure-logic `tests/unit/` tier beside it. The
-driving invariant under this plan: **tests that exercise graph semantics
-MUST run against real Postgres and real Inngest.** Path-based tier
-boundaries are preserved. CI budgets shift from seconds to minutes.
+The tier retirement and orphan-tier consolidation have landed. Current
+posture: `tests/unit/` (pure logic), `tests/integration/` (real
+Postgres + Inngest), `tests/e2e/` (full Docker + optional E2B), and
+`tests/real_llm/` (opt-in, bug-hunting). The SQLite-backed
+`tests/state/` tier is gone; the orphan `tests/contract/`,
+`tests/cli/`, `tests/minif2f/`, and `tests/swebench_verified/` roots
+have been folded into unit/integration.
 
 Paired shifts under the same planning arc:
 
 - A per-benchmark smoke pattern at
-  `tests/integration/smokes/test_<slug>_smoke.py`, using a shared
-  fixed-delegation stub worker to exercise a complex-enough subgraph.
+  `tests/integration/smokes/test_<slug>_smoke.py`, using the canonical
+  smoke worker to exercise a complex-enough subgraph.
 - Test-harness endpoints (`/api/test/read/*`, `/api/test/write/*`) that
   mount only when `ENABLE_TEST_HARNESS=1`, so Playwright can assert
   backend state inside a single test invocation. Writes gated by
   `X-Test-Secret`.
-- Two contract tests migrated from the dashboard layer: every
-  `DashboardEmitter` method must have a non-trivial call site, and every
-  `RunGraphMutation.kind` must have a matching TypeScript reducer.
+- Dashboard contract tests (emitter call-site check and RunGraphMutation
+  reducer check) migrated under `tests/unit/`.
 
 Tracking:
 
-- `docs/rfcs/active/2026-04-18-testing-posture-reset.md` — **partially
-  resolved.** Variant A′ has landed for `tests/integration/`: the two
-  lifecycle smokes (`test_full_lifecycle.py`,
-  `test_full_lifecycle_with_eval.py`) now drive through the real Inngest
-  dev server + real Postgres via `Experiment.run()`, and the CI
-  `integration-tests` job brings up `docker-compose.ci.yml` before
-  running them. The broader migration of `tests/state/` → real-infra
-  integration (30+ graph files) is still outstanding and tracked by the
-  same RFC.
+- `docs/rfcs/accepted/2026-04-18-testing-posture-reset.md` — resolved.
+  Integration lifecycle smokes drive through real Inngest + Postgres,
+  the SQLite `tests/state/` tier has been demolished, and orphan tiers
+  have been folded in.
 - `docs/rfcs/active/2026-04-18-fixed-delegation-stub-worker.md`
 - `docs/rfcs/active/2026-04-18-test-harness-endpoints.md`
 - `docs/rfcs/active/2026-04-18-dashboard-event-wiring-enforcement.md`
-- `docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md`
+- `docs/rfcs/accepted/2026-04-17-criterion-runtime-di-container.md`
 - `docs/bugs/open/2026-04-18-ci-docker-caching.md` — Docker rebuild cost
   becomes load-bearing once the integration tier hits real infra on
   every PR.
