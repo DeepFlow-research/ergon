@@ -12,7 +12,7 @@ from ergon_core.api.generation import GenerationTurn, TextPart
 class StubWorker(Worker):
     type_slug = "stub-worker"
 
-    def __init__(self, *, name: str = "stub", model: str | None) -> None:
+    def __init__(self, *, name: str, model: str | None) -> None:
         super().__init__(name=name, model=model)
 
     async def execute(
