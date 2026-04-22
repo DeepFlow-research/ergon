@@ -1,8 +1,31 @@
 # docker-compose.real-llm.yml
 #
 # Full stack overlay for the real-LLM pytest tier at tests/real_llm/.
-# Mirrors docker-compose.ci.yml but adds the frontend dashboard on port 3101
-# and enables the test harness endpoints (ENABLE_TEST_HARNESS=1).
+#
+# Why a third overlay alongside docker-compose.yml and docker-compose.ci.yml:
+#
+#   docker-compose.yml      — interactive dev (host-mounted source, debug ports)
+#   docker-compose.ci.yml   — headless backend CI (no dashboard, no test harness;
+#                             frontend runs against a mock in its own job)
+#   docker-compose.real-llm.yml (this file) — real-LLM debug harness stack
+#
+# The real-LLM tier specifically needs two things neither other overlay
+# provides:
+#
+#   1. A running dashboard (port 3101) so Playwright can drive the UI and
+#      assert cohort/run state end-to-end. Booting the Next.js dev server
+#      costs ~60s; we don't want that in the backend CI loop, which is why
+#      docker-compose.ci.yml omits it.
+#
+#   2. The test harness API (ENABLE_TEST_HARNESS=1 + TEST_HARNESS_SECRET),
+#      which exposes the /api/test/read/* endpoints that
+#      tests/real_llm/fixtures/harness_client.py polls. We never want these
+#      endpoints enabled in backend CI or dev; keeping them gated to this
+#      overlay makes that explicit.
+#
+# If either of those constraints changes (backend CI starts running
+# Playwright too, or the harness endpoints become safe everywhere), this
+# overlay can collapse back into docker-compose.ci.yml.
 services:
   postgres:
     image: postgres:15

@@ -47,12 +47,17 @@ runnable — not a catalog of registered implementations.
     `register_model_backend(prefix, resolver)` at import time.
   - Freeze status: stable API; adding a backend is additive.
 
-- DI factories and tools.
-  - `benchmark_toolkit_composer` is a DI factory that, given a benchmark slug and
-    a `WorkerContext`, returns the union of tools the generic ReAct worker
-    (`react-generic` slug) needs to exercise that benchmark. It is the mechanism
-    by which the real-LLM debug harness (`tests/real_llm/`) drives one worker
-    against all three benchmark sandboxes without per-benchmark specialised workers.
+- ReAct adapter composition.
+  - There is one concrete ReAct worker class — `ReActWorker` (slug `react-v1`)
+    — parameterised by a `BenchmarkAdapter`. Each benchmark that needs tool use
+    ships an adapter under `ergon_builtins/workers/baselines/adapters/`
+    (`MiniF2FAdapter`, `SWEBenchAdapter`, …) that owns the toolkit, per-task
+    setup hooks (`on_run_start`), post-run artifact capture (`on_run_end`),
+    and output routing (`transform_output`). Registry entries such as
+    `"minif2f-react"` and `"swebench-react"` are tiny factory closures in
+    `registry_core.py` that instantiate `ReActWorker(adapter=…)`.
+  - Freeze status: adapter interface is additive; adding a benchmark means
+    a new adapter class and a registry entry, not a new worker subclass.
 
 - Onboarding profile.
   - Today a hand-maintained `BENCHMARK_DEPS` dict in
