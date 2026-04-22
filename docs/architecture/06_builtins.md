@@ -47,17 +47,25 @@ runnable — not a catalog of registered implementations.
     `register_model_backend(prefix, resolver)` at import time.
   - Freeze status: stable API; adding a backend is additive.
 
-- ReAct adapter composition.
+- ReAct toolkit composition.
   - There is one concrete ReAct worker class — `ReActWorker` (slug `react-v1`)
-    — parameterised by a `BenchmarkAdapter`. Each benchmark that needs tool use
-    ships an adapter under `ergon_builtins/workers/baselines/adapters/`
-    (`MiniF2FAdapter`, `SWEBenchAdapter`, …) that owns the toolkit, per-task
-    setup hooks (`on_run_start`), post-run artifact capture (`on_run_end`),
-    and output routing (`transform_output`). Registry entries such as
-    `"minif2f-react"` and `"swebench-react"` are tiny factory closures in
-    `registry_core.py` that instantiate `ReActWorker(adapter=…)`.
-  - Freeze status: adapter interface is additive; adding a benchmark means
-    a new adapter class and a registry entry, not a new worker subclass.
+    — with a fully explicit construction contract:
+    `ReActWorker(name=..., model=..., tools=[...], system_prompt=...,
+    max_iterations=...)`. Every kwarg is required; no nullable-with-default
+    fallbacks hide sizing decisions. Benchmark-specific glue (the toolkit
+    itself, the system prompt, the iteration budget) is a
+    **factory-closure** concern. Registry entries such as `"minif2f-react"`
+    and `"swebench-react"` live in `registry_core.py` as small closures
+    that build the `list[Tool]` and pass every kwarg through to
+    `ReActWorker(...)`. There is no `BenchmarkAdapter` ABC, no
+    `on_run_start`/`on_run_end` hooks, no `transform_output` seam.
+  - Per-task environment setup (clone a repo, install deps, apply a
+    harness spec) lives in `BaseSandboxManager._install_dependencies`, not
+    in the worker or an adapter. The sandbox manager reads the per-task
+    payload via `queries.task_executions.get_task_payload(task_id)`.
+  - Freeze status: adding a benchmark that needs ReAct means a new registry
+    factory closure and (if it needs bespoke setup) a
+    `BaseSandboxManager` subclass, not a new worker subclass or adapter.
 
 - Onboarding profile.
   - Today a hand-maintained `BENCHMARK_DEPS` dict in
@@ -161,6 +169,20 @@ Benchmark loader → Task instances → Worker
   environment.** Persisted runs become orphaned (see invariant).
 - **A Criterion spawning its own sandbox.** Enforced by
   `tests/state/test_criteria_do_not_spawn_sandboxes.py`.
+- **Worker subclasses for per-benchmark glue.** Benchmark-specific wiring
+  is a factory-closure concern (registry), not a class hierarchy. The
+  worker `__init__` contract is `tools: list[Tool]` + prompt only; a new
+  benchmark that reuses `ReActWorker` means a new registry factory, not a
+  new `ReActWorker` subclass.
+- **Per-task setup inside workers.** Setup scripts (clone, install deps,
+  environment bootstrap) belong to `BaseSandboxManager._install_dependencies`
+  — sandbox lifecycle, not worker lifecycle. The manager reads the
+  per-task payload via `queries.task_executions.get_task_payload(task_id)`.
+- **Nullable-with-default kwargs on concrete Worker `__init__`.**
+  `tools: list[Tool] | None = None`, `max_iterations: int = 10`, etc. hide
+  sizing decisions in a shared default and mask per-benchmark intent.
+  Concrete workers declare their required construction contract; factories
+  pass every kwarg explicitly.
 
 ## 7. Follow-ups
 

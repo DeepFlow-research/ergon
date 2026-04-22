@@ -31,7 +31,24 @@ owned by that module.
   `Experiment.validate()`.
 - **`Worker`** — abstract base. `execute()` is an async generator that MUST
   yield a `GenerationTurn` per LLM call (see invariants). The runtime uses each
-  yield as both an RL observation point and a cancellation checkpoint.
+  yield as both an RL observation point and a cancellation checkpoint. The
+  base class and every concrete subclass declare their construction contract
+  with **required keyword-only kwargs and no nullable-with-default fallbacks**.
+  `Worker.__init__` takes `name: str` and `model: str | None` (both required,
+  no default). `ReActWorker.__init__` adds `tools: list[Tool]`,
+  `system_prompt: str | None`, and `max_iterations: int` — also required. A
+  default value on worker `__init__` is an anti-pattern: it hides sizing
+  decisions (iteration budget, model choice, system prompt) that should live
+  visibly in the per-benchmark registry factory. Workers MUST NOT own per-task
+  environment setup — setup belongs to the sandbox manager (see
+  `BaseSandboxManager._install_dependencies`). Workers MUST NOT return files
+  or blobs through `WorkerOutput.artifacts` — the runtime serialization layer
+  drops that field at the Inngest `worker_execute` boundary. Files → write to
+  `/workspace/final_output/` (auto-published as `RunResource` rows).
+- **`Tool`** — public alias re-exported from `ergon_core.api` for the toolkit
+  primitive concrete workers consume. `ReActWorker`'s `tools: list[Tool]`
+  kwarg uses this alias; registry factories build the list and pass it
+  explicitly per benchmark (no toolkit defaults inside the worker).
 - **`GenerationTurn`** — frozen model holding the per-turn LLM trace (input
   messages, response parts, tool results, token IDs, logprobs, policy version,
   timing). Not persisted directly; the runtime decomposes each turn into one
@@ -48,10 +65,15 @@ owned by that module.
 - **`CriterionRuntime`** — Protocol. The execution context an agentic
   criterion uses to reach into its environment. **Surface-area constraint:**
   this Protocol is narrowly scoped to sandbox lifecycle and resource I/O; it
-  should not grow into a generic service locator. The one current method that
-  is not about sandbox/I/O is a candidate for extraction if the surface
-  continues to accumulate capabilities. Expansion is in flight — see
-  follow-ups.
+  should not grow into a generic service locator. The current surface is 12
+  methods: sandbox lifecycle (7), resource I/O (3 — `list_resources`,
+  `read_resource`, `get_all_files_for_task`), DB read (1), and event
+  emission (1). `get_all_files_for_task()` is the materializing helper that
+  returns `{name: bytes}` for every resource produced by the task; criteria
+  use it when they want the whole output bundle rather than iterating
+  `list_resources()` + `read_resource()` themselves. The one method that is
+  not about sandbox/I/O is a candidate for extraction if the surface
+  continues to accumulate capabilities.
 - **`Experiment`** — **plain Python class**, deliberately not a Pydantic model,
   because it is the declarative binding of `{benchmark, workers, evaluators,
   assignments, metadata}` and the canonical import contributors rely on.
@@ -141,6 +163,19 @@ within the constraints the invariants below impose.
   zeros. The RL extractor treats `None` as "no logprobs collected" and pads;
   `[]` would be interpreted as "zero tokens generated" and silently corrupt
   token budget math (`ergon_core/core/rl/extraction.py:173`).
+- **`final_assistant_message` is the canonical agent-text field name.** The
+  field that carries the agent's final assistant-text message is named
+  `final_assistant_message` end-to-end — from the Inngest
+  `WorkerExecuteResult` through `FinalizeTaskExecutionCommand` to the
+  `RunTaskExecution.final_assistant_message` column. Future work MUST NOT
+  reintroduce `output_text` as a synonym; the rename propagates into
+  dashboard readers and CLI surfaces in the same PR that renames the column.
+  (The code-side rename lands later in this same PR.)
+- **`WorkerOutput.artifacts` is non-durable.** The field is dropped at the
+  Inngest `worker_execute` serialization boundary and is not a channel to
+  criteria. File-shaped artifacts travel via the sandbox → `RunResource`
+  path (see `cross_cutting/artifacts.md`); computed artifacts are produced
+  by the criterion itself via `CriterionRuntime.run_command`.
 
 ## extension points
 
@@ -164,14 +199,24 @@ within the constraints the invariants below impose.
 
 ### add a new worker
 
-1. Subclass `Worker`.
+1. Subclass `Worker`. `__init__` takes `name: str` and `model: str | None`
+   as required keyword-only kwargs; do NOT add nullable-with-default
+   fallbacks.
 2. Implement `execute()` as an async generator. Yield a `GenerationTurn` for
    every LLM call; stubs must yield at least once.
 3. Resolve LLM clients via `resolve_model_target(...)` from
    `ergon_core/core/providers/generation/model_resolution.py`. Never import a
    provider SDK directly — the resolver presents a uniform cross-provider
    interface.
-4. Register per the worker registry conventions.
+4. For benchmark-specific glue (tools, system prompts, iteration budget),
+   do NOT subclass — build a factory closure in the registry that
+   instantiates `ReActWorker(tools=..., system_prompt=..., max_iterations=...,
+   name=..., model=...)` with every kwarg explicit.
+5. Per-task environment setup (clone a repo, install deps) belongs in
+   `BaseSandboxManager._install_dependencies`, not in the worker. The
+   sandbox manager reads the per-task payload via
+   `queries.task_executions.get_task_payload(task_id)`.
+6. Register per the worker registry conventions.
 
 ### add a new evaluator or criterion
 
@@ -210,6 +255,16 @@ within the constraints the invariants below impose.
 - **Criteria that allocate their own sandbox.** Agentic criteria must run in
   the task's existing sandbox via the `CriterionRuntime` seam. Enforced by
   `tests/state/test_criteria_do_not_spawn_sandboxes.py`.
+- **Nullable-with-default kwargs on concrete Worker `__init__`.**
+  `tools: list[Tool] | None = None`, `max_iterations: int = 10`, etc. hide
+  sizing decisions in a shared default and mask per-benchmark intent.
+  Concrete workers declare their required construction contract; factories
+  pass every kwarg explicitly.
+- **Reading files via `WorkerOutput.artifacts`.** The field is dropped at
+  the Inngest serialization boundary. Criteria read files via
+  `CriterionRuntime.read_resource(name)` or
+  `CriterionRuntime.get_all_files_for_task()`; workers publish by writing
+  to `/workspace/final_output/`.
 
 ## follow-ups
 

@@ -95,6 +95,13 @@ promotes into the runtime's public contract.
 
 ## Invariants (intended)
 
+- `WorkerOutput.artifacts` is a non-durable field. It is dropped at the
+  Inngest `worker_execute` step boundary and is not a channel to criteria.
+  File-shaped artifacts are published via `SandboxResourcePublisher.sync()`
+  from `/workspace/final_output/`; criteria read them via
+  `CriterionRuntime.read_resource(name)` or `get_all_files_for_task()`.
+  Computed artifacts (e.g. `git diff`) are produced by the criterion
+  itself via `CriterionRuntime.run_command(...)`.
 - Artifacts from a worker that an evaluator needs MUST go through
   `SandboxResourcePublisher`. Enforced (once RFC lands) by: the only
   evaluator read path is `runtime.read_resource(name)`, which only returns
