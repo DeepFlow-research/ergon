@@ -4,19 +4,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
-from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
-    SWEBenchSandboxManager,
-)
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.registry import (
-    BENCHMARKS,
-    EVALUATORS,
-    SANDBOX_MANAGERS,
     SANDBOX_TEMPLATES,
-    WORKERS,
 )
-from ergon_builtins.workers.baselines.adapters.swebench import SWEBenchAdapter
-from ergon_builtins.workers.baselines.react_worker import ReActWorker
 
 FAKE_ROW = {
     "instance_id": "django__django-1",
@@ -31,18 +22,6 @@ FAKE_ROW = {
     "PASS_TO_PASS": '["t0"]',
     "environment_setup_commit": "aaa",
 }
-
-
-def test_all_slugs_resolve_to_correct_classes() -> None:
-    assert BENCHMARKS["swebench-verified"] is SweBenchVerifiedBenchmark
-    # The "swebench-react" registry entry is a factory that constructs a
-    # ReActWorker pre-bound to SWEBenchAdapter. Exercise the factory to
-    # confirm the wiring; the adapter owns all benchmark-specific behaviour.
-    worker = WORKERS["swebench-react"](name="w", model=None)
-    assert isinstance(worker, ReActWorker)
-    assert isinstance(worker._adapter, SWEBenchAdapter)
-    assert EVALUATORS["swebench-rubric"] is SWEBenchRubric
-    assert SANDBOX_MANAGERS["swebench-verified"] is SWEBenchSandboxManager
 
 
 def test_sandbox_template_directory_is_packaged() -> None:

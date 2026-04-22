@@ -37,7 +37,6 @@ from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.vllm_backend import resolve_vllm
-from ergon_builtins.workers.baselines.adapters import MiniF2FAdapter, SWEBenchAdapter
 from ergon_builtins.workers.baselines.manager_researcher_worker import ManagerResearcherWorker
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
