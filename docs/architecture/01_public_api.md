@@ -34,17 +34,34 @@ owned by that module.
   yield as both an RL observation point and a cancellation checkpoint. The
   base class and every concrete subclass declare their construction contract
   with **required keyword-only kwargs and no nullable-with-default fallbacks**.
-  `Worker.__init__` takes `name: str` and `model: str | None` (both required,
+  `Worker.__init__` takes `name: str`, `model: str | None`, and the runtime
+  identity kwargs `task_id: UUID` and `sandbox_id: str` (all four required,
   no default). `ReActWorker.__init__` adds `tools: list[Tool]`,
   `system_prompt: str | None`, and `max_iterations: int` — also required. A
   default value on worker `__init__` is an anti-pattern: it hides sizing
   decisions (iteration budget, model choice, system prompt) that should live
-  visibly in the per-benchmark registry factory. Workers MUST NOT own per-task
+  visibly in the per-benchmark registry factory. The `task_id` / `sandbox_id`
+  requirement is load-bearing: it guarantees every live `Worker` has a
+  concrete, non-sentinel identity, and the runtime never constructs a
+  `Worker` with placeholder values. **Workers are never instantiated at
+  config time** — use `WorkerSpec` for the `Experiment` binding and let the
+  `worker_execute` Inngest function construct the real `Worker` with the
+  prepared task/sandbox identity. Workers MUST NOT own per-task
   environment setup — setup belongs to the sandbox manager (see
   `BaseSandboxManager._install_dependencies`). Workers MUST NOT return files
   or blobs through `WorkerOutput.artifacts` — the runtime serialization layer
   drops that field at the Inngest `worker_execute` boundary. Files → write to
   `/workspace/final_output/` (auto-published as `RunResource` rows).
+- **`WorkerSpec`** — frozen Pydantic model, the config-time descriptor of a
+  worker binding. Fields: `worker_slug: str`, `name: str`, `model: str | None`.
+  An `Experiment` holds `Mapping[str, WorkerSpec]`, not live `Worker`
+  instances — that keeps runtime identity (`task_id`, `sandbox_id`) out of
+  the declarative binding and avoids placeholder-sentinel leakage. The
+  registry factory for `worker_slug` is invoked exactly once per task
+  execution, inside `worker_execute`, with the prepared identity — the
+  resulting `Worker` lives only for that execution. `WorkerSpec.validate_spec()`
+  checks `worker_slug` against `WORKERS` and rejects empty names; it is
+  called from `Experiment.validate()` for every binding.
 - **`Tool`** — public alias re-exported from `ergon_core.api` for the toolkit
   primitive concrete workers consume. `ReActWorker`'s `tools: list[Tool]`
   kwarg uses this alias; registry factories build the list and pass it

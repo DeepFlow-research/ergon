@@ -68,7 +68,15 @@ async def test_execute_calls_plan_subtasks_with_correct_topology() -> None:
             node_id=parent_node,
             metadata={},
         )
-        worker = CanonicalSmokeWorker(name="smoke", model=None)
+        # reason: RFC 2026-04-22 §1 — Worker base requires task_id /
+        # sandbox_id; execute() never dereferences them in this test because
+        # TaskManagementService is patched.
+        worker = CanonicalSmokeWorker(
+            name="smoke",
+            model=None,
+            task_id=ctx.task_id,
+            sandbox_id=ctx.sandbox_id,
+        )
         turns = [t async for t in worker.execute(task=None, context=ctx)]
 
     assert len(turns) >= 1

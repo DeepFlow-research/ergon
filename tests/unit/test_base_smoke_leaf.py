@@ -48,8 +48,10 @@ async def test_leaf_writes_file_yields_turn_and_reports_success() -> None:
         AsyncMock(return_value=fake_sandbox),
     ):
         node_id = UUID("00000000-0000-0000-0000-0000000000aa")
-        leaf = _OkLeaf(name="ok", model=None)
         ctx = _ctx(node_id)
+        # reason: RFC 2026-04-22 §1 — Worker base now requires task_id /
+        # sandbox_id at construction.
+        leaf = _OkLeaf(name="ok", model=None, task_id=ctx.task_id, sandbox_id=ctx.sandbox_id)
 
         turns = [turn async for turn in leaf.execute(task=None, context=ctx)]
 
@@ -78,8 +80,8 @@ async def test_leaf_reports_failure_when_probe_nonzero() -> None:
         AsyncMock(return_value=fake_sandbox),
     ):
         node_id = UUID("00000000-0000-0000-0000-0000000000bb")
-        leaf = _FailLeaf(name="fail", model=None)
         ctx = _ctx(node_id)
+        leaf = _FailLeaf(name="fail", model=None, task_id=ctx.task_id, sandbox_id=ctx.sandbox_id)
         _ = [t async for t in leaf.execute(task=None, context=ctx)]
 
     assert leaf.get_output(ctx).success is False

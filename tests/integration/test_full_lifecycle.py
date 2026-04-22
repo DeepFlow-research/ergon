@@ -9,8 +9,7 @@ directly to simulate the event-driven flow:
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.registry import WORKERS
-from ergon_builtins.workers.baselines.stub_worker import StubWorker
-from ergon_core.api import Experiment, Worker
+from ergon_core.api import Experiment, Worker, WorkerSpec
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
@@ -73,12 +72,16 @@ async def test_full_lifecycle():
 
     # ── Phase A: Construct + Validate + Persist ─────────────────────
     benchmark = SmokeTestBenchmark(workflow="flat", task_count=2)
-    worker = StubWorker(name="test", model="openai:gpt-4o")
+    # reason: RFC 2026-04-22 §1 — ``Experiment`` holds ``WorkerSpec``
+    # descriptors at config time; the live ``Worker`` is built per-task
+    # via the registry factory inside ``worker_execute`` (mirrored at
+    # Phase B below).
+    spec = WorkerSpec(worker_slug="stub-worker", name="test", model="openai:gpt-4o")
     rubric = StubRubric()
 
     experiment = Experiment.from_single_worker(
         benchmark=benchmark,
-        worker=worker,
+        worker=spec,
         evaluators={"default": rubric},
     )
     experiment.validate()
@@ -152,11 +155,16 @@ async def test_full_lifecycle():
             f"(worker={prepared.worker_type}, model={prepared.model_target})"
         )
 
-        # Construct worker from registry (same as worker_execute Inngest fn)
+        # Construct worker from registry (same as worker_execute Inngest fn).
+        # reason: RFC 2026-04-22 §1 — base ``Worker.__init__`` requires
+        # ``task_id`` / ``sandbox_id``; every registered subclass forwards
+        # them to ``super().__init__``, so the factory signature is uniform.
         worker_cls = WORKERS[prepared.worker_type]
         live_worker = worker_cls(
             name=prepared.assigned_worker_slug or "worker",
             model=prepared.model_target,
+            task_id=task_desc.task_id,
+            sandbox_id="test-sandbox",
         )
 
         # Execute

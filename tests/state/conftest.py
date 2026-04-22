@@ -1,6 +1,6 @@
 """Shared fixtures for state tests.
 
-Module-scoped in-memory SQLite engine with per-test transaction rollback
+Session-scoped in-memory SQLite engine with per-test transaction rollback
 so every test sees a clean database without the cost of re-creating tables.
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def engine() -> Engine:
     e = create_engine("sqlite://", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(e)

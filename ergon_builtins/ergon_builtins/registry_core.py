@@ -53,26 +53,11 @@ from ergon_builtins.workers.research_rubrics.stub_worker import (
 from ergon_builtins.workers.stubs.canonical_smoke_worker import CanonicalSmokeWorker
 
 
-def _plain(cls: type[Worker]) -> Callable[..., Worker]:
-    """Wrap a plain ``Worker`` subclass so it ignores registry-injected kwargs.
-
-    Non-benchmark workers (``StubWorker``, ``SmokeTestWorker``, …) don't need
-    ``task_id`` or ``sandbox_id``. The registry call site always passes them
-    (see ``worker_execute.py``); this shim drops the extras before forwarding.
-    """
-
-    def factory(
-        *,
-        name: str,
-        model: str | None,
-        task_id: UUID,  # noqa: ARG001
-        sandbox_id: str,  # noqa: ARG001
-    ) -> Worker:
-        return cls(name=name, model=model)
-
-    factory.__name__ = f"_{cls.__name__}_factory"
-    factory.__qualname__ = factory.__name__
-    return factory
+# reason: Worker factory signature — every registry entry accepts the same
+# four keyword-only args. Plain ``Worker`` subclasses get them via
+# ``super().__init__``; benchmark factories read ``task_id`` to resolve a
+# live sandbox. RFC 2026-04-22 §1 + Open Question 1 resolution.
+WorkerFactory = Callable[..., Worker]
 
 
 def _minif2f_run_skill(sandbox: Any) -> Any:  # slopcop: ignore[no-typing-any]
@@ -109,7 +94,7 @@ def _minif2f_react(
     name: str,
     model: str | None,
     task_id: UUID,
-    sandbox_id: str,  # noqa: ARG001 — factory signature requires it; manager keys on task_id
+    sandbox_id: str,
 ) -> ReActWorker:
     """Registry factory: ReActWorker wired with a live MiniF2F toolkit."""
     # reason: lazy import so tests can monkeypatch `MiniF2FSandboxManager` on
@@ -131,9 +116,14 @@ def _minif2f_react(
         sandbox_run_skill=_minif2f_run_skill(sandbox),
         run_id=task_id,
     )
+    # reason: RFC 2026-04-22 §1 — forward task_id / sandbox_id so the base
+    # ``Worker.__init__`` invariant is satisfied; ReActWorker passes them
+    # through to super().
     return ReActWorker(
         name=name,
         model=model,
+        task_id=task_id,
+        sandbox_id=sandbox_id,
         tools=list(toolkit.get_tools()),
         system_prompt=MINIF2F_SYSTEM_PROMPT,
         max_iterations=30,
@@ -145,7 +135,7 @@ def _swebench_react(
     name: str,
     model: str | None,
     task_id: UUID,
-    sandbox_id: str,  # noqa: ARG001
+    sandbox_id: str,
 ) -> ReActWorker:
     """Registry factory: ReActWorker wired with a live SWE-Bench toolkit."""
     # reason: lazy import to mirror the MiniF2F factory — keeps sandbox-manager
@@ -166,9 +156,13 @@ def _swebench_react(
             "_install_dependencies) before worker-execute runs."
         )
     toolkit = SWEBenchToolkit(sandbox=sandbox, workdir="/workspace/repo")
+    # reason: RFC 2026-04-22 §1 — forward task_id / sandbox_id so the base
+    # ``Worker.__init__`` invariant is satisfied.
     return ReActWorker(
         name=name,
         model=model,
+        task_id=task_id,
+        sandbox_id=sandbox_id,
         tools=list(toolkit.get_tools()),
         system_prompt=SWEBENCH_SYSTEM_PROMPT,
         max_iterations=50,
@@ -177,23 +171,24 @@ def _swebench_react(
 
 # Registry maps worker slug → a factory callable accepting
 # ``(name=..., model=..., task_id=..., sandbox_id=...)`` that returns a
-# ready-to-run Worker. Benchmark factories close over their sandbox manager
-# and pre-bind a concrete toolkit + system prompt + iteration budget. Plain
-# Worker subclasses are wrapped by ``_plain`` so they accept-and-ignore the
-# task_id / sandbox_id kwargs that benchmark factories need (RFC 2026-04-22
-# §1, Open Question 1 resolution (a)).
-WORKERS: dict[str, Callable[..., Worker]] = {
-    "stub-worker": _plain(StubWorker),
-    "training-stub": _plain(TrainingStubWorker),
-    "smoke-test-worker": _plain(SmokeTestWorker),
+# ready-to-run Worker. Plain subclasses are referenced directly now that
+# base ``Worker.__init__`` requires ``task_id`` and ``sandbox_id``; benchmark
+# factories (``_minif2f_react``, ``_swebench_react``) close over their
+# sandbox manager and pre-bind a concrete toolkit + system prompt +
+# iteration budget. RFC 2026-04-22 §1 + Open Question 1 resolution (c)
+# (make IDs required on base Worker, drop ``_plain`` shim).
+WORKERS: dict[str, WorkerFactory] = {
+    "stub-worker": StubWorker,
+    "training-stub": TrainingStubWorker,
+    "smoke-test-worker": SmokeTestWorker,
     # NOTE: bare `"react-v1": ReActWorker` entry removed (RFC 2026-04-22 §1).
     # Every real use binds a concrete toolkit via a factory closure below.
     "minif2f-react": _minif2f_react,
     "swebench-react": _swebench_react,
-    "manager-researcher": _plain(ManagerResearcherWorker),
-    "researcher": _plain(StubWorker),
-    "researchrubrics-stub": _plain(StubResearchRubricsWorker),
-    "canonical-smoke": _plain(CanonicalSmokeWorker),
+    "manager-researcher": ManagerResearcherWorker,
+    "researcher": StubWorker,
+    "researchrubrics-stub": StubResearchRubricsWorker,
+    "canonical-smoke": CanonicalSmokeWorker,
 }
 
 BENCHMARKS: dict[str, type[Benchmark]] = {

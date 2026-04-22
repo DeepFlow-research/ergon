@@ -6,26 +6,33 @@ from typing import Any
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
-from ergon_core.api.worker import Worker
+from ergon_core.api.worker_spec import WorkerSpec
 
 
 class Experiment:
-    """Composition root binding a benchmark, workers, evaluators, and assignments.
+    """Composition root binding a benchmark, worker specs, evaluators, and assignments.
 
     This is the main object users build and hand to ``persist()`` / ``run()``.
+
+    reason: RFC 2026-04-22 §1 — workers are described here as ``WorkerSpec``
+    (config-time descriptor), not as live ``Worker`` instances. The
+    registry factory is invoked exactly once per task at execute time with
+    the real ``task_id`` / ``sandbox_id``. Holding a ``Worker`` here would
+    force either sentinel identity fields or constructing the same worker
+    twice.
     """
 
     def __init__(
         self,
         *,
         benchmark: Benchmark,
-        workers: Mapping[str, Worker],
+        workers: Mapping[str, WorkerSpec],
         evaluators: Mapping[str, Evaluator] | None = None,
         assignments: Mapping[str, str | Sequence[str]] | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.benchmark = benchmark
-        self.workers: dict[str, Worker] = dict(workers)
+        self.workers: dict[str, WorkerSpec] = dict(workers)
         self.evaluators: dict[str, Evaluator] = dict(evaluators or {})
         self.assignments: dict[str, str | list[str]] | None = (
             _normalise_assignments(assignments) if assignments is not None else None
@@ -38,7 +45,7 @@ class Experiment:
         cls,
         *,
         benchmark: Benchmark,
-        worker: Worker,
+        worker: WorkerSpec,
         evaluators: Mapping[str, Evaluator] | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> "Experiment":
@@ -69,8 +76,8 @@ class Experiment:
         - assignment worker keys and task slugs reference valid objects
         """
         self.benchmark.validate()
-        for worker in self.workers.values():
-            worker.validate()
+        for spec in self.workers.values():
+            spec.validate_spec()
         for evaluator in self.evaluators.values():
             evaluator.validate()
 

@@ -8,6 +8,7 @@ drafts via the graph toolkit.
 
 from collections.abc import AsyncGenerator
 from typing import ClassVar
+from uuid import UUID
 
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
@@ -56,10 +57,14 @@ class ResearchRubricsManagerWorker(ReActWorker):
         *,
         name: str,
         model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
     ) -> None:
         super().__init__(
             name=name,
             model=model,
+            task_id=task_id,
+            sandbox_id=sandbox_id,
             tools=[],
             system_prompt=_MANAGER_SYSTEM_PROMPT,
             max_iterations=30,

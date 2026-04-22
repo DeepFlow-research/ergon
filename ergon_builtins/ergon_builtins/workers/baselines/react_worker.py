@@ -81,11 +81,13 @@ class ReActWorker(Worker):
         *,
         name: str,
         model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
         tools: list[Tool],
         system_prompt: str | None,
         max_iterations: int,
     ) -> None:
-        super().__init__(name=name, model=model)
+        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
         self.tools: list[Tool] = tools
         self.system_prompt: str | None = system_prompt
         self.max_iterations: int = max_iterations

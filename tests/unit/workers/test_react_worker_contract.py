@@ -1,6 +1,7 @@
 """Contract tests for the post-RFC `ReActWorker.__init__` signature."""
 
 import inspect
+from uuid import UUID
 
 import pytest
 
@@ -16,7 +17,7 @@ def test_no_adapter_kwarg() -> None:
 
 @pytest.mark.parametrize(
     "kwarg",
-    ["name", "model", "tools", "system_prompt", "max_iterations"],
+    ["name", "model", "task_id", "sandbox_id", "tools", "system_prompt", "max_iterations"],
 )
 def test_all_kwargs_required_and_keyword_only(kwarg: str) -> None:
     sig = inspect.signature(ReActWorker.__init__)
@@ -32,9 +33,15 @@ def test_all_kwargs_required_and_keyword_only(kwarg: str) -> None:
 
 def test_construct_with_minimal_explicit_kwargs() -> None:
     """A ReActWorker can be built with explicit [] tools and None prompt."""
+    # reason: RFC 2026-04-22 §1 — base ``Worker.__init__`` now requires
+    # ``task_id`` and ``sandbox_id``; the registry factory supplies real
+    # values at execute time, test fixture supplies placeholders that are
+    # never dereferenced (execute() isn't called).
     worker = ReActWorker(
         name="unit",
         model=None,
+        task_id=UUID(int=1),
+        sandbox_id="test-sandbox",
         tools=[],
         system_prompt=None,
         max_iterations=1,

@@ -27,6 +27,16 @@ runnable — not a catalog of registered implementations.
   - Reference workers that run across benchmarks live under
     `ergon_builtins/workers/baselines/`; benchmark-specific worker variants
     live alongside their benchmark.
+  - Registry shape: `WORKERS: dict[str, WorkerFactory]` where
+    `WorkerFactory = Callable[..., Worker]` and every entry is called with
+    `(name=..., model=..., task_id=..., sandbox_id=...)`. Plain subclasses
+    are referenced directly (`"stub-worker": StubWorker`) because base
+    `Worker.__init__` requires `task_id` / `sandbox_id` and every concrete
+    subclass forwards them through to `super().__init__`. Benchmark-specific
+    entries (`"minif2f-react"`, `"swebench-react"`) are small closures that
+    build a live toolkit from the sandbox and pass every ctor kwarg —
+    including the runtime identity kwargs — through to `ReActWorker(...)`.
+    The previous `_plain(cls)` shim has been removed (RFC 2026-04-22 §1).
   - Freeze status: additive.
   - Owner: worker author.
 
@@ -48,15 +58,16 @@ runnable — not a catalog of registered implementations.
   - Freeze status: stable API; adding a backend is additive.
 
 - ReAct toolkit composition.
-  - There is one concrete ReAct worker class — `ReActWorker` (slug `react-v1`)
-    — with a fully explicit construction contract:
-    `ReActWorker(name=..., model=..., tools=[...], system_prompt=...,
-    max_iterations=...)`. Every kwarg is required; no nullable-with-default
-    fallbacks hide sizing decisions. Benchmark-specific glue (the toolkit
-    itself, the system prompt, the iteration budget) is a
-    **factory-closure** concern. Registry entries such as `"minif2f-react"`
-    and `"swebench-react"` live in `registry_core.py` as small closures
-    that build the `list[Tool]` and pass every kwarg through to
+  - There is one concrete ReAct worker class — `ReActWorker` (slug `react-v1`,
+    not registered bare) — with a fully explicit construction contract:
+    `ReActWorker(name=..., model=..., task_id=..., sandbox_id=...,
+    tools=[...], system_prompt=..., max_iterations=...)`. Every kwarg is
+    required; no nullable-with-default fallbacks hide sizing decisions.
+    Benchmark-specific glue (the toolkit itself, the system prompt, the
+    iteration budget) is a **factory-closure** concern. Registry entries
+    such as `"minif2f-react"` and `"swebench-react"` live in
+    `registry_core.py` as small closures that build the `list[Tool]` and
+    pass every kwarg — including `task_id` and `sandbox_id` — through to
     `ReActWorker(...)`. There is no `BenchmarkAdapter` ABC, no
     `on_run_start`/`on_run_end` hooks, no `transform_output` seam.
   - Per-task environment setup (clone a repo, install deps, apply a

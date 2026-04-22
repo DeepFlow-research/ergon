@@ -66,7 +66,7 @@ async def create_experiment_run(
         run_id=run.id,
         definition_id=definition.definition_id,
     )
-    inngest_client.send_sync(
+    await inngest_client.send(
         inngest.Event(
             name=WorkflowStartedEvent.name,
             data=event.model_dump(mode="json"),

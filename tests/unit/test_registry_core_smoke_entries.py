@@ -21,9 +21,9 @@ from ergon_builtins.workers.stubs.canonical_smoke_worker import CanonicalSmokeWo
 
 
 def test_canonical_smoke_worker_registered() -> None:
-    """Post-RFC 2026-04-22: plain workers are wrapped in a `_plain(cls)` factory
-    closure, so the registry entry is a callable that builds a ``CanonicalSmokeWorker``
-    rather than the class itself. Verify it behaviorally."""
+    """Post-RFC 2026-04-22: ``_plain`` was dropped (base ``Worker.__init__``
+    now requires ``task_id`` / ``sandbox_id``), so the registry entry is
+    the bare class. Verify construction still works with registry kwargs."""
     factory = WORKERS["canonical-smoke"]
     worker = factory(
         name="canonical-smoke",

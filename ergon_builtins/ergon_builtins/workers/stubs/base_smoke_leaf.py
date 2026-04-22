@@ -8,6 +8,7 @@ runtime's persist_outputs step creates RunResource rows for them.
 
 from collections.abc import AsyncGenerator
 from typing import ClassVar
+from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
@@ -25,8 +26,15 @@ class BaseSmokeLeafWorker(Worker):
 
     subworker_cls: ClassVar[type[SmokeSubworker]]
 
-    def __init__(self, *, name: str, model: str | None) -> None:
-        super().__init__(name=name, model=model)
+    def __init__(
+        self,
+        *,
+        name: str,
+        model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
+    ) -> None:
+        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
         self._last_result: SubworkerResult | None = None
 
     async def execute(

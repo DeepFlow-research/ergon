@@ -12,8 +12,7 @@ from uuid import uuid4
 from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.registry import EVALUATORS, WORKERS
-from ergon_builtins.workers.baselines.stub_worker import StubWorker
-from ergon_core.api import Experiment, Worker
+from ergon_core.api import Experiment, Worker, WorkerSpec
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
@@ -107,12 +106,15 @@ async def test_full_lifecycle_with_evaluation():
 
     # ── Construct + Validate + Persist ──────────────────────────────
     benchmark = SmokeTestBenchmark(workflow="flat", task_count=2)
-    worker = StubWorker(name="test", model="openai:gpt-4o")
+    # reason: RFC 2026-04-22 §1 — ``Experiment`` holds ``WorkerSpec`` at
+    # config time; the live ``Worker`` is built per-task via the registry
+    # factory inside ``worker_execute`` (mirrored at Phase B below).
+    spec = WorkerSpec(worker_slug="stub-worker", name="test", model="openai:gpt-4o")
     rubric = StubRubric()
 
     experiment = Experiment.from_single_worker(
         benchmark=benchmark,
-        worker=worker,
+        worker=spec,
         evaluators={"default": rubric},
     )
     experiment.validate()
@@ -143,9 +145,15 @@ async def test_full_lifecycle_with_evaluation():
         )
         assert prepared.worker_type is not None
         worker_cls = WORKERS[prepared.worker_type]
+        # reason: RFC 2026-04-22 §1 — base ``Worker.__init__`` requires
+        # ``task_id`` / ``sandbox_id``; every registered subclass forwards
+        # them to ``super().__init__``. Mirror ``worker_execute.py`` so the
+        # test construction path stays isomorphic to the durable Inngest one.
         live_worker = worker_cls(
             name=prepared.assigned_worker_slug or "w",
             model=prepared.model_target,
+            task_id=task_desc.task_id,
+            sandbox_id="test-sandbox",
         )
         task_data = BenchmarkTask(
             task_slug=prepared.task_slug,

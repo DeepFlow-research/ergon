@@ -10,6 +10,7 @@ sandbox path without paying for cloud LLM calls.
 
 from collections.abc import AsyncGenerator
 from typing import ClassVar
+from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
@@ -57,8 +58,10 @@ class StubResearchRubricsWorker(Worker):
         *,
         name: str = "researchrubrics-stub",
         model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
     ) -> None:
-        super().__init__(name=name, model=model)
+        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
 
     async def execute(
         self,

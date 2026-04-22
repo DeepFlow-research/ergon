@@ -50,7 +50,14 @@ class TestResearcherWorker:
             ResearchRubricsResearcherWorker,
         )
 
-        worker = ResearchRubricsResearcherWorker(name="test-researcher", model=None)
+        # reason: RFC 2026-04-22 §1 — Worker base requires task_id /
+        # sandbox_id; execute() isn't called here so placeholders suffice.
+        worker = ResearchRubricsResearcherWorker(
+            name="test-researcher",
+            model=None,
+            task_id=uuid4(),
+            sandbox_id="test-sandbox",
+        )
         assert worker.type_slug == "researchrubrics-researcher"
         assert worker.tools == []
 
@@ -60,11 +67,13 @@ class TestResearcherWorker:
             ResearchRubricsResearcherWorker,
         )
 
+        context = _make_context()
         worker = ResearchRubricsResearcherWorker(
             name="test-researcher",
             model="openai:gpt-4o",
+            task_id=context.task_id,
+            sandbox_id=context.sandbox_id,
         )
-        context = _make_context()
         task = _make_task()
 
         # Mock the sandbox manager and super().execute()
@@ -121,7 +130,14 @@ class TestManagerWorker:
             ResearchRubricsManagerWorker,
         )
 
-        worker = ResearchRubricsManagerWorker(name="test-manager", model=None)
+        # reason: RFC 2026-04-22 §1 — Worker base requires task_id /
+        # sandbox_id; execute() isn't called here so placeholders suffice.
+        worker = ResearchRubricsManagerWorker(
+            name="test-manager",
+            model=None,
+            task_id=uuid4(),
+            sandbox_id="test-sandbox",
+        )
         assert worker.type_slug == "researchrubrics-manager"
         assert worker.tools == []
 
@@ -131,11 +147,13 @@ class TestManagerWorker:
             ResearchRubricsManagerWorker,
         )
 
+        context = _make_context(with_node_id=False)
         worker = ResearchRubricsManagerWorker(
             name="test-manager",
             model="openai:gpt-4o",
+            task_id=context.task_id,
+            sandbox_id=context.sandbox_id,
         )
-        context = _make_context(with_node_id=False)
         task = _make_task()
 
         with pytest.raises(RuntimeError, match="requires WorkerContext.node_id"):
@@ -148,11 +166,13 @@ class TestManagerWorker:
             ResearchRubricsManagerWorker,
         )
 
+        context = _make_context(with_node_id=True)
         worker = ResearchRubricsManagerWorker(
             name="test-manager",
             model="openai:gpt-4o",
+            task_id=context.task_id,
+            sandbox_id=context.sandbox_id,
         )
-        context = _make_context(with_node_id=True)
         task = _make_task()
 
         with patch(

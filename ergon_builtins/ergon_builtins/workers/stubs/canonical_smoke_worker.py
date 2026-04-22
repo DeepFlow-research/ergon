@@ -16,6 +16,7 @@ composition binding `smoke-leaf`. The worker calls plan_subtasks directly
 """
 
 from collections.abc import AsyncGenerator
+from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TextPart
@@ -76,8 +77,15 @@ class CanonicalSmokeWorker(Worker):
 
     type_slug = "canonical-smoke"
 
-    def __init__(self, *, name: str = "canonical-smoke", model: str | None) -> None:
-        super().__init__(name=name, model=model)
+    def __init__(
+        self,
+        *,
+        name: str = "canonical-smoke",
+        model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
+    ) -> None:
+        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
 
     async def execute(
         self,

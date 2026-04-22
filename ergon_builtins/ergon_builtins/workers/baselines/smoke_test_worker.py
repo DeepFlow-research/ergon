@@ -6,6 +6,7 @@ can later verify.
 """
 
 from collections.abc import AsyncGenerator
+from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
@@ -18,8 +19,15 @@ MARKER_CONTENT = "smoke-test-marker"
 class SmokeTestWorker(Worker):
     type_slug = "smoke-test-worker"
 
-    def __init__(self, *, name: str = "smoke-test", model: str | None) -> None:
-        super().__init__(name=name, model=model)
+    def __init__(
+        self,
+        *,
+        name: str = "smoke-test",
+        model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
+    ) -> None:
+        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
 
     async def execute(
         self,

@@ -12,6 +12,7 @@ the RL training loop.
 import random
 from collections.abc import AsyncGenerator
 from typing import cast
+from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import (
@@ -30,8 +31,15 @@ from ergon_core.api.generation import (
 class TrainingStubWorker(Worker):
     type_slug = "training-stub"
 
-    def __init__(self, *, name: str = "training-stub", model: str | None) -> None:
-        super().__init__(name=name, model=model)
+    def __init__(
+        self,
+        *,
+        name: str = "training-stub",
+        model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
+    ) -> None:
+        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
 
     async def execute(
         self,

@@ -213,7 +213,14 @@ def test_get_output_reads_last_turn(session: Session):
         async def execute(self, task, *, context):
             yield  # type: ignore[misc]
 
-    worker = _TestWorker(name="test", model=None)
+    # reason: RFC 2026-04-22 §1 — Worker base requires task_id / sandbox_id;
+    # mirror the same identity used by the execution context.
+    worker = _TestWorker(
+        name="test",
+        model=None,
+        task_id=task_ids[0],
+        sandbox_id="",
+    )
     ctx = WorkerContext(
         run_id=run_id,
         task_id=task_ids[0],

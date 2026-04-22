@@ -32,10 +32,19 @@ class Worker(ABC):
         *,
         name: str,
         model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
+        # reason: RFC 2026-04-22 §1 — ``Worker`` is execution-ready only;
+        # ``task_id`` / ``sandbox_id`` are required so every concrete worker
+        # has the identity it needs at execute time. Config-time composition
+        # uses ``WorkerSpec`` (ergon_core.api.worker_spec) which carries the
+        # descriptor-only fields and never constructs a ``Worker`` directly.
         self.name = name
         self.model = model
+        self.task_id = task_id
+        self.sandbox_id = sandbox_id
         self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
         self._turn_repo = GenerationTurnRepository()
 
