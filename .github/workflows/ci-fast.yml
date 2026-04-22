@@ -93,10 +93,26 @@ jobs:
   integration-tests:
     name: "Integration tests (Python)"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     needs: lint-and-type-check
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start CI stack
+        run: docker compose -f docker-compose.ci.yml up -d --build --wait
+        timeout-minutes: 10
+
+      - name: Wait for Inngest sync
+        run: |
+          echo "Waiting for Inngest to sync functions..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8289/v1/events/test > /dev/null 2>&1; then
+              echo "Inngest dev server responding"
+              break
+            fi
+            sleep 2
+          done
+          sleep 5
 
       - uses: astral-sh/setup-uv@v4
         with:
@@ -106,5 +122,16 @@ jobs:
 
       - name: Run integration tests
         env:
-          ERGON_DATABASE_URL: "sqlite:///test_integration.db"
-        run: uv run pytest tests/integration -v --timeout=120
+          ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
+          INNGEST_API_BASE_URL: http://localhost:8289
+          INNGEST_DEV: "1"
+          INNGEST_EVENT_KEY: dev
+        run: uv run pytest tests/integration -v --timeout=300
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.ci.yml logs api --tail 200
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down -v

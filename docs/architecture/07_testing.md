@@ -18,9 +18,14 @@ Three tiers, separated by filesystem path (not pytest markers):
 - **Fast tier** — in-memory SQLite, direct service-class calls, no Inngest,
   no Docker. Covers graph propagation, context assembly, repository
   behavior, RL extraction, state-machine scenarios, and pure-logic
-  helpers. Split today between `tests/state/` (unit-ish + service) and
-  `tests/integration/` (same stack plus a stub worker through the
-  pipeline).
+  helpers. Lives at `tests/state/` today; `tests/unit/` sits alongside
+  it for pure-logic tests (no DB, no fixtures).
+- **Integration tier** (`tests/integration/`) — real Postgres + real
+  Inngest dev server via the `docker-compose.ci.yml` stack. Tests drive
+  the production event seam (`inngest_client.send(...)`), then block on
+  durable Inngest processing, then assert terminal state via ORM reads.
+  Direct service-class calls that bypass the Inngest layer are banned in
+  this tier.
 - **E2E tier** (`tests/e2e/`) — full Docker stack: Postgres, Inngest dev
   server, FastAPI app. `StubWorker` + `StubRubric` by default; real E2B
   enabled on `feature/*` branches.
@@ -34,8 +39,9 @@ gate and the CI workflow both dispatch by directory.
 
 | Tier | Location | Infra |
 |------|----------|-------|
+| Fast — pure logic | `tests/unit/` | None — no I/O, no fixtures |
 | Fast — graph/service | `tests/state/` | SQLite, no Inngest |
-| Fast — stub-worker pipeline | `tests/integration/` | SQLite, no Inngest |
+| Integration — stub-worker pipeline | `tests/integration/` | Postgres + Inngest dev server (docker-compose.ci.yml) |
 | E2E | `tests/e2e/` | Docker + Inngest + optional E2B |
 | Frontend | `ergon-dashboard/tests/e2e/` | Playwright (not in CI) |
 | real-LLM | `tests/real_llm/` | Docker + Inngest + Postgres + Playwright; opt-in via `ERGON_REAL_LLM=1` + `OPENROUTER_API_KEY`; manual dispatch only (not in CI) |
@@ -74,6 +80,14 @@ CI mirrors it for the fast tier; the e2e workflow runs on
   If it needs Docker, Postgres, or an Inngest runtime, it does not belong
   in the fast tier.
 - Tier boundaries are filesystem paths. No pytest markers.
+- **Integration tests MUST drive through Inngest events.** Direct
+  service-class calls that bypass the event seam are banned in
+  `tests/integration/`. Tests use `inngest_client.send(...)` (typically
+  indirectly via `Experiment.run()` → `create_experiment_run`), wait for
+  Inngest to durably process, then assert on ORM state. A helper class
+  that wraps "call the same service the Inngest fn would call" is the
+  anti-pattern this invariant closes — it yielded green-theatre signal
+  because the event wiring itself was never exercised.
 - State tests do not read `RunTaskStateEvent` (deprecated). Assertions go
   through `RunGraphMutation` or `RunGraphNode.status`.
 - State tests assert against service-class return values or graph
@@ -108,10 +122,17 @@ CI mirrors it for the fast tier; the e2e workflow runs on
 - **Pushing a Postgres-requiring test into the fast tier.** Breaks the
   speed guarantee the tier is built around.
 - **Reading `RunTaskStateEvent` from any test.** Deprecated table.
-- **Fast-tier state tests that skip Inngest when production does not.**
-  This is the root cause motivating the posture-reset follow-up: a green
-  test that bypasses the production event path claims correctness it
-  cannot support.
+- **Integration-tier tests that skip Inngest when production does not.**
+  _Resolved for `tests/integration/` as of the posture-reset landing_:
+  the former `test_full_lifecycle.py` / `test_full_lifecycle_with_eval.py`
+  variants that called service classes directly (with an
+  `InProcessCriterionExecutor` stand-in for `step.run`) have been
+  rewritten to dispatch through `Experiment.run()` →
+  `inngest_client.send(...)` and assert terminal state via ORM reads.
+  New integration tests must follow the same pattern. The same
+  anti-pattern historically applied to `tests/state/`; the larger
+  migration of those files to real Postgres + Inngest is tracked by
+  `docs/rfcs/active/2026-04-18-testing-posture-reset.md`.
 - **Mocking the LLM in e2e.** Defeats the purpose of the tier.
 
 ## 7. Follow-ups
@@ -138,7 +159,15 @@ Paired shifts under the same planning arc:
 
 Tracking:
 
-- `docs/rfcs/active/2026-04-18-testing-posture-reset.md`
+- `docs/rfcs/active/2026-04-18-testing-posture-reset.md` — **partially
+  resolved.** Variant A′ has landed for `tests/integration/`: the two
+  lifecycle smokes (`test_full_lifecycle.py`,
+  `test_full_lifecycle_with_eval.py`) now drive through the real Inngest
+  dev server + real Postgres via `Experiment.run()`, and the CI
+  `integration-tests` job brings up `docker-compose.ci.yml` before
+  running them. The broader migration of `tests/state/` → real-infra
+  integration (30+ graph files) is still outstanding and tracked by the
+  same RFC.
 - `docs/rfcs/active/2026-04-18-fixed-delegation-stub-worker.md`
 - `docs/rfcs/active/2026-04-18-test-harness-endpoints.md`
 - `docs/rfcs/active/2026-04-18-dashboard-event-wiring-enforcement.md`
