@@ -4,6 +4,8 @@ The env smoke rubrics wrap env-specific SmokeCriterionBase subclasses --
 they are registered under "<env>-smoke-rubric" slugs in EVALUATORS.
 """
 
+from uuid import uuid4
+
 from ergon_builtins.benchmarks.minif2f.smoke_rubric import MiniF2FSmokeRubric
 from ergon_builtins.benchmarks.researchrubrics.smoke_rubric import (
     ResearchRubricsSmokeRubric,
@@ -19,7 +21,17 @@ from ergon_builtins.workers.stubs.canonical_smoke_worker import CanonicalSmokeWo
 
 
 def test_canonical_smoke_worker_registered() -> None:
-    assert WORKERS["canonical-smoke"] is CanonicalSmokeWorker
+    """Post-RFC 2026-04-22: plain workers are wrapped in a `_plain(cls)` factory
+    closure, so the registry entry is a callable that builds a ``CanonicalSmokeWorker``
+    rather than the class itself. Verify it behaviorally."""
+    factory = WORKERS["canonical-smoke"]
+    worker = factory(
+        name="canonical-smoke",
+        model=None,
+        task_id=uuid4(),
+        sandbox_id="sbx-test",
+    )
+    assert isinstance(worker, CanonicalSmokeWorker)
 
 
 def test_env_smoke_rubrics_registered() -> None:
