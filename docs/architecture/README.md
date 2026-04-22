@@ -86,7 +86,7 @@ Cross-cutting concerns that span layers live in [`cross_cutting/`](cross_cutting
 
 | File | Scope |
 |------|-------|
-| [`cross_cutting/artifacts.md`](cross_cutting/artifacts.md) | Worker→criterion artifact handoff (currently broken; RFCs in flight). |
+| [`cross_cutting/artifacts.md`](cross_cutting/artifacts.md) | Worker→criterion artifact handoff via `SandboxResourcePublisher` + `CriterionRuntime.read_resource`. |
 | [`cross_cutting/sandbox_lifecycle.md`](cross_cutting/sandbox_lifecycle.md) | Per-task default, reconnect, teardown timing. |
 | [`cross_cutting/error_propagation.md`](cross_cutting/error_propagation.md) | Failure semantics, cancel cascade, fractal-OS semantics. |
 

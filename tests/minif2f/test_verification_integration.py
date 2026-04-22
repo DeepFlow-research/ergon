@@ -30,6 +30,7 @@ from ergon_core.core.runtime.evaluation.criterion_runtime import (
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
 
+
 def _require_setup() -> None:
     if not os.environ.get("E2B_API_KEY"):
         pytest.skip("E2B_API_KEY not set — skipping live sandbox test")

@@ -299,12 +299,13 @@ within the constraints the invariants below impose.
   keeps growing, the LLM-judge helper is a candidate for extraction into a
   mixin so the Protocol stays focused on sandbox and resource I/O.
 - **Artifact handoff between worker and evaluator** — see
-  `docs/architecture/cross_cutting/artifacts.md`. Today worker artifacts drop
-  at the Inngest seam and evaluators reinvent retrieval ad-hoc. The canonical
-  path will be `SandboxResourcePublisher` on the worker side and a
-  `read_resource` accessor on the evaluator side. Until that lands, treat
-  artifact retrieval as unstable and keep benchmark-specific retrieval code
-  local to the benchmark package.
+  `docs/architecture/cross_cutting/artifacts.md`. The canonical path is
+  `SandboxResourcePublisher` on the worker side (triggered by writing to
+  `/workspace/final_output/`) and `CriterionRuntime.read_resource` /
+  `get_all_files_for_task` on the evaluator side; the old `WorkerOutput.
+  artifacts` escape hatch was removed in RFC 2026-04-22. Follow-up work:
+  inventory any remaining benchmark-local retrieval code and move it behind
+  the runtime's read surface.
 
 ## code map
 

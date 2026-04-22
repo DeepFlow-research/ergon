@@ -162,12 +162,10 @@ promotes into the runtime's public contract.
   `read_resource(name)` / `list_resources()` to `CriterionRuntime`. This is
   the RFC that closes the seam described above; once it lands, the
   "intended" control flow is the actual one.
-- Proposed future: lint rule forbidding `artifacts: dict[str, Any]` style
-  assembly in workers; force everything through the publisher. Mechanical
-  check at CI time, since the failure mode is otherwise silent.
-- Backfill audit. Inventory the existing workers that still return a dict
-  of artifacts; migrate each to publish + named read. Track in the RFC's
-  rollout checklist.
+- Proposed future: lint rule forbidding new `dict[str, Any]` bag-of-bytes
+  fields on `WorkerOutput` (or sibling result models). The field removal
+  closes the current offenders but nothing stops a future PR from
+  reintroducing the pattern under a new name.
 - Retention policy. `ERGON_BLOB_ROOT` has no documented GC. Decide on a
   per-run TTL and whether blobs survive task deletion; wire into the
   RunResource lifecycle.
