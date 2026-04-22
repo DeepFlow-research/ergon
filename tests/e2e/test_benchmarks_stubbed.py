@@ -52,17 +52,17 @@ class TestStubbedBenchmarks:
     """Benchmarks with stub-worker + stub-rubric — no external API keys needed."""
 
     @pytest.mark.parametrize("slug,worker,evaluator,cohort", STUB_CONFIGS)
-    def test_run_completes(self, slug, worker, evaluator, cohort):
-        result = run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
+    def test_run_completes(self, benchmarked, slug, worker, evaluator, cohort):
+        result = benchmarked(slug, worker=worker, evaluator=evaluator, cohort=cohort)
         assert result.returncode == 0, (
             f"CLI exited {result.returncode}:\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
         assert "Status:     completed" in result.stdout
 
     @pytest.mark.parametrize("slug,worker,evaluator,cohort", STUB_CONFIGS)
-    def test_single_execution_per_task(self, slug, worker, evaluator, cohort):
+    def test_single_execution_per_task(self, benchmarked, slug, worker, evaluator, cohort):
         """Each task should have exactly one execution record."""
-        run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
+        benchmarked(slug, worker=worker, evaluator=evaluator, cohort=cohort)
 
         with _get_session() as session:
             latest_run = session.exec(
@@ -85,9 +85,9 @@ class TestStubbedBenchmarks:
                 assert ex.completed_at is not None
 
     @pytest.mark.parametrize("slug,worker,evaluator,cohort", STUB_CONFIGS)
-    def test_evaluations_exist(self, slug, worker, evaluator, cohort):
+    def test_evaluations_exist(self, benchmarked, slug, worker, evaluator, cohort):
         """Each task should have evaluation records with scores."""
-        run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
+        benchmarked(slug, worker=worker, evaluator=evaluator, cohort=cohort)
 
         with _get_session() as session:
             latest_run = session.exec(
@@ -108,8 +108,8 @@ class TestStubbedBenchmarks:
                 assert ev.score is not None
 
     @pytest.mark.parametrize("slug,worker,evaluator,cohort", STUB_CONFIGS)
-    def test_summary_json_populated(self, slug, worker, evaluator, cohort):
-        run_benchmark(slug, worker=worker, evaluator=evaluator, cohort=cohort)
+    def test_summary_json_populated(self, benchmarked, slug, worker, evaluator, cohort):
+        benchmarked(slug, worker=worker, evaluator=evaluator, cohort=cohort)
 
         with _get_session() as session:
             latest_run = session.exec(
@@ -123,9 +123,9 @@ class TestStubbedBenchmarks:
             assert "normalized_score" in summary
             assert "evaluators_count" in summary
 
-    def test_cohort_created(self):
+    def test_cohort_created(self, benchmarked):
         """At least one cohort should exist after running benchmarks."""
-        run_benchmark(
+        benchmarked(
             "smoke-test", worker="stub-worker", evaluator="stub-rubric", cohort="ci-cohort-check"
         )
 

@@ -12,6 +12,7 @@ from typing import ClassVar
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
+from ergon_core.core.runtime.evaluation.criterion_runtime import ResourceNotFoundError
 from pydantic import BaseModel
 
 from ergon_builtins.benchmarks.minif2f.constants import LEAN_CMD, LEAN_CMD_PREFIX
@@ -116,21 +117,10 @@ class ProofVerificationCriterion(Criterion):
         Reads from the task-scoped run-resource named
         ``final_solution.lean`` -- published by
         ``SandboxResourcePublisher.sync()`` after the worker writes to
-        ``/workspace/final_output/final_solution.lean``.  The pre-RFC
-        path through ``worker_result.artifacts`` is not used:
-        ``artifacts`` is dropped at the Inngest ``worker_execute``
-        boundary, so reading from it was always dead code masked by the
-        now-deleted ``MiniF2FAdapter.transform_output``.
+        ``/workspace/final_output/final_solution.lean``.
         """
         if context.runtime is None:
             return None
-        # reason: ResourceNotFoundError is a ``core`` symbol and importing
-        # it at module scope would pull runtime internals into a builtins
-        # package. Lazy-import at the single call site.
-        from ergon_core.core.runtime.evaluation.criterion_runtime import (
-            ResourceNotFoundError,
-        )
-
         try:
             raw = await context.runtime.read_resource("final_solution.lean")
         except ResourceNotFoundError:

@@ -30,6 +30,7 @@ services:
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
       - OTEL_TRACES_ENABLED=false
       - OTEL_SERVICE_NAME=ergon-core
+      - ENABLE_TEST_HARNESS=1
     depends_on:
       postgres:
         condition: service_healthy

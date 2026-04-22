@@ -17,20 +17,6 @@ class WorkerOutput(BaseModel):
 
     output: str
     success: bool = True
-    artifacts: dict[str, Any] = Field(  # slopcop: ignore[no-typing-any]
-        default_factory=dict,
-        description=(
-            "DEPRECATED. This field is NOT carried across the durable "
-            "worker→evaluator boundary (dropped at "
-            "inngest/worker_execute.py). Do not use for files or data "
-            "the criterion needs to read. Files → write to "
-            "/workspace/final_output/ (auto-published as RunResources by "
-            "SandboxResourcePublisher.sync). Computed artifacts → have "
-            "the criterion run commands in the sandbox via "
-            "CriterionRuntime.run_command. "
-            "Slated for removal once no in-tree worker writes to it."
-        ),
-    )
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
 

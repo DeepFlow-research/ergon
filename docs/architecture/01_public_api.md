@@ -49,9 +49,11 @@ owned by that module.
   prepared task/sandbox identity. Workers MUST NOT own per-task
   environment setup — setup belongs to the sandbox manager (see
   `BaseSandboxManager._install_dependencies`). Workers MUST NOT return files
-  or blobs through `WorkerOutput.artifacts` — the runtime serialization layer
-  drops that field at the Inngest `worker_execute` boundary. Files → write to
-  `/workspace/final_output/` (auto-published as `RunResource` rows).
+  or blobs through `WorkerOutput` — the non-durable `artifacts` field was
+  removed (RFC 2026-04-22); nothing crosses the Inngest `worker_execute`
+  boundary except the persisted `WorkerOutput` (`output`, `success`,
+  `metadata`). Files → write to `/workspace/final_output/` (auto-published
+  as `RunResource` rows).
 - **`WorkerSpec`** — frozen Pydantic model, the config-time descriptor of a
   worker binding. Fields: `worker_slug: str`, `name: str`, `model: str | None`.
   An `Experiment` holds `Mapping[str, WorkerSpec]`, not live `Worker`
@@ -188,11 +190,13 @@ within the constraints the invariants below impose.
   reintroduce `output_text` as a synonym; the rename propagates into
   dashboard readers and CLI surfaces in the same PR that renames the column.
   (The code-side rename lands later in this same PR.)
-- **`WorkerOutput.artifacts` is non-durable.** The field is dropped at the
-  Inngest `worker_execute` serialization boundary and is not a channel to
-  criteria. File-shaped artifacts travel via the sandbox → `RunResource`
-  path (see `cross_cutting/artifacts.md`); computed artifacts are produced
-  by the criterion itself via `CriterionRuntime.run_command`.
+- **`WorkerOutput` carries `output`, `success`, and `metadata` only.** The
+  former `artifacts: dict[str, Any]` field was removed in RFC 2026-04-22:
+  nothing carried it across the Inngest `worker_execute` serialization
+  boundary, and every live criterion now reads file-shaped artifacts via
+  the sandbox → `RunResource` path (see `cross_cutting/artifacts.md`) or
+  produces computed artifacts via `CriterionRuntime.run_command`. Adding a
+  new mutable-bag-of-bytes field to `WorkerOutput` is a regression.
 
 ## extension points
 
@@ -277,11 +281,13 @@ within the constraints the invariants below impose.
   sizing decisions in a shared default and mask per-benchmark intent.
   Concrete workers declare their required construction contract; factories
   pass every kwarg explicitly.
-- **Reading files via `WorkerOutput.artifacts`.** The field is dropped at
-  the Inngest serialization boundary. Criteria read files via
+- **Reading or writing `WorkerOutput.artifacts`.** The field no longer
+  exists (removed in RFC 2026-04-22). Criteria read files via
   `CriterionRuntime.read_resource(name)` or
   `CriterionRuntime.get_all_files_for_task()`; workers publish by writing
-  to `/workspace/final_output/`.
+  to `/workspace/final_output/`. Reintroducing an ad-hoc dict-typed bag
+  on `WorkerOutput` is an anti-pattern — it can't cross the Inngest
+  serialization boundary and hides the real publish/read contract.
 
 ## follow-ups
 

@@ -1,9 +1,9 @@
 """SWE-Bench criterion computes its own patch via runtime.run_command.
 
-The pre-RFC-2026-04-22 path read ``worker.artifacts["patch"]`` with a
-fallback to ``worker.output``. Neither carries across the durable
-Inngest boundary, so the criterion must extract the patch itself by
-running ``git add -A && git diff HEAD`` against the task sandbox.
+The criterion extracts the patch itself by running
+``git add -A && git diff HEAD`` against the task sandbox — neither the
+deprecated (and now removed) ``WorkerOutput.artifacts`` nor ``worker.output``
+are read for the patch payload.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -33,7 +33,7 @@ def _fake_run(cmd: str, timeout: int = 30) -> CommandResult:
 async def test_criterion_computes_patch_via_run_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Criterion must NOT read worker.artifacts or worker.output for the patch."""
+    """Criterion must NOT read worker.output for the patch."""
     # reason: RFC 2026-04-22 §3 — the criterion drives the harness entirely
     # through Protocol ops (``run_command``, ``write_file``); no reach
     # past the DI surface to ``sandbox_manager.get_sandbox`` anymore.
@@ -55,8 +55,8 @@ async def test_criterion_computes_patch_via_run_command(
         "hints_text": "",
     }
 
-    # Worker produces NO artifacts and empty output; criterion must still
-    # derive the patch from the sandbox.
+    # Worker produces empty output; criterion must still derive the patch
+    # from the sandbox.
     run_id = uuid4()
     context = EvaluationContext(
         run_id=run_id,
@@ -134,10 +134,7 @@ async def test_criterion_short_circuits_on_empty_patch(
             description="d",
             task_payload=payload,
         ),
-        # artifacts["patch"] is populated but must be ignored now.
-        worker_result=WorkerOutput(
-            output="", success=True, artifacts={"patch": "diff --git a/x b/x\n"}
-        ),
+        worker_result=WorkerOutput(output="", success=True),
         sandbox_id="sbx-abc",
         runtime=runtime,
     )

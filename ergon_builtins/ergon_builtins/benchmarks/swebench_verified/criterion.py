@@ -39,9 +39,9 @@ PATCH_EXTRACT_TIMEOUT_SEC = 120
 async def _extract_patch_via_runtime(context: EvaluationContext) -> str:
     """Compute ``git add -A && git diff HEAD`` via the criterion runtime.
 
-    The criterion owns patch extraction now -- ``WorkerOutput.artifacts``
-    is dropped at the Inngest ``worker_execute`` boundary, so the only
-    reliable source of truth is the sandbox working tree.
+    The criterion owns patch extraction; the sandbox working tree is the
+    only reliable source of truth (nothing crosses the durable Inngest
+    ``worker_execute`` boundary).
     """
     if context.runtime is None:
         raise RuntimeError(

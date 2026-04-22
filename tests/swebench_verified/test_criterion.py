@@ -71,7 +71,6 @@ def _mock_runtime(
 def _ctx(
     *,
     output: str = "PATCH",
-    artifacts: dict[str, object] | None = None,
     runtime: object | None = None,
 ) -> EvaluationContext:
     run_id = uuid4()
@@ -80,11 +79,7 @@ def _ctx(
         task_id=uuid4(),
         execution_id=uuid4(),
         task=_task(),
-        worker_result=WorkerOutput(
-            output=output,
-            success=True,
-            artifacts=artifacts if artifacts is not None else {"patch": output},
-        ),
+        worker_result=WorkerOutput(output=output, success=True),
         runtime=runtime,
     )
 
@@ -94,7 +89,7 @@ async def test_criterion_returns_score_0_for_empty_patch() -> None:
     """When ``git diff HEAD`` returns an empty tree, score is 0."""
     runtime = _mock_runtime(patch_text="")
     crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
-    ctx = _ctx(output="", artifacts={"patch": ""}, runtime=runtime)
+    ctx = _ctx(output="", runtime=runtime)
     result = await crit.evaluate(ctx)
     assert result.score == 0.0
     assert result.passed is False

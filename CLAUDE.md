@@ -65,6 +65,12 @@ pnpm run test:be:e2e    # E2E tests (requires Docker stack)
 - `ty` for type checking (not mypy)
 - New workspace members: add paths in `package.json` and `.github/workflows/ci-fast.yml`
 - `slopcop`: `no-print` is ignored in CLI, infra, rendering, tests, and scripts (see `[tool.slopcop]` in `pyproject.toml`)
+- **Lazy imports are banned.** The only acceptable reason to defer an import
+  to call-site scope is a genuine circular import that cannot be resolved by
+  restructuring modules. "Keeping the import graph narrow", "faster startup",
+  "tests can monkeypatch", and "pulls in heavy deps" are NOT acceptable
+  reasons — restructure the code instead. Any lazy import must be accompanied
+  by a `# reason:` comment that cites the specific cycle it breaks.
 
 ## Architecture docs (canonical reference)
 

@@ -4,12 +4,12 @@
 
 Workers produce artifacts (files, diffs, reports) that evaluators need to
 read. The canonical path for this handoff is `SandboxResourcePublisher`, a
-content-addressed blob store. Today the seam is PARTIALLY BROKEN — workers
-write artifacts in-process as an `artifacts: dict`, which gets dropped at
-the Inngest serialization boundary, forcing evaluators to either re-read
-from the sandbox (which may be torn down) or reinvent retrieval ad-hoc.
-This doc captures the intended canonical path, enumerates the live
-offenders, and marks the RFC that closes the gap.
+content-addressed blob store. The legacy `WorkerOutput.artifacts: dict`
+escape-hatch was removed in RFC 2026-04-22 — it never survived the Inngest
+`worker_execute` serialization boundary, and its presence masked the real
+publish/read contract. Today every live criterion reads files via
+`CriterionRuntime.read_resource(name)` / `get_all_files_for_task()` or
+produces computed artifacts through `CriterionRuntime.run_command(...)`.
 
 ## Core abstractions
 
@@ -71,20 +71,22 @@ and the read (evaluator does a keyed lookup). Neither depends on the
 sandbox still existing, and neither depends on the in-process memory of the
 worker. That is the whole point.
 
-## Current state (what is actually broken)
+## Current state
 
-- Workers accumulate an in-process `artifacts: dict[str, Any]` that gets
-  dropped at the Inngest seam when the task-completion event is serialized.
-  The dict never crosses the boundary.
-- Evaluators that need artifacts fall back to one of two paths:
-  1. Direct `sandbox.files.read(...)` — fails if the sandbox is torn down
-     before the evaluator runs. In practice this is a race: fast evaluators
-     win, slow ones silently fail.
-  2. Direct DB queries on `RunResource` plus direct blob-store reads — this
-     is correct but inlined into every evaluator that needs it, so there is
-     no uniform retrieval layer.
-- No single enforcement that artifacts go through the publisher. Nothing
-  stops a worker from returning a dict and hoping.
+- `WorkerOutput.artifacts` no longer exists on the public surface; the
+  serializable worker result carries `output`, `success`, and `metadata`
+  only (see `ergon_core/api/results.py`). Workers that need to hand files
+  off to an evaluator MUST write to `/workspace/final_output/` and let
+  `SandboxResourcePublisher.sync()` do the work.
+- Legacy fallback paths that evaluators used to take (direct
+  `sandbox.files.read(...)` or DB-inline reads of `RunResource`) are
+  closed. Every in-tree criterion now reads via
+  `CriterionRuntime.read_resource(name)` /
+  `CriterionRuntime.get_all_files_for_task()` or computes artifacts in
+  the sandbox via `CriterionRuntime.run_command(...)`.
+- Enforcement is architectural: there is no `.artifacts` field to
+  populate, so the failure mode is a type error at construction, not a
+  silent data loss at the Inngest seam.
 
 ## Example of the correct pattern (reference)
 
@@ -95,13 +97,13 @@ promotes into the runtime's public contract.
 
 ## Invariants (intended)
 
-- `WorkerOutput.artifacts` is a non-durable field. It is dropped at the
-  Inngest `worker_execute` step boundary and is not a channel to criteria.
-  File-shaped artifacts are published via `SandboxResourcePublisher.sync()`
-  from `/workspace/final_output/`; criteria read them via
-  `CriterionRuntime.read_resource(name)` or `get_all_files_for_task()`.
-  Computed artifacts (e.g. `git diff`) are produced by the criterion
-  itself via `CriterionRuntime.run_command(...)`.
+- `WorkerOutput` MUST NOT grow a dict-typed bag-of-bytes field like the
+  old `artifacts` escape hatch. File-shaped artifacts are published via
+  `SandboxResourcePublisher.sync()` from `/workspace/final_output/`;
+  criteria read them via `CriterionRuntime.read_resource(name)` or
+  `get_all_files_for_task()`. Computed artifacts (e.g. `git diff`) are
+  produced by the criterion itself via
+  `CriterionRuntime.run_command(...)`.
 - Artifacts from a worker that an evaluator needs MUST go through
   `SandboxResourcePublisher`. Enforced (once RFC lands) by: the only
   evaluator read path is `runtime.read_resource(name)`, which only returns
@@ -135,11 +137,12 @@ promotes into the runtime's public contract.
 
 ## Anti-patterns (with offenders)
 
-- **Accumulating an `artifacts: dict` in the worker and hoping it crosses
-  the Inngest seam.** Currently the de-facto pattern in some workers. It
-  does NOT cross. The dict is lost. Audit every worker that builds a
-  dict-typed `artifacts` field on the return value; each is a silent data
-  loss.
+- **Reintroducing an `artifacts: dict`-style field on `WorkerOutput`.**
+  Removed in RFC 2026-04-22 for a reason: the dict did not cross the
+  Inngest `worker_execute` serialization boundary, so the data loss was
+  silent. Adding a new bag-of-bytes field relitigates that regression.
+  Publish via `SandboxResourcePublisher` and read via
+  `CriterionRuntime.read_resource` — that is the contract.
 - **Evaluator reading directly from the sandbox.** Only safe while the
   sandbox is alive. Criteria timing makes this a race. Use the publisher.
   Any call to `sandbox.files.read(...)` from inside an evaluator is suspect.

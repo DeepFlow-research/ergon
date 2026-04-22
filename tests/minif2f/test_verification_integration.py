@@ -12,7 +12,6 @@ on this machine).
 
 import json
 import os
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -30,9 +29,6 @@ from ergon_core.core.runtime.evaluation.criterion_runtime import (
     DefaultCriterionRuntime,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
-
-FIXTURE_PROOF = Path(__file__).parent.parent / "fixtures/minif2f/known_good_proof.lean"
-
 
 def _require_setup() -> None:
     if not os.environ.get("E2B_API_KEY"):
@@ -92,7 +88,6 @@ async def _setup_runtime(
 async def test_fixture_proof_verifies_to_score_1() -> None:
     _require_setup()
 
-    proof_code = FIXTURE_PROOF.read_text(encoding="utf-8")
     run_id = uuid4()
 
     mgr = MiniF2FSandboxManager()
@@ -101,7 +96,6 @@ async def test_fixture_proof_verifies_to_score_1() -> None:
         worker_output = WorkerOutput(
             output="",
             success=True,
-            artifacts={"final_solution.lean": proof_code},
         )
         eval_ctx = EvaluationContext(
             run_id=run_id,
@@ -130,13 +124,11 @@ async def test_fixture_proof_verifies_to_score_1() -> None:
 @pytest.mark.asyncio
 async def test_sorry_proof_scores_zero_without_sandbox() -> None:
     """Static rejection of 'sorry' should work even without a live sandbox."""
-    proof_code = "theorem foo : 1 = 1 := by sorry\n"
     run_id = uuid4()
 
     worker_output = WorkerOutput(
         output="",
         success=True,
-        artifacts={"final_solution.lean": proof_code},
     )
     eval_ctx = EvaluationContext(
         run_id=run_id,
