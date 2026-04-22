@@ -24,6 +24,8 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.providers.generation.model_resolution import resolve_model_target
 from ergon_core.core.providers.generation.pydantic_ai_format import extract_logprobs
 from ergon_core.core.rl import LOGPROB_SETTINGS
+
+from ergon_builtins.workers.baselines.adapters.base import BenchmarkAdapter
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
@@ -64,8 +66,15 @@ class _AgentOutput(BaseModel):
 class ReActWorker(Worker):
     """ReAct-style worker that delegates to a pydantic-ai Agent.
 
-    Yields ``GenerationTurn`` objects after the run completes.
-    Each yielded turn is persisted to PG by the runtime.
+    Yields ``GenerationTurn`` objects after the run completes. Each
+    yielded turn is persisted to PG by the runtime.
+
+    Benchmark-specific wiring (toolkit construction, per-task setup,
+    post-run artifact capture, output routing) is plugged in via a
+    :class:`BenchmarkAdapter`. Pass ``adapter=...`` at construction and
+    the worker will call the adapter's hooks around the ReAct loop.
+    With no adapter, the worker uses whatever ``tools``/``system_prompt``
+    were passed at construction and behaves as a plain ReAct loop.
     """
 
     type_slug = "react-v1"
@@ -77,12 +86,26 @@ class ReActWorker(Worker):
         model: str | None = None,
         tools: list[Any] | None = None,  # slopcop: ignore[no-typing-any]
         system_prompt: str | None = None,
-        max_iterations: int = 10,
+        max_iterations: int | None = None,
+        adapter: BenchmarkAdapter | None = None,
     ) -> None:
         super().__init__(name=name, model=model)
+        self._adapter = adapter
+        # Resolve defaults: explicit kwargs always win over adapter defaults,
+        # which win over the built-in defaults.
         self.tools: list[Any] = tools or []  # slopcop: ignore[no-typing-any]
-        self.system_prompt: str | None = system_prompt
-        self.max_iterations = max_iterations
+        if system_prompt is not None:
+            self.system_prompt: str | None = system_prompt
+        elif adapter is not None and adapter.system_prompt:
+            self.system_prompt = adapter.system_prompt
+        else:
+            self.system_prompt = None
+        if max_iterations is not None:
+            self.max_iterations = max_iterations
+        elif adapter is not None:
+            self.max_iterations = adapter.max_iterations
+        else:
+            self.max_iterations = 10
         self._seed_messages: list[ModelMessage] | None = None
 
     async def execute(
@@ -91,6 +114,22 @@ class ReActWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
+        if self._adapter is not None:
+            await self._adapter.on_run_start(task, context)
+            self.tools = await self._adapter.build_tools(task, context)
+
+        try:
+            async for turn in self._run_agent(task):
+                yield turn
+        finally:
+            if self._adapter is not None:
+                await self._adapter.on_run_end(task, context)
+
+    async def _run_agent(
+        self,
+        task: BenchmarkTask,
+    ) -> AsyncGenerator[GenerationTurn, None]:
+        """Run the underlying pydantic-ai agent and yield the turns it produced."""
         resolved = resolve_model_target(self.model)
 
         model_settings: dict[str, object] | None = None
@@ -133,6 +172,13 @@ class ReActWorker(Worker):
 
     def get_output(self, context: WorkerContext) -> WorkerOutput:
         """Extract the agent's text output from the last context event."""
+        base = self._base_output(context)
+        if self._adapter is not None:
+            return self._adapter.transform_output(context, base)
+        return base
+
+    def _base_output(self, context: WorkerContext) -> WorkerOutput:
+        """Build the non-adapter-transformed output from persisted events."""
         # reason: avoid circular import at module level
         from ergon_core.core.persistence.context.event_payloads import (
             AssistantTextPayload,

@@ -1,35 +1,23 @@
-"""SWE-Bench Verified ReAct worker with per-task setup + patch extraction.
+"""SWE-Bench Verified adapter for :class:`ReActWorker`.
 
-Thin subclass of :class:`ReActWorker` that:
-
-1. Fetches the live E2B sandbox from the :class:`SWEBenchSandboxManager`
-   singleton keyed by ``context.task_id``.
-2. Runs the per-instance ``setup_env_script`` and ``install_repo_script``
-   produced by ``swebench.harness.test_spec.make_test_spec`` inside that
-   sandbox before the ReAct loop starts.
-3. Builds a :class:`SWEBenchToolkit` against the live sandbox, publishes
-   its tools onto ``self.tools``, then delegates to ``super().execute``.
-4. After the loop finishes (even on failure/cancellation), extracts the
-   patch via ``git add -A && git diff HEAD`` from the workdir and stashes
-   it on ``self._patch``.
-5. Overrides ``get_output`` to route the patch through the ``output``
-   field so criteria downstream can read it even when the runtime drops
-   ``artifacts``.
+Drives the per-instance harness setup, exposes the bash + str_replace
+editor tools via :class:`SWEBenchToolkit`, and after the run extracts
+the patch with ``git add -A && git diff HEAD``. The patch is routed
+through both ``WorkerOutput.output`` and ``artifacts`` for the same
+reason as MiniF2F — the runtime drops ``artifacts`` before scoring.
 """
 
 import logging
 import shlex
-from collections.abc import AsyncGenerator
-from typing import Any, ClassVar
+from typing import Any
 
 from ergon_core.api import BenchmarkTask, WorkerContext, WorkerOutput
-from ergon_core.api.generation import GenerationTurn
 
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
-from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.workers.baselines.adapters.base import BenchmarkAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -90,63 +78,79 @@ def _payload_to_swebench_row(
     }
 
 
-class SWEBenchReActWorker(ReActWorker):
-    """ReAct worker wired to the SWE-Bench Verified toolkit + harness scripts."""
+class SWEBenchAdapter(BenchmarkAdapter):
+    """ReAct adapter for the SWE-Bench Verified benchmark."""
 
-    type_slug: ClassVar[str] = "swebench-react"
+    system_prompt = DEFAULT_SYSTEM_PROMPT
+    max_iterations = 50
 
-    def __init__(
-        self,
-        *,
-        name: str = "swebench-react",
-        model: str | None = None,
-        system_prompt: str | None = None,
-        max_iterations: int = 50,
-    ) -> None:
-        super().__init__(
-            name=name,
-            model=model,
-            tools=[],
-            system_prompt=system_prompt or DEFAULT_SYSTEM_PROMPT,
-            max_iterations=max_iterations,
-        )
+    def __init__(self, *, workdir: str = WORKDIR) -> None:
         self._sandbox: Any = None  # slopcop: ignore[no-typing-any]
-        self._workdir: str = WORKDIR
+        self._workdir = workdir
         self._patch: str | None = None
 
-    async def execute(
+    async def on_run_start(
         self,
         task: BenchmarkTask,
-        *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
+    ) -> None:
+        """Open the sandbox and run ``setup_env`` + ``install_repo`` scripts."""
         manager = SWEBenchSandboxManager()
         sandbox = manager.get_sandbox(context.task_id)
         if sandbox is None:
             raise RuntimeError(
-                f"SWEBenchReActWorker requires a live sandbox for task_id={context.task_id}; "
+                f"SWE-Bench adapter requires a live sandbox for task_id={context.task_id}; "
                 "none is registered on the SWEBenchSandboxManager singleton."
             )
         self._sandbox = sandbox
-
         await self._run_setup(task)
 
-        toolkit = SWEBenchToolkit(sandbox=sandbox, workdir=self._workdir)
-        self.tools = list(toolkit.get_tools())
+    async def build_tools(
+        self,
+        task: BenchmarkTask,
+        context: WorkerContext,
+    ) -> list[Any]:  # slopcop: ignore[no-typing-any]
+        if self._sandbox is None:
+            raise RuntimeError("build_tools called before on_run_start opened the sandbox")
+        toolkit = SWEBenchToolkit(sandbox=self._sandbox, workdir=self._workdir)
+        return list(toolkit.get_tools())
 
-        try:
-            async for turn in super().execute(task, context=context):
-                yield turn
-        finally:
-            # Capture the patch even if the base generator raised or was
-            # closed early — without this, evaluation would have no artifact
-            # to score against. The sandbox is still alive here; teardown
-            # happens after get_output() runs.
-            self._patch = await self._extract_patch()
-            logger.info(
-                "SWEBenchReActWorker captured patch: %d bytes",
-                len(self._patch or ""),
-            )
+    async def on_run_end(
+        self,
+        task: BenchmarkTask,
+        context: WorkerContext,
+    ) -> None:
+        # Capture the patch even if the ReAct loop raised or was closed
+        # early — without this, evaluation would have no artifact to score
+        # against. The sandbox is still alive here; teardown happens after
+        # get_output() runs.
+        self._patch = await self._extract_patch()
+        logger.info(
+            "SWE-Bench adapter captured patch: %d bytes",
+            len(self._patch or ""),
+        )
+
+    def transform_output(
+        self,
+        context: WorkerContext,
+        base: WorkerOutput,
+    ) -> WorkerOutput:
+        """Route the captured patch through both ``output`` and ``artifacts``.
+
+        The runtime's evaluator dispatch only carries ``execution.output_text``
+        forward — ``artifacts`` is dropped in some paths. So we ship the
+        patch as the output text itself (mirrors :class:`MiniF2FAdapter`).
+        """
+        patch = self._patch or ""
+        artifacts = dict(base.artifacts) if base.artifacts else {}
+        artifacts["patch"] = patch
+        return base.model_copy(
+            update={
+                "output": patch,
+                "success": bool(patch.strip()),
+                "artifacts": artifacts,
+            }
+        )
 
     async def _run_setup(self, task: BenchmarkTask) -> None:
         """Run setup_env + install_repo scripts from the swebench test-spec."""
@@ -170,7 +174,7 @@ class SWEBenchReActWorker(ReActWorker):
                 )
 
     async def _extract_patch(self) -> str:
-        """Return ``git diff HEAD`` from the workdir, or '' on failure."""
+        """Return ``git diff HEAD`` from the workdir, or ``''`` on failure."""
         if self._sandbox is None:
             return ""
         try:
@@ -189,23 +193,3 @@ class SWEBenchReActWorker(ReActWorker):
             )
             return ""
         return result.stdout or ""
-
-    def get_output(self, context: WorkerContext) -> WorkerOutput:
-        """Route the captured patch through both ``output`` and ``artifacts``.
-
-        The runtime's evaluator dispatch only carries ``execution.output_text``
-        forward into ``agent_reasoning`` — ``artifacts`` is dropped in some
-        paths. So we ship the patch as the output text itself (mirrors
-        ``MiniF2FReActWorker.get_output``).
-        """
-        base = super().get_output(context)
-        patch = self._patch or ""
-        artifacts = dict(base.artifacts) if base.artifacts else {}
-        artifacts["patch"] = patch
-        return base.model_copy(
-            update={
-                "output": patch,
-                "success": bool(patch.strip()),
-                "artifacts": artifacts,
-            }
-        )

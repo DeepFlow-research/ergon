@@ -15,7 +15,8 @@ from ergon_builtins.registry import (
     SANDBOX_TEMPLATES,
     WORKERS,
 )
-from ergon_builtins.workers.baselines.swebench_worker import SWEBenchReActWorker
+from ergon_builtins.workers.baselines.adapters.swebench import SWEBenchAdapter
+from ergon_builtins.workers.baselines.react_worker import ReActWorker
 
 FAKE_ROW = {
     "instance_id": "django__django-1",
@@ -34,7 +35,12 @@ FAKE_ROW = {
 
 def test_all_slugs_resolve_to_correct_classes() -> None:
     assert BENCHMARKS["swebench-verified"] is SweBenchVerifiedBenchmark
-    assert WORKERS["swebench-react"] is SWEBenchReActWorker
+    # The "swebench-react" registry entry is a factory that constructs a
+    # ReActWorker pre-bound to SWEBenchAdapter. Exercise the factory to
+    # confirm the wiring; the adapter owns all benchmark-specific behaviour.
+    worker = WORKERS["swebench-react"](name="w", model=None)
+    assert isinstance(worker, ReActWorker)
+    assert isinstance(worker._adapter, SWEBenchAdapter)
     assert EVALUATORS["swebench-rubric"] is SWEBenchRubric
     assert SANDBOX_MANAGERS["swebench-verified"] is SWEBenchSandboxManager
 

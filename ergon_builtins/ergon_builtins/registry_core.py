@@ -6,6 +6,7 @@ regardless of which optional extras are installed.
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from ergon_core.api import Benchmark, Evaluator, Worker
 from ergon_core.core.providers.generation.model_resolution import ResolvedModel
@@ -36,27 +37,40 @@ from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.vllm_backend import resolve_vllm
+from ergon_builtins.workers.baselines.adapters import MiniF2FAdapter, SWEBenchAdapter
 from ergon_builtins.workers.baselines.manager_researcher_worker import ManagerResearcherWorker
-from ergon_builtins.workers.baselines.minif2f_react_worker import MiniF2FReActWorker
-from ergon_builtins.workers.baselines.react_generic_worker import ReActGenericWorker
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.smoke_test_worker import SmokeTestWorker
 from ergon_builtins.workers.baselines.stub_worker import StubWorker
-from ergon_builtins.workers.baselines.swebench_worker import SWEBenchReActWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
 from ergon_builtins.workers.research_rubrics.stub_worker import (
     StubResearchRubricsWorker,
 )
 from ergon_builtins.workers.stubs.canonical_smoke_worker import CanonicalSmokeWorker
 
-WORKERS: dict[str, type[Worker]] = {
+
+def _minif2f_react(**kwargs: Any) -> Worker:  # slopcop: ignore[no-typing-any]
+    """Registry factory: ReActWorker wired with :class:`MiniF2FAdapter`."""
+    return ReActWorker(adapter=MiniF2FAdapter(), **kwargs)
+
+
+def _swebench_react(**kwargs: Any) -> Worker:  # slopcop: ignore[no-typing-any]
+    """Registry factory: ReActWorker wired with :class:`SWEBenchAdapter`."""
+    return ReActWorker(adapter=SWEBenchAdapter(), **kwargs)
+
+
+# Registry maps worker slug → a zero-configured factory that builds a
+# ready-to-run Worker when called with ``(name=..., model=...)``. Plain
+# worker classes satisfy this signature directly; benchmark-specific
+# variants use small factory closures that pre-bind a BenchmarkAdapter
+# onto the unified ReActWorker (see ``adapters/`` for the adapter types).
+WORKERS: dict[str, Callable[..., Worker]] = {
     "stub-worker": StubWorker,
     "training-stub": TrainingStubWorker,
     "smoke-test-worker": SmokeTestWorker,
     "react-v1": ReActWorker,
-    "react-generic": ReActGenericWorker,
-    "minif2f-react": MiniF2FReActWorker,
-    "swebench-react": SWEBenchReActWorker,
+    "minif2f-react": _minif2f_react,
+    "swebench-react": _swebench_react,
     "manager-researcher": ManagerResearcherWorker,
     "researcher": StubWorker,
     "researchrubrics-stub": StubResearchRubricsWorker,

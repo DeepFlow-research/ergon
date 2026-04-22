@@ -1,12 +1,13 @@
-"""Tests for :class:`SWEBenchReActWorker`.
+"""Tests for :class:`SWEBenchAdapter` wired onto :class:`ReActWorker`.
 
-Covers the two behaviours the worker must guarantee:
+Covers the two behaviours the SWE-Bench ReAct wiring must guarantee:
 
-1. Before the ReAct loop, it runs ``spec.setup_env_script`` and
-   ``spec.install_repo_script`` against the sandbox registered on the
+1. Before the ReAct loop, ``on_run_start`` runs ``spec.setup_env_script``
+   and ``spec.install_repo_script`` against the sandbox registered on the
    singleton manager.
-2. After the loop (even on failure), it extracts the patch via
-   ``git diff HEAD`` from the workdir.
+2. After the loop (even on failure), ``on_run_end`` extracts the patch
+   via ``git diff HEAD`` from the workdir and ``transform_output``
+   routes it through ``WorkerOutput.output``.
 """
 
 from __future__ import annotations
@@ -17,11 +18,11 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.api import BenchmarkTask
+from ergon_builtins.workers.baselines.adapters.swebench import SWEBenchAdapter
+from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_core.api import BenchmarkTask, WorkerOutput
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-
-from ergon_builtins.workers.baselines.swebench_worker import SWEBenchReActWorker
 
 
 @pytest.fixture(autouse=True)
@@ -75,22 +76,18 @@ async def test_worker_runs_setup_scripts_before_react_loop(
     sandbox = MagicMock(name="AsyncSandbox")
     sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="", stderr=""))
 
-    # Wire the sandbox onto the singleton manager keyed by the test task_id.
     ctx = _ctx()
-    # Stub the manager construction to hand back our controlled instance.
     manager = MagicMock()
     manager.get_sandbox = MagicMock(return_value=sandbox)
 
-    # Stub the ReAct tail so we do not spin up an LLM.
-    async def _stub_super_execute(
-        self, task, *, context
-    ) -> AsyncIterator:  # slopcop: ignore[no-typing-any]
+    # Stub the ReAct loop so we do not spin up an LLM.
+    async def _stub_run_agent(self, task) -> AsyncIterator:  # slopcop: ignore[no-typing-any]
         return
-        yield  # make this an async generator
+        yield
 
     monkeypatch.setattr(
-        "ergon_builtins.workers.baselines.react_worker.ReActWorker.execute",
-        _stub_super_execute,
+        "ergon_builtins.workers.baselines.react_worker.ReActWorker._run_agent",
+        _stub_run_agent,
     )
 
     fake_spec = MagicMock(
@@ -101,15 +98,15 @@ async def test_worker_runs_setup_scripts_before_react_loop(
 
     with (
         patch(
-            "ergon_builtins.workers.baselines.swebench_worker.SWEBenchSandboxManager",
+            "ergon_builtins.workers.baselines.adapters.swebench.SWEBenchSandboxManager",
             return_value=manager,
         ),
         patch(
-            "ergon_builtins.workers.baselines.swebench_worker.make_test_spec",
+            "ergon_builtins.workers.baselines.adapters.swebench.make_test_spec",
             return_value=fake_spec,
         ),
     ):
-        worker = SWEBenchReActWorker(name="swebench-react", model=None)
+        worker = ReActWorker(name="swebench-react", model=None, adapter=SWEBenchAdapter())
         async for _ in worker.execute(_fake_task(), context=ctx):
             pass
 
@@ -121,17 +118,17 @@ async def test_worker_runs_setup_scripts_before_react_loop(
 
 
 @pytest.mark.asyncio
-async def test_worker_extracts_patch_via_git_diff_on_output() -> None:
+async def test_adapter_extracts_patch_via_git_diff() -> None:
     """_extract_patch should call git diff HEAD from the workdir."""
     sandbox = MagicMock()
     sandbox.commands.run = AsyncMock(
         return_value=MagicMock(exit_code=0, stdout="--- diff ---\n+foo", stderr="")
     )
-    worker = SWEBenchReActWorker(name="swebench-react", model=None)
-    worker._sandbox = sandbox
-    worker._workdir = "/workspace/repo"
+    adapter = SWEBenchAdapter()
+    adapter._sandbox = sandbox
+    adapter._workdir = "/workspace/repo"
 
-    output = await worker._extract_patch()
+    output = await adapter._extract_patch()
 
     assert "--- diff ---" in output
     invoked = sandbox.commands.run.call_args.args[0]
@@ -140,21 +137,18 @@ async def test_worker_extracts_patch_via_git_diff_on_output() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_raises_when_no_sandbox_registered() -> None:
-    """If the sandbox manager has no entry for task_id, execute raises."""
-    worker = SWEBenchReActWorker(name="swebench-react", model=None)
+async def test_on_run_start_raises_when_no_sandbox_registered() -> None:
+    """If the sandbox manager has no entry for task_id, on_run_start raises."""
+    adapter = SWEBenchAdapter()
     ctx = _ctx()
 
-    gen = worker.execute(_fake_task(), context=ctx)
     with pytest.raises(RuntimeError, match="requires a live sandbox"):
-        await gen.__anext__()
+        await adapter.on_run_start(_fake_task(), ctx)
 
 
 @pytest.mark.asyncio
-async def test_setup_raises_when_setup_env_script_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """If setup_env_script exits non-zero, _run_setup raises RuntimeError."""
+async def test_on_run_start_raises_when_setup_env_script_fails() -> None:
+    """If setup_env_script exits non-zero, on_run_start raises RuntimeError."""
     sandbox = MagicMock()
     sandbox.commands.run = AsyncMock(
         return_value=MagicMock(exit_code=1, stdout="boom", stderr="err")
@@ -163,14 +157,6 @@ async def test_setup_raises_when_setup_env_script_fails(
     manager = MagicMock()
     manager.get_sandbox = MagicMock(return_value=sandbox)
 
-    async def _stub_super_execute(self, task, *, context):  # slopcop: ignore[no-typing-any]
-        return
-        yield
-
-    monkeypatch.setattr(
-        "ergon_builtins.workers.baselines.react_worker.ReActWorker.execute",
-        _stub_super_execute,
-    )
     fake_spec = MagicMock(
         setup_env_script="exit 1",
         install_repo_script="echo INSTALL_REPO",
@@ -179,61 +165,36 @@ async def test_setup_raises_when_setup_env_script_fails(
 
     with (
         patch(
-            "ergon_builtins.workers.baselines.swebench_worker.SWEBenchSandboxManager",
+            "ergon_builtins.workers.baselines.adapters.swebench.SWEBenchSandboxManager",
             return_value=manager,
         ),
         patch(
-            "ergon_builtins.workers.baselines.swebench_worker.make_test_spec",
+            "ergon_builtins.workers.baselines.adapters.swebench.make_test_spec",
             return_value=fake_spec,
         ),
     ):
-        worker = SWEBenchReActWorker(name="swebench-react", model=None)
-        gen = worker.execute(_fake_task(), context=_ctx())
+        adapter = SWEBenchAdapter()
         with pytest.raises(RuntimeError, match="setup_env failed"):
-            await gen.__anext__()
+            await adapter.on_run_start(_fake_task(), _ctx())
 
 
-@pytest.mark.asyncio
-async def test_get_output_routes_patch_through_output_field(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """get_output should put self._patch into the output field and artifacts."""
-    from ergon_core.api import WorkerOutput
+def test_transform_output_routes_patch_through_output_field() -> None:
+    """transform_output should put self._patch into the output field and artifacts."""
+    adapter = SWEBenchAdapter()
+    adapter._patch = "--- a/foo\n+++ b/foo\n@@\n+bar\n"
 
-    worker = SWEBenchReActWorker(name="swebench-react", model=None)
-    worker._patch = "--- a/foo\n+++ b/foo\n@@\n+bar\n"
-
-    def _stub_base_get_output(self, context):  # slopcop: ignore[no-typing-any]
-        return WorkerOutput(output="done", success=True, artifacts={})
-
-    monkeypatch.setattr(
-        "ergon_builtins.workers.baselines.react_worker.ReActWorker.get_output",
-        _stub_base_get_output,
-    )
-
-    out = worker.get_output(_ctx())
-    assert out.output == worker._patch
-    assert out.artifacts["patch"] == worker._patch
+    base = WorkerOutput(output="done", success=True, artifacts={})
+    out = adapter.transform_output(_ctx(), base)
+    assert out.output == adapter._patch
+    assert out.artifacts["patch"] == adapter._patch
     assert out.success is True
 
 
-@pytest.mark.asyncio
-async def test_get_output_marks_unsuccessful_when_patch_empty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_transform_output_marks_unsuccessful_when_patch_empty() -> None:
     """Empty / whitespace-only patch means the worker produced nothing."""
-    from ergon_core.api import WorkerOutput
+    adapter = SWEBenchAdapter()
+    adapter._patch = "   \n"
 
-    worker = SWEBenchReActWorker(name="swebench-react", model=None)
-    worker._patch = "   \n"
-
-    def _stub_base_get_output(self, context):  # slopcop: ignore[no-typing-any]
-        return WorkerOutput(output="done", success=True, artifacts={})
-
-    monkeypatch.setattr(
-        "ergon_builtins.workers.baselines.react_worker.ReActWorker.get_output",
-        _stub_base_get_output,
-    )
-
-    out = worker.get_output(_ctx())
+    base = WorkerOutput(output="done", success=True, artifacts={})
+    out = adapter.transform_output(_ctx(), base)
     assert out.success is False

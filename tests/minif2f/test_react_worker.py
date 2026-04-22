@@ -1,12 +1,15 @@
-"""Tests for :class:`MiniF2FReActWorker`.
+"""Tests for :class:`MiniF2FAdapter` wired onto :class:`ReActWorker`.
 
-Covers the two behaviours the worker must guarantee before any model run:
+Covers the behaviours the MiniF2F ReAct wiring must guarantee before any
+model run:
 
-1. ``execute`` raises a clear error when no sandbox is registered on the
-   singleton manager for the given ``task_id`` (catches misconfigured runs
-   early).
-2. ``execute`` builds the MiniF2F toolkit against the live sandbox and
-   populates ``self.tools`` *before* the ReAct loop begins.
+1. ``build_tools`` raises a clear error when no sandbox is registered on
+   the singleton manager for the given ``task_id`` (catches misconfigured
+   runs early).
+2. ``build_tools`` populates the tool list against the live sandbox.
+3. ``on_run_end`` scrapes the final proof off the sandbox, and
+   ``transform_output`` routes it through ``WorkerOutput.output`` so the
+   criterion can read it.
 """
 
 from collections.abc import AsyncIterator
@@ -16,13 +19,14 @@ from uuid import UUID, uuid4
 import pytest
 
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
-from ergon_builtins.workers.baselines.minif2f_react_worker import (
-    MiniF2FReActWorker,
+from ergon_builtins.workers.baselines.adapters.minif2f import (
+    MiniF2FAdapter,
     _make_run_skill,
     _read_final_proof,
 )
+from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_core.api import BenchmarkTask, WorkerOutput
 from ergon_core.api.worker_context import WorkerContext
-from ergon_core.api import BenchmarkTask
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 
@@ -58,20 +62,17 @@ def _make_task() -> BenchmarkTask:
 
 
 @pytest.mark.asyncio
-async def test_execute_raises_when_no_sandbox_registered() -> None:
-    worker = MiniF2FReActWorker(name="minif2f-react", model=None)
+async def test_build_tools_raises_when_no_sandbox_registered() -> None:
+    adapter = MiniF2FAdapter()
     ctx = _make_context()
 
-    gen = worker.execute(_make_task(), context=ctx)
     with pytest.raises(RuntimeError, match="requires a live sandbox"):
-        await gen.__anext__()
+        await adapter.build_tools(_make_task(), ctx)
 
 
 @pytest.mark.asyncio
-async def test_execute_builds_toolkit_against_live_sandbox(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Worker must populate self.tools before handing off to the ReAct loop."""
+async def test_build_tools_returns_toolkit_tools_against_live_sandbox() -> None:
+    """Adapter must return the MiniF2F toolkit's tools against the live sandbox."""
     fake_sandbox = MagicMock(name="AsyncSandbox")
     task_id = uuid4()
 
@@ -79,24 +80,40 @@ async def test_execute_builds_toolkit_against_live_sandbox(
     mgr = MiniF2FSandboxManager()
     mgr._sandboxes[task_id] = fake_sandbox
 
-    # Stub out the ReActWorker.execute tail so we don't actually spin up an
-    # LLM. This yields zero turns; we only care that self.tools was set by
-    # the time super().execute() is called.
+    adapter = MiniF2FAdapter()
+    tools = await adapter.build_tools(_make_task(), _make_context(task_id=task_id))
+
+    assert isinstance(tools, list)
+    # Four tools: write/check/verify lean + search_lemmas (no stakeholder in autonomous mode)
+    assert len(tools) == 4
+
+
+@pytest.mark.asyncio
+async def test_react_worker_with_minif2f_adapter_populates_tools_before_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Composed worker must hand the adapter's tools to the ReAct loop."""
+    fake_sandbox = MagicMock(name="AsyncSandbox")
+    # _read_final_proof runs in on_run_end; set up a clean exit here.
+    fake_sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=1, stdout="", stderr=""))
+    task_id = uuid4()
+
+    mgr = MiniF2FSandboxManager()
+    mgr._sandboxes[task_id] = fake_sandbox
+
     captured: dict[str, object] = {}
 
-    async def _stub_super_execute(
-        self, task, *, context
-    ) -> AsyncIterator:  # slopcop: ignore[no-typing-any]
+    async def _stub_run_agent(self, task) -> AsyncIterator:  # slopcop: ignore[no-typing-any]
         captured["tools"] = list(self.tools)
         return
-        yield  # make this an async generator
+        yield  # async generator
 
     monkeypatch.setattr(
-        "ergon_builtins.workers.baselines.react_worker.ReActWorker.execute",
-        _stub_super_execute,
+        "ergon_builtins.workers.baselines.react_worker.ReActWorker._run_agent",
+        _stub_run_agent,
     )
 
-    worker = MiniF2FReActWorker(name="minif2f-react", model=None)
+    worker = ReActWorker(name="minif2f-react", model=None, adapter=MiniF2FAdapter())
     ctx = _make_context(task_id=task_id)
 
     async for _ in worker.execute(_make_task(), context=ctx):
@@ -104,7 +121,6 @@ async def test_execute_builds_toolkit_against_live_sandbox(
 
     tools = captured["tools"]
     assert isinstance(tools, list)
-    # Four tools: write/check/verify lean + search_lemmas (no stakeholder in autonomous mode)
     assert len(tools) == 4
 
 
@@ -171,12 +187,9 @@ async def test_read_final_proof_tolerates_sandbox_exception() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_populates_artifacts_with_final_proof(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """After execute() finishes, get_output must surface the scraped proof."""
+async def test_on_run_end_captures_proof_and_transform_output_routes_it() -> None:
+    """After on_run_end runs, transform_output must surface the scraped proof."""
     fake_sandbox = MagicMock(name="AsyncSandbox")
-    # Used by _read_final_proof at end-of-execute.
     fake_sandbox.commands.run = AsyncMock(
         return_value=MagicMock(
             exit_code=0,
@@ -188,33 +201,17 @@ async def test_execute_populates_artifacts_with_final_proof(
     mgr = MiniF2FSandboxManager()
     mgr._sandboxes[task_id] = fake_sandbox
 
-    async def _stub_super_execute(self, task, *, context):  # slopcop: ignore[no-typing-any]
-        return
-        yield
-
-    # Stub the ReAct loop itself and the sync get_output on the base class
-    # so we don't need a live DB.
-    monkeypatch.setattr(
-        "ergon_builtins.workers.baselines.react_worker.ReActWorker.execute",
-        _stub_super_execute,
-    )
-    from ergon_core.api import WorkerOutput
-
-    def _stub_base_get_output(self, context):  # slopcop: ignore[no-typing-any]
-        return WorkerOutput(output="done", success=True, artifacts={})
-
-    monkeypatch.setattr(
-        "ergon_builtins.workers.baselines.react_worker.ReActWorker.get_output",
-        _stub_base_get_output,
-    )
-
-    worker = MiniF2FReActWorker(name="minif2f-react", model=None)
     ctx = _make_context(task_id=task_id)
+    adapter = MiniF2FAdapter()
 
-    async for _ in worker.execute(_make_task(), context=ctx):
-        pass
+    # Simulate the worker's call sequence: build_tools opens the sandbox,
+    # then on_run_end scrapes the proof.
+    await adapter.build_tools(_make_task(), ctx)
+    await adapter.on_run_end(_make_task(), ctx)
 
-    out = worker.get_output(ctx)
+    base = WorkerOutput(output="done", success=True, artifacts={})
+    out = adapter.transform_output(ctx, base)
+
     # Proof is shipped in both artifacts AND output — the runtime's evaluator
     # dispatch only carries output_text forward, so output is the critical path.
     assert out.artifacts["final_solution.lean"] == "theorem t : 1 = 1 := rfl\n"
@@ -222,23 +219,12 @@ async def test_execute_populates_artifacts_with_final_proof(
     assert out.success is True
 
 
-@pytest.mark.asyncio
-async def test_get_output_returns_base_when_no_proof_captured(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_transform_output_passes_through_when_no_proof_captured() -> None:
     """If the agent never wrote final_solution.lean, artifacts stay empty."""
-    from ergon_core.api import WorkerOutput
-
-    worker = MiniF2FReActWorker(name="minif2f-react", model=None)
-    # _final_proof stays None because execute() was never called.
-
-    def _stub_base_get_output(self, context):  # slopcop: ignore[no-typing-any]
-        return WorkerOutput(output="", success=False, artifacts={})
-
-    monkeypatch.setattr(
-        "ergon_builtins.workers.baselines.react_worker.ReActWorker.get_output",
-        _stub_base_get_output,
-    )
-    ctx = _make_context()
-    out = worker.get_output(ctx)
+    adapter = MiniF2FAdapter()
+    # _final_proof stays None because on_run_end was never called.
+    base = WorkerOutput(output="", success=False, artifacts={})
+    out = adapter.transform_output(_make_context(), base)
     assert out.artifacts == {}
+    assert out.output == ""
+    assert out.success is False

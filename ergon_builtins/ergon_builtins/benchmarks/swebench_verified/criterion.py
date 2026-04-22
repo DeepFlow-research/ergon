@@ -23,7 +23,7 @@ from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
 
-from ergon_builtins.workers.baselines.swebench_worker import _payload_to_swebench_row
+from ergon_builtins.workers.baselines.adapters.swebench import _payload_to_swebench_row
 
 logger = logging.getLogger(__name__)
 

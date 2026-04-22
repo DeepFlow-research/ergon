@@ -185,7 +185,6 @@ def run_benchmark(args: Namespace) -> int:
         evaluator_slug=args.evaluator,
         workflow=args.workflow,
         limit=args.limit,
-        toolkit_benchmark=args.toolkit_benchmark,
     )
     experiment.validate()
     persisted = experiment.persist()
