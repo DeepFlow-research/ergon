@@ -111,6 +111,7 @@ async def test_fixture_proof_verifies_to_score_1() -> None:
             worker_result=worker_output,
             sandbox_id=mgr.get_sandbox(run_id).sandbox_id,  # type: ignore[union-attr]
             metadata={"runtime": runtime},
+            runtime=runtime,
         )
 
         criterion = ProofVerificationCriterion(

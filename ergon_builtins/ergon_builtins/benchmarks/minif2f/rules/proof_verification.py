@@ -1,8 +1,10 @@
 """Proof-verification criterion for formal mathematics (Lean).
 
-Extracts the agent's ``final_solution.lean`` from the worker result
-artifacts, writes it into the sandbox, and invokes the Lean compiler
-to verify the proof.
+Extracts the agent's ``final_solution.lean`` from the task's
+run-resources (published by ``SandboxResourcePublisher.sync()`` after the
+worker writes to ``/workspace/final_output/final_solution.lean``),
+writes it into the sandbox, and invokes the Lean compiler to verify the
+proof.
 """
 
 from typing import ClassVar
@@ -37,7 +39,8 @@ class ProofVerificationCriterion(Criterion):
     """Criterion that verifies Lean formal proofs via sandbox compilation.
 
     The evaluate path:
-    1. Extract ``final_solution.lean`` from ``worker_result.artifacts``
+    1. Read ``final_solution.lean`` as a run-resource via
+       ``context.runtime.read_resource``
     2. Reject proofs containing ``sorry`` (incomplete)
     3. Write proof into sandbox and run the Lean compiler
     4. Return full-score on exit-code 0, else 0
@@ -62,7 +65,20 @@ class ProofVerificationCriterion(Criterion):
         self.formal_system = formal_system
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
-        proof_data = self._extract_proof(context)
+        proof_data = await self._extract_proof(context)
+        if proof_data is None:
+            return CriterionResult(
+                name=self.name,
+                score=0.0,
+                passed=False,
+                weight=self.weight,
+                feedback=(
+                    "No final_solution.lean run-resource published for this task. "
+                    "The worker must write to /workspace/final_output/final_solution.lean "
+                    "so SandboxResourcePublisher.sync picks it up."
+                ),
+                metadata={"evaluated_resource_ids": []},
+            )
         proof_code = proof_data.proof_code
         problem_stmt = self.problem_statement or context.task.description
 
@@ -94,36 +110,35 @@ class ProofVerificationCriterion(Criterion):
 
     # ------------------------------------------------------------------
 
-    def _extract_proof(self, context: EvaluationContext) -> ExtractedProof:
-        """Extract proof code from worker result artifacts."""
-        artifacts: dict[str, object] = context.worker_result.artifacts
+    async def _extract_proof(self, context: EvaluationContext) -> ExtractedProof | None:
+        """Read the Lean source the agent wrote, or ``None`` if missing.
 
-        proof_code = artifacts.get("final_solution.lean")
-        if proof_code is not None:
-            return ExtractedProof(
-                proof_code=str(proof_code),
-                source="artifact:final_solution.lean",
-                evaluated_resource_ids=[],
-            )
+        Reads from the task-scoped run-resource named
+        ``final_solution.lean`` -- published by
+        ``SandboxResourcePublisher.sync()`` after the worker writes to
+        ``/workspace/final_output/final_solution.lean``.  The pre-RFC
+        path through ``worker_result.artifacts`` is not used:
+        ``artifacts`` is dropped at the Inngest ``worker_execute``
+        boundary, so reading from it was always dead code masked by the
+        now-deleted ``MiniF2FAdapter.transform_output``.
+        """
+        if context.runtime is None:
+            return None
+        # reason: ResourceNotFoundError is a ``core`` symbol and importing
+        # it at module scope would pull runtime internals into a builtins
+        # package. Lazy-import at the single call site.
+        from ergon_core.core.runtime.evaluation.criterion_runtime import (
+            ResourceNotFoundError,
+        )
 
-        lean_files = [k for k in artifacts if k.endswith(".lean")]
-        if lean_files:
-            raise ValueError(
-                f"No 'final_solution.lean' found in worker artifacts. "
-                f"Found other .lean files: {lean_files}. "
-                "The worker must store the final proof as "
-                "artifacts['final_solution.lean']."
-            )
-
-        if context.worker_result.output and context.worker_result.output.strip():
-            return ExtractedProof(
-                proof_code=context.worker_result.output,
-                source="worker_output",
-                evaluated_resource_ids=[],
-            )
-
-        raise ValueError(
-            "No 'final_solution.lean' found in worker artifacts and no proof code in worker output."
+        try:
+            raw = await context.runtime.read_resource("final_solution.lean")
+        except ResourceNotFoundError:
+            return None
+        return ExtractedProof(
+            proof_code=raw.decode("utf-8", errors="replace"),
+            source="run_resource:final_solution.lean",
+            evaluated_resource_ids=[],
         )
 
     async def _verify_proof(
