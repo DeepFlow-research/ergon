@@ -22,7 +22,16 @@ def test_model_kwarg_has_no_default() -> None:
 
 
 def test_name_kwarg_has_no_default() -> None:
+    """Mirror of the `model` invariant: `name` also has no default.
+
+    Locked in so future drift (someone adding `name: str = "worker"` to
+    the base) is caught immediately.
+    """
     sig = inspect.signature(Worker.__init__)
     name_param = sig.parameters["name"]
-    assert name_param.kind == inspect.Parameter.KEYWORD_ONLY
-    assert name_param.default is inspect.Parameter.empty
+    assert name_param.kind == inspect.Parameter.KEYWORD_ONLY, (
+        f"`name` must be keyword-only, got {name_param.kind}"
+    )
+    assert name_param.default is inspect.Parameter.empty, (
+        f"`name` must have no default; got {name_param.default!r}"
+    )
