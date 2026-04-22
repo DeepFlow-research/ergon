@@ -166,11 +166,16 @@ class ProofVerificationCriterion(Criterion):
                 ),
             )
 
-        runtime = context.metadata.get("runtime")
+        # reason: RFC 2026-04-22 §3 — criteria use the DI surface
+        # (`context.runtime`), not the pre-DI `context.metadata["runtime"]`
+        # back-door. `_extract_proof` above already reads via
+        # `context.runtime.read_resource`; this keeps `_verify_proof`
+        # consistent and unblocks deletion of the metadata shim.
+        runtime = context.runtime
         if runtime is None:
             return ProofVerificationOutcome(
                 verified=False,
-                errors="No criterion runtime in evaluation context metadata.",
+                errors="No criterion runtime in evaluation context.",
             )
 
         await runtime.write_file(

@@ -39,6 +39,11 @@ async def test_reads_proof_via_runtime_read_resource() -> None:
         return_value=CommandResult(stdout="[ok]", stderr="", exit_code=0)
     )
 
+    # reason: RFC 2026-04-22 §3 — criteria use `context.runtime`, not the
+    # pre-DI `context.metadata["runtime"]` back-door. The test does NOT seed
+    # `metadata`; if the production path were still reaching into metadata,
+    # `_verify_proof` would short-circuit on "No criterion runtime" and
+    # `read_resource` would never be awaited.
     context = EvaluationContext(
         run_id=uuid4(),
         task_id=uuid4(),
@@ -46,7 +51,6 @@ async def test_reads_proof_via_runtime_read_resource() -> None:
         task=_make_task(),
         worker_result=WorkerOutput(output="irrelevant", success=True),
         sandbox_id="sbx-abc",
-        metadata={"runtime": runtime},
         runtime=runtime,
     )
 
@@ -79,7 +83,6 @@ async def test_scores_zero_when_proof_missing() -> None:
         task=_make_task(),
         worker_result=WorkerOutput(output="irrelevant", success=True),
         sandbox_id="sbx-abc",
-        metadata={"runtime": runtime},
         runtime=runtime,
     )
 
