@@ -37,37 +37,35 @@ def _task() -> BenchmarkTask:
 
 
 def _mock_runtime(
-    sandbox: object | None = None,
     *,
     patch_text: str = "PATCH",
     patch_exit_code: int = 0,
+    install_exit_code: int = 0,
+    eval_stdout: str = "log",
 ) -> MagicMock:
-    """Return a mock CriterionRuntime with sandbox_manager wired up.
+    """Return a mock ``CriterionRuntime`` wired via Protocol ops only.
 
-    ``run_command`` is stubbed to return ``patch_text`` for the
-    ``git diff HEAD`` extraction -- tests that exercise the evaluator
-    past the empty-patch short-circuit need to set this.
+    The criterion post-RFC-2026-04-22 uses ``runtime.run_command`` and
+    ``runtime.write_file`` exclusively — no reach-through to
+    ``sandbox_manager``. This mock routes ``run_command`` on command
+    content: the ``git diff HEAD`` extraction returns ``patch_text``
+    with ``patch_exit_code``; the ``install_repo`` bash script returns
+    ``install_exit_code``; every other command (``git apply``, the eval
+    script) returns a benign success with ``eval_stdout``.
     """
-    mock_sandbox = sandbox or _mock_sandbox()
     runtime = MagicMock()
     runtime.ensure_sandbox = AsyncMock()
-    runtime.sandbox_manager = MagicMock()
-    runtime.sandbox_manager.get_sandbox.return_value = mock_sandbox
-    runtime.run_command = AsyncMock(
-        return_value=CommandResult(
-            stdout=patch_text,
-            stderr="",
-            exit_code=patch_exit_code,
-        )
-    )
+    runtime.write_file = AsyncMock()
+
+    async def _dispatch(cmd: str, timeout: int = 30) -> CommandResult:
+        if "git diff HEAD" in cmd:
+            return CommandResult(stdout=patch_text, stderr="", exit_code=patch_exit_code)
+        if "install" in cmd.lower() or "INSTALL" in cmd:
+            return CommandResult(stdout=eval_stdout, stderr="", exit_code=install_exit_code)
+        return CommandResult(stdout=eval_stdout, stderr="", exit_code=0)
+
+    runtime.run_command = AsyncMock(side_effect=_dispatch)
     return runtime
-
-
-def _mock_sandbox() -> AsyncMock:
-    sb = AsyncMock()
-    sb.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="log", stderr=""))
-    sb.files.write = AsyncMock()
-    return sb
 
 
 def _ctx(
@@ -105,8 +103,7 @@ async def test_criterion_returns_score_0_for_empty_patch() -> None:
 
 @pytest.mark.asyncio
 async def test_criterion_scores_1_when_report_resolved() -> None:
-    sandbox = _mock_sandbox()
-    runtime = _mock_runtime(sandbox)
+    runtime = _mock_runtime()
 
     with (
         patch(
@@ -139,8 +136,7 @@ async def test_criterion_scores_1_when_report_resolved() -> None:
 
 @pytest.mark.asyncio
 async def test_criterion_scores_0_when_report_unresolved() -> None:
-    sandbox = _mock_sandbox()
-    runtime = _mock_runtime(sandbox)
+    runtime = _mock_runtime()
 
     with (
         patch(
@@ -172,8 +168,7 @@ async def test_criterion_scores_0_when_report_unresolved() -> None:
 
 @pytest.mark.asyncio
 async def test_criterion_applies_test_patch_then_agent_patch() -> None:
-    sandbox = _mock_sandbox()
-    runtime = _mock_runtime(sandbox)
+    runtime = _mock_runtime()
 
     with (
         patch(
@@ -191,14 +186,16 @@ async def test_criterion_applies_test_patch_then_agent_patch() -> None:
         crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
         await crit.evaluate(_ctx(runtime=runtime))
 
-    # Two files were written to the sandbox: /tmp/test.patch and /tmp/agent.patch,
-    # in that order.
-    written_paths = [call.args[0] for call in sandbox.files.write.call_args_list]
+    # reason: RFC 2026-04-22 §3 — post-refactor the criterion writes files via
+    # the `CriterionRuntime.write_file` Protocol op, not
+    # `sandbox.files.write`. Two files must be written in order:
+    # /tmp/test.patch then /tmp/agent.patch.
+    written_paths = [call.args[0] for call in runtime.write_file.call_args_list]
     assert "/tmp/test.patch" in written_paths
     assert "/tmp/agent.patch" in written_paths
     assert written_paths.index("/tmp/test.patch") < written_paths.index("/tmp/agent.patch")
     # And the patch content bytes passed
-    written_contents = {call.args[0]: call.args[1] for call in sandbox.files.write.call_args_list}
+    written_contents = {call.args[0]: call.args[1] for call in runtime.write_file.call_args_list}
     assert b"TP" in written_contents["/tmp/test.patch"]
     assert b"PATCH" in written_contents["/tmp/agent.patch"]
 
@@ -219,22 +216,23 @@ async def test_criterion_raises_when_no_runtime_injected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_criterion_returns_sandbox_unavailable_when_get_sandbox_returns_none() -> None:
-    """If runtime.sandbox_manager.get_sandbox returns None, criterion returns error result."""
-    runtime = MagicMock()
-    runtime.ensure_sandbox = AsyncMock()
-    runtime.sandbox_manager.get_sandbox.return_value = None
-    runtime.run_command = AsyncMock(
-        return_value=CommandResult(stdout="PATCH", stderr="", exit_code=0)
-    )
+async def test_criterion_returns_error_when_install_repo_fails() -> None:
+    """If install_repo_script exits non-zero, criterion returns error result.
+
+    reason: RFC 2026-04-22 §3 replaced the ``sandbox_manager.get_sandbox``
+    reach-through with Protocol-only ops, so the old ``sandbox_unavailable``
+    error path no longer exists. The remaining early-exit on this code path
+    is install-script failure, which this test now covers.
+    """
+    runtime = _mock_runtime(install_exit_code=1, eval_stdout="install blew up")
 
     with patch(
         "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
-        return_value=MagicMock(install_repo_script="echo", eval_script="echo"),
+        return_value=MagicMock(install_repo_script="echo INSTALL", eval_script="echo EVAL"),
     ):
         crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
         result = await crit.evaluate(_ctx(runtime=runtime))
 
     assert result.score == 0.0
     assert result.passed is False
-    assert "sandbox_unavailable" in str(result.metadata)
+    assert "install_repo" in str(result.metadata)

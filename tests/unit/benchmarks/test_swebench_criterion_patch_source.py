@@ -34,17 +34,13 @@ async def test_criterion_computes_patch_via_run_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Criterion must NOT read worker.artifacts or worker.output for the patch."""
+    # reason: RFC 2026-04-22 §3 — the criterion drives the harness entirely
+    # through Protocol ops (``run_command``, ``write_file``); no reach
+    # past the DI surface to ``sandbox_manager.get_sandbox`` anymore.
     runtime = MagicMock()
     runtime.run_command = AsyncMock(side_effect=_fake_run)
     runtime.ensure_sandbox = AsyncMock()
-
-    sandbox = MagicMock()
-    sandbox.files.write = AsyncMock()
-    sandbox.commands.run = AsyncMock(
-        return_value=MagicMock(exit_code=0, stdout="PASSED", stderr="")
-    )
-    runtime.sandbox_manager = MagicMock()
-    runtime.sandbox_manager.get_sandbox = MagicMock(return_value=sandbox)
+    runtime.write_file = AsyncMock()
 
     payload = {
         "instance_id": "django__django-1",
@@ -113,7 +109,7 @@ async def test_criterion_short_circuits_on_empty_patch(
     runtime = MagicMock()
     runtime.run_command = AsyncMock(side_effect=_empty_diff)
     runtime.ensure_sandbox = AsyncMock()
-    runtime.sandbox_manager = MagicMock()
+    runtime.write_file = AsyncMock()
 
     payload = {
         "instance_id": "django__django-1",

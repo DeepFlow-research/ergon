@@ -1,11 +1,14 @@
-"""Integration test: SWEBenchTestCriterion.evaluate() uses runtime.ensure_sandbox().
+"""Integration test: SWEBenchTestCriterion.evaluate() uses Protocol-only runtime ops.
 
 After Task 0 (PR 2 of the criterion-runtime-di-container RFC), the criterion
-must NOT construct ``SWEBenchSandboxManager`` directly.  It must instead call
-``context.runtime.ensure_sandbox()`` and retrieve the sandbox via
-``context.runtime.sandbox_manager.get_sandbox()``.
+must NOT construct ``SWEBenchSandboxManager`` directly.  It calls
+``context.runtime.ensure_sandbox()`` to bring up a sandbox and then drives
+the harness entirely through ``runtime.run_command`` and
+``runtime.write_file`` — no reach-through to the concrete
+``sandbox_manager.get_sandbox`` attribute (RFC 2026-04-22 §3).
 
 Refs: docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md (PR 2 of 2)
+      docs/rfcs/active/2026-04-22-worker-interface-and-artifact-routing.md (§3)
 Closes: docs/bugs/open/2026-04-18-swebench-criterion-spawns-sandbox.md
 """
 
@@ -49,18 +52,21 @@ def _task() -> BenchmarkTask:
 
 @pytest.mark.asyncio
 async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
-    """Criterion calls runtime.ensure_sandbox(), not the removed _spawn_eval_sandbox."""
+    """Criterion calls runtime.ensure_sandbox(), not the removed _spawn_eval_sandbox.
+
+    reason: RFC 2026-04-22 §3 — all sandbox ops go through Protocol methods
+    (``run_command``, ``write_file``); the concrete ``sandbox_manager``
+    attribute is never touched.
+    """
     # reason: local import so the test doesn't pin a ``core`` symbol at module scope.
     from ergon_core.api.criterion_runtime import CommandResult
 
-    sandbox = AsyncMock()
-    sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="log", stderr=""))
-    sandbox.files.write = AsyncMock()
-
     mock_runtime = MagicMock()
     mock_runtime.ensure_sandbox = AsyncMock()
-    mock_runtime.sandbox_manager.get_sandbox.return_value = sandbox
-    # Criterion now extracts the patch itself via run_command.
+    mock_runtime.write_file = AsyncMock()
+    # Criterion extracts the patch, runs install_repo, applies patches, and
+    # runs the eval script — all via run_command. A single benign success
+    # return value is enough to drive the happy-path harness shape.
     mock_runtime.run_command = AsyncMock(
         return_value=CommandResult(
             stdout="diff --git a/foo.py b/foo.py\n+pass\n",
