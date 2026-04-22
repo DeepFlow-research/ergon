@@ -230,6 +230,34 @@ class DefaultCriterionRuntime:
             rows = list(session.exec(stmt).all())
         return [RunResourceView.from_row(r) for r in rows]
 
+    async def get_all_files_for_task(self) -> dict[str, bytes]:
+        """See ``CriterionRuntime.get_all_files_for_task``.
+
+        Returns ``{}`` when this runtime has no ``task_id`` scope.  For
+        scoped calls, queries ``run_resources`` filtered by
+        ``(run_id, task_execution_id)``, dedups by ``name`` keeping the
+        newest, and materializes each ``file_path`` into bytes.
+        """
+        if self._task_id is None:
+            return {}
+        with get_session() as session:
+            stmt = (
+                select(RunResource)
+                .where(RunResource.run_id == self._run_id)
+                .where(RunResource.task_execution_id == self._task_id)
+                .order_by(RunResource.created_at.desc())  # type: ignore[arg-type]  # ty: ignore[unresolved-attribute]
+            )
+            rows = list(session.exec(stmt).all())
+
+        seen: set[str] = set()
+        out: dict[str, bytes] = {}
+        for row in rows:
+            if row.name in seen:
+                continue
+            seen.add(row.name)
+            out[row.name] = Path(row.file_path).read_bytes()
+        return out
+
     # ── DB access ─────────────────────────────────────────────────────
 
     def db_read_session(self) -> Session:

@@ -198,8 +198,8 @@ class TestRunIdResolution:
 
 
 class TestCriterionRuntimeProtocolCompliance:
-    def test_protocol_has_all_eleven_methods(self) -> None:
-        """CriterionRuntime Protocol exposes all 11 expected method names."""
+    def test_protocol_has_all_twelve_methods(self) -> None:
+        """CriterionRuntime Protocol exposes all 12 expected method names."""
         from ergon_core.api.criterion_runtime import CriterionRuntime
 
         expected = {
@@ -212,6 +212,7 @@ class TestCriterionRuntimeProtocolCompliance:
             "cleanup",
             "read_resource",
             "list_resources",
+            "get_all_files_for_task",
             "db_read_session",
             "event_sink",
         }
