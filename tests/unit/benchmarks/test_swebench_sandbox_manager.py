@@ -58,9 +58,7 @@ async def test_install_raises_when_payload_missing(monkeypatch: pytest.MonkeyPat
     from ergon_core.core.persistence import queries as q_mod
     from ergon_core.core.providers.sandbox.errors import SandboxSetupError
 
-    monkeypatch.setattr(
-        q_mod.queries.task_executions, "get_task_payload", lambda _tid: None
-    )
+    monkeypatch.setattr(q_mod.queries.task_executions, "get_task_payload", lambda _tid: None)
 
     manager = SWEBenchSandboxManager()
     with pytest.raises(SandboxSetupError, match="No task_payload"):
@@ -83,9 +81,7 @@ async def test_install_raises_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -
     )
 
     sandbox = MagicMock()
-    sandbox.commands.run = AsyncMock(
-        return_value=MagicMock(exit_code=1, stdout="boom")
-    )
+    sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=1, stdout="boom"))
 
     manager = SWEBenchSandboxManager()
     with pytest.raises(SandboxSetupError, match="setup_env"):
