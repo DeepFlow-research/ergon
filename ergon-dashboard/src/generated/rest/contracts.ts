@@ -42,7 +42,7 @@ const RunExecutionAttemptDto = z.object({
   status: z.string(),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
-  outputText: z.union([z.string(), z.null()]).optional(),
+  finalAssistantMessage: z.union([z.string(), z.null()]).optional(),
   errorMessage: z.union([z.string(), z.null()]).optional(),
   score: z.union([z.number(), z.null()]).optional(),
   agentId: z.union([z.string(), z.null()]).optional(),

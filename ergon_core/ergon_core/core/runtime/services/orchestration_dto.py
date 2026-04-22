@@ -82,7 +82,7 @@ class FinalizeTaskExecutionCommand(BaseModel):
     model_config = {"frozen": True}
 
     execution_id: UUID
-    output_text: str | None = None
+    final_assistant_message: str | None = None
     output_resource_ids: list[UUID] = Field(default_factory=list)
 
 

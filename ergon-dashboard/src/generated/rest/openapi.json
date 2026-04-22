@@ -1269,7 +1269,7 @@
             ],
             "title": "Completedat"
           },
-          "outputText": {
+          "finalAssistantMessage": {
             "anyOf": [
               {
                 "type": "string"
@@ -1278,7 +1278,7 @@
                 "type": "null"
               }
             ],
-            "title": "Outputtext"
+            "title": "Finalassistantmessage"
           },
           "errorMessage": {
             "anyOf": [

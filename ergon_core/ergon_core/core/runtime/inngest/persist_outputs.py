@@ -195,11 +195,11 @@ async def _publish_resources(
         )
 
     # Publish the WorkerOutput text as a blob-backed resource.
-    if payload.worker_output_text:
+    if payload.worker_final_assistant_message:
         view = publisher.publish_value(
             kind=RunResourceKind.OUTPUT,
             name="worker_output",
-            content=payload.worker_output_text,
+            content=payload.worker_final_assistant_message,
         )
         if view is not None:
             logger.info(

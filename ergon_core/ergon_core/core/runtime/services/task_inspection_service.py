@@ -92,16 +92,16 @@ class TaskInspectionService:
         )
 
     def _latest_output(self, session: Session, node_id: UUID) -> str | None:
-        """Truncated output_text from the most recent execution."""
+        """Truncated final_assistant_message from the most recent execution."""
         exe = session.exec(
             select(RunTaskExecution)
             .where(RunTaskExecution.node_id == node_id)
             .order_by(RunTaskExecution.started_at.desc())  # type: ignore[union-attr]
             .limit(1)
         ).first()
-        if exe is None or exe.output_text is None:
+        if exe is None or exe.final_assistant_message is None:
             return None
-        text = exe.output_text
+        text = exe.final_assistant_message
         return text if len(text) <= _OUTPUT_MAX_CHARS else text[:_OUTPUT_MAX_CHARS] + "\u2026"
 
     def _latest_error(self, session: Session, node_id: UUID) -> str | None:

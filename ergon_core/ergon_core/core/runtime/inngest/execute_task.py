@@ -172,14 +172,14 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 sandbox_id=sandbox_result.sandbox_id,
                 output_dir=sandbox_result.output_dir,
                 benchmark_type=prepared.benchmark_type,
-                worker_output_text=worker_result.output_text,
+                worker_final_assistant_message=worker_result.final_assistant_message,
             ).model_dump(),
         )
 
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
-                output_text=worker_result.output_text,
+                final_assistant_message=worker_result.final_assistant_message,
             )
         )
 

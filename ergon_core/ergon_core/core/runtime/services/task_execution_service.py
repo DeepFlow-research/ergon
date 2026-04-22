@@ -267,7 +267,7 @@ class TaskExecutionService:
             )
             execution.status = TaskExecutionStatus.COMPLETED
             execution.completed_at = utcnow()
-            execution.output_text = command.output_text
+            execution.final_assistant_message = command.final_assistant_message
             if command.output_resource_ids:
                 execution.output_json = {
                     "resource_ids": [str(rid) for rid in command.output_resource_ids],

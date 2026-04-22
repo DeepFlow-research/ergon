@@ -121,14 +121,14 @@ export interface CohortDetail {
 export interface RunExecutionAttempt
   extends Omit<
     RawRunExecutionAttempt,
-    "agentId" | "agentName" | "completedAt" | "errorMessage" | "outputResourceIds" | "outputText" | "score" | "startedAt"
+    "agentId" | "agentName" | "completedAt" | "errorMessage" | "finalAssistantMessage" | "outputResourceIds" | "score" | "startedAt"
   > {
   agentId: string | null;
   agentName: string | null;
   completedAt: string | null;
   errorMessage: string | null;
+  finalAssistantMessage: string | null;
   outputResourceIds: string[];
-  outputText: string | null;
   score: number | null;
   startedAt: string | null;
 }
@@ -272,7 +272,7 @@ function normalizeRunExecutionAttempt(execution: RawRunExecutionAttempt): RunExe
     completedAt: execution.completedAt ?? null,
     errorMessage: execution.errorMessage ?? null,
     outputResourceIds: execution.outputResourceIds ?? [],
-    outputText: execution.outputText ?? null,
+    finalAssistantMessage: execution.finalAssistantMessage ?? null,
     score: execution.score ?? null,
     startedAt: execution.startedAt ?? null,
   };

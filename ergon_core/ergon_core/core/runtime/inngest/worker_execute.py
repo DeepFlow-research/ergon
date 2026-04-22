@@ -145,7 +145,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
 
     return WorkerExecuteResult(
         success=True,
-        output_text=output.output,
+        final_assistant_message=output.output,
     )
 
 

@@ -93,7 +93,7 @@ class TelemetryRepository:
         execution_id: UUID,
         *,
         success: bool,
-        output_text: str | None = None,
+        final_assistant_message: str | None = None,
         output_json: dict[str, object] | None = None,
         error_json: dict[str, object] | None = None,
     ) -> RunTaskExecution:
@@ -103,8 +103,8 @@ class TelemetryRepository:
 
         execution.status = TaskExecutionStatus.COMPLETED if success else TaskExecutionStatus.FAILED
         execution.completed_at = _utcnow()
-        if output_text is not None:
-            execution.output_text = output_text
+        if final_assistant_message is not None:
+            execution.final_assistant_message = final_assistant_message
         if output_json is not None:
             execution.output_json = output_json
         if error_json is not None:

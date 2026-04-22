@@ -179,7 +179,7 @@ async def test_full_lifecycle():
         await exec_svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
-                output_text=result.output,
+                final_assistant_message=result.output,
             )
         )
         completed_executions.append((task_desc, prepared))
@@ -231,7 +231,7 @@ async def test_full_lifecycle():
     assert len(executions) == 2
     for ex in executions:
         assert ex.status == TaskExecutionStatus.COMPLETED
-        assert ex.output_text is not None
+        assert ex.final_assistant_message is not None
     print(f"[VERIFY] {len(executions)} task executions, all COMPLETED")
 
     session.close()

@@ -69,7 +69,7 @@ class WorkerExecuteResult(BaseModel):
     model_config = {"frozen": True}
 
     success: bool = False
-    output_text: str | None = None
+    final_assistant_message: str | None = None
     error: str | None = None
 
 

@@ -159,7 +159,7 @@ def _task_keyed_executions(
                 status=ex.status,
                 started_at=ex.started_at,
                 completed_at=ex.completed_at,
-                output_text=ex.output_text,
+                final_assistant_message=ex.final_assistant_message,
                 error_message=error_msg,
                 score=None,
                 agent_id=agent_id,

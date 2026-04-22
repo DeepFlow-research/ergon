@@ -142,7 +142,7 @@ class TestListSubtasks:
         assert results == []
 
     async def test_hydrates_output_for_completed(self, session: Session):
-        """Completed subtasks include truncated output_text from execution."""
+        """Completed subtasks include truncated final_assistant_message from execution."""
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService()
         run_id = uuid4()
@@ -165,7 +165,7 @@ class TestListSubtasks:
                 node_id=child.id,
                 status=TaskExecutionStatus.COMPLETED,
                 started_at=utcnow(),
-                output_text="research results here",
+                final_assistant_message="research results here",
             )
         )
         session.flush()

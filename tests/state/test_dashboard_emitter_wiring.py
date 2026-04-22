@@ -270,7 +270,7 @@ class TestTaskStatusChangedEmitter:
         ):
             svc = TaskExecutionService()
             await svc.finalize_success(
-                FinalizeTaskExecutionCommand(execution_id=exe.id, output_text="done")
+                FinalizeTaskExecutionCommand(execution_id=exe.id, final_assistant_message="done")
             )
 
         mock_emit.assert_called_once()

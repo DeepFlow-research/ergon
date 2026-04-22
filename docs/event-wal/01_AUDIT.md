@@ -55,7 +55,7 @@ sole state source.
 
 | Table | What's there |
 |-------|-------------|
-| `run_task_executions` | started_at, completed_at, output_text, status=COMPLETED |
+| `run_task_executions` | started_at, completed_at, final_assistant_message, status=COMPLETED |
 | `run_generation_turns` | All turns: raw_request, raw_response, tool_calls, tool_results, logprobs |
 | `run_actions` | Each action with started_at, completed_at, action_type, input/output |
 | `run_resources` | Sandbox outputs downloaded and registered |

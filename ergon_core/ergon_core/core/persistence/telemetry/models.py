@@ -117,7 +117,7 @@ class RunTaskExecution(SQLModel, table=True):
     status: TaskExecutionStatus = Field(index=True)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-    output_text: str | None = None
+    final_assistant_message: str | None = None
     output_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     error_json: dict | None = Field(default=None, sa_column=Column(JSON))
 

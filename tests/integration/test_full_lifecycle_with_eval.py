@@ -162,7 +162,7 @@ async def test_full_lifecycle_with_evaluation():
         await exec_svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
-                output_text=result.output,
+                final_assistant_message=result.output,
             )
         )
         completed_tasks.append((task_desc, prepared, result))

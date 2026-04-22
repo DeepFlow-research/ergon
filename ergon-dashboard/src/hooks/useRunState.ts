@@ -200,7 +200,7 @@ export function useRunState(
               agentName: data.assignedWorkerName,
               startedAt: data.timestamp,
               completedAt: null,
-              outputText: null,
+              finalAssistantMessage: null,
               outputResourceIds: [],
               errorMessage: null,
               score: null,
