@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 class _AgentOutput(BaseModel):
     """Structured output the ReAct agent returns at the end of a run."""
 
-    output_text: str
+    final_assistant_message: str
     reasoning: str | None = None
 
 
