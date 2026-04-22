@@ -49,7 +49,6 @@ class TestBenchmarkOnboardingDepsContract:
         assert BENCHMARKS["smoke-test"].onboarding_deps.e2b is True
         assert BENCHMARKS["minif2f"].onboarding_deps.e2b is True
         assert BENCHMARKS["swebench-verified"].onboarding_deps.e2b is True
-        assert BENCHMARKS["delegation-smoke"].onboarding_deps.e2b is False
         assert BENCHMARKS["researchrubrics-smoke"].onboarding_deps.e2b is False
 
 

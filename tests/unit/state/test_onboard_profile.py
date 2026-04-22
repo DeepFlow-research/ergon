@@ -155,16 +155,14 @@ class TestPreviouslyMissingBenchmarks:
 
 
 class TestOnboardingWizardSeesAllBenchmarks:
-    """The wizard must offer all registered benchmarks, not just the old 5."""
+    """The wizard must offer all registered benchmarks."""
 
-    def test_wizard_sees_nine_slugs(self) -> None:
+    def test_wizard_sees_all_registered_slugs(self) -> None:
         from ergon_builtins.registry import BENCHMARKS
 
-        # All nine registered slugs must be visible
         expected = {
             "smoke-test",
             "minif2f",
-            "delegation-smoke",
             "researchrubrics-smoke",
             "swebench-verified",
             "gdpeval",
