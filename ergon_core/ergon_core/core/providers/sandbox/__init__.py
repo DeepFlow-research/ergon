@@ -1,5 +1,6 @@
 """Sandbox management: provisioning, file I/O, lifecycle."""
 
+from ergon_core.core.providers.sandbox.errors import SandboxSetupError
 from ergon_core.core.providers.sandbox.event_sink import (
     DashboardEmitterSandboxEventSink,
     NoopSandboxEventSink,
@@ -20,4 +21,5 @@ __all__ = [
     "DownloadedFiles",
     "NoopSandboxEventSink",
     "SandboxEventSink",
+    "SandboxSetupError",
 ]
