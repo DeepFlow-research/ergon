@@ -14,30 +14,13 @@ add a new component, update the dicts there *and* this doc.
 | Goal | Command |
 |---|---|
 | Populate **OUTPUTS** (RunResource rows, clickable file viewers) deterministically — no LLM, no cloud | `ergon benchmark run researchrubrics-smoke --worker researchrubrics-stub` (needs E2B sandbox) |
-| Populate **SANDBOX** panel (stdin/stdout events) with no LLM | `ergon benchmark run smoke-test --worker smoke-test-worker` |
+| Populate **SANDBOX** panel (stdin/stdout events) with no LLM | `ergon benchmark run researchrubrics-smoke --worker canonical-smoke` |
 | Populate **GENERATIONS** without calling a model | `ergon benchmark run smoke-test --worker training-stub` |
 | Populate **EVALUATION** with a passing gate, no LLM | any benchmark + `--evaluator stub-rubric` |
 | Populate **EVALUATION** with varied scores (RL reward-shape test) | any benchmark + `--evaluator varied-stub-rubric` |
-| Test a real ReAct agent end-to-end | `ergon benchmark run smoke-test --worker react-v1 --model openai:gpt-4o` |
-| Test manager → researcher delegation with a real LLM | `ergon benchmark run delegation-smoke --worker manager-researcher --model openai:gpt-4o` |
+| Test a real ReAct agent end-to-end | `ergon benchmark run swebench-verified --worker swebench-react --model openai:gpt-4o` |
+| Test manager → researcher delegation with a real LLM | `ergon benchmark run researchrubrics-smoke --worker researchrubrics-manager --model openai:gpt-4o` |
 | Test Lean 4 proof verification | `ergon benchmark run minif2f --worker minif2f-react --model openai:gpt-4o` (needs Lean sandbox) |
-
-### ⚠️ Common footgun: `delegation-smoke --worker manager-researcher` with no files
-
-The `delegation-smoke` benchmark spawns `researcher` sub-agents.  In the
-current registry:
-
-```python
-"researcher": StubWorker,   # registry_core.py:49
-```
-
-…`researcher` is aliased to **`StubWorker`** — a no-op that produces one
-plain-text `GenerationTurn` and nothing else.  No RunResource rows, no
-sandbox events.  That's why the OUTPUTS panel stays empty.
-
-If you want delegation **with** file-producing sub-agents, see the
-`researcher-stub` worker on the `feature/run-visibility` branch (not yet
-merged to main), or swap the benchmark composition manually.
 
 ---
 
@@ -49,7 +32,7 @@ Which worker emits what.  `—` = not applicable, `✗` = nothing emitted.
 |---|---|---|---|---|
 | `stub-worker` | ✓ (1 turn, plain text) | ✗ | ✗ | ✗ |
 | `training-stub` | ✓ (multi-turn synthetic w/ logprobs) | ✗ | ✗ | ✗ |
-| `smoke-test-worker` | ✓ | ✗ | ✓ (writes `/outputs/ci_marker.txt`) | ✗ |
+| `canonical-smoke` | ✓ | ✓ (per-env leaf RunResource) | ✓ (via per-env leaf) | ✗ |
 | `react-v1` | ✓ | ✗ | ✗ | ✓ (system/user/assistant/thinking/tool calls) |
 | `minif2f-react` | ✓ | ✓ (proof artifact) | ✓ (Lean files) | ✓ |
 | `manager-researcher` | ✓ | ✗ | ✓ (bash tool) | ✓ (delegation flow) |
@@ -67,7 +50,7 @@ EVALUATION is populated by whichever **evaluator** you pass with
 |---|---|---|---|
 | `stub-worker` | `workers/baselines/stub_worker.py` | none | Minimal no-op; returns a fixed string. |
 | `training-stub` | `workers/baselines/training_stub_worker.py` | none | Emits synthetic multi-turn data with fake logprobs/token_ids — exercises the RL extraction path without a real model. |
-| `smoke-test-worker` | `workers/baselines/smoke_test_worker.py` | E2B sandbox | Writes a marker file to the sandbox for the CI round-trip test. |
+| `canonical-smoke` | `workers/stubs/canonical_smoke_worker.py` | per-env leaf + its sandbox | Dispatches to a per-benchmark smoke leaf (`SweBenchSmokeRubric`, `ResearchRubricsSmokeRubric`, `MiniF2FSmokeRubric`) — the RFC 2026-04-21 canonical smoke path. |
 | `react-v1` | `workers/baselines/react_worker.py` | LLM | Generic ReAct-style worker built on pydantic-ai.  Used by most real benchmarks. |
 | `minif2f-react` | `workers/baselines/minif2f_react_worker.py` | LLM + Lean 4 sandbox | ReAct pre-wired with `write_lean_file`, `check_lean_file`, `verify_lean_proof`.  Produces a proof artifact in `WorkerOutput`. |
 | `manager-researcher` | `workers/baselines/manager_researcher_worker.py` | LLM + E2B sandbox | Manager with `add_subtask`, `plan_subtasks`, `refine_task`, `cancel_task`, `bash` tools — drives dynamic delegation. |
@@ -80,10 +63,10 @@ EVALUATION is populated by whichever **evaluator** you pass with
 
 | slug | class | task count | requires |
 |---|---|---|---|
-| `smoke-test` | `benchmarks/smoke_test/benchmark.py` | configurable DAG (single / linear / parallel / diamond) | none |
-| `delegation-smoke` | `benchmarks/delegation_smoke/benchmark.py` | 1 (manager with instruction to spawn exactly 2 sub-tasks) | LLM (manager) |
+| `smoke-test` | `benchmarks/smoke_test/benchmark.py` | configurable DAG (single / linear / parallel / diamond) | none — generic orchestration fixture used by the integration tier |
 | `minif2f` | `benchmarks/minif2f/benchmark.py` | ~14k Lean 4 theorems from HuggingFace `minif2f-v2c` | Lean 4 sandbox |
 | `researchrubrics-smoke` | `benchmarks/researchrubrics/smoke.py` | 1 (instruction: "write a research report") | E2B sandbox |
+| `swebench-verified` | `benchmarks/swebench_verified/benchmark.py` | curated SWE-Bench instances | Docker sandbox (ships with repo snapshots) |
 
 ---
 
@@ -93,10 +76,12 @@ EVALUATION is populated by whichever **evaluator** you pass with
 |---|---|---|---|
 | `stub-rubric` | `evaluators/rubrics/stub_rubric.py` | none | Passes iff `worker.success == True`. |
 | `varied-stub-rubric` | `evaluators/rubrics/varied_stub_rubric.py` | none | Returns a random score in `[0.1, 1.0)`; useful for GRPO reward-shape tests. |
-| `smoke-test-rubric` | `benchmarks/smoke_test/rubric.py` | E2B sandbox | Verifies the marker file exists after `smoke-test-worker` ran. |
 | `minif2f-rubric` | `benchmarks/minif2f/rubric.py` | Lean 4 sandbox | Compiles the final `.lean` in the sandbox; awards partial credit for syntactically-valid-but-unproved proofs. |
+| `minif2f-smoke-rubric` | `benchmarks/minif2f/smoke_rubric.py` | Lean sandbox | Canonical-smoke leaf for the MiniF2F env. |
 | `staged-rubric` | `benchmarks/gdpeval/rubric.py` | LLM (embedded `llm-judge` criteria) | Sequential-gate multi-stage evaluator used by GDPEval. |
 | `researchrubrics-smoke-rubric` | `benchmarks/researchrubrics/smoke_rubric.py` | none (reads local RunResource) | Asserts a `REPORT` RunResource exists with required headers (`# Findings`, `## Sources`). |
+| `swebench-smoke-rubric` | `benchmarks/swebench_verified/smoke_rubric.py` | SWE-Bench sandbox | Canonical-smoke leaf for the SWE-Bench env. |
+| `swebench-rubric` | `evaluators/rubrics/swebench_rubric.py` | SWE-Bench sandbox | Real SWE-Bench patch evaluation. |
 
 ---
 
@@ -122,6 +107,7 @@ EVALUATION is populated by whichever **evaluator** you pass with
 |---|---|---|
 | `gdpeval` | `benchmarks/gdpeval/sandbox.py` | GDPEval harness sandbox. |
 | `minif2f` | `benchmarks/minif2f/sandbox_manager.py` | Lean 4 sandbox with the compiler pre-installed. |
+| `swebench-verified` | `benchmarks/swebench_verified/sandbox_manager.py` | SWE-Bench instance sandbox; installs repo+deps in `_install_dependencies`. |
 
 (`ResearchRubricsSandboxManager` lives in `ergon_core/core/providers/sandbox/`
 and is instantiated directly by `researchrubrics-stub`; it is not in
@@ -150,6 +136,6 @@ multi-worker experiments:
 | trigger | what it wires |
 |---|---|
 | `--worker manager-researcher` (any benchmark) | `manager-researcher` on all static tasks + `researcher` bound as the sub-worker for dynamically-spawned subtasks |
-| `--benchmark delegation-smoke` (any worker) | same as above — `delegation-smoke` is designed around this composition |
+| `--worker researchrubrics-manager` (any benchmark) | `researchrubrics-manager` on all static tasks + `researchrubrics-researcher` bound as the sub-worker |
 
 Everything else runs the single worker you pass, against every task.

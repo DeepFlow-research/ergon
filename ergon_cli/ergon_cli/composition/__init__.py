@@ -25,16 +25,11 @@ def build_experiment(
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
     evaluator = evaluator_cls(name="evaluator")
 
-    # Composition is driven by the explicit worker selection first; the
-    # benchmark only wins when nothing else matches (delegation-smoke needs
-    # both manager + researcher regardless of which single worker the user
-    # typed).
-    match (worker_slug, benchmark_slug):
-        case (_, "delegation-smoke"):
-            return _build_delegation_experiment(benchmark, model, evaluator)
-        case ("manager-researcher", _):
+    # Composition is driven by the explicit worker selection.
+    match worker_slug:
+        case "manager-researcher":
             return _build_manager_researcher_experiment(benchmark, model, evaluator)
-        case ("researchrubrics-manager", _):
+        case "researchrubrics-manager":
             return _build_researchrubrics_experiment(benchmark, model, evaluator)
         case _:
             spec = WorkerSpec(worker_slug=worker_slug, name="worker", model=model)
@@ -77,28 +72,6 @@ def _build_manager_researcher_experiment(
         },
         evaluators={"default": evaluator},
         assignments={"manager-researcher": all_task_slugs},
-    )
-
-
-def _build_delegation_experiment(
-    benchmark: Benchmark,
-    model: str,
-    evaluator: Evaluator,
-) -> Experiment:
-    """Build experiment with both manager and researcher worker bindings."""
-    manager_spec = WorkerSpec(
-        worker_slug="manager-researcher", name="manager-researcher", model=model
-    )
-    researcher_spec = WorkerSpec(worker_slug="researcher", name="researcher", model=model)
-
-    return Experiment(
-        benchmark=benchmark,
-        workers={
-            "manager-researcher": manager_spec,
-            "researcher": researcher_spec,
-        },
-        evaluators={"default": evaluator},
-        assignments={"manager-researcher": "manager-task"},
     )
 
 
