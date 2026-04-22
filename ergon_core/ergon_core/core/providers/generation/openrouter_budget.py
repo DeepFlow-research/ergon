@@ -10,16 +10,24 @@ Usage:
 
 import httpx
 
-
-_KEY_ENDPOINT = "https://openrouter.ai/api/v1/auth/key"
+from ergon_core.core.settings import settings
 
 
 class OpenRouterBudget:
     """Snapshot cumulative OpenRouter spend and compare against a limit."""
 
-    def __init__(self, *, limit_usd: float, api_key: str) -> None:
+    def __init__(
+        self,
+        *,
+        limit_usd: float,
+        api_key: str,
+        base_url: str | None = None,
+    ) -> None:
         self._limit = limit_usd
         self._api_key = api_key
+        # Default pulled from Settings so ``OPENROUTER_BASE_URL`` env overrides
+        # flow through the same config mechanism as the rest of the app.
+        self._base_url = (base_url or settings.openrouter_base_url).rstrip("/")
         self._baseline: float | None = None
 
     async def snapshot_baseline(self) -> None:
@@ -34,7 +42,7 @@ class OpenRouterBudget:
     async def _current_usage(self) -> float:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                _KEY_ENDPOINT,
+                f"{self._base_url}/auth/key",
                 headers={"Authorization": f"Bearer {self._api_key}"},
             )
             resp.raise_for_status()
