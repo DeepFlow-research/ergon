@@ -71,6 +71,8 @@ class SWEBenchSandboxManager(BaseSandboxManager):
         ``BaseSandboxManager.create()`` — the early-return at ``create()``
         guards idempotence, so re-entry does not re-run these scripts.
         """
+        # reason: avoid import cycle — queries pulls in telemetry models that
+        # transitively depend on sandbox provider imports during app startup.
         from ergon_core.core.persistence.queries import queries
 
         payload = queries.task_executions.get_task_payload(task_id)

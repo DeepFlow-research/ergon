@@ -112,9 +112,12 @@ def _minif2f_react(
     sandbox_id: str,  # noqa: ARG001 — factory signature requires it; manager keys on task_id
 ) -> ReActWorker:
     """Registry factory: ReActWorker wired with a live MiniF2F toolkit."""
-    # Lazy import so tests can monkeypatch `MiniF2FSandboxManager` on its
-    # defining module and have the replacement picked up here.
+    # reason: lazy import so tests can monkeypatch `MiniF2FSandboxManager` on
+    # its defining module and have the replacement picked up here.
     from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
+
+    # reason: paired lazy import with the sandbox_manager above — defer toolkit
+    # import too so a bare `import registry_core` doesn't pull the toolkit.
     from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 
     sandbox = MiniF2FSandboxManager().get_sandbox(task_id)
@@ -145,9 +148,14 @@ def _swebench_react(
     sandbox_id: str,  # noqa: ARG001
 ) -> ReActWorker:
     """Registry factory: ReActWorker wired with a live SWE-Bench toolkit."""
+    # reason: lazy import to mirror the MiniF2F factory — keeps sandbox-manager
+    # instantiation deferred until a sandbox is actually requested and lets
+    # tests monkeypatch the manager on its defining module.
     from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
         SWEBenchSandboxManager as _Manager,
     )
+
+    # reason: paired lazy import with the sandbox_manager above.
     from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 
     sandbox = _Manager().get_sandbox(task_id)
