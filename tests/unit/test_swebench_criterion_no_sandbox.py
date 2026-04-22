@@ -50,6 +50,9 @@ def _task() -> BenchmarkTask:
 @pytest.mark.asyncio
 async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
     """Criterion calls runtime.ensure_sandbox(), not the removed _spawn_eval_sandbox."""
+    # reason: local import so the test doesn't pin a ``core`` symbol at module scope.
+    from ergon_core.api.criterion_runtime import CommandResult
+
     sandbox = AsyncMock()
     sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="log", stderr=""))
     sandbox.files.write = AsyncMock()
@@ -57,17 +60,21 @@ async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
     mock_runtime = MagicMock()
     mock_runtime.ensure_sandbox = AsyncMock()
     mock_runtime.sandbox_manager.get_sandbox.return_value = sandbox
+    # Criterion now extracts the patch itself via run_command.
+    mock_runtime.run_command = AsyncMock(
+        return_value=CommandResult(
+            stdout="diff --git a/foo.py b/foo.py\n+pass\n",
+            stderr="",
+            exit_code=0,
+        )
+    )
 
     ctx = EvaluationContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         task=_task(),
-        worker_result=WorkerOutput(
-            output="diff --git a/foo.py b/foo.py\n+pass",
-            success=True,
-            artifacts={"patch": "diff --git a/foo.py b/foo.py\n+pass"},
-        ),
+        worker_result=WorkerOutput(output="", success=True),
         runtime=mock_runtime,
     )
 

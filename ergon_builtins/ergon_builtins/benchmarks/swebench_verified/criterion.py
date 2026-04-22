@@ -32,6 +32,29 @@ logger = logging.getLogger(__name__)
 WORKDIR = "/workspace/repo"
 EVAL_TIMEOUT_SEC = 1800
 APPLY_TIMEOUT_SEC = 120
+PATCH_EXTRACT_TIMEOUT_SEC = 120
+
+
+async def _extract_patch_via_runtime(context: EvaluationContext) -> str:
+    """Compute ``git add -A && git diff HEAD`` via the criterion runtime.
+
+    The criterion owns patch extraction now -- ``WorkerOutput.artifacts``
+    is dropped at the Inngest ``worker_execute`` boundary, so the only
+    reliable source of truth is the sandbox working tree.
+    """
+    if context.runtime is None:
+        raise RuntimeError(
+            "SWEBenchTestCriterion requires a CriterionRuntime for patch "
+            "extraction; none was injected into EvaluationContext."
+        )
+    await context.runtime.ensure_sandbox()
+    result = await context.runtime.run_command(
+        f"cd {WORKDIR} && git add -A && git diff HEAD",
+        timeout=PATCH_EXTRACT_TIMEOUT_SEC,
+    )
+    if result.exit_code != 0:
+        return ""
+    return result.stdout or ""
 
 
 def make_test_spec(row: dict[str, Any]) -> Any:  # slopcop: ignore[no-typing-any]
@@ -108,8 +131,7 @@ class SWEBenchTestCriterion(Criterion):
         super().__init__(name=name, weight=weight)
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
-        worker = context.worker_result
-        patch_text = (worker.artifacts or {}).get("patch") or worker.output or ""
+        patch_text = await _extract_patch_via_runtime(context)
         if not patch_text.strip():
             return CriterionResult(
                 name=self.name,
@@ -124,13 +146,8 @@ class SWEBenchTestCriterion(Criterion):
         row = _payload_to_swebench_row(payload)
         spec = make_test_spec(row)
 
-        if context.runtime is None:
-            raise RuntimeError(
-                "SWEBenchTestCriterion requires a CriterionRuntime; "
-                "none was injected into EvaluationContext."
-            )
-
-        await context.runtime.ensure_sandbox()
+        # ``_extract_patch_via_runtime`` already called ``ensure_sandbox``;
+        # grab the live sandbox handle for the harness-grading path.
         sandbox = context.runtime.sandbox_manager.get_sandbox(  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]
             context.run_id
         )

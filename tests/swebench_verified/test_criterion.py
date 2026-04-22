@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from ergon_core.api.criterion_runtime import CommandResult
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
@@ -35,13 +36,30 @@ def _task() -> BenchmarkTask:
     )
 
 
-def _mock_runtime(sandbox: object | None = None) -> MagicMock:
-    """Return a mock CriterionRuntime with sandbox_manager wired up."""
+def _mock_runtime(
+    sandbox: object | None = None,
+    *,
+    patch_text: str = "PATCH",
+    patch_exit_code: int = 0,
+) -> MagicMock:
+    """Return a mock CriterionRuntime with sandbox_manager wired up.
+
+    ``run_command`` is stubbed to return ``patch_text`` for the
+    ``git diff HEAD`` extraction -- tests that exercise the evaluator
+    past the empty-patch short-circuit need to set this.
+    """
     mock_sandbox = sandbox or _mock_sandbox()
     runtime = MagicMock()
     runtime.ensure_sandbox = AsyncMock()
     runtime.sandbox_manager = MagicMock()
     runtime.sandbox_manager.get_sandbox.return_value = mock_sandbox
+    runtime.run_command = AsyncMock(
+        return_value=CommandResult(
+            stdout=patch_text,
+            stderr="",
+            exit_code=patch_exit_code,
+        )
+    )
     return runtime
 
 
@@ -75,8 +93,10 @@ def _ctx(
 
 @pytest.mark.asyncio
 async def test_criterion_returns_score_0_for_empty_patch() -> None:
+    """When ``git diff HEAD`` returns an empty tree, score is 0."""
+    runtime = _mock_runtime(patch_text="")
     crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
-    ctx = _ctx(output="", artifacts={"patch": ""})
+    ctx = _ctx(output="", artifacts={"patch": ""}, runtime=runtime)
     result = await crit.evaluate(ctx)
     assert result.score == 0.0
     assert result.passed is False
@@ -204,6 +224,9 @@ async def test_criterion_returns_sandbox_unavailable_when_get_sandbox_returns_no
     runtime = MagicMock()
     runtime.ensure_sandbox = AsyncMock()
     runtime.sandbox_manager.get_sandbox.return_value = None
+    runtime.run_command = AsyncMock(
+        return_value=CommandResult(stdout="PATCH", stderr="", exit_code=0)
+    )
 
     with patch(
         "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
