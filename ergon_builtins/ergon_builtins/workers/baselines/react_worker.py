@@ -150,7 +150,7 @@ class ReActWorker(Worker):
         return self._base_output(context)
 
     def _base_output(self, context: WorkerContext) -> WorkerOutput:
-        """Build the non-adapter-transformed output from persisted events."""
+        """Build the worker's output from persisted context events."""
         # reason: avoid circular import at module level
         from ergon_core.core.persistence.context.event_payloads import (
             AssistantTextPayload,

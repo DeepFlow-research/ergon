@@ -40,6 +40,7 @@ def test_construct_with_minimal_explicit_kwargs() -> None:
         max_iterations=1,
     )
     assert worker.name == "unit"
+    assert worker.model is None
     assert worker.tools == []
     assert worker.system_prompt is None
     assert worker.max_iterations == 1
