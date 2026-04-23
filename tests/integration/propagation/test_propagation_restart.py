@@ -63,28 +63,14 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Restart semantics not yet implemented — "
-        "operator_unblock (BLOCKED → PENDING) is a Step 6 feature"
-    ),
-)
 @pytest.mark.asyncio
 async def test_8_operator_unblock_transitions_blocked_to_pending() -> None:
     """An operator can unblock a BLOCKED node, transitioning it back to PENDING.
 
     Scenario:
       1. A→B chain. A fails → B becomes BLOCKED.
-      2. Operator retries / fixes A (A transitions to COMPLETED).
-      3. operator_unblock is called on B → B becomes PENDING.
-      4. Propagation resumes: B becomes READY for execution.
-
-    This is a stub — the ``operator_unblock`` function/service call
-    below is intentionally referencing a function that does not yet exist
-    (``TaskPropagationService.operator_unblock``). The test will xfail
-    at import/collection time because of the missing attribute OR at
-    assertion time because B stays BLOCKED.
+      2. Operator fixes A and calls operator_unblock on B.
+      3. B becomes PENDING and WAL records the transition.
     """
     with get_session() as session:
         defn = make_experiment_definition(session)
@@ -137,19 +123,12 @@ async def test_8_operator_unblock_transitions_blocked_to_pending() -> None:
         _cleanup_run(run_id, defn_id)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Restart of FAILED node not yet implemented — re-running a FAILED task is a Step 6 feature"
-    ),
-)
 @pytest.mark.asyncio
 async def test_8b_restart_failed_node_re_enters_running() -> None:
-    """A FAILED node can be restarted, transitioning back through PENDING → RUNNING.
+    """A FAILED node can be restarted, transitioning back to PENDING.
 
-    This is a stub — the restart semantics are Step 6 work. The test
-    asserts the FAILED node becomes RUNNING after a restart call, which
-    will xfail until the implementation exists.
+    Operator calls restart_node on a FAILED node. The node becomes PENDING
+    so it can be re-scheduled for execution.
     """
     with get_session() as session:
         defn = make_experiment_definition(session)

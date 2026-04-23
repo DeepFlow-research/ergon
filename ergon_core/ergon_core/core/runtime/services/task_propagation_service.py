@@ -101,6 +101,41 @@ class TaskPropagationService:
                 workflow_terminal_state=terminal,
             )
 
+    async def operator_unblock(self, *, run_id: UUID, node_id: UUID, reason: str) -> None:
+        """Operator action: transition a BLOCKED node back to PENDING.
+
+        BLOCKED is non-terminal so the default only_if_not_terminal guard is
+        not needed here, but we write unconditionally so it also works if the
+        node was somehow left in another non-terminal state.
+        """
+        with get_session() as session:
+            graph_repo = WorkflowGraphRepository()
+            await graph_repo.update_node_status(
+                session,
+                run_id=run_id,
+                node_id=node_id,
+                new_status=TaskExecutionStatus.PENDING,
+                meta=MutationMeta(actor="operator:unblock", reason=reason),
+            )
+            session.commit()
+
+    async def restart_node(self, *, run_id: UUID, node_id: UUID, reason: str) -> None:
+        """Operator action: restart a FAILED node by transitioning it back to PENDING.
+
+        FAILED is terminal, so only_if_not_terminal must NOT be used here —
+        this is an explicit operator override that reverses a terminal status.
+        """
+        with get_session() as session:
+            graph_repo = WorkflowGraphRepository()
+            await graph_repo.update_node_status(
+                session,
+                run_id=run_id,
+                node_id=node_id,
+                new_status=TaskExecutionStatus.PENDING,
+                meta=MutationMeta(actor="operator:restart", reason=reason),
+            )
+            session.commit()
+
     async def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
         """Handle task failure: invalidate downstream deps, detect workflow terminal.
 
