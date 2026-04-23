@@ -161,19 +161,9 @@ async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult
         )
     )
 
-    failure_events: list[inngest.Event] = [
-        inngest.Event(
-            name=TaskCancelledEvent.name,
-            data=TaskCancelledEvent(
-                run_id=payload.run_id,
-                definition_id=payload.definition_id,
-                node_id=inv_node_id,
-                execution_id=None,
-                cause="dep_invalidated",
-            ).model_dump(mode="json"),
-        )
-        for inv_node_id in propagation.invalidated_targets
-    ]
+    # BLOCKED successors are a DB write only — no task/cancelled events.
+    # propagation.invalidated_targets is always empty from the failure path.
+    failure_events: list[inngest.Event] = []
 
     if propagation.workflow_terminal_state == WorkflowTerminalState.FAILED:
         failure_events.append(

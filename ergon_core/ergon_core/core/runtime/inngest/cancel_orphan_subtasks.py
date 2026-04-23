@@ -25,6 +25,7 @@ from ergon_core.core.runtime.events.task_events import (
     TaskFailedEvent,
 )
 from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.services.subtask_blocking_service import SubtaskBlockingService
 from ergon_core.core.runtime.services.subtask_cancellation_service import (
     SubtaskCancellationService,
 )
@@ -90,21 +91,33 @@ async def cancel_orphans_on_completed_fn(ctx: inngest.Context) -> int:
 
 
 @inngest_client.create_function(
-    fn_id="cancel-orphans-on-failed",
+    fn_id="block-descendants-on-failed",
     trigger=inngest.TriggerEvent(event="task/failed"),
     cancel=RUN_CANCEL,
     retries=1,
 )
-async def cancel_orphans_on_failed_fn(ctx: inngest.Context) -> int:
+async def block_descendants_on_failed_fn(ctx: inngest.Context) -> int:
+    """When a parent fails, PENDING/READY containment descendants become BLOCKED.
+
+    RUNNING descendants are not interrupted. Horizontal (edge-based) successor
+    BLOCKED propagation is handled separately in propagation.py.
+    """
     payload = TaskFailedEvent.model_validate(ctx.event.data)
-    logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.node_id)
-    return await _cancel_orphans_for(
-        ctx,
-        run_id=payload.run_id,
-        definition_id=payload.definition_id,
-        parent_node_id=payload.node_id,
-        cause="parent_terminal",
-    )
+    logger.info("block-descendants-on-failed parent=%s", payload.node_id)
+    svc = SubtaskBlockingService()
+
+    async def _block_descendants() -> list[str]:
+        with get_session() as session:
+            blocked_ids = await svc.block_pending_descendants(
+                session,
+                run_id=payload.run_id,
+                parent_node_id=payload.node_id,
+                cause="parent_failed",
+            )
+        return [str(nid) for nid in blocked_ids]
+
+    blocked = await ctx.step.run("block-pending-descendants", _block_descendants)
+    return len(blocked)
 
 
 @inngest_client.create_function(

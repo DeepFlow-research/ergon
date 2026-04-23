@@ -15,10 +15,12 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import (
+    BLOCKED,
     CANCELLED,
     EDGE_INVALIDATED,
     EDGE_SATISFIED,
     FAILED,
+    RUNNING,
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
@@ -503,27 +505,25 @@ async def on_task_completed_or_failed(
             continue
 
         if not is_success:
-            # Dynamic subtasks (parent_node_id set) are manager-owned.
-            # The manager polls via list_subtasks and decides whether to
-            # retry, cancel, or re-plan — so we leave the target PENDING
-            # and only invalidate the edge.  Static workflow nodes
-            # (parent_node_id is None) have no adaptive supervisor, so
-            # auto-cancel is the correct behaviour.
-            if candidate_node.parent_node_id is not None:
+            # RUNNING nodes finish on their own terms; propagation must not
+            # interrupt a live execution regardless of what its predecessor did.
+            if candidate_node.status == RUNNING:
                 continue
 
+            # All PENDING/READY/BLOCKED successors become BLOCKED.
+            # BLOCKED means "predecessor failed; operator action required."
+            # This is a synchronous DB write only — no task/cancelled events.
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
                 node_id=candidate_id,
-                new_status=CANCELLED,
+                new_status=BLOCKED,
                 meta=MutationMeta(
                     actor="system:propagation",
                     reason=f"dependency {node_id} {terminal_status}",
                 ),
                 only_if_not_terminal=True,
             )
-            invalidated.append(candidate_id)
             continue
 
         # Source completed — check if this candidate can become READY.
@@ -602,8 +602,17 @@ def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
 
 
 def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
-    """True when any graph node for this run has reached FAILED."""
+    """All nodes terminal AND at least one FAILED.
+
+    BLOCKED is non-terminal, so a run with BLOCKED tasks returns False and
+    keeps the RunRecord in EXECUTING (stuck, awaiting operator action). Only
+    when every node is terminal (operator has resolved all BLOCKED nodes) and
+    at least one is FAILED does the run finalise as FAILED.
+    """
     statuses = list(
         session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
     )
-    return any(s == TaskExecutionStatus.FAILED for s in statuses)
+    if not statuses:
+        return False
+    all_terminal = all(s in TERMINAL_STATUSES for s in statuses)
+    return all_terminal and any(s == FAILED for s in statuses)
