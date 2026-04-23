@@ -14,8 +14,14 @@ See docs/superpowers/plans/test-refactor/01-fixtures.md §2.7.
 
 from ergon_builtins.registry import EVALUATORS, WORKERS
 
+from tests.e2e._fixtures.criteria.minif2f_smoke import MiniF2FSmokeCriterion
 from tests.e2e._fixtures.criteria.researchrubrics_smoke import (
     ResearchRubricsSmokeCriterion,
+)
+from tests.e2e._fixtures.criteria.swebench_smoke import SweBenchSmokeCriterion
+from tests.e2e._fixtures.workers.minif2f_smoke import (
+    MiniF2FSmokeLeafWorker,
+    MiniF2FSmokeWorker,
 )
 from tests.e2e._fixtures.workers.researchrubrics_smoke import (
     ResearchRubricsSmokeLeafWorker,
@@ -24,6 +30,10 @@ from tests.e2e._fixtures.workers.researchrubrics_smoke import (
 from tests.e2e._fixtures.workers.researchrubrics_smoke_sadpath import (
     ResearchRubricsFailingLeafWorker,
     ResearchRubricsSadPathSmokeWorker,
+)
+from tests.e2e._fixtures.workers.swebench_smoke import (
+    SweBenchSmokeLeafWorker,
+    SweBenchSmokeWorker,
 )
 
 
@@ -44,7 +54,15 @@ def register_smoke_fixtures() -> None:
     WORKERS[ResearchRubricsSadPathSmokeWorker.type_slug] = ResearchRubricsSadPathSmokeWorker
     WORKERS[ResearchRubricsFailingLeafWorker.type_slug] = ResearchRubricsFailingLeafWorker
 
-    # Phase D: MiniF2F + SWE-Bench registrations land here.
+    # MiniF2F happy-path
+    WORKERS[MiniF2FSmokeWorker.type_slug] = MiniF2FSmokeWorker
+    WORKERS[MiniF2FSmokeLeafWorker.type_slug] = MiniF2FSmokeLeafWorker
+    EVALUATORS[MiniF2FSmokeCriterion.type_slug] = MiniF2FSmokeCriterion
+
+    # SWE-Bench Verified happy-path
+    WORKERS[SweBenchSmokeWorker.type_slug] = SweBenchSmokeWorker
+    WORKERS[SweBenchSmokeLeafWorker.type_slug] = SweBenchSmokeLeafWorker
+    EVALUATORS[SweBenchSmokeCriterion.type_slug] = SweBenchSmokeCriterion
 
 
 register_smoke_fixtures()

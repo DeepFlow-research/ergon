@@ -50,11 +50,19 @@ def test_register_is_idempotent() -> None:
     register_smoke_fixtures()
 
 
-@pytest.mark.skip(reason="Phase D populates minif2f and swebench fixtures")
 def test_minif2f_slugs_registered() -> None:
-    pass
+    import tests.e2e._fixtures  # noqa: F401
+    from ergon_builtins.registry import EVALUATORS, WORKERS
+
+    assert "minif2f-smoke-worker" in WORKERS
+    assert "minif2f-smoke-leaf" in WORKERS
+    assert "minif2f-smoke-criterion" in EVALUATORS
 
 
-@pytest.mark.skip(reason="Phase D populates minif2f and swebench fixtures")
 def test_swebench_slugs_registered() -> None:
-    pass
+    import tests.e2e._fixtures  # noqa: F401
+    from ergon_builtins.registry import EVALUATORS, WORKERS
+
+    assert "swebench-smoke-worker" in WORKERS
+    assert "swebench-smoke-leaf" in WORKERS
+    assert "swebench-smoke-criterion" in EVALUATORS
