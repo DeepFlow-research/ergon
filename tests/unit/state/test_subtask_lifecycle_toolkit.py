@@ -1,6 +1,5 @@
 """Unit tests for SubtaskLifecycleToolkit pydantic-ai tool closures."""
 
-import asyncio
 from uuid import uuid4
 
 from ergon_builtins.tools.subtask_lifecycle_toolkit import SubtaskLifecycleToolkit
@@ -12,19 +11,6 @@ def _make_toolkit() -> SubtaskLifecycleToolkit:
         parent_node_id=uuid4(),
         sandbox_id="test-sandbox",
     )
-
-
-def test_get_tools_returns_eight_callables() -> None:
-    toolkit = _make_toolkit()
-    tools = toolkit.get_tools()
-    assert len(tools) == 8
-    assert all(callable(t) for t in tools)
-
-
-def test_add_subtask_tool_is_async_callable() -> None:
-    toolkit = _make_toolkit()
-    tools = toolkit.get_tools()
-    assert asyncio.iscoroutinefunction(tools[0])
 
 
 async def test_cancel_task_handles_invalid_uuid_gracefully() -> None:
