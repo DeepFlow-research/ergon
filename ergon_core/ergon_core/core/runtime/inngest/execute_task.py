@@ -8,9 +8,9 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
+from ergon_core.core.providers.sandbox.manager import StubSandboxManager
 from ergon_core.core.runtime.errors import ConfigurationError, ContractViolationError
 from ergon_core.core.runtime.events.task_events import (
-    SANDBOX_SKIPPED,
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,
@@ -80,6 +80,14 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             payload.task_id,
             prepared.skip_reason,
         )
+        # ``TaskCompletedEvent.sandbox_id`` is required, so mint a stub id
+        # representing "this task completed without provisioning a sandbox".
+        # Downstream teardown uses ``is_stub_sandbox_id`` to short-circuit.
+        stub_sandbox_id = await StubSandboxManager().create(
+            payload.task_id,
+            run_id=payload.run_id,
+            display_task_id=payload.task_id,
+        )
         await inngest_client.send(
             inngest.Event(
                 name=TaskCompletedEvent.name,
@@ -88,7 +96,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                     definition_id=payload.definition_id,
                     task_id=payload.task_id,
                     execution_id=prepared.execution_id,
-                    sandbox_id=SANDBOX_SKIPPED,
+                    sandbox_id=stub_sandbox_id,
                     node_id=prepared.node_id,
                 ).model_dump(mode="json"),
             )
@@ -102,7 +110,10 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             skip_reason=prepared.skip_reason,
         )
 
-    task_sandbox_id: str = SANDBOX_SKIPPED
+    # ``None`` until sandbox-setup returns. ``TaskFailedEvent.sandbox_id`` is
+    # now ``str | None`` so a pre-sandbox failure carries ``None`` instead of
+    # the old ``"skipped"`` magic string.
+    task_sandbox_id: str | None = None
     try:
         # Deferred: child function modules register with Inngest at import
         # time. Eager cross-imports between registered modules cause cycles.
@@ -183,6 +194,16 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             )
         )
 
+        # task_sandbox_id was populated from sandbox-setup above; the
+        # contract violation was already raised if it was missing. Assert via
+        # ContractViolationError rather than `assert` so the check survives
+        # `python -O`.
+        if task_sandbox_id is None:
+            raise ContractViolationError(
+                "task_sandbox_id is None after sandbox-setup completed",
+                run_id=payload.run_id,
+                task_id=payload.task_id,
+            )
         await inngest_client.send(
             inngest.Event(
                 name=TaskCompletedEvent.name,

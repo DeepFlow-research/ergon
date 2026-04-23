@@ -11,7 +11,10 @@ import inngest
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.providers.sandbox.manager import (
+    BaseSandboxManager,
+    is_stub_sandbox_id,
+)
 from ergon_core.core.runtime.errors import ConfigurationError, DataIntegrityError
 from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -66,7 +69,13 @@ async def _cleanup_run(run_id: UUID, status: str, error_message: str | None) -> 
         sandbox_id = run.parsed_summary().get("sandbox_id")
         sandbox_terminated = False
 
-        if sandbox_id and isinstance(sandbox_id, str):
+        if is_stub_sandbox_id(sandbox_id):
+            logger.info(
+                "run-cleanup run_id=%s: sandbox_id=%s is a stub (no E2B sandbox exists), skipping termination",
+                run_id,
+                sandbox_id,
+            )
+        elif sandbox_id and isinstance(sandbox_id, str):
             sandbox_terminated = await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
         elif sandbox_id is not None:
             logger.warning(
