@@ -201,14 +201,14 @@ function applyNodeAdded(
 
   const task: TaskState = {
     id: nodeId,
-    name: value.task_key,
+    name: value.task_slug,
     description: value.description,
     status: value.status as TaskStatus,
     parentId: null,
     childIds: [],
     dependsOnIds: [],
     assignedWorkerId: null,
-    assignedWorkerName: value.assigned_worker_key,
+    assignedWorkerName: value.assigned_worker_slug,
     startedAt: null,
     completedAt: null,
     isLeaf: true,
@@ -276,7 +276,7 @@ function applyNodeFieldChange(
     case "description":
       updated.description = value.value ?? "";
       break;
-    case "assigned_worker_key":
+    case "assigned_worker_slug":
       updated.assignedWorkerName = value.value;
       break;
   }
