@@ -1,4 +1,5 @@
 """Shared polling and assertion helpers for propagation integration tests."""
+
 import time
 from uuid import UUID
 
@@ -34,9 +35,9 @@ def get_node_status(session: Session, node_id: UUID) -> str:
 
 
 def get_wal_entries(session: Session, node_id: UUID) -> list[RunGraphMutation]:
-    return list(session.exec(
-        select(RunGraphMutation).where(RunGraphMutation.target_id == node_id)
-    ).all())
+    return list(
+        session.exec(select(RunGraphMutation).where(RunGraphMutation.target_id == node_id)).all()
+    )
 
 
 def assert_wal_has_status(

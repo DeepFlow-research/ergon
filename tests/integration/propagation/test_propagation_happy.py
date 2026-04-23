@@ -5,6 +5,7 @@ COMPLETED status and the RunRecord must stay non-failed.
 
 Expected to PASS with current production code (no xfail).
 """
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
@@ -65,13 +66,9 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
             select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(
-            select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
-        ).all():
+        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
             session.delete(edge)
-        for nd in session.exec(
-            select(RunGraphNode).where(RunGraphNode.run_id == run_id)
-        ).all():
+        for nd in session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all():
             session.delete(nd)
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
@@ -98,6 +95,9 @@ async def test_1_single_task_happy_path() -> None:
         defn = make_experiment_definition(session)
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="task-a", status="running")
+        run_id = run.id
+        defn_id = defn.id
+        node_a_id = node_a.id
         session.commit()
 
     try:
@@ -106,8 +106,8 @@ async def test_1_single_task_happy_path() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(actor="test:setup", reason="test setup: running"),
             )
@@ -117,31 +117,31 @@ async def test_1_single_task_happy_path() -> None:
         svc = TaskPropagationService()
         await svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run.id,
-                definition_id=defn.id,
-                task_id=node_a.definition_task_id,
-                execution_id=None,
-                node_id=node_a.id,
+                run_id=run_id,
+                definition_id=defn_id,
+                task_id=node_a_id,
+                execution_id=node_a_id,
+                node_id=node_a_id,
             )
         )
 
         # --- Assertions ---
         with get_session() as session:
-            status = get_node_status(session, node_a.id)
+            status = get_node_status(session, node_a_id)
             assert status == TaskExecutionStatus.COMPLETED, (
                 f"Expected node to be COMPLETED, got {status!r}"
             )
-            assert_wal_has_status(session, node_a.id, "completed")
+            assert_wal_has_status(session, node_a_id, "completed")
 
         # RunRecord must not be FAILED after single-task happy-path completion.
         with get_session() as session:
-            run_row = session.get(RunRecord, run.id)
+            run_row = session.get(RunRecord, run_id)
             assert run_row is not None
             assert run_row.status != RunStatus.FAILED, (
                 f"RunRecord should not be FAILED; got {run_row.status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run.id)
+            assert_cross_cutting_invariants(session, run_id)
     finally:
-        _cleanup_run(run.id, defn.id)
+        _cleanup_run(run_id, defn_id)

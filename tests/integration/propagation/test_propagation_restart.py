@@ -8,6 +8,7 @@ the production code does not yet implement:
 
 When Step 6 is complete, this test should be expanded and un-xfailed.
 """
+
 import pytest
 from sqlmodel import select
 
@@ -44,13 +45,9 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
             select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(
-            select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
-        ).all():
+        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
             session.delete(edge)
-        for nd in session.exec(
-            select(RunGraphNode).where(RunGraphNode.run_id == run_id)
-        ).all():
+        for nd in session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all():
             session.delete(nd)
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
@@ -95,6 +92,10 @@ async def test_8_operator_unblock_transitions_blocked_to_pending() -> None:
         node_a = make_node(session, run.id, task_slug="task-a-failed", status="failed")
         node_b = make_node(session, run.id, task_slug="task-b-blocked", status="blocked")
         make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        run_id = run.id
+        defn_id = defn.id
+        node_a_id = node_a.id
+        node_b_id = node_b.id
         session.commit()
 
     try:
@@ -103,15 +104,15 @@ async def test_8_operator_unblock_transitions_blocked_to_pending() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: A failed"),
             )
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_b.id,
+                run_id=run_id,
+                node_id=node_b_id,
                 new_status=BLOCKED,
                 meta=MutationMeta(actor="test:setup", reason="test: B blocked by A failure"),
             )
@@ -120,27 +121,26 @@ async def test_8_operator_unblock_transitions_blocked_to_pending() -> None:
         # Step 6 will add this method. It doesn't exist yet — xfail covers the AttributeError.
         svc = TaskPropagationService()
         await svc.operator_unblock(  # type: ignore[attr-defined]  # Step 6: not implemented yet
-            run_id=run.id,
-            node_id=node_b.id,
+            run_id=run_id,
+            node_id=node_b_id,
             reason="operator: unblocking B after A was retried",
         )
 
         with get_session() as session:
-            b_status = get_node_status(session, node_b.id)
+            b_status = get_node_status(session, node_b_id)
             assert b_status == TaskExecutionStatus.PENDING, (
                 f"Expected B to be PENDING after operator_unblock; got {b_status!r}"
             )
-            assert_wal_has_status(session, node_b.id, "pending")
+            assert_wal_has_status(session, node_b_id, "pending")
 
     finally:
-        _cleanup_run(run.id, defn.id)
+        _cleanup_run(run_id, defn_id)
 
 
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Restart of FAILED node not yet implemented — "
-        "re-running a FAILED task is a Step 6 feature"
+        "Restart of FAILED node not yet implemented — re-running a FAILED task is a Step 6 feature"
     ),
 )
 @pytest.mark.asyncio
@@ -155,6 +155,9 @@ async def test_8b_restart_failed_node_re_enters_running() -> None:
         defn = make_experiment_definition(session)
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="task-a-to-restart", status="failed")
+        run_id = run.id
+        defn_id = defn.id
+        node_a_id = node_a.id
         session.commit()
 
     try:
@@ -162,8 +165,8 @@ async def test_8b_restart_failed_node_re_enters_running() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: A failed"),
             )
@@ -172,16 +175,16 @@ async def test_8b_restart_failed_node_re_enters_running() -> None:
         # Step 6 will add this method.
         svc = TaskPropagationService()
         await svc.restart_node(  # type: ignore[attr-defined]  # Step 6: not implemented yet
-            run_id=run.id,
-            node_id=node_a.id,
+            run_id=run_id,
+            node_id=node_a_id,
             reason="operator: restarting A",
         )
 
         with get_session() as session:
-            a_status = get_node_status(session, node_a.id)
+            a_status = get_node_status(session, node_a_id)
             assert a_status == TaskExecutionStatus.PENDING, (
                 f"Expected A to be PENDING after restart; got {a_status!r}"
             )
 
     finally:
-        _cleanup_run(run.id, defn.id)
+        _cleanup_run(run_id, defn_id)

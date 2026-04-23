@@ -1,8 +1,9 @@
 """Edge-case propagation tests.
 
-EC-1: fan-in race under failure → BLOCKED, not CANCELLED. xfail.
+EC-1: fan-in race under failure → BLOCKED, not CANCELLED.
 EC-2: duplicate task/ready idempotency. Expected to pass with current code.
 """
+
 import pytest
 from sqlmodel import select
 
@@ -40,13 +41,9 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
             select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(
-            select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
-        ).all():
+        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
             session.delete(edge)
-        for nd in session.exec(
-            select(RunGraphNode).where(RunGraphNode.run_id == run_id)
-        ).all():
+        for nd in session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all():
             session.delete(nd)
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
@@ -62,16 +59,12 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BLOCKED not yet implemented — fan-in target becomes CANCELLED instead",
-)
 @pytest.mark.asyncio
 async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
     """Fan-in race: two dependencies A and B → C.
 
     A fails; B completes. C must become BLOCKED because one of its
-    dependencies failed — not CANCELLED (which is the current behaviour).
+    dependencies failed — not CANCELLED (which was the old behaviour).
 
     Topology:
         A ──┐
@@ -81,11 +74,7 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
     Execution order:
       1. A fails → propagate_failure from A → edge A→C invalidated.
       2. B completes → propagate from B → B's edge to C is satisfied.
-      3. C cannot start (one dep failed) → should be BLOCKED.
-
-    With BLOCKED not yet implemented, A's failure will mark C as CANCELLED
-    (the current behaviour), so the assertion that C is BLOCKED will fail
-    and pytest will report the expected xfail.
+      3. C cannot start (one dep failed) → must be BLOCKED.
     """
     with get_session() as session:
         defn = make_experiment_definition(session)
@@ -95,6 +84,11 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         node_c = make_node(session, run.id, task_slug="fan-c", status="pending")
         make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_c.id)
         make_edge(session, run.id, source_node_id=node_b.id, target_node_id=node_c.id)
+        run_id = run.id
+        defn_id = defn.id
+        node_a_id = node_a.id
+        node_b_id = node_b.id
+        node_c_id = node_c.id
         session.commit()
 
     try:
@@ -102,15 +96,15 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: A failed"),
             )
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_b.id,
+                run_id=run_id,
+                node_id=node_b_id,
                 new_status=TaskExecutionStatus.COMPLETED,
                 meta=MutationMeta(actor="test:setup", reason="test: B completed"),
             )
@@ -121,46 +115,46 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         # Propagate A's failure first
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
-                run_id=run.id,
-                definition_id=defn.id,
-                task_id=node_a.definition_task_id,
-                execution_id=None,
-                node_id=node_a.id,
+                run_id=run_id,
+                definition_id=defn_id,
+                task_id=node_a_id,
+                execution_id=node_a_id,
+                node_id=node_a_id,
             )
         )
 
         # Then propagate B's completion — B is done but A already failed C
         await svc.propagate(
             PropagateTaskCompletionCommand(
-                run_id=run.id,
-                definition_id=defn.id,
-                task_id=node_b.definition_task_id,
-                execution_id=None,
-                node_id=node_b.id,
+                run_id=run_id,
+                definition_id=defn_id,
+                task_id=node_b_id,
+                execution_id=node_b_id,
+                node_id=node_b_id,
             )
         )
 
         with get_session() as session:
-            c_status = get_node_status(session, node_c.id)
-            # After BLOCKED is implemented, C must be BLOCKED (not CANCELLED)
+            c_status = get_node_status(session, node_c_id)
+            # C must be BLOCKED (not CANCELLED) when one dep failed (fan-in)
             assert c_status == BLOCKED, (
                 f"Expected C to be BLOCKED when one dep failed (fan-in); got {c_status!r}"
             )
-            assert_wal_has_status(session, node_c.id, BLOCKED)
+            assert_wal_has_status(session, node_c_id, BLOCKED)
 
         # RunRecord must remain EXECUTING — the run is stuck, not over
         with get_session() as session:
-            run_row = session.get(RunRecord, run.id)
+            run_row = session.get(RunRecord, run_id)
             assert run_row is not None
             assert run_row.status == RunStatus.EXECUTING, (
                 f"RunRecord must remain EXECUTING while C is blocked; got {run_row.status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run.id)
+            assert_cross_cutting_invariants(session, run_id)
 
     finally:
-        _cleanup_run(run.id, defn.id)
+        _cleanup_run(run_id, defn_id)
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +177,10 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         node_a = make_node(session, run.id, task_slug="idem-a", status="running")
         node_b = make_node(session, run.id, task_slug="idem-b", status="pending")
         make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        run_id = run.id
+        defn_id = defn.id
+        node_a_id = node_a.id
+        node_b_id = node_b.id
         session.commit()
 
     try:
@@ -190,8 +188,8 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(actor="test:setup", reason="test setup"),
             )
@@ -200,18 +198,18 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         svc = TaskPropagationService()
 
         command = PropagateTaskCompletionCommand(
-            run_id=run.id,
-            definition_id=defn.id,
-            task_id=node_a.definition_task_id,
-            execution_id=None,
-            node_id=node_a.id,
+            run_id=run_id,
+            definition_id=defn_id,
+            task_id=node_a_id,
+            execution_id=node_a_id,
+            node_id=node_a_id,
         )
 
         # First propagation
         await svc.propagate(command)
 
         with get_session() as session:
-            a_status = get_node_status(session, node_a.id)
+            a_status = get_node_status(session, node_a_id)
             assert a_status == TaskExecutionStatus.COMPLETED, (
                 f"Expected A to be COMPLETED after first propagate; got {a_status!r}"
             )
@@ -220,23 +218,21 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         await svc.propagate(command)
 
         with get_session() as session:
-            a_status_after = get_node_status(session, node_a.id)
+            a_status_after = get_node_status(session, node_a_id)
             assert a_status_after == TaskExecutionStatus.COMPLETED, (
                 f"Expected A to remain COMPLETED after duplicate propagate; got {a_status_after!r}"
             )
             # B should still be in its post-first-propagate state (PENDING/ready)
-            b_status = get_node_status(session, node_b.id)
+            b_status = get_node_status(session, node_b_id)
             # B should be PENDING (was activated by first propagation) or COMPLETED
             # — the key invariant is it's not FAILED or CANCELLED from a spurious call
             assert b_status not in {
                 TaskExecutionStatus.FAILED,
                 CANCELLED,
-            }, (
-                f"B status corrupted by duplicate propagate; got {b_status!r}"
-            )
+            }, f"B status corrupted by duplicate propagate; got {b_status!r}"
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run.id)
+            assert_cross_cutting_invariants(session, run_id)
 
     finally:
-        _cleanup_run(run.id, defn.id)
+        _cleanup_run(run_id, defn_id)

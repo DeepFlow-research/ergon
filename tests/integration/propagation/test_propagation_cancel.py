@@ -7,6 +7,7 @@ already implemented. No xfail needed.
 If this were asserting RunRecord status assertions that aren't yet wired,
 it would need xfail; but the simple node-level cancel works today.
 """
+
 import pytest
 from sqlmodel import select
 
@@ -41,13 +42,9 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
             select(RunGraphMutation).where(RunGraphMutation.run_id == run_id)
         ).all():
             session.delete(mut)
-        for edge in session.exec(
-            select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
-        ).all():
+        for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
             session.delete(edge)
-        for nd in session.exec(
-            select(RunGraphNode).where(RunGraphNode.run_id == run_id)
-        ).all():
+        for nd in session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all():
             session.delete(nd)
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
@@ -75,6 +72,9 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         defn = make_experiment_definition(session)
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="cancel-target", status="pending")
+        run_id = run.id
+        defn_id = defn.id
+        node_a_id = node_a.id
         session.commit()
 
     try:
@@ -84,8 +84,8 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=TaskExecutionStatus.PENDING,
                 meta=MutationMeta(actor="test:setup", reason="test setup: node pending"),
             )
@@ -95,8 +95,8 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=CANCELLED,
                 meta=MutationMeta(
                     actor="manager:operator",
@@ -106,22 +106,22 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
             session.commit()
 
         with get_session() as session:
-            status = get_node_status(session, node_a.id)
+            status = get_node_status(session, node_a_id)
             assert status == CANCELLED, (
                 f"Expected node to be CANCELLED after operator cancel; got {status!r}"
             )
             assert_wal_has_status(
                 session,
-                node_a.id,
+                node_a_id,
                 CANCELLED,
                 cause_contains="manager_decision",
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run.id)
+            assert_cross_cutting_invariants(session, run_id)
 
     finally:
-        _cleanup_run(run.id, defn.id)
+        _cleanup_run(run_id, defn_id)
 
 
 @pytest.mark.asyncio
@@ -136,6 +136,9 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
         defn = make_experiment_definition(session)
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="already-completed", status="completed")
+        run_id = run.id
+        defn_id = defn.id
+        node_a_id = node_a.id
         session.commit()
 
     try:
@@ -145,8 +148,8 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
             # Stamp COMPLETED into WAL
             await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=TaskExecutionStatus.COMPLETED,
                 meta=MutationMeta(actor="test:setup", reason="test setup: node completed"),
             )
@@ -156,8 +159,8 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
         with get_session() as session:
             applied = await graph_repo.update_node_status(
                 session,
-                run_id=run.id,
-                node_id=node_a.id,
+                run_id=run_id,
+                node_id=node_a_id,
                 new_status=CANCELLED,
                 meta=MutationMeta(actor="test:operator", reason="late cancel attempt"),
                 only_if_not_terminal=True,
@@ -167,13 +170,13 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
         assert not applied, "Expected cancel to be rejected for already-COMPLETED node"
 
         with get_session() as session:
-            status = get_node_status(session, node_a.id)
+            status = get_node_status(session, node_a_id)
             assert status == TaskExecutionStatus.COMPLETED, (
                 f"Node should still be COMPLETED after rejected cancel; got {status!r}"
             )
 
         with get_session() as session:
-            assert_cross_cutting_invariants(session, run.id)
+            assert_cross_cutting_invariants(session, run_id)
 
     finally:
-        _cleanup_run(run.id, defn.id)
+        _cleanup_run(run_id, defn_id)
