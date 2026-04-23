@@ -24,7 +24,7 @@ check() {
 }
 
 # Postgres via docker exec (host may not have pg_isready installed).
-check "postgres"  "docker compose -f docker-compose.ci.yml exec -T postgres pg_isready -U ergon > /dev/null 2>&1"
+check "postgres"  "docker compose exec -T postgres pg_isready -U ergon > /dev/null 2>&1"
 check "inngest"   "curl -sf http://localhost:8289/v1/events/test > /dev/null 2>&1"
 # The api has no / or /healthz route today; any HTTP response (including
 # 404) from uvicorn counts as "reachable".  ``curl -s`` without ``-f``
