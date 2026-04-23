@@ -10,10 +10,10 @@ dev server and real Postgres. Does two things:
    function-scoped event loops that pytest-asyncio creates don't leave the
    singleton holding a closed loop's httpcore connection pool.
 
-This preflight is deliberately NOT at `tests/conftest.py` — pure-logic
-tiers (`tests/unit/`, `tests/state/`) run on SQLite with no Inngest
-runtime and must not be gated on an integration-tier dependency. Scoping
-is by filesystem path, per `docs/architecture/07_testing.md` §4.
+This preflight is deliberately NOT at `tests/conftest.py` — the
+`tests/unit/` tier runs without the integration Inngest/Postgres stack and
+must not be gated on this preflight. Scoping is by filesystem path, per
+`docs/architecture/07_testing.md` §4.
 
 Opt out of the preflight with ERGON_SKIP_INFRA_CHECK=1 when you knowingly
 want to run against a missing backend (e.g. debugging retry paths).
