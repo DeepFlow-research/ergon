@@ -86,6 +86,37 @@ def db_session():
     session.close()
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _screenshot_uploader():
+    """Push Playwright screenshots to the ``screenshots/pr-{N}`` branch.
+
+    Runs once per pytest session.  Skipped when ``GITHUB_PR_NUMBER`` is
+    not set (local dev).  Delegates to ``ci/push_screenshots.sh`` so the
+    push logic lives next to the CI workflow, not in Python.
+
+    Always runs (even on test failure) so dashboard state at time of
+    failure is captured for human review.
+    """
+    yield
+
+    pr_number = os.environ.get("GITHUB_PR_NUMBER")
+    screenshot_dir = os.environ.get("SCREENSHOT_DIR", "/tmp/playwright")
+    env = os.environ.get("SMOKE_ENV", "unknown")
+    if not pr_number:
+        return  # local run — skip
+
+    script = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "ci",
+        "push_screenshots.sh",
+    )
+    if not os.path.exists(script):
+        return  # Phase E not yet landed
+    subprocess.run(["bash", script, pr_number, env, screenshot_dir], check=False)
+
+
 def run_benchmark(
     slug: str,
     *,

@@ -27,6 +27,7 @@ from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphN
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
+    ExperimentCohort,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -65,6 +66,11 @@ class TestRunStateDto(BaseModel):
     mutations: list[TestGraphMutationDto]
     evaluations: list[TestEvaluationDto]
     resource_count: int
+
+
+class TestCohortRunDto(BaseModel):
+    run_id: UUID
+    status: str
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +174,32 @@ def read_run_state(
         evaluations=evaluations,
         resource_count=resource_count,
     )
+
+
+@router.get(
+    "/read/cohort/{cohort_key}/runs",
+    response_model=list[TestCohortRunDto],
+)
+def read_cohort_runs(
+    cohort_key: str,
+    session: Annotated[Session, Depends(get_session_dep)],
+) -> list[TestCohortRunDto]:
+    """List all runs attached to a cohort by name.
+
+    ``cohort_key`` matches ``ExperimentCohort.name`` exactly.  Returns
+    empty list when the cohort does not exist (rather than 404) so
+    Playwright / pytest can poll cheaply while a cohort is being
+    submitted.
+    """
+    cohort = session.exec(
+        select(ExperimentCohort).where(ExperimentCohort.name == cohort_key),
+    ).first()
+    if cohort is None:
+        return []
+    runs = list(
+        session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort.id)).all(),
+    )
+    return [TestCohortRunDto(run_id=r.id, status=r.status) for r in runs]
 
 
 # ---------------------------------------------------------------------------
