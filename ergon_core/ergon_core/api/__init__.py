@@ -4,7 +4,7 @@ from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion_runtime import CommandResult, CriterionRuntime, SandboxResult
-from ergon_core.api.errors import DependencyError
+from ergon_core.api.errors import CriteriaCheckError, DependencyError
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.evaluator import Evaluator, Rubric
 from ergon_core.api.experiment import Experiment
@@ -24,6 +24,7 @@ __all__ = [
     "CommandResult",
     "Criterion",
     "CriterionResult",
+    "CriteriaCheckError",
     "CriterionRuntime",
     "DependencyError",
     "EvaluationContext",
