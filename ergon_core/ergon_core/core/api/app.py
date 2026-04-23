@@ -9,6 +9,7 @@ from ergon_core.core.api.cohorts import router as cohorts_router
 from ergon_core.core.api.rollouts import init_service as init_rollout_service
 from ergon_core.core.api.rollouts import router as rollouts_router
 from ergon_core.core.api.runs import router as runs_router
+from ergon_core.core.api.test_harness import router as _test_harness_router
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.providers.sandbox.event_sink import DashboardEmitterSandboxEventSink
@@ -67,8 +68,6 @@ app.include_router(rollouts_router)
 
 # Test-only harness: mounted in CI + local-e2e only.
 if os.environ.get("ENABLE_TEST_HARNESS") == "1":
-    from ergon_core.core.api.test_harness import router as _test_harness_router  # noqa: PLC0415
-
     app.include_router(_test_harness_router)
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)
