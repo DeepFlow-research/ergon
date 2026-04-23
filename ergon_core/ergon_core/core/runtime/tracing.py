@@ -379,12 +379,12 @@ class OtelTraceSink:
 
 
 def _create_sink() -> TraceSink:
-    if settings.otel_traces_enabled:
-        try:
-            return OtelTraceSink()
-        except Exception:  # slopcop: ignore[no-broad-except]
-            return NoopTraceSink()
-    return NoopTraceSink()
+    if not settings.otel_traces_enabled:
+        return NoopTraceSink()
+    # The operator explicitly opted in to OTEL. Refuse to silently downgrade
+    # to a no-op sink — that has caused real "where are my traces?" debugging
+    # sessions. Surface the construction error so misconfiguration is loud.
+    return OtelTraceSink()
 
 
 _sink: TraceSink = _create_sink()
