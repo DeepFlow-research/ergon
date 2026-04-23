@@ -12,18 +12,8 @@ const RunTaskDto = z.object({
   level: z.number().int(),
   assignedWorkerId: z.union([z.string(), z.null()]).optional(),
   assignedWorkerName: z.union([z.string(), z.null()]).optional(),
-  startedAt: z
-    .union([z.string(), z.null()])
-    .optional()
-    .describe(
-      "When this task began meaningful execution (wall clock). Null only while the task has not actually started yet (for example pending or ready).",
-    ),
-  completedAt: z
-    .union([z.string(), z.null()])
-    .optional()
-    .describe(
-      "When this task reached a terminal outcome (completed, failed, cancelled, etc.). Null until the task finishes, or null together with startedAt if the task has not started yet.",
-    ),
+  startedAt: z.union([z.string(), z.null()]).optional(),
+  completedAt: z.union([z.string(), z.null()]).optional(),
 });
 const RunResourceDto = z.object({
   id: z.string(),
@@ -99,6 +89,26 @@ const RunSandboxDto = z.object({
   closeReason: z.union([z.string(), z.null()]).optional(),
   commands: z.array(RunSandboxCommandDto).optional(),
 });
+const RunGenerationTurnDto = z.object({
+  id: z.string(),
+  taskExecutionId: z.string(),
+  workerBindingKey: z.string(),
+  turnIndex: z.number().int(),
+  promptText: z.union([z.string(), z.null()]).optional(),
+  rawResponse: z.object({}).partial().passthrough(),
+  responseText: z.union([z.string(), z.null()]).optional(),
+  toolCalls: z
+    .union([z.array(z.object({}).partial().passthrough()), z.null()])
+    .optional(),
+  toolResults: z
+    .union([z.array(z.object({}).partial().passthrough()), z.null()])
+    .optional(),
+  policyVersion: z.union([z.string(), z.null()]).optional(),
+  hasLogprobs: z.boolean().optional().default(false),
+  createdAt: z.union([z.string(), z.null()]).optional(),
+  tokenIds: z.union([z.array(z.number().int()), z.null()]).optional(),
+  logprobs: z.union([z.array(z.number()), z.null()]).optional(),
+});
 const RunCommunicationMessageDto = z.object({
   id: z.string(),
   threadId: z.string(),
@@ -122,35 +132,18 @@ const RunCommunicationThreadDto = z.object({
   updatedAt: z.string().datetime({ offset: true }),
   messages: z.array(RunCommunicationMessageDto).optional(),
 });
-const RunGenerationTurnDto = z.object({
-  id: z.string(),
-  taskExecutionId: z.string(),
-  workerBindingKey: z.string(),
-  turnIndex: z.number().int(),
-  promptText: z.union([z.string(), z.null()]).optional(),
-  rawResponse: z.object({}).partial().passthrough().optional(),
-  responseText: z.union([z.string(), z.null()]).optional(),
-  toolCalls: z.union([z.array(z.object({}).partial().passthrough()), z.null()]).optional(),
-  toolResults: z.union([z.array(z.object({}).partial().passthrough()), z.null()]).optional(),
-  policyVersion: z.union([z.string(), z.null()]).optional(),
-  hasLogprobs: z.boolean().optional().default(false),
-  createdAt: z.union([z.string(), z.null()]).optional(),
-  tokenIds: z.union([z.array(z.number().int()), z.null()]).optional(),
-  logprobs: z.union([z.array(z.number()), z.null()]).optional(),
-  workerName: z.string().optional().default(""),
-});
 const RunSnapshotDto = z.object({
   id: z.string(),
   experimentId: z.string(),
   name: z.string(),
   status: z.string(),
-  tasks: z.record(z.string(), RunTaskDto).optional(),
+  tasks: z.record(RunTaskDto).optional(),
   rootTaskId: z.string().optional().default(""),
-  resourcesByTask: z.record(z.string(), z.array(RunResourceDto)).optional(),
-  executionsByTask: z.record(z.string(), z.array(RunExecutionAttemptDto)).optional(),
-  evaluationsByTask: z.record(z.string(), RunTaskEvaluationDto).optional(),
-  sandboxesByTask: z.record(z.string(), RunSandboxDto).optional(),
-  generationTurnsByTask: z.record(z.string(), z.array(RunGenerationTurnDto)).optional(),
+  resourcesByTask: z.record(z.array(RunResourceDto)).optional(),
+  executionsByTask: z.record(z.array(RunExecutionAttemptDto)).optional(),
+  evaluationsByTask: z.record(RunTaskEvaluationDto).optional(),
+  sandboxesByTask: z.record(RunSandboxDto).optional(),
+  generationTurnsByTask: z.record(z.array(RunGenerationTurnDto)).optional(),
   threads: z.array(RunCommunicationThreadDto).optional(),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
@@ -176,6 +169,37 @@ const HTTPValidationError = z
   .object({ detail: z.array(ValidationError) })
   .partial()
   .passthrough();
+const include = z.union([z.string(), z.null()]).optional();
+const TrainingCurvePointDto = z.object({
+  runId: z.string(),
+  step: z.number().int(),
+  meanScore: z.number(),
+  benchmarkType: z.union([z.string(), z.null()]).optional(),
+  createdAt: z.union([z.string(), z.null()]).optional(),
+});
+const TrainingSessionDto = z.object({
+  id: z.string(),
+  experimentDefinitionId: z.string(),
+  modelName: z.string(),
+  status: z.string(),
+  startedAt: z.union([z.string(), z.null()]).optional(),
+  completedAt: z.union([z.string(), z.null()]).optional(),
+  outputDir: z.union([z.string(), z.null()]).optional(),
+  totalSteps: z.union([z.number(), z.null()]).optional(),
+  finalLoss: z.union([z.number(), z.null()]).optional(),
+});
+const TrainingMetricDto = z.object({
+  step: z.number().int(),
+  epoch: z.union([z.number(), z.null()]).optional(),
+  loss: z.union([z.number(), z.null()]).optional(),
+  gradNorm: z.union([z.number(), z.null()]).optional(),
+  learningRate: z.union([z.number(), z.null()]).optional(),
+  rewardMean: z.union([z.number(), z.null()]).optional(),
+  rewardStd: z.union([z.number(), z.null()]).optional(),
+  entropy: z.union([z.number(), z.null()]).optional(),
+  completionMeanLength: z.union([z.number(), z.null()]).optional(),
+  stepTimeS: z.union([z.number(), z.null()]).optional(),
+});
 const CohortStatusCountsDto = z
   .object({
     pending: z.number().int().default(0),
@@ -229,59 +253,61 @@ const ExperimentCohortStatus = z.enum(["active", "archived"]);
 const UpdateCohortRequest = z
   .object({ status: ExperimentCohortStatus })
   .passthrough();
-
-const BenchmarkName = z.enum(["gdpeval", "minif2f", "researchrubrics", "custom", "smoke_test"]);
-const RunStatus = z.enum(["pending", "executing", "evaluating", "completed", "failed"]);
-const TaskStatus = z.enum(["pending", "ready", "running", "completed", "failed", "cancelled"]);
-
-const DispatchConfigSnapshot = z
+const SubmitRequest = z
   .object({
-    extras: z.object({}).partial().passthrough(),
-    max_concurrent_runs: z.union([z.number(), z.null()]),
-    max_questions: z.union([z.number(), z.null()]),
-    max_retries: z.union([z.number(), z.null()]),
-    worker_model: z.union([z.string(), z.null()]),
+    definition_id: z.string().uuid(),
+    num_episodes: z.number().int().gte(1),
+    policy_version: z.union([z.number(), z.null()]).optional(),
+    model_target_override: z.union([z.string(), z.null()]).optional(),
   })
-  .partial()
   .passthrough();
-const SandboxConfigSnapshot = z
+const BatchStatus = z.enum([
+  "pending",
+  "running",
+  "complete",
+  "failed",
+  "cancelled",
+]);
+const SubmitResponse = z
   .object({
-    extras: z.object({}).partial().passthrough(),
-    provider: z.union([z.string(), z.null()]),
-    template_id: z.union([z.string(), z.null()]),
-    timeout_minutes: z.union([z.number(), z.null()]),
+    batch_id: z.string().uuid(),
+    run_ids: z.array(z.string().uuid()),
+    status: BatchStatus.optional(),
   })
-  .partial()
   .passthrough();
-const CohortMetadataSummaryDto = z
+const Trajectory = z
   .object({
-    code_commit_sha: z.union([z.string(), z.null()]),
-    dispatch_config: DispatchConfigSnapshot,
-    model_name: z.union([z.string(), z.null()]),
-    model_provider: z.union([z.string(), z.null()]),
-    prompt_version: z.union([z.string(), z.null()]),
-    repo_dirty: z.union([z.boolean(), z.null()]),
-    sandbox_config: SandboxConfigSnapshot,
-    worker_version: z.union([z.string(), z.null()]),
+    run_id: z.string().uuid(),
+    agent_id: z.string(),
+    prompt_ids: z.array(z.number().int()),
+    completion_ids: z.array(z.number().int()),
+    logprobs: z.array(z.number()),
+    env_mask: z.array(z.number().int()),
+    reward: z.number(),
+    num_turns: z.number().int(),
   })
-  .partial()
   .passthrough();
-const CohortStatsExtras = z
+const EpisodeFailure = z
+  .object({ run_id: z.string().uuid(), error: z.string() })
+  .passthrough();
+const PollResponse = z
   .object({
-    benchmark_counts: z.record(z.string(), z.number().int()),
-    latest_run_at: z.union([z.string(), z.null()]),
+    batch_id: z.string().uuid(),
+    status: BatchStatus,
+    completed: z.number().int().optional().default(0),
+    total: z.number().int().optional().default(0),
+    trajectories: z.array(Trajectory).optional(),
+    failures: z.array(EpisodeFailure).optional(),
   })
-  .partial()
+  .passthrough();
+const WeightSyncRequest = z
+  .object({ checkpoint_path: z.string(), model_name: z.string() })
+  .passthrough();
+const WeightSyncResponse = z
+  .object({ success: z.boolean(), vllm_model_loaded: z.string() })
   .passthrough();
 
 export const schemas = {
-  BenchmarkName,
-  RunStatus,
-  TaskStatus,
-  DispatchConfigSnapshot,
-  SandboxConfigSnapshot,
-  CohortMetadataSummaryDto,
-  CohortStatsExtras,
   RunTaskDto,
   RunResourceDto,
   RunExecutionAttemptDto,
@@ -289,16 +315,28 @@ export const schemas = {
   RunTaskEvaluationDto,
   RunSandboxCommandDto,
   RunSandboxDto,
+  RunGenerationTurnDto,
   RunCommunicationMessageDto,
   RunCommunicationThreadDto,
-  RunGenerationTurnDto,
   RunSnapshotDto,
   ValidationError,
   HTTPValidationError,
+  include,
+  TrainingCurvePointDto,
+  TrainingSessionDto,
+  TrainingMetricDto,
   CohortStatusCountsDto,
   CohortSummaryDto,
   CohortRunRowDto,
   CohortDetailDto,
   ExperimentCohortStatus,
   UpdateCohortRequest,
+  SubmitRequest,
+  BatchStatus,
+  SubmitResponse,
+  Trajectory,
+  EpisodeFailure,
+  PollResponse,
+  WeightSyncRequest,
+  WeightSyncResponse,
 };

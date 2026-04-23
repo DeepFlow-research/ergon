@@ -286,6 +286,7 @@ class RunTaskEvaluation(SQLModel, table=True):
     # -- JSON accessor: summary_json --
 
     def parsed_summary(self) -> "EvaluationSummary":
+        # reason: breaks import cycle — evaluation_summary imports RunTaskEvaluation for type hints
         from ergon_core.core.persistence.telemetry.evaluation_summary import (
             EvaluationSummary,
         )
