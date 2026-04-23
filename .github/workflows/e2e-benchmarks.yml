@@ -1,4 +1,4 @@
-name: E2E Benchmarks
+name: E2E Benchmarks (canonical smoke matrix)
 
 on:
   pull_request:
@@ -8,123 +8,122 @@ on:
       - "ergon_cli/**"
       - "ergon_infra/**"
       - "tests/e2e/**"
+      - "tests/unit/smoke_base/**"
+      - "ergon-dashboard/src/**"
+      - "ergon-dashboard/tests/e2e/**"
+      - "ergon-dashboard/tests/helpers/backendHarnessClient.ts"
+      - "ci/**"
       - "docker-compose.ci.yml"
       - "Dockerfile"
+      - ".github/workflows/e2e-benchmarks.yml"
   workflow_dispatch:
 
+permissions:
+  contents: write        # push screenshots/pr-<N> ref
+  pull-requests: write   # gh pr comment
+
 jobs:
-  e2e-stubbed:
-    name: "Stubbed benchmarks (no API keys)"
+  smoke:
+    name: "smoke [${{ matrix.env }}]"
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [researchrubrics, minif2f, swebench-verified]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      SMOKE_ENV: ${{ matrix.env }}
+      ENABLE_TEST_HARNESS: "1"
+      TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET }}
+      E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+      GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history for screenshots ref operations
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Start CI stack
-        env:
-          # Enable BuildKit so docker-compose honours cache_from/cache_to.
-          DOCKER_BUILDKIT: "1"
-          COMPOSE_DOCKER_CLI_BUILD: "1"
-        run: docker compose -f docker-compose.ci.yml up -d --build --wait
-        timeout-minutes: 5
-
-      - name: Wait for Inngest sync
-        run: |
-          echo "Waiting for Inngest to sync functions..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8289/v1/events/test > /dev/null 2>&1; then
-              echo "Inngest dev server responding"
-              break
-            fi
-            sleep 2
-          done
-          sleep 5
-
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
       - uses: astral-sh/setup-uv@v4
         with:
           python-version: "3.13"
-      - name: Install project
-        run: uv sync --frozen --all-packages
-
-      - name: Run stubbed E2E tests
-        env:
-          ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
-          INNGEST_API_BASE_URL: http://localhost:8289
-          INNGEST_DEV: "1"
-          INNGEST_EVENT_KEY: dev
-        run: uv run pytest tests/e2e/test_benchmarks_stubbed.py::TestStubbedBenchmarks -v --timeout=180
-
-      - name: Dump API logs on failure
-        if: failure()
-        run: docker compose -f docker-compose.ci.yml logs api --tail 100
-
-      - name: Teardown
-        if: always()
-        run: docker compose -f docker-compose.ci.yml down -v
-
-  e2e-sandbox:
-    name: "E2B sandbox I/O tests"
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'feature/')
-    steps:
-      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Prepare shared blob root
-        # Bind-mounted at the same path on host and inside the api container
-        # so pytest can read the files the publisher writes.  World-writable
-        # because the container runs as a different UID than the runner.
         run: |
           sudo mkdir -p /tmp/ergon-blob
           sudo chmod 777 /tmp/ergon-blob
 
+      - name: Install workspace dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          uv sync --frozen --all-packages
+
       - name: Start CI stack
         env:
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
           DOCKER_BUILDKIT: "1"
           COMPOSE_DOCKER_CLI_BUILD: "1"
         run: docker compose -f docker-compose.ci.yml up -d --build --wait
         timeout-minutes: 5
 
-      - name: Wait for Inngest sync
+      - name: Wait for backend stack
+        run: bash ci/wait_for_stack.sh
+
+      - name: Build + start dashboard
         run: |
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:8289/v1/events/test > /dev/null 2>&1 && break
-            sleep 2
-          done
-          sleep 5
+          pnpm --dir ergon-dashboard build
+          pnpm --dir ergon-dashboard start > /tmp/dashboard.log 2>&1 &
+          bash ci/wait_for_dashboard.sh
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/cache@v4
         with:
-          python-version: "3.13"
-      - name: Install project
-        run: uv sync --frozen --all-packages
+          path: ~/.cache/ms-playwright
+          key: pw-${{ hashFiles('ergon-dashboard/pnpm-lock.yaml') }}
+      - name: Install Playwright browser
+        run: pnpm --dir ergon-dashboard exec playwright install --with-deps chromium
 
-      - name: Run sandbox E2E tests
+      - name: Run smoke
         env:
           ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
-          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
           ERGON_BLOB_ROOT: /tmp/ergon-blob
-        # --timeout=600 (per-test) is a safety net against a hung E2B
-        # sandbox or pending Inngest event; actual CI run-time for this
-        # suite is <60s. A per-test limit (rather than no limit) gives us
-        # a clean pytest error with stacks when something hangs, instead
-        # of the opaque 6-hour GitHub-Actions job cancel.
+          ERGON_API_BASE_URL: http://127.0.0.1:9000
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          SCREENSHOT_DIR: /tmp/playwright
         run: |
-          uv run pytest tests/e2e/test_benchmarks_stubbed.py::TestE2BSandboxBenchmarks -v --timeout=600
+          # Translate matrix env id to python module name (swebench-verified → swebench).
+          case "${SMOKE_ENV}" in
+            researchrubrics)    PYFILE="tests/e2e/test_researchrubrics_smoke.py" ;;
+            minif2f)            PYFILE="tests/e2e/test_minif2f_smoke.py" ;;
+            swebench-verified)  PYFILE="tests/e2e/test_swebench_smoke.py" ;;
+            *)                  echo "unknown env ${SMOKE_ENV}" >&2; exit 2 ;;
+          esac
+          uv run pytest "${PYFILE}" -v --timeout=270 --tb=short
+
+      - name: Push screenshots
+        if: always() && github.event.pull_request.number
+        run: bash ci/push_screenshots.sh "$GITHUB_PR_NUMBER" "$SMOKE_ENV" /tmp/playwright
+
+      - name: Comment on PR
+        if: always() && github.event.pull_request.number
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash ci/pr_comment_screenshots.sh "$GITHUB_PR_NUMBER" "$SMOKE_ENV"
 
       - name: Dump API logs on failure
         if: failure()
-        run: docker compose -f docker-compose.ci.yml logs api --tail 100
+        run: docker compose -f docker-compose.ci.yml logs api --tail 200
+
+      - name: Dump dashboard log on failure
+        if: failure()
+        run: tail -200 /tmp/dashboard.log || true
 
       - name: Teardown
         if: always()
