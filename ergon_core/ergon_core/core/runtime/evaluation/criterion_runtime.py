@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 from uuid import UUID
 
+from e2b import SandboxNotFoundException, TimeoutException
 from ergon_core.api.criterion_runtime import (
     CommandResult,
     CriterionRuntime,
@@ -115,10 +116,9 @@ class DefaultCriterionRuntime:
             content = resource.get("content", b"")
             if isinstance(content, str):
                 content = content.encode("utf-8")
-            try:
-                await sandbox.files.write(sandbox_path, content)
-            except Exception as exc:  # slopcop: ignore[no-broad-except]
-                logger.warning("Failed to upload %s: %s", name, exc)
+            # Propagate upload failures: a criterion that quietly proceeds
+            # against missing inputs would silently produce wrong scores.
+            await sandbox.files.write(sandbox_path, content)
 
     async def write_file(self, path: str, content: bytes) -> None:
         sandbox = self.sandbox_manager.get_sandbox(self._run_id)
@@ -130,38 +130,35 @@ class DefaultCriterionRuntime:
         sandbox = self.sandbox_manager.get_sandbox(self._run_id)
         if sandbox is None:
             raise RuntimeError("Sandbox not created - call ensure_sandbox first")
-        try:
-            result = await sandbox.commands.run(command, timeout=timeout)
-            return CommandResult(
-                stdout=result.stdout,
-                stderr=result.stderr,
-                exit_code=result.exit_code,
-            )
-        except Exception as exc:  # slopcop: ignore[no-broad-except]
-            return CommandResult(
-                stdout="",
-                stderr=str(exc),
-                exit_code=1,
-            )
+        # Intentionally NOT wrapping in try/except: a sandbox exception
+        # (timeout, killed, network) is not the same as the command exiting
+        # non-zero. Propagate so criteria see real infra failures distinctly
+        # from program-level exit codes.
+        result = await sandbox.commands.run(command, timeout=timeout)
+        return CommandResult(
+            stdout=result.stdout,
+            stderr=result.stderr,
+            exit_code=result.exit_code,
+        )
 
     async def execute_code(self, code: str) -> SandboxResult:
         sandbox = self.sandbox_manager.get_sandbox(self._run_id)
         if sandbox is None:
             raise RuntimeError("Sandbox not created")
+        # Wrap concrete sandbox-side timeout / not-found errors with a
+        # useful message; anything else propagates so unrelated bugs do not
+        # get silently reclassified as timeouts.
         try:
             execution = await sandbox.run_code(code, language="python", timeout=30)
-            return SandboxResult(
-                stdout=list(execution.logs.stdout),
-                stderr=list(execution.logs.stderr),
-            )
-        except Exception as exc:  # slopcop: ignore[no-broad-except]
-            error_msg = str(exc)
-            if "timeout" in error_msg.lower() or "sandbox was not found" in error_msg.lower():
-                raise RuntimeError(
-                    f"Sandbox execution failed (likely timeout): {error_msg}. "
-                    "Code criterion may have taken too long (>30s)."
-                ) from exc
-            raise
+        except (TimeoutException, SandboxNotFoundException) as exc:
+            raise RuntimeError(
+                f"Sandbox execution failed (likely timeout): {exc}. "
+                "Code criterion may have taken too long (>30s)."
+            ) from exc
+        return SandboxResult(
+            stdout=list(execution.logs.stdout),
+            stderr=list(execution.logs.stderr),
+        )
 
     async def call_llm_judge(self, messages: list, response_type: type[T]) -> T:
         client = AsyncOpenAI(api_key=settings.openai_api_key)
