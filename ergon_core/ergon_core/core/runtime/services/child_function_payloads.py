@@ -17,7 +17,7 @@ class SandboxSetupRequest(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     benchmark_type: str
     input_resource_ids: list[UUID] = []
     envs: dict[str, str] = {}
@@ -29,7 +29,7 @@ class WorkerExecuteRequest(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     execution_id: UUID
     sandbox_id: str
     task_slug: str
@@ -47,7 +47,7 @@ class PersistOutputsRequest(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     execution_id: UUID
     sandbox_id: str | None = None
     output_dir: str | None = None

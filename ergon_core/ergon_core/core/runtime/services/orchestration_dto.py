@@ -56,7 +56,7 @@ class PrepareTaskExecutionCommand(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     node_id: UUID | None = None
 
 
