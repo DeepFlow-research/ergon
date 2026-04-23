@@ -17,14 +17,18 @@ check() {
       echo "FATAL: $name did not become ready within 60s" >&2
       return 1
     fi
-    echo "  waiting for $name…"
+    echo "  waiting for ${name}..."
     sleep 2
   done
   echo "  $name ready"
 }
 
-check "postgres"  "pg_isready -h localhost -p 5433 -U ergon > /dev/null 2>&1"
+# Postgres via docker exec (host may not have pg_isready installed).
+check "postgres"  "docker compose -f docker-compose.ci.yml exec -T postgres pg_isready -U ergon > /dev/null 2>&1"
 check "inngest"   "curl -sf http://localhost:8289/v1/events/test > /dev/null 2>&1"
-check "api"       "curl -sf http://localhost:9000/healthz > /dev/null 2>&1 || curl -sf http://localhost:9000/ > /dev/null 2>&1"
+# The api has no / or /healthz route today; any HTTP response (including
+# 404) from uvicorn counts as "reachable".  ``curl -s`` without ``-f``
+# returns 0 on any HTTP status; ``--connect-timeout 2`` keeps probes snappy.
+check "api"       "curl -s -o /dev/null --connect-timeout 2 http://localhost:9000/ 2>/dev/null"
 
 echo "stack up"

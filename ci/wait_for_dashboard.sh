@@ -11,7 +11,7 @@ until curl -sf http://localhost:3000 > /dev/null 2>&1; do
     echo "FATAL: dashboard did not become ready within 60s" >&2
     exit 1
   fi
-  echo "  waiting for dashboard…"
+  echo "  waiting for dashboard..."
   sleep 2
 done
 
