@@ -31,7 +31,7 @@ from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
-    GenerationTurn as GenerationTurnRow,
+    RunGenerationTurn,
     RunResource,
     RunTaskEvaluation,
     RunTaskExecution,
@@ -114,18 +114,20 @@ def _assert_run_resources(run_id: UUID) -> None:
 
 
 def _assert_run_turn_counts(run_id: UUID) -> None:
-    """1 parent × PARENT_TURN_COUNT + 9 leaves × LEAF_TURN_COUNT turns."""
+    """1 parent × PARENT_TURN_COUNT + 9 leaves × LEAF_TURN_COUNT turns.
+
+    ``RunGenerationTurn.turn_index`` is per-task-execution (1 row per
+    model-call-per-execution), so we assert the total count across the
+    whole run.  Ordering within each execution is implicit from
+    ``turn_index`` and is the worker's responsibility.
+    """
     expected = (
         SmokeWorkerBase.PARENT_TURN_COUNT + 9 * BaseSmokeLeafWorker.LEAF_TURN_COUNT
     )  # currently 3 + 18 = 21
 
     with get_session() as s:
         turns = list(
-            s.exec(
-                select(GenerationTurnRow)
-                .where(GenerationTurnRow.run_id == run_id)
-                .order_by(GenerationTurnRow.sequence_num),  # ty: ignore[unresolved-attribute]
-            ).all(),
+            s.exec(select(RunGenerationTurn).where(RunGenerationTurn.run_id == run_id)).all(),
         )
 
     assert len(turns) == expected, (
