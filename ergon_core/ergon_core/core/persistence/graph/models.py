@@ -66,7 +66,7 @@ class RunGraphNode(SQLModel, table=True):
     # experiments can define different lifecycles without core schema changes.
     status: str = Field(index=True)
 
-    # WORKERS-registry slug, e.g. "researcher", "canonical-smoke".
+    # WORKERS-registry slug, e.g. "researchrubrics-researcher", "canonical-smoke".
     assigned_worker_slug: str | None = None
 
     # Containment: self-referential FK to the spawning node.

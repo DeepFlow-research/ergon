@@ -504,6 +504,10 @@ if created:
         sandbox in ``_sandboxes``; cross-process callers hold the returned
         handle directly.
         """
+        # reason: deferred import avoids a circular chain through
+        # ``providers.sandbox.__init__`` when the manager module is first
+        # loaded during settings/app bootstrap; ``SandboxExpiredError`` is
+        # only needed at reconnect-time, so the local import is cheap.
         from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
 
         if AsyncSandbox is None:

@@ -38,17 +38,12 @@ from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.vllm_backend import resolve_vllm
-from ergon_builtins.workers.baselines.manager_researcher_worker import ManagerResearcherWorker
 from ergon_builtins.workers.baselines.react_prompts import (
     MINIF2F_SYSTEM_PROMPT,
     SWEBENCH_SYSTEM_PROMPT,
 )
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
-from ergon_builtins.workers.baselines.stub_worker import StubWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
-from ergon_builtins.workers.research_rubrics.stub_worker import (
-    StubResearchRubricsWorker,
-)
 from ergon_builtins.workers.stubs.canonical_smoke_worker import CanonicalSmokeWorker
 
 
@@ -159,15 +154,11 @@ def _swebench_react(
 # iteration budget. RFC 2026-04-22 §1 + Open Question 1 resolution (c)
 # (make IDs required on base Worker, drop ``_plain`` shim).
 WORKERS: dict[str, WorkerFactory] = {
-    "stub-worker": StubWorker,
     "training-stub": TrainingStubWorker,
     # NOTE: bare `"react-v1": ReActWorker` entry removed (RFC 2026-04-22 §1).
     # Every real use binds a concrete toolkit via a factory closure below.
     "minif2f-react": _minif2f_react,
     "swebench-react": _swebench_react,
-    "manager-researcher": ManagerResearcherWorker,
-    "researcher": StubWorker,
-    "researchrubrics-stub": StubResearchRubricsWorker,
     "canonical-smoke": CanonicalSmokeWorker,
 }
 

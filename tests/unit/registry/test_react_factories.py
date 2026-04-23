@@ -17,27 +17,35 @@ def test_no_bare_react_v1_entry() -> None:
     )
 
 
-def test_stub_factory_accepts_new_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_training_stub_factory_accepts_new_kwargs(monkeypatch: pytest.MonkeyPatch) -> None:
     """Non-benchmark factories must accept `task_id` / `sandbox_id` kwargs (option a)."""
-    factory = WORKERS["stub-worker"]
+    factory = WORKERS["training-stub"]
     worker = factory(
-        name="stub-under-test",
+        name="training-stub-under-test",
         model=None,
         task_id=uuid4(),
         sandbox_id="sbx-abc",
     )
     assert isinstance(worker, Worker)
-    assert worker.name == "stub-under-test"
+    assert worker.name == "training-stub-under-test"
 
 
 def test_minif2f_factory_builds_toolkit(monkeypatch: pytest.MonkeyPatch) -> None:
     """The minif2f factory must construct a live toolkit bound to the sandbox."""
+    # reason: imports deferred to avoid pulling registry_core + sandbox_manager
+    # eagerly into test collection. Every test pulls its own patch target.
+    from ergon_builtins import registry_core
+
+    # reason: only needed for MagicMock spec= below; eager import would pull
+    # the benchmark sandbox module into all registry tests.
     from ergon_builtins.benchmarks.minif2f import sandbox_manager as sm_mod
 
     fake_sandbox = MagicMock(name="fake-sandbox")
     fake_manager = MagicMock(spec=sm_mod.MiniF2FSandboxManager)
     fake_manager.get_sandbox.return_value = fake_sandbox
-    monkeypatch.setattr(sm_mod, "MiniF2FSandboxManager", lambda: fake_manager)
+    # Patch on the call-site module so the test does not depend on lazy
+    # imports inside the factory.
+    monkeypatch.setattr(registry_core, "MiniF2FSandboxManager", lambda: fake_manager)
 
     factory = WORKERS["minif2f-react"]
     task_id = uuid4()

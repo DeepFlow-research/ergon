@@ -14,6 +14,14 @@ from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.settings import settings
 from sqlmodel import Session
 
+# Import side-effect: registers the per-env canonical-smoke workers,
+# leaves, and criteria into ergon_builtins.registry's WORKERS /
+# EVALUATORS dicts for the duration of the test session.  Phase B lands
+# this as an empty hook; Phase C / D populate it.  Keeping the import at
+# session-module scope means any e2e test that runs through conftest
+# sees the registrations.
+import tests.e2e._fixtures  # noqa: F401  (registration side-effect)
+
 
 def _probe_tcp(host: str, port: int, timeout: float = 0.5) -> str | None:
     try:

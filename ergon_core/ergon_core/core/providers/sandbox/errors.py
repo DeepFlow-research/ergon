@@ -30,7 +30,7 @@ class SandboxExpiredError(SandboxError):
     publisher before the sandbox timed out.
     """
 
-    def __init__(self, sandbox_id: str, detail: str = "") -> None:
+    def __init__(self, sandbox_id: str, detail: str | None = None) -> None:
         self.sandbox_id = sandbox_id
         msg = f"Sandbox {sandbox_id!r} is expired or not found"
         if detail:

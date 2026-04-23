@@ -13,9 +13,6 @@ from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubr
 from ergon_builtins.benchmarks.researchrubrics.vanilla import (
     ResearchRubricsVanillaBenchmark,
 )
-from ergon_builtins.workers.research_rubrics.manager_worker import (
-    ResearchRubricsManagerWorker,
-)
 from ergon_builtins.workers.research_rubrics.researcher_worker import (
     ResearchRubricsResearcherWorker,
 )
@@ -37,6 +34,5 @@ EVALUATORS: dict[str, type[Evaluator]] = {
 # stores the bare class (``WorkerFactory = Callable[..., Worker]``) and
 # ``_plain`` has been deleted.
 WORKERS: dict[str, Callable[..., Worker]] = {
-    "researchrubrics-manager": ResearchRubricsManagerWorker,
     "researchrubrics-researcher": ResearchRubricsResearcherWorker,
 }

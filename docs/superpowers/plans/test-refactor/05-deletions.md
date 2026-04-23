@@ -62,7 +62,10 @@ After registration hook runs in `tests/e2e/_fixtures/__init__.py`, the process-l
 | `smoke-test` | Benchmark |
 | `researchrubrics-smoke` | Benchmark |
 | `stub-worker` | Worker |
-| ~~`training-stub-worker`~~ | — (kept: production baseline, see §1.2) |
+| `researcher` | Worker (alias) |
+| `manager-researcher` | Worker |
+| `researchrubrics-manager` | Worker |
+| ~~`training-stub`~~ | — (kept: production baseline, see §6) |
 | `researchrubrics-stub` | Worker |
 | `stub-criterion` | Criterion |
 | `varied-stub-criterion` | Criterion |
@@ -157,9 +160,9 @@ Audit run with `grep -Rn "training-stub\|training_stub\|TrainingStubWorker" ergo
 
 - **`ergon_builtins/registry_core.py`** registers `"training-stub": TrainingStubWorker` — production registry entry.
 - **`ergon_builtins/AGENTS.md`** documents it as the RL-logprobs fixture operators invoke via `ergon benchmark run smoke-test --worker training-stub`.
-- **Accepted RFC [`2026-04-22-worker-interface-and-artifact-routing.md`](../../../rfcs/accepted/2026-04-22-worker-interface-and-artifact-routing.md)** treats `TrainingStubWorker` as a first-class baseline alongside `ReActWorker`, `ManagerResearcherWorker`, `StubWorker`, and migrates it through the worker-interface refactor.
+- **Accepted RFC [`2026-04-22-worker-interface-and-artifact-routing.md`](../../../rfcs/accepted/2026-04-22-worker-interface-and-artifact-routing.md)** treats `TrainingStubWorker` as a first-class baseline alongside `ReActWorker` and migrates it through the worker-interface refactor.
 
-**Outcome:** keep `training_stub_worker.py` in `ergon_builtins/workers/baselines/` untouched. The "stub" in its name is a technical term (synthetic trajectory / fake logprobs), not "test fixture." Renaming is an optional follow-up, not blocking this refactor.
+**Outcome:** `training_stub_worker.py` is the **only** remaining stub exception in `ergon_builtins/workers/baselines/` — kept untouched. The "stub" in its name is a technical term (synthetic trajectory / fake logprobs), not "test fixture." `StubWorker`, `ManagerResearcherWorker`, `StubResearchRubricsWorker`, and `ResearchRubricsManagerWorker` have all been deleted as part of the `assigned_worker_slug` default removal (see §1.2 and §2). Renaming `training_stub_worker.py` is an optional follow-up, not blocking this refactor.
 
 The merge checklist in `00-program.md §5` carries this exception explicitly.
 
@@ -194,6 +197,14 @@ rg -l 'SmokeWorkerBase|SmokeSubworker|BaseSmokeLeafWorker|SmokeCriterionBase' \
 # Training-stub baseline is ALLOWED to remain in ergon_builtins (see §6).
 # This command should return exactly ONE match — the baseline itself:
 rg -l 'TrainingStubWorker' ergon_builtins/ | head
+
+# "researcher" slug, StubWorker, ManagerResearcherWorker, and
+# ResearchRubricsManagerWorker must all be gone from production code.
+# Should return zero matches:
+rg -n '"researcher"' ergon_core/ ergon_cli/ ergon_infra/ ergon_builtins/
+rg -n '"stub-worker"' ergon_core/ ergon_cli/ ergon_infra/ ergon_builtins/
+rg -n '"manager-researcher"' ergon_core/ ergon_cli/ ergon_infra/ ergon_builtins/
+rg -n '"researchrubrics-manager"' ergon_core/ ergon_cli/ ergon_infra/ ergon_builtins/
 ```
 
-Both should be empty outputs. If not, the deletion pass is incomplete.
+All should be empty outputs. If not, the deletion pass is incomplete.

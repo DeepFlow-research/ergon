@@ -85,7 +85,7 @@ class SubtaskLifecycleToolkit:
         async def add_subtask(
             task_slug: str,
             description: str,
-            assigned_worker_slug: str = "researcher",
+            assigned_worker_slug: str,
             depends_on: list[str] | None = None,
         ) -> dict[str, object]:
             """Spawn one subtask under this manager.
@@ -95,6 +95,9 @@ class SubtaskLifecycleToolkit:
             by observers (dashboard, criteria, tests) to identify this
             node semantically. Pick a stable, legible slug — it is not
             auto-generated.
+
+            ``assigned_worker_slug`` is the slug of the worker type to handle this
+            subtask (e.g. 'researchrubrics-researcher'). Required.
 
             ``depends_on`` still refers to sibling ``node_id`` strings
             (real UUIDs from earlier ``add_subtask`` calls), not slugs.
@@ -125,7 +128,7 @@ class SubtaskLifecycleToolkit:
         async def plan_subtasks(subtasks: list[dict]) -> dict[str, object]:
             """Atomically create a sub-DAG. Each entry has ``task_slug``
             (kebab-case identifier, persisted verbatim on the graph node),
-            ``description``, optional ``assigned_worker_slug``, and
+            ``description``, required ``assigned_worker_slug``, and
             optional ``depends_on`` — a list of sibling ``task_slug``s
             within this same call. Cycles, duplicate slugs, and unknown
             slugs are rejected."""

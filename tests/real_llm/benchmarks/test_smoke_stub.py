@@ -69,7 +69,7 @@ async def test_harness_canary_smoke_stub(
             "--model",
             "stub:constant",
             "--worker",
-            "stub-worker",
+            "training-stub",
             "--evaluator",
             "stub-rubric",
             "--limit",

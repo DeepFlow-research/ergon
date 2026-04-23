@@ -23,10 +23,9 @@ class TestResearchRubricsBenchmarkRegistration:
         assert cls.__name__ == "ResearchRubricsVanillaBenchmark"
 
     def test_worker_slugs_registered(self):
-        """Both worker slugs are present in the registry."""
+        """researchrubrics-researcher is present in the registry."""
         from ergon_builtins.registry_data import WORKERS
 
-        assert "researchrubrics-manager" in WORKERS
         assert "researchrubrics-researcher" in WORKERS
 
 

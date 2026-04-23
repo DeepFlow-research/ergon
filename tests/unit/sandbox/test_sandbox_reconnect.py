@@ -20,7 +20,9 @@ class _MinimalManager(BaseSandboxManager):
         return None
 
     async def _create_directory_structure(
-        self, sandbox: object, sandbox_key: object,
+        self,
+        sandbox: object,
+        sandbox_key: object,
     ) -> None:
         return None
 
@@ -63,7 +65,8 @@ async def test_reconnect_returns_sandbox_on_success(
 
     assert result is fake_sandbox
     fake_connect.assert_awaited_once_with(
-        sandbox_id="sbx-live-001", api_key="test-key",
+        sandbox_id="sbx-live-001",
+        api_key="test-key",
     )
 
 
@@ -139,10 +142,14 @@ async def test_reconnect_raises_sandbox_expired_on_not_found_exception(
 
     fake_connect = AsyncMock(side_effect=_FakeSandboxNotFound("E2B says: not found"))
     monkeypatch.setattr(
-        mgr_mod, "AsyncSandbox", MagicMock(connect=fake_connect),
+        mgr_mod,
+        "AsyncSandbox",
+        MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        mgr_mod, "SandboxNotFoundException", _FakeSandboxNotFound,
+        mgr_mod,
+        "SandboxNotFoundException",
+        _FakeSandboxNotFound,
     )
     monkeypatch.setattr(mgr_mod.settings, "e2b_api_key", "test-key")
 
@@ -166,7 +173,9 @@ async def test_reconnect_raises_sandbox_expired_on_timeout_exception(
 
     fake_connect = AsyncMock(side_effect=_FakeTimeout("E2B says: timed out"))
     monkeypatch.setattr(
-        mgr_mod, "AsyncSandbox", MagicMock(connect=fake_connect),
+        mgr_mod,
+        "AsyncSandbox",
+        MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(mgr_mod, "TimeoutException", _FakeTimeout)
     monkeypatch.setattr(mgr_mod.settings, "e2b_api_key", "test-key")

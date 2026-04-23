@@ -6,7 +6,6 @@ model calls.
 """
 
 from collections.abc import AsyncGenerator
-from typing import ClassVar
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -115,87 +114,6 @@ class TestResearcherWorker:
         assert "edit_report_draft" in tool_names
         assert "read_report_draft" in tool_names
         # Graph tools
-        assert "list_my_resources" in tool_names
-        assert "list_child_resources" in tool_names
-
-
-# ---------------------------------------------------------------------------
-# ResearchRubricsManagerWorker
-# ---------------------------------------------------------------------------
-
-
-class TestManagerWorker:
-    def test_instantiates_with_correct_slug(self):
-        from ergon_builtins.workers.research_rubrics.manager_worker import (
-            ResearchRubricsManagerWorker,
-        )
-
-        # reason: RFC 2026-04-22 §1 — Worker base requires task_id /
-        # sandbox_id; execute() isn't called here so placeholders suffice.
-        worker = ResearchRubricsManagerWorker(
-            name="test-manager",
-            model=None,
-            task_id=uuid4(),
-            sandbox_id="test-sandbox",
-        )
-        assert worker.type_slug == "researchrubrics-manager"
-        assert worker.tools == []
-
-    @pytest.mark.asyncio
-    async def test_requires_node_id(self):
-        from ergon_builtins.workers.research_rubrics.manager_worker import (
-            ResearchRubricsManagerWorker,
-        )
-
-        context = _make_context(with_node_id=False)
-        worker = ResearchRubricsManagerWorker(
-            name="test-manager",
-            model="openai:gpt-4o",
-            task_id=context.task_id,
-            sandbox_id=context.sandbox_id,
-        )
-        task = _make_task()
-
-        with pytest.raises(RuntimeError, match="requires WorkerContext.node_id"):
-            async for _ in worker.execute(task, context=context):
-                pass
-
-    @pytest.mark.asyncio
-    async def test_execute_builds_tools(self):
-        from ergon_builtins.workers.research_rubrics.manager_worker import (
-            ResearchRubricsManagerWorker,
-        )
-
-        context = _make_context(with_node_id=True)
-        worker = ResearchRubricsManagerWorker(
-            name="test-manager",
-            model="openai:gpt-4o",
-            task_id=context.task_id,
-            sandbox_id=context.sandbox_id,
-        )
-        task = _make_task()
-
-        with patch(
-            "ergon_builtins.workers.baselines.react_worker.ReActWorker.execute",
-            return_value=_empty_gen(),
-        ):
-            turns = []
-            async for turn in worker.execute(task, context=context):
-                turns.append(turn)
-
-        # After execute, tools should be populated:
-        # 8 subtask lifecycle tools + 6 graph tools = 14
-        assert len(worker.tools) == 14
-
-        tool_names = {_tool_name(t) for t in worker.tools}
-        assert "add_subtask" in tool_names
-        assert "plan_subtasks" in tool_names
-        assert "cancel_task" in tool_names
-        assert "refine_task" in tool_names
-        assert "restart_task" in tool_names
-        assert "list_subtasks" in tool_names
-        assert "get_subtask" in tool_names
-        assert "bash" in tool_names
         assert "list_my_resources" in tool_names
         assert "list_child_resources" in tool_names
 

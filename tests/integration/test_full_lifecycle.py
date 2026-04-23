@@ -60,7 +60,7 @@ async def test_full_lifecycle() -> None:
     # reason: RFC 2026-04-22 §1 — ``Experiment`` holds ``WorkerSpec`` descriptors
     # at config time; the live ``Worker`` is built per-task via the registry
     # factory inside the ``worker_execute`` Inngest fn.
-    spec = WorkerSpec(worker_slug="stub-worker", name="test", model="openai:gpt-4o")
+    spec = WorkerSpec(worker_slug="training-stub", name="test", model="openai:gpt-4o")
     rubric = StubRubric()
 
     experiment = Experiment.from_single_worker(
