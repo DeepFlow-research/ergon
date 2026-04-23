@@ -9,6 +9,8 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
+from datasets import load_dataset
+
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
@@ -74,10 +76,6 @@ def _load_rows(
     *, limit: int | None = None
 ) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
     """Load rows from the HF dataset. Isolated for testability."""
-    # reason: lazy import — `datasets` is a heavy optional dep pulled in
-    # only when someone actually runs the benchmark loader.
-    from datasets import load_dataset
-
     ds = load_dataset(HF_DATASET_ID, split=HF_SPLIT)
     if limit is not None:
         ds = ds.select(range(min(limit, len(ds))))

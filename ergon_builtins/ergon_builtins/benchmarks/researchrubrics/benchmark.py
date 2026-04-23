@@ -7,6 +7,9 @@ whether agents know when and what to ask stakeholders.
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
+from datasets import load_dataset
+from huggingface_hub import HfApi
+
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
@@ -93,12 +96,6 @@ class ResearchRubricsBenchmark(Benchmark):
 
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
-        # Deferred: optional dependency
-        from datasets import load_dataset
-
-        # Deferred: optional dependency
-        from huggingface_hub import HfApi
-
         dataset_name = self.dataset_name
         if dataset_name is None:
             api = HfApi()

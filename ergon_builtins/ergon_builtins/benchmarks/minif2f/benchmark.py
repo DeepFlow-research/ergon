@@ -11,6 +11,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
+from huggingface_hub import hf_hub_download
+
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
@@ -86,9 +88,6 @@ class MiniF2FBenchmark(Benchmark):
 
     def _download_jsonl(self) -> Path:
         """Download the v2c jsonl from HuggingFace Hub, returning the cached path."""
-        # reason: optional dependency from ergon-builtins[data]
-        from huggingface_hub import hf_hub_download
-
         cache_dir = str(self.data_dir) if self.data_dir else None
         path = hf_hub_download(
             repo_id=HF_REPO_ID,
