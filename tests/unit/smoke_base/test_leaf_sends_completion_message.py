@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import pytest
 
+from ergon_core.api import BenchmarkTask
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug
 from tests.e2e._fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
 from tests.e2e._fixtures.smoke_base.subworker import SmokeSubworker, SubworkerResult
@@ -105,15 +106,16 @@ async def test_send_completion_message_posts_request(
 async def test_send_completion_message_not_called_when_subworker_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Sad-path invariant: a subworker that raises inside ``execute``
-    prevents ``_send_completion_message`` from being invoked.  The call is
-    sequenced AFTER ``subworker.work`` returns (leaf_base.py); an exception
-    skips the remaining lines including the message post.
-    """
+    """_send_completion_message must not be called when subworker.work() raises."""
     save_mock = AsyncMock()
     monkeypatch.setattr(
         "tests.e2e._fixtures.smoke_base.leaf_base.communication_service.save_message",
         save_mock,
+    )
+    # Mock AsyncSandbox.connect so execute() doesn't need a real sandbox
+    monkeypatch.setattr(
+        "tests.e2e._fixtures.smoke_base.leaf_base.AsyncSandbox",
+        MagicMock(connect=AsyncMock(return_value=MagicMock())),
     )
 
     class _FailingSubworker:
@@ -124,21 +126,11 @@ async def test_send_completion_message_not_called_when_subworker_raises(
         type_slug = "unit-test-leaf-failing"
         subworker_cls = _FailingSubworker  # type: ignore[assignment]
 
-    # We cannot run execute() end-to-end without a sandbox mock; the
-    # invariant is easier to assert structurally: verify save_message is
-    # called AFTER the result assignment line in execute().  Read the
-    # leaf_base module source and confirm ordering is write-then-send.
-    import inspect
+    leaf = _FailingLeaf(name="unit-test", model=None, task_id=uuid4(), sandbox_id="sbx-unit")
+    task = BenchmarkTask(task_slug="l_fail", instance_key="default", description="x")
 
-    from tests.e2e._fixtures.smoke_base import leaf_base as lb
+    with pytest.raises(RuntimeError, match="sad-path"):
+        async for _ in leaf.execute(task, context=_context()):
+            pass
 
-    src = inspect.getsource(lb.BaseSmokeLeafWorker.execute)
-    idx_work = src.find("subworker_cls().work")
-    idx_send = src.find("_send_completion_message")
-    assert idx_work < idx_send, (
-        "execute() must call subworker.work() BEFORE _send_completion_message; "
-        "otherwise a raising subworker cannot suppress the message"
-    )
-    # And the raising-subworker call site never reaches the send — no need
-    # to execute the generator; structural ordering is the invariant.
     save_mock.assert_not_called()
