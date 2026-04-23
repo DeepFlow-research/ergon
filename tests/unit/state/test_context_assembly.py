@@ -201,17 +201,15 @@ class TestAssembleTrailingResponse:
         assert isinstance(messages[0], ModelRequest)
         assert isinstance(messages[1], ModelResponse)
 
-    def test_only_request_events_no_response(self):
+    def test_request_only_produces_no_assembled_messages(self):
         events = [
             _make_event("system_prompt", SystemPromptPayload(text="sys"), 0),
             _make_event("user_message", UserMessagePayload(text="hi"), 1),
         ]
 
-        # No model-generated events — request parts never flushed to a message
-        # (they'd be pending). Assembly returns empty because no response events trigger flush.
+        # A request without a paired response event yields no assembled messages.
         messages = assemble_pydantic_ai_messages(events)
-        # Request-only: not flushed because no response event triggers it
-        assert len(messages) == 0
+        assert messages == []
 
 
 class TestSystemPromptPartType:
