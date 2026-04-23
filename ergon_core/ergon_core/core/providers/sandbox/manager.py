@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
+from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
 from ergon_core.core.providers.sandbox.event_sink import (
     NoopSandboxEventSink,
     SandboxEventSink,
@@ -448,6 +449,7 @@ if created:
 
         sandbox_id = sandbox.sandbox_id
         display_task_id = self._get_display_task_id(task_id)
+        run_id = self._run_ids.get(task_id)
         try:
             await sandbox.kill()
         except Exception as e:  # slopcop: ignore[no-broad-except]
@@ -463,6 +465,7 @@ if created:
                 task_id=display_task_id,
                 sandbox_id=sandbox_id,
                 reason=reason,
+                run_id=run_id,
             )
             await self._emit_wal_entry(
                 task_id,
@@ -504,12 +507,6 @@ if created:
         sandbox in ``_sandboxes``; cross-process callers hold the returned
         handle directly.
         """
-        # reason: deferred import avoids a circular chain through
-        # ``providers.sandbox.__init__`` when the manager module is first
-        # loaded during settings/app bootstrap; ``SandboxExpiredError`` is
-        # only needed at reconnect-time, so the local import is cheap.
-        from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
-
         if AsyncSandbox is None:
             raise RuntimeError(
                 "e2b_code_interpreter is not installed. "

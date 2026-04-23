@@ -64,4 +64,16 @@ export class BackendHarnessClient {
     }
     return r.json() as Promise<BackendCohortRun[]>;
   }
+
+  async getCohortId(cohortKey: string): Promise<string> {
+    const r = await fetch(
+      `${this.baseUrl}/api/test/read/cohort/${encodeURIComponent(cohortKey)}/id`,
+      { headers: this.headers() },
+    );
+    if (!r.ok) {
+      throw new Error(`harness ${r.status}: ${await r.text()}`);
+    }
+    const body = (await r.json()) as { cohort_id: string };
+    return body.cohort_id;
+  }
 }

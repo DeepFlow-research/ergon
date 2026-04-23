@@ -132,7 +132,8 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
       const cohortRuns = await client.getCohortRuns(cohortKey);
       expect(cohortRuns.length).toBe(cohort.length);
 
-      await page.goto(`/cohort/${encodeURIComponent(cohortKey)}`);
+      const cohortId = await client.getCohortId(cohortKey);
+      await page.goto(`/cohorts/${cohortId}`);
       // Dashboard keys cohort-run rows as ``cohort-run-row-<run_id>``
       // (per CohortDetailView.tsx:36) — prefix match via locator rather
       // than exact getByTestId.

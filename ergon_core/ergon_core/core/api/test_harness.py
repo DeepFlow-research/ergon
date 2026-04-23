@@ -78,6 +78,10 @@ class TestCohortRunDto(BaseModel):
     status: str
 
 
+class TestCohortIdDto(BaseModel):
+    cohort_id: UUID
+
+
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
@@ -179,6 +183,23 @@ def read_run_state(
         evaluations=evaluations,
         resource_count=resource_count,
     )
+
+
+@router.get(
+    "/read/cohort/{cohort_key}/id",
+    response_model=TestCohortIdDto,
+)
+def read_cohort_id(
+    cohort_key: str,
+    session: Annotated[Session, Depends(get_session_dep)],
+) -> TestCohortIdDto:
+    """Resolve a cohort name to its UUID for dashboard navigation."""
+    cohort = session.exec(
+        select(ExperimentCohort).where(ExperimentCohort.name == cohort_key),
+    ).first()
+    if cohort is None:
+        raise HTTPException(status_code=404, detail=f"Cohort {cohort_key!r} not found")
+    return TestCohortIdDto(cohort_id=cohort.id)
 
 
 @router.get(

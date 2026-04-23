@@ -13,18 +13,22 @@ path at realistic volume.  See
 ``docs/superpowers/plans/test-refactor/01-fixtures.md §2.3``.
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
 from typing import ClassVar, final
-from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TextPart
+from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
     NodeId,
     RunId,
     TaskSlug,
+)
+from ergon_core.core.runtime.services.task_inspection_service import (
+    TaskInspectionService,
 )
 from ergon_core.core.runtime.services.task_management_dto import (
     PlanSubtasksCommand,
@@ -118,6 +122,22 @@ class SmokeWorkerBase(Worker):
                 ),
             ],
         )
+
+        # Poll until every direct child has reached a terminal status.
+        # The evaluators fire on TaskCompletedEvent, so the parent must not
+        # return until all children are terminal (otherwise criterion checks
+        # like SmokeCriterionBase._check_children_completed fail immediately).
+        inspection = TaskInspectionService()
+        while True:
+            with get_session() as session:
+                children = inspection.list_subtasks(
+                    session,
+                    run_id=context.run_id,
+                    parent_node_id=context.node_id,
+                )
+            if children and all(c.status in TERMINAL_STATUSES for c in children):
+                break
+            await asyncio.sleep(2)
 
     def _spec_for(
         self,

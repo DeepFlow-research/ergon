@@ -1,26 +1,22 @@
-"""Inngest child function: persist outputs from sandbox.
+"""Inngest child function: persist outputs from sandbox via blob publisher.
 
-Downloads outputs from sandbox and registers them as RunResource rows.
-Also invokes :class:`SandboxResourcePublisher` for append-only blob-store
-publication and ``WorkerOutput`` capture.
+All serialisation goes through :class:`SandboxResourcePublisher` — the
+single authoritative path from sandbox → Postgres (``run_resources`` rows)
+and local blob store.  The legacy "download-to-local-path + kind='output'"
+loop that created a second row per file has been removed; consumers should
+read via the publisher (``kind='report'``/``kind='artifact'`` rows whose
+``file_path`` points at the content-addressed blob store).
 """
 
 import logging
 from datetime import UTC, datetime
-from functools import partial
-from pathlib import Path
-from uuid import UUID
 
 import inngest
 from ergon_builtins.registry import SANDBOX_MANAGERS
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.ids import new_id
-from ergon_core.core.persistence.telemetry.models import RunResource, RunResourceKind
-from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.persistence.telemetry.models import RunResourceKind
 from ergon_core.core.providers.sandbox.manager import (
     BaseSandboxManager,
     DefaultSandboxManager,
-    DownloadedFiles,
 )
 from ergon_core.core.providers.sandbox.resource_publisher import SandboxResourcePublisher
 from ergon_core.core.runtime.errors import ContractViolationError
@@ -32,7 +28,6 @@ from ergon_core.core.runtime.tracing import (
     get_trace_sink,
     persist_outputs_context,
 )
-from ergon_core.core.utils import get_mime_type, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +39,12 @@ logger = logging.getLogger(__name__)
     output_type=PersistOutputsResult,
 )
 async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
-    """Download outputs from sandbox and register them as resources."""
+    """Sync sandbox publish dirs to the blob store and register resources."""
     payload = PersistOutputsRequest.model_validate(ctx.event.data)
     run_id = payload.run_id
     task_id = payload.task_id
     execution_id = payload.execution_id
     span_start = datetime.now(UTC)
-    output_dir = Path(payload.output_dir) if payload.output_dir else None
     sandbox_id = payload.sandbox_id
 
     logger.info(
@@ -60,85 +54,17 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
         sandbox_id,
     )
 
-    if not sandbox_id or not output_dir:
+    if not sandbox_id:
         raise ContractViolationError(
-            "persist-outputs invoked without sandbox_id or output_dir",
+            "persist-outputs invoked without sandbox_id",
             run_id=run_id,
             task_id=task_id,
-            sandbox_id=sandbox_id,
-            output_dir=str(output_dir),
         )
 
     manager_cls = SANDBOX_MANAGERS.get(payload.benchmark_type, DefaultSandboxManager)
     sandbox_manager = manager_cls()
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    downloaded: DownloadedFiles = await ctx.step.run(
-        "download-outputs",
-        partial(_download_outputs, task_id, output_dir, sandbox_manager),
-        output_type=DownloadedFiles,
-    )
-
-    if not downloaded.files:
-        return PersistOutputsResult()
-
-    # NOTE: this path predates the blob-backed ``SandboxResourcePublisher``.
-    # It writes one row per downloaded file, pointing at the *local* path
-    # the downloader wrote to (``file_info.local_path``).  The publisher
-    # below does a separate, orthogonal thing: it hashes sandbox contents
-    # into the content-addressed blob store and appends rows keyed by
-    # ``blob_path``.  For files that appear in both paths (e.g. a report
-    # in ``/workspace/final_output/``), we'll end up with two rows -- one
-    # ``kind="output"`` at ``local_path`` and one ``kind="report"`` at
-    # ``blob_path``.  That's intentional for now: the local-path row is
-    # the legacy quick-access copy; the blob row is the durable,
-    # dedup-able, append-only record.  Once every consumer reads via the
-    # publisher, this loop can go away.
-    resource_ids: list[UUID] = []
-    new_resources: list[RunResource] = []
-    with get_session() as session:
-        for file_info in downloaded.files:
-            resource = RunResource(
-                id=new_id(),
-                run_id=run_id,
-                task_execution_id=execution_id,
-                kind="output",
-                name=Path(file_info.local_path).name,
-                mime_type=get_mime_type(file_info.local_path),
-                file_path=file_info.local_path,
-                size_bytes=file_info.size_bytes,
-                created_at=utcnow(),
-            )
-            session.add(resource)
-            resource_ids.append(resource.id)
-            new_resources.append(resource)
-
-        session.commit()
-
-    for resource in new_resources:
-        await dashboard_emitter.resource_published(
-            run_id=run_id,
-            task_id=task_id,
-            task_execution_id=execution_id,
-            resource_id=resource.id,
-            resource_name=resource.name,
-            mime_type=resource.mime_type,
-            size_bytes=resource.size_bytes,
-            file_path=resource.file_path,
-        )
-
-    logger.info(
-        "persist-outputs registered %d resources for run_id=%s",
-        len(resource_ids),
-        run_id,
-    )
-
-    # ------------------------------------------------------------------
-    # SandboxResourcePublisher: append-only blob-store sync + WorkerOutput
-    # Must run BEFORE sandbox teardown so we can still read sandbox files.
-    # ------------------------------------------------------------------
-    await _publish_resources(sandbox_manager, payload)
+    outputs_count = await _publish_resources(sandbox_manager, payload)
 
     get_trace_sink().emit_span(
         CompletedSpan(
@@ -150,26 +76,22 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
                 "run_id": str(run_id),
                 "task_id": str(task_id),
                 "execution_id": str(execution_id),
-                "outputs_count": len(resource_ids),
-                "resource_ids": [str(rid) for rid in resource_ids],
+                "outputs_count": outputs_count,
             },
         )
     )
 
-    return PersistOutputsResult(
-        output_resource_ids=resource_ids,
-        outputs_count=len(resource_ids),
-    )
+    return PersistOutputsResult(outputs_count=outputs_count)
 
 
 async def _publish_resources(
     sandbox_manager: BaseSandboxManager,
     payload: PersistOutputsRequest,
-) -> None:
-    """Run the SandboxResourcePublisher if a live sandbox exists for this task.
+) -> int:
+    """Sync the live sandbox's publish dirs to the blob store.
 
-    No-op when the benchmark doesn't use sandboxes (e.g. ``DefaultSandboxManager``
-    with ``E2B_API_KEY`` unset).
+    Returns the number of new resource rows created.  No-op when no live
+    sandbox exists for this task (e.g. benchmark without sandboxes).
     """
     sandbox = sandbox_manager.get_sandbox(payload.task_id)
     if sandbox is None:
@@ -177,7 +99,7 @@ async def _publish_resources(
             "persist-outputs: no live sandbox for task_id=%s, skipping publisher",
             payload.task_id,
         )
-        return
+        return 0
 
     publisher = SandboxResourcePublisher(
         sandbox=sandbox,
@@ -185,16 +107,15 @@ async def _publish_resources(
         task_execution_id=payload.execution_id,
     )
 
-    # Sync PUBLISH_DIRS -- catches anything the runtime crashed past.
     synced = await publisher.sync()
+    count = len(synced)
     if synced:
         logger.info(
             "persist-outputs: publisher.sync() created %d resource(s) for run_id=%s",
-            len(synced),
+            count,
             payload.run_id,
         )
 
-    # Publish the WorkerOutput text as a blob-backed resource.
     if payload.worker_final_assistant_message:
         view = publisher.publish_value(
             kind=RunResourceKind.OUTPUT,
@@ -202,17 +123,11 @@ async def _publish_resources(
             content=payload.worker_final_assistant_message,
         )
         if view is not None:
+            count += 1
             logger.info(
                 "persist-outputs: published worker_output resource_id=%s for run_id=%s",
                 view.id,
                 payload.run_id,
             )
 
-
-async def _download_outputs(
-    task_id: UUID,
-    output_dir: Path,
-    sandbox_manager: BaseSandboxManager,
-) -> DownloadedFiles:
-    """Download all outputs from sandbox."""
-    return await sandbox_manager.download_all_outputs(task_id, output_dir)
+    return count

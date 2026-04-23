@@ -9,6 +9,17 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
+from ergon_core.core.persistence.shared.enums import (
+    RunStatus,
+    TaskExecutionStatus,
+    TrainingStatus,
+)
+from ergon_core.core.utils import utcnow as _utcnow
+from pydantic import model_validator
+import sqlalchemy as sa
+from sqlalchemy import JSON, Column, DateTime
+from sqlmodel import Field, SQLModel
+
 if TYPE_CHECKING:
     from ergon_core.core.persistence.telemetry.evaluation_summary import (
         EvaluationSummary,
@@ -17,16 +28,6 @@ if TYPE_CHECKING:
         ToolCall,
         ToolResult,
     )
-
-from ergon_core.core.persistence.shared.enums import (
-    RunStatus,
-    TaskExecutionStatus,
-    TrainingStatus,
-)
-from ergon_core.core.utils import utcnow as _utcnow
-from pydantic import model_validator
-from sqlalchemy import JSON, Column, DateTime
-from sqlmodel import Field, SQLModel
 
 TZDateTime = DateTime(timezone=True)
 
@@ -285,7 +286,6 @@ class RunTaskEvaluation(SQLModel, table=True):
     # -- JSON accessor: summary_json --
 
     def parsed_summary(self) -> "EvaluationSummary":
-        # Deferred: avoid circular import
         from ergon_core.core.persistence.telemetry.evaluation_summary import (
             EvaluationSummary,
         )
@@ -372,6 +372,7 @@ class ExperimentCohortStats(SQLModel, table=True):
 
 class Thread(SQLModel, table=True):
     __tablename__ = "threads"
+    __table_args__ = (sa.UniqueConstraint("run_id", "topic", name="uq_threads_run_topic"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
@@ -606,3 +607,57 @@ class RolloutBatchRun(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     batch_id: UUID = Field(foreign_key="rollout_batches.id", index=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
+
+
+# ---------------------------------------------------------------------------
+# SandboxCommandWalEntry — append-only log of bash commands run in a sandbox
+# ---------------------------------------------------------------------------
+
+
+class SandboxCommandWalEntry(SQLModel, table=True):
+    """One row per bash command emitted by ``SandboxEventSink.sandbox_command``.
+
+    ``run_id`` is indexed but carries no FK constraint — the sandbox.closed
+    synthetic WAL entry may arrive with run_id=task_id due to a pre-existing
+    quirk in the manager's teardown sequence.  Queries should filter by
+    run_id; rows with an unexpected run_id will simply not appear.
+    """
+
+    __tablename__ = "sandbox_command_wal_entries"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    run_id: UUID = Field(index=True)
+    task_id: UUID = Field(index=True)
+    sandbox_id: str = Field(index=True)
+    command: str
+    stdout: str | None = None
+    stderr: str | None = None
+    exit_code: int | None = None
+    duration_ms: int | None = None
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+
+# ---------------------------------------------------------------------------
+# SandboxEvent — sandbox_created / sandbox_closed lifecycle events
+# ---------------------------------------------------------------------------
+
+
+class SandboxEvent(SQLModel, table=True):
+    """One row per sandbox lifecycle event emitted by ``SandboxEventSink``.
+
+    ``kind`` is one of ``"sandbox_created"`` or ``"sandbox_closed"``.
+    ``run_id`` carries no FK — same teardown-sequence caveat as
+    ``SandboxCommandWalEntry``.
+    """
+
+    __tablename__ = "sandbox_events"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    run_id: UUID = Field(index=True)
+    task_id: UUID = Field(index=True)
+    sandbox_id: str = Field(index=True)
+    kind: str
+    timeout_minutes: int | None = None
+    template: str | None = None
+    reason: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

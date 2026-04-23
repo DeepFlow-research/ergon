@@ -3,6 +3,9 @@
 from typing import Any, Protocol
 from uuid import UUID
 
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import SandboxCommandWalEntry, SandboxEvent
+
 
 class SandboxEventSink(Protocol):
     """Observer for sandbox lifecycle and append-only WAL events."""
@@ -33,6 +36,7 @@ class SandboxEventSink(Protocol):
         task_id: UUID,
         sandbox_id: str,
         reason: str,
+        run_id: UUID | None = None,
     ) -> None: ...
 
 
@@ -67,6 +71,7 @@ class NoopSandboxEventSink:
         task_id: UUID,
         sandbox_id: str,
         reason: str,
+        run_id: UUID | None = None,
     ) -> None:
         return
 
@@ -120,9 +125,154 @@ class DashboardEmitterSandboxEventSink:
         task_id: UUID,
         sandbox_id: str,
         reason: str,
+        run_id: UUID | None = None,
     ) -> None:
         await self._emitter.sandbox_closed(
             task_id=task_id,
             sandbox_id=sandbox_id,
             reason=reason,
         )
+
+
+class PostgresSandboxEventSink:
+    """Persists sandbox lifecycle events and command WAL to Postgres.
+
+    Writes to ``sandbox_events`` and ``sandbox_command_wal_entries``.
+    Failures are swallowed with a warning so that a Postgres hiccup never
+    blocks sandbox I/O.
+    """
+
+    async def sandbox_created(
+        self,
+        run_id: UUID,
+        task_id: UUID,
+        sandbox_id: str,
+        timeout_minutes: int,
+        template: str | None = None,
+    ) -> None:
+        with get_session() as s:
+            s.add(
+                SandboxEvent(
+                    run_id=run_id,
+                    task_id=task_id,
+                    sandbox_id=sandbox_id,
+                    kind="sandbox_created",
+                    timeout_minutes=timeout_minutes,
+                    template=template,
+                )
+            )
+            s.commit()
+
+    async def sandbox_command(
+        self,
+        run_id: UUID,
+        task_id: UUID,
+        sandbox_id: str,
+        command: str,
+        stdout: str | None = None,
+        stderr: str | None = None,
+        exit_code: int | None = None,
+        duration_ms: int | None = None,
+    ) -> None:
+        with get_session() as s:
+            s.add(
+                SandboxCommandWalEntry(
+                    run_id=run_id,
+                    task_id=task_id,
+                    sandbox_id=sandbox_id,
+                    command=command,
+                    stdout=stdout,
+                    stderr=stderr,
+                    exit_code=exit_code,
+                    duration_ms=duration_ms,
+                )
+            )
+            s.commit()
+
+    async def sandbox_closed(
+        self,
+        task_id: UUID,
+        sandbox_id: str,
+        reason: str,
+        run_id: UUID | None = None,
+    ) -> None:
+        if run_id is None:
+            return
+        with get_session() as s:
+            s.add(
+                SandboxEvent(
+                    run_id=run_id,
+                    task_id=task_id,
+                    sandbox_id=sandbox_id,
+                    kind="sandbox_closed",
+                    reason=reason,
+                )
+            )
+            s.commit()
+
+
+class CompoundSandboxEventSink:
+    """Dispatches to multiple sinks in order.
+
+    Constructed in app lifespan with ``DashboardEmitterSandboxEventSink``
+    and ``PostgresSandboxEventSink`` so both paths run on every event.
+    Failures in one sink propagate (no swallowing at this level).
+    """
+
+    def __init__(self, *sinks: SandboxEventSink) -> None:
+        self._sinks = sinks
+
+    async def sandbox_created(
+        self,
+        run_id: UUID,
+        task_id: UUID,
+        sandbox_id: str,
+        timeout_minutes: int,
+        template: str | None = None,
+    ) -> None:
+        for sink in self._sinks:
+            await sink.sandbox_created(
+                run_id=run_id,
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                timeout_minutes=timeout_minutes,
+                template=template,
+            )
+
+    async def sandbox_command(
+        self,
+        run_id: UUID,
+        task_id: UUID,
+        sandbox_id: str,
+        command: str,
+        stdout: str | None = None,
+        stderr: str | None = None,
+        exit_code: int | None = None,
+        duration_ms: int | None = None,
+    ) -> None:
+        for sink in self._sinks:
+            await sink.sandbox_command(
+                run_id=run_id,
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                command=command,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=exit_code,
+                duration_ms=duration_ms,
+            )
+
+    async def sandbox_closed(
+        self,
+        task_id: UUID,
+        sandbox_id: str,
+        reason: str,
+        run_id: UUID | None = None,
+    ) -> None:
+        for sink in self._sinks:
+            await sink.sandbox_closed(
+                task_id=task_id,
+                sandbox_id=sandbox_id,
+                reason=reason,
+                run_id=run_id,
+            )

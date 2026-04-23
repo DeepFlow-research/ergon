@@ -30,11 +30,13 @@ from sqlmodel import select
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.telemetry.models import (
-    RunGenerationTurn,
     RunResource,
     RunTaskEvaluation,
     RunTaskExecution,
+    SandboxCommandWalEntry,
+    SandboxEvent,
     Thread,
     ThreadMessage,
 )
@@ -100,49 +102,67 @@ def _assert_dag_edges(run_id: UUID, leaves: list[RunGraphNode]) -> None:
 
 
 def _assert_run_resources(run_id: UUID) -> None:
-    """≥ 18 resources (9 outputs + 9 probes); all have content_hash."""
+    """Exactly 18 kind='report' resources: 9 report_*.md + 9 probe_*.json.
+
+    All resources from ``SandboxResourcePublisher.sync()`` land as
+    ``kind='report'``.  The legacy ``kind='output'`` download path has been
+    removed from ``persist_outputs.py``.
+    """
     with get_session() as s:
         resources = list(s.exec(select(RunResource).where(RunResource.run_id == run_id)).all())
 
-    probes = [r for r in resources if r.name.startswith("probe_") and r.name.endswith(".json")]
-    assert len(probes) == 9, f"expected 9 probe_*.json resources, got {len(probes)}"
-    assert len(resources) >= 18, (
-        f"expected >= 18 resources (9 outputs + 9 probes), got {len(resources)}"
+    report_resources = [r for r in resources if r.kind == "report"]
+    probes = [
+        r for r in report_resources if r.name.startswith("probe_") and r.name.endswith(".json")
+    ]
+    assert len(probes) == 9, f"expected 9 probe_*.json (kind=report) resources, got {len(probes)}"
+    assert len(report_resources) == 18, (
+        f"expected 18 kind=report resources (9 reports + 9 probes), got {len(report_resources)}"
     )
     missing_hash = [r.name for r in resources if not r.content_hash]
     assert not missing_hash, f"resources missing content_hash: {missing_hash}"
 
 
 def _assert_run_turn_counts(run_id: UUID) -> None:
-    """1 parent × PARENT_TURN_COUNT + 9 leaves × LEAF_TURN_COUNT turns.
+    """1 parent × PARENT_TURN_COUNT + N leaves × LEAF_TURN_COUNT context events.
 
-    ``RunGenerationTurn.turn_index`` is per-task-execution (1 row per
-    model-call-per-execution), so we assert the total count across the
-    whole run.  Ordering within each execution is implicit from
-    ``turn_index`` and is the worker's responsibility.
+    Each smoke ``GenerationTurn`` has ``messages_in=[]`` and one ``TextPart``
+    in ``response_parts``, so ``persist_turn`` emits exactly 1 ``RunContextEvent``
+    per turn.  Total = PARENT_TURN_COUNT + len(EXPECTED_SUBTASK_SLUGS) × LEAF_TURN_COUNT.
     """
     expected = (
-        SmokeWorkerBase.PARENT_TURN_COUNT + 9 * BaseSmokeLeafWorker.LEAF_TURN_COUNT
-    )  # currently 3 + 18 = 21
+        SmokeWorkerBase.PARENT_TURN_COUNT
+        + len(EXPECTED_SUBTASK_SLUGS) * BaseSmokeLeafWorker.LEAF_TURN_COUNT
+    )  # currently 3 + 9×2 = 21
 
     with get_session() as s:
-        turns = list(
-            s.exec(select(RunGenerationTurn).where(RunGenerationTurn.run_id == run_id)).all(),
+        events = list(
+            s.exec(select(RunContextEvent).where(RunContextEvent.run_id == run_id)).all(),
         )
 
-    assert len(turns) == expected, (
+    assert len(events) == expected, (
         f"turn count mismatch: expected {expected} "
         f"(parent={SmokeWorkerBase.PARENT_TURN_COUNT}, "
-        f"leaves=9×{BaseSmokeLeafWorker.LEAF_TURN_COUNT}), got {len(turns)}"
+        f"leaves={len(EXPECTED_SUBTASK_SLUGS)}×{BaseSmokeLeafWorker.LEAF_TURN_COUNT}), got {len(events)}"
     )
 
 
 def _assert_run_evaluation(run_id: UUID) -> None:
-    """Exactly 1 RunTaskEvaluation row with score 1.0."""
-    with get_session() as s:
-        evals = list(
-            s.exec(select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)).all(),
-        )
+    """Exactly 1 RunTaskEvaluation row with score 1.0.
+
+    Retries for up to 30 s because the evaluator Inngest function fires
+    asynchronously after the run reaches terminal state.
+    """
+    deadline = time.monotonic() + 30
+    evals: list[RunTaskEvaluation] = []
+    while time.monotonic() < deadline:
+        with get_session() as s:
+            evals = list(
+                s.exec(select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)).all(),
+            )
+        if evals:
+            break
+        time.sleep(2)
     assert len(evals) == 1, f"expected 1 evaluation, got {len(evals)}"
     assert evals[0].score == 1.0, (
         f"expected score 1.0, got {evals[0].score} ({evals[0].feedback!r})"
@@ -156,26 +176,7 @@ def _assert_run_evaluation(run_id: UUID) -> None:
 
 
 def _assert_sandbox_command_wal(run_id: UUID) -> None:
-    """Bash commands land as WAL rows (sandbox_command event sink path).
-
-    Implementation note: the WAL is emitted via
-    ``SandboxEventSink.sandbox_command`` and persisted by the dashboard
-    sink adapter.  If no dedicated Postgres table exists for these
-    events in the current schema, this helper is a known-to-be-soft
-    check until the event-sink persistence lands.  See
-    ``docs/superpowers/plans/test-refactor/02-drivers-and-asserts.md
-    §2.5a``.
-    """
-    try:
-        from ergon_core.core.persistence.telemetry.models import (
-            SandboxCommandWalEntry,  # ty: ignore[unresolved-import]
-        )
-    except ImportError:
-        # Event-sink persistence not yet landed — soft-skip; the Playwright
-        # spec covers the dashboard-side observability path, and the driver
-        # reruns the probe JSON checks out-of-band.
-        return
-
+    """Bash commands land as WAL rows via ``PostgresSandboxEventSink``."""
     with get_session() as s:
         entries = list(
             s.exec(
@@ -187,18 +188,7 @@ def _assert_sandbox_command_wal(run_id: UUID) -> None:
 
 
 def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
-    """``sandbox_created`` + ``sandbox_closed`` symmetric per sandbox.
-
-    Same conditional-import caveat as ``_assert_sandbox_command_wal`` —
-    soft-skip when the event-sink Postgres table isn't there yet.
-    """
-    try:
-        from ergon_core.core.persistence.telemetry.models import (
-            SandboxEvent,  # ty: ignore[unresolved-import]
-        )
-    except ImportError:
-        return
-
+    """``sandbox_created`` + ``sandbox_closed`` symmetric per sandbox."""
     with get_session() as s:
         events = list(s.exec(select(SandboxEvent).where(SandboxEvent.run_id == run_id)).all())
     created = {e.sandbox_id for e in events if e.kind == "sandbox_created"}
@@ -240,7 +230,14 @@ def _assert_thread_messages_ordered(run_id: UUID) -> None:
 
 def _assert_blob_roundtrip(run_id: UUID) -> None:
     """Read one probe JSON artifact from disk; confirm it parses and
-    is byte-stable across two reads."""
+    is byte-stable across two reads.
+
+    Uses ``kind='report'`` resources because those are written to the
+    content-addressed blob store (``ERGON_BLOB_ROOT``) which is bind-mounted
+    at the same path on both the host and inside the API container.  The
+    legacy ``kind='output'`` rows store container-internal download paths
+    that are not directly accessible from the host-side test process.
+    """
     with get_session() as s:
         row = s.exec(
             select(RunResource)
@@ -248,12 +245,13 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
             .where(
                 RunResource.name.like("probe_%.json"),  # ty: ignore[unresolved-attribute]
             )
+            .where(RunResource.kind == "report")
             .order_by(
                 RunResource.created_at,  # ty: ignore[unresolved-attribute]
             )
             .limit(1),
         ).first()
-    assert row is not None, "no probe_*.json to round-trip"
+    assert row is not None, "no probe_*.json (kind=report) to round-trip"
     assert row.content_hash
     bytes_a = Path(row.file_path).read_bytes()
     bytes_b = Path(row.file_path).read_bytes()
@@ -387,15 +385,7 @@ def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
 
 
 def _assert_sadpath_partial_wal(run_id: UUID) -> None:
-    """Pre-failure ``wc -l partial_*`` command persists as WAL row.
-    Soft-skipped if WAL persistence isn't in the schema yet."""
-    try:
-        from ergon_core.core.persistence.telemetry.models import (
-            SandboxCommandWalEntry,  # ty: ignore[unresolved-import]
-        )
-    except ImportError:
-        return
-
+    """Pre-failure ``wc -l partial_*`` command persists as WAL row."""
     with get_session() as s:
         entries = list(
             s.exec(
@@ -410,8 +400,9 @@ def _assert_sadpath_partial_wal(run_id: UUID) -> None:
 
 
 def _assert_sadpath_thread_messages(run_id: UUID) -> None:
-    """Happy path sends 9 messages; l_2 raises before sending.  Expect 8
-    on the smoke-completion thread with l_2 missing from from_agent_id."""
+    """Happy path sends 9 messages; l_2 raises before sending; l_3 is BLOCKED
+    and never executes.  Expect 7 on the smoke-completion thread with both l_2
+    and l_3 missing from from_agent_id."""
     with get_session() as s:
         thread = s.exec(
             select(Thread).where(Thread.run_id == run_id).where(Thread.topic == "smoke-completion"),
@@ -424,12 +415,16 @@ def _assert_sadpath_thread_messages(run_id: UUID) -> None:
                 .order_by(ThreadMessage.sequence_num),  # ty: ignore[unresolved-attribute]
             ).all(),
         )
-    assert len(msgs) == 8, (
-        f"expected 8 completion messages (l_2 raises before sending), got {len(msgs)}"
+    assert len(msgs) == 7, (
+        f"expected 7 completion messages (l_2 raises before sending, "
+        f"l_3 is BLOCKED and never executes), got {len(msgs)}"
     )
     from_slugs = {m.from_agent_id.removeprefix("leaf-") for m in msgs}
     assert "l_2" not in from_slugs, f"l_2 sent a completion message despite raising: {from_slugs}"
-    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {"l_2"}
+    assert "l_3" not in from_slugs, (
+        f"l_3 sent a completion message despite being BLOCKED: {from_slugs}"
+    )
+    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {"l_2", "l_3"}
 
 
 def _assert_sadpath_evaluation(run_id: UUID) -> None:

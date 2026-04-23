@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 const isLive = process.env.PLAYWRIGHT_LIVE === "1";
 const port = isLive ? "3000" : "3101";
@@ -16,6 +16,12 @@ export default defineConfig({
     screenshot: "on",
     video: "retain-on-failure",
   },
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+    },
+  ],
   webServer: isLive
     ? undefined
     : {

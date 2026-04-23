@@ -64,26 +64,18 @@ class CohortSlot:
 def _build_cohort() -> tuple[CohortSlot, ...]:
     """Build the cohort using the ``SMOKE_COHORT_SIZE`` env-var override.
 
-    Default (``SMOKE_COHORT_SIZE`` unset or ``=3``): 2 happy + 1 sad
-    per plan §3.2.
+    ``SMOKE_COHORT_SIZE`` controls the number of *happy* slots (default 2).
+    One sad-path slot is always appended — every cohort must exercise the
+    line-cascade failure path regardless of size.
 
-    For local dev (``SMOKE_COHORT_SIZE=1``): single happy slot — the
-    sad-path slot is dropped so iteration focuses on the happy
-    pipeline first.  ``SMOKE_COHORT_SIZE=2`` = 2 happy, also drops sad.
-    ``SMOKE_COHORT_SIZE=3`` = full default.  Larger values extend with
-    additional happy slots.
+    Size=1 → 1 happy + 1 sad.  Size=2 (default) → 2 happy + 1 sad.
     """
-    size = int(os.environ.get("SMOKE_COHORT_SIZE", "3"))
+    size = int(os.environ.get("SMOKE_COHORT_SIZE", "2"))
     if size <= 0:
         raise ValueError(f"SMOKE_COHORT_SIZE must be >= 1, got {size}")
 
-    include_sad = size >= 3
-    happy_count = (size - 1) if include_sad else size
-    slots: list[CohortSlot] = [
-        CohortSlot(HAPPY_WORKER, CRITERION, "happy") for _ in range(happy_count)
-    ]
-    if include_sad:
-        slots.append(CohortSlot(SAD_WORKER, CRITERION, "sad"))
+    slots: list[CohortSlot] = [CohortSlot(HAPPY_WORKER, CRITERION, "happy") for _ in range(size)]
+    slots.append(CohortSlot(SAD_WORKER, CRITERION, "sad"))
     return tuple(slots)
 
 
@@ -175,7 +167,8 @@ def _assert_env_content_happy(rid: uuid.UUID) -> None:
                 .where(RunResource.run_id == rid)
                 .where(
                     RunResource.name.like("report_%.md"),  # ty: ignore[unresolved-attribute]
-                ),
+                )
+                .where(RunResource.kind == "report"),  # blob-store only (host-accessible)
             ).all(),
         )
     assert len(reports) == 9, f"expected 9 reports, got {len(reports)}"
@@ -221,7 +214,7 @@ def _invoke_playwright(
             "PLAYWRIGHT_LIVE": "1",
             "PLAYWRIGHT_BASE_URL": os.environ.get(
                 "PLAYWRIGHT_BASE_URL",
-                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3001",
             ),
             "ERGON_API_BASE_URL": os.environ.get(
                 "ERGON_API_BASE_URL",

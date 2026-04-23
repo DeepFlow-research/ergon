@@ -132,7 +132,7 @@ class BaseSmokeLeafWorker(Worker):
           ``RunGraphNode.task_slug`` by ``context.node_id``
         - ``to_agent_id``: ``"parent"``
         - 9 messages per happy run, sequence_num 1..9 per-thread-monotonic
-        - 8 messages per sad run (l_2 fails before reaching this call)
+        - 7 messages per sad run (l_2 fails before reaching this call; l_3 is BLOCKED)
         """
         task_slug = self._lookup_task_slug(context.node_id)
         await communication_service.save_message(
