@@ -7,6 +7,7 @@ resolving ``model_target`` strings (e.g. ``"openai:gpt-4o"`` or
 
 import json as _json
 import logging
+import urllib.error
 import urllib.request
 
 import pydantic_ai.models
@@ -72,18 +73,37 @@ def resolve_model_target(
 def _discover_vllm_model_name(endpoint: str) -> str:
     """Query ``/v1/models`` to discover the served model name.
 
-    Falls back to ``"default"`` if the endpoint is unreachable (e.g.
-    during test setup before vLLM is running).
+    Raises ``VLLMDiscoveryError`` if the endpoint is unreachable, returns
+    a malformed payload, or advertises no models. Callers that intend to
+    run before vLLM is up MUST pass ``model_name=`` explicitly to
+    ``resolve_model_target`` instead of relying on a silent fallback.
     """
     url = f"{endpoint}/v1/models"
     try:
         with urllib.request.urlopen(url, timeout=5) as resp:
             body = _json.loads(resp.read())
-        models = body.get("data", [])
-        if models:
-            name = models[0].get("id", "default")
-            logger.info("Discovered vLLM model name: %s", name)
-            return name
-    except Exception:  # slopcop: ignore[no-broad-except]
-        logger.warning("Could not discover vLLM model name from %s, using 'default'", url)
-    return "default"
+    except (urllib.error.URLError, TimeoutError, _json.JSONDecodeError) as exc:
+        raise VLLMDiscoveryError(
+            f"Could not discover vLLM model name from {url}: {exc}. "
+            "Pass model_name= explicitly to resolve_model_target if vLLM "
+            "is not yet running."
+        ) from exc
+
+    models = body.get("data", [])
+    if not models:
+        raise VLLMDiscoveryError(
+            f"vLLM endpoint {url} returned no models in /v1/models payload.",
+        )
+
+    name = models[0].get("id")
+    if not isinstance(name, str) or not name:
+        raise VLLMDiscoveryError(
+            f"vLLM endpoint {url} returned a model without a string 'id' field.",
+        )
+
+    logger.info("Discovered vLLM model name: %s", name)
+    return name
+
+
+class VLLMDiscoveryError(RuntimeError):
+    """Raised when ``/v1/models`` cannot be queried or returns no usable model."""
