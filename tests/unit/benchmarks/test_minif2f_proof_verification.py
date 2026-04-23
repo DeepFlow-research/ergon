@@ -60,8 +60,10 @@ async def test_reads_proof_via_runtime_read_resource() -> None:
     result = await criterion.evaluate(context)
 
     runtime.read_resource.assert_awaited_once_with("final_solution.lean")
-    # Smoke: result is a well-formed CriterionResult.
-    assert result.name
+    assert result.name == "proof_verification"
+    assert result.score == 1.0
+    assert result.passed is True
+    assert result.feedback == "Proof successfully verified by Lean compiler."
 
 
 @pytest.mark.asyncio
@@ -84,3 +86,4 @@ async def test_scores_zero_when_proof_missing() -> None:
     result = await criterion.evaluate(context)
     assert result.score == 0.0
     assert not result.passed
+    assert "final_solution.lean" in result.feedback

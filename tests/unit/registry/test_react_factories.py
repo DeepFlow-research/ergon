@@ -58,7 +58,8 @@ def test_minif2f_factory_builds_toolkit(monkeypatch: pytest.MonkeyPatch) -> None
     assert isinstance(worker, Worker)
     # Factory should have asked the manager for the sandbox
     fake_manager.get_sandbox.assert_called_once_with(task_id)
-    # Tools list must be non-empty (the MiniF2F toolkit publishes ≥1 tool)
-    assert worker.tools != []
+    # MiniF2FToolkit without ask_stakeholder_fn publishes exactly 4 tools:
+    # write_lean_file, check_lean_file, verify_lean_proof, search_lemmas
+    assert len(worker.tools) == 4
     # `max_iterations` must be explicit — 30 is the MiniF2F budget from the old adapter
     assert worker.max_iterations == 30

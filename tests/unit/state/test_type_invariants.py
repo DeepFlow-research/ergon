@@ -154,6 +154,9 @@ from ergon_core.core.persistence.telemetry.models import (
 def test_field_accepts_valid_value(build_fn, field, expected):
     obj = build_fn()
     assert getattr(obj, field) == expected
+    # Round-trip
+    roundtripped = type(obj).model_validate(obj.model_dump())
+    assert getattr(roundtripped, field) == expected
 
 
 def test_tightened_list_types():

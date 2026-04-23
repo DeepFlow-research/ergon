@@ -19,6 +19,7 @@ Opt out of the preflight with ERGON_SKIP_INFRA_CHECK=1 when you knowingly
 want to run against a missing backend (e.g. debugging retry paths).
 """
 
+import asyncio
 import os
 import socket
 from urllib.parse import urlparse
@@ -59,8 +60,8 @@ async def _reset_inngest_http_client():
         fresh = inngest_client._http_client  # type: ignore[attr-defined]
         try:
             await fresh._http_client.aclose()
-        except Exception:
-            pass
+        except (RuntimeError, asyncio.CancelledError):
+            pass  # client already closed or event loop torn down between tests
 
 
 def _probe_tcp(host: str, port: int, timeout: float = 0.5) -> str | None:

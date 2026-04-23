@@ -117,6 +117,7 @@ def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     from ergon_core.core.settings import settings
 
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
+    fake = _patch_sdk(monkeypatch)
 
     registry = tmp_path / "sandbox_templates.json"
     registry.write_text(
@@ -125,6 +126,7 @@ def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
 
     rc = setup_benchmark(_make_args())
     assert rc == 0
+    fake.build.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

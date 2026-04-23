@@ -1,6 +1,7 @@
 """Tests for ResearchRubrics benchmark registration and vanilla variant."""
 
 import pytest
+from ergon_core.api import Benchmark
 
 
 class TestResearchRubricsBenchmarkRegistration:
@@ -8,19 +9,23 @@ class TestResearchRubricsBenchmarkRegistration:
 
     def test_researchrubrics_ablated_registered(self):
         """researchrubrics-ablated resolves to ResearchRubricsBenchmark."""
+        from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
         from ergon_builtins.registry_data import BENCHMARKS
 
         assert "researchrubrics-ablated" in BENCHMARKS
-        cls = BENCHMARKS["researchrubrics-ablated"]
-        assert cls.__name__ == "ResearchRubricsBenchmark"
+        assert BENCHMARKS["researchrubrics-ablated"] is ResearchRubricsBenchmark
+        assert issubclass(ResearchRubricsBenchmark, Benchmark)
 
     def test_researchrubrics_vanilla_registered(self):
         """researchrubrics-vanilla resolves to ResearchRubricsVanillaBenchmark."""
+        from ergon_builtins.benchmarks.researchrubrics.vanilla import (
+            ResearchRubricsVanillaBenchmark,
+        )
         from ergon_builtins.registry_data import BENCHMARKS
 
         assert "researchrubrics-vanilla" in BENCHMARKS
-        cls = BENCHMARKS["researchrubrics-vanilla"]
-        assert cls.__name__ == "ResearchRubricsVanillaBenchmark"
+        assert BENCHMARKS["researchrubrics-vanilla"] is ResearchRubricsVanillaBenchmark
+        assert issubclass(ResearchRubricsVanillaBenchmark, Benchmark)
 
     def test_worker_slugs_registered(self):
         """researchrubrics-researcher is present in the registry."""

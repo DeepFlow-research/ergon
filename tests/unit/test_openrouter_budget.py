@@ -7,21 +7,27 @@ import pytest
 from ergon_core.core.providers.generation.openrouter_budget import OpenRouterBudget
 
 
+def _make_mock_response(
+    usage: float, limit: float = 100.0, limit_remaining: float = 97.5
+) -> object:
+    class _Resp:
+        status_code = 200
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"data": {"usage": usage, "limit": limit, "limit_remaining": limit_remaining}}
+
+    return _Resp()
+
+
 @pytest.mark.asyncio
 async def test_remaining_usd_returns_limit_minus_delta() -> None:
     budget = OpenRouterBudget(limit_usd=5.0, api_key="test-key")
 
     async def _mock_get(*_args: object, **_kwargs: object) -> object:
-        class _Resp:
-            status_code = 200
-
-            def raise_for_status(self) -> None:
-                return None
-
-            def json(self) -> dict[str, object]:
-                return {"data": {"usage": 2.50, "limit": 100.0, "limit_remaining": 97.50}}
-
-        return _Resp()
+        return _make_mock_response(usage=2.50, limit_remaining=97.50)
 
     with patch("httpx.AsyncClient.get", new=AsyncMock(side_effect=_mock_get)):
         await budget.snapshot_baseline()
@@ -39,18 +45,7 @@ async def test_remaining_usd_after_spend() -> None:
     usages = iter([2.50, 3.70])
 
     async def _mock_get(*_args: object, **_kwargs: object) -> object:
-        next_usage = next(usages)
-
-        class _Resp:
-            status_code = 200
-
-            def raise_for_status(self) -> None:
-                return None
-
-            def json(self) -> dict[str, object]:
-                return {"data": {"usage": next_usage, "limit": 100.0, "limit_remaining": 97.5}}
-
-        return _Resp()
+        return _make_mock_response(usage=next(usages))
 
     with patch("httpx.AsyncClient.get", new=AsyncMock(side_effect=_mock_get)):
         await budget.snapshot_baseline()

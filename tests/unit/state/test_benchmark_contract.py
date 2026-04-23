@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 
@@ -40,7 +41,7 @@ class TestBenchmarkOnboardingDepsContract:
 
         for slug, cls in BENCHMARKS.items():
             deps = cls.onboarding_deps
-            with pytest.raises(Exception):  # Pydantic ValidationError
+            with pytest.raises(ValidationError):
                 deps.e2b = not deps.e2b  # type: ignore[misc]
 
     def test_known_e2b_benchmarks(self) -> None:
