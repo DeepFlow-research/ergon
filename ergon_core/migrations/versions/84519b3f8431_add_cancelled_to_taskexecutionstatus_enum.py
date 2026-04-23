@@ -51,9 +51,7 @@ def upgrade() -> None:
     if op.get_context().dialect.name != "postgresql":
         return
     with op.get_context().autocommit_block():
-        op.execute(
-            sa.text("ALTER TYPE taskexecutionstatus ADD VALUE IF NOT EXISTS 'CANCELLED'")
-        )
+        op.execute(sa.text("ALTER TYPE taskexecutionstatus ADD VALUE IF NOT EXISTS 'CANCELLED'"))
 
 
 def downgrade() -> None:

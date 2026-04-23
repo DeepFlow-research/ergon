@@ -34,8 +34,8 @@ drift.
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 
 # Keep this set in sync with the Postgres ``taskexecutionstatus`` enum,
-# which after migration ``84519b3f8431`` contains:
-#     PENDING, RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED
+# which after migration ``4a71a3dc2ef5`` contains:
+#     PENDING, RUNNING, COMPLETED, FAILED, SKIPPED, CANCELLED, BLOCKED
 EXPECTED_MEMBERS = {
     "PENDING",
     "RUNNING",
@@ -43,6 +43,7 @@ EXPECTED_MEMBERS = {
     "FAILED",
     "SKIPPED",
     "CANCELLED",
+    "BLOCKED",
 }
 
 

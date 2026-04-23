@@ -182,4 +182,10 @@ class RunGraphMutation(SQLModel, table=True):
     old_value: dict | None = Field(default=None, sa_column=Column(JSON))
     new_value: dict = Field(default_factory=dict, sa_column=Column(JSON))
     reason: str | None = None
+    triggered_by_mutation_id: UUID | None = Field(
+        default=None,
+        foreign_key="run_graph_mutations.id",
+        ondelete="SET NULL",
+    )
+    batch_operation_id: UUID | None = Field(default=None, index=False)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

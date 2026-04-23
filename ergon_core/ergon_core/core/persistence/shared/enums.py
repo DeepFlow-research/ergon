@@ -26,6 +26,7 @@ class TaskExecutionStatus(StrEnum):
     FAILED = "failed"
     SKIPPED = "skipped"
     CANCELLED = "cancelled"
+    BLOCKED = "blocked"
 
 
 class TrainingStatus(StrEnum):
