@@ -491,6 +491,46 @@ if created:
         logger.info("Successfully terminated sandbox %s", sandbox_id)
         return True
 
+    async def reconnect(self, sandbox_id: str) -> "AsyncSandbox":
+        """Attach to a running sandbox by its E2B ``sandbox_id``.
+
+        Returns an ``AsyncSandbox`` handle. Raises ``SandboxExpiredError``
+        if the sandbox is not found or has already timed out. Idempotent:
+        two calls for the same ``sandbox_id`` return equivalent handles.
+
+        Use this path for cross-process criterion reconnect. In-process
+        criteria should prefer ``get_sandbox(task_id)`` which reads shared
+        class state. ``reconnect`` deliberately does NOT register the
+        sandbox in ``_sandboxes``; cross-process callers hold the returned
+        handle directly.
+        """
+        from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
+
+        if AsyncSandbox is None:
+            raise RuntimeError(
+                "e2b_code_interpreter is not installed. "
+                "Install it with: pip install e2b-code-interpreter"
+            )
+        try:
+            sandbox = await AsyncSandbox.connect(
+                sandbox_id=sandbox_id,
+                api_key=settings.e2b_api_key,
+            )
+        except SandboxNotFoundException as exc:
+            raise SandboxExpiredError(sandbox_id, detail=str(exc)) from exc
+        except TimeoutException as exc:
+            raise SandboxExpiredError(sandbox_id, detail=str(exc)) from exc
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
+            # Classify by message as a fallback for SDK error shapes that
+            # don't inherit the two named exceptions above. We only catch
+            # the expiry-adjacent cases here; other errors re-raise so
+            # unrelated bugs aren't silently reclassified.
+            err = str(exc).lower()
+            if "not found" in err or "404" in err or "expired" in err or "timeout" in err:
+                raise SandboxExpiredError(sandbox_id, detail=str(exc)) from exc
+            raise
+        return sandbox
+
 
 class DefaultSandboxManager(BaseSandboxManager):
     """No custom dependencies. Used by benchmarks without specific sandbox setup.
