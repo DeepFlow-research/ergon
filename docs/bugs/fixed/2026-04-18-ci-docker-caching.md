@@ -1,11 +1,18 @@
 ---
-status: open
+status: fixed
 opened: 2026-04-18
-fixed_pr: null
+fixed_pr: TBD
 priority: P3
 invariant_violated: null
 related_rfc: null
 ---
+
+## Fix summary (2026-04-23)
+
+- `docker-compose.ci.yml` `api` service now declares `cache_from: [type=gha,scope=ergon-api]` + `cache_to: [type=gha,scope=ergon-api,mode=max]` — BuildKit reads/writes the GitHub Actions cache.
+- `.github/workflows/e2e-benchmarks.yml` adds `docker/setup-buildx-action@v3` before `docker compose up --build` in both jobs, and exports `DOCKER_BUILDKIT=1` + `COMPOSE_DOCKER_CLI_BUILD=1` so compose honours `cache_from`/`cache_to`.
+- `postgres` kept at tag `15`; `inngest/inngest` left at `:latest` with a TODO. Digest-pinning of base images is a follow-up.
+- Measurement: to be recorded on the landing PR (before/after wall-clock of `e2e-benchmarks.yml` on a no-op change).
 
 # Bug: CI Docker layers are not cached between e2e workflow runs
 

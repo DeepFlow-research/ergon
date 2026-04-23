@@ -1,5 +1,9 @@
 services:
   postgres:
+    # Keep tag-pinned to 15 (major version). Follow-up: pin to a specific
+    # digest once a maintainer can grab one via:
+    #   docker pull postgres:15 && docker image inspect \
+    #     --format='{{index .RepoDigests 0}}' postgres:15
     image: postgres:15
     environment:
       POSTGRES_USER: ergon
@@ -17,6 +21,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # BuildKit GHA cache: CI passes these through via buildx bake/build.
+      # Local developers get a no-op (type=gha is only honoured when the
+      # buildx GHA-cache endpoints are present, which GitHub Actions sets
+      # automatically). No local setup required.
+      cache_from:
+        - type=gha,scope=ergon-api
+      cache_to:
+        - type=gha,scope=ergon-api,mode=max
+    image: ergon-api:ci
     ports:
       - "9000:9000"
     environment:
@@ -40,6 +53,9 @@ services:
     command: uvicorn ergon_core.core.api.app:app --host 0.0.0.0 --port 9000
 
   inngest-dev:
+    # TODO: move off ``:latest`` to a pinned version once a maintainer
+    # picks the target release. ``:latest`` means CI cache invalidates
+    # silently whenever upstream pushes a new build.
     image: inngest/inngest:latest
     command: >
       inngest dev --no-discovery

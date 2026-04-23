@@ -20,7 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Start CI stack
+        env:
+          # Enable BuildKit so docker-compose honours cache_from/cache_to.
+          DOCKER_BUILDKIT: "1"
+          COMPOSE_DOCKER_CLI_BUILD: "1"
         run: docker compose -f docker-compose.ci.yml up -d --build --wait
         timeout-minutes: 5
 
@@ -66,6 +73,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Prepare shared blob root
         # Bind-mounted at the same path on host and inside the api container
         # so pytest can read the files the publisher writes.  World-writable
@@ -77,6 +87,8 @@ jobs:
       - name: Start CI stack
         env:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          DOCKER_BUILDKIT: "1"
+          COMPOSE_DOCKER_CLI_BUILD: "1"
         run: docker compose -f docker-compose.ci.yml up -d --build --wait
         timeout-minutes: 5
 
