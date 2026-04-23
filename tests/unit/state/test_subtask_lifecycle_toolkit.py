@@ -2,6 +2,8 @@
 
 from uuid import uuid4
 
+import pytest
+
 from ergon_builtins.tools.subtask_lifecycle_toolkit import SubtaskLifecycleToolkit
 
 
@@ -13,37 +15,27 @@ def _make_toolkit() -> SubtaskLifecycleToolkit:
     )
 
 
-async def test_cancel_task_handles_invalid_uuid_gracefully() -> None:
-    toolkit = _make_toolkit()
-    tools = toolkit.get_tools()
-    cancel = tools[2]
-    result = await cancel("not-a-uuid")
+@pytest.mark.parametrize(
+    "tool_name,args",
+    [
+        ("cancel_task", ("not-a-uuid",)),
+        ("refine_task", ("not-a-uuid", "new description")),
+        ("restart_task", ("not-a-uuid",)),
+    ],
+)
+async def test_invalid_uuid_returns_error(tool_name: str, args: tuple) -> None:
+    tools = _make_toolkit().get_tools()
+    tool = next(t for t in tools if t.__name__ == tool_name)
+    result = await tool(*args)
     assert result["success"] is False
     assert "error" in result
-    assert isinstance(result["error"], str)
-    assert len(result["error"]) > 0
-
-
-async def test_refine_task_handles_invalid_uuid_gracefully() -> None:
-    toolkit = _make_toolkit()
-    tools = toolkit.get_tools()
-    refine = tools[3]
-    result = await refine("not-a-uuid", "new desc")
-    assert result["success"] is False
-    assert "error" in result
-    assert isinstance(result["error"], str)
-    assert len(result["error"]) > 0
-
-
-async def test_restart_task_handles_invalid_uuid_gracefully() -> None:
-    toolkit = _make_toolkit()
-    tools = toolkit.get_tools()
-    restart = tools[4]
-    result = await restart("not-a-uuid")
-    assert result["success"] is False
-    assert "error" in result
-    assert isinstance(result["error"], str)
-    assert len(result["error"]) > 0
+    error_lower = result["error"].lower()
+    assert (
+        "not-a-uuid" in result["error"]
+        or "invalid" in error_lower
+        or "badly formed" in error_lower
+        or "hexadecimal" in error_lower
+    )
 
 
 def test_tools_have_correct_function_names() -> None:
