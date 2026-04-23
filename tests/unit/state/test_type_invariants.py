@@ -22,6 +22,7 @@ from ergon_core.core.persistence.shared.enums import (
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStatus,
+    RolloutBatch,
     RunGenerationTurn,
     RunRecord,
     RunResource,
@@ -181,18 +182,82 @@ def test_enum_value_matches_string():
 
 
 # ---------------------------------------------------------------------------
-# Rejection — invalid values raise ValidationError at construction
+# Rejection — invalid values raise ValidationError via model_validate()
 #
-# Investigation result: every field that appears to be constrained
-# (RunRecord.status, RunTaskExecution.status, ExperimentCohort.status,
-# TrainingSession.status, RunGenerationTurn.execution_outcome,
-# RunResource.kind, RunGraphMutation.mutation_type / target_type,
-# RunGraphAnnotation.target_type) is annotated as plain ``str`` in the
-# SQLModel column definition for database compatibility.  Pydantic therefore
-# treats each field as ``str`` and coerces / accepts any string value —
-# ValidationError is never raised at construction time.
-#
-# Consequence: there are no constructable rejection test cases today.
-# If a future refactor adds a proper Pydantic-validated enum field (e.g. via
-# AfterValidator or model_validator), add parametrize entries here.
+# Note: SQLModel table=True models bypass Pydantic validators on direct
+# construction (Model(...)). Use model_validate() to trigger the
+# AfterValidators added to each model below.
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "cls,base_data,invalid_field,invalid_value",
+    [
+        (
+            RunRecord,
+            {"experiment_definition_id": str(uuid4()), "status": "pending"},
+            "status",
+            "not-a-status",
+        ),
+        (
+            RunTaskExecution,
+            {"run_id": str(uuid4()), "status": "pending"},
+            "status",
+            "garbage",
+        ),
+        (
+            RunGenerationTurn,
+            {
+                "run_id": str(uuid4()),
+                "task_execution_id": str(uuid4()),
+                "worker_binding_key": "w",
+                "turn_index": 0,
+                "raw_response": {},
+            },
+            "execution_outcome",
+            "unknown-outcome",
+        ),
+        (
+            RunResource,
+            {
+                "run_id": str(uuid4()),
+                "name": "test",
+                "mime_type": "text/plain",
+                "file_path": "/x",
+                "size_bytes": 0,
+            },
+            "kind",
+            "invalid-kind",
+        ),
+        (
+            ExperimentCohort,
+            {"name": "test-cohort"},
+            "status",
+            "unknown-status",
+        ),
+        (
+            TrainingSession,
+            {"experiment_definition_id": str(uuid4()), "model_name": "gpt"},
+            "status",
+            "garbage",
+        ),
+        (
+            RolloutBatch,
+            {"definition_id": str(uuid4())},
+            "status",
+            "garbage",
+        ),
+    ],
+)
+def test_invalid_field_value_rejected_via_model_validate(
+    cls, base_data, invalid_field, invalid_value
+):
+    """Enum/Literal fields reject invalid values when validated via model_validate().
+
+    Note: SQLModel table=True models bypass Pydantic validators on direct
+    construction. Use model_validate() to trigger the AfterValidators.
+    """
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        cls.model_validate({**base_data, invalid_field: invalid_value})
