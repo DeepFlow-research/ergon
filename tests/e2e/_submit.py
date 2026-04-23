@@ -1,26 +1,38 @@
 """Cohort submission helper for canonical smoke drivers.
 
-Submits N runs of a benchmark via the existing ``ergon benchmark run``
-CLI, in parallel, all sharing one ``cohort_key``.  Returns the run_ids
-in the same order as the slots passed in.
+In-process submission: builds the experiment graph, persists it, creates
+a ``RunRecord``, and emits ``WorkflowStartedEvent`` via Inngest — all
+without spawning an external ``ergon benchmark run`` subprocess.
+
+Historically this shelled out to the CLI so the test orchestrator could
+live on the host and talk to a dockerised backend.  That layout needed
+the smoke ``WORKERS`` / ``EVALUATORS`` to be registered in *every*
+process that might resolve a worker slug (the CLI's process *and* the
+api container's Inngest worker).  Moving pytest into the api container
+(see Dockerfile + docker-compose) means both halves run in the same
+interpreter, so direct service calls are sufficient and cheaper.
 
 Each slot can use a different ``(worker_slug, criterion_slug)`` pair —
 used by the researchrubrics leg which has 2 happy + 1 sad slot.  Empty
 slots list is valid (returns ``[]``) but unlikely in practice.
-
-Parses the run_id from the CLI's ``Run ID:   <uuid>`` line.  If the CLI
-output format changes, grep for ``Run ID`` in
-``ergon_cli/commands/benchmark.py`` and update the regex.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
-import re
 from uuid import UUID
 
-RUN_ID_RE = re.compile(r"Run ID:\s+([0-9a-f-]{36})")
+import inngest
+from ergon_cli.composition import build_experiment
+from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
+from ergon_core.core.runtime.services.run_service import create_run
+
+# Default model passed into ``build_experiment``.  Smoke workers do not
+# call an LLM — the field is only there because the production CLI arg
+# requires it.  Matches the CLI default (``ergon_cli.main``).
+_SMOKE_MODEL = "openai:gpt-4o"
 
 
 async def _submit_one(
@@ -29,40 +41,37 @@ async def _submit_one(
     worker_slug: str,
     criterion_slug: str,
     cohort_key: str,
-    timeout: int = 300,
+    timeout: int = 300,  # noqa: ARG001  # kept for backward-compat signature
 ) -> UUID:
-    """Launch one ``ergon benchmark run`` subprocess; return its run_id."""
-    proc = await asyncio.create_subprocess_exec(
-        "ergon",
-        "benchmark",
-        "run",
-        benchmark_slug,
-        "--worker",
-        worker_slug,
-        "--evaluator",
-        criterion_slug,
-        "--cohort",
-        cohort_key,
-        "--timeout",
-        str(timeout),
-        "--limit",
-        "1",
-        env={**os.environ, "PYTHONUNBUFFERED": "1"},
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+    """Build + persist + dispatch one smoke run; return its run_id."""
+    experiment = build_experiment(
+        benchmark_slug=benchmark_slug,
+        model=_SMOKE_MODEL,
+        worker_slug=worker_slug,
+        evaluator_slug=criterion_slug,
+        limit=1,
     )
-    stdout_b, stderr_b = await proc.communicate()
-    stdout = stdout_b.decode("utf-8", errors="replace")
-    stderr = stderr_b.decode("utf-8", errors="replace")
-    match = RUN_ID_RE.search(stdout)
-    if match is None:
-        raise RuntimeError(
-            "Could not parse run_id from CLI output. "
-            f"exit={proc.returncode}\n"
-            f"STDOUT:\n{stdout[-2000:]}\n"
-            f"STDERR:\n{stderr[-2000:]}",
+    experiment.validate()
+    persisted = experiment.persist()
+
+    cohort = experiment_cohort_service.resolve_or_create(
+        name=cohort_key,
+        description=f"smoke cohort: {benchmark_slug} / {worker_slug} / {criterion_slug}",
+        created_by="smoke-test",
+    )
+    run = create_run(persisted, cohort_id=cohort.id)
+
+    event = WorkflowStartedEvent(
+        run_id=run.id,
+        definition_id=persisted.definition_id,
+    )
+    await inngest_client.send(
+        inngest.Event(
+            name=WorkflowStartedEvent.name,
+            data=event.model_dump(mode="json"),
         )
-    return UUID(match.group(1))
+    )
+    return run.id
 
 
 async def submit_cohort(
@@ -72,17 +81,17 @@ async def submit_cohort(
     cohort_key: str,
     timeout: int = 300,
 ) -> list[UUID]:
-    """Submit one run per slot, all with the same ``cohort_key``.
+    """Submit one run per slot, all sharing ``cohort_key``.
 
-    Returns run_ids in the same order as ``slots``.  Submissions happen
-    in parallel via ``asyncio.gather``.
+    Returns run_ids in the same order as ``slots``.  Dispatch happens in
+    parallel via ``asyncio.gather``.
 
     Args:
         benchmark_slug:  e.g. ``"researchrubrics"``
         slots:           list of ``(worker_slug, criterion_slug)`` tuples
                          — one entry per cohort member
         cohort_key:      shared cohort string (all runs group under this)
-        timeout:         per-run timeout seconds passed to the CLI
+        timeout:         per-run timeout seconds (reserved for future use)
     """
     tasks = [
         _submit_one(

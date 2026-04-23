@@ -89,6 +89,10 @@ def _invoke_playwright(
     cohort: list[dict[str, str]],
     screenshot_dir: pathlib.Path,
 ) -> None:
+    # See test_minif2f_smoke.py — SKIP_PLAYWRIGHT=1 short-circuits when
+    # pytest is running inside the api container.
+    if os.environ.get("SKIP_PLAYWRIGHT") == "1":
+        return
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [

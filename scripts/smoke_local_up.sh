@@ -39,20 +39,22 @@ bash ci/wait_for_dashboard.sh
 
 cat <<'EOF'
 
-Stack is up.  Export these in your shell before running smoke:
+Stack is up.
 
-    export ERGON_DATABASE_URL=postgresql://ergon:ergon_dev@localhost:5433/ergon
-    export INNGEST_API_BASE_URL=http://localhost:8289
-    export INNGEST_DEV=1
-    export INNGEST_EVENT_KEY=dev
-    export ERGON_API_BASE_URL=http://127.0.0.1:9000
-    export PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001
-    export ENABLE_TEST_HARNESS=1
-    export TEST_HARNESS_SECRET=local-dev
-    export SCREENSHOT_DIR=/tmp/playwright
-    export E2B_API_KEY=<your key>   # required for real sandbox runs
+Smoke runs (pytest execs inside the api container — zero host setup):
 
-Then: scripts/smoke_local_run.sh minif2f   (or researchrubrics / swebench-verified)
+    scripts/smoke_local_run.sh minif2f            # cohort_size=1 by default
+    scripts/smoke_local_run.sh researchrubrics 3  # match CI cohort size
+
+E2B_API_KEY + OPENROUTER_API_KEY must be set in the shell before
+``smoke_local_up.sh`` runs — docker compose passes them through to the
+api container.
+
+Playwright screenshots run host-side (they need node + pnpm + chromium):
+
+    export COHORT_KEY=<copy from the pytest output>
+    pnpm --dir ergon-dashboard exec playwright test \
+         tests/e2e/${ENV}.smoke.spec.ts --project=chromium
 
 Teardown: docker compose down -v
 API logs: docker compose logs -f api
