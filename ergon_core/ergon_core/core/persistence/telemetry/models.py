@@ -30,11 +30,17 @@ from sqlmodel import Field, SQLModel
 
 TZDateTime = DateTime(timezone=True)
 
+# model_validator(mode="after") fires on model_validate() but NOT on direct
+# SQLModel table model construction (SQLModel's __init__ bypasses Pydantic
+# for table=True). Validators here protect the API/deserialization boundary.
+
 # ---------------------------------------------------------------------------
 # Type aliases
 # ---------------------------------------------------------------------------
 
 ExecutionOutcome = Literal["success", "failure"]
+
+_VALID_OUTCOMES = frozenset({"success", "failure"})
 
 # ---------------------------------------------------------------------------
 # Cohort status enum
@@ -83,8 +89,15 @@ class RunRecord(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_summary_json(self) -> "RunRecord":
+    def _validate_fields(self) -> "RunRecord":
         self.__class__._parse_summary(self.summary_json)
+        try:
+            RunStatus(self.status)
+        except ValueError:
+            raise ValueError(
+                f"{self.status!r} is not a valid RunStatus; "
+                f"valid values: {[e.value for e in RunStatus]}"
+            )
         return self
 
 
@@ -132,11 +145,6 @@ class RunTaskExecution(SQLModel, table=True):
             raise ValueError(f"output_json must be a dict, got {type(data).__name__}")
         return data
 
-    @model_validator(mode="after")
-    def _validate_output_json(self) -> "RunTaskExecution":
-        self.__class__._parse_output(self.output_json)
-        return self
-
     # -- JSON accessor: error_json (nullable) --
 
     def parsed_error(self) -> dict[str, object] | None:
@@ -151,8 +159,16 @@ class RunTaskExecution(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_error_json(self) -> "RunTaskExecution":
+    def _validate_fields(self) -> "RunTaskExecution":
+        self.__class__._parse_output(self.output_json)
         self.__class__._parse_error(self.error_json)
+        try:
+            TaskExecutionStatus(self.status)
+        except ValueError:
+            raise ValueError(
+                f"{self.status!r} is not a valid TaskExecutionStatus; "
+                f"valid values: {[e.value for e in TaskExecutionStatus]}"
+            )
         return self
 
 
@@ -230,8 +246,15 @@ class RunResource(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_metadata_json(self) -> "RunResource":
+    def _validate_fields(self) -> "RunResource":
         self.__class__._parse_metadata(self.metadata_json)
+        try:
+            RunResourceKind(self.kind)
+        except ValueError:
+            raise ValueError(
+                f"{self.kind!r} is not a valid RunResourceKind; "
+                f"valid values: {[e.value for e in RunResourceKind]}"
+            )
         return self
 
 
@@ -307,8 +330,15 @@ class ExperimentCohort(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_metadata_json(self) -> "ExperimentCohort":
+    def _validate_fields(self) -> "ExperimentCohort":
         self.__class__._parse_metadata(self.metadata_json)
+        try:
+            ExperimentCohortStatus(self.status)
+        except ValueError:
+            raise ValueError(
+                f"{self.status!r} is not a valid ExperimentCohortStatus; "
+                f"valid values: {[e.value for e in ExperimentCohortStatus]}"
+            )
         return self
 
 
@@ -460,6 +490,11 @@ class RunGenerationTurn(SQLModel, table=True):
     def _validate_json_columns(self) -> "RunGenerationTurn":
         if not isinstance(self.raw_response, dict):
             raise ValueError(f"raw_response must be a dict, got {type(self.raw_response).__name__}")
+        if self.execution_outcome is not None and self.execution_outcome not in _VALID_OUTCOMES:
+            raise ValueError(
+                f"{self.execution_outcome!r} is not a valid execution_outcome; "
+                f"valid values: {sorted(_VALID_OUTCOMES)}"
+            )
         return self
 
 
@@ -490,6 +525,17 @@ class TrainingSession(SQLModel, table=True):
     output_dir: str | None = None
     total_steps: int | None = None
     final_loss: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_fields(self) -> "TrainingSession":
+        try:
+            TrainingStatus(self.status)
+        except ValueError:
+            raise ValueError(
+                f"{self.status!r} is not a valid TrainingStatus; "
+                f"valid values: {[e.value for e in TrainingStatus]}"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -525,6 +571,8 @@ class TrainingMetric(SQLModel, table=True):
 # RolloutBatch — durable batch state for the rollout service
 # ---------------------------------------------------------------------------
 
+_VALID_BATCH_STATUSES = frozenset({"pending", "running", "complete", "failed", "cancelled"})
+
 
 class RolloutBatch(SQLModel, table=True):
     """One rollout batch submitted by the RL trainer.
@@ -539,6 +587,15 @@ class RolloutBatch(SQLModel, table=True):
     definition_id: UUID = Field(foreign_key="experiment_definitions.id", index=True)
     status: str = Field(default="pending", index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+    @model_validator(mode="after")
+    def _validate_fields(self) -> "RolloutBatch":
+        if self.status not in _VALID_BATCH_STATUSES:
+            raise ValueError(
+                f"{self.status!r} is not a valid RolloutBatch status; "
+                f"valid values: {sorted(_VALID_BATCH_STATUSES)}"
+            )
+        return self
 
 
 class RolloutBatchRun(SQLModel, table=True):
