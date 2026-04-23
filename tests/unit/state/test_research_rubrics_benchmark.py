@@ -28,10 +28,11 @@ class TestResearchRubricsBenchmarkRegistration:
         assert issubclass(ResearchRubricsVanillaBenchmark, Benchmark)
 
     def test_worker_slugs_registered(self):
-        """researchrubrics-researcher is present in the registry."""
         from ergon_builtins.registry_data import WORKERS
 
-        assert "researchrubrics-researcher" in WORKERS
+        expected = {"researchrubrics-researcher"}
+        missing = expected - set(WORKERS.keys())
+        assert not missing, f"Expected worker slugs missing from registry: {missing}"
 
 
 class TestResearchRubricsVanillaBenchmark:
