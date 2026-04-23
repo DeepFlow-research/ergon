@@ -19,6 +19,7 @@ from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_builtins.benchmarks.minif2f.smoke_rubric import MiniF2FSmokeRubric
+from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_builtins.benchmarks.researchrubrics.smoke import (
     ResearchRubricsSmokeTestBenchmark,
 )
@@ -31,6 +32,7 @@ from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
 from ergon_builtins.benchmarks.swebench_verified.smoke_rubric import SweBenchSmokeRubric
+from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
@@ -94,14 +96,6 @@ def _minif2f_react(
     sandbox_id: str,
 ) -> ReActWorker:
     """Registry factory: ReActWorker wired with a live MiniF2F toolkit."""
-    # reason: lazy import so tests can monkeypatch `MiniF2FSandboxManager` on
-    # its defining module and have the replacement picked up here.
-    from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
-
-    # reason: paired lazy import with the sandbox_manager above — defer toolkit
-    # import too so a bare `import registry_core` doesn't pull the toolkit.
-    from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
-
     sandbox = MiniF2FSandboxManager().get_sandbox(task_id)
     if sandbox is None:
         raise RuntimeError(
@@ -135,17 +129,7 @@ def _swebench_react(
     sandbox_id: str,
 ) -> ReActWorker:
     """Registry factory: ReActWorker wired with a live SWE-Bench toolkit."""
-    # reason: lazy import to mirror the MiniF2F factory — keeps sandbox-manager
-    # instantiation deferred until a sandbox is actually requested and lets
-    # tests monkeypatch the manager on its defining module.
-    from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
-        SWEBenchSandboxManager as _Manager,
-    )
-
-    # reason: paired lazy import with the sandbox_manager above.
-    from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
-
-    sandbox = _Manager().get_sandbox(task_id)
+    sandbox = SWEBenchSandboxManager().get_sandbox(task_id)
     if sandbox is None:
         raise RuntimeError(
             f"SWE-Bench factory requires a live sandbox for task_id={task_id}; "
