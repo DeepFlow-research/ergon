@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -91,8 +90,10 @@ def test_resolve_template_falls_back_on_malformed_registry(
 
 @pytest.mark.asyncio
 async def test_create_threads_template_kwarg_to_e2b_sdk(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, swebench_execution: tuple
 ) -> None:
+    execution_id, run_id = swebench_execution
+
     # Point the registry lookup at a known template_id.
     registry = tmp_path / "sandbox_templates.json"
     registry.write_text(json.dumps({"swebench-verified": {"template_id": "tmpl_pin_sw"}}))
@@ -126,7 +127,7 @@ async def test_create_threads_template_kwarg_to_e2b_sdk(
     mgr = SWEBenchSandboxManager()
     assert mgr.template == "tmpl_pin_sw"
 
-    sandbox_id = await mgr.create(sandbox_key=uuid4(), run_id=uuid4(), timeout_minutes=5)
+    sandbox_id = await mgr.create(sandbox_key=execution_id, run_id=run_id, timeout_minutes=5)
     assert sandbox_id == "sbx_fake_sw001"
 
     # Verify AsyncSandbox.create was called with template=tmpl_pin_sw.
@@ -143,8 +144,10 @@ async def test_create_threads_template_kwarg_to_e2b_sdk(
 
 @pytest.mark.asyncio
 async def test_verify_setup_raises_when_git_missing(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, swebench_execution: tuple
 ) -> None:
+    execution_id, run_id = swebench_execution
+
     monkeypatch.setattr(
         "ergon_builtins.benchmarks.swebench_verified.sandbox.utils.REGISTRY_PATH",
         tmp_path / "missing.json",
@@ -153,7 +156,7 @@ async def test_verify_setup_raises_when_git_missing(
     fake_sandbox = MagicMock()
     fake_sandbox.sandbox_id = "sbx_broken_sw"
 
-    # Dir-setup mkdir succeeds; the smoke check fails.
+    # Dir-setup and _install_dependencies scripts succeed; _verify_setup git check fails.
     async def _run(cmd: str, **_kwargs: object) -> MagicMock:
         if "git --version" in cmd:
             return MagicMock(exit_code=127, stdout="", stderr="git: command not found")
@@ -177,4 +180,4 @@ async def test_verify_setup_raises_when_git_missing(
 
     mgr = SWEBenchSandboxManager()
     with pytest.raises(RuntimeError, match="SWE-Bench sandbox smoke check failed"):
-        await mgr.create(sandbox_key=uuid4(), run_id=uuid4())
+        await mgr.create(sandbox_key=execution_id, run_id=run_id)
