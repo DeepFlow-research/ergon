@@ -38,23 +38,30 @@ def test_correct_slug_set_passes() -> None:
     _crit()._check_graph_shape(children)  # type: ignore[arg-type]
 
 
-def test_missing_slug_raises() -> None:
-    missing_l_3 = [s for s in EXPECTED_SUBTASK_SLUGS if s != "l_3"]
-    children = [_FakeNode(task_slug=s) for s in missing_l_3]
-    with pytest.raises(CriteriaCheckError, match="graph shape mismatch"):
-        _crit()._check_graph_shape(children)  # type: ignore[arg-type]
+def _nodes_missing_slug() -> list[_FakeNode]:
+    return [_FakeNode(task_slug=s) for s in EXPECTED_SUBTASK_SLUGS if s != "l_3"]
 
 
-def test_extra_slug_raises() -> None:
-    children = [_FakeNode(task_slug=s) for s in EXPECTED_SUBTASK_SLUGS]
-    children.append(_FakeNode(task_slug="unexpected_extra"))
-    with pytest.raises(CriteriaCheckError, match="graph shape mismatch"):
-        _crit()._check_graph_shape(children)  # type: ignore[arg-type]
+def _nodes_extra_slug() -> list[_FakeNode]:
+    nodes = [_FakeNode(task_slug=s) for s in EXPECTED_SUBTASK_SLUGS]
+    nodes.append(_FakeNode(task_slug="unexpected_extra"))
+    return nodes
 
 
-def test_renamed_slug_raises() -> None:
-    renamed = [
+def _nodes_renamed_slug() -> list[_FakeNode]:
+    return [
         _FakeNode(task_slug=(s if s != "d_join" else "d_joined")) for s in EXPECTED_SUBTASK_SLUGS
     ]
+
+
+@pytest.mark.parametrize(
+    "children",
+    [
+        pytest.param(_nodes_missing_slug(), id="missing_slug"),
+        pytest.param(_nodes_extra_slug(), id="extra_slug"),
+        pytest.param(_nodes_renamed_slug(), id="renamed_slug"),
+    ],
+)
+def test_bad_slug_set_raises(children: list[_FakeNode]) -> None:
     with pytest.raises(CriteriaCheckError, match="graph shape mismatch"):
-        _crit()._check_graph_shape(renamed)  # type: ignore[arg-type]
+        _crit()._check_graph_shape(children)  # type: ignore[arg-type]
