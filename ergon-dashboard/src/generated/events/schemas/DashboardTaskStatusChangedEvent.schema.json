@@ -1,34 +1,66 @@
 {
-  "$defs": {
-    "TaskStatus": {
-      "description": "Task execution status.",
-      "enum": [
-        "pending",
-        "ready",
-        "running",
-        "completed",
-        "failed"
-      ],
-      "title": "TaskStatus",
+  "additionalProperties": true,
+  "properties": {
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
       "type": "string"
     },
-    "TaskTrigger": {
-      "description": "What triggered a task state transition.",
-      "enum": [
-        "workflow_started",
-        "dependency_satisfied",
-        "worker_started",
-        "execution_succeeded",
-        "execution_failed",
-        "children_completed"
-      ],
-      "title": "TaskTrigger",
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
       "type": "string"
-    }
-  },
-  "additionalProperties": false,
-  "description": "Emitted on any task status transition - for dashboard visualization.",
-  "properties": {
+    },
+    "task_name": {
+      "title": "Task Name",
+      "type": "string"
+    },
+    "parent_task_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Task Id"
+    },
+    "old_status": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Old Status"
+    },
+    "new_status": {
+      "title": "New Status",
+      "type": "string"
+    },
+    "triggered_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Triggered By"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
     "assigned_worker_id": {
       "anyOf": [
         {
@@ -53,63 +85,6 @@
       ],
       "default": null,
       "title": "Assigned Worker Name"
-    },
-    "new_status": {
-      "$ref": "#/$defs/TaskStatus"
-    },
-    "old_status": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/TaskStatus"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "parent_task_id": {
-      "anyOf": [
-        {
-          "format": "uuid",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Parent Task Id"
-    },
-    "run_id": {
-      "format": "uuid",
-      "title": "Run Id",
-      "type": "string"
-    },
-    "task_id": {
-      "format": "uuid",
-      "title": "Task Id",
-      "type": "string"
-    },
-    "task_name": {
-      "title": "Task Name",
-      "type": "string"
-    },
-    "timestamp": {
-      "format": "date-time",
-      "title": "Timestamp",
-      "type": "string"
-    },
-    "triggered_by": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/TaskTrigger"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
     }
   },
   "required": [

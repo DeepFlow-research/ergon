@@ -40,6 +40,7 @@ from ergon_core.core.dashboard.event_contracts import (
     DashboardTaskStatusChangedEvent,
     DashboardThreadMessageCreatedEvent,
     DashboardWorkflowCompletedEvent,
+    TaskTreeNode,
     DashboardWorkflowStartedEvent,
 )
 
@@ -72,7 +73,7 @@ class DashboardEmitter:
         run_id: UUID,
         experiment_id: UUID,
         workflow_name: str,
-        task_tree: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        task_tree: TaskTreeNode,
         total_tasks: int,
         total_leaf_tasks: int,
     ) -> None:

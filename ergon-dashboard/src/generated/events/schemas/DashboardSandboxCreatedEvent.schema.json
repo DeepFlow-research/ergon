@@ -1,19 +1,18 @@
 {
-  "additionalProperties": false,
-  "description": "Emitted when an E2B sandbox is created for a task.",
+  "additionalProperties": true,
   "properties": {
     "run_id": {
       "format": "uuid",
       "title": "Run Id",
       "type": "string"
     },
-    "sandbox_id": {
-      "title": "Sandbox Id",
-      "type": "string"
-    },
     "task_id": {
       "format": "uuid",
       "title": "Task Id",
+      "type": "string"
+    },
+    "sandbox_id": {
+      "title": "Sandbox Id",
       "type": "string"
     },
     "template": {

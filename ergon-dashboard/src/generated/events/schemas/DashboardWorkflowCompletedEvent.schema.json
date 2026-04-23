@@ -1,7 +1,15 @@
 {
-  "additionalProperties": false,
-  "description": "Emitted when workflow finishes - for dashboard visualization.",
+  "additionalProperties": true,
   "properties": {
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
     "completed_at": {
       "format": "date-time",
       "title": "Completed At",
@@ -10,18 +18,6 @@
     "duration_seconds": {
       "title": "Duration Seconds",
       "type": "number"
-    },
-    "error": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Error"
     },
     "final_score": {
       "anyOf": [
@@ -35,14 +31,17 @@
       "default": null,
       "title": "Final Score"
     },
-    "run_id": {
-      "format": "uuid",
-      "title": "Run Id",
-      "type": "string"
-    },
-    "status": {
-      "title": "Status",
-      "type": "string"
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
     }
   },
   "required": [

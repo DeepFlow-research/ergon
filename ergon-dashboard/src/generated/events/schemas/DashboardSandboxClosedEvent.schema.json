@@ -1,18 +1,17 @@
 {
-  "additionalProperties": false,
-  "description": "Emitted when a sandbox is terminated.",
+  "additionalProperties": true,
   "properties": {
-    "reason": {
-      "title": "Reason",
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
       "type": "string"
     },
     "sandbox_id": {
       "title": "Sandbox Id",
       "type": "string"
     },
-    "task_id": {
-      "format": "uuid",
-      "title": "Task Id",
+    "reason": {
+      "title": "Reason",
       "type": "string"
     },
     "timestamp": {
