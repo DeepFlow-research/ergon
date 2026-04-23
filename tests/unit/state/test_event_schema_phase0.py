@@ -56,18 +56,10 @@ _NODE_ID_CASES = [
             task_id=uuid4(),
         ),
     ),
-    (
-        "PreparedTaskExecution",
-        lambda: PreparedTaskExecution(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-            task_slug="test-task",
-            task_description="A test task",
-            benchmark_type="test",
-            execution_id=uuid4(),
-        ),
-    ),
+    # PreparedTaskExecution dropped from this parametrisation: its
+    # ``node_id`` is no longer optional — every prepared task IS a
+    # graph node, so ``node_id: UUID`` is required.  See
+    # docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
     (
         "TaskDescriptor",
         lambda: TaskDescriptor(

@@ -151,10 +151,15 @@ class TaskExecutionService:
                 worker_name=assigned_worker_slug,
             )
 
+            # Graph-native path: ``command.node_id`` is guaranteed non-null
+            # by the branch guard in ``prepare`` above.  ``command.task_id``
+            # is the legacy definition FK — may be ``None`` for
+            # dynamically-spawned subtasks that have no definition row.
             return PreparedTaskExecution(
                 run_id=command.run_id,
                 definition_id=command.definition_id,
-                task_id=command.task_id,
+                node_id=command.node_id,
+                definition_task_id=command.task_id,
                 task_slug=node.task_slug,
                 task_description=node.description,
                 benchmark_type=definition.benchmark_type,
@@ -162,7 +167,6 @@ class TaskExecutionService:
                 worker_type=worker_row.worker_type,
                 model_target=worker_row.model_target,
                 execution_id=execution.id,
-                node_id=command.node_id,
             )
 
     # -- Definition path (static tasks) ---
@@ -208,6 +212,17 @@ class TaskExecutionService:
 
             graph_lookup = GraphNodeLookup(session, command.run_id)
             resolved_node_id = graph_lookup.node_id(command.task_id)
+            # Workflow initialization creates a RunGraphNode per static
+            # definition task; a missing node here means the graph was
+            # never initialised or the static FK is stale.  Fail loud
+            # rather than propagate a ``None`` through PreparedTaskExecution.
+            if resolved_node_id is None:
+                raise ConfigurationError(
+                    f"No RunGraphNode resolved for definition task_id="
+                    f"{command.task_id} in run {command.run_id}",
+                    run_id=command.run_id,
+                    task_id=command.task_id,
+                )
 
             execution = RunTaskExecution(
                 run_id=command.run_id,
@@ -243,10 +258,15 @@ class TaskExecutionService:
                 worker_name=assigned_worker_slug,
             )
 
+            # Definition path: ``command.task_id`` is the static FK (known
+            # non-null by the branch guard in ``prepare``) and doubles as
+            # the runtime identity since, for static tasks, ``node_id``
+            # resolves 1:1 from the FK via ``graph_lookup.node_id()``.
             return PreparedTaskExecution(
                 run_id=command.run_id,
                 definition_id=command.definition_id,
-                task_id=command.task_id,
+                node_id=resolved_node_id,
+                definition_task_id=command.task_id,
                 task_slug=task.task_slug,
                 task_description=task.description,
                 benchmark_type=definition.benchmark_type,
@@ -254,7 +274,6 @@ class TaskExecutionService:
                 worker_type=worker_type,
                 model_target=model_target,
                 execution_id=execution.id,
-                node_id=resolved_node_id,
             )
 
     # -- Finalization (unchanged) ---
