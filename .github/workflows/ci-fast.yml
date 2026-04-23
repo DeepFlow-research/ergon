@@ -49,9 +49,36 @@ jobs:
           node-version: "20"
           cache: pnpm
           cache-dependency-path: ergon-dashboard/pnpm-lock.yaml
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
 
-      - name: Install dependencies
+      - name: Install pnpm dependencies
         run: pnpm -C ergon-dashboard install --frozen-lockfile
+
+      - name: Install Python workspace (for contract exporter)
+        run: uv sync --frozen --all-packages --group dev
+
+      # Contract-gen drift check.  Runs the full pydantic → JSON schema →
+      # json-schema-to-zod pipeline, then fails the build if the output
+      # differs from what's tracked.  Prevents dashboard event contracts
+      # silently drifting from their pydantic source — the bug class we
+      # saw in docs/bugs/open/2026-04-23-inngest-function-failures.md § E.
+      - name: Regenerate contracts
+        run: pnpm -C ergon-dashboard run generate:contracts
+
+      - name: Verify no contract drift
+        run: |
+          if ! git diff --quiet -- \
+            ergon-dashboard/src/generated/events/ \
+            ergon-dashboard/src/generated/rest/; then
+            echo "::error::Generated contracts are out of sync with their pydantic sources."
+            echo "::error::Run 'pnpm -C ergon-dashboard run generate:contracts' locally and commit the result."
+            git --no-pager diff --stat -- \
+              ergon-dashboard/src/generated/events/ \
+              ergon-dashboard/src/generated/rest/
+            exit 1
+          fi
 
       - name: ESLint
         run: pnpm -C ergon-dashboard run lint

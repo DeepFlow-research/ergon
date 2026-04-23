@@ -9,7 +9,7 @@
     "start": "NODE_ENV=production tsx server.ts",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "generate:contracts:schemas": "PYTHONPATH=.. python ../scripts/export_contract_schemas.py",
+    "generate:contracts:schemas": "cd .. && uv run python scripts/export_contract_schemas.py",
     "generate:contracts:rest": "openapi-zod-client ./src/generated/rest/openapi.json -o ./src/generated/rest/contracts.ts --export-schemas && node ./scripts/generate-rest-contracts.mjs",
     "generate:contracts:events": "node ./scripts/generate-event-contracts.mjs",
     "generate:contracts": "pnpm run generate:contracts:schemas && pnpm run generate:contracts:rest && pnpm run generate:contracts:events",
