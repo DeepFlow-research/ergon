@@ -54,7 +54,14 @@ class TestEvaluationContextRuntime:
 
 class TestLLMJudgeCriterionWithRuntime:
     @pytest.mark.asyncio
-    async def test_evaluate_calls_runtime(self):
+    @pytest.mark.parametrize(
+        "passed,expected_score,reasoning",
+        [
+            (True, 1.0, "Good coverage of the topic."),
+            (False, 0.0, "Report lacks sources."),
+        ],
+    )
+    async def test_evaluate_verdict(self, passed, expected_score, reasoning):
         from ergon_builtins.evaluators.criteria.llm_judge import (
             LLMJudgeCriterion,
             _JudgeVerdict,
@@ -63,8 +70,8 @@ class TestLLMJudgeCriterionWithRuntime:
         fake_runtime = AsyncMock()
         fake_runtime.call_llm_judge = AsyncMock(
             return_value=_JudgeVerdict(
-                reasoning="Good coverage of the topic.",
-                passed=True,
+                reasoning=reasoning,
+                passed=passed,
             ),
         )
 
@@ -78,39 +85,10 @@ class TestLLMJudgeCriterionWithRuntime:
         ctx = _make_eval_context(runtime=fake_runtime)
         result = await criterion.evaluate(ctx)
 
-        assert result.passed is True
-        assert result.score == 1.0
-        assert result.feedback == "Good coverage of the topic."
+        assert result.passed is passed
+        assert result.score == expected_score
+        assert result.feedback == reasoning
         fake_runtime.call_llm_judge.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_evaluate_failing_verdict(self):
-        from ergon_builtins.evaluators.criteria.llm_judge import (
-            LLMJudgeCriterion,
-            _JudgeVerdict,
-        )
-
-        fake_runtime = AsyncMock()
-        fake_runtime.call_llm_judge = AsyncMock(
-            return_value=_JudgeVerdict(
-                reasoning="Report lacks sources.",
-                passed=False,
-            ),
-        )
-
-        criterion = LLMJudgeCriterion(
-            name="test-criterion",
-            prompt_template="Evaluate the report.",
-            weight=2.0,
-            max_score=2.0,
-        )
-
-        ctx = _make_eval_context(runtime=fake_runtime)
-        result = await criterion.evaluate(ctx)
-
-        assert result.passed is False
-        assert result.score == 0.0
-        assert result.feedback == "Report lacks sources."
 
     @pytest.mark.asyncio
     async def test_evaluate_raises_without_runtime(self):

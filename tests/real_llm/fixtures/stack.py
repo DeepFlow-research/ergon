@@ -44,7 +44,8 @@ def real_llm_stack(request: pytest.FixtureRequest) -> Generator[None, None, None
     env = {
         **os.environ,
         "TEST_HARNESS_SECRET": os.environ.get(
-            "TEST_HARNESS_SECRET", "real-llm-secret",
+            "TEST_HARNESS_SECRET",
+            "real-llm-secret",
         ),
     }
     subprocess.run(

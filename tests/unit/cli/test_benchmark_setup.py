@@ -60,38 +60,46 @@ def _patch_sdk(
 
 
 # ---------------------------------------------------------------------------
-# 1. E2B_API_KEY not set
+# 1 & 2. Error scenarios — each checks both exit code and stderr message
 # ---------------------------------------------------------------------------
 
 
-def test_fails_when_api_key_unset(monkeypatch: pytest.MonkeyPatch) -> None:
-    from ergon_core.core.settings import settings
-
-    monkeypatch.setattr(settings, "e2b_api_key", "")
-    rc = setup_benchmark(_make_args())
-    assert rc != 0
-
-
-def test_error_message_mentions_api_key(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    "setup_env,args_kwargs,expected_message",
+    [
+        (
+            "api_key_unset",
+            {},
+            "E2B_API_KEY",
+        ),
+        (
+            "unknown_slug",
+            {"slug": "nonexistent"},
+            None,
+        ),
+    ],
+    ids=["api_key_unset", "unknown_slug"],
+)
+def test_error_scenarios(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    setup_env: str,
+    args_kwargs: dict,
+    expected_message: str | None,
 ) -> None:
-    from ergon_core.core.settings import settings
+    if setup_env == "api_key_unset":
+        from ergon_core.core.settings import settings
 
-    monkeypatch.setattr(settings, "e2b_api_key", "")
-    setup_benchmark(_make_args())
-    captured = capsys.readouterr()
-    assert "E2B_API_KEY" in captured.err
+        monkeypatch.setattr(settings, "e2b_api_key", "")
+    else:
+        monkeypatch.setenv("E2B_API_KEY", "test-key")
 
-
-# ---------------------------------------------------------------------------
-# 2. Unknown slug
-# ---------------------------------------------------------------------------
-
-
-def test_fails_for_unknown_slug(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("E2B_API_KEY", "test-key")
-    rc = setup_benchmark(_make_args(slug="nonexistent"))
+    rc = setup_benchmark(_make_args(**args_kwargs))
     assert rc != 0
+
+    if expected_message is not None:
+        captured = capsys.readouterr()
+        assert expected_message in captured.err
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +115,7 @@ def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     # Patch the attribute directly so these tests pass regardless of xdist
     # worker import ordering.
     from ergon_core.core.settings import settings
+
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
 
     registry = tmp_path / "sandbox_templates.json"
@@ -131,6 +140,7 @@ def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     # Patch the attribute directly so these tests pass regardless of xdist
     # worker import ordering.
     from ergon_core.core.settings import settings
+
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     fake = _patch_sdk(monkeypatch)
 
@@ -157,6 +167,7 @@ def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     # Patch the attribute directly so these tests pass regardless of xdist
     # worker import ordering.
     from ergon_core.core.settings import settings
+
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     _patch_sdk(monkeypatch)
 
@@ -186,6 +197,7 @@ def test_build_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # Patch the attribute directly so these tests pass regardless of xdist
     # worker import ordering.
     from ergon_core.core.settings import settings
+
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     _patch_sdk(monkeypatch, raise_on_build=RuntimeError("simulated build failure"))
 

@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 
+import pytest
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
@@ -22,117 +23,42 @@ class TestDynamicTaskNone:
         assert evt.task_id is None
 
 
-class TestTaskReadyEventNodeId:
-    def test_without_node_id(self):
-        evt = TaskReadyEvent(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-        )
-        assert evt.node_id is None
-        data = evt.model_dump()
-        assert data["node_id"] is None
-        roundtripped = TaskReadyEvent.model_validate(data)
-        assert roundtripped.node_id is None
-
-    def test_with_node_id(self):
-        nid = uuid4()
-        evt = TaskReadyEvent(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-            node_id=nid,
-        )
-        assert evt.node_id == nid
-        data = evt.model_dump()
-        roundtripped = TaskReadyEvent.model_validate(data)
-        assert roundtripped.node_id == nid
-
-
-class TestTaskCompletedEventNodeId:
-    def test_without_node_id(self):
-        evt = TaskCompletedEvent(
+_NODE_ID_CASES = [
+    (
+        "TaskReadyEvent",
+        lambda: TaskReadyEvent(run_id=uuid4(), definition_id=uuid4(), task_id=uuid4()),
+    ),
+    (
+        "TaskCompletedEvent",
+        lambda: TaskCompletedEvent(
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             sandbox_id="sbx-123",
-        )
-        assert evt.node_id is None
-        data = evt.model_dump()
-        roundtripped = TaskCompletedEvent.model_validate(data)
-        assert roundtripped.node_id is None
-
-    def test_with_node_id(self):
-        nid = uuid4()
-        evt = TaskCompletedEvent(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-            execution_id=uuid4(),
-            sandbox_id="sbx-123",
-            node_id=nid,
-        )
-        assert evt.node_id == nid
-        data = evt.model_dump()
-        roundtripped = TaskCompletedEvent.model_validate(data)
-        assert roundtripped.node_id == nid
-
-
-class TestTaskFailedEventNodeId:
-    def test_without_node_id(self):
-        evt = TaskFailedEvent(
+        ),
+    ),
+    (
+        "TaskFailedEvent",
+        lambda: TaskFailedEvent(
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             error="boom",
-        )
-        assert evt.node_id is None
-        data = evt.model_dump()
-        roundtripped = TaskFailedEvent.model_validate(data)
-        assert roundtripped.node_id is None
-
-    def test_with_node_id(self):
-        nid = uuid4()
-        evt = TaskFailedEvent(
+        ),
+    ),
+    (
+        "PrepareTaskExecutionCommand",
+        lambda: PrepareTaskExecutionCommand(
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
-            execution_id=uuid4(),
-            error="boom",
-            node_id=nid,
-        )
-        assert evt.node_id == nid
-        data = evt.model_dump()
-        roundtripped = TaskFailedEvent.model_validate(data)
-        assert roundtripped.node_id == nid
-
-
-class TestPrepareTaskExecutionCommandNodeId:
-    def test_accepts_node_id(self):
-        nid = uuid4()
-        cmd = PrepareTaskExecutionCommand(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-            node_id=nid,
-        )
-        assert cmd.node_id == nid
-
-    def test_defaults_to_none(self):
-        cmd = PrepareTaskExecutionCommand(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-        )
-        assert cmd.node_id is None
-
-
-class TestPreparedTaskExecutionNodeId:
-    def test_accepts_node_id(self):
-        nid = uuid4()
-        result = PreparedTaskExecution(
+        ),
+    ),
+    (
+        "PreparedTaskExecution",
+        lambda: PreparedTaskExecution(
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
@@ -140,80 +66,52 @@ class TestPreparedTaskExecutionNodeId:
             task_description="A test task",
             benchmark_type="test",
             execution_id=uuid4(),
-            node_id=nid,
-        )
-        assert result.node_id == nid
-
-    def test_defaults_to_none(self):
-        result = PreparedTaskExecution(
-            run_id=uuid4(),
-            definition_id=uuid4(),
+        ),
+    ),
+    (
+        "TaskDescriptor",
+        lambda: TaskDescriptor(
             task_id=uuid4(),
             task_slug="test-task",
-            task_description="A test task",
-            benchmark_type="test",
-            execution_id=uuid4(),
-        )
-        assert result.node_id is None
-
-
-class TestTaskDescriptorNodeId:
-    def test_accepts_node_id(self):
-        nid = uuid4()
-        td = TaskDescriptor(
-            task_id=uuid4(),
-            task_slug="test-task",
-            node_id=nid,
-        )
-        assert td.node_id == nid
-
-    def test_defaults_to_none(self):
-        td = TaskDescriptor(
-            task_id=uuid4(),
-            task_slug="test-task",
-        )
-        assert td.node_id is None
-
-
-class TestPropagateTaskCompletionCommandNodeId:
-    def test_accepts_node_id(self):
-        nid = uuid4()
-        cmd = PropagateTaskCompletionCommand(
+        ),
+    ),
+    (
+        "PropagateTaskCompletionCommand",
+        lambda: PropagateTaskCompletionCommand(
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
-            node_id=nid,
-        )
-        assert cmd.node_id == nid
-
-    def test_defaults_to_none(self):
-        cmd = PropagateTaskCompletionCommand(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-            execution_id=uuid4(),
-        )
-        assert cmd.node_id is None
-
-
-class TestWorkerContextNodeId:
-    def test_accepts_node_id(self):
-        nid = uuid4()
-        ctx = WorkerContext(
+        ),
+    ),
+    (
+        "WorkerContext",
+        lambda: WorkerContext(
             run_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             sandbox_id="sbx-123",
-            node_id=nid,
-        )
-        assert ctx.node_id == nid
+        ),
+    ),
+]
 
-    def test_defaults_to_none(self):
-        ctx = WorkerContext(
-            run_id=uuid4(),
-            task_id=uuid4(),
-            execution_id=uuid4(),
-            sandbox_id="sbx-123",
-        )
-        assert ctx.node_id is None
+
+@pytest.mark.parametrize("label,factory", _NODE_ID_CASES, ids=[c[0] for c in _NODE_ID_CASES])
+def test_node_id_defaults_to_none(label, factory):
+    obj = factory()
+    assert obj.node_id is None
+    data = obj.model_dump()
+    assert data["node_id"] is None
+    roundtripped = type(obj).model_validate(data)
+    assert roundtripped.node_id is None
+
+
+@pytest.mark.parametrize("label,factory", _NODE_ID_CASES, ids=[c[0] for c in _NODE_ID_CASES])
+def test_node_id_round_trips(label, factory):
+    nid = uuid4()
+    obj = factory()
+    obj_with_id = type(obj).model_validate({**obj.model_dump(), "node_id": str(nid)})
+    assert obj_with_id.node_id == nid
+    data = obj_with_id.model_dump()
+    roundtripped = type(obj).model_validate(data)
+    assert roundtripped.node_id == nid
