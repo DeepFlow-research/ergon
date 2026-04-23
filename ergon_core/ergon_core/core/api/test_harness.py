@@ -19,10 +19,8 @@ from collections.abc import Iterator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
-from sqlmodel import Session, select
-
+import inngest
+from ergon_cli.composition import build_experiment
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
@@ -32,6 +30,13 @@ from ergon_core.core.persistence.telemetry.models import (
     RunResource,
     RunTaskEvaluation,
 )
+from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
+from ergon_core.core.runtime.services.run_service import create_run
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pydantic import BaseModel
+from sqlmodel import Session, select
 
 router = APIRouter(prefix="/api/test", tags=["test-harness"])
 
@@ -287,3 +292,76 @@ def reset_test_rows(
                 s.delete(r)
         s.commit()
     return None
+
+
+# ---------------------------------------------------------------------------
+# Cohort submission endpoint — the single entry point for smoke drivers.
+#
+# Moved here (rather than a separate /runs POST) because it's the test
+# harness that cares about cohort-scoped multi-run submission.  Host-side
+# pytest never imports ergon internals; it just POSTs slugs.  That keeps
+# the smoke fixtures single-sourced in the api container's process (one
+# ``import tests.e2e._fixtures`` in app.py) and eliminates the host /
+# container fixture-drift risk.
+# ---------------------------------------------------------------------------
+
+
+class CohortSlotRequest(BaseModel):
+    worker_slug: str
+    evaluator_slug: str
+
+
+class SubmitCohortRequest(BaseModel):
+    benchmark_slug: str
+    slots: list[CohortSlotRequest]
+    cohort_key: str
+    # Smoke workers don't hit an LLM; the field is required downstream
+    # only because ``WorkerSpec`` models it.  Default matches the CLI.
+    model: str = "openai:gpt-4o"
+    limit: int = 1
+
+
+class SubmitCohortResponse(BaseModel):
+    run_ids: list[UUID]
+    cohort_id: UUID
+
+
+@router.post("/write/cohort", response_model=SubmitCohortResponse)
+async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
+    """Build + persist + dispatch N runs under one cohort.
+
+    Per-slot flow mirrors the CLI's ``ergon benchmark run``:
+    ``build_experiment`` → ``validate`` → ``persist`` → ``create_run``
+    → send ``WorkflowStartedEvent``.  Slots submit sequentially —
+    typical N ≤ 3, so the parallel-gather savings are negligible.
+    """
+    cohort = experiment_cohort_service.resolve_or_create(
+        name=body.cohort_key,
+        description=f"smoke cohort: {body.benchmark_slug}",
+        created_by="test-harness",
+    )
+
+    run_ids: list[UUID] = []
+    for slot in body.slots:
+        experiment = build_experiment(
+            benchmark_slug=body.benchmark_slug,
+            model=body.model,
+            worker_slug=slot.worker_slug,
+            evaluator_slug=slot.evaluator_slug,
+            limit=body.limit,
+        )
+        experiment.validate()
+        persisted = experiment.persist()
+        run = create_run(persisted, cohort_id=cohort.id)
+        await inngest_client.send(
+            inngest.Event(
+                name=WorkflowStartedEvent.name,
+                data=WorkflowStartedEvent(
+                    run_id=run.id,
+                    definition_id=persisted.definition_id,
+                ).model_dump(mode="json"),
+            )
+        )
+        run_ids.append(run.id)
+
+    return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)

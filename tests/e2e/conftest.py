@@ -14,13 +14,13 @@ from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.settings import settings
 from sqlmodel import Session
 
-# Import side-effect: registers the per-env canonical-smoke workers,
-# leaves, and criteria into ergon_builtins.registry's WORKERS /
-# EVALUATORS dicts for the duration of the test session.  Phase B lands
-# this as an empty hook; Phase C / D populate it.  Keeping the import at
-# session-module scope means any e2e test that runs through conftest
-# sees the registrations.
-import tests.e2e._fixtures  # noqa: F401  (registration side-effect)
+# NOTE: smoke fixture registration (``tests.e2e._fixtures``) now lives
+# exclusively inside the api container — see the conditional import in
+# ``ergon_core/core/api/app.py`` gated on ``ENABLE_TEST_HARNESS=1``.
+# Host-side pytest is a black-box client (``_submit.py`` → HTTP) and
+# doesn't need the fixtures in its own process.  Keeping the registry
+# single-sourced eliminates the drift window where a fixture edit
+# landed on one side but the other was running stale code.
 
 
 def _probe_tcp(host: str, port: int, timeout: float = 0.5) -> str | None:

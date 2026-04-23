@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# Run one smoke driver against the local stack by execing pytest INSIDE
-# the api container.
+# Run one smoke driver locally against an already-up stack.
 #
 # Usage: scripts/smoke_local_run.sh <env> [<cohort_size>]
 #   env:         researchrubrics | minif2f | swebench-verified
 #   cohort_size: integer, default 1 (local iteration preset).
 #                CI uses 3; pass 3 here to mirror CI exactly.
 #
-# Assumes ``scripts/smoke_local_up.sh`` has already brought the stack up.
-# No host-side env var exports are required — the env vars live inside
-# the api container already (see ``docker-compose.yml``).  Playwright is
-# skipped by default in this mode; run it separately on the host via
-# ``scripts/smoke_playwright_run.sh`` once the cohort is persisted.
+# Host-side pytest talks to the dockerised stack via HTTP (see
+# ``tests/e2e/_submit.py``).  ``scripts/smoke_local_up.sh`` must have
+# printed / you must have exported the env vars it lists.
 
 set -euo pipefail
 
@@ -25,18 +22,18 @@ case "${env_slug}" in
   *) echo "unknown env: ${env_slug}" >&2; exit 2 ;;
 esac
 
-if ! docker compose ps --status running api | grep -q api; then
-  echo "FATAL: api container is not running — run scripts/smoke_local_up.sh first" >&2
-  exit 1
-fi
+for var in ERGON_DATABASE_URL ERGON_API_BASE_URL TEST_HARNESS_SECRET ENABLE_TEST_HARNESS; do
+  if [ -z "${!var:-}" ]; then
+    echo "FATAL: \$${var} not set — run 'source <(scripts/smoke_local_up.sh | tail -n +2)' or export manually" >&2
+    exit 1
+  fi
+done
 
-echo "-> Running ${pyfile} inside api container with SMOKE_COHORT_SIZE=${cohort_size}"
-echo "   (env: ${env_slug}; Playwright skipped — see smoke_playwright_run.sh)"
+export SMOKE_COHORT_SIZE="${cohort_size}"
+export SMOKE_ENV="${env_slug}"
+
+echo "-> Running ${pyfile} with SMOKE_COHORT_SIZE=${cohort_size}"
+echo "   (env: ${env_slug}, harness: ${ERGON_API_BASE_URL})"
 echo
 
-docker compose exec \
-  -e SMOKE_COHORT_SIZE="${cohort_size}" \
-  -e SMOKE_ENV="${env_slug}" \
-  -e SKIP_PLAYWRIGHT=1 \
-  api \
-  pytest "${pyfile}" -v --timeout=300 --tb=short
+uv run pytest "${pyfile}" -v --timeout=300 --tb=short

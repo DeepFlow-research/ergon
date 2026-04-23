@@ -87,23 +87,23 @@ services:
       - OTEL_SERVICE_NAME=ergon-core
       - E2B_API_KEY=${E2B_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      # Put /app on sys.path so (a) ``tests.e2e._fixtures`` resolves when
-      # ENABLE_TEST_HARNESS=1 imports it on startup and (b) ``docker
-      # compose exec api pytest tests/...`` works without -m tweaks.
+      # Put /app on sys.path so ``tests.e2e._fixtures`` resolves when
+      # ``ENABLE_TEST_HARNESS=1`` imports it on startup (see
+      # ``ergon_core/core/api/app.py``).  Narrow purpose — the api
+      # container only reaches into that one subpackage, host-side
+      # pytest is still the test orchestrator.
       - PYTHONPATH=/app
     volumes:
       # Source mounts: support ``--reload`` in dev.  Harmless in CI —
       # the same source is on the runner's filesystem from ``checkout``.
       - ./ergon_core:/app/ergon_core
       - ./ergon_builtins:/app/ergon_builtins
-      - ./ergon_cli:/app/ergon_cli
       - ./data:/app/data
-      # Test trees are baked into the image (see Dockerfile) so CI has a
-      # self-contained runtime.  Bind-mount them on top for dev so host
-      # edits to tests / fixtures / scripts are live without rebuild.
+      # Smoke fixtures (``tests/e2e/_fixtures``) define workers +
+      # evaluators that the api's Inngest executor must be able to
+      # resolve when ``ENABLE_TEST_HARNESS=1``.  Bind-mounted (not
+      # baked into the image) so production builds ship no test code.
       - ./tests:/app/tests
-      - ./scripts:/app/scripts
-      - ./ci:/app/ci
       # Blob store bind mount so host-side pytest can read files the
       # SandboxResourcePublisher writes from inside the container.  The
       # mount uses the same path on both sides so the DB-stored
@@ -118,7 +118,6 @@ services:
       --host 0.0.0.0 --port 9000 --reload
       --reload-dir /app/ergon_core
       --reload-dir /app/ergon_builtins
-      --reload-dir /app/ergon_cli
       --reload-dir /app/tests
 
   dashboard:

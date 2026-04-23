@@ -27,7 +27,6 @@ from typing import Literal
 
 import pytest
 
-import tests.e2e._fixtures  # noqa: F401  (registration side-effect)
 from tests.e2e._asserts import (
     _assert_blob_roundtrip,
     _assert_cohort_membership,
@@ -200,13 +199,7 @@ def _invoke_playwright(
     shared factory can dispatch per-kind assertions.  Always runs (even
     when phase-3 assertions failed) so the dashboard state at time of
     failure is captured.
-
-    Skipped when ``SKIP_PLAYWRIGHT=1`` — set automatically by
-    ``smoke_local_run.sh`` when pytest runs inside the api container,
-    which has no pnpm / node / chromium.
     """
-    if os.environ.get("SKIP_PLAYWRIGHT") == "1":
-        return
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [

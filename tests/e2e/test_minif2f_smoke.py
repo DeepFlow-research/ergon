@@ -16,7 +16,6 @@ from datetime import datetime, timezone
 
 import pytest
 
-import tests.e2e._fixtures  # noqa: F401  (registration side-effect)
 from tests.e2e._asserts import (
     _assert_blob_roundtrip,
     _assert_cohort_membership,
@@ -83,12 +82,6 @@ def _invoke_playwright(
     cohort: list[dict[str, str]],
     screenshot_dir: pathlib.Path,
 ) -> None:
-    # Playwright needs ``pnpm`` + node + a reachable dashboard URL; none
-    # of those are present when pytest runs inside the api container
-    # (the in-container smoke harness).  Callers that still want
-    # screenshots invoke a dedicated host-side script after pytest.
-    if os.environ.get("SKIP_PLAYWRIGHT") == "1":
-        return
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
         [
