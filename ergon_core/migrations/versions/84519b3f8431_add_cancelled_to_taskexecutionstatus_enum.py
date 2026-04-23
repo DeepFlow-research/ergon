@@ -41,14 +41,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # ALTER TYPE ... ADD VALUE cannot run inside a transaction in Postgres.
-    # Switch the bound connection to AUTOCOMMIT for the DDL, then it will
-    # be restored to the Alembic-managed transaction on exit.
-    bind = op.get_bind()
-    if bind.dialect.name != "postgresql":
-        # SQLite / other dialects render sa.Enum as VARCHAR — nothing to do.
+    # ``context.autocommit_block()`` is the Alembic-native way to carve out
+    # a DDL that must run outside the migration's envelope transaction —
+    # the earlier ``bind.execution_options(isolation_level=...)`` pattern
+    # returned a proxy that did not flush the DDL before the envelope
+    # transaction closed, leaving alembic_version unchanged after the
+    # migration logged ``Running upgrade`` at the start.  SQLite renders
+    # sa.Enum as VARCHAR, so the migration is a no-op on non-Postgres.
+    if op.get_context().dialect.name != "postgresql":
         return
-    with bind.execution_options(isolation_level="AUTOCOMMIT"):
-        bind.execute(sa.text("ALTER TYPE taskexecutionstatus ADD VALUE IF NOT EXISTS 'CANCELLED'"))
+    with op.get_context().autocommit_block():
+        op.execute(
+            sa.text("ALTER TYPE taskexecutionstatus ADD VALUE IF NOT EXISTS 'CANCELLED'")
+        )
 
 
 def downgrade() -> None:
