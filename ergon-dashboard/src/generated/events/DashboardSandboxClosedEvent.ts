@@ -1,3 +1,3 @@
 import { z } from "zod"
 
-export const DashboardSandboxClosedEventSchema = z.object({ "reason": z.string(), "sandbox_id": z.string(), "task_id": z.string().uuid(), "timestamp": z.string().datetime({ offset: true }) }).strict().describe("Emitted when a sandbox is terminated.")
+export const DashboardSandboxClosedEventSchema = z.object({ "task_id": z.string().uuid(), "sandbox_id": z.string(), "reason": z.string(), "timestamp": z.string().datetime({ offset: true }) }).catchall(z.any())
