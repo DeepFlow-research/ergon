@@ -28,7 +28,10 @@ class TestRequiredKeys:
         assert "GOOGLE_API_KEY" not in keys
 
     def test_e2b_benchmark_needs_e2b_key(self) -> None:
-        p = OnboardProfile(benchmarks=["smoke-test"])
+        # ``minif2f`` is the lowest-dependency E2B benchmark still in the
+        # registry after the canonical-smoke cleanup removed the legacy
+        # ``smoke-test`` benchmark.
+        p = OnboardProfile(benchmarks=["minif2f"])
         keys = p.required_keys()
         assert "E2B_API_KEY" in keys
 
@@ -94,9 +97,13 @@ class TestRequiredExtras:
         extras = p.required_extras()
         assert "ergon-builtins[data]" in extras
 
-    def test_smoke_test_needs_no_extra(self) -> None:
-        p = OnboardProfile(benchmarks=["smoke-test"])
-        assert p.required_extras() == []
+    def test_minif2f_needs_no_data_extra(self) -> None:
+        # ``minif2f`` replaces the retired ``smoke-test`` benchmark as
+        # the smallest-dependency E2B benchmark.  Smoke runs use each
+        # benchmark's real sandbox image; no separate ``smoke-test``
+        # benchmark exists after the canonical-smoke cleanup.
+        p = OnboardProfile(benchmarks=["minif2f"])
+        assert "ergon-builtins[data]" not in p.required_extras()
 
     def test_training_adds_infra_training(self) -> None:
         p = OnboardProfile(training=True)
@@ -160,10 +167,12 @@ class TestOnboardingWizardSeesAllBenchmarks:
     def test_wizard_sees_all_registered_slugs(self) -> None:
         from ergon_builtins.registry import BENCHMARKS
 
+        # ``smoke-test`` and ``researchrubrics-smoke`` benchmarks retired
+        # alongside the canonical-smoke refactor — smoke now runs
+        # against each benchmark's real sandbox image via test-only
+        # fixtures.  See docs/architecture/07_testing.md.
         expected = {
-            "smoke-test",
             "minif2f",
-            "researchrubrics-smoke",
             "swebench-verified",
             "gdpeval",
             "researchrubrics",

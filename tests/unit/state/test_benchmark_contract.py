@@ -46,10 +46,10 @@ class TestBenchmarkOnboardingDepsContract:
     def test_known_e2b_benchmarks(self) -> None:
         from ergon_builtins.registry_core import BENCHMARKS
 
-        assert BENCHMARKS["smoke-test"].onboarding_deps.e2b is True
+        # ``smoke-test`` and ``researchrubrics-smoke`` benchmarks retired
+        # alongside the canonical-smoke refactor.
         assert BENCHMARKS["minif2f"].onboarding_deps.e2b is True
         assert BENCHMARKS["swebench-verified"].onboarding_deps.e2b is True
-        assert BENCHMARKS["researchrubrics-smoke"].onboarding_deps.e2b is False
 
 
 class TestBenchmarkSubclassEnforcement:

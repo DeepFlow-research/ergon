@@ -18,24 +18,13 @@ from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
-from ergon_builtins.benchmarks.minif2f.smoke_rubric import MiniF2FSmokeRubric
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
-from ergon_builtins.benchmarks.researchrubrics.smoke import (
-    ResearchRubricsSmokeTestBenchmark,
-)
-from ergon_builtins.benchmarks.researchrubrics.smoke_rubric import (
-    ResearchRubricsSmokeRubric,
-)
-from ergon_builtins.benchmarks.smoke_test.benchmark import SmokeTestBenchmark
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
-from ergon_builtins.benchmarks.swebench_verified.smoke_rubric import SweBenchSmokeRubric
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
-from ergon_builtins.evaluators.rubrics.stub_rubric import StubRubric
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
-from ergon_builtins.evaluators.rubrics.varied_stub_rubric import VariedStubRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.workers.baselines.react_prompts import (
@@ -44,7 +33,6 @@ from ergon_builtins.workers.baselines.react_prompts import (
 )
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
-from ergon_builtins.workers.stubs.canonical_smoke_worker import CanonicalSmokeWorker
 
 
 # reason: Worker factory signature — every registry entry accepts the same
@@ -159,25 +147,25 @@ WORKERS: dict[str, WorkerFactory] = {
     # Every real use binds a concrete toolkit via a factory closure below.
     "minif2f-react": _minif2f_react,
     "swebench-react": _swebench_react,
-    "canonical-smoke": CanonicalSmokeWorker,
+    # Test-only smoke workers register via tests/e2e/_fixtures/__init__.py;
+    # they do NOT appear here (production CLI paths don't import tests).
 }
 
 BENCHMARKS: dict[str, type[Benchmark]] = {
-    "smoke-test": SmokeTestBenchmark,
     "minif2f": MiniF2FBenchmark,
-    "researchrubrics-smoke": ResearchRubricsSmokeTestBenchmark,
     "swebench-verified": SweBenchVerifiedBenchmark,
+    # ``researchrubrics-smoke`` / ``smoke-test`` benchmarks retired alongside
+    # the canonical-smoke refactor (see
+    # docs/architecture/07_testing.md §canonical-smoke).  Smoke uses each
+    # benchmark's real sandbox image via the test-fixture registrations.
 }
 
 EVALUATORS: dict[str, type[Evaluator]] = {
-    "stub-rubric": StubRubric,
-    "varied-stub-rubric": VariedStubRubric,
     "staged-rubric": StagedRubric,
     "minif2f-rubric": MiniF2FRubric,
     "swebench-rubric": SWEBenchRubric,
-    "researchrubrics-smoke-rubric": ResearchRubricsSmokeRubric,
-    "minif2f-smoke-rubric": MiniF2FSmokeRubric,
-    "swebench-smoke-rubric": SweBenchSmokeRubric,
+    # Stub rubrics + smoke rubrics retired.  Test-only smoke criteria
+    # register via tests/e2e/_fixtures/__init__.py.
 }
 
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
