@@ -4,22 +4,23 @@
   "scripts": {
     "check:be:lint": "uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts",
     "check:be:fmt": "uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts",
-    "check:be:type": "uv run ty check ergon_core ergon_builtins ergon_cli ergon_infra",
+    "check:be:type": "uv run ty check ergon_core/ergon_core ergon_builtins ergon_cli ergon_infra",
     "check:be:slopcop": "uv run slopcop ergon_core ergon_builtins ergon_cli ergon_infra",
     "check:be:complexity": "uv run xenon --max-absolute F --max-modules E --max-average C ergon_core ergon_builtins ergon_cli ergon_infra",
     "check:be": "pnpm run check:be:lint && pnpm run check:be:fmt && pnpm run check:be:type && pnpm run check:be:slopcop && pnpm run check:be:complexity",
-    "test:be:state": "uv run pytest tests/state tests/contract -q -n auto --durations=20",
-    "test:be:coverage": "uv run pytest tests/state tests/integration --cov=ergon_core --cov=ergon_builtins --cov-report=term-missing --cov-report=xml:coverage.xml",
-    "test:be:integration": "uv run pytest tests/integration -v",
-    "test:be:all": "pnpm run test:be:state && pnpm run test:be:integration",
+    "test:be:unit": "uv run pytest tests/unit -q -n auto --durations=20",
+    "test:be:coverage": "uv run pytest tests/unit tests/integration --cov=ergon_core --cov=ergon_builtins --cov-report=term-missing --cov-report=xml:coverage.xml",
+    "test:be:integration": "uv run pytest tests/integration -v --timeout=300",
+    "test:be:all": "pnpm run test:be:unit && pnpm run test:be:integration",
     "test:be:e2e": "uv run pytest tests/e2e -v",
+    "test:be:real-llm": "ERGON_REAL_LLM=1 uv run pytest tests/real_llm -v",
     "check:fe:lint": "pnpm -C ergon-dashboard run lint",
     "check:fe:type": "pnpm -C ergon-dashboard run typecheck",
     "check:fe": "pnpm run check:fe:lint && pnpm run check:fe:type",
     "test:fe:e2e": "pnpm -C ergon-dashboard run e2e",
     "test:fe:e2e:live": "pnpm -C ergon-dashboard run e2e:live",
     "check:fast": "pnpm run check:be && pnpm run check:fe",
-    "test:be:fast": "pnpm run test:be:state"
+    "test:be:fast": "pnpm run test:be:unit"
   },
   "packageManager": "pnpm@10.17.1+sha512.17c560fca4867ae9473a3899ad84a88334914f379be46d455cbf92e5cf4b39d34985d452d2583baf19967fa76cb5c17bc9e245529d0b98745721aa7200ecaf7a"
 }
