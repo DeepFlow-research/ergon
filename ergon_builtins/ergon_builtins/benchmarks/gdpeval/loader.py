@@ -10,6 +10,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+from huggingface_hub import hf_hub_download, snapshot_download
+
 HF_REPO_ID = "cm2435-new/gdpval_preference_rubrics"
 _HF_REPO_TYPE = "dataset"
 
@@ -33,12 +36,6 @@ def _rubric_filename(split: str) -> str:
 @functools.lru_cache(maxsize=4)
 def _load_parquet(repo_id: str) -> Any:  # slopcop: ignore[no-typing-any]
     """Download gdpeval.parquet from HF and cache the DataFrame in-process."""
-    # Deferred: optional dependency
-    import pandas as pd
-
-    # Deferred: optional dependency
-    from huggingface_hub import hf_hub_download
-
     path = hf_hub_download(
         repo_id=repo_id,
         filename="gdpeval.parquet",
@@ -74,9 +71,6 @@ def find_reference_files(
     cached in ``~/.cache/huggingface/hub/``.  Only this task's files are
     downloaded — not the full 1.5 GB corpus.
     """
-    # Deferred: optional dependency
-    from huggingface_hub import snapshot_download
-
     local_dir = snapshot_download(
         repo_id=repo_id,
         repo_type=_HF_REPO_TYPE,
@@ -101,9 +95,6 @@ def load_task_ids(
         repo_id: HF dataset repo to pull from.
         limit:   If set, return at most this many IDs.
     """
-    # Deferred: optional dependency
-    from huggingface_hub import hf_hub_download
-
     path = hf_hub_download(
         repo_id=repo_id,
         filename=_rubric_filename(split),
@@ -123,9 +114,6 @@ def load_rubric_data(
     repo_id: str = HF_REPO_ID,
 ) -> dict[str, dict]:  # slopcop: ignore[no-typing-any]
     """Load all rubrics from HF into ``{task_id: raw_dict}`` for *split*."""
-    # Deferred: optional dependency
-    from huggingface_hub import hf_hub_download
-
     path = hf_hub_download(
         repo_id=repo_id,
         filename=_rubric_filename(split),
