@@ -14,11 +14,11 @@ See docs/superpowers/plans/test-refactor/01-fixtures.md §2.7.
 
 from ergon_builtins.registry import EVALUATORS, WORKERS
 
-from tests.e2e._fixtures.criteria.minif2f_smoke import MiniF2FSmokeCriterion
-from tests.e2e._fixtures.criteria.researchrubrics_smoke import (
-    ResearchRubricsSmokeCriterion,
+from tests.e2e._fixtures.criteria.smoke_rubrics import (
+    MiniF2FSmokeRubric,
+    ResearchRubricsSmokeRubric,
+    SweBenchSmokeRubric,
 )
-from tests.e2e._fixtures.criteria.swebench_smoke import SweBenchSmokeCriterion
 from tests.e2e._fixtures.workers.minif2f_smoke import (
     MiniF2FSmokeLeafWorker,
     MiniF2FSmokeWorker,
@@ -38,17 +38,23 @@ from tests.e2e._fixtures.workers.swebench_smoke import (
 
 
 def register_smoke_fixtures() -> None:
-    """Register the per-env smoke worker + criterion slugs.
+    """Register the per-env smoke worker + criterion-rubric slugs.
 
     Called on import (below) so the fixtures are available by the time
     the e2e pytest session starts executing test modules.  Idempotent:
     calling multiple times reassigns the same dict entries without
     side-effects.
+
+    Note: evaluator slugs map to ``Rubric`` subclasses that wrap a
+    single smoke criterion — the CLI composition layer expects
+    ``EVALUATORS`` values to satisfy the ``Evaluator`` interface
+    (``.criteria_for`` / ``.aggregate_task``), which bare ``Criterion``
+    subclasses don't provide.  See ``criteria/smoke_rubrics.py``.
     """
     # ResearchRubrics happy-path
     WORKERS[ResearchRubricsSmokeWorker.type_slug] = ResearchRubricsSmokeWorker
     WORKERS[ResearchRubricsSmokeLeafWorker.type_slug] = ResearchRubricsSmokeLeafWorker
-    EVALUATORS[ResearchRubricsSmokeCriterion.type_slug] = ResearchRubricsSmokeCriterion
+    EVALUATORS[ResearchRubricsSmokeRubric.type_slug] = ResearchRubricsSmokeRubric
 
     # ResearchRubrics sad-path (cohort slot 3)
     WORKERS[ResearchRubricsSadPathSmokeWorker.type_slug] = ResearchRubricsSadPathSmokeWorker
@@ -57,12 +63,12 @@ def register_smoke_fixtures() -> None:
     # MiniF2F happy-path
     WORKERS[MiniF2FSmokeWorker.type_slug] = MiniF2FSmokeWorker
     WORKERS[MiniF2FSmokeLeafWorker.type_slug] = MiniF2FSmokeLeafWorker
-    EVALUATORS[MiniF2FSmokeCriterion.type_slug] = MiniF2FSmokeCriterion
+    EVALUATORS[MiniF2FSmokeRubric.type_slug] = MiniF2FSmokeRubric
 
     # SWE-Bench Verified happy-path
     WORKERS[SweBenchSmokeWorker.type_slug] = SweBenchSmokeWorker
     WORKERS[SweBenchSmokeLeafWorker.type_slug] = SweBenchSmokeLeafWorker
-    EVALUATORS[SweBenchSmokeCriterion.type_slug] = SweBenchSmokeCriterion
+    EVALUATORS[SweBenchSmokeRubric.type_slug] = SweBenchSmokeRubric
 
 
 register_smoke_fixtures()
