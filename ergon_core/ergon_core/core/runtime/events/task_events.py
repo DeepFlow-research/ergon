@@ -8,10 +8,16 @@ from uuid import UUID
 
 from ergon_core.core.runtime.events.base import InngestEventContract
 
-SANDBOX_SKIPPED: Literal["skipped"] = "skipped"
-SandboxId = str | Literal["skipped"]
-
-DYNAMIC_TASK_SENTINEL_ID = UUID("00000000-0000-0000-0000-000000000000")
+# SandboxId is just a str. Previously the type was ``str | Literal["skipped"]``
+# with a ``SANDBOX_SKIPPED = "skipped"`` sentinel returned by
+# ``DefaultSandboxManager.create`` when no E2B_API_KEY was configured. That
+# sentinel forced every downstream consumer to branch on a magic string.
+# Stub/CI mode is now served by ``StubSandboxManager`` which returns a
+# structurally identifiable ID (see ``is_stub_sandbox_id``); event payloads
+# carry a plain ``str`` sandbox_id exactly like the real path, and
+# ``TaskFailedEvent.sandbox_id`` is ``str | None`` because a task can fail
+# before sandbox-setup runs (in which case there really is no sandbox).
+SandboxId = str
 
 
 class TaskReadyEvent(InngestEventContract):
@@ -21,7 +27,7 @@ class TaskReadyEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None = None
     node_id: UUID | None = None
 
 
@@ -32,7 +38,7 @@ class TaskStartedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None = None
     execution_id: UUID
 
 
@@ -43,7 +49,7 @@ class TaskCompletedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None = None
     execution_id: UUID
     sandbox_id: SandboxId
     node_id: UUID | None = None
@@ -56,10 +62,11 @@ class TaskFailedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None = None
     execution_id: UUID
     error: str
-    sandbox_id: SandboxId = SANDBOX_SKIPPED
+    # ``None`` when the task failed before sandbox-setup could run.
+    sandbox_id: str | None = None
     node_id: UUID | None = None
 
 

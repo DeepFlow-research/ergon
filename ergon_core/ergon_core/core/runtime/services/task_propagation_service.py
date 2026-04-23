@@ -4,7 +4,6 @@ from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.runtime.events.task_events import DYNAMIC_TASK_SENTINEL_ID
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.runtime.execution.propagation import (
     is_workflow_complete_v2,
@@ -81,7 +80,7 @@ class TaskPropagationService:
                 if rn is not None:
                     ready_descriptors.append(
                         TaskDescriptor(
-                            task_id=rn.definition_task_id or DYNAMIC_TASK_SENTINEL_ID,
+                            task_id=rn.definition_task_id,
                             task_slug=rn.task_slug,
                             node_id=ready_node_id,
                         )

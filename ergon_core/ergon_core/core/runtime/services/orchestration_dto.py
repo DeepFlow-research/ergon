@@ -26,7 +26,7 @@ class TaskDescriptor(BaseModel):
 
     model_config = {"frozen": True}
 
-    task_id: UUID
+    task_id: UUID | None = None
     task_slug: str
     parent_task_id: UUID | None = None
     node_id: UUID | None = None

@@ -1,10 +1,9 @@
-"""Phase 0 schema tests: node_id on events, DTOs, and sentinel constant."""
+"""Phase 0 schema tests: node_id on events, DTOs, and optional task_id."""
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.runtime.events.task_events import (
-    DYNAMIC_TASK_SENTINEL_ID,
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,
@@ -17,10 +16,10 @@ from ergon_core.core.runtime.services.orchestration_dto import (
 )
 
 
-class TestDynamicTaskSentinel:
-    def test_sentinel_is_nil_uuid(self):
-        assert DYNAMIC_TASK_SENTINEL_ID == UUID("00000000-0000-0000-0000-000000000000")
-        assert int(DYNAMIC_TASK_SENTINEL_ID) == 0
+class TestDynamicTaskNone:
+    def test_task_ready_event_task_id_defaults_to_none(self):
+        evt = TaskReadyEvent(run_id=uuid4(), definition_id=uuid4())
+        assert evt.task_id is None
 
 
 class TestTaskReadyEventNodeId:
