@@ -26,20 +26,12 @@ def test_researchrubrics_slugs_registered() -> None:
 
 
 def test_no_retired_slugs_present() -> None:
-    """Retired smoke slugs should not appear under the test-fixture
-    registrations.  Legacy ``canonical-smoke`` worker may still be
-    registered by the non-test registry path until Phase F deletions,
-    so we don't assert it's absent — only that we haven't re-introduced
-    it from the fixtures side.
-    """
-    import importlib
+    import tests.e2e._fixtures  # noqa: F401
+    from ergon_builtins.registry import WORKERS
 
-    fixtures = importlib.import_module("tests.e2e._fixtures")
-    # Fixtures module exposes only register_smoke_fixtures and the
-    # imported classes; no "canonical-smoke" symbol should leak.
-    assert not hasattr(fixtures, "CanonicalSmokeWorker"), (
-        "fixtures must not re-export the retired CanonicalSmokeWorker"
-    )
+    retired = {"canonical-smoke"}
+    still_present = retired & set(WORKERS.keys())
+    assert not still_present, f"Retired worker slugs still in registry: {still_present}"
 
 
 def test_register_is_idempotent() -> None:
