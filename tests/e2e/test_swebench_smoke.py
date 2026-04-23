@@ -41,7 +41,8 @@ ENV = "swebench-verified"
 WORKER_PREFIX = "swebench"
 WORKER = f"{WORKER_PREFIX}-smoke-worker"
 CRITERION = f"{WORKER_PREFIX}-smoke-criterion"
-COHORT_SIZE = 3
+# ``SMOKE_COHORT_SIZE`` override for local dev; CI uses default 3.
+COHORT_SIZE = int(os.environ.get("SMOKE_COHORT_SIZE", "3"))
 PER_RUN_TIMEOUT = 270
 
 

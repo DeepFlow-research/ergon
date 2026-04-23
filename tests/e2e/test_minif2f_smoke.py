@@ -35,7 +35,8 @@ from tests.e2e._submit import submit_cohort
 ENV = "minif2f"
 WORKER = f"{ENV}-smoke-worker"
 CRITERION = f"{ENV}-smoke-criterion"
-COHORT_SIZE = 3
+# ``SMOKE_COHORT_SIZE`` override for local dev; CI uses default 3.
+COHORT_SIZE = int(os.environ.get("SMOKE_COHORT_SIZE", "3"))
 PER_RUN_TIMEOUT = 270
 
 

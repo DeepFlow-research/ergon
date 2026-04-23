@@ -62,12 +62,33 @@ class CohortSlot:
     kind: Literal["happy", "sad"]
 
 
-# 2 happy + 1 sad per plan §3.2.
-COHORT: tuple[CohortSlot, ...] = (
-    CohortSlot(HAPPY_WORKER, CRITERION, "happy"),
-    CohortSlot(HAPPY_WORKER, CRITERION, "happy"),
-    CohortSlot(SAD_WORKER, CRITERION, "sad"),
-)
+def _build_cohort() -> tuple[CohortSlot, ...]:
+    """Build the cohort using the ``SMOKE_COHORT_SIZE`` env-var override.
+
+    Default (``SMOKE_COHORT_SIZE`` unset or ``=3``): 2 happy + 1 sad
+    per plan §3.2.
+
+    For local dev (``SMOKE_COHORT_SIZE=1``): single happy slot — the
+    sad-path slot is dropped so iteration focuses on the happy
+    pipeline first.  ``SMOKE_COHORT_SIZE=2`` = 2 happy, also drops sad.
+    ``SMOKE_COHORT_SIZE=3`` = full default.  Larger values extend with
+    additional happy slots.
+    """
+    size = int(os.environ.get("SMOKE_COHORT_SIZE", "3"))
+    if size <= 0:
+        raise ValueError(f"SMOKE_COHORT_SIZE must be >= 1, got {size}")
+
+    include_sad = size >= 3
+    happy_count = (size - 1) if include_sad else size
+    slots: list[CohortSlot] = [
+        CohortSlot(HAPPY_WORKER, CRITERION, "happy") for _ in range(happy_count)
+    ]
+    if include_sad:
+        slots.append(CohortSlot(SAD_WORKER, CRITERION, "sad"))
+    return tuple(slots)
+
+
+COHORT: tuple[CohortSlot, ...] = _build_cohort()
 
 
 @pytest.mark.e2e
