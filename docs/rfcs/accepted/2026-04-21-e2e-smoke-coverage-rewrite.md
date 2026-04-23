@@ -452,6 +452,10 @@ Each env's leaf is a Worker subclass whose `execute()` delegates to the env's
 output. The Worker class is what gets registered in `WORKERS`; the Protocol
 implementation is what the Worker holds.
 
+**Sandbox scope:** each leaf **subtask** gets its **own** sandbox acquisition (nine per smoke run). The parallel CI matrix runs three envs ⇒ **27** sandbox provisions per full-matrix PR, by design—not one container reused for the whole run.
+
+**Implementation note (Worker API):** the snippet below is illustrative. The shipped leaf worker attaches with **`AsyncSandbox.connect(sandbox_id=context.sandbox_id)`** after runtime sandbox-setup, writes under **`/workspace/final_output/`**, and relies on the runtime persist step for **`RunResource`** rows—see [`docs/superpowers/plans/2026-04-22-unified-testing-e2e-smoke-plan.md`](../../superpowers/plans/2026-04-22-unified-testing-e2e-smoke-plan.md) §4.1.
+
 ```python
 # ergon_builtins/workers/stubs/base_smoke_leaf.py
 

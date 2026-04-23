@@ -51,7 +51,7 @@ There is no `reconnect()` method. In-process criteria reconnect via `get_sandbox
 
 `DefaultSandboxManager` is the documented default for benchmarks whose only requirement is the stock E2B image: no pinned template, no install step, no verify step.
 
-Its `create()` overrides the base to gracefully skip provisioning when `E2B_API_KEY` is absent, returning the `SANDBOX_SKIPPED` sentinel; downstream task-events machinery short-circuits on that sentinel. This is what makes stub-mode CI runs work without an E2B key — the worker runs, the criterion evaluator runs, and no sandbox is provisioned.
+When `E2B_API_KEY` is absent, `DefaultSandboxManager.create()` transparently delegates to `StubSandboxManager`, which returns a structurally-identifiable stub sandbox id (`stub-sandbox-<uuid>`). Downstream teardown code skips stub ids via `is_stub_sandbox_id(sandbox_id)` rather than branching on a magic string constant. This is what makes stub-mode CI runs work without an E2B key — the worker runs, the criterion evaluator runs, and no real sandbox is provisioned.
 
 ### 2.4 SandboxEventSink
 

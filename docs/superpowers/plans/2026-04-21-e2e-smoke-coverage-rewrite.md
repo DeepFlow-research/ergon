@@ -1,5 +1,7 @@
 # E2E Smoke Coverage Rewrite — Implementation Plan
 
+**Unified entry point:** [`2026-04-22-unified-testing-e2e-smoke-plan.md`](2026-04-22-unified-testing-e2e-smoke-plan.md) — testing tiers, smoke invariants, delivery bundle, and RFC errata (sandbox attach). This document remains the **step-by-step task checklist** (PR 0, Task 1, …).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the retired `tests/e2e/` tier with three canonical per-env smoke tests (researchrubrics, minif2f, swebench-verified) built on a shared multi-agent smoke-worker pattern, plus a backend test-harness router, Playwright frontend assertions, and on-PR inline screenshot delivery.
@@ -9,9 +11,9 @@
 **Tech Stack:** Python 3.13 (pytest, httpx, sqlmodel, FastAPI), TypeScript (Playwright, Next.js), Docker Compose, GitHub Actions, `gh` CLI, UV workspace, pnpm.
 
 **Canonical references:**
-- Spec: `docs/rfcs/active/2026-04-21-e2e-smoke-coverage-rewrite.md`
-- Superseded-but-absorbed spec: `docs/rfcs/active/2026-04-18-test-harness-endpoints.md` (full harness router implementation lives here verbatim)
-- Parent project RFC (prerequisites): `docs/rfcs/active/2026-04-18-testing-posture-reset.md`
+- Spec: `docs/rfcs/accepted/2026-04-21-e2e-smoke-coverage-rewrite.md`
+- Superseded-but-absorbed spec: `docs/rfcs/rejected/2026-04-18-test-harness-endpoints.md` (harness absorbed by smoke RFC; paths in this plan may still cite it)
+- Parent project RFC (prerequisites): `docs/rfcs/accepted/2026-04-18-testing-posture-reset.md`
 
 **Prerequisites gating:**
 - **PR 0 of this plan** is a standalone engine rename (no dependencies) — must merge before PR 1 branch is created.
@@ -672,7 +674,7 @@ git commit -m "feat(smoke): SmokeSubworker Protocol + SubworkerResult"
 5. Yield a `GenerationTurn` describing what happened.
 6. Override `get_output(context) -> WorkerOutput` to report probe success/failure via structured metadata.
 
-Uniqueness: since multiple leaves may share a sandbox root if the engine re-uses sandboxes, filenames are prefixed with `context.node_id.hex[:8]` to avoid collisions.
+Uniqueness: canonical smoke uses **one sandbox per leaf subtask** (no run-wide reuse). Filenames are still prefixed with `context.node_id.hex[:8]` so artifacts are stable and unambiguous in logs and `RunResource` rows.
 
 - [ ] **Step 2.1: Write failing test with a fake subworker**
 
