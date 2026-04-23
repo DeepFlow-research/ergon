@@ -66,7 +66,25 @@ async def test_install_raises_when_payload_missing(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_install_raises_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "failing_script,match_label",
+    [
+        ("setup_env_script", "setup_env"),
+        ("install_repo_script", "install_repo"),
+    ],
+)
+async def test_install_raises_on_nonzero_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    failing_script: str,
+    match_label: str,
+) -> None:
+    """SandboxSetupError is raised when either setup script exits non-zero.
+
+    _install_dependencies iterates scripts in order and raises on the first
+    failure.  To exercise the install_repo_script path we must let the
+    setup_env_script call succeed (exit_code=0) so execution reaches the
+    second script.
+    """
     from ergon_builtins.benchmarks.swebench_verified import sandbox_manager as sm
     from ergon_core.core.persistence import queries as q_mod
     from ergon_core.core.providers.sandbox.errors import SandboxSetupError
@@ -81,8 +99,18 @@ async def test_install_raises_on_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -
     )
 
     sandbox = MagicMock()
-    sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=1, stdout="boom"))
+    if failing_script == "setup_env_script":
+        # First call (setup_env) fails immediately.
+        sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=1, stdout="boom"))
+    else:
+        # First call (setup_env) succeeds; second call (install_repo) fails.
+        sandbox.commands.run = AsyncMock(
+            side_effect=[
+                MagicMock(exit_code=0, stdout="ok"),
+                MagicMock(exit_code=1, stdout="boom"),
+            ]
+        )
 
     manager = SWEBenchSandboxManager()
-    with pytest.raises(SandboxSetupError, match="setup_env"):
+    with pytest.raises(SandboxSetupError, match=match_label):
         await manager._install_dependencies(sandbox, uuid4())  # type: ignore[attr-defined]
