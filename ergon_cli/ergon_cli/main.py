@@ -3,6 +3,15 @@
 import argparse
 import sys
 
+from ergon_cli.commands.benchmark import handle_benchmark
+from ergon_cli.commands.doctor import handle_doctor
+from ergon_cli.commands.eval import handle_eval
+from ergon_cli.commands.evaluator import handle_evaluator
+from ergon_cli.commands.onboard import handle_onboard
+from ergon_cli.commands.run import handle_run
+from ergon_cli.commands.train import handle_train
+from ergon_cli.commands.worker import handle_worker
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ergon", description="Ergon experiment orchestration")
@@ -163,44 +172,20 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "benchmark":
-        # Deferred: CLI startup cost
-        from ergon_cli.commands.benchmark import handle_benchmark
-
         return handle_benchmark(args)
     elif args.command == "run":
-        # Deferred: CLI startup cost
-        from ergon_cli.commands.run import handle_run
-
         return handle_run(args)
     elif args.command == "worker":
-        # Deferred: CLI startup cost
-        from ergon_cli.commands.worker import handle_worker
-
         return handle_worker(args)
     elif args.command == "evaluator":
-        # Deferred: CLI startup cost
-        from ergon_cli.commands.evaluator import handle_evaluator
-
         return handle_evaluator(args)
     elif args.command == "eval":
-        # Deferred: CLI startup cost
-        from ergon_cli.commands.eval import handle_eval
-
         return handle_eval(args)
     elif args.command == "train":
-        # Deferred: heavy optional deps (TRL, vLLM, etc.)
-        from ergon_cli.commands.train import handle_train
-
         return handle_train(args)
     elif args.command == "onboard":
-        # Deferred: CLI startup cost
-        from ergon_cli.commands.onboard import handle_onboard
-
         return handle_onboard(args)
     elif args.command == "doctor":
-        # Deferred: CLI startup cost
-        from ergon_cli.commands.doctor import handle_doctor
-
         return handle_doctor(args)
     else:
         parser.print_help()
