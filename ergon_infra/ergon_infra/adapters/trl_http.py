@@ -16,10 +16,21 @@ Usage::
 
 import logging
 import time
+from typing import TypedDict
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+class RolloutBatch(TypedDict):
+    """Batch tensors returned by :func:`rollout_func` for GRPOTrainer."""
+
+    prompt_ids: list[list[int]]
+    completion_ids: list[list[int]]
+    logprobs: list[list[float]]
+    completion_reward: list[float]
+    env_mask: list[list[int]]
 
 
 def make_ergon_http_rollout_func(
@@ -41,7 +52,7 @@ def make_ergon_http_rollout_func(
     """
     client = httpx.Client(base_url=ergon_url, timeout=30.0)
 
-    def rollout_func(prompts: list, trainer: object) -> dict:
+    def rollout_func(prompts: list, trainer: object) -> RolloutBatch:
         resp = client.post(
             "/rollouts/submit",
             json={

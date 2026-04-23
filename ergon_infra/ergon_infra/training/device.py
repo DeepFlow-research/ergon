@@ -1,13 +1,26 @@
 """Device resolution: map TrainingConfig to TRL GRPOConfig kwargs."""
 
+from typing import Required, TypedDict
+
 from ergon_infra.training.config import TrainingConfig
 
 
-def resolve_device_mode(config: TrainingConfig) -> dict:
+class GRPODeviceKwargs(TypedDict, total=False):
+    """GRPOConfig kwargs produced by :func:`resolve_device_mode`.
+
+    ``use_vllm`` is always present; the remaining keys depend on the mode.
+    """
+
+    use_vllm: Required[bool]
+    use_cpu: bool
+    vllm_mode: str
+    vllm_server_base_url: str
+
+
+def resolve_device_mode(config: TrainingConfig) -> GRPODeviceKwargs:
     """Resolve a ``TrainingConfig`` into TRL-compatible GRPOConfig kwargs.
 
-    Returns a dict with keys consumed by ``GRPOConfig``:
-    ``use_vllm``, ``vllm_mode``, ``vllm_server_base_url``, ``no_cuda``.
+    Returns a :class:`GRPODeviceKwargs` suitable for ``GRPOConfig(**device_kwargs, ...)``.
     """
     if config.device == "cpu":
         return {
