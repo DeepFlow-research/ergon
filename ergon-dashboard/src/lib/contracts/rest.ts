@@ -2,10 +2,10 @@ import { z } from "zod";
 
 import { schemas } from "@/generated/rest/contracts";
 
-export const BenchmarkNameSchema = schemas.BenchmarkName;
+export const BenchmarkNameSchema = z.string();
 export const ExperimentCohortStatusSchema = schemas.ExperimentCohortStatus;
-export const RunStatusSchema = schemas.RunStatus;
-export const TaskStatusSchema = schemas.TaskStatus;
+export const RunStatusSchema = z.enum(["pending", "executing", "evaluating", "completed", "failed", "cancelled"]);
+export const TaskStatusSchema = z.string();
 
 export const CohortSummarySchema = schemas.CohortSummaryDto;
 export const CohortDetailSchema = schemas.CohortDetailDto;

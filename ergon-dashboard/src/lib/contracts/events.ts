@@ -148,7 +148,7 @@ export const DashboardGenerationTurnCompletedDataSchema = z.object({
 export const RunListEntrySchema = z.object({
   runId: z.string(),
   name: z.string(),
-  status: z.enum(["pending", "executing", "evaluating", "completed", "failed"]),
+  status: z.enum(["pending", "executing", "evaluating", "completed", "failed", "cancelled"]),
   startedAt: z.string(),
   completedAt: z.string().nullable(),
   durationSeconds: z.number().nullable(),
