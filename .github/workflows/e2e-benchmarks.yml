@@ -27,6 +27,7 @@ jobs:
     name: "smoke [${{ matrix.env }}]"
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         env: [researchrubrics, minif2f, swebench-verified]
     runs-on: ubuntu-latest
