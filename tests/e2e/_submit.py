@@ -22,6 +22,7 @@ import os
 from uuid import UUID
 
 import httpx
+import pytest
 
 _DEFAULT_API = "http://127.0.0.1:9000"
 
@@ -56,7 +57,13 @@ async def submit_cohort(
     }
     async with httpx.AsyncClient(base_url=_api_base(), timeout=30.0) as client:
         response = await client.post("/api/test/write/cohort", json=payload)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            pytest.fail(
+                "cohort submission failed: "
+                f"{response.status_code} {response.reason_phrase} "
+                f"for {response.request.url}\n"
+                f"response body:\n{response.text[:4000]}",
+            )
         body = response.json()
     return [UUID(rid) for rid in body["run_ids"]]
 

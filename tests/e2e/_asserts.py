@@ -458,9 +458,15 @@ async def wait_for_terminal(run_id: UUID, timeout_seconds: int = 270) -> str:
                 headers={"X-Test-Secret": secret},
             )
             if r.status_code == 200:
-                status = r.json()["status"]
-                if status in TERMINAL_STATUSES:
+                state = r.json()
+                status = state["status"]
+                if status == "completed":
                     return status
+                if status in TERMINAL_STATUSES:
+                    raise AssertionError(
+                        f"run {run_id} reached terminal failure status {status!r}:\n"
+                        f"{json.dumps(state, indent=2, sort_keys=True)}"
+                    )
             await asyncio.sleep(2)
     raise TimeoutError(
         f"run {run_id} did not reach terminal status within {timeout_seconds}s",
