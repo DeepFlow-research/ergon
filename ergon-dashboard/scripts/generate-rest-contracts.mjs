@@ -6,10 +6,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const contractsPath = path.resolve(__dirname, "../src/generated/rest/contracts.ts");
 
-const source = readFileSync(contractsPath, "utf8").replace(
-  'import { makeApi, Zodios, type ZodiosOptions } from "@zodios/core";\n',
-  "",
-);
+const source = readFileSync(contractsPath, "utf8")
+  .replace('import { makeApi, Zodios, type ZodiosOptions } from "@zodios/core";\n', "")
+  // openapi-zod-client generates z.record(V) but Zod requires z.record(K, V).
+  .replace(/z\.record\((?!z\.string\(\))/g, "z.record(z.string(), ");
 const endpointMarker = "\nconst endpoints = makeApi([";
 const markerIndex = source.indexOf(endpointMarker);
 
