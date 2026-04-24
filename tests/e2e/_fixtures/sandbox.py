@@ -62,11 +62,7 @@ class _SmokeFiles:
         host_path = self._host_path(path)
         if not host_path.exists():
             raise FileNotFoundError(path)
-        return [
-            _EntryInfo(child.name)
-            for child in sorted(host_path.iterdir())
-            if child.is_file()
-        ]
+        return [_EntryInfo(child.name) for child in sorted(host_path.iterdir()) if child.is_file()]
 
 
 class _SmokeCommands:
@@ -168,7 +164,9 @@ class SmokeSandboxManager(BaseSandboxManager):
 
     async def terminate(self, task_id: UUID, reason: str = "completed") -> None:
         sandbox = self._sandboxes.pop(task_id, None)
-        sandbox_id = sandbox.sandbox_id if sandbox is not None else f"{_SMOKE_SANDBOX_PREFIX}{task_id}"
+        sandbox_id = (
+            sandbox.sandbox_id if sandbox is not None else f"{_SMOKE_SANDBOX_PREFIX}{task_id}"
+        )
         display_task_id = self._get_display_task_id(task_id)
         run_id = self._run_ids.get(task_id)
         self._sandbox_ids.pop(sandbox_id, None)
