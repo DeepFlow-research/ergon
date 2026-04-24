@@ -40,6 +40,8 @@ from ergon_core.core.runtime.services.task_management_service import (
 
 from tests.e2e._fixtures.smoke_base.constants import SUBTASK_GRAPH
 
+_CHILD_WAIT_TERMINAL_STATUSES = TERMINAL_STATUSES | {"blocked"}
+
 
 class SmokeWorkerBase(Worker):
     """Abstract parent.  Subclasses set ``type_slug`` and ``leaf_slug``.
@@ -135,7 +137,7 @@ class SmokeWorkerBase(Worker):
                     run_id=context.run_id,
                     parent_node_id=context.node_id,
                 )
-            if children and all(c.status in TERMINAL_STATUSES for c in children):
+            if children and all(c.status in _CHILD_WAIT_TERMINAL_STATUSES for c in children):
                 break
             await asyncio.sleep(2)
 

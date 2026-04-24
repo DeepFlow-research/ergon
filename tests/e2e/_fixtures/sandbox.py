@@ -79,7 +79,7 @@ class _SmokeCommands:
         if command.startswith("lean --check "):
             return _CommandResult()
         if command.startswith("python -m py_compile ") or "python /tmp/smoke_health.py" in command:
-            return _CommandResult(stdout="8.0.0\n" if "pytest" in command else "")
+            return _CommandResult(stdout="HEALTH_OK\n8.0.0\n" if "pytest" in command else "")
         if command.startswith("mkdir -p ") or command.startswith("rm -f "):
             return _CommandResult()
         return _CommandResult()
