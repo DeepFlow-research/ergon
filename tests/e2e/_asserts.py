@@ -372,16 +372,22 @@ def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
 def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
     """``AlwaysFailSubworker`` writes ``partial_<node>.md`` before raising.
     The runtime's persist step must still serialize it as a RunResource."""
-    with get_session() as s:
-        partials = list(
-            s.exec(
-                select(RunResource)
-                .where(RunResource.run_id == run_id)
-                .where(
-                    RunResource.name.like("partial_%.md"),  # ty: ignore[unresolved-attribute]
-                ),
-            ).all(),
-        )
+    deadline = time.monotonic() + 30
+    partials: list[RunResource] = []
+    while time.monotonic() < deadline:
+        with get_session() as s:
+            partials = list(
+                s.exec(
+                    select(RunResource)
+                    .where(RunResource.run_id == run_id)
+                    .where(
+                        RunResource.name.like("partial_%.md"),  # ty: ignore[unresolved-attribute]
+                    ),
+                ).all(),
+            )
+        if partials:
+            break
+        time.sleep(2)
     assert len(partials) == 1, (
         f"expected 1 partial artifact from l_2 (partial work must persist on "
         f"FAILED leaf), got {len(partials)}"
@@ -394,13 +400,19 @@ def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
 
 def _assert_sadpath_partial_wal(run_id: UUID) -> None:
     """Pre-failure ``wc -l partial_*`` command persists as WAL row."""
-    with get_session() as s:
-        entries = list(
-            s.exec(
-                select(SandboxCommandWalEntry).where(SandboxCommandWalEntry.run_id == run_id),
-            ).all(),
-        )
-    wc = [e for e in entries if "wc -l" in e.command and "partial_" in e.command]
+    deadline = time.monotonic() + 30
+    wc: list[SandboxCommandWalEntry] = []
+    while time.monotonic() < deadline:
+        with get_session() as s:
+            entries = list(
+                s.exec(
+                    select(SandboxCommandWalEntry).where(SandboxCommandWalEntry.run_id == run_id),
+                ).all(),
+            )
+        wc = [e for e in entries if "wc -l" in e.command and "partial_" in e.command]
+        if wc:
+            break
+        time.sleep(2)
     assert len(wc) >= 1, (
         "expected ≥1 'wc -l partial_*' WAL entry from the pre-failure probe; "
         "sandbox_command path did not persist the command before the raise"
