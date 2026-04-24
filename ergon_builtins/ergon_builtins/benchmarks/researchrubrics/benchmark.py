@@ -97,12 +97,18 @@ class ResearchRubricsBenchmark(Benchmark):
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
         dataset_name = self.dataset_name
+        # reason: avoids circular import at module level
+        from ergon_core.core.settings import settings
+
+        token = settings.hf_api_key
         if dataset_name is None:
-            api = HfApi()
+            if token is None:
+                raise RuntimeError("HF_API_KEY must be set when dataset_name is not provided")
+            api = HfApi(token=token)
             user_info = api.whoami()
             dataset_name = f"{user_info['name']}/researchrubrics-ablated"
 
-        ds = load_dataset(dataset_name)
+        ds = load_dataset(dataset_name, token=token)
         train_ds = ds["train"]
 
         if self.limit:

@@ -49,6 +49,10 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("ERGON_CHECKPOINT_PATH"),
     )
+    hf_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("HF_API_KEY"),
+    )
 
     @property
     def data_dir(self) -> Path:
