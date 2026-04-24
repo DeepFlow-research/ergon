@@ -157,6 +157,7 @@ jobs:
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
+          TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-local' }}
         run: uv run pytest tests/integration -v --timeout=300
 
       - name: Dump API logs on failure
