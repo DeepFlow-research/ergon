@@ -21,7 +21,7 @@ from ergon_core.core.persistence.graph.status_conventions import (
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.shared.types import NodeId, TaskSlug
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
 from ergon_core.core.runtime.errors.delegation_errors import (
     CycleDetectedError,
     DuplicateTaskSlugError,
@@ -87,9 +87,6 @@ def _latest_execution_id(session: Session, node_id: UUID) -> UUID | None:
     Used to attach execution_id to TaskCancelledEvent so the cleanup
     function can release the correct sandbox.
     """
-    # reason: deferred to avoid circular import at module level
-    from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-
     exe = session.exec(
         select(RunTaskExecution.id)
         .where(RunTaskExecution.node_id == node_id)

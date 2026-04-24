@@ -13,6 +13,7 @@ from ergon_core.core.runtime.services.communication_schemas import (
     ThreadWithMessages,
 )
 from ergon_core.core.utils import utcnow
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import func, select
 
 logger = logging.getLogger(__name__)
@@ -189,26 +190,27 @@ class CommunicationService:
         agent_b_id: str,
         topic: str,
     ) -> Thread:
-        a, b = sorted([agent_a_id, agent_b_id])
-        stmt = (
-            select(Thread)
-            .where(Thread.run_id == run_id)
-            .where(Thread.agent_a_id == a)
-            .where(Thread.agent_b_id == b)
-            .where(Thread.topic == topic)
-        )
+        # Threads are keyed by (run_id, topic) only — all senders on the same
+        # topic share one thread per run (broadcast/group semantics).
+        # The unique constraint uq_threads_run_topic enforces this at the DB level
+        # and lets us safely retry on concurrent INSERT races.
+        stmt = select(Thread).where(Thread.run_id == run_id).where(Thread.topic == topic)
         existing = session.exec(stmt).first()
         if existing is not None:
             return existing
 
-        thread = Thread(
-            run_id=run_id,
-            topic=topic,
-            agent_a_id=a,
-            agent_b_id=b,
-        )
+        a, b = sorted([agent_a_id, agent_b_id])
+        thread = Thread(run_id=run_id, topic=topic, agent_a_id=a, agent_b_id=b)
         session.add(thread)
-        session.flush()
+        try:
+            session.flush()
+        except IntegrityError:
+            # Concurrent insert won the race — roll back and fetch the winner.
+            session.rollback()
+            existing = session.exec(stmt).first()
+            if existing is not None:
+                return existing
+            raise
         return thread
 
 

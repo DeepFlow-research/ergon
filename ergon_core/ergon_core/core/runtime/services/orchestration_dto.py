@@ -104,7 +104,7 @@ class FailTaskExecutionCommand(BaseModel):
 
     execution_id: UUID
     run_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     error_message: str
 
 
@@ -119,7 +119,7 @@ class PropagateTaskCompletionCommand(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     execution_id: UUID
     node_id: UUID | None = None
 
@@ -129,7 +129,7 @@ class PropagationResult(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    completed_task_id: UUID
+    completed_task_id: UUID | None
     ready_tasks: list[TaskDescriptor] = Field(default_factory=list)
     invalidated_targets: list[UUID] = Field(default_factory=list)
     workflow_terminal_state: WorkflowTerminalState = WorkflowTerminalState.NONE

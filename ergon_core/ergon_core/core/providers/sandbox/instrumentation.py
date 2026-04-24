@@ -6,11 +6,6 @@ import time
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-if TYPE_CHECKING:
-    from e2b.sandbox_async.commands.command import Commands  # type: ignore[import-untyped]
-    from e2b.sandbox_async.filesystem.filesystem import Filesystem  # type: ignore[import-untyped]
-    from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-
 try:
     from e2b.sandbox.commands.command_handle import (
         CommandExitException,  # type: ignore[import-untyped]
@@ -25,6 +20,11 @@ from ergon_core.core.providers.sandbox.utils import (
     coerce_text,
     preview_python_code,
 )
+
+if TYPE_CHECKING:
+    from e2b.sandbox_async.commands.command import Commands  # type: ignore[import-untyped]
+    from e2b.sandbox_async.filesystem.filesystem import Filesystem  # type: ignore[import-untyped]
+    from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
 
 class InstrumentedSandboxCommands:

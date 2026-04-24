@@ -25,7 +25,13 @@ class WorkerContext(BaseModel):
             "to worker_type."
         ),
     )
-    task_id: UUID
+    task_id: UUID | None = Field(
+        default=None,
+        description=(
+            "ExperimentDefinitionTask.id — null for dynamically-spawned subtasks "
+            "which have no compile-time declaration."
+        ),
+    )
     execution_id: UUID
     sandbox_id: str
     node_id: UUID | None = Field(

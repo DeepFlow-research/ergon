@@ -19,6 +19,7 @@ from ergon_core.core.persistence.graph.status_conventions import (
     CANCELLED,
     TERMINAL_STATUSES,
 )
+from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
@@ -117,9 +118,6 @@ def _latest_execution_id(session: Session, node_id: UUID) -> UUID | None:
     Duplicated from task_management_service — both services need it
     independently to populate TaskCancelledEvent.execution_id.
     """
-    # reason: deferred to avoid circular import at module level
-    from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-
     exe = session.exec(
         select(RunTaskExecution.id)
         .where(RunTaskExecution.node_id == node_id)

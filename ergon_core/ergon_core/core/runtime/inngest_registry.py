@@ -7,7 +7,6 @@ from ergon_core.core.runtime.inngest.benchmark_run_start import benchmark_run_st
 from ergon_core.core.runtime.inngest.cancel_orphan_subtasks import (
     block_descendants_on_failed_fn,
     cancel_orphans_on_cancelled_fn,
-    cancel_orphans_on_completed_fn,
 )
 from ergon_core.core.runtime.inngest.cleanup_cancelled_task import cleanup_cancelled_task_fn
 from ergon_core.core.runtime.inngest.check_evaluators import check_and_run_evaluators
@@ -43,7 +42,6 @@ ALL_FUNCTIONS = [
     check_and_run_evaluators,
     evaluate_task_run,
     # Subtask lifecycle
-    cancel_orphans_on_completed_fn,
     block_descendants_on_failed_fn,
     cancel_orphans_on_cancelled_fn,
     cleanup_cancelled_task_fn,

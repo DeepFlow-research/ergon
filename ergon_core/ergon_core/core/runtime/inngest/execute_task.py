@@ -34,6 +34,9 @@ from ergon_core.core.runtime.services.orchestration_dto import (
     PrepareTaskExecutionCommand,
 )
 from ergon_core.core.runtime.services.task_execution_service import TaskExecutionService
+from ergon_core.core.runtime.inngest.persist_outputs import persist_outputs_fn
+from ergon_core.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
+from ergon_core.core.runtime.inngest.worker_execute import worker_execute_fn
 from ergon_core.core.runtime.tracing import (
     CompletedSpan,
     get_trace_sink,
@@ -127,15 +130,10 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 skip_reason=prepared.skip_reason,
             )
 
-        # Deferred: child function modules register with Inngest at import
-        # time. Eager cross-imports between registered modules cause cycles.
-        from ergon_core.core.runtime.inngest.persist_outputs import persist_outputs_fn
-
-        # Deferred: avoid circular import
-        from ergon_core.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
-
-        # Deferred: avoid circular import
-        from ergon_core.core.runtime.inngest.worker_execute import worker_execute_fn
+        # Dynamic subtasks have no static task_id (UUID | None).  Use node_id
+        # as the sandbox key so each subtask gets its own isolated sandbox slot
+        # in the manager's registry rather than all sharing _sandboxes[None].
+        _sandbox_key = payload.task_id or prepared.node_id
 
         sandbox_result: SandboxReadyResult = await ctx.step.invoke(
             "sandbox-setup",
@@ -143,7 +141,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             data=SandboxSetupRequest(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
-                task_id=payload.task_id,
+                task_id=_sandbox_key,
                 benchmark_type=prepared.benchmark_type,
             ).model_dump(),
         )
@@ -190,7 +188,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             data=PersistOutputsRequest(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
-                task_id=payload.task_id,
+                task_id=_sandbox_key,
                 execution_id=prepared.execution_id,
                 sandbox_id=sandbox_result.sandbox_id,
                 output_dir=sandbox_result.output_dir,

@@ -17,6 +17,7 @@ from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 from ergon_core.core.runtime.errors.inngest_errors import ConfigurationError
 from ergon_core.core.runtime.execution.propagation import (
     mark_task_failed,
+    mark_task_failed_by_node,
     mark_task_running,
 )
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
@@ -314,16 +315,26 @@ class TaskExecutionService:
             session.add(execution)
 
             graph_repo = WorkflowGraphRepository()
-            graph_lookup = GraphNodeLookup(session, command.run_id)
-            await mark_task_failed(
-                session,
-                command.run_id,
-                command.task_id,
-                command.error_message,
-                execution_id=command.execution_id,
-                graph_repo=graph_repo,
-                graph_lookup=graph_lookup,
-            )
+            if command.task_id is not None:
+                graph_lookup = GraphNodeLookup(session, command.run_id)
+                await mark_task_failed(
+                    session,
+                    command.run_id,
+                    command.task_id,
+                    command.error_message,
+                    execution_id=command.execution_id,
+                    graph_repo=graph_repo,
+                    graph_lookup=graph_lookup,
+                )
+            elif execution.node_id is not None:
+                await mark_task_failed_by_node(
+                    session,
+                    command.run_id,
+                    execution.node_id,
+                    command.error_message,
+                    execution_id=command.execution_id,
+                    graph_repo=graph_repo,
+                )
             session.commit()
 
             await _emit_task_status(

@@ -106,7 +106,7 @@ class CompletedSpan(BaseModel):
     start_time: datetime
     end_time: datetime
     attributes: dict[str, object] = Field(default_factory=dict)
-    status_code: int = 0
+    status_code: int | str = 0
     status_message: str | None = None
     events: list[SpanEvent] = Field(default_factory=list)
 

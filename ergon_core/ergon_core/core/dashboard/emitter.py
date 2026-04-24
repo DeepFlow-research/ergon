@@ -10,7 +10,10 @@ from uuid import UUID
 
 import inngest
 from ergon_core.core.persistence.context.event_payloads import ContextEventType
-from ergon_core.core.persistence.context.models import RunContextEvent as _RunContextEvent
+from ergon_core.core.persistence.context.models import (
+    RunContextEvent as _RunContextEvent,
+    _PAYLOAD_ADAPTER,
+)
 from ergon_core.core.persistence.graph.models import (
     GraphTargetType,
     MutationType,
@@ -396,9 +399,6 @@ class DashboardEmitter:
         if not self._enabled:
             return
         try:
-            # reason: avoid circular import at module level between dashboard and persistence layers
-            from ergon_core.core.persistence.context.models import _PAYLOAD_ADAPTER  # noqa: PLC2701
-
             task_node_id = self._execution_task_map.get(event.task_execution_id)
             if task_node_id is None:
                 logger.warning(

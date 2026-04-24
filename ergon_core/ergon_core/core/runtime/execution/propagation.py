@@ -644,18 +644,25 @@ def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
     return all(s in TERMINAL_STATUSES for s in statuses) and not any(s == FAILED for s in statuses)
 
 
-def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
-    """All nodes terminal AND at least one FAILED.
+_SETTLED_STATUSES = TERMINAL_STATUSES | frozenset({BLOCKED})
 
-    BLOCKED is non-terminal, so a run with BLOCKED tasks returns False and
-    keeps the RunRecord in EXECUTING (stuck, awaiting operator action). Only
-    when every node is terminal (operator has resolved all BLOCKED nodes) and
-    at least one is FAILED does the run finalise as FAILED.
+
+def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
+    """All nodes settled (terminal or BLOCKED) AND at least one FAILED.
+
+    BLOCKED nodes represent predecessor-failed state awaiting operator action.
+    Once all remaining work is settled — either terminal or BLOCKED with no
+    PENDING/RUNNING tasks remaining — the run cannot make further autonomous
+    progress. Treat this as a workflow failure so the RunRecord transitions to
+    FAILED and criterion evaluation fires.
+
+    BLOCKED nodes are preserved (not CANCELLED) so the operator can examine
+    them and use operator_unblock / restart_node to resume if desired.
     """
     statuses = list(
         session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
     )
     if not statuses:
         return False
-    all_terminal = all(s in TERMINAL_STATUSES for s in statuses)
-    return all_terminal and any(s == FAILED for s in statuses)
+    all_settled = all(s in _SETTLED_STATUSES for s in statuses)
+    return all_settled and any(s == FAILED for s in statuses)
