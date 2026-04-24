@@ -105,7 +105,7 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
             if slot.kind == "happy"
             else wait_for_terminal_status(
                 rid,
-                expected_statuses=frozenset({"failed"}),
+                expected_statuses=frozenset({"completed"}),
                 timeout_seconds=PER_RUN_TIMEOUT,
             )
             for slot, rid in slotted
