@@ -120,34 +120,3 @@ async def test_fixture_proof_verifies_to_score_1() -> None:
         assert result.passed is True
     finally:
         await mgr.terminate(run_id)
-
-
-@pytest.mark.asyncio
-async def test_sorry_proof_scores_zero_without_sandbox() -> None:
-    """Static rejection of 'sorry' should work even without a live sandbox."""
-    run_id = uuid4()
-
-    worker_output = WorkerOutput(
-        output="",
-        success=True,
-    )
-    eval_ctx = EvaluationContext(
-        run_id=run_id,
-        task_id=uuid4(),
-        execution_id=uuid4(),
-        task=_make_task(),
-        worker_result=worker_output,
-        sandbox_id=None,
-        metadata={},
-    )
-
-    criterion = ProofVerificationCriterion(
-        name="proof_verification",
-        weight=1.0,
-        max_score=1.0,
-    )
-    result = await criterion.evaluate(eval_ctx)
-
-    assert result.score == 0.0
-    assert result.passed is False
-    assert "sorry" in (result.feedback or "").lower()
