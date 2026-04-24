@@ -64,15 +64,23 @@ def test_smoke_benchmarks_are_test_owned_when_harness_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from tests.e2e._fixtures import register_smoke_fixtures
-    from ergon_builtins.registry import BENCHMARKS
+    from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
+    from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 
     slugs = ("researchrubrics", "minif2f", "swebench-verified")
-    originals = {slug: BENCHMARKS[slug] for slug in slugs}
+    original_benchmarks = {slug: BENCHMARKS[slug] for slug in slugs}
+    original_managers = {slug: SANDBOX_MANAGERS.get(slug) for slug in slugs}
     monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
 
     try:
         register_smoke_fixtures()
         for slug in slugs:
             assert BENCHMARKS[slug].__module__.startswith("tests.e2e._fixtures")
+            assert SANDBOX_MANAGERS[slug] is DefaultSandboxManager
     finally:
-        BENCHMARKS.update(originals)
+        BENCHMARKS.update(original_benchmarks)
+        for slug, manager_cls in original_managers.items():
+            if manager_cls is None:
+                SANDBOX_MANAGERS.pop(slug, None)
+            else:
+                SANDBOX_MANAGERS[slug] = manager_cls

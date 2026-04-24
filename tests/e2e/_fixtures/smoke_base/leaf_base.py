@@ -30,6 +30,9 @@ from ergon_core.api.generation import GenerationTurn, TextPart
 from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.providers.sandbox.instrumentation import InstrumentedSandbox
+from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
+from ergon_core.core.settings import settings
 from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
 from ergon_core.core.runtime.services.communication_service import (
     communication_service,
@@ -82,7 +85,14 @@ class BaseSmokeLeafWorker(Worker):
             ],
         )
 
-        sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
+        raw_sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
+        sandbox = InstrumentedSandbox(
+            raw_sandbox,
+            DefaultSandboxManager._event_sink,
+            context.run_id,
+            context.node_id or context.execution_id,
+            settings.otel_stdout_stderr_max_length,
+        )
         result = await self.subworker_cls().work(node_id=node_hex, sandbox=sandbox)
         self._last_result = result
 
