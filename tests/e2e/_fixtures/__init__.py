@@ -12,8 +12,13 @@ is a no-op (``dict`` assignment is the mechanism).
 See docs/superpowers/plans/test-refactor/01-fixtures.md §2.7.
 """
 
-from ergon_builtins.registry import EVALUATORS, WORKERS
+from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
 
+from tests.e2e._fixtures.benchmarks import (
+    MiniF2FSmokeBenchmark,
+    ResearchRubricsSmokeBenchmark,
+    SweBenchSmokeBenchmark,
+)
 from tests.e2e._fixtures.criteria.smoke_rubrics import (
     MiniF2FSmokeRubric,
     ResearchRubricsSmokeRubric,
@@ -51,6 +56,12 @@ def register_smoke_fixtures() -> None:
     (``.criteria_for`` / ``.aggregate_task``), which bare ``Criterion``
     subclasses don't provide.  See ``criteria/smoke_rubrics.py``.
     """
+    # Production benchmark loaders fetch external datasets. The smoke
+    # harness owns its benchmark roots so CI stays deterministic and offline.
+    BENCHMARKS[ResearchRubricsSmokeBenchmark.type_slug] = ResearchRubricsSmokeBenchmark
+    BENCHMARKS[MiniF2FSmokeBenchmark.type_slug] = MiniF2FSmokeBenchmark
+    BENCHMARKS[SweBenchSmokeBenchmark.type_slug] = SweBenchSmokeBenchmark
+
     # ResearchRubrics happy-path
     WORKERS[ResearchRubricsSmokeWorker.type_slug] = ResearchRubricsSmokeWorker
     WORKERS[ResearchRubricsSmokeLeafWorker.type_slug] = ResearchRubricsSmokeLeafWorker

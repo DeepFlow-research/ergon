@@ -58,3 +58,11 @@ def test_swebench_slugs_registered() -> None:
     assert "swebench-smoke-worker" in WORKERS
     assert "swebench-smoke-leaf" in WORKERS
     assert "swebench-smoke-criterion" in EVALUATORS
+
+
+def test_smoke_benchmarks_are_test_owned() -> None:
+    import tests.e2e._fixtures  # noqa: F401
+    from ergon_builtins.registry import BENCHMARKS
+
+    for slug in ("researchrubrics", "minif2f", "swebench-verified"):
+        assert BENCHMARKS[slug].__module__.startswith("tests.e2e._fixtures")
