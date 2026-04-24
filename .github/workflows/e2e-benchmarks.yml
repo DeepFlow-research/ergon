@@ -61,7 +61,7 @@ jobs:
 
       - name: Install workspace dependencies
         run: |
-          pnpm install --frozen-lockfile
+          pnpm -C ergon-dashboard install --frozen-lockfile
           uv sync --frozen --all-packages
 
       - name: Start full stack
