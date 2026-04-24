@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 
 import pytest
 import pytest_asyncio
+from ergon_core.core.persistence.shared.db import ensure_db
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.settings import settings
 from inngest._internal import net as inngest_net
@@ -75,6 +76,8 @@ def _probe_tcp(host: str, port: int, timeout: float = 0.5) -> str | None:
 def pytest_sessionstart(session: pytest.Session) -> None:
     if os.environ.get("ERGON_SKIP_INFRA_CHECK") == "1":
         return
+
+    ensure_db()
 
     parsed = urlparse(settings.inngest_api_base_url)
     host = parsed.hostname or "localhost"
