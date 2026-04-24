@@ -82,7 +82,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
 
         async def publisher_sync() -> list[RunResourceView]:
             publisher = manager.publisher_for(
-                task_id=context.task_id,
+                task_id=self.task_id,
                 run_id=context.run_id,
                 task_execution_id=context.execution_id,
             )
