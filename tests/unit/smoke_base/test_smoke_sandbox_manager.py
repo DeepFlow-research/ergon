@@ -1,6 +1,46 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+
+from ergon_core.core.providers.sandbox.event_sink import SandboxEventSink
+
+
+class _RecordingSink(SandboxEventSink):
+    def __init__(self) -> None:
+        self.created: list[tuple[str, str]] = []
+        self.closed: list[tuple[str, str]] = []
+
+    async def sandbox_created(
+        self,
+        run_id: UUID,
+        task_id: UUID,
+        sandbox_id: str,
+        timeout_minutes: int,
+        template: str | None = None,
+    ) -> None:
+        self.created.append((str(run_id), sandbox_id))
+
+    async def sandbox_command(
+        self,
+        run_id: UUID,
+        task_id: UUID,
+        sandbox_id: str,
+        command: str,
+        stdout: str | None = None,
+        stderr: str | None = None,
+        exit_code: int | None = None,
+        duration_ms: int | None = None,
+    ) -> None:
+        return None
+
+    async def sandbox_closed(
+        self,
+        task_id: UUID,
+        sandbox_id: str,
+        reason: str,
+        run_id: UUID | None = None,
+    ) -> None:
+        self.closed.append((str(run_id), sandbox_id))
 
 
 @pytest.mark.asyncio
@@ -16,6 +56,38 @@ async def test_smoke_sandbox_manager_ignores_e2b_key(monkeypatch: pytest.MonkeyP
 
     assert sandbox_id.startswith("smoke-sandbox-")
     assert manager.get_sandbox(task_id) is await manager.reconnect(sandbox_id)
+
+
+@pytest.mark.asyncio
+async def test_static_teardown_closes_registered_smoke_sandbox() -> None:
+    from ergon_core.core.providers.sandbox.event_sink import NoopSandboxEventSink
+    from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+    from tests.e2e._fixtures.sandbox import SmokeSandboxManager
+
+    sink = _RecordingSink()
+    SmokeSandboxManager.set_event_sink(sink)
+    manager = SmokeSandboxManager()
+    run_id = uuid4()
+    task_id = uuid4()
+
+    try:
+        sandbox_id = await manager.create(task_id, run_id=run_id)
+
+        terminated = await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
+
+        assert terminated is True
+        assert manager.get_sandbox(task_id) is None
+        assert sink.closed == [(str(run_id), sandbox_id)]
+    finally:
+        SmokeSandboxManager.set_event_sink(NoopSandboxEventSink())
+        SmokeSandboxManager._sandboxes.pop(task_id, None)
+        SmokeSandboxManager._sandbox_ids.pop(locals().get("sandbox_id", ""), None)
+        tempdir = SmokeSandboxManager._tempdirs.pop(task_id, None)
+        if tempdir is not None:
+            tempdir.cleanup()
+        SmokeSandboxManager._run_ids.pop(task_id, None)
+        SmokeSandboxManager._display_task_ids.pop(task_id, None)
+        SmokeSandboxManager._sandbox_manager_classes.pop(task_id, None)
 
 
 def test_smoke_benchmarks_use_smoke_sandbox_manager(

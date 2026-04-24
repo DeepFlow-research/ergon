@@ -83,6 +83,7 @@ class BaseSandboxManager(ABC):
     _created_files_registry: dict[UUID, set[str]] = {}
     _run_ids: dict[UUID, UUID] = {}
     _display_task_ids: dict[UUID, UUID] = {}
+    _sandbox_manager_classes: dict[UUID, type["BaseSandboxManager"]] = {}
     _creation_locks: dict[UUID, asyncio.Lock] = {}
     _event_sink: SandboxEventSink = NoopSandboxEventSink()
 
@@ -334,6 +335,7 @@ if created:
             self._ensure_registries(sandbox_key)
             self._run_ids[sandbox_key] = run_id
             self._display_task_ids[sandbox_key] = display_task_id
+            self._sandbox_manager_classes[sandbox_key] = type(self)
 
             await self._event_sink.sandbox_created(
                 run_id=run_id,
@@ -486,6 +488,7 @@ if created:
             self._created_files_registry.pop(task_id, None)
             self._run_ids.pop(task_id, None)
             self._display_task_ids.pop(task_id, None)
+            self._sandbox_manager_classes.pop(task_id, None)
             return
 
         sandbox_id = sandbox.sandbox_id
@@ -501,6 +504,7 @@ if created:
             self._created_files_registry.pop(task_id, None)
             self._run_ids.pop(task_id, None)
             self._display_task_ids.pop(task_id, None)
+            self._sandbox_manager_classes.pop(task_id, None)
 
             await self._event_sink.sandbox_closed(
                 task_id=display_task_id,
@@ -521,6 +525,45 @@ if created:
     @staticmethod
     async def terminate_by_sandbox_id(sandbox_id: str) -> bool:
         """Terminate a sandbox directly by its E2B sandbox_id."""
+        for task_id, sandbox in list(BaseSandboxManager._sandboxes.items()):
+            if getattr(sandbox, "sandbox_id", None) != sandbox_id:
+                continue
+
+            manager_cls = BaseSandboxManager._sandbox_manager_classes.get(
+                task_id,
+                BaseSandboxManager,
+            )
+            display_task_id = BaseSandboxManager._display_task_ids.get(task_id, task_id)
+            run_id = BaseSandboxManager._run_ids.get(task_id)
+            try:
+                await sandbox.kill()
+            except Exception as e:  # slopcop: ignore[no-broad-except]
+                logger.warning("Error killing sandbox_id=%s: %s", sandbox_id, e)
+            finally:
+                BaseSandboxManager._sandboxes.pop(task_id, None)
+                BaseSandboxManager._file_registries.pop(task_id, None)
+                BaseSandboxManager._created_files_registry.pop(task_id, None)
+                BaseSandboxManager._run_ids.pop(task_id, None)
+                BaseSandboxManager._display_task_ids.pop(task_id, None)
+                BaseSandboxManager._sandbox_manager_classes.pop(task_id, None)
+
+                await manager_cls._event_sink.sandbox_closed(
+                    task_id=display_task_id,
+                    sandbox_id=sandbox_id,
+                    reason="completed",
+                    run_id=run_id,
+                )
+                await manager_cls._event_sink.sandbox_command(
+                    run_id=run_id or task_id,
+                    task_id=display_task_id,
+                    sandbox_id=sandbox_id,
+                    command="sandbox.closed: completed",
+                    stdout=f"sandbox_id={sandbox_id}",
+                    exit_code=0,
+                    duration_ms=0,
+                )
+            return True
+
         if AsyncSandbox is None:
             logger.warning(
                 "e2b_code_interpreter not installed; cannot terminate sandbox %s",

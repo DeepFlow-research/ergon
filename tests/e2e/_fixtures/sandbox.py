@@ -134,6 +134,7 @@ class SmokeSandboxManager(BaseSandboxManager):
         self._ensure_registries(sandbox_key)
         self._run_ids[sandbox_key] = run_id
         self._display_task_ids[sandbox_key] = display_task_id
+        self._sandbox_manager_classes[sandbox_key] = type(self)
 
         await self._event_sink.sandbox_created(
             run_id=run_id,
@@ -174,6 +175,7 @@ class SmokeSandboxManager(BaseSandboxManager):
         self._created_files_registry.pop(task_id, None)
         self._run_ids.pop(task_id, None)
         self._display_task_ids.pop(task_id, None)
+        self._sandbox_manager_classes.pop(task_id, None)
         tempdir = self._tempdirs.pop(task_id, None)
         if tempdir is not None:
             tempdir.cleanup()
