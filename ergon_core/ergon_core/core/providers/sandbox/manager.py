@@ -526,7 +526,7 @@ if created:
     async def terminate_by_sandbox_id(sandbox_id: str) -> bool:
         """Terminate a sandbox directly by its E2B sandbox_id."""
         for task_id, sandbox in list(BaseSandboxManager._sandboxes.items()):
-            if getattr(sandbox, "sandbox_id", None) != sandbox_id:
+            if sandbox.sandbox_id != sandbox_id:
                 continue
 
             manager_cls = BaseSandboxManager._sandbox_manager_classes.get(
