@@ -14,21 +14,16 @@ import subprocess
 from datetime import datetime, timezone
 
 import pytest
+from sqlmodel import select
+
+from ergon_core.core.persistence.shared.db import ensure_db, get_session
+from ergon_core.core.persistence.telemetry.models import RunRecord
 
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 
 
 def _latest_run_id_since(since: datetime) -> str:
     """Query the most recent RunRecord created at or after `since`."""
-    # reason: deferred to avoid DB + heavy builtins import at pytest-collect time
-    from sqlmodel import select
-
-    # reason: deferred to avoid DB + heavy builtins import at pytest-collect time
-    from ergon_core.core.persistence.shared.db import ensure_db, get_session
-
-    # reason: deferred to avoid DB + heavy builtins import at pytest-collect time
-    from ergon_core.core.persistence.telemetry.models import RunRecord
-
     ensure_db()
     with get_session() as session:
         stmt = (

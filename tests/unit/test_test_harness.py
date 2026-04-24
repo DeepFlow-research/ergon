@@ -7,6 +7,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from ergon_core.core.api.test_harness import get_session_dep, router
+
 
 class _NullSession:
     """Minimal session stub that returns no rows for any exec/get call.
@@ -47,9 +49,6 @@ def _build_app_with_harness(
         monkeypatch.delenv("TEST_HARNESS_SECRET", raising=False)
 
     if enabled:
-        # reason: import after env mutation so module-level gates see ENABLE_TEST_HARNESS=1
-        from ergon_core.core.api.test_harness import get_session_dep, router
-
         app.include_router(router)
         app.dependency_overrides[get_session_dep] = _null_session_factory
     return app

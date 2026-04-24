@@ -21,6 +21,7 @@ from uuid import uuid4
 import pytest
 
 from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
+from ergon_core.api.criterion_runtime import CommandResult
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
@@ -58,9 +59,6 @@ async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
     (``run_command``, ``write_file``); the concrete ``sandbox_manager``
     attribute is never touched.
     """
-    # reason: local import so the test doesn't pin a ``core`` symbol at module scope.
-    from ergon_core.api.criterion_runtime import CommandResult
-
     mock_runtime = MagicMock()
     mock_runtime.ensure_sandbox = AsyncMock()
     mock_runtime.write_file = AsyncMock()

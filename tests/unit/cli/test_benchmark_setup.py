@@ -4,9 +4,12 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import e2b
 import pytest
 
+import ergon_cli.commands.benchmark as _bench_mod
 from ergon_cli.commands.benchmark import setup_benchmark
+from ergon_core.core.settings import settings
 
 
 def _make_args(slug: str = "minif2f", *, force: bool = False):
@@ -49,12 +52,8 @@ def _patch_sdk(
     else:
         fake_template_cls.build.return_value = build_info or _FakeBuildInfo()
 
-    import e2b
-
     monkeypatch.setattr(e2b, "Template", fake_template_cls)
     # Also patch the already-imported name in the benchmark module.
-    import ergon_cli.commands.benchmark as _bench_mod
-
     monkeypatch.setattr(_bench_mod, "Template", fake_template_cls)
     return fake_template_cls
 
@@ -88,8 +87,6 @@ def test_error_scenarios(
     expected_message: str | None,
 ) -> None:
     if setup_env == "api_key_unset":
-        from ergon_core.core.settings import settings
-
         monkeypatch.setattr(settings, "e2b_api_key", "")
     else:
         monkeypatch.setenv("E2B_API_KEY", "test-key")
@@ -110,12 +107,9 @@ def test_error_scenarios(
 def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
-    # ``settings`` is a module-level singleton whose ``e2b_api_key`` was
-    # cached at import time — ``setenv`` alone doesn't propagate to it.
-    # Patch the attribute directly so these tests pass regardless of xdist
+    # ``settings`` is a module-level singleton — ``setenv`` alone doesn't propagate
+    # to it. Patch the attribute directly so these tests pass regardless of xdist
     # worker import ordering.
-    from ergon_core.core.settings import settings
-
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     fake = _patch_sdk(monkeypatch)
 
@@ -137,12 +131,6 @@ def test_idempotent_skip(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
 def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
-    # ``settings`` is a module-level singleton whose ``e2b_api_key`` was
-    # cached at import time — ``setenv`` alone doesn't propagate to it.
-    # Patch the attribute directly so these tests pass regardless of xdist
-    # worker import ordering.
-    from ergon_core.core.settings import settings
-
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     fake = _patch_sdk(monkeypatch)
 
@@ -164,12 +152,6 @@ def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
-    # ``settings`` is a module-level singleton whose ``e2b_api_key`` was
-    # cached at import time — ``setenv`` alone doesn't propagate to it.
-    # Patch the attribute directly so these tests pass regardless of xdist
-    # worker import ordering.
-    from ergon_core.core.settings import settings
-
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     _patch_sdk(monkeypatch)
 
@@ -194,12 +176,6 @@ def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
 def test_build_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
-    # ``settings`` is a module-level singleton whose ``e2b_api_key`` was
-    # cached at import time — ``setenv`` alone doesn't propagate to it.
-    # Patch the attribute directly so these tests pass regardless of xdist
-    # worker import ordering.
-    from ergon_core.core.settings import settings
-
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
     _patch_sdk(monkeypatch, raise_on_build=RuntimeError("simulated build failure"))
 

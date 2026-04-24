@@ -7,13 +7,21 @@ Also covers ``run_id`` / ``task_id`` resolution.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from sqlmodel import Session
 
+from ergon_core.api.criterion_runtime import CriterionRuntime
+from ergon_core.api.run_resource import RunResourceView
+from ergon_core.core.providers.sandbox.event_sink import (
+    DashboardEmitterSandboxEventSink,
+    NoopSandboxEventSink,
+)
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
     DefaultCriterionRuntime,
     ResourceNotFoundError,
@@ -55,8 +63,6 @@ class TestReadResource:
             "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
-            import asyncio
-
             result = asyncio.run(runtime.read_resource("patch"))
 
         assert result == b"hello-world"
@@ -74,8 +80,6 @@ class TestReadResource:
             "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
-            import asyncio
-
             with pytest.raises(ResourceNotFoundError, match="no_such_resource"):
                 asyncio.run(runtime.read_resource("no_such_resource"))
 
@@ -83,8 +87,6 @@ class TestReadResource:
 class TestListResources:
     def test_returns_dtos_newest_first(self) -> None:
         """list_resources maps ORM rows to RunResourceView DTOs."""
-        from ergon_core.api.run_resource import RunResourceView
-
         runtime = _make_runtime()
         mock_row = MagicMock()
 
@@ -100,8 +102,6 @@ class TestListResources:
             ),
             patch.object(RunResourceView, "from_row", return_value=MagicMock()) as mock_from_row,
         ):
-            import asyncio
-
             result = asyncio.run(runtime.list_resources())
 
         assert len(result) == 1
@@ -120,8 +120,6 @@ class TestListResources:
             "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
-            import asyncio
-
             result = asyncio.run(runtime.list_resources())
 
         assert result == []
@@ -130,8 +128,6 @@ class TestListResources:
 class TestDbReadSession:
     def test_returns_session(self) -> None:
         """db_read_session returns the session from get_session()."""
-        from sqlmodel import Session
-
         runtime = _make_runtime()
         with patch("ergon_core.core.runtime.evaluation.criterion_runtime.get_session") as mock_get:
             mock_get.return_value = MagicMock(spec=Session)
@@ -142,17 +138,11 @@ class TestDbReadSession:
 class TestEventSink:
     def test_returns_noop_by_default(self) -> None:
         """event_sink() returns a NoopSandboxEventSink when none was injected."""
-        from ergon_core.core.providers.sandbox.event_sink import NoopSandboxEventSink
-
         runtime = _make_runtime()
         assert isinstance(runtime.event_sink(), NoopSandboxEventSink)
 
     def test_returns_injected_sink(self) -> None:
         """event_sink() returns the sink passed at construction time."""
-        from ergon_core.core.providers.sandbox.event_sink import (
-            DashboardEmitterSandboxEventSink,
-        )
-
         emitter = MagicMock()
         sink = DashboardEmitterSandboxEventSink(emitter)
         runtime = _make_runtime(event_sink=sink)
@@ -200,8 +190,6 @@ class TestRunIdResolution:
 class TestCriterionRuntimeProtocolCompliance:
     def test_protocol_has_all_twelve_methods(self) -> None:
         """CriterionRuntime Protocol exposes all 12 expected method names."""
-        from ergon_core.api.criterion_runtime import CriterionRuntime
-
         expected = {
             "ensure_sandbox",
             "upload_files",

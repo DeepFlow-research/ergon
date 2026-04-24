@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from ergon_builtins.registry_core import BENCHMARKS as CORE_BENCHMARKS
+from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 
 
@@ -12,9 +14,7 @@ class TestBenchmarkOnboardingDepsContract:
     """Every benchmark in both registries must declare onboarding_deps."""
 
     def test_core_benchmarks_have_onboarding_deps(self) -> None:
-        from ergon_builtins.registry_core import BENCHMARKS
-
-        for slug, cls in BENCHMARKS.items():
+        for slug, cls in CORE_BENCHMARKS.items():
             assert hasattr(cls, "onboarding_deps"), (
                 f"Benchmark '{slug}' ({cls.__qualname__}) is missing 'onboarding_deps'. "
                 f"Add 'onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(...)' "
@@ -37,26 +37,20 @@ class TestBenchmarkOnboardingDepsContract:
 
     def test_onboarding_deps_is_frozen(self) -> None:
         """BenchmarkDeps instances must be immutable (frozen=True via attribute access)."""
-        from ergon_builtins.registry_core import BENCHMARKS
-
-        for slug, cls in BENCHMARKS.items():
+        for slug, cls in CORE_BENCHMARKS.items():
             deps = cls.onboarding_deps
             with pytest.raises(ValidationError):
                 deps.e2b = not deps.e2b  # type: ignore[misc]
 
     def test_known_e2b_benchmarks(self) -> None:
-        from ergon_builtins.registry_core import BENCHMARKS
-
         # ``smoke-test`` and ``researchrubrics-smoke`` benchmarks retired
         # alongside the canonical-smoke refactor.
-        assert BENCHMARKS["minif2f"].onboarding_deps.e2b is True
-        assert BENCHMARKS["swebench-verified"].onboarding_deps.e2b is True
+        assert CORE_BENCHMARKS["minif2f"].onboarding_deps.e2b is True
+        assert CORE_BENCHMARKS["swebench-verified"].onboarding_deps.e2b is True
 
 
 class TestBenchmarkSubclassEnforcement:
     def test_missing_onboarding_deps_raises_at_class_definition(self) -> None:
-        from ergon_core.api.benchmark import Benchmark
-
         with pytest.raises(TypeError, match="onboarding_deps"):
 
             class BadBenchmark(Benchmark):
@@ -66,9 +60,6 @@ class TestBenchmarkSubclassEnforcement:
                     return {}
 
     def test_valid_declaration_does_not_raise(self) -> None:
-        from ergon_core.api.benchmark import Benchmark
-        from ergon_core.api.benchmark_deps import BenchmarkDeps
-
         class GoodBenchmark(Benchmark):
             type_slug = "good-test"
             onboarding_deps = BenchmarkDeps()

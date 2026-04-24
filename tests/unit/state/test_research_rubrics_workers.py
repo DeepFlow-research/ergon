@@ -10,6 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from ergon_builtins.workers.research_rubrics.researcher_worker import (
+    ResearchRubricsResearcherWorker,
+)
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
@@ -45,11 +48,7 @@ def _make_task() -> BenchmarkTask:
 
 class TestResearcherWorker:
     def test_instantiates_with_correct_slug(self):
-        from ergon_builtins.workers.research_rubrics.researcher_worker import (
-            ResearchRubricsResearcherWorker,
-        )
-
-        # reason: RFC 2026-04-22 §1 — Worker base requires task_id /
+        # RFC 2026-04-22 §1 — Worker base requires task_id /
         # sandbox_id; execute() isn't called here so placeholders suffice.
         worker = ResearchRubricsResearcherWorker(
             name="test-researcher",
@@ -62,10 +61,6 @@ class TestResearcherWorker:
 
     @pytest.mark.asyncio
     async def test_execute_builds_tools(self):
-        from ergon_builtins.workers.research_rubrics.researcher_worker import (
-            ResearchRubricsResearcherWorker,
-        )
-
         context = _make_context()
         worker = ResearchRubricsResearcherWorker(
             name="test-researcher",

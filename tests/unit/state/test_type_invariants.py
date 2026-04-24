@@ -8,6 +8,7 @@ is empty as a result; see the inline comment for details.
 """
 
 import pytest
+from pydantic import ValidationError
 from uuid import uuid4
 
 from ergon_core.core.persistence.graph.models import (
@@ -257,7 +258,5 @@ def test_invalid_field_value_rejected_via_model_validate(
     Note: SQLModel table=True models bypass Pydantic validators on direct
     construction. Use model_validate() to trigger the AfterValidators.
     """
-    from pydantic import ValidationError
-
     with pytest.raises(ValidationError):
         cls.model_validate({**base_data, invalid_field: invalid_value})
