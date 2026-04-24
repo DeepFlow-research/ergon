@@ -25,6 +25,11 @@ git config user.email "github-actions[bot]@users.noreply.github.com"
 # Move to repo root so relative paths work regardless of where the
 # script is invoked.
 cd "$(git rev-parse --show-toplevel)"
+original_head="$(git rev-parse --verify HEAD)"
+restore_checkout() {
+  git checkout --force "$original_head" >/dev/null 2>&1 || true
+}
+trap restore_checkout EXIT
 
 # Fetch or init the screenshots branch.
 if git ls-remote --heads origin "$branch" | grep -q "$branch"; then
