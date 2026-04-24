@@ -456,6 +456,20 @@ def _assert_sadpath_evaluation(run_id: UUID) -> None:
 
 async def wait_for_terminal(run_id: UUID, timeout_seconds: int = 270) -> str:
     """Poll the harness read endpoint until the run reaches a terminal state."""
+    return await wait_for_terminal_status(
+        run_id,
+        expected_statuses=frozenset({"completed"}),
+        timeout_seconds=timeout_seconds,
+    )
+
+
+async def wait_for_terminal_status(
+    run_id: UUID,
+    *,
+    expected_statuses: frozenset[str],
+    timeout_seconds: int = 270,
+) -> str:
+    """Poll until the run reaches one of the expected terminal statuses."""
     api_base = os.environ["ERGON_API_BASE_URL"]
     secret = os.environ["TEST_HARNESS_SECRET"]
     deadline = time.monotonic() + timeout_seconds
@@ -470,7 +484,7 @@ async def wait_for_terminal(run_id: UUID, timeout_seconds: int = 270) -> str:
                 state = r.json()
                 last_state = state
                 status = state["status"]
-                if status == "completed":
+                if status in expected_statuses:
                     return status
                 if status in TERMINAL_STATUSES:
                     raise AssertionError(

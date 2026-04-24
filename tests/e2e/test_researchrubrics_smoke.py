@@ -44,6 +44,7 @@ from tests.e2e._asserts import (
     _assert_temporal_ordering,
     _assert_thread_messages_ordered,
     wait_for_terminal,
+    wait_for_terminal_status,
 )
 from tests.e2e._submit import submit_cohort
 
@@ -99,7 +100,16 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
 
     # ── Phase 2: wait for terminal state ──────────────────────────────
     await asyncio.gather(
-        *(wait_for_terminal(rid, timeout_seconds=PER_RUN_TIMEOUT) for rid in run_ids),
+        *(
+            wait_for_terminal(rid, timeout_seconds=PER_RUN_TIMEOUT)
+            if slot.kind == "happy"
+            else wait_for_terminal_status(
+                rid,
+                expected_statuses=frozenset({"failed"}),
+                timeout_seconds=PER_RUN_TIMEOUT,
+            )
+            for slot, rid in slotted
+        ),
     )
 
     # ── Phase 3: per-run assertions (dispatched on kind) ──────────────
