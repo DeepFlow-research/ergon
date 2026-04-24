@@ -13,6 +13,7 @@ up BLOCKED/CANCELLED, diamond + singletons stay COMPLETED.
 from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+from ergon_core.api import WorkerContext
 
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.core.runtime.services.task_management_dto import SubtaskSpec
@@ -23,10 +24,10 @@ from tests.e2e._fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 
 class AlwaysFailSubworker:
-    """Does TWO units of real work, then raises.
+    """Does TWO units of real work, then returns a failing probe result.
 
     Proves the partial-work-persists-on-failure path.  When the leaf
-    fails mid-execution:
+    fails after partial work:
 
       1. The partial file we wrote to ``/workspace/final_output/`` still
          becomes a ``RunResource`` row (the runtime's persist step runs
@@ -34,9 +35,9 @@ class AlwaysFailSubworker:
       2. The sandbox command we already ran still emits a
          ``sandbox_command`` event / WAL entry (the command path writes
          synchronously, before our raise).
-      3. The leaf's task row ends up FAILED because we RAISE (not just
-         return an exit_code=1) so the exception propagates through
-         ``BaseSmokeLeafWorker.execute``.
+      3. The leaf's task row ends up FAILED because we return
+         ``probe_exit_code=1``; this keeps normal output persistence alive
+         while still failing the task.
       4. Downstream static sibling ``l_3`` ends up BLOCKED/CANCELLED
          per RFC ``static-sibling-failure-semantics``.
     """
@@ -65,14 +66,17 @@ class AlwaysFailSubworker:
                 "assumes partial work completes cleanly before the raise.",
             )
 
-        # Action 3: deliberate failure.  Raises instead of returning
-        # exit_code=1 so the task row is marked FAILED (not merely emits a
-        # failed ``WorkerOutput``).
-        raise RuntimeError(
-            f"SmokeSadPathError: deliberate failure of {node_id} after "
-            f"writing {partial_path} and running probe "
-            f"(exit={pre_check.exit_code}). Smoke asserts the partial file + "
-            "probe WAL survive.",
+        # Action 3: deliberate failure via WorkerOutput.success=False.  This
+        # exercises the failed-task path without bypassing output persistence.
+        return SubworkerResult(
+            file_path=partial_path,
+            probe_stdout=(
+                f"SmokeSadPathError: deliberate failure of {node_id} after "
+                f"writing {partial_path} and running probe "
+                f"(exit={pre_check.exit_code}). Smoke asserts the partial file + "
+                "probe WAL survive."
+            ),
+            probe_exit_code=1,
         )
 
 
@@ -81,6 +85,14 @@ class ResearchRubricsFailingLeafWorker(BaseSmokeLeafWorker):
 
     type_slug = "researchrubrics-smoke-leaf-failing"
     subworker_cls = AlwaysFailSubworker  # type: ignore[assignment]
+
+    async def _send_completion_message(
+        self,
+        context: WorkerContext,
+        result: SubworkerResult,
+    ) -> None:
+        """Preserve sad-path invariant: failed l_2 does not report completion."""
+        return None
 
 
 class ResearchRubricsSadPathSmokeWorker(SmokeWorkerBase):
