@@ -24,14 +24,12 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TextPart
 from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.providers.sandbox.instrumentation import InstrumentedSandbox
-from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.settings import settings
 from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
 from ergon_core.core.runtime.services.communication_service import (
@@ -39,6 +37,7 @@ from ergon_core.core.runtime.services.communication_service import (
 )
 
 from tests.e2e._fixtures.smoke_base.subworker import SmokeSubworker, SubworkerResult
+from tests.e2e._fixtures.sandbox import SmokeSandboxManager
 
 
 class BaseSmokeLeafWorker(Worker):
@@ -85,10 +84,10 @@ class BaseSmokeLeafWorker(Worker):
             ],
         )
 
-        raw_sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
+        raw_sandbox = await SmokeSandboxManager().reconnect(context.sandbox_id)
         sandbox = InstrumentedSandbox(
             raw_sandbox,
-            DefaultSandboxManager._event_sink,
+            SmokeSandboxManager._event_sink,
             context.run_id,
             context.node_id or context.execution_id,
             settings.otel_stdout_stderr_max_length,

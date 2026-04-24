@@ -65,7 +65,7 @@ def test_smoke_benchmarks_are_test_owned_when_harness_enabled(
 ) -> None:
     from tests.e2e._fixtures import register_smoke_fixtures
     from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
-    from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
+    from tests.e2e._fixtures.sandbox import SmokeSandboxManager
 
     slugs = ("researchrubrics", "minif2f", "swebench-verified")
     original_benchmarks = {slug: BENCHMARKS[slug] for slug in slugs}
@@ -76,7 +76,7 @@ def test_smoke_benchmarks_are_test_owned_when_harness_enabled(
         register_smoke_fixtures()
         for slug in slugs:
             assert BENCHMARKS[slug].__module__.startswith("tests.e2e._fixtures")
-            assert SANDBOX_MANAGERS[slug] is DefaultSandboxManager
+            assert SANDBOX_MANAGERS[slug] is SmokeSandboxManager
     finally:
         BENCHMARKS.update(original_benchmarks)
         for slug, manager_cls in original_managers.items():

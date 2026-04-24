@@ -15,7 +15,6 @@ See docs/superpowers/plans/test-refactor/01-fixtures.md §2.7.
 import os
 
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, SANDBOX_MANAGERS, WORKERS
-from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 
 from tests.e2e._fixtures.benchmarks import (
     MiniF2FSmokeBenchmark,
@@ -27,6 +26,7 @@ from tests.e2e._fixtures.criteria.smoke_rubrics import (
     ResearchRubricsSmokeRubric,
     SweBenchSmokeRubric,
 )
+from tests.e2e._fixtures.sandbox import SmokeSandboxManager
 from tests.e2e._fixtures.workers.minif2f_smoke import (
     MiniF2FSmokeLeafWorker,
     MiniF2FSmokeWorker,
@@ -65,9 +65,9 @@ def register_smoke_fixtures() -> None:
         BENCHMARKS[ResearchRubricsSmokeBenchmark.type_slug] = ResearchRubricsSmokeBenchmark
         BENCHMARKS[MiniF2FSmokeBenchmark.type_slug] = MiniF2FSmokeBenchmark
         BENCHMARKS[SweBenchSmokeBenchmark.type_slug] = SweBenchSmokeBenchmark
-        SANDBOX_MANAGERS[ResearchRubricsSmokeBenchmark.type_slug] = DefaultSandboxManager
-        SANDBOX_MANAGERS[MiniF2FSmokeBenchmark.type_slug] = DefaultSandboxManager
-        SANDBOX_MANAGERS[SweBenchSmokeBenchmark.type_slug] = DefaultSandboxManager
+        SANDBOX_MANAGERS[ResearchRubricsSmokeBenchmark.type_slug] = SmokeSandboxManager
+        SANDBOX_MANAGERS[MiniF2FSmokeBenchmark.type_slug] = SmokeSandboxManager
+        SANDBOX_MANAGERS[SweBenchSmokeBenchmark.type_slug] = SmokeSandboxManager
 
     # ResearchRubrics happy-path
     WORKERS[ResearchRubricsSmokeWorker.type_slug] = ResearchRubricsSmokeWorker
