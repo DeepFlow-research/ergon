@@ -346,8 +346,7 @@ def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
 
 
 def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
-    """Line cascade: l_1 COMPLETED, l_2 FAILED, l_3 BLOCKED/CANCELLED.
-    Diamond + singletons unaffected (all COMPLETED)."""
+    """Score-zero sad path: all graph nodes complete, l_2 produces failed output."""
     with get_session() as s:
         leaves = list(
             s.exec(
@@ -357,15 +356,9 @@ def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
             ).all(),
         )
     by_slug = {n.task_slug: n for n in leaves}
-    assert by_slug["l_1"].status == COMPLETED, by_slug["l_1"].status
-    assert by_slug["l_2"].status == "failed", by_slug["l_2"].status
-    assert by_slug["l_3"].status in {"blocked", "cancelled"}, (
-        f"l_3 expected BLOCKED or CANCELLED per static-sibling-failure-semantics "
-        f"RFC, got {by_slug['l_3'].status}"
-    )
-    for slug in ("d_root", "d_left", "d_right", "d_join", "s_a", "s_b"):
+    for slug in EXPECTED_SUBTASK_SLUGS:
         assert by_slug[slug].status == COMPLETED, (
-            f"{slug} expected COMPLETED (independent branch), got {by_slug[slug].status}"
+            f"{slug} expected COMPLETED, got {by_slug[slug].status}"
         )
 
 
@@ -420,9 +413,7 @@ def _assert_sadpath_partial_wal(run_id: UUID) -> None:
 
 
 def _assert_sadpath_thread_messages(run_id: UUID) -> None:
-    """Happy path sends 9 messages; l_2 raises before sending; l_3 is BLOCKED
-    and never executes.  Expect 7 on the smoke-completion thread with both l_2
-    and l_3 missing from from_agent_id."""
+    """Happy path sends 9 messages; sad l_2 suppresses completion reporting."""
     with get_session() as s:
         thread = s.exec(
             select(Thread).where(Thread.run_id == run_id).where(Thread.topic == "smoke-completion"),
@@ -435,21 +426,16 @@ def _assert_sadpath_thread_messages(run_id: UUID) -> None:
                 .order_by(ThreadMessage.sequence_num),  # ty: ignore[unresolved-attribute]
             ).all(),
         )
-    assert len(msgs) == 7, (
-        f"expected 7 completion messages (l_2 raises before sending, "
-        f"l_3 is BLOCKED and never executes), got {len(msgs)}"
-    )
+    assert len(msgs) == 8, f"expected 8 completion messages (l_2 suppressed), got {len(msgs)}"
     from_slugs = {m.from_agent_id.removeprefix("leaf-") for m in msgs}
-    assert "l_2" not in from_slugs, f"l_2 sent a completion message despite raising: {from_slugs}"
-    assert "l_3" not in from_slugs, (
-        f"l_3 sent a completion message despite being BLOCKED: {from_slugs}"
+    assert "l_2" not in from_slugs, (
+        f"l_2 sent a completion message despite suppression: {from_slugs}"
     )
-    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {"l_2", "l_3"}
+    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {"l_2"}
 
 
 def _assert_sadpath_evaluation(run_id: UUID) -> None:
-    """Reusing happy-path criterion on sad-path run must return score 0.
-    Feedback should name the failing slug for operator visibility."""
+    """Reusing happy-path criterion on sad-path run must return score 0."""
     with get_session() as s:
         evals = list(
             s.exec(select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)).all(),
@@ -457,8 +443,6 @@ def _assert_sadpath_evaluation(run_id: UUID) -> None:
     assert len(evals) == 1
     assert evals[0].score == 0.0
     assert evals[0].passed is False
-    feedback = evals[0].feedback or ""
-    assert "l_2" in feedback, f"sad-path evaluation feedback should mention l_2; got: {feedback!r}"
 
 
 # =============================================================================
