@@ -107,17 +107,17 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
           return;
         }
 
-        // sad-path run assertions (researchrubrics-only today)
-        expect(state.status).toBe("failed");
+        // sad-path run assertions (researchrubrics-only today). A failed leaf
+        // returns score-zero output so persistence still runs.
+        expect(state.status).toBe("completed");
         const statusBySlug = new Map(
           state.graph_nodes.filter((n) => n.level > 0).map((n) => [n.task_slug, n.status]),
         );
-        expect(statusBySlug.get("l_1")).toBe("completed");
-        expect(statusBySlug.get("l_2")).toBe("failed");
-        expect(["blocked", "cancelled"]).toContain(statusBySlug.get("l_3") ?? "");
-        for (const slug of ["d_root", "d_left", "d_right", "d_join", "s_a", "s_b"]) {
+        for (const slug of EXPECTED_SUBTASK_SLUGS) {
           expect(statusBySlug.get(slug)).toBe("completed");
         }
+        const failedEval = state.evaluations.some((e) => e.score === 0.0);
+        expect(failedEval).toBe(true);
 
         await page.goto(`/run/${run_id}`);
         await expect(page.getByTestId("graph-canvas")).toBeVisible();
