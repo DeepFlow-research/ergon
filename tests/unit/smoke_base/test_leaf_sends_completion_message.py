@@ -112,10 +112,10 @@ async def test_send_completion_message_not_called_when_subworker_raises(
         "tests.e2e._fixtures.smoke_base.leaf_base.communication_service.save_message",
         save_mock,
     )
-    # Mock AsyncSandbox.connect so execute() doesn't need a real sandbox
+    # Mock sandbox reconnect so execute() doesn't need a real sandbox.
     monkeypatch.setattr(
-        "tests.e2e._fixtures.smoke_base.leaf_base.AsyncSandbox",
-        MagicMock(connect=AsyncMock(return_value=MagicMock())),
+        "tests.e2e._fixtures.smoke_base.leaf_base.SmokeSandboxManager.reconnect",
+        AsyncMock(return_value=MagicMock(sandbox_id="smoke-sandbox-unit")),
     )
 
     class _FailingSubworker:

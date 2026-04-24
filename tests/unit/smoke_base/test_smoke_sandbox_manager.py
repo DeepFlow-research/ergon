@@ -28,13 +28,14 @@ def test_smoke_benchmarks_use_smoke_sandbox_manager(
         SweBenchSmokeBenchmark,
     )
     from tests.e2e._fixtures.sandbox import SmokeSandboxManager
-    from ergon_builtins.registry import SANDBOX_MANAGERS
+    from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
 
     slugs = (
         ResearchRubricsSmokeBenchmark.type_slug,
         MiniF2FSmokeBenchmark.type_slug,
         SweBenchSmokeBenchmark.type_slug,
     )
+    original_benchmarks = {slug: BENCHMARKS[slug] for slug in slugs}
     original_managers = {slug: SANDBOX_MANAGERS.get(slug) for slug in slugs}
     monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
 
@@ -43,6 +44,7 @@ def test_smoke_benchmarks_use_smoke_sandbox_manager(
         for slug in slugs:
             assert SANDBOX_MANAGERS[slug] is SmokeSandboxManager
     finally:
+        BENCHMARKS.update(original_benchmarks)
         for slug, manager_cls in original_managers.items():
             if manager_cls is None:
                 SANDBOX_MANAGERS.pop(slug, None)
