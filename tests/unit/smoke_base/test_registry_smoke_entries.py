@@ -60,7 +60,9 @@ def test_swebench_slugs_registered() -> None:
     assert "swebench-smoke-criterion" in EVALUATORS
 
 
-def test_smoke_benchmarks_are_test_owned_when_harness_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_smoke_benchmarks_are_test_owned_when_harness_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from tests.e2e._fixtures import register_smoke_fixtures
     from ergon_builtins.registry import BENCHMARKS
 
