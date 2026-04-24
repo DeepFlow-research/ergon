@@ -60,9 +60,17 @@ def test_swebench_slugs_registered() -> None:
     assert "swebench-smoke-criterion" in EVALUATORS
 
 
-def test_smoke_benchmarks_are_test_owned() -> None:
-    import tests.e2e._fixtures  # noqa: F401
+def test_smoke_benchmarks_are_test_owned_when_harness_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.e2e._fixtures import register_smoke_fixtures
     from ergon_builtins.registry import BENCHMARKS
 
-    for slug in ("researchrubrics", "minif2f", "swebench-verified"):
-        assert BENCHMARKS[slug].__module__.startswith("tests.e2e._fixtures")
+    slugs = ("researchrubrics", "minif2f", "swebench-verified")
+    originals = {slug: BENCHMARKS[slug] for slug in slugs}
+    monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
+
+    try:
+        register_smoke_fixtures()
+        for slug in slugs:
+            assert BENCHMARKS[slug].__module__.startswith("tests.e2e._fixtures")
+    finally:
+        BENCHMARKS.update(originals)
