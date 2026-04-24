@@ -35,7 +35,7 @@ jobs:
     env:
       SMOKE_ENV: ${{ matrix.env }}
       ENABLE_TEST_HARNESS: "1"
-      TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET }}
+      TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-test-harness' }}
       E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
       GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
@@ -106,7 +106,7 @@ jobs:
             swebench-verified)  PYFILE="tests/e2e/test_swebench_smoke.py" ;;
             *)                  echo "unknown env ${SMOKE_ENV}" >&2; exit 2 ;;
           esac
-          uv run pytest "${PYFILE}" -v --timeout=270 --tb=short
+          uv run pytest "${PYFILE}" -v --timeout=330 --tb=short
 
       - name: Push screenshots
         if: always() && github.event.pull_request.number

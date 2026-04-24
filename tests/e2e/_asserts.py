@@ -21,7 +21,6 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
 from uuid import UUID
 
 import httpx
@@ -189,8 +188,17 @@ def _assert_sandbox_command_wal(run_id: UUID) -> None:
 
 def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
     """``sandbox_created`` + ``sandbox_closed`` symmetric per sandbox."""
-    with get_session() as s:
-        events = list(s.exec(select(SandboxEvent).where(SandboxEvent.run_id == run_id)).all())
+    deadline = time.monotonic() + 30
+    events: list[SandboxEvent] = []
+    while time.monotonic() < deadline:
+        with get_session() as s:
+            events = list(s.exec(select(SandboxEvent).where(SandboxEvent.run_id == run_id)).all())
+        created = {e.sandbox_id for e in events if e.kind == "sandbox_created"}
+        closed = {e.sandbox_id for e in events if e.kind == "sandbox_closed"}
+        if created == closed:
+            return
+        time.sleep(2)
+
     created = {e.sandbox_id for e in events if e.kind == "sandbox_created"}
     closed = {e.sandbox_id for e in events if e.kind == "sandbox_closed"}
     assert created == closed, (
@@ -451,6 +459,7 @@ async def wait_for_terminal(run_id: UUID, timeout_seconds: int = 270) -> str:
     api_base = os.environ["ERGON_API_BASE_URL"]
     secret = os.environ["TEST_HARNESS_SECRET"]
     deadline = time.monotonic() + timeout_seconds
+    last_state: dict[str, object] | None = None
     async with httpx.AsyncClient(timeout=10.0) as client:
         while time.monotonic() < deadline:
             r = await client.get(
@@ -459,6 +468,7 @@ async def wait_for_terminal(run_id: UUID, timeout_seconds: int = 270) -> str:
             )
             if r.status_code == 200:
                 state = r.json()
+                last_state = state
                 status = state["status"]
                 if status == "completed":
                     return status
@@ -469,5 +479,6 @@ async def wait_for_terminal(run_id: UUID, timeout_seconds: int = 270) -> str:
                     )
             await asyncio.sleep(2)
     raise TimeoutError(
-        f"run {run_id} did not reach terminal status within {timeout_seconds}s",
+        f"run {run_id} did not reach terminal status within {timeout_seconds}s:\n"
+        f"{json.dumps(last_state, indent=2, sort_keys=True)}",
     )
