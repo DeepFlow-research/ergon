@@ -1,6 +1,5 @@
 """Tests for SWEBenchTestCriterion."""
 
-import shlex
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -59,8 +58,7 @@ def _mock_runtime(
     runtime.write_file = AsyncMock()
 
     async def _dispatch(cmd: str, timeout: int = 30) -> CommandResult:
-        parts = shlex.split(cmd)
-        if parts[:3] == ["git", "diff", "HEAD"]:
+        if "git diff HEAD" in cmd:
             return CommandResult(stdout=patch_text, stderr="", exit_code=patch_exit_code)
         if "install" in cmd.lower() or "INSTALL" in cmd:
             return CommandResult(stdout=eval_stdout, stderr="", exit_code=install_exit_code)
