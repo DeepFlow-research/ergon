@@ -93,6 +93,12 @@ services:
       # container only reaches into that one subpackage, host-side
       # pytest is still the test orchestrator.
       - PYTHONPATH=/app
+      # Unbuffered Python stdio so ``docker compose logs api`` streams
+      # logger output as it happens.  Default (buffered) hides
+      # exceptions behind the uvicorn worker's output queue for many
+      # seconds, turning any "why is this stuck" investigation into a
+      # long stare at stale logs.
+      - PYTHONUNBUFFERED=1
     volumes:
       # Source mounts: support ``--reload`` in dev.  Harmless in CI —
       # the same source is on the runner's filesystem from ``checkout``.
@@ -118,6 +124,7 @@ services:
       --host 0.0.0.0 --port 9000 --reload
       --reload-dir /app/ergon_core
       --reload-dir /app/ergon_builtins
+      --timeout-graceful-shutdown 30
 
   dashboard:
     build:
