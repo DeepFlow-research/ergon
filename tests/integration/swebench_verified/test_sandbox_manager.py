@@ -124,6 +124,16 @@ async def test_create_threads_template_kwarg_to_e2b_sdk(
         "test-key",
     )
 
+    # make_test_spec does a live lookup against swebench's internal fixture
+    # data; stub it so the fake payload doesn't trigger "commit not found".
+    fake_spec = MagicMock()
+    fake_spec.setup_env_script = "echo setup"
+    fake_spec.install_repo_script = "echo install"
+    monkeypatch.setattr(
+        "ergon_builtins.benchmarks.swebench_verified.sandbox_manager.make_test_spec",
+        MagicMock(return_value=fake_spec),
+    )
+
     mgr = SWEBenchSandboxManager()
     assert mgr.template == "tmpl_pin_sw"
 
@@ -176,6 +186,14 @@ async def test_verify_setup_raises_when_git_missing(
     monkeypatch.setattr(
         "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
         "test-key",
+    )
+
+    fake_spec = MagicMock()
+    fake_spec.setup_env_script = "echo setup"
+    fake_spec.install_repo_script = "echo install"
+    monkeypatch.setattr(
+        "ergon_builtins.benchmarks.swebench_verified.sandbox_manager.make_test_spec",
+        MagicMock(return_value=fake_spec),
     )
 
     mgr = SWEBenchSandboxManager()
