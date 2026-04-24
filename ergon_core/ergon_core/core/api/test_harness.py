@@ -29,6 +29,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
     RunTaskEvaluation,
+    RunTaskExecution,
 )
 from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -64,12 +65,19 @@ class TestGraphMutationDto(BaseModel):
     target_task_slug: str | None
 
 
+class TestExecutionDto(BaseModel):
+    task_slug: str | None
+    status: str
+    error: str | None
+
+
 class TestRunStateDto(BaseModel):
     run_id: UUID
     status: str
     graph_nodes: list[TestGraphNodeDto]
     mutations: list[TestGraphMutationDto]
     evaluations: list[TestEvaluationDto]
+    executions: list[TestExecutionDto]
     resource_count: int
 
 
@@ -115,6 +123,17 @@ def _require_secret(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
+def _execution_error_message(execution: RunTaskExecution) -> str | None:
+    error = execution.parsed_error()
+    if error is None:
+        return None
+    for key in ("message", "error", "detail"):
+        value = error.get(key)
+        if isinstance(value, str):
+            return value
+    return str(error)
+
+
 # ---------------------------------------------------------------------------
 # Read endpoint
 # ---------------------------------------------------------------------------
@@ -146,7 +165,7 @@ def read_run_state(
         session.exec(
             select(RunGraphMutation)
             .where(RunGraphMutation.run_id == run_id)
-            .order_by(RunGraphMutation.sequence)
+            .order_by(RunGraphMutation.sequence)  # ty: ignore[invalid-argument-type]
         ).all()
     )
     mutations = [
@@ -169,6 +188,18 @@ def read_run_state(
         for ev in eval_rows
     ]
 
+    execution_rows = list(
+        session.exec(select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)).all()
+    )
+    executions = [
+        TestExecutionDto(
+            task_slug=slug_by_node_id.get(ex.node_id) if ex.node_id else None,
+            status=ex.status,
+            error=_execution_error_message(ex),
+        )
+        for ex in execution_rows
+    ]
+
     resource_count = len(
         list(session.exec(select(RunResource).where(RunResource.run_id == run_id)).all())
     )
@@ -181,6 +212,7 @@ def read_run_state(
         graph_nodes=graph_nodes,
         mutations=mutations,
         evaluations=evaluations,
+        executions=executions,
         resource_count=resource_count,
     )
 
