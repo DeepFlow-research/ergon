@@ -5,7 +5,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import ClassVar, Protocol, runtime_checkable
 from uuid import UUID
 
 from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
@@ -67,6 +67,15 @@ class BaseSandboxManager(ABC):
     # this (or set it on the instance in __init__) to point at their benchmark
     # image — e.g. MiniF2FSandboxManager uses "ergon-minif2f-v1".
     template: str | None = None
+
+    # Environment variables that in-sandbox tools for this benchmark read.
+    # Each entry is the env-var name as it should appear inside the sandbox
+    # (e.g. ``"EXA_API_KEY"``); its value is sourced from the matching
+    # lowercase attribute on ``settings`` (e.g. ``settings.exa_api_key``).
+    # Subclasses override to declare their in-sandbox auth requirements;
+    # ``create()`` merges them into the ``envs`` dict threaded to
+    # ``AsyncSandbox.create``.
+    required_env_keys: ClassVar[tuple[str, ...]] = ()
 
     _instance: "BaseSandboxManager | None" = None
     _sandboxes: dict[UUID, "AsyncSandbox"] = {}
@@ -237,6 +246,32 @@ if created:
             content = py_file.read_bytes()
             await sandbox.files.write(remote_path, content)
 
+    def _compose_envs(self, user_envs: dict[str, str] | None) -> dict[str, str]:
+        """Merge caller-supplied envs with settings-sourced ``required_env_keys``.
+
+        For each name in ``required_env_keys``, read the matching lowercase
+        attribute on ``settings`` (e.g. ``"EXA_API_KEY"`` →
+        ``settings.exa_api_key``). A missing value (empty string / None)
+        raises ``ValueError`` so a misconfigured sandbox fails at
+        ``create()`` time rather than silently provisioning a sandbox whose
+        in-sandbox tools will 401 on every call. Caller-supplied entries
+        take precedence so tests can override individual keys.
+        """
+        composed: dict[str, str] = {}
+        for key in self.required_env_keys:
+            value = getattr(settings, key.lower(), "")  # slopcop: ignore[no-hasattr-getattr]
+            if not value:
+                raise ValueError(
+                    f"{key} is required for "
+                    f"{type(self).__name__} sandbox provisioning but is not set "
+                    f"on settings (attribute '{key.lower()}'). Set it in your "
+                    f".env or environment before creating the sandbox."
+                )
+            composed[key] = value
+        if user_envs:
+            composed.update(user_envs)
+        return composed
+
     @abstractmethod
     async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None: ...
 
@@ -270,14 +305,20 @@ if created:
                     "Please set E2B_API_KEY in your .env file or environment variables."
                 )
 
+            # Pre-flight env composition outside the SDK try/except so the
+            # ValueError from a missing required key propagates cleanly
+            # instead of being re-wrapped as a "sandbox creation failed"
+            # RuntimeError.
+            composed_envs = self._compose_envs(envs)
+
             try:
                 timeout_seconds = timeout_minutes * 60
                 create_kwargs: dict[str, str | int] = {
                     "api_key": settings.e2b_api_key,
                     "timeout": timeout_seconds,
                 }
-                if envs:
-                    create_kwargs["envs"] = envs
+                if composed_envs:
+                    create_kwargs["envs"] = composed_envs  # ty: ignore[invalid-assignment]
                 if self.template:
                     create_kwargs["template"] = self.template
                 sandbox = await AsyncSandbox.create(**create_kwargs)

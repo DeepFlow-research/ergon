@@ -38,13 +38,21 @@ class ResearchRubricsSandboxManager(BaseSandboxManager):
 
     One ``AsyncSandbox`` per root task.  ``exa-py`` is installed and the
     workspace directory tree is scaffolded at ``create`` time via the
-    ``_install_dependencies`` override.
+    ``_install_dependencies`` override.  ``EXA_API_KEY`` from ``settings``
+    is injected into the sandbox process env so the in-sandbox Exa
+    skill calls (``exa_search``, ``exa_qa``, ``exa_get_content``) can
+    authenticate.
 
     Inherits singleton ``__new__`` from ``BaseSandboxManager`` -- do NOT
     re-declare it here.
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
+
+    # In-sandbox tool keys sourced from ``settings``.  The base class's
+    # ``_compose_envs`` helper reads ``settings.exa_api_key`` and merges
+    # it into the ``envs`` dict threaded to ``AsyncSandbox.create``.
+    required_env_keys: ClassVar[tuple[str, ...]] = ("EXA_API_KEY",)
 
     # ------------------------------------------------------------------
     # Abstract method implementation
