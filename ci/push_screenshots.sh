@@ -53,6 +53,7 @@ else
 fi
 
 cd "$worktree_dir"
+rm -rf "${env}"
 mkdir -p "${env}"
 if compgen -G "${source_dir}/${env}/*.png" > /dev/null; then
   cp -r "${source_dir}/${env}"/*.png "${env}/"
@@ -63,6 +64,9 @@ else
   printf "No screenshots captured for %s on this run.\n" "$env" \
     > "${env}/EMPTY.txt"
 fi
+
+echo "screenshot upload source: ${source_dir}/${env}"
+find "${env}" -maxdepth 1 -type f | sort
 
 git add "${env}/"
 if ! git diff --cached --quiet; then
