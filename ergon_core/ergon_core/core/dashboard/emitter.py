@@ -9,6 +9,7 @@ from typing import Any, cast
 from uuid import UUID
 
 import inngest
+from ergon_core.core.api.schemas import RunTaskEvaluationDto
 from ergon_core.core.persistence.context.event_payloads import ContextEventType
 from ergon_core.core.persistence.context.models import (
     RunContextEvent as _RunContextEvent,
@@ -164,9 +165,9 @@ class DashboardEmitter:
         self,
         run_id: UUID,
         task_id: UUID,
-        evaluation: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        evaluation: RunTaskEvaluationDto,
     ) -> None:
-        """Send evaluation update. `evaluation` must be a camelCase RunTaskEvaluationDto dict."""
+        """Send evaluation update."""
         if not self._enabled:
             return
         try:

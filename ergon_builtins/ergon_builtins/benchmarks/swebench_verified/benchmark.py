@@ -52,10 +52,9 @@ class SweBenchVerifiedBenchmark(Benchmark):
         self.limit = limit
 
     def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[SWEBenchTaskPayload]]]:
-        rows = _load_rows(limit=self.limit)
+        instances = _load_rows(limit=self.limit)
         tasks: list[BenchmarkTask[SWEBenchTaskPayload]] = []
-        for row in rows:
-            instance = SWEBenchInstance.from_raw(row)
+        for instance in instances:
             payload = SWEBenchTaskPayload.from_instance(instance)
             tasks.append(
                 BenchmarkTask[SWEBenchTaskPayload](
@@ -75,9 +74,9 @@ class SweBenchVerifiedBenchmark(Benchmark):
 
 def _load_rows(
     *, limit: int | None = None
-) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
-    """Load rows from the HF dataset. Isolated for testability."""
+) -> list[SWEBenchInstance]:
+    """Load and validate SWE-Bench instances from HuggingFace."""
     ds = load_dataset(HF_DATASET_ID, split=HF_SPLIT)
     if limit is not None:
         ds = ds.select(range(min(limit, len(ds))))
-    return [dict(row) for row in ds]
+    return [SWEBenchInstance.from_raw(row) for row in ds]

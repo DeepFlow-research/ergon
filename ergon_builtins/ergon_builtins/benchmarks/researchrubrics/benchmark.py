@@ -58,29 +58,14 @@ class ResearchRubricsBenchmark(Benchmark):
     # ------------------------------------------------------------------
 
     def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[ResearchRubricsTaskPayload]]]:
-        rows = self._load_rows()
+        payloads = self._load_rows()
         tasks: list[BenchmarkTask[ResearchRubricsTaskPayload]] = []
-        for row in rows:
-            payload = ResearchRubricsTaskPayload(
-                sample_id=row["sample_id"],
-                domain=row.get("domain", ""),
-                ablated_prompt=row["ablated_prompt"],
-                rubrics=[
-                    RubricCriterion(
-                        criterion=r["criterion"],
-                        axis=r["axis"],
-                        weight=r["weight"],
-                    )
-                    for r in row["rubrics"]
-                ],
-                removed_elements=row.get("removed_elements"),
-                ablation_type=row.get("ablation_type"),
-            )
+        for payload in payloads:
             tasks.append(
                 BenchmarkTask[ResearchRubricsTaskPayload](
-                    task_slug=row["sample_id"],
+                    task_slug=payload.sample_id,
                     instance_key="default",
-                    description=row["ablated_prompt"],
+                    description=payload.ablated_prompt,
                     evaluator_binding_keys=("default",),
                     task_payload=payload,
                 )
@@ -92,8 +77,8 @@ class ResearchRubricsBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def _load_rows(self) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
-        """Load dataset rows from HuggingFace.
+    def _load_rows(self) -> list[ResearchRubricsTaskPayload]:
+        """Load and validate dataset rows from HuggingFace.
 
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
@@ -115,4 +100,23 @@ class ResearchRubricsBenchmark(Benchmark):
         if self.limit:
             train_ds = train_ds.select(range(min(self.limit, len(train_ds))))
 
-        return [train_ds[idx] for idx in range(len(train_ds))]
+        return [_payload_from_row(train_ds[idx]) for idx in range(len(train_ds))]
+
+
+def _payload_from_row(row: Mapping[str, Any]) -> ResearchRubricsTaskPayload:  # slopcop: ignore[no-typing-any]
+    """Convert one raw HuggingFace row into the benchmark payload schema."""
+    return ResearchRubricsTaskPayload(
+        sample_id=row["sample_id"],
+        domain=str(row.get("domain", "")),
+        ablated_prompt=row["ablated_prompt"],
+        rubrics=[
+            RubricCriterion(
+                criterion=r["criterion"],
+                axis=r["axis"],
+                weight=r["weight"],
+            )
+            for r in row["rubrics"]
+        ],
+        removed_elements=row.get("removed_elements"),
+        ablation_type=row.get("ablation_type"),
+    )

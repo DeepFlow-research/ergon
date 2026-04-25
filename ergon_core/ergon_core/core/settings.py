@@ -1,6 +1,5 @@
 """Application settings loaded from environment / .env file."""
 
-import os
 from pathlib import Path
 
 from pydantic import AliasChoices, Field
@@ -53,6 +52,14 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("HF_API_KEY"),
     )
+    enable_test_harness: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("ENABLE_TEST_HARNESS"),
+    )
+    enable_smoke_fixtures: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ENABLE_SMOKE_FIXTURES"),
+    )
 
     @property
     def data_dir(self) -> Path:
@@ -61,6 +68,14 @@ class Settings(BaseSettings):
     @property
     def runs_dir(self) -> Path:
         return self.data_dir / "runs"
+
+    @property
+    def smoke_fixtures_enabled(self) -> bool:
+        return (
+            self.enable_smoke_fixtures
+            if self.enable_smoke_fixtures is not None
+            else self.enable_test_harness
+        )
 
     def missing_values(self, names: list[str]) -> list[str]:
         return [
@@ -78,8 +93,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-if settings.openai_api_key:
-    os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)
-if settings.openrouter_api_key:
-    os.environ.setdefault("OPENROUTER_API_KEY", settings.openrouter_api_key)

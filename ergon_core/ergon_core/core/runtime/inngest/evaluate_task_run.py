@@ -8,22 +8,10 @@ from datetime import UTC, datetime
 import logging
 
 import inngest
-from sqlmodel import select
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, SANDBOX_MANAGERS
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
-)
 from ergon_core.core.persistence.queries import queries
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.evaluation_summary import (
-    CriterionResultEntry,
-    EvaluationSummary,
-)
-from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
-from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.runtime.errors import ContractViolationError, RegistryLookupError
 from ergon_core.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
@@ -35,8 +23,10 @@ from ergon_core.core.runtime.services.child_function_payloads import (
 from ergon_core.core.runtime.services.inngest_function_results import (
     EvaluateTaskRunResult,
 )
+from ergon_core.core.runtime.services.evaluation_persistence_service import (
+    EvaluationPersistenceService,
+)
 from ergon_core.core.runtime.services.rubric_evaluation_service import (
-    EvaluationServiceResult,
     RubricEvaluationService,
 )
 from ergon_core.core.runtime.tracing import (
@@ -46,6 +36,7 @@ from ergon_core.core.runtime.tracing import (
 )
 
 logger = logging.getLogger(__name__)
+evaluation_persistence = EvaluationPersistenceService()
 
 
 @inngest_client.create_function(
@@ -65,6 +56,11 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
     evaluator_type = payload.evaluator_type
     agent_reasoning = payload.agent_reasoning
     span_start = datetime.now(UTC)
+
+    if task_id is None:
+        raise ContractViolationError("EvaluateTaskRunRequest.task_id is required")
+    if evaluator_binding_key is None:
+        raise ContractViolationError("EvaluateTaskRunRequest.evaluator_binding_key is required")
 
     evaluator_cls = EVALUATORS.get(evaluator_type)
     if evaluator_cls is None:
@@ -99,15 +95,9 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         sandbox_manager=sandbox_manager,
     )
 
-    with get_session() as session:
-        task_row = session.get(ExperimentDefinitionTask, task_id)
-        instance_row = (
-            session.get(ExperimentDefinitionInstance, task_row.instance_id)
-            if task_row is not None
-            else None
-        )
+    task_row, instance_row = queries.definitions.get_task_with_instance(task_id)
 
-    task_input = task_row.description if task_row is not None else ""
+    task_input = task_row.description
     task_context = TaskEvaluationContext(
         run_id=run_id,
         task_input=task_input,
@@ -118,12 +108,12 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
     benchmark_cls = BENCHMARKS.get(benchmark_type) if benchmark_type is not None else None
     task_payload = (
         benchmark_cls.parse_task_payload(task_row.task_payload)
-        if benchmark_cls is not None and task_row is not None
+        if benchmark_cls is not None
         else None
     )
     task_kwargs = {
-        "task_slug": task_row.task_slug if task_row is not None else "",
-        "instance_key": instance_row.instance_key if instance_row is not None else "",
+        "task_slug": task_row.task_slug,
+        "instance_key": instance_row.instance_key,
         "description": task_input,
     }
     if task_payload is not None:
@@ -148,7 +138,7 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
             task_id,
             evaluator_type,
         )
-        _persist_evaluation_failure(
+        evaluation_persistence.persist_failure(
             run_id=run_id,
             task_id=task_id,
             evaluator_id=evaluator_id,
@@ -162,53 +152,16 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         )
     result = service_result.result
 
-    summary = _build_evaluation_summary(service_result, evaluation_input="")
-
-    session = get_session()
-    try:
-        evaluation = RunTaskEvaluation(
-            run_id=run_id,
-            definition_task_id=task_id,
-            definition_evaluator_id=evaluator_id,
-            score=result.score,
-            passed=result.passed,
-            feedback=result.feedback,
-            summary_json=summary.model_dump(mode="json"),
-        )
-        session.add(evaluation)
-        session.commit()
-        session.refresh(evaluation)
-    finally:
-        session.close()
-    _refresh_run_evaluation_summary(run_id)
-
-    evaluation_dict = {
-        "id": str(evaluation.id),
-        "runId": str(run_id),
-        "taskId": str(task_id),
-        "totalScore": result.score,
-        "maxScore": summary.max_score,
-        "normalizedScore": summary.normalized_score,
-        "stagesEvaluated": summary.stages_evaluated,
-        "stagesPassed": summary.stages_passed,
-        "failedGate": None,
-        "createdAt": evaluation.created_at.isoformat(),
-        "criterionResults": [
-            {
-                "criterionName": cr.criterion_name,
-                "criterionType": cr.criterion_type,
-                "score": cr.score,
-                "maxScore": cr.max_score,
-                "passed": cr.passed,
-                "feedback": cr.feedback,
-            }
-            for cr in summary.criterion_results
-        ],
-    }
+    persisted = evaluation_persistence.persist_success(
+        run_id=run_id,
+        task_id=task_id,
+        evaluator_id=evaluator_id,
+        service_result=service_result,
+    )
     await dashboard_emitter.task_evaluation_updated(
         run_id=run_id,
         task_id=task_id,
-        evaluation=evaluation_dict,
+        evaluation=persisted.dashboard_dto,
     )
 
     get_trace_sink().emit_span(
@@ -225,8 +178,8 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
                 "evaluator_type": evaluator_type,
                 "score": result.score,
                 "passed": result.passed,
-                "stages_evaluated": summary.stages_evaluated,
-                "stages_passed": summary.stages_passed,
+                "stages_evaluated": persisted.summary.stages_evaluated,
+                "stages_passed": persisted.summary.stages_passed,
             },
         )
     )
@@ -237,123 +190,3 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         evaluator_name=result.evaluator_name,
     )
 
-
-def _persist_evaluation_failure(
-    *,
-    run_id,
-    task_id,
-    evaluator_id,
-    evaluator_name: str,
-    exc: Exception,
-) -> None:
-    session = get_session()
-    try:
-        error_type = type(exc).__name__
-        evaluation = RunTaskEvaluation(
-            run_id=run_id,
-            definition_task_id=task_id,
-            definition_evaluator_id=evaluator_id,
-            score=0.0,
-            passed=False,
-            feedback=f"{error_type}: {exc}",
-            summary_json={
-                "evaluator_name": evaluator_name,
-                "max_score": 0.0,
-                "normalized_score": 0.0,
-                "stages_evaluated": 0,
-                "stages_passed": 0,
-                "criterion_results": [],
-                "error": {
-                    "type": error_type,
-                    "message": str(exc),
-                },
-            },
-        )
-        session.add(evaluation)
-        session.commit()
-    finally:
-        session.close()
-    _refresh_run_evaluation_summary(run_id)
-
-
-def _refresh_run_evaluation_summary(run_id) -> None:
-    session = get_session()
-    try:
-        run = session.get(RunRecord, run_id)
-        if run is None:
-            return
-        evaluations = list(
-            session.exec(
-                select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id),
-            ).all()
-        )
-        scores = [evaluation.score for evaluation in evaluations if evaluation.score is not None]
-        final_score = sum(scores) if scores else None
-        normalized_score = final_score / len(scores) if scores and final_score is not None else None
-        existing_summary = dict(run.summary_json or {})
-        existing_summary.update(
-            {
-                "final_score": final_score,
-                "normalized_score": normalized_score,
-                "evaluators_count": len(evaluations),
-            }
-        )
-        run.summary_json = existing_summary
-        session.add(run)
-        session.commit()
-    finally:
-        session.close()
-
-
-def _build_evaluation_summary(
-    service_result: EvaluationServiceResult,
-    evaluation_input: str,
-) -> EvaluationSummary:
-    """Build a strongly-typed evaluation summary from service result + specs."""
-    result = service_result.result
-    specs = service_result.specs
-
-    spec_by_idx = {s.criterion_idx: s for s in specs}
-    max_score_total = sum(s.max_score for s in specs) if specs else 1.0
-
-    entries: list[CriterionResultEntry] = []
-    for i, cr in enumerate(result.criterion_results):
-        spec = spec_by_idx.get(i)
-        if spec is None:
-            raise ContractViolationError(
-                f"Criterion result at index {i} ({cr.name!r}) has no matching "
-                f"CriterionSpec — specs and results are out of sync",
-            )
-        entries.append(
-            CriterionResultEntry(
-                criterion_name=cr.name,
-                criterion_type=spec.criterion.type_slug,
-                criterion_description=spec.criterion.name,
-                stage_num=spec.stage_idx,
-                stage_name=spec.stage_name,
-                criterion_num=spec.criterion_idx,
-                score=cr.score,
-                max_score=spec.max_score,
-                passed=cr.passed,
-                weight=cr.weight,
-                feedback=cr.feedback or "",
-                evaluation_input=evaluation_input,
-            )
-        )
-
-    total_score = result.score
-    normalized = total_score / max_score_total if max_score_total > 0 else 0.0
-
-    stage_names = {s.stage_name for s in specs}
-    stages_passed = sum(
-        1 for sn in stage_names if all(e.passed for e in entries if e.stage_name == sn)
-    )
-
-    return EvaluationSummary(
-        evaluator_name=result.evaluator_name,
-        max_score=max_score_total,
-        normalized_score=normalized,
-        stages_evaluated=len(stage_names),
-        stages_passed=stages_passed,
-        criterion_results=entries,
-    )

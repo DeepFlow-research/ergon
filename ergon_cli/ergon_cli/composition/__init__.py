@@ -18,6 +18,8 @@ def build_experiment(
         # reason: host-side real-LLM canaries use the same test-owned smoke
         # fixtures as the API container, but production CLI paths must not
         # import tests unless smoke fixtures are explicitly enabled.
+        # TODO: Move smoke fixtures into a dev/test support package outside
+        # ``tests`` so production entrypoints never import test modules.
         import tests.e2e._fixtures  # noqa: F401
 
     # Deferred: CLI startup cost

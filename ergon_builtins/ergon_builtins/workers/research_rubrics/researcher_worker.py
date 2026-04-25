@@ -165,17 +165,11 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             )
 
         try:
-            sandbox = manager._get_raw_sandbox(self.task_id)
             if skill_name == "read_report_draft":
-                content = await sandbox.files.read(path)
-                if isinstance(content, bytes):
-                    content = content.decode("utf-8")
                 latency_ms = (time.perf_counter() - started) * 1000
-                await manager._emit_wal_entry(
-                    self.task_id,
-                    command=f"files.read {path}",
-                    stdout=f"path={path}\nbytes={len(content.encode('utf-8'))}",
-                    exit_code=0,
+                content = await manager.read_report_file(
+                    task_id=self.task_id,
+                    workspace_path=path,
                     duration_ms=int(latency_ms),
                 )
                 return ReportReadSuccess(
@@ -188,14 +182,11 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             content = str(
                 kwargs["content"] if skill_name == "write_report_draft" else kwargs["patch"],
             )
-            await sandbox.files.write(path, content.encode("utf-8"))
             latency_ms = (time.perf_counter() - started) * 1000
-            manager.register_created_file(self.task_id, path)
-            await manager._emit_wal_entry(
-                self.task_id,
-                command=f"files.write {path}",
-                stdout=f"path={path}\nbytes={len(content.encode('utf-8'))}",
-                exit_code=0,
+            await manager.write_report_file(
+                task_id=self.task_id,
+                workspace_path=path,
+                content=content,
                 duration_ms=int(latency_ms),
             )
             return ReportWriteSuccess(

@@ -9,7 +9,7 @@ is the sum of all positive weights, and *min_possible* is the sum of all
 negative weights.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import ClassVar
 
 from ergon_core.api.evaluator import Rubric
@@ -37,11 +37,11 @@ class ResearchRubricsRubric(Rubric):
         self,
         *,
         name: str = "researchrubrics-rubric",
-        rubric_criteria: list[RubricCriterion] | None = None,
+        rubric_criteria: Sequence[RubricCriterion] = (),
     ) -> None:
-        criteria = build_criteria_from_rubrics(rubric_criteria or [])
+        criteria = build_criteria_from_rubrics(rubric_criteria)
         super().__init__(name=name, criteria=criteria)
-        self._rubric_criteria = rubric_criteria or []
+        self._rubric_criteria = tuple(rubric_criteria)
 
     def criteria_for(self, task: BenchmarkTask):
         """Build task-specific LLM-judge criteria from the task payload."""

@@ -13,6 +13,10 @@ import pytest
 from ergon_builtins.workers.research_rubrics.researcher_worker import (
     ResearchRubricsResearcherWorker,
 )
+from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
+    ReportReadSuccess,
+    ReportWriteSuccess,
+)
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
@@ -111,6 +115,57 @@ class TestResearcherWorker:
         # Graph tools
         assert "list_my_resources" in tool_names
         assert "list_child_resources" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_report_write_uses_manager_public_file_api(self):
+        task_id = uuid4()
+        worker = ResearchRubricsResearcherWorker(
+            name="test-researcher",
+            model=None,
+            task_id=task_id,
+            sandbox_id="test-sandbox",
+        )
+        manager = MagicMock()
+        manager.write_report_file = AsyncMock()
+
+        result = await worker._run_sandbox_report_skill(
+            manager=manager,
+            skill_name="write_report_draft",
+            relative_path="final_output/report.md",
+            content="# Report",
+        )
+
+        manager.write_report_file.assert_awaited_once()
+        _, kwargs = manager.write_report_file.await_args
+        assert kwargs["task_id"] == task_id
+        assert kwargs["workspace_path"] == "/workspace/final_output/report.md"
+        assert kwargs["content"] == "# Report"
+        assert isinstance(result, ReportWriteSuccess)
+
+    @pytest.mark.asyncio
+    async def test_report_read_uses_manager_public_file_api(self):
+        task_id = uuid4()
+        worker = ResearchRubricsResearcherWorker(
+            name="test-researcher",
+            model=None,
+            task_id=task_id,
+            sandbox_id="test-sandbox",
+        )
+        manager = MagicMock()
+        manager.read_report_file = AsyncMock(return_value="# Existing")
+
+        result = await worker._run_sandbox_report_skill(
+            manager=manager,
+            skill_name="read_report_draft",
+            relative_path="final_output/report.md",
+        )
+
+        manager.read_report_file.assert_awaited_once()
+        _, kwargs = manager.read_report_file.await_args
+        assert kwargs["task_id"] == task_id
+        assert kwargs["workspace_path"] == "/workspace/final_output/report.md"
+        assert isinstance(result, ReportReadSuccess)
+        assert result.content == "# Existing"
 
 
 # ---------------------------------------------------------------------------

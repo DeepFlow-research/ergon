@@ -168,6 +168,26 @@ class TelemetryRepository:
         session.flush()
         return evaluation
 
+    def refresh_run_evaluation_summary(self, session: Session, run_id: UUID) -> None:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            return
+        evaluations = self.get_task_evaluations(session, run_id)
+        scores = [evaluation.score for evaluation in evaluations if evaluation.score is not None]
+        final_score = sum(scores) if scores else None
+        normalized_score = final_score / len(scores) if scores and final_score is not None else None
+        existing_summary = dict(run.summary_json or {})
+        existing_summary.update(
+            {
+                "final_score": final_score,
+                "normalized_score": normalized_score,
+                "evaluators_count": len(evaluations),
+            }
+        )
+        run.summary_json = existing_summary
+        session.add(run)
+        session.flush()
+
 
 class GenerationTurnRepository:
     """Read/write operations for lossless per-turn generation records."""

@@ -62,28 +62,16 @@ class GDPEvalBenchmark(Benchmark):
         All tasks land in a single ``"default"`` instance since there is
         no multi-instance structure in the GDP dataset.
         """
-        task_ids = load_task_ids(
-            split=self.split,
-            repo_id=self.dataset_repo,
-            limit=self.limit,
-        )
-
         tasks: list[BenchmarkTask[GDPTaskConfig]] = []
-        for task_id in task_ids:
-            description = extract_task_description(task_id, repo_id=self.dataset_repo)
-            ref_files = find_reference_files(task_id, repo_id=self.dataset_repo)
-
+        for payload in self._load_task_configs():
+            description = extract_task_description(payload.task_id, repo_id=self.dataset_repo)
             tasks.append(
                 BenchmarkTask[GDPTaskConfig](
-                    task_slug=task_id,
+                    task_slug=payload.task_id,
                     instance_key="default",
                     description=description,
                     evaluator_binding_keys=("default",),
-                    task_payload=GDPTaskConfig(
-                        task_id=task_id,
-                        workflow_type="document_processing",
-                        reference_files=[str(p) for p in ref_files],
-                    ),
+                    task_payload=payload,
                 )
             )
 
@@ -91,3 +79,22 @@ class GDPEvalBenchmark(Benchmark):
 
     def evaluator_requirements(self) -> Sequence[str]:
         return ["default"]
+
+    def _load_task_configs(self) -> list[GDPTaskConfig]:
+        """Load and validate GDP task payload configs from the dataset."""
+        task_ids = load_task_ids(
+            split=self.split,
+            repo_id=self.dataset_repo,
+            limit=self.limit,
+        )
+        configs: list[GDPTaskConfig] = []
+        for task_id in task_ids:
+            ref_files = find_reference_files(task_id, repo_id=self.dataset_repo)
+            configs.append(
+                GDPTaskConfig(
+                    task_id=task_id,
+                    workflow_type="document_processing",
+                    reference_files=[str(p) for p in ref_files],
+                )
+            )
+        return configs

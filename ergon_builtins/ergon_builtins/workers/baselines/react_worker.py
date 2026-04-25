@@ -171,16 +171,9 @@ class ReActWorker(Worker):
 
         text_events = [e for e in events if e.event_type == "assistant_text"]
         if not text_events:
-            final_tool_calls = [
-                payload
-                for e in events
-                if e.event_type == "tool_call"
-                and isinstance((payload := e.parsed_payload()), ToolCallPayload)
-                and payload.tool_name == "final_result"
-            ]
-            if not final_tool_calls:
+            output = _latest_final_result_message(events, ToolCallPayload)
+            if not output:
                 return WorkerOutput(output="", success=False)
-            output = str(final_tool_calls[-1].args.get("final_assistant_message", ""))
             return WorkerOutput(
                 output=output,
                 success=bool(output),
@@ -224,6 +217,22 @@ def _format_task(task: BenchmarkTask) -> str:
         lines.append("")
         lines.append(f"Payload: {json.dumps(payload, default=str)}")
     return "\n".join(lines)
+
+
+def _latest_final_result_message(
+    events: list[Any],  # slopcop: ignore[no-typing-any]
+    payload_type: type[Any],  # slopcop: ignore[no-typing-any]
+) -> str:
+    """Extract fallback text from the latest ``final_result`` tool call."""
+    messages: list[str] = []
+    for event in events:
+        if getattr(event, "event_type", None) != "tool_call":
+            continue
+        payload = event.parsed_payload()
+        if not isinstance(payload, payload_type) or payload.tool_name != "final_result":
+            continue
+        messages.append(str(payload.args.get("final_assistant_message", "")))
+    return messages[-1] if messages else ""
 
 
 def _build_turns(messages: list[ModelMessage]) -> list[GenerationTurn]:

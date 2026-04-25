@@ -13,6 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from ergon_core.core.api.schemas import RunTaskEvaluationDto
 from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
     ContextEventType,
@@ -109,21 +110,13 @@ class DashboardTaskStatusChangedEvent(InngestEventContract):
 
 
 class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
-    """Embeds the full RunTaskEvaluationDto (camelCase) as `evaluation`.
-
-    TODO(E2b, bug file § D): tighten ``evaluation`` to
-    ``RunTaskEvaluationDto``.  Deferred because the current emitter in
-    ``evaluate_task_run.py`` hand-rolls the dict and doesn't have
-    access to the rich criterion metadata (stage_num, stage_name,
-    criterion_num, criterion_description) the dashboard schema
-    requires.  Fixing both together is an independent unit of work.
-    """
+    """Embeds the full RunTaskEvaluationDto as ``evaluation``."""
 
     name: ClassVar[str] = "dashboard/task.evaluation_updated"
 
     run_id: UUID
     task_id: UUID
-    evaluation: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    evaluation: RunTaskEvaluationDto
 
 
 # ---------------------------------------------------------------------------

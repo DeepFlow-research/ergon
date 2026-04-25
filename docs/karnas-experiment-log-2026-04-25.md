@@ -213,6 +213,54 @@ and extend the research agent action space where the evidence shows a real gap.
   - Command: `uv run ruff check ...changed Python files...`
   - Result: `All checks passed`.
 
+### 16:58 UTC+1 - Typed dataset loader boundaries
+
+- Follow-up cleanup:
+  - ResearchRubrics `_load_rows()` now returns `list[ResearchRubricsTaskPayload]` instead of `list[dict[str, Any]]`.
+  - SWE-Bench Verified `_load_rows()` now returns `list[SWEBenchInstance]` instead of raw HuggingFace row dictionaries.
+  - GDPEval now has `_load_task_configs()` returning `list[GDPTaskConfig]` before task materialization.
+  - MiniF2F was already typed at the loader boundary with `list[MiniF2FProblem]`.
+- Verification:
+  - Command: `uv run pytest tests/unit/state/test_gdpeval_benchmark.py tests/unit/state/test_research_rubrics_benchmark.py tests/integration/swebench_verified/test_benchmark.py tests/integration/swebench_verified/test_smoke_e2e.py -q`
+  - Result: `19 passed`.
+  - Command: `uv run ruff check ...typed loader files...`
+  - Result: `All checks passed`.
+
+### 17:05 UTC+1 - PR review triage fixes
+
+- Review feedback applied:
+  - Removed settings-time mutation of `os.environ` for API keys.
+  - Added `ENABLE_TEST_HARNESS` / `ENABLE_SMOKE_FIXTURES` to the settings object and routed API feature gates through settings.
+  - Restored OpenRouter as a required dependency for real-LLM rollouts and budget gating.
+  - Moved definition task + instance hydration behind the persistence query layer and added a boundary test for Inngest runtime modules.
+  - Moved run evaluation summary refresh into `TelemetryRepository`.
+  - Restored Inngest criterion execution through `ctx.group.parallel(...)`.
+  - Removed nullable `rubric_criteria` from `ResearchRubricsRubric` constructor.
+  - Extracted the `final_result` fallback parsing in `ReActWorker` into a helper.
+- Verification:
+  - Command: `uv run pytest tests/unit/test_app_mounts_harness_conditionally.py tests/unit/runtime/test_definition_lookup_boundaries.py tests/unit/state/test_research_rubrics_benchmark.py tests/unit/state/test_benchmark_contract.py tests/unit/benchmarks/test_swebench_criterion_patch_source.py tests/integration/swebench_verified/test_criterion.py -q`
+  - Result: `30 passed`.
+  - Command: `uv run ruff check ...review-fix files...`
+  - Result: `All checks passed`.
+
+### 17:18 UTC+1 - Broad review refactors
+
+- Follow-up on broad review questions:
+  - Added TODO comments at the temporary smoke-fixture imports in the CLI and API app, marking that the fixtures should move out of `tests`.
+  - Added public `read_report_file` / `write_report_file` methods to `ResearchRubricsSandboxManager`; `ResearchRubricsResearcherWorker` now calls those instead of reaching into `_get_raw_sandbox`, `_emit_wal_entry`, and file registries directly.
+  - Extracted evaluation persistence, summary construction, and dashboard DTO construction into `EvaluationPersistenceService`.
+  - Tightened dashboard evaluation events to carry `RunTaskEvaluationDto` instead of an untyped dict and regenerated dashboard event contracts.
+  - Updated the graph mutation contract fixture to use valid UUIDs now that generated schemas validate UUID formats.
+- Verification:
+  - Command: `uv run pytest tests/unit/runtime/test_definition_lookup_boundaries.py tests/unit/state/test_research_rubrics_benchmark.py tests/unit/state/test_research_rubrics_workers.py tests/unit/state/test_benchmark_contract.py tests/unit/benchmarks/test_swebench_criterion_patch_source.py tests/integration/swebench_verified/test_criterion.py -q`
+  - Result: `32 passed`.
+  - Command: `pnpm -C ergon-dashboard run generate:contracts`
+  - Result: succeeded.
+  - Command: `pnpm -C ergon-dashboard run test:contracts`
+  - Result: passed after fixing the test fixture UUIDs.
+  - Command: `uv run ruff check ...broad refactor files...`
+  - Result: `All checks passed`.
+
 ### 13:35 UTC+1 - Final telemetry verification rollout
 
 - Ran final full rollout `b395b9e7-b111-4f2d-9df2-49829d5dff75`.

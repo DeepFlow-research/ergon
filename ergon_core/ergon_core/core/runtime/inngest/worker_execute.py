@@ -15,11 +15,8 @@ from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinitionInstance,
-    ExperimentDefinitionTask,
-)
 from ergon_core.core.persistence.context.repository import ContextEventRepository
+from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -71,18 +68,11 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     task_payload = None
     instance_key = str(payload.execution_id)
     if payload.task_id is not None:
-        with get_session() as session:
-            task_row = session.get(ExperimentDefinitionTask, payload.task_id)
-            instance_row = (
-                session.get(ExperimentDefinitionInstance, task_row.instance_id)
-                if task_row is not None
-                else None
-            )
+        task_row, instance_row = queries.definitions.get_task_with_instance(payload.task_id)
         benchmark_cls = BENCHMARKS.get(payload.benchmark_type)
-        if benchmark_cls is not None and task_row is not None:
+        if benchmark_cls is not None:
             task_payload = benchmark_cls.parse_task_payload(task_row.task_payload)
-        if instance_row is not None:
-            instance_key = instance_row.instance_key
+        instance_key = instance_row.instance_key
 
     task_kwargs = {
         "task_slug": payload.task_slug,

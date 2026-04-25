@@ -66,25 +66,8 @@ _POST_TERMINAL_ARTIFACT_TIMEOUT_SECONDS = 300
 
 @pytest.fixture(autouse=True)
 def _require_keys() -> None:
-    """Skip unless every settings key this rollout touches is populated.
-
-    Provider-specific keys are selected from ``ERGON_REAL_LLM_MODEL`` so
-    the rollout harness can run against OpenAI on machines that do not
-    have OpenRouter configured.
-    """
-    model = os.environ.get("ERGON_REAL_LLM_MODEL", _DEFAULT_MODEL)
-    provider_key = model.split(":", 1)[0]
-    provider_settings = {
-        "openai": "openai_api_key",
-        "openrouter": "openrouter_api_key",
-    }
-    required = ["exa_api_key", "e2b_api_key"]
-    if provider_key in provider_settings:
-        required.append(provider_settings[provider_key])
-
-    missing = settings.missing_values(
-        required,
-    )
+    """Skip unless every settings key this rollout touches is populated."""
+    missing = settings.missing_values(["openrouter_api_key", "exa_api_key", "e2b_api_key"])
     if missing:
         pytest.skip(
             f"researchrubrics rollout requires {missing} — set them in .env "

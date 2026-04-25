@@ -49,6 +49,40 @@ class TestResearchRubricsVanillaBenchmark:
         assert benchmark.name == "researchrubrics-vanilla"
 
 
+class TestResearchRubricsDatasetLoading:
+    def test_load_rows_returns_typed_payloads(self, monkeypatch: pytest.MonkeyPatch):
+        class FakeTrainDataset:
+            def __len__(self):
+                return 1
+
+            def __getitem__(self, idx):
+                assert idx == 0
+                return {
+                    "sample_id": "sample",
+                    "domain": "quality",
+                    "ablated_prompt": "Write a report.",
+                    "rubrics": [
+                        {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
+                    ],
+                }
+
+        monkeypatch.setattr(
+            "ergon_builtins.benchmarks.researchrubrics.benchmark.load_dataset",
+            lambda *args, **kwargs: {"train": FakeTrainDataset()},
+        )
+
+        rows = ResearchRubricsBenchmark(dataset_name="fake/researchrubrics")._load_rows()
+
+        assert rows == [
+            ResearchRubricsTaskPayload(
+                sample_id="sample",
+                domain="quality",
+                ablated_prompt="Write a report.",
+                rubrics=[{"criterion": "Includes citations.", "axis": "quality", "weight": 2.0}],
+            )
+        ]
+
+
 class TestResearchRubricsRubric:
     """Verify task-payload-driven rubric construction."""
 

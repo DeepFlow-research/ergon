@@ -35,6 +35,7 @@ from ergon_core.core.providers.sandbox.event_sink import (
 from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.settings import settings
 from ergon_core.core.runtime.inngest_registry import ALL_FUNCTIONS
 from ergon_core.core.settings import Settings
 from fastapi import FastAPI
@@ -89,10 +90,10 @@ app.include_router(cohorts_router)
 app.include_router(rollouts_router)
 
 # Test-only harness: mounted in CI + local-e2e only.
-if os.environ.get("ENABLE_TEST_HARNESS") == "1":
+if settings.enable_test_harness:
     app.include_router(_test_harness_router)
 
-if os.environ.get("ENABLE_SMOKE_FIXTURES", os.environ.get("ENABLE_TEST_HARNESS")) == "1":
+if settings.smoke_fixtures_enabled:
     # Register the canonical-smoke WORKERS / EVALUATORS into this
     # process's registry dicts.  Inngest's ``worker_execute_fn`` runs
     # inside this container, so if the smoke fixtures are only imported
@@ -101,6 +102,8 @@ if os.environ.get("ENABLE_SMOKE_FIXTURES", os.environ.get("ENABLE_TEST_HARNESS")
     # separate from ``ENABLE_TEST_HARNESS`` because real-LLM rollouts
     # need the read-only harness endpoints without replacing production
     # benchmark registries with smoke fixtures.
+    # TODO: Move smoke fixtures into a dev/test support package outside
+    # ``tests`` so production entrypoints never import test modules.
     import tests.e2e._fixtures  # noqa: F401, PLC0415
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)

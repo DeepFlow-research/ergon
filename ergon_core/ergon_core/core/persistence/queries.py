@@ -151,6 +151,19 @@ class DefinitionsQueries(BaseQueries[ExperimentDefinition]):
             )
             return list(session.exec(stmt).all())
 
+    def get_task_with_instance(
+        self,
+        task_id: UUID,
+    ) -> tuple[ExperimentDefinitionTask, ExperimentDefinitionInstance]:
+        with get_session() as session:
+            task = session.get(ExperimentDefinitionTask, task_id)
+            if task is None:
+                raise ValueError(f"ExperimentDefinitionTask {task_id} not found")
+            instance = session.get(ExperimentDefinitionInstance, task.instance_id)
+            if instance is None:
+                raise ValueError(f"ExperimentDefinitionInstance {task.instance_id} not found")
+            return task, instance
+
     def get_task_dependencies(
         self, definition_id: UUID
     ) -> list[ExperimentDefinitionTaskDependency]:
