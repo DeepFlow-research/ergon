@@ -91,5 +91,5 @@ def test_task_payload_retains_test_patch_for_evaluator() -> None:
         benchmark = SweBenchVerifiedBenchmark()
         task = benchmark.build_instances()["default"][0]
 
-    assert task.task_payload["test_patch"] == "TP1"
-    assert "patch" not in task.task_payload
+    assert task.task_payload.test_patch == "TP1"
+    assert not hasattr(task.task_payload, "patch")

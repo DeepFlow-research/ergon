@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel
 from pydantic import ValidationError
 
 from ergon_builtins.registry_core import BENCHMARKS as CORE_BENCHMARKS
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 
 
 class TestBenchmarkOnboardingDepsContract:
@@ -34,6 +36,23 @@ class TestBenchmarkOnboardingDepsContract:
                 f"Benchmark '{slug}' ({cls.__qualname__}) is missing 'onboarding_deps'."
             )
             assert isinstance(cls.onboarding_deps, BenchmarkDeps)
+
+    def test_core_benchmarks_declare_payload_models(self) -> None:
+        for slug, cls in CORE_BENCHMARKS.items():
+            assert issubclass(cls.task_payload_model, BaseModel), (
+                f"Benchmark '{slug}' ({cls.__qualname__}) must declare a "
+                "Pydantic task_payload_model."
+            )
+
+    def test_data_benchmarks_declare_payload_models(self) -> None:
+        pytest.importorskip("datasets", reason="ergon-builtins[data] not installed")
+        from ergon_builtins.registry_data import BENCHMARKS
+
+        for slug, cls in BENCHMARKS.items():
+            assert issubclass(cls.task_payload_model, BaseModel), (
+                f"Benchmark '{slug}' ({cls.__qualname__}) must declare a "
+                "Pydantic task_payload_model."
+            )
 
     def test_onboarding_deps_is_frozen(self) -> None:
         """BenchmarkDeps instances must be immutable (frozen=True via attribute access)."""
@@ -68,3 +87,25 @@ class TestBenchmarkSubclassEnforcement:
                 return {}
 
         # No exception raised
+
+
+class TestBenchmarkTaskPayloadContract:
+    def test_task_payload_is_a_pydantic_model(self) -> None:
+        payload = EmptyTaskPayload()
+        task = BenchmarkTask(
+            task_slug="task",
+            instance_key="default",
+            description="desc",
+            task_payload=payload,
+        )
+
+        assert task.task_payload is payload
+
+    def test_plain_dict_payload_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            BenchmarkTask(
+                task_slug="task",
+                instance_key="default",
+                description="desc",
+                task_payload={"loose": "dict"},
+            )

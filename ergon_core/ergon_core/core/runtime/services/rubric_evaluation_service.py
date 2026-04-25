@@ -54,6 +54,7 @@ class RubricEvaluationService:
 
         criterion_results: list[CriterionResult] = await self.criterion_executor.execute_all(
             task_context=task_context,
+            task=task,
             benchmark_name=benchmark_name,
             criteria=specs,
         )

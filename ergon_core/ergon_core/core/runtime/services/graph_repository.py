@@ -204,7 +204,8 @@ class WorkflowGraphRepository:
             )
             seq += 1
 
-            if task.task_payload:
+            payload = task.task_payload.model_dump(mode="json")
+            if payload:
                 annotation_rows.append(
                     RunGraphAnnotation(
                         run_id=run_id,
@@ -212,7 +213,7 @@ class WorkflowGraphRepository:
                         target_id=node.id,
                         namespace="payload",
                         sequence=seq,
-                        payload=dict(task.task_payload),
+                        payload=payload,
                         created_at=now,
                     )
                 )
@@ -227,7 +228,7 @@ class WorkflowGraphRepository:
                         old_value=None,
                         new_value=AnnotationSetMutation(
                             namespace="payload",
-                            payload=dict(task.task_payload),
+                            payload=payload,
                         ).model_dump(),
                         reason=meta.reason,
                         created_at=now,

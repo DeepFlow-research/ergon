@@ -122,7 +122,7 @@ class ExperimentPersistenceService:
                     instance_id=instance_id,
                     task_slug=task.task_slug,
                     description=task.description,
-                    task_payload=dict(task.task_payload),
+                    task_payload=task.task_payload.model_dump(mode="json"),
                     created_at=now,
                 )
                 task_rows_by_key[(instance_key, task.task_slug)] = task_row

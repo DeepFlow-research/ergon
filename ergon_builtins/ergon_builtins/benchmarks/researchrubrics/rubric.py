@@ -17,7 +17,10 @@ from ergon_core.api.results import CriterionResult, TaskEvaluationResult
 from ergon_core.api.task_types import BenchmarkTask
 
 from ergon_builtins.benchmarks.researchrubrics.criteria import build_criteria_from_rubrics
-from ergon_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
+from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
+    ResearchRubricsTaskPayload,
+    RubricCriterion,
+)
 
 
 class ResearchRubricsRubric(Rubric):
@@ -45,11 +48,8 @@ class ResearchRubricsRubric(Rubric):
         if self._rubric_criteria:
             return self.criteria
 
-        payload_rubrics = task.task_payload.get("rubrics", [])
-        rubric_criteria = [
-            item if isinstance(item, RubricCriterion) else RubricCriterion.model_validate(item)
-            for item in payload_rubrics
-        ]
+        payload = ResearchRubricsTaskPayload.model_validate(task.task_payload.model_dump())
+        rubric_criteria = list(payload.rubrics)
         return build_criteria_from_rubrics(rubric_criteria)
 
     def aggregate_task(

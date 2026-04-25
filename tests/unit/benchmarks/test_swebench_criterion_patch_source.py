@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 
 from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
+from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 from ergon_core.api import WorkerOutput
 from ergon_core.api.criterion_runtime import CommandResult
 from ergon_core.api.evaluation_context import EvaluationContext
@@ -42,18 +43,18 @@ async def test_criterion_computes_patch_via_run_command(
     runtime.ensure_sandbox = AsyncMock()
     runtime.write_file = AsyncMock()
 
-    payload = {
-        "instance_id": "django__django-1",
-        "repo": "django/django",
-        "base_commit": "abc",
-        "version": "4.2",
-        "problem_statement": "x",
-        "fail_to_pass": ["tests.t"],
-        "pass_to_pass": [],
-        "environment_setup_commit": "setup",
-        "test_patch": "",
-        "hints_text": "",
-    }
+    payload = SWEBenchTaskPayload(
+        instance_id="django__django-1",
+        repo="django/django",
+        base_commit="abc",
+        version="4.2",
+        problem_statement="x",
+        fail_to_pass=["tests.t"],
+        pass_to_pass=[],
+        environment_setup_commit="setup",
+        test_patch="",
+        hints_text="",
+    )
 
     # Worker produces empty output; criterion must still derive the patch
     # from the sandbox.
@@ -62,7 +63,7 @@ async def test_criterion_computes_patch_via_run_command(
         run_id=run_id,
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=BenchmarkTask(
+        task=BenchmarkTask[SWEBenchTaskPayload](
             task_slug="django-1",
             instance_key="default",
             description="d",
@@ -77,7 +78,7 @@ async def test_criterion_computes_patch_via_run_command(
     # doesn't try to import swebench or run the real eval script.
     monkeypatch.setattr(
         "ergon_builtins.benchmarks.swebench_verified.criterion.get_eval_report",
-        lambda **kwargs: {payload["instance_id"]: {"resolved": True, "tests_status": {}}},
+        lambda **kwargs: {payload.instance_id: {"resolved": True, "tests_status": {}}},
     )
     monkeypatch.setattr(
         "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
@@ -111,24 +112,24 @@ async def test_criterion_short_circuits_on_empty_patch(
     runtime.ensure_sandbox = AsyncMock()
     runtime.write_file = AsyncMock()
 
-    payload = {
-        "instance_id": "django__django-1",
-        "repo": "django/django",
-        "base_commit": "abc",
-        "version": "4.2",
-        "problem_statement": "x",
-        "fail_to_pass": ["tests.t"],
-        "pass_to_pass": [],
-        "environment_setup_commit": "setup",
-        "test_patch": "",
-        "hints_text": "",
-    }
+    payload = SWEBenchTaskPayload(
+        instance_id="django__django-1",
+        repo="django/django",
+        base_commit="abc",
+        version="4.2",
+        problem_statement="x",
+        fail_to_pass=["tests.t"],
+        pass_to_pass=[],
+        environment_setup_commit="setup",
+        test_patch="",
+        hints_text="",
+    )
 
     context = EvaluationContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=BenchmarkTask(
+        task=BenchmarkTask[SWEBenchTaskPayload](
             task_slug="django-1",
             instance_key="default",
             description="d",
@@ -143,7 +144,7 @@ async def test_criterion_short_circuits_on_empty_patch(
     # monkeypatch so the test doesn't depend on the real swebench harness.
     monkeypatch.setattr(
         "ergon_builtins.benchmarks.swebench_verified.criterion.get_eval_report",
-        lambda **kwargs: {payload["instance_id"]: {"resolved": False, "tests_status": {}}},
+        lambda **kwargs: {payload.instance_id: {"resolved": False, "tests_status": {}}},
     )
     monkeypatch.setattr(
         "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",

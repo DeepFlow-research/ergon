@@ -10,10 +10,12 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
+from pydantic import BaseModel
+
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.dependencies import check_packages
 from ergon_core.api.errors import DependencyError
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 
 
 class Benchmark(ABC):
@@ -26,6 +28,7 @@ class Benchmark(ABC):
 
     type_slug: ClassVar[str]
     onboarding_deps: ClassVar[BenchmarkDeps]
+    task_payload_model: ClassVar[type[BaseModel]] = EmptyTaskPayload
     required_packages: ClassVar[list[str]] = []
     install_hint: ClassVar[str] = ""
 
@@ -42,6 +45,12 @@ class Benchmark(ABC):
                     f"{cls.__qualname__} must declare "
                     f"'onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(...)'. "
                     f"See ergon_core/api/benchmark_deps.py."
+                )
+            payload_model = getattr(cls, "task_payload_model", None)  # slopcop: ignore[no-hasattr-getattr]
+            if not isinstance(payload_model, type) or not issubclass(payload_model, BaseModel):
+                raise TypeError(
+                    f"{cls.__qualname__} must declare "
+                    f"'task_payload_model: ClassVar[type[BaseModel]]'."
                 )
 
     def __init__(
@@ -70,6 +79,17 @@ class Benchmark(ABC):
         checks are filled by the experiment's evaluator mapping.
         """
         return ("default",)
+
+    @classmethod
+    def parse_task_payload(cls, payload: BaseModel | Mapping[str, Any] | None) -> BaseModel:
+        """Validate persisted JSON into this benchmark's payload model."""
+        if payload is None:
+            return cls.task_payload_model()
+        if isinstance(payload, cls.task_payload_model):
+            return payload
+        if isinstance(payload, BaseModel):
+            payload = payload.model_dump()
+        return cls.task_payload_model.model_validate(payload)
 
     def validate(self) -> None:
         """Check that runtime dependencies are available."""

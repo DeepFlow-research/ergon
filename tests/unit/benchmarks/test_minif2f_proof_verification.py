@@ -16,7 +16,7 @@ from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
 from ergon_core.api import WorkerOutput
 from ergon_core.api.criterion_runtime import CommandResult
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
     ResourceNotFoundError,
 )
@@ -27,7 +27,7 @@ def _make_task() -> BenchmarkTask:
         task_slug="t1",
         instance_key="default",
         description="theorem t : True := by trivial",
-        task_payload={},
+        task_payload=EmptyTaskPayload(),
     )
 
 

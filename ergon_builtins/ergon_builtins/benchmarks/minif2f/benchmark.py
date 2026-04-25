@@ -33,6 +33,7 @@ class MiniF2FBenchmark(Benchmark):
     """
 
     type_slug: ClassVar[str] = "minif2f"
+    task_payload_model: ClassVar[type[MiniF2FTaskPayload]] = MiniF2FTaskPayload
     onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(e2b=True)
 
     def __init__(
@@ -54,9 +55,9 @@ class MiniF2FBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
+    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[MiniF2FTaskPayload]]]:
         problems = self._load_problems()
-        tasks: list[BenchmarkTask] = []
+        tasks: list[BenchmarkTask[MiniF2FTaskPayload]] = []
         for problem in problems:
             payload = MiniF2FTaskPayload(
                 name=problem.name,
@@ -71,12 +72,12 @@ class MiniF2FBenchmark(Benchmark):
                 f"{problem.formal_statement}"
             )
             tasks.append(
-                BenchmarkTask(
+                BenchmarkTask[MiniF2FTaskPayload](
                     task_slug=problem.name,
                     instance_key="default",
                     description=description,
                     evaluator_binding_keys=("default",),
-                    task_payload=payload.model_dump(),
+                    task_payload=payload,
                 )
             )
         return {"default": tasks}

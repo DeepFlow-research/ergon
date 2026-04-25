@@ -10,11 +10,15 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from ergon_builtins.registry import WORKERS
+from ergon_builtins.registry import BENCHMARKS, WORKERS
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.persistence.definitions.models import (
+    ExperimentDefinitionInstance,
+    ExperimentDefinitionTask,
+)
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.errors import RegistryLookupError
@@ -64,11 +68,33 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         sandbox_id=payload.sandbox_id,
     )
 
-    task = BenchmarkTask(
-        task_slug=payload.task_slug,
-        instance_key=str(payload.execution_id),
-        description=payload.task_description,
-    )
+    task_payload = None
+    instance_key = str(payload.execution_id)
+    if payload.task_id is not None:
+        with get_session() as session:
+            task_row = session.get(ExperimentDefinitionTask, payload.task_id)
+            instance_row = (
+                session.get(ExperimentDefinitionInstance, task_row.instance_id)
+                if task_row is not None
+                else None
+            )
+        benchmark_cls = BENCHMARKS.get(payload.benchmark_type)
+        if benchmark_cls is not None and task_row is not None:
+            task_payload = benchmark_cls.parse_task_payload(task_row.task_payload)
+        if instance_row is not None:
+            instance_key = instance_row.instance_key
+
+    task_kwargs = {
+        "task_slug": payload.task_slug,
+        "instance_key": instance_key,
+        "description": payload.task_description,
+    }
+    if task_payload is not None:
+        task_kwargs["task_payload"] = task_payload
+        task_model = BenchmarkTask[type(task_payload)]
+    else:
+        task_model = BenchmarkTask
+    task = task_model(**task_kwargs)
 
     worker_context = WorkerContext(
         run_id=payload.run_id,

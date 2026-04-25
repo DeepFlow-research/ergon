@@ -199,6 +199,20 @@ and extend the research agent action space where the evidence shows a real gap.
   - Command: `uv run pytest tests/unit/state/test_research_rubrics_benchmark.py tests/unit/state/test_research_rubrics_workers.py -q`
   - Result: `10 passed`.
 
+### 16:55 UTC+1 - Strongly typed benchmark task payloads
+
+- Change requested after PR creation: replace weak `dict[str, Any]` task payloads with benchmark-owned Pydantic payload models.
+- Fix applied:
+  - `BenchmarkTask` is now generic over a `BaseModel` payload and defaults to `EmptyTaskPayload`.
+  - `Benchmark` classes now declare `task_payload_model` and use it to rehydrate persisted JSON payloads.
+  - ResearchRubrics, SWE-Bench Verified, MiniF2F, and GDPEval now build tasks with typed payload objects instead of raw dictionaries.
+  - Runtime persistence still stores JSON via `model_dump(mode="json")`, while worker/evaluator execution reconstructs the typed payload from the benchmark registry.
+- Verification:
+  - Command: `uv run pytest tests/unit/state/test_benchmark_contract.py tests/unit/state/test_research_rubrics_benchmark.py tests/integration/swebench_verified/test_benchmark.py tests/integration/swebench_verified/test_criterion.py tests/unit/benchmarks/test_swebench_criterion_patch_source.py tests/unit/benchmarks/test_minif2f_proof_verification.py -q`
+  - Result: `32 passed`.
+  - Command: `uv run ruff check ...changed Python files...`
+  - Result: `All checks passed`.
+
 ### 13:35 UTC+1 - Final telemetry verification rollout
 
 - Ran final full rollout `b395b9e7-b111-4f2d-9df2-49829d5dff75`.

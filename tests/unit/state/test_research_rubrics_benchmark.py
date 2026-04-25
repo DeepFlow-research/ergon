@@ -3,6 +3,7 @@
 import pytest
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from ergon_builtins.benchmarks.researchrubrics.task_schemas import ResearchRubricsTaskPayload
 from ergon_builtins.benchmarks.researchrubrics.vanilla import ResearchRubricsVanillaBenchmark
 from ergon_builtins.registry_data import BENCHMARKS, EVALUATORS, WORKERS
 from ergon_core.api import Benchmark
@@ -53,17 +54,20 @@ class TestResearchRubricsRubric:
 
     def test_can_construct_without_prebound_criteria(self):
         rubric = ResearchRubricsRubric(name="evaluator")
-        task = BenchmarkTask(
+        task = BenchmarkTask[ResearchRubricsTaskPayload](
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
             evaluator_binding_keys=("default",),
-            task_payload={
+            task_payload=ResearchRubricsTaskPayload.model_validate({
+                "sample_id": "sample",
+                "domain": "quality",
+                "ablated_prompt": "Write a report.",
                 "rubrics": [
                     {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
                     {"criterion": "No unsupported claims.", "axis": "quality", "weight": -1.0},
                 ],
-            },
+            }),
         )
 
         criteria = list(rubric.criteria_for(task))

@@ -219,9 +219,10 @@ class ReActWorker(Worker):
 
 def _format_task(task: BenchmarkTask) -> str:
     lines = [f"Task: {task.description}"]
-    if task.task_payload:
+    payload = task.task_payload.model_dump(mode="json")
+    if payload:
         lines.append("")
-        lines.append(f"Payload: {json.dumps(task.task_payload, default=str)}")
+        lines.append(f"Payload: {json.dumps(payload, default=str)}")
     return "\n".join(lines)
 
 

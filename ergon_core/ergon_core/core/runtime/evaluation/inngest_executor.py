@@ -50,6 +50,7 @@ class InngestCriterionExecutor:
     async def execute_all(
         self,
         task_context: TaskEvaluationContext,
+        task: BenchmarkTask,
         benchmark_name: str,
         criteria: list[CriterionSpec],
     ) -> list[CriterionResult]:
@@ -87,11 +88,7 @@ class InngestCriterionExecutor:
                         run_id=task_context.run_id,
                         task_id=self.task_id,
                         execution_id=self.execution_id,
-                        task=BenchmarkTask(
-                            task_slug="",
-                            instance_key="",
-                            description=task_context.task_input,
-                        ),
+                        task=task,
                         worker_result=WorkerOutput(
                             output=task_context.agent_reasoning,
                         ),

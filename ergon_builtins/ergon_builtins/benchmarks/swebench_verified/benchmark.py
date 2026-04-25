@@ -30,6 +30,7 @@ class SweBenchVerifiedBenchmark(Benchmark):
     """Benchmark backed by SWE-Bench Verified (500 curated instances)."""
 
     type_slug: ClassVar[str] = "swebench-verified"
+    task_payload_model: ClassVar[type[SWEBenchTaskPayload]] = SWEBenchTaskPayload
     onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
         e2b=True,
         extras=("ergon-builtins[data]",),
@@ -50,19 +51,19 @@ class SweBenchVerifiedBenchmark(Benchmark):
         )
         self.limit = limit
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
+    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[SWEBenchTaskPayload]]]:
         rows = _load_rows(limit=self.limit)
-        tasks: list[BenchmarkTask] = []
+        tasks: list[BenchmarkTask[SWEBenchTaskPayload]] = []
         for row in rows:
             instance = SWEBenchInstance.from_raw(row)
             payload = SWEBenchTaskPayload.from_instance(instance)
             tasks.append(
-                BenchmarkTask(
+                BenchmarkTask[SWEBenchTaskPayload](
                     task_slug=instance.instance_id,
                     instance_key="default",
                     description=payload.build_worker_description(),
                     evaluator_binding_keys=("default",),
-                    task_payload=payload.model_dump(),
+                    task_payload=payload,
                 )
             )
         logger.info("Loaded %d SWE-Bench Verified instances", len(tasks))

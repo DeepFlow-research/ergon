@@ -11,7 +11,7 @@ from ergon_core.api.experiment import Experiment
 from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
 from ergon_core.api.results import CriterionResult, TaskEvaluationResult, WorkerOutput
 from ergon_core.api.run_resource import RunResourceKind, RunResourceView
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.api.types import Tool
 from ergon_core.api.worker import Worker
 from ergon_core.api.worker_context import WorkerContext
@@ -31,6 +31,7 @@ __all__ = [
     "Evaluator",
     "Experiment",
     "ExperimentRunHandle",
+    "EmptyTaskPayload",
     "PersistedExperimentDefinition",
     "Rubric",
     "RunResourceKind",

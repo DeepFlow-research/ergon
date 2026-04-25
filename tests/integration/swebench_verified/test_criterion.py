@@ -13,26 +13,27 @@ from ergon_core.api.task_types import BenchmarkTask
 from ergon_builtins.benchmarks.swebench_verified.criterion import (
     SWEBenchTestCriterion,
 )
+from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 
 
-def _task() -> BenchmarkTask:
-    return BenchmarkTask(
+def _task() -> BenchmarkTask[SWEBenchTaskPayload]:
+    return BenchmarkTask[SWEBenchTaskPayload](
         task_slug="django__django-1",
         instance_key="default",
         description="Fix the thing",
         evaluator_binding_keys=("default",),
-        task_payload={
-            "instance_id": "django__django-1",
-            "repo": "django/django",
-            "base_commit": "aaa",
-            "version": "3.0",
-            "problem_statement": "p",
-            "hints_text": "",
-            "fail_to_pass": ["t1"],
-            "pass_to_pass": ["t0"],
-            "environment_setup_commit": "aaa",
-            "test_patch": "TP",
-        },
+        task_payload=SWEBenchTaskPayload(
+            instance_id="django__django-1",
+            repo="django/django",
+            base_commit="aaa",
+            version="3.0",
+            problem_statement="p",
+            hints_text="",
+            fail_to_pass=["t1"],
+            pass_to_pass=["t0"],
+            environment_setup_commit="aaa",
+            test_patch="TP",
+        ),
     )
 
 

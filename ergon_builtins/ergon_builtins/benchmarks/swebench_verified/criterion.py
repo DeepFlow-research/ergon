@@ -27,6 +27,7 @@ from ergon_core.api.results import CriterionResult
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import (
     payload_to_swebench_row as _payload_to_swebench_row,
 )
+from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,7 @@ class SWEBenchTestCriterion(Criterion):
                 metadata={},
             )
 
-        payload = context.task.task_payload
+        payload = SWEBenchTaskPayload.model_validate(context.task.task_payload.model_dump())
         row = _payload_to_swebench_row(payload)
         spec = make_test_spec(row)
 
@@ -166,7 +167,7 @@ class SWEBenchTestCriterion(Criterion):
         *,
         runtime: CriterionRuntime,
         spec: Any,  # slopcop: ignore[no-typing-any]
-        payload: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        payload: SWEBenchTaskPayload,
         patch_text: str,
     ) -> CriterionResult:
         # 1. install_repo_script: clone + checkout base_commit + install deps.
@@ -187,7 +188,7 @@ class SWEBenchTestCriterion(Criterion):
             )
 
         # 2. Apply test_patch then agent patch (order matters).
-        test_patch = payload.get("test_patch") or ""
+        test_patch = payload.test_patch
         try:
             if test_patch.strip():
                 await _write_and_apply(runtime, "/tmp/test.patch", test_patch)
@@ -206,10 +207,10 @@ class SWEBenchTestCriterion(Criterion):
         report = _grade_with_log(
             spec=spec,
             log=log,
-            instance_id=payload["instance_id"],
+            instance_id=payload.instance_id,
             patch_text=patch_text,
         )
-        entry = report.get(payload["instance_id"], {}) if isinstance(report, dict) else {}
+        entry = report.get(payload.instance_id, {}) if isinstance(report, dict) else {}
         resolved = bool(entry.get("resolved"))
         return CriterionResult(
             name=self.name,

@@ -30,6 +30,7 @@ class ResearchRubricsBenchmark(Benchmark):
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
+    task_payload_model: ClassVar[type[ResearchRubricsTaskPayload]] = ResearchRubricsTaskPayload
     onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
         extras=("ergon-builtins[data]",),
         optional_keys=("EXA_API_KEY",),
@@ -56,9 +57,9 @@ class ResearchRubricsBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
+    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[ResearchRubricsTaskPayload]]]:
         rows = self._load_rows()
-        tasks: list[BenchmarkTask] = []
+        tasks: list[BenchmarkTask[ResearchRubricsTaskPayload]] = []
         for row in rows:
             payload = ResearchRubricsTaskPayload(
                 sample_id=row["sample_id"],
@@ -76,12 +77,12 @@ class ResearchRubricsBenchmark(Benchmark):
                 ablation_type=row.get("ablation_type"),
             )
             tasks.append(
-                BenchmarkTask(
+                BenchmarkTask[ResearchRubricsTaskPayload](
                     task_slug=row["sample_id"],
                     instance_key="default",
                     description=row["ablated_prompt"],
                     evaluator_binding_keys=("default",),
-                    task_payload=payload.model_dump(),
+                    task_payload=payload,
                 )
             )
         return {"default": tasks}
