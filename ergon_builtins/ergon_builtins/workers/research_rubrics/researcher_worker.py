@@ -34,6 +34,7 @@ from ergon_builtins.tools.research_rubrics_toolkit import (
 )
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.research_rubrics._run_skill import (
+    SkillValue,
     make_run_skill,
 )
 
@@ -102,7 +103,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         async def run_skill(
             skill_name: str,
             response_model: type[BaseModel],
-            **kwargs: object,
+            **kwargs: SkillValue,
         ) -> BaseModel:
             if skill_name in {"write_report_draft", "edit_report_draft", "read_report_draft"}:
                 return await self._run_sandbox_report_skill(
@@ -142,7 +143,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         *,
         manager: ResearchRubricsSandboxManager,
         skill_name: str,
-        **kwargs: object,
+        **kwargs: SkillValue,
     ) -> ReportWriteResponse | ReportReadResponse:
         started = time.perf_counter()
         try:
