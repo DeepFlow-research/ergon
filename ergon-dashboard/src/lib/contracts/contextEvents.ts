@@ -24,6 +24,7 @@ export type ContextEventPayload =
       event_type: "assistant_text";
       text: string;
       turn_id: string;
+      turn_token_ids: number[] | null;
       turn_logprobs: TokenLogprob[] | null;
     }
   | {
@@ -32,6 +33,7 @@ export type ContextEventPayload =
       tool_name: string;
       args: Record<string, unknown>;
       turn_id: string;
+      turn_token_ids: number[] | null;
       turn_logprobs: TokenLogprob[] | null;
     }
   | {
@@ -45,6 +47,7 @@ export type ContextEventPayload =
       event_type: "thinking";
       text: string;
       turn_id: string;
+      turn_token_ids: number[] | null;
       turn_logprobs: TokenLogprob[] | null;
     };
 

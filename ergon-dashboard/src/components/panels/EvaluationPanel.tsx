@@ -69,9 +69,11 @@ export function EvaluationPanel({
                 {criterion.score} / {criterion.maxScore}
               </div>
             </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-200">
-              {criterion.feedback}
-            </p>
+            {criterion.feedback ? (
+              <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-200">
+                {criterion.feedback}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>

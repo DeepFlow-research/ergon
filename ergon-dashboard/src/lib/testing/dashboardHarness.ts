@@ -1,5 +1,6 @@
 import {
   broadcastCohortUpdated,
+  broadcastContextEvent,
   broadcastRunCompleted,
   broadcastTaskEvaluation,
   broadcastTaskStatus,
@@ -11,6 +12,7 @@ import {
   CommunicationThreadState,
   CohortDetail,
   CohortSummary,
+  ContextEventState,
   ExperimentCohortStatus,
   SerializedWorkflowRunState,
   TaskEvaluationState,
@@ -227,6 +229,16 @@ export function emitHarnessThreadMessage(runId: string, thread: CommunicationThr
       message,
     });
   }
+}
+
+export function emitHarnessContextEvent(
+  runId: string,
+  taskNodeId: string,
+  event: ContextEventState,
+): void {
+  requireHarnessEnabled();
+  store.addContextEvent(runId, taskNodeId, event);
+  broadcastContextEvent(runId, taskNodeId, event);
 }
 
 export function emitHarnessTaskEvaluation(

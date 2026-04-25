@@ -26,7 +26,7 @@ import type { GraphMutationSocketData } from "@/lib/contracts/events";
 import type { RunSandbox, RunSandboxCommand } from "@/lib/contracts/rest";
 import {
   ExecutionAttemptState,
-  GenerationTurnState,
+  ContextEventState,
   TaskStatus,
   TaskState,
   SandboxState,
@@ -34,7 +34,7 @@ import {
   WorkflowRunState,
   SerializedWorkflowRunState,
 } from "@/lib/types";
-import { deserializeRunState } from "@/lib/runState";
+import { compareContextEvents, deserializeRunState } from "@/lib/runState";
 import { useGraphMutations } from "@/features/graph/hooks/useGraphMutations";
 
 interface UseRunStateResult {
@@ -400,15 +400,24 @@ export function useRunState(
     [runId]
   );
 
-  const handleGenerationTurn = useCallback(
-    (payload: { runId: string; turn: GenerationTurnState }) => {
+  const handleContextEvent = useCallback(
+    (payload: { runId: string; taskNodeId: string; event: ContextEventState }) => {
       if (payload.runId !== runId) return;
 
       setRunState((prev) => {
         if (!prev) return prev;
+        const nextEvents = new Map(prev.contextEventsByTask);
+        const events = nextEvents.get(payload.taskNodeId) ?? [];
+        if (events.some((event) => event.id === payload.event.id)) {
+          return prev;
+        }
+        nextEvents.set(
+          payload.taskNodeId,
+          [...events, payload.event].sort(compareContextEvents),
+        );
         return {
           ...prev,
-          generationTurns: [...prev.generationTurns, payload.turn],
+          contextEventsByTask: nextEvents,
         };
       });
     },
@@ -515,7 +524,7 @@ export function useRunState(
     socket.on("run:completed", handleRunCompleted);
     socket.on("thread:message", handleThreadMessage);
     socket.on("task:evaluation", handleTaskEvaluation);
-    socket.on("generation:turn", handleGenerationTurn);
+    socket.on("context:event", handleContextEvent);
     socket.on("graph:mutation", handleGraphMutationSocket);
 
     return () => {
@@ -529,7 +538,7 @@ export function useRunState(
       socket.off("run:completed", handleRunCompleted);
       socket.off("thread:message", handleThreadMessage);
       socket.off("task:evaluation", handleTaskEvaluation);
-      socket.off("generation:turn", handleGenerationTurn);
+      socket.off("context:event", handleContextEvent);
       socket.off("graph:mutation", handleGraphMutationSocket);
     };
   }, [
@@ -547,7 +556,7 @@ export function useRunState(
     handleRunCompleted,
     handleThreadMessage,
     handleTaskEvaluation,
-    handleGenerationTurn,
+    handleContextEvent,
     handleGraphMutationSocket,
   ]);
 

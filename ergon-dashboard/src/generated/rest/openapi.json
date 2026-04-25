@@ -50,70 +50,6 @@
         }
       }
     },
-    "/runs/{run_id}/generations": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Generations",
-        "description": "Get lossless generation turns for a run.\n\nEach turn contains the raw model request/response, extracted text,\ntool calls, tool results, and optionally logprobs.\n\nQuery params:\n    include: comma-separated fields to include.  ``logprobs`` adds\n        ``token_ids`` and ``logprobs`` arrays (can be large).",
-        "operationId": "get_generations_runs__run_id__generations_get",
-        "parameters": [
-          {
-            "name": "run_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Run Id"
-            }
-          },
-          {
-            "name": "include",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Include"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/RunGenerationTurnDto"
-                  },
-                  "title": "Response Get Generations Runs  Run Id  Generations Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/runs/training/curves": {
       "get": {
         "tags": [
@@ -1142,6 +1078,78 @@
         ],
         "title": "RunCommunicationThreadDto"
       },
+      "RunContextEventDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "taskExecutionId": {
+            "type": "string",
+            "title": "Taskexecutionid"
+          },
+          "taskNodeId": {
+            "type": "string",
+            "title": "Tasknodeid"
+          },
+          "workerBindingKey": {
+            "type": "string",
+            "title": "Workerbindingkey"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "eventType": {
+            "type": "string",
+            "title": "Eventtype"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Startedat"
+          },
+          "completedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completedat"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "taskExecutionId",
+          "taskNodeId",
+          "workerBindingKey",
+          "sequence",
+          "eventType",
+          "payload",
+          "createdAt"
+        ],
+        "title": "RunContextEventDto"
+      },
       "RunEvaluationCriterionDto": {
         "properties": {
           "id": {
@@ -1169,7 +1177,14 @@
             "title": "Criteriondescription"
           },
           "evaluationInput": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Evaluationinput"
           },
           "score": {
@@ -1181,7 +1196,14 @@
             "title": "Maxscore"
           },
           "feedback": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Feedback"
           },
           "evaluatedActionIds": {
@@ -1220,10 +1242,8 @@
           "criterionNum",
           "criterionType",
           "criterionDescription",
-          "evaluationInput",
           "score",
-          "maxScore",
-          "feedback"
+          "maxScore"
         ],
         "title": "RunEvaluationCriterionDto"
       },
@@ -1353,149 +1373,6 @@
           "status"
         ],
         "title": "RunExecutionAttemptDto"
-      },
-      "RunGenerationTurnDto": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "taskExecutionId": {
-            "type": "string",
-            "title": "Taskexecutionid"
-          },
-          "workerBindingKey": {
-            "type": "string",
-            "title": "Workerbindingkey"
-          },
-          "turnIndex": {
-            "type": "integer",
-            "title": "Turnindex"
-          },
-          "promptText": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prompttext"
-          },
-          "rawResponse": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Rawresponse"
-          },
-          "responseText": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Responsetext"
-          },
-          "toolCalls": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": true,
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Toolcalls"
-          },
-          "toolResults": {
-            "anyOf": [
-              {
-                "items": {
-                  "additionalProperties": true,
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Toolresults"
-          },
-          "policyVersion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Policyversion"
-          },
-          "hasLogprobs": {
-            "type": "boolean",
-            "title": "Haslogprobs",
-            "default": false
-          },
-          "createdAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Createdat"
-          },
-          "tokenIds": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "integer"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tokenids"
-          },
-          "logprobs": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Logprobs"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "taskExecutionId",
-          "workerBindingKey",
-          "turnIndex",
-          "rawResponse"
-        ],
-        "title": "RunGenerationTurnDto",
-        "description": "One model generation turn in a task execution."
       },
       "RunResourceDto": {
         "properties": {
@@ -1751,15 +1628,15 @@
             "type": "object",
             "title": "Sandboxesbytask"
           },
-          "generationTurnsByTask": {
+          "contextEventsByTask": {
             "additionalProperties": {
               "items": {
-                "$ref": "#/components/schemas/RunGenerationTurnDto"
+                "$ref": "#/components/schemas/RunContextEventDto"
               },
               "type": "array"
             },
             "type": "object",
-            "title": "Generationturnsbytask"
+            "title": "Contexteventsbytask"
           },
           "threads": {
             "items": {

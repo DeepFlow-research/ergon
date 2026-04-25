@@ -11,7 +11,6 @@ import {
   broadcastRunStarted,
   broadcastCohortUpdated,
   broadcastRunCompleted,
-  broadcastGenerationTurn,
   broadcastGraphMutation,
   broadcastTaskEvaluation,
   broadcastTaskStatus,
@@ -23,7 +22,6 @@ import {
 } from "@/lib/socket/server";
 import {
   parseDashboardCohortUpdatedData,
-  parseDashboardGenerationTurnCompletedData,
   parseDashboardGraphMutationData,
   parseDashboardTaskEvaluationUpdatedData,
   parseDashboardThreadMessageCreatedData,
@@ -38,7 +36,6 @@ import {
   DashboardWorkflowCompletedEventSchema,
 } from "@/generated/events";
 import {
-  GenerationTurnState,
   ResourceState,
   SandboxCommandState,
   TaskStatus,
@@ -425,33 +422,6 @@ const onSandboxClosed = inngest.createFunction(
 );
 
 // =============================================================================
-// Generation Turn Events (RL Observability)
-// =============================================================================
-
-const onGenerationTurnCompleted = inngest.createFunction(
-  { id: "dashboard-generation-turn-completed" },
-  { event: "dashboard/generation.turn_completed" },
-  async ({ event }) => {
-    const payload = parseDashboardGenerationTurnCompletedData(event.data);
-
-    const turn: GenerationTurnState = {
-      taskExecutionId: payload.task_execution_id,
-      workerBindingKey: payload.worker_binding_key,
-      workerName: payload.worker_name,
-      turnIndex: payload.turn_index,
-      responseText: payload.response_text ?? null,
-      toolCalls: (payload.tool_calls as GenerationTurnState["toolCalls"]) ?? null,
-      policyVersion: payload.policy_version ?? null,
-    };
-
-    store.addGenerationTurn(payload.run_id, turn);
-    broadcastGenerationTurn(payload.run_id, turn);
-
-    return { success: true };
-  },
-);
-
-// =============================================================================
 // Graph Mutation Events
 // =============================================================================
 
@@ -481,7 +451,6 @@ export const functions = [
   onSandboxCreated,
   onSandboxCommand,
   onSandboxClosed,
-  onGenerationTurnCompleted,
   onGraphMutation,
   onContextEvent,
 ];

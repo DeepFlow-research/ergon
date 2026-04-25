@@ -4,10 +4,10 @@ import { useTaskDetails } from "@/hooks/useTaskDetails";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { CommunicationPanel } from "@/components/panels/CommunicationPanel";
 import { EvaluationPanel } from "@/components/panels/EvaluationPanel";
-import { GenerationTracePanel } from "@/components/panels/GenerationTracePanel";
 import { ResourcePanel } from "@/components/panels/ResourcePanel";
 import { SandboxPanel } from "@/components/panels/SandboxPanel";
 import { TaskTransitionLog } from "@/components/workspace/TaskTransitionLog";
+import { ContextEventLog } from "@/features/graph/components/ContextEventLog";
 import type { WorkflowRunState } from "@/lib/types";
 import { formatTaskWallTimestamp } from "@/features/graph/utils/taskTiming";
 
@@ -53,7 +53,7 @@ export function TaskWorkspace({
   const { task, resources, executions, sandbox, threads, evaluation, dependencies, isLoading } =
     useTaskDetails(runState, taskId);
 
-  const generationTurns = runState?.generationTurns ?? [];
+  const contextEvents = taskId && runState ? (runState.contextEventsByTask.get(taskId) ?? []) : [];
 
   if (!taskId) {
     return (
@@ -167,8 +167,8 @@ export function TaskWorkspace({
           <TaskTransitionLog task={task} onJumpToSequence={onJumpToSequence} />
         </WorkspaceSection>
 
-        <WorkspaceSection testId="workspace-generations" title="Generations">
-          <GenerationTracePanel turns={generationTurns} runId={runState?.id} />
+        <WorkspaceSection testId="workspace-actions" title="Actions">
+          <ContextEventLog events={contextEvents} />
         </WorkspaceSection>
 
         <div data-testid="workspace-primary">

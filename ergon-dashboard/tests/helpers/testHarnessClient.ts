@@ -1,13 +1,17 @@
 import type { APIRequestContext } from "@playwright/test";
 
 export interface TestGraphNodeDto {
+  id: string;
   task_slug: string;
   level: number;
   status: string;
+  parent_node_id: string | null;
   parent_task_slug: string | null;
 }
 
 export interface TestEvaluationDto {
+  task_id: string;
+  task_slug: string | null;
   score: number;
   reason: string;
 }
@@ -24,7 +28,16 @@ export interface TestRunStateDto {
   graph_nodes: TestGraphNodeDto[];
   mutations: TestGraphMutationDto[];
   evaluations: TestEvaluationDto[];
+  executions: {
+    task_slug: string | null;
+    status: string;
+    error: string | null;
+  }[];
+  execution_count: number;
+  mutation_count: number;
   resource_count: number;
+  thread_count: number;
+  context_event_count: number;
 }
 
 export class BackendHarnessClient {

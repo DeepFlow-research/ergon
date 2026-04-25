@@ -15,7 +15,6 @@ import { config } from "../config";
 import {
   ContextEventState,
   ExecutionAttemptState,
-  GenerationTurnState,
   TaskStatus,
   TaskTreeNode,
   TaskState,
@@ -124,7 +123,6 @@ class DashboardStore {
       sandboxesByTask: new Map(),
       threads: [],
       evaluationsByTask: new Map(),
-      generationTurns: [],
       contextEventsByTask: new Map(),
       startedAt,
       completedAt: null,
@@ -286,12 +284,6 @@ class DashboardStore {
     } else {
       run.threads.push(thread);
     }
-  }
-
-  addGenerationTurn(runId: string, turn: GenerationTurnState): void {
-    const run = this.runs.get(runId);
-    if (!run) return;
-    run.generationTurns.push(turn);
   }
 
   addContextEvent(runId: string, taskNodeId: string, event: ContextEventState): void {

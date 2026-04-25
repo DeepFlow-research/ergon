@@ -77,7 +77,6 @@ export const DashboardEventNames = {
   SANDBOX_CLOSED: "dashboard/sandbox.closed",
   THREAD_MESSAGE_CREATED: "dashboard/thread.message_created",
   TASK_EVALUATION_UPDATED: "dashboard/task.evaluation_updated",
-  GENERATION_TURN_COMPLETED: "dashboard/generation.turn_completed",
   GRAPH_MUTATION: "dashboard/graph.mutation",
   CONTEXT_EVENT: "dashboard/context.event",
 } as const;
@@ -107,8 +106,7 @@ export type TaskEvaluationState = RestRunTaskEvaluation;
 export type DashboardThreadMessageCreatedData = GeneratedDashboardThreadMessageCreatedData;
 export type DashboardTaskEvaluationUpdatedData = GeneratedDashboardTaskEvaluationUpdatedData;
 
-import type { DashboardGenerationTurnCompletedData as _GeneratedDashboardGenerationTurnCompletedData, DashboardContextEventEventData as _GeneratedDashboardContextEventEventData } from "@/lib/contracts/events";
-export type DashboardGenerationTurnCompletedData = _GeneratedDashboardGenerationTurnCompletedData;
+import type { DashboardContextEventEventData as _GeneratedDashboardContextEventEventData } from "@/lib/contracts/events";
 export type DashboardContextEventEventData = _GeneratedDashboardContextEventEventData;
 
 export type DashboardGraphMutationData = GeneratedDashboardGraphMutationData;
@@ -129,7 +127,6 @@ export type DashboardEventData =
   | DashboardSandboxClosedData
   | DashboardThreadMessageCreatedData
   | DashboardTaskEvaluationUpdatedData
-  | DashboardGenerationTurnCompletedData
   | DashboardGraphMutationData
   | DashboardContextEventEventData;
 
@@ -148,7 +145,6 @@ export type DashboardEvents = {
   "dashboard/sandbox.closed": { data: DashboardSandboxClosedData };
   "dashboard/thread.message_created": { data: DashboardThreadMessageCreatedData };
   "dashboard/task.evaluation_updated": { data: DashboardTaskEvaluationUpdatedData };
-  "dashboard/generation.turn_completed": { data: DashboardGenerationTurnCompletedData };
   "dashboard/graph.mutation": { data: DashboardGraphMutationData };
   "dashboard/context.event": { data: DashboardContextEventEventData };
 };
@@ -260,20 +256,6 @@ export interface SandboxCommandState {
   timestamp: string;
 }
 
-export interface GenerationTurnState {
-  taskExecutionId: string;
-  workerBindingKey: string;
-  workerName: string;
-  turnIndex: number;
-  responseText: string | null;
-  toolCalls: Array<{ tool_call_id: string; tool_name: string; args: unknown }> | null;
-  policyVersion: string | null;
-  /** ISO timestamp of when this turn completed, if available. Used for timeline correlation. */
-  at?: string | null;
-  /** Task node this turn belongs to (for cross-linking from timeline/stream). */
-  taskId?: string | null;
-}
-
 /**
  * A DAG edge tracked independently of node parent/child structure, so we can
  * respond to edge.removed / edge.status_changed mutations instead of silently
@@ -344,9 +326,6 @@ export interface WorkflowRunState {
   // Task evaluation snapshots keyed by task ID or "__run__" for run-scoped judgments
   evaluationsByTask: Map<string, TaskEvaluationState>;
 
-  // Generation turns (RL observability) — append-only, keyed by task execution
-  generationTurns: GenerationTurnState[];
-
   // Context events (lossless per-event records) keyed by task node ID
   contextEventsByTask: Map<string, ContextEventState[]>;
 
@@ -394,7 +373,6 @@ export interface ServerToClientEvents {
   "sandbox:closed": (data: SandboxClosedSocketData) => void;
   "thread:message": (data: DashboardThreadMessageCreatedData) => void;
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
-  "generation:turn": (data: { runId: string; turn: GenerationTurnState }) => void;
   "graph:mutation": (data: GraphMutationSocketData) => void;
   "context:event": (data: { runId: string; taskNodeId: string; event: ContextEventState }) => void;
   // Sync event - sends all current runs to a client on request

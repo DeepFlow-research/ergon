@@ -1,6 +1,7 @@
 import type { DashboardHarnessSeedPayload } from "../../src/lib/testing/dashboardHarness";
 import type {
   CommunicationThreadState,
+  ContextEventState,
   SerializedWorkflowRunState,
   TaskEvaluationState,
   TaskState,
@@ -21,6 +22,9 @@ export const FIXTURE_IDS = {
   messageIdB: "88888888-8888-4888-8888-888888888888",
   evaluationId: "99999999-9999-4999-8999-999999999999",
   criterionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  toolCallEventId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  toolResultEventId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  deltaToolCallEventId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
 } as const;
 
 function taskState(task: Partial<TaskState> & Pick<TaskState, "id" | "name" | "description" | "status" | "isLeaf" | "level">): TaskState {
@@ -67,6 +71,46 @@ function serializedRunState(): SerializedWorkflowRunState {
     parentId: FIXTURE_IDS.rootTaskId,
     dependsOnIds: [FIXTURE_IDS.exploreTaskId],
   });
+  const solveContextEvents: ContextEventState[] = [
+    {
+      id: FIXTURE_IDS.toolCallEventId,
+      taskExecutionId: "execution-solve-1",
+      taskNodeId: FIXTURE_IDS.solveTaskId,
+      workerBindingKey: "react-worker",
+      sequence: 0,
+      eventType: "tool_call",
+      payload: {
+        event_type: "tool_call",
+        tool_call_id: "call-lean-check",
+        tool_name: "lean_check",
+        args: { file: "proof.lean" },
+        turn_id: "turn-1",
+        turn_token_ids: [101, 102, 103],
+        turn_logprobs: null,
+      },
+      createdAt: "2026-03-18T12:00:18.000Z",
+      startedAt: "2026-03-18T12:00:18.000Z",
+      completedAt: "2026-03-18T12:00:18.100Z",
+    },
+    {
+      id: FIXTURE_IDS.toolResultEventId,
+      taskExecutionId: "execution-solve-1",
+      taskNodeId: FIXTURE_IDS.solveTaskId,
+      workerBindingKey: "react-worker",
+      sequence: 1,
+      eventType: "tool_result",
+      payload: {
+        event_type: "tool_result",
+        tool_call_id: "call-lean-check",
+        tool_name: "lean_check",
+        result: "checking proof...",
+        is_error: false,
+      },
+      createdAt: "2026-03-18T12:00:19.000Z",
+      startedAt: null,
+      completedAt: null,
+    },
+  ];
 
   return {
     id: FIXTURE_IDS.runId,
@@ -79,7 +123,9 @@ function serializedRunState(): SerializedWorkflowRunState {
       [solve.id]: solve,
     },
     rootTaskId: FIXTURE_IDS.rootTaskId,
-    generationTurnsByTask: {},
+    contextEventsByTask: {
+      [FIXTURE_IDS.solveTaskId]: solveContextEvents,
+    },
     resourcesByTask: {
       [FIXTURE_IDS.solveTaskId]: [
         {
@@ -282,6 +328,29 @@ export function createDeltaThread(): CommunicationThreadState {
         createdAt: "2026-03-18T12:00:24.000Z",
       },
     ],
+  };
+}
+
+export function createDeltaContextEvent(): ContextEventState {
+  return {
+    id: FIXTURE_IDS.deltaToolCallEventId,
+    taskExecutionId: "execution-solve-1",
+    taskNodeId: FIXTURE_IDS.solveTaskId,
+    workerBindingKey: "react-worker",
+    sequence: 2,
+    eventType: "tool_call",
+    payload: {
+      event_type: "tool_call",
+      tool_call_id: "call-lake-build",
+      tool_name: "lake_build",
+      args: { target: "Proof" },
+      turn_id: "turn-2",
+      turn_token_ids: [201, 202],
+      turn_logprobs: null,
+    },
+    createdAt: "2026-03-18T12:00:25.000Z",
+    startedAt: "2026-03-18T12:00:25.000Z",
+    completedAt: "2026-03-18T12:00:26.000Z",
   };
 }
 

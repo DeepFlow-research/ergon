@@ -19,7 +19,7 @@ import * as path from "node:path";
 
 import { expect, Page, test } from "@playwright/test";
 
-import { BackendHarnessClient } from "../../helpers/backendHarnessClient";
+import { BackendHarnessClient, BackendRunState } from "../../helpers/backendHarnessClient";
 import { EXPECTED_SUBTASK_SLUGS } from "./expected";
 
 export interface SmokeSpecConfig {
@@ -54,6 +54,52 @@ async function screenshot(target: Page, out: string): Promise<void> {
   await target.screenshot({ path: out, fullPage: true });
 }
 
+async function assertRunWorkspace(
+  page: Page,
+  state: BackendRunState,
+  runId: string,
+): Promise<void> {
+  await expect(page.getByTestId("run-header")).toBeVisible();
+  await expect(page.getByTestId("run-status-bar")).toBeVisible();
+  await expect(page.getByTestId("run-status-count-completed")).toBeVisible();
+  await expect(page.getByTestId("graph-canvas")).toBeVisible();
+
+  const evaluatedTaskIds = new Set(state.evaluations.map((evaluation) => evaluation.task_id));
+  const selected =
+    state.graph_nodes.find((node) => node.level > 0 && node.task_slug === "d_root") ??
+    state.graph_nodes.find((node) => node.level > 0 && evaluatedTaskIds.has(node.id)) ??
+    state.graph_nodes.find((node) => node.level > 0);
+  expect(selected, `no leaf task found for run ${runId}`).toBeTruthy();
+
+  await page.getByTestId(`graph-node-${selected!.id}`).click();
+  await expect(page.getByTestId("workspace-region")).toBeVisible();
+  await expect(page.getByTestId("workspace-header")).toContainText(selected!.task_slug);
+  await expect(page.getByTestId("workspace-actions")).toBeVisible();
+  await expect(page.getByTestId("workspace-outputs")).toBeVisible();
+  await expect(page.getByTestId("workspace-executions")).toBeVisible();
+  await expect(page.getByTestId("workspace-sandbox")).toBeVisible();
+  await expect(page.getByTestId("workspace-communication")).toBeVisible();
+  await expect(page.getByTestId("workspace-transitions")).toBeVisible();
+
+  if (evaluatedTaskIds.has(selected!.id)) {
+    await expect(page.getByTestId("workspace-evaluation")).toContainText("Total score");
+  } else {
+    await expect(page.getByTestId("workspace-evaluation")).toBeVisible();
+  }
+
+  const eventStream = page.getByTestId("event-stream-region");
+  if (!(await eventStream.isVisible())) {
+    await page.getByTestId("event-stream-toggle").click();
+  }
+  await expect(eventStream).toBeVisible();
+  await expect(page.locator('[data-testid^="event-row-"]').first()).toBeVisible();
+
+  if (state.mutation_count > 0) {
+    await page.getByTestId("mode-timeline").click();
+    await expect(page.getByTestId("timeline-region")).toBeVisible();
+  }
+}
+
 export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
   const cohortKey = requireEnv("COHORT_KEY");
   const screenshotDir = requireEnv("SCREENSHOT_DIR");
@@ -78,6 +124,13 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         if (kind === "happy") {
           expect(state.status).toBe("completed");
           expect(state.graph_nodes.length).toBe(10);
+          expect(state.resource_count).toBeGreaterThanOrEqual(18);
+          expect(state.mutation_count).toBeGreaterThan(0);
+          expect(state.mutations.length).toBe(state.mutation_count);
+          expect(state.executions.length).toBeGreaterThan(0);
+          expect(state.executions.length).toBe(state.execution_count);
+          expect(state.thread_count).toBeGreaterThan(0);
+          expect(state.context_event_count).toBeGreaterThan(0);
 
           const leafSlugs = state.graph_nodes
             .filter((n) => n.level > 0)
@@ -92,9 +145,9 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
           const successfulEval = state.evaluations.some((e) => e.score === 1.0);
           expect(successfulEval).toBe(true);
 
-          await page.goto(`/run/${run_id}`);
-          // Graph canvas is the dashboard contract we rely on today.
-          await expect(page.getByTestId("graph-canvas")).toBeVisible();
+          const cohortId = await client.getCohortId(cohortKey);
+          await page.goto(`/cohorts/${cohortId}/runs/${run_id}`);
+          await assertRunWorkspace(page, state, run_id);
 
           await screenshot(
             page,
@@ -110,6 +163,11 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         // sad-path run assertions (researchrubrics-only today). A failed leaf
         // returns score-zero output so persistence still runs.
         expect(state.status).toBe("completed");
+        expect(state.resource_count).toBeGreaterThanOrEqual(17);
+        expect(state.executions.length).toBe(state.execution_count);
+        expect(state.mutations.length).toBe(state.mutation_count);
+        expect(state.thread_count).toBeGreaterThan(0);
+        expect(state.context_event_count).toBeGreaterThan(0);
         const statusBySlug = new Map(
           state.graph_nodes.filter((n) => n.level > 0).map((n) => [n.task_slug, n.status]),
         );
@@ -119,8 +177,9 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         const failedEval = state.evaluations.some((e) => e.score === 0.0);
         expect(failedEval).toBe(true);
 
-        await page.goto(`/run/${run_id}`);
-        await expect(page.getByTestId("graph-canvas")).toBeVisible();
+        const cohortId = await client.getCohortId(cohortKey);
+        await page.goto(`/cohorts/${cohortId}/runs/${run_id}`);
+        await assertRunWorkspace(page, state, run_id);
         await screenshot(
           page,
           path.join(screenshotDir, cfg.env, `${run_id}-sad.png`),
