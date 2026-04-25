@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MAS Evolution Walkthrough</title>
+  <style>
+    :root {
+      --bg: #080d17;
+      --panel: #101a2c;
+      --panel-2: #162238;
+      --stroke: #253650;
+      --ink: #edf6ff;
+      --muted: #91a4bd;
+      --blue: #38bdf8;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --violet: #a78bfa;
+      --paper: #f8fafc;
+      --paper-ink: #0f172a;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 10% 6%, rgb(56 189 248 / 0.18), transparent 28%),
+        radial-gradient(circle at 88% 18%, rgb(167 139 250 / 0.14), transparent 30%),
+        var(--bg);
+      color: var(--ink);
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 26px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: 42px;
+      line-height: 1;
+      letter-spacing: -0.045em;
+    }
+
+    .hero p {
+      margin-top: 14px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 16px;
+    }
+
+    .thesis {
+      border: 1px solid var(--stroke);
+      border-radius: 24px;
+      padding: 18px;
+      background: rgb(16 26 44 / 0.82);
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .thesis b {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+
+    .story {
+      display: grid;
+      gap: 22px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      border: 1px solid var(--stroke);
+      border-radius: 28px;
+      background: rgb(16 26 44 / 0.74);
+      overflow: hidden;
+      box-shadow: 0 22px 64px rgb(0 0 0 / 0.34);
+    }
+
+    .copy {
+      padding: 24px;
+      border-right: 1px solid var(--stroke);
+      background: linear-gradient(180deg, rgb(22 34 56 / 0.92), rgb(16 26 44 / 0.92));
+    }
+
+    .eyebrow {
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .copy h2 {
+      margin-top: 10px;
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .copy p {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .rules {
+      margin-top: 16px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .rule {
+      border: 1px solid rgb(255 255 255 / 0.08);
+      border-radius: 14px;
+      background: rgb(8 13 23 / 0.38);
+      padding: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .rule b { color: var(--ink); }
+
+    .visual {
+      position: relative;
+      min-height: 350px;
+      background:
+        radial-gradient(circle, rgb(148 163 184 / 0.12) 1px, transparent 1px),
+        #09111f;
+      background-size: 20px 20px;
+    }
+
+    .node {
+      position: absolute;
+      width: 132px;
+      min-height: 72px;
+      border-radius: 14px;
+      background: var(--paper);
+      color: var(--paper-ink);
+      border-left: 5px solid #94a3b8;
+      padding: 10px;
+      box-shadow: 0 14px 34px rgb(0 0 0 / 0.32);
+      z-index: 2;
+    }
+
+    .node h3 {
+      margin-top: 7px;
+      font-size: 12px;
+      line-height: 1.15;
+    }
+
+    .node p {
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 10px;
+      line-height: 1.25;
+    }
+
+    .node.green { border-left-color: var(--green); }
+    .node.amber { border-left-color: var(--amber); }
+    .node.blue { border-left-color: var(--blue); }
+    .node.focus {
+      outline: 3px solid rgb(56 189 248 / 0.45);
+      outline-offset: 4px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      font-size: 8px;
+      font-weight: 950;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 14px currentColor;
+    }
+
+    .pill {
+      position: absolute;
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: rgb(16 26 44 / 0.96);
+      padding: 9px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      z-index: 3;
+    }
+
+    .timeline {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 24px;
+      height: 70px;
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      background: rgb(16 26 44 / 0.95);
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      padding: 12px;
+      z-index: 4;
+    }
+
+    .tick {
+      border-radius: 12px;
+      background: #17243a;
+      border: 1px solid #22344f;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      font-size: 10px;
+      font-weight: 850;
+    }
+
+    .tick.active {
+      border-color: var(--blue);
+      color: var(--ink);
+      background: rgb(56 189 248 / 0.15);
+    }
+
+    .branch {
+      position: absolute;
+      border: 2px dashed rgb(56 189 248 / 0.32);
+      border-radius: 22px;
+      background: rgb(56 189 248 / 0.05);
+      z-index: 1;
+    }
+
+    .branch span {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 10px;
+      font-weight: 950;
+    }
+
+    svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    path {
+      fill: none;
+      stroke: #5f7896;
+      stroke-width: 2;
+      stroke-dasharray: 6 6;
+      opacity: 0.7;
+    }
+
+    path.hot {
+      stroke: var(--blue);
+      stroke-width: 3;
+      stroke-dasharray: none;
+      filter: drop-shadow(0 0 8px rgb(56 189 248 / 0.6));
+    }
+
+    .phase-grid {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      top: 48px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+
+    .phase {
+      min-height: 150px;
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      background: rgb(16 26 44 / 0.92);
+      padding: 12px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .phase b {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 10px;
+    }
+
+    .phase.active {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgb(56 189 248 / 0.16);
+    }
+
+    .mini {
+      height: 26px;
+      border-radius: 9px;
+      background: rgb(24 40 64 / 0.88);
+      margin-top: 7px;
+      border-left: 4px solid #94a3b8;
+    }
+
+    .mini.green { border-left-color: var(--green); }
+    .mini.amber { border-left-color: var(--amber); }
+    .mini.blue { border-left-color: var(--blue); }
+
+    .inspector {
+      position: absolute;
+      top: 26px;
+      right: 26px;
+      width: 210px;
+      bottom: 26px;
+      border: 1px solid var(--stroke);
+      border-radius: 20px;
+      background: rgb(16 26 44 / 0.96);
+      padding: 14px;
+      z-index: 4;
+    }
+
+    .inspector h3 {
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .inspector div {
+      border-radius: 12px;
+      background: var(--panel-2);
+      padding: 9px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      margin-top: 8px;
+    }
+
+    .inspector b { color: var(--ink); }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div>
+        <h1>Walk the User Through a MAS Run</h1>
+        <p>
+          This walkthrough treats the run page as a visual debugger. The graph is a spatial aid,
+          but time is the main axis. Details move into an inspector so the canvas stays readable.
+        </p>
+      </div>
+      <aside class="thesis">
+        <b>Product thesis</b>
+        Do not show recursive subtasks all the way down by default. Show the event being explained,
+        expand the affected branch, summarize hidden branches, and let the user scrub or pin context.
+      </aside>
+    </section>
+
+    <section class="story">
+      <article class="step">
+        <div class="copy">
+          <div class="eyebrow">Moment 1</div>
+          <h2>Landing: “Where is this sample right now?”</h2>
+          <p>
+            The default page opens at the latest meaningful moment. It shows current status, the
+            active branch, and a compact timeline. The user should not need to pan around first.
+          </p>
+          <div class="rules">
+            <div class="rule"><b>Default expansion:</b> root plus active branch only.</div>
+            <div class="rule"><b>Hidden depth:</b> collapsed branches show counts and status mix.</div>
+            <div class="rule"><b>Primary action:</b> scrub backward or click current task.</div>
+          </div>
+        </div>
+        <div class="visual">
+          <svg viewBox="0 0 820 350">
+            <path class="hot" d="M120 148 C196 148, 220 148, 290 148" />
+            <path d="M120 148 C194 148, 226 72, 300 72" />
+            <path d="M422 148 C500 148, 526 148, 600 148" />
+          </svg>
+          <div class="pill" style="left: 24px; top: 20px;">Latest moment · step 12 / 34</div>
+          <div class="node amber" style="left: 62px; top: 112px;">
+            <span class="status"><span class="dot" style="color: var(--amber)"></span>running</span><h3>Root task</h3><p>Coordinating branches.</p>
+          </div>
+          <div class="node green" style="left: 290px; top: 46px;">
+            <span class="status"><span class="dot" style="color: var(--green)"></span>done</span><h3>Inspect repo</h3><p>Completed.</p>
+          </div>
+          <div class="node amber focus" style="left: 290px; top: 112px;">
+            <span class="status"><span class="dot" style="color: var(--amber)"></span>running</span><h3>Reproduce issue</h3><p>Current focus.</p>
+          </div>
+          <div class="pill" style="left: 590px; top: 124px;">Implementation branch · 3 hidden</div>
+          <div class="timeline">
+            <div class="tick">create</div><div class="tick">delegate</div><div class="tick">inspect</div>
+            <div class="tick active">repro</div><div class="tick">patch</div><div class="tick">eval</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="copy">
+          <div class="eyebrow">Moment 2</div>
+          <h2>Scrub: “What changed at this point?”</h2>
+          <p>
+            Scrubbing does not just move a slider. It changes graph emphasis, opens the touched
+            branch, and shows the state delta in plain language.
+          </p>
+          <div class="rules">
+            <div class="rule"><b>Selected event:</b> one mutation or grouped event has ownership of the canvas.</div>
+            <div class="rule"><b>Before/after:</b> touched nodes show old → new status.</div>
+            <div class="rule"><b>Noise control:</b> unrelated branches dim or collapse.</div>
+          </div>
+        </div>
+        <div class="visual">
+          <svg viewBox="0 0 820 350">
+            <path class="hot" d="M130 160 C220 160, 240 160, 322 160" />
+            <path d="M454 160 C534 160, 556 224, 636 224" />
+          </svg>
+          <div class="branch" style="left: 236px; top: 44px; width: 290px; height: 204px;"><span>affected branch</span></div>
+          <div class="node green" style="left: 62px; top: 124px;">
+            <span class="status"><span class="dot" style="color: var(--green)"></span>before</span><h3>Inspect repo</h3><p>Ready dependency.</p>
+          </div>
+          <div class="node amber focus" style="left: 322px; top: 124px;">
+            <span class="status"><span class="dot" style="color: var(--amber)"></span>after</span><h3>Reproduce issue</h3><p>pending → running</p>
+          </div>
+          <div class="node blue" style="left: 636px; top: 188px;">
+            <span class="status"><span class="dot" style="color: var(--blue)"></span>waiting</span><h3>Patch strategy</h3><p>Blocked by repro.</p>
+          </div>
+          <div class="inspector">
+            <h3>Event #12</h3>
+            <div><b>Trigger</b><br />worker_started</div>
+            <div><b>Changed</b><br />Reproduce issue: pending → running</div>
+            <div><b>Why</b><br />Inspect repo completed and dependency became satisfied.</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="step">
+        <div class="copy">
+          <div class="eyebrow">Moment 3</div>
+          <h2>Zoom out: “What chapter are we in?”</h2>
+          <p>
+            For post-run understanding, raw mutations are too granular. A phase map gives the user
+            a stable story: created, delegated, executed, validated, evaluated.
+          </p>
+          <div class="rules">
+            <div class="rule"><b>Phase map:</b> grouped by intent, not event type alone.</div>
+            <div class="rule"><b>Drilldown:</b> clicking a phase filters timeline and graph.</div>
+            <div class="rule"><b>Audit:</b> raw events remain available below the summary.</div>
+          </div>
+        </div>
+        <div class="visual">
+          <div class="phase-grid">
+            <div class="phase"><b>Create</b><div class="mini green"></div><div class="mini green"></div></div>
+            <div class="phase"><b>Delegate</b><div class="mini green"></div><div class="mini blue"></div></div>
+            <div class="phase active"><b>Execute</b><div class="mini green"></div><div class="mini amber"></div><div class="mini blue"></div></div>
+            <div class="phase"><b>Validate</b><div class="mini"></div><div class="mini"></div></div>
+            <div class="phase"><b>Evaluate</b><div class="mini"></div></div>
+          </div>
+          <div class="pill" style="left: 44px; bottom: 42px; right: 44px; border-radius: 18px; line-height: 1.4;">
+            Execute phase selected: 9 events, 5 completed tasks, 2 running tasks, 1 blocked task.
+            This phase summary becomes the screenshot-friendly story of the sample.
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
