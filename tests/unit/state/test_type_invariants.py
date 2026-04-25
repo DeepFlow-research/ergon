@@ -124,6 +124,7 @@ def test_field_accepts_valid_value(build_fn, field, expected):
     roundtripped = type(obj).model_validate(obj.model_dump())
     assert getattr(roundtripped, field) == expected
 
+
 def test_task_execution_rejects_missing_static_or_dynamic_identity():
     with pytest.raises(ValidationError):
         RunTaskExecution.model_validate(

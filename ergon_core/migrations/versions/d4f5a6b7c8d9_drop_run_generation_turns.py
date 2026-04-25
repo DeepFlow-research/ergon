@@ -21,10 +21,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.drop_index(op.f("ix_run_generation_turns_worker_binding_key"), table_name="run_generation_turns")
-    op.drop_index(op.f("ix_run_generation_turns_task_execution_id"), table_name="run_generation_turns")
+    op.drop_index(
+        op.f("ix_run_generation_turns_worker_binding_key"), table_name="run_generation_turns"
+    )
+    op.drop_index(
+        op.f("ix_run_generation_turns_task_execution_id"), table_name="run_generation_turns"
+    )
     op.drop_index(op.f("ix_run_generation_turns_run_id"), table_name="run_generation_turns")
-    op.drop_index(op.f("ix_run_generation_turns_execution_outcome"), table_name="run_generation_turns")
+    op.drop_index(
+        op.f("ix_run_generation_turns_execution_outcome"), table_name="run_generation_turns"
+    )
     op.drop_table("run_generation_turns")
 
 

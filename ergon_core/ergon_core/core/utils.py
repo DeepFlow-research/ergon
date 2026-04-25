@@ -15,4 +15,3 @@ def require_not_none(value: T | None, error_msg: str) -> T:
     if value is None:
         raise ValueError(error_msg)
     return value
-
