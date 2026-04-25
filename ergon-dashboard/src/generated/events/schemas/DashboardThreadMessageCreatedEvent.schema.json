@@ -31,6 +31,18 @@
           "default": null,
           "title": "Taskid"
         },
+        "taskExecutionId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskexecutionid"
+        },
         "fromAgentId": {
           "title": "Fromagentid",
           "type": "string"

@@ -28,8 +28,16 @@
           "type": "string"
         },
         "evaluationInput": {
-          "title": "Evaluationinput",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evaluationinput"
         },
         "score": {
           "title": "Score",
@@ -40,8 +48,16 @@
           "type": "number"
         },
         "feedback": {
-          "title": "Feedback",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feedback"
         },
         "evaluatedActionIds": {
           "items": {
@@ -78,10 +94,8 @@
         "criterionNum",
         "criterionType",
         "criterionDescription",
-        "evaluationInput",
         "score",
-        "maxScore",
-        "feedback"
+        "maxScore"
       ],
       "title": "RunEvaluationCriterionDto",
       "type": "object"

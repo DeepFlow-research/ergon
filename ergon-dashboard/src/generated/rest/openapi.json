@@ -977,6 +977,17 @@
             ],
             "title": "Taskid"
           },
+          "taskExecutionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Taskexecutionid"
+          },
           "fromAgentId": {
             "type": "string",
             "title": "Fromagentid"
