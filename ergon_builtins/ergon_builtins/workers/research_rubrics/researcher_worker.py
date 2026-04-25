@@ -10,8 +10,6 @@ import time
 from typing import ClassVar
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from ergon_core.api import RunResourceView
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
@@ -34,7 +32,11 @@ from ergon_builtins.tools.research_rubrics_toolkit import (
 )
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.research_rubrics._run_skill import (
-    SkillValue,
+    ReportEditSkillRequest,
+    ReportReadSkillRequest,
+    ReportWriteSkillRequest,
+    SkillRequest,
+    SkillResponse,
     make_run_skill,
 )
 
@@ -100,18 +102,16 @@ class ResearchRubricsResearcherWorker(ReActWorker):
 
         model_run_skill = make_run_skill(model=self.model)
 
-        async def run_skill(
-            skill_name: str,
-            response_model: type[BaseModel],
-            **kwargs: SkillValue,
-        ) -> BaseModel:
-            if skill_name in {"write_report_draft", "edit_report_draft", "read_report_draft"}:
+        async def run_skill(request: SkillRequest) -> SkillResponse:
+            if isinstance(
+                request,
+                (ReportWriteSkillRequest, ReportEditSkillRequest, ReportReadSkillRequest),
+            ):
                 return await self._run_sandbox_report_skill(
                     manager=manager,
-                    skill_name=skill_name,
-                    **kwargs,
+                    request=request,
                 )
-            return await model_run_skill(skill_name, response_model, **kwargs)
+            return await model_run_skill(request)
 
         async def publisher_sync() -> list[RunResourceView]:
             publisher = manager.publisher_for(
@@ -142,31 +142,30 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         self,
         *,
         manager: ResearchRubricsSandboxManager,
-        skill_name: str,
-        **kwargs: SkillValue,
+        request: ReportWriteSkillRequest | ReportEditSkillRequest | ReportReadSkillRequest,
     ) -> ReportWriteResponse | ReportReadResponse:
         started = time.perf_counter()
         try:
-            relative_path = str(kwargs["relative_path"])
+            relative_path = request.relative_path
             path = _workspace_path(relative_path)
-        except (KeyError, ValueError) as exc:
+        except ValueError as exc:
             latency_ms = (time.perf_counter() - started) * 1000
-            if skill_name == "read_report_draft":
+            if isinstance(request, ReportReadSkillRequest):
                 return ReportReadFailure(
-                    path=str(kwargs.get("relative_path", "")),
+                    path=request.relative_path,
                     reason="path_disallowed",
                     detail=str(exc),
                     latency_ms=latency_ms,
                 )
             return ReportWriteFailure(
-                path=str(kwargs.get("relative_path", "")),
+                path=request.relative_path,
                 reason="path_disallowed",
                 detail=str(exc),
                 latency_ms=latency_ms,
             )
 
         try:
-            if skill_name == "read_report_draft":
+            if isinstance(request, ReportReadSkillRequest):
                 latency_ms = (time.perf_counter() - started) * 1000
                 content = await manager.read_report_file(
                     task_id=self.task_id,
@@ -180,8 +179,8 @@ class ResearchRubricsResearcherWorker(ReActWorker):
                     latency_ms=latency_ms,
                 )
 
-            content = str(
-                kwargs["content"] if skill_name == "write_report_draft" else kwargs["patch"],
+            content = (
+                request.content if isinstance(request, ReportWriteSkillRequest) else request.patch
             )
             latency_ms = (time.perf_counter() - started) * 1000
             await manager.write_report_file(
@@ -197,7 +196,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             )
         except Exception as exc:  # slopcop: ignore[no-broad-except]
             latency_ms = (time.perf_counter() - started) * 1000
-            if skill_name == "read_report_draft":
+            if isinstance(request, ReportReadSkillRequest):
                 return ReportReadFailure(
                     path=path,
                     reason="unknown",

@@ -17,6 +17,10 @@ from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportReadSuccess,
     ReportWriteSuccess,
 )
+from ergon_builtins.workers.research_rubrics._run_skill import (
+    ReportReadSkillRequest,
+    ReportWriteSkillRequest,
+)
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
@@ -130,9 +134,10 @@ class TestResearcherWorker:
 
         result = await worker._run_sandbox_report_skill(
             manager=manager,
-            skill_name="write_report_draft",
-            relative_path="final_output/report.md",
-            content="# Report",
+            request=ReportWriteSkillRequest(
+                relative_path="final_output/report.md",
+                content="# Report",
+            ),
         )
 
         manager.write_report_file.assert_awaited_once()
@@ -156,8 +161,7 @@ class TestResearcherWorker:
 
         result = await worker._run_sandbox_report_skill(
             manager=manager,
-            skill_name="read_report_draft",
-            relative_path="final_output/report.md",
+            request=ReportReadSkillRequest(relative_path="final_output/report.md"),
         )
 
         manager.read_report_file.assert_awaited_once()

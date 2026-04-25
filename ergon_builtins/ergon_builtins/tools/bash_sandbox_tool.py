@@ -10,21 +10,47 @@ sandbox_id. Other toolkits can reuse it independently.
 """
 
 from collections.abc import Awaitable, Callable
+from typing import Literal
 
-from ergon_core.api.json_types import JsonObject
+from pydantic import BaseModel
 
 
-async def _stub_sandbox_exec(*, sandbox_id: str, command: str, timeout_s: int) -> dict[str, str]:
+class BashToolSuccess(BaseModel):
+    kind: Literal["success"] = "success"
+    stdout: str
+    stderr: str
+    exit_code: int
+
+    model_config = {"frozen": True}
+
+
+class BashToolFailure(BaseModel):
+    kind: Literal["failure"] = "failure"
+    error: str
+
+    model_config = {"frozen": True}
+
+
+type BashToolResponse = BashToolSuccess | BashToolFailure
+
+
+class SandboxExecResult(BaseModel):
+    stdout: str
+    stderr: str
+    exit_code: int
+
+
+async def _stub_sandbox_exec(*, sandbox_id: str, command: str, timeout_s: int) -> SandboxExecResult:
     """Stub until sandbox management module exists."""
     raise NotImplementedError(
         f"Sandbox exec not yet wired (sandbox_id={sandbox_id}, command={command!r})"
     )
 
 
-def make_sandbox_bash_tool(*, sandbox_id: str) -> Callable[..., Awaitable[JsonObject]]:
+def make_sandbox_bash_tool(*, sandbox_id: str) -> Callable[..., Awaitable[BashToolResponse]]:
     """Produce a single bash callable bound to the given sandbox."""
 
-    async def bash(command: str, timeout_s: int = 30) -> JsonObject:
+    async def bash(command: str, timeout_s: int = 30) -> BashToolResponse:
         """Run a shell command inside the manager's sandbox. Useful for:
         - `sleep 10` between subtask-status polls;
         - `cat` / `echo` for light inspection;
@@ -36,13 +62,12 @@ def make_sandbox_bash_tool(*, sandbox_id: str) -> Callable[..., Awaitable[JsonOb
                 command=command,
                 timeout_s=timeout_s,
             )
-            return {
-                "success": True,
-                "stdout": result.get("stdout", ""),
-                "stderr": result.get("stderr", ""),
-                "exit_code": result.get("exit_code", 0),
-            }
+            return BashToolSuccess(
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.exit_code,
+            )
         except Exception as exc:  # slopcop: ignore[no-broad-except]
-            return {"success": False, "error": str(exc)}
+            return BashToolFailure(error=str(exc))
 
     return bash

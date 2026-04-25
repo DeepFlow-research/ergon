@@ -4,7 +4,10 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_builtins.tools.subtask_lifecycle_toolkit import SubtaskLifecycleToolkit
+from ergon_builtins.tools.subtask_lifecycle_toolkit import (
+    SubtaskLifecycleToolkit,
+    ToolFailure,
+)
 
 
 def _make_toolkit() -> SubtaskLifecycleToolkit:
@@ -27,11 +30,11 @@ async def test_invalid_uuid_returns_error(tool_name: str, args: tuple) -> None:
     tools = _make_toolkit().get_tools()
     tool = next(t for t in tools if t.__name__ == tool_name)
     result = await tool(*args)
-    assert result["success"] is False
-    assert "error" in result
-    error_lower = result["error"].lower()
+    assert isinstance(result, ToolFailure)
+    assert result.kind == "failure"
+    error_lower = result.error.lower()
     assert (
-        "not-a-uuid" in result["error"]
+        "not-a-uuid" in result.error
         or "invalid" in error_lower
         or "badly formed" in error_lower
         or "hexadecimal" in error_lower

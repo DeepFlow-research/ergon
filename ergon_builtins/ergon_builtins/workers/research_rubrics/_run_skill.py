@@ -20,29 +20,94 @@ Why per-call Agent construction:
     interface.
 """
 
-import json
 import logging
 from collections.abc import Awaitable
-from typing import Protocol, TypeVar, get_args, get_origin, get_type_hints
+from types import UnionType
+from typing import ClassVar, Literal, Protocol, cast, get_args, get_type_hints
 
-from ergon_core.api.json_types import JsonObject, JsonValue
 from ergon_core.core.providers.generation.model_resolution import resolve_model_target
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
+from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
+    DocumentResponse,
+    QAResponse,
+    ReportReadResponse,
+    ReportWriteResponse,
+    SearchResponse,
+)
+
 logger = logging.getLogger(__name__)
 
-_T = TypeVar("_T", bound=BaseModel)
-type SkillValue = JsonValue | BaseModel
+type ResponseModel = type[BaseModel] | UnionType
+
+
+class ExaSearchSkillRequest(BaseModel):
+    skill_name: Literal["exa_search"] = "exa_search"
+    response_model: ClassVar[ResponseModel] = SearchResponse
+    query: str
+    num_results: int = 5
+
+    model_config = {"frozen": True}
+
+
+class ExaQASkillRequest(BaseModel):
+    skill_name: Literal["exa_qa"] = "exa_qa"
+    response_model: ClassVar[ResponseModel] = QAResponse
+    question: str
+
+    model_config = {"frozen": True}
+
+
+class ExaGetContentSkillRequest(BaseModel):
+    skill_name: Literal["exa_get_content"] = "exa_get_content"
+    response_model: ClassVar[ResponseModel] = DocumentResponse
+    url: str
+
+    model_config = {"frozen": True}
+
+
+class ReportWriteSkillRequest(BaseModel):
+    skill_name: Literal["write_report_draft"] = "write_report_draft"
+    response_model: ClassVar[ResponseModel] = ReportWriteResponse
+    relative_path: str
+    content: str
+
+    model_config = {"frozen": True}
+
+
+class ReportEditSkillRequest(BaseModel):
+    skill_name: Literal["edit_report_draft"] = "edit_report_draft"
+    response_model: ClassVar[ResponseModel] = ReportWriteResponse
+    relative_path: str
+    patch: str
+
+    model_config = {"frozen": True}
+
+
+class ReportReadSkillRequest(BaseModel):
+    skill_name: Literal["read_report_draft"] = "read_report_draft"
+    response_model: ClassVar[ResponseModel] = ReportReadResponse
+    relative_path: str
+
+    model_config = {"frozen": True}
+
+
+type SkillRequest = (
+    ExaSearchSkillRequest
+    | ExaQASkillRequest
+    | ExaGetContentSkillRequest
+    | ReportWriteSkillRequest
+    | ReportEditSkillRequest
+    | ReportReadSkillRequest
+)
+type SkillResponse = (
+    SearchResponse | QAResponse | DocumentResponse | ReportWriteResponse | ReportReadResponse
+)
 
 
 class RunSkillFn(Protocol):
-    def __call__(
-        self,
-        skill_name: str,
-        response_model: type[_T],
-        **kwargs: SkillValue,
-    ) -> Awaitable[_T]: ...
+    def __call__(self, request: SkillRequest) -> Awaitable[SkillResponse]: ...
 
 
 def make_run_skill(
@@ -64,59 +129,41 @@ def make_run_skill(
         to the default cloud model when None.
     """
 
-    async def run_skill(
-        skill_name: str,
-        response_model: type[_T],
-        **kwargs: SkillValue,
-    ) -> _T:
+    async def run_skill(request: SkillRequest) -> SkillResponse:
         resolved = resolve_model_target(model)
 
-        agent: Agent[None, _T] = Agent(
+        agent = Agent(
             model=resolved.model,
-            output_type=response_model,
+            output_type=request.response_model,
         )
 
-        prompt = _format_skill_prompt(skill_name, kwargs)
+        prompt = _format_skill_prompt(request)
         try:
             result = await agent.run(prompt)
         except Exception as exc:  # slopcop: ignore[no-broad-except]
             # LLM/transport errors are opaque; wrap into a Failure variant.
-            logger.warning("run_skill(%s) failed: %s", skill_name, exc, exc_info=True)
-            failure = _try_build_failure(response_model, kwargs, exc)
+            logger.warning("run_skill(%s) failed: %s", request.skill_name, exc, exc_info=True)
+            failure = _try_build_failure(request, exc)
             if failure is not None:
-                # Narrow: _try_build_failure returns a member of the
-                # response_model union, so it is assignable to _T.
-                return failure  # type: ignore[return-value]  # ty: ignore[invalid-return-type]
+                return cast(SkillResponse, failure)
             raise
-        return result.output
+        return cast(SkillResponse, result.output)
 
     return run_skill
 
 
-def _format_skill_prompt(skill_name: str, kwargs: dict[str, SkillValue]) -> str:
+def _format_skill_prompt(request: SkillRequest) -> str:
     """Format a skill call into a prompt for the pydantic-ai Agent.
 
-    Uses ``default=_json_default`` so BaseModel and other non-JSON-native
-    values survive serialization without the ``str(v)`` mangling the previous
-    version applied to everything.
+    Request DTOs keep each skill's argument shape explicit while still giving
+    the model a simple JSON object to condition on.
     """
-    serialized = json.dumps(kwargs, indent=2, default=_json_default)
+    serialized = request.model_dump_json(indent=2)
     return (
-        f"Execute the '{skill_name}' skill with the following parameters:\n\n"
+        f"Execute the '{request.skill_name}' skill with the following parameters:\n\n"
         f"{serialized}\n\n"
         "Return a structured response matching the expected output schema."
     )
-
-
-def _json_default(value: SkillValue) -> JsonValue:
-    """Fallback serializer for ``json.dumps``.
-
-    Pydantic models are dumped via ``model_dump`` so nested fields are
-    preserved; everything else falls back to ``str``.
-    """
-    if isinstance(value, BaseModel):
-        return value.model_dump(mode="json")
-    return str(value)
 
 
 # ---------------------------------------------------------------------------
@@ -125,8 +172,7 @@ def _json_default(value: SkillValue) -> JsonValue:
 
 
 def _try_build_failure(
-    response_model: type[BaseModel],
-    kwargs: dict[str, SkillValue],
+    request: SkillRequest,
     exc: BaseException,
 ) -> BaseModel | None:
     """Best-effort construction of a ``kind='failure'`` variant of ``response_model``.
@@ -134,7 +180,7 @@ def _try_build_failure(
     Returns ``None`` when the union has no failure member or when required
     fields cannot be satisfied from ``kwargs``.
     """
-    failure_cls = _pick_failure_class(response_model)
+    failure_cls = _pick_failure_class(request.response_model)
     if failure_cls is None:
         return None
 
@@ -143,17 +189,18 @@ def _try_build_failure(
     except Exception:  # slopcop: ignore[no-broad-except]  pragma: no cover -- defensive
         return None
 
-    init_kwargs: JsonObject = {
+    init_kwargs = {
         "detail": f"{type(exc).__name__}: {exc}",
         "latency_ms": 0.0,
     }
     if "reason" in hints:
         init_kwargs["reason"] = "unknown"
-    # Pass through any kwarg that matches a field name on the failure model
+    request_values = request.model_dump(mode="json")
+    # Pass through any request field that matches a field name on the failure model
     # (query/question/url/path depending on which failure type we hit).
     for field_name in hints:
-        if field_name in kwargs and field_name not in init_kwargs:
-            init_kwargs[field_name] = kwargs[field_name]
+        if field_name in request_values and field_name not in init_kwargs:
+            init_kwargs[field_name] = request_values[field_name]
 
     try:
         return failure_cls(**init_kwargs)
@@ -161,7 +208,7 @@ def _try_build_failure(
         return None
 
 
-def _pick_failure_class(response_model: type) -> type[BaseModel] | None:
+def _pick_failure_class(response_model: ResponseModel) -> type[BaseModel] | None:
     """Return the union member whose ``kind`` literal equals ``'failure'``."""
     # response_model may be a single class or a typing.Union alias produced
     # by ``Success | Failure``.  ``get_args`` returns ``()`` for non-unions.
