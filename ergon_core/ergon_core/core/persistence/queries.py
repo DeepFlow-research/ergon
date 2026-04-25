@@ -26,7 +26,6 @@ from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionSta
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
-    RunTaskEvaluation,
     RunTaskExecution,
 )
 from pydantic import BaseModel
@@ -308,39 +307,6 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
 
 
 # ---------------------------------------------------------------------------
-# Evaluations
-# ---------------------------------------------------------------------------
-
-
-class EvaluationsQueries(BaseQueries[RunTaskEvaluation]):
-    def __init__(self) -> None:
-        super().__init__(RunTaskEvaluation)
-
-    def list_by_run(self, run_id: UUID) -> list[RunTaskEvaluation]:
-        with get_session() as session:
-            stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
-            return list(session.exec(stmt).all())
-
-    def get_by_task(self, run_id: UUID, definition_task_id: UUID) -> list[RunTaskEvaluation]:
-        with get_session() as session:
-            stmt = select(RunTaskEvaluation).where(
-                RunTaskEvaluation.run_id == run_id,
-                RunTaskEvaluation.definition_task_id == definition_task_id,
-            )
-            return list(session.exec(stmt).all())
-
-    def get_by_evaluator(
-        self, run_id: UUID, definition_evaluator_id: UUID
-    ) -> list[RunTaskEvaluation]:
-        with get_session() as session:
-            stmt = select(RunTaskEvaluation).where(
-                RunTaskEvaluation.run_id == run_id,
-                RunTaskEvaluation.definition_evaluator_id == definition_evaluator_id,
-            )
-            return list(session.exec(stmt).all())
-
-
-# ---------------------------------------------------------------------------
 # Resources
 # ---------------------------------------------------------------------------
 
@@ -398,33 +364,6 @@ class ResourcesQueries(BaseQueries[RunResource]):
             )
             return session.exec(stmt).first()
 
-    def list_latest_for_execution(
-        self,
-        task_execution_id: UUID,
-    ) -> list[RunResource]:
-        """One row per file_path -- the most-recently-inserted row wins.
-
-        Uses a subquery to find the max (created_at, id) per file_path,
-        compatible with both Postgres and SQLite.
-        """
-        with get_session() as session:
-            all_rows = list(
-                session.exec(
-                    select(RunResource)
-                    .where(RunResource.task_execution_id == task_execution_id)
-                    .order_by(
-                        RunResource.file_path,
-                        RunResource.created_at.desc(),
-                        RunResource.id.desc(),
-                    )
-                ).all()
-            )
-            seen: dict[str, RunResource] = {}
-            for row in all_rows:
-                if row.file_path not in seen:
-                    seen[row.file_path] = row
-            return list(seen.values())
-
     # --- append ----------------------------------------------------------
 
     def append(  # slopcop: ignore[max-function-params]
@@ -472,14 +411,12 @@ class Queries:
     runs: RunsQueries
     definitions: DefinitionsQueries
     task_executions: TaskExecutionsQueries
-    evaluations: EvaluationsQueries
     resources: ResourcesQueries
 
     def __init__(self) -> None:
         self.runs = RunsQueries()
         self.definitions = DefinitionsQueries()
         self.task_executions = TaskExecutionsQueries()
-        self.evaluations = EvaluationsQueries()
         self.resources = ResourcesQueries()
 
 

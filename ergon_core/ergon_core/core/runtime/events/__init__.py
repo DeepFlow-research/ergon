@@ -1,10 +1,6 @@
 """Inngest event contracts."""
 
 from ergon_core.core.runtime.events.base import InngestEventContract
-from ergon_core.core.runtime.events.evaluation_events import (
-    CriterionEvaluationEvent,
-    TaskEvaluationEvent,
-)
 from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
 from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
@@ -17,11 +13,9 @@ from ergon_core.core.runtime.events.task_events import (
 )
 
 __all__ = [
-    "CriterionEvaluationEvent",
     "InngestEventContract",
     "RunCleanupEvent",
     "TaskCompletedEvent",
-    "TaskEvaluationEvent",
     "TaskFailedEvent",
     "TaskReadyEvent",
     "TaskStartedEvent",

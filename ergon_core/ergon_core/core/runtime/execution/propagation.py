@@ -100,25 +100,6 @@ async def mark_task_running(
     )
 
 
-async def mark_task_completed(
-    session: Session,
-    run_id: UUID,
-    task_id: UUID,
-    execution_id: UUID,
-    *,
-    graph_repo: WorkflowGraphRepository,
-    graph_lookup: GraphNodeLookup,
-) -> None:
-    await _update_task_status(
-        session,
-        run_id,
-        task_id,
-        TaskExecutionStatus.COMPLETED,
-        graph_repo=graph_repo,
-        graph_lookup=graph_lookup,
-    )
-
-
 async def mark_task_failed(
     session: Session,
     run_id: UUID,
@@ -143,26 +124,6 @@ async def mark_task_failed(
 # ---------------------------------------------------------------------------
 # Read helpers — all reads go through RunGraphNode
 # ---------------------------------------------------------------------------
-
-
-def get_current_task_status(
-    session: Session,
-    run_id: UUID,
-    task_id: UUID,
-    *,
-    graph_lookup: GraphNodeLookup,
-) -> str | None:
-    """Return the current status for a task in this run."""
-    node_id = graph_lookup.node_id(task_id)
-    if node_id is None:
-        return None
-    row = session.exec(
-        select(RunGraphNode.status).where(
-            RunGraphNode.id == node_id,
-            RunGraphNode.run_id == run_id,
-        )
-    ).first()
-    return row
 
 
 async def get_initial_ready_tasks(
@@ -200,147 +161,8 @@ async def get_initial_ready_tasks(
 
 
 # ---------------------------------------------------------------------------
-# Propagation
-# ---------------------------------------------------------------------------
-
-
-async def on_task_completed(
-    session: Session,
-    run_id: UUID,
-    definition_id: UUID,
-    task_id: UUID,
-    execution_id: UUID,
-    *,
-    graph_repo: WorkflowGraphRepository,
-    graph_lookup: GraphNodeLookup,
-) -> list[UUID]:
-    """Mark task completed, resolve edges, find and mark newly-ready dependents."""
-    await mark_task_completed(
-        session,
-        run_id,
-        task_id,
-        execution_id,
-        graph_repo=graph_repo,
-        graph_lookup=graph_lookup,
-    )
-
-    dependent_edges_stmt = select(ExperimentDefinitionTaskDependency).where(
-        ExperimentDefinitionTaskDependency.experiment_definition_id == definition_id,
-        ExperimentDefinitionTaskDependency.depends_on_task_id == task_id,
-    )
-    dependent_edges = list(session.exec(dependent_edges_stmt).all())
-
-    candidate_task_ids = {e.task_id for e in dependent_edges}
-
-    newly_ready: list[UUID] = []
-    for candidate_id in candidate_task_ids:
-        all_deps_stmt = select(ExperimentDefinitionTaskDependency.depends_on_task_id).where(
-            ExperimentDefinitionTaskDependency.experiment_definition_id == definition_id,
-            ExperimentDefinitionTaskDependency.task_id == candidate_id,
-        )
-        dep_task_ids = list(session.exec(all_deps_stmt).all())
-
-        if all(
-            get_current_task_status(
-                session,
-                run_id,
-                dep_id,
-                graph_lookup=graph_lookup,
-            )
-            == TaskExecutionStatus.COMPLETED
-            for dep_id in dep_task_ids
-        ):
-            # Update resolved edges to "satisfied"
-            for dep_id in dep_task_ids:
-                edge_id = graph_lookup.edge_id(dep_id, candidate_id)
-                if edge_id:
-                    await graph_repo.update_edge_status(
-                        session,
-                        run_id=run_id,
-                        edge_id=edge_id,
-                        new_status="satisfied",
-                        meta=_PROPAGATION_META,
-                    )
-
-            await mark_task_ready(
-                session,
-                run_id,
-                candidate_id,
-                graph_repo=graph_repo,
-                graph_lookup=graph_lookup,
-            )
-            newly_ready.append(candidate_id)
-
-    session.commit()
-    return newly_ready
-
-
-# ---------------------------------------------------------------------------
-# Terminal-state checks
-# ---------------------------------------------------------------------------
-
-
-def is_workflow_complete(session: Session, run_id: UUID, definition_id: UUID) -> bool:
-    """True when every graph node for this run has reached COMPLETED."""
-    statuses = list(
-        session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
-    )
-    if not statuses:
-        return True
-    return all(s == TaskExecutionStatus.COMPLETED for s in statuses)
-
-
-def is_workflow_failed(session: Session, run_id: UUID, definition_id: UUID) -> bool:
-    """True when any graph node for this run has reached FAILED."""
-    statuses = list(
-        session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
-    )
-    return any(s == TaskExecutionStatus.FAILED for s in statuses)
-
-
-# ---------------------------------------------------------------------------
 # Graph-native write helpers (no GraphNodeLookup)
 # ---------------------------------------------------------------------------
-
-
-async def mark_task_running_by_node(
-    session: Session,
-    run_id: UUID,
-    node_id: UUID,
-    execution_id: UUID,
-    *,
-    graph_repo: WorkflowGraphRepository,
-) -> None:
-    await graph_repo.update_node_status(
-        session,
-        run_id=run_id,
-        node_id=node_id,
-        new_status=TaskExecutionStatus.RUNNING,
-        meta=MutationMeta(
-            actor="system:propagation",
-            reason=f"execution {execution_id} running",
-        ),
-    )
-
-
-async def mark_task_completed_by_node(
-    session: Session,
-    run_id: UUID,
-    node_id: UUID,
-    execution_id: UUID,
-    *,
-    graph_repo: WorkflowGraphRepository,
-) -> None:
-    await graph_repo.update_node_status(
-        session,
-        run_id=run_id,
-        node_id=node_id,
-        new_status=TaskExecutionStatus.COMPLETED,
-        meta=MutationMeta(
-            actor="system:propagation",
-            reason=f"execution {execution_id} completed",
-        ),
-    )
 
 
 async def mark_task_failed_by_node(
@@ -367,75 +189,6 @@ async def mark_task_failed_by_node(
 # ---------------------------------------------------------------------------
 # Graph-native propagation (no GraphNodeLookup, walks RunGraphEdge)
 # ---------------------------------------------------------------------------
-
-
-async def on_task_completed_by_node(
-    session: Session,
-    run_id: UUID,
-    node_id: UUID,
-    execution_id: UUID,
-    *,
-    graph_repo: WorkflowGraphRepository,
-) -> list[UUID]:
-    """Process completion of a graph node. Returns newly-ready node_ids.
-
-    .. deprecated:: Use on_task_completed_or_failed for new code.
-
-    Walks RunGraphEdge (not ExperimentDefinitionTaskDependency) so it
-    works for both static and dynamic tasks.
-    """
-    await graph_repo.update_node_status(
-        session,
-        run_id=run_id,
-        node_id=node_id,
-        new_status=TaskExecutionStatus.COMPLETED,
-        meta=MutationMeta(
-            actor="system:propagation",
-            reason=f"execution {execution_id} completed",
-        ),
-    )
-
-    outgoing = list(
-        session.exec(
-            select(RunGraphEdge).where(
-                RunGraphEdge.run_id == run_id,
-                RunGraphEdge.source_node_id == node_id,
-            )
-        ).all()
-    )
-    candidate_node_ids = {e.target_node_id for e in outgoing}
-
-    newly_ready: list[UUID] = []
-    for candidate_id in candidate_node_ids:
-        candidate_node = session.get(RunGraphNode, candidate_id)
-        if candidate_node is None or candidate_node.status != TaskExecutionStatus.PENDING:
-            continue
-
-        incoming = list(
-            session.exec(
-                select(RunGraphEdge).where(
-                    RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_node_id == candidate_id,
-                )
-            ).all()
-        )
-
-        source_nodes = [session.get(RunGraphNode, e.source_node_id) for e in incoming]
-        if all(n is not None and n.status in TERMINAL_STATUSES for n in source_nodes):
-            await graph_repo.update_node_status(
-                session,
-                run_id=run_id,
-                node_id=candidate_id,
-                new_status=TaskExecutionStatus.PENDING,
-                meta=MutationMeta(
-                    actor="system:propagation",
-                    reason=f"all dependencies satisfied after {node_id}",
-                ),
-            )
-            newly_ready.append(candidate_id)
-
-    session.commit()
-    return newly_ready
 
 
 async def _block_successors_bfs(

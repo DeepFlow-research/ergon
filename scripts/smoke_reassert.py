@@ -35,9 +35,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Register smoke fixtures so ``RunGenerationTurn`` schema imports + any
-# runtime ClassVars (PARENT_TURN_COUNT etc.) are wired up identically to how
-# the driver sees them.
+# Register smoke fixtures so runtime ClassVars (PARENT_TURN_COUNT etc.) are
+# wired up identically to how the driver sees them.
 from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
 
 register_smoke_fixtures()

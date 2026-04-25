@@ -22,8 +22,6 @@ to be an executable cleanup plan, not just an inventory.
 | Delete | Remove once a focused test/lint pass confirms no hidden caller. |
 | Port/use | Old code contains useful behavior that should be moved into the active path before deletion. |
 | Keep | Useful internal API, currently imported, or deliberately kept as an extension point. |
-| Deprecate | Appears unused in-repo but may be public or externally imported. Mark first, remove later. |
-| Investigate | Static evidence is not enough; confirm dynamic loading, external usage, or product intent. |
 
 ## Executive Summary
 
@@ -40,6 +38,27 @@ Failures follow the same active helper through `TaskPropagationService.propagate
 The old helpers still in the file either walk `ExperimentDefinitionTaskDependency`
 directly or implement stale semantics. They should be removed before they are
 accidentally reused.
+
+## Estimated Size Impact
+
+If every row currently marked `Delete` is removed, the cleanup removes about:
+
+- 6 entire modules.
+- 38 audit-listed delete items.
+- 13 top-level classes.
+- 17 top-level functions.
+- 45 class methods.
+- 2 unused type aliases.
+- 1,079 physical Python lines, or 941 nonblank Python lines.
+
+Against `ergon_core/ergon_core/core`, that is roughly 5.7% of physical Python
+lines and 5.9% of nonblank Python lines (`18,919` physical lines, `15,883`
+nonblank lines total). This estimate counts the deleted symbols/modules
+themselves, not the small import/export/test cleanup that will come with them.
+
+Propagation alone accounts for 8 top-level functions and about 221 physical
+lines. That is the most important qualitative reduction because it removes stale
+alternative control flow, not just unused helpers.
 
 ## Propagation Decision Table
 
@@ -65,12 +84,12 @@ accidentally reused.
 
 | Area | File | Symbol / module | Current evidence | Decision | Why | Risk | Follow-up test/check |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Evaluation events | `core/runtime/events/evaluation_events.py` | `TaskEvaluationEvent` | Only re-exported from `events/__init__.py`; no in-repo instantiation. Current evaluation dispatch uses `EvaluateTaskRunRequest` and raw `task/evaluate` trigger names. | Deprecate | Name is public-ish via `__all__`, but runtime does not use it. | Medium | Check package consumers before deleting. |
-| Evaluation events | `core/runtime/events/evaluation_events.py` | `CriterionEvaluationEvent` | Only re-exported from `events/__init__.py`; no active criterion event function found. | Deprecate | Public-ish export and potentially planned feature, but currently orphaned. | Medium | Search docs/scripts before deleting. |
+| Evaluation events | `core/runtime/events/evaluation_events.py` | `TaskEvaluationEvent` | Only re-exported from `events/__init__.py`; no in-repo instantiation. Current evaluation dispatch uses `EvaluateTaskRunRequest` and raw `task/evaluate` trigger names. | Delete | Runtime does not use it, and external compatibility is not a concern for this repo. | Medium | Remove export and run tests/import checks. |
+| Evaluation events | `core/runtime/events/evaluation_events.py` | `CriterionEvaluationEvent` | Only re-exported from `events/__init__.py`; no active criterion event function found. | Delete | Orphaned planned feature/event contract, and external compatibility is not a concern for this repo. | Medium | Remove export and run tests/import checks. |
 | Tracing | `core/runtime/tracing.py` | `action_context` | No repo-wide caller. | Delete | Unused context helper. Current code uses task/evaluation-specific context helpers and `emit_span()`. | Low | Search for `action_context` after removal. |
 | Tracing | `core/runtime/tracing.py` | `TraceSink.add_event`, `TraceSink.child_context` | No active call sites; implemented on protocol/noop/otel sinks. | Keep | Reasonable extension points for tracing API, even if currently unused. | Low | Keep unless simplifying tracing API intentionally. |
-| Delegation errors | `core/runtime/errors/delegation_errors.py` | `TaskNotPendingError` | Exported from `errors/__init__.py`, but no raises in repo. Comment says kept for backwards compatibility. | Deprecate | Public compatibility error, not active runtime behavior. | Low | Mark deprecated before deleting. |
-| Graph errors | `core/runtime/errors/graph_errors.py` | `AnnotationNotFoundError` | Re-exported but not raised in repo. | Deprecate | Public-ish error class; possibly planned annotation API. | Low | Confirm no external consumers. |
+| Delegation errors | `core/runtime/errors/delegation_errors.py` | `TaskNotPendingError` | Exported from `errors/__init__.py`, but no raises in repo. Comment says kept for backwards compatibility. | Delete | Backwards compatibility is not needed; no active runtime behavior depends on it. | Low | Remove export and run import checks. |
+| Graph errors | `core/runtime/errors/graph_errors.py` | `AnnotationNotFoundError` | Re-exported but not raised in repo. | Delete | No active graph path raises it, and external compatibility is not a concern. | Low | Remove export and run import checks. |
 
 ## Persistence
 
@@ -79,24 +98,24 @@ accidentally reused.
 | Definitions persistence | `core/persistence/definitions/repositories.py` | `DefinitionRepository` | No repo-wide import or instantiation. Reads happen through `queries`, `graph_repository`, services, or direct sessions. | Delete | Superseded read repository. Docstring points writes elsewhere. | Medium | Ensure no package-level import consumers. |
 | Saved specs persistence | `core/persistence/saved_specs/repositories.py` | `SavedSpecsRepository`, `saved_specs_repository` | No repo-wide import or call site. | Delete | Repository wrapper appears never wired. | Medium | Keep ORM models; only remove repository if imports stay clean. |
 | Saved specs persistence | `core/persistence/saved_specs/models.py` | Saved spec ORM models | Models are schema objects and may be loaded by Alembic metadata. | Keep | ORM models are not dead just because repository is unused. | High | Do not remove without migration/schema audit. |
-| Telemetry persistence | `core/persistence/telemetry/repositories.py` | `TelemetryRepository.get_run`, `get_task_executions`, `get_resources`, `create_run`, `create_task_execution`, `complete_task_execution`, `create_resource` | `TelemetryRepository` is used by `EvaluationPersistenceService`, but only evaluation methods are called in repo. | Investigate | Could be intended as a facade, but active code does not use most of it. | Medium | Decide whether telemetry write/read facade is product API or stale. |
+| Telemetry persistence | `core/persistence/telemetry/repositories.py` | `TelemetryRepository.get_run`, `get_task_executions`, `get_resources`, `create_run`, `create_task_execution`, `complete_task_execution`, `create_resource` | `TelemetryRepository` is used by `EvaluationPersistenceService`, but only evaluation methods are called in repo. Run/task/resource lifecycles are handled through services or direct ORM queries. | Delete | Stale facade methods. The active evaluation methods should stay, but these seven methods are not wired. | Medium | Delete the seven methods only; keep `create_task_evaluation`, `get_task_evaluations`, and `refresh_run_evaluation_summary`. |
 | Telemetry persistence | `core/persistence/telemetry/repositories.py` | `TelemetryRepository.create_task_evaluation`, `refresh_run_evaluation_summary`, `get_task_evaluations` | Used by evaluation persistence flow. | Keep | Active evaluation persistence. | Medium | Do not remove. |
-| Telemetry persistence | `core/persistence/telemetry/repositories.py` | `GenerationTurnRepository.add_listener`, `persist_single`, `persist_turns`, `get_for_run`, `mark_execution_outcome` | `GenerationTurnRepository` is instantiated by `api/worker.py`, but only `get_for_execution` appears called. | Investigate | This may be a wiring gap: reads are active, but writes/listeners are not. Do not delete until generation-turn persistence ownership is clear. | High | Trace worker execution and turn persistence before deciding. |
-| Telemetry persistence | `core/persistence/telemetry/repositories.py` | `GenerationTurnRepository.get_for_execution` | Used by `api/worker.py`. | Keep | Active read path. | Medium | Do not remove. |
-| Query namespace | `core/persistence/queries.py` | `queries.evaluations` / `EvaluationsQueries` | No repo-wide `queries.evaluations` usage. | Investigate | `queries` is a broad namespace API; low usage may be intentional. | Medium | Determine whether `queries` is public API before pruning. |
-| Query namespace | `core/persistence/queries.py` | `ResourcesQueries.list_latest_for_execution` | No repo-wide caller found. | Investigate | May be useful API despite no active caller. | Low | Keep unless pruning query namespace. |
-| Shared typing | `core/persistence/shared/types.py` | `BenchmarkSlug`, `ExecutionId` | No repo-wide imports beyond definition. | Investigate | Tiny type aliases. If this file is intended to define canonical domain IDs, keeping is cheap; if the goal is a strict type surface, delete them. | Low | Prefer keep unless cleaning type surface aggressively. |
+| Telemetry persistence | `core/persistence/telemetry/repositories.py` | `GenerationTurnRepository.persist_single` | Current worker execution persists `RunContextEvent`, not `RunGenerationTurn`. Earlier investigation treated this as a missing write, but the frontend/backend action-log direction is context events. | Delete | Do not revive the old generation-turn write path. Finish migrating readers/UI to `RunContextEvent`, then delete this stale writer. | High | Add tests proving yielded turns render from context events in both live updates and persisted snapshots. |
+| Telemetry persistence | `core/persistence/telemetry/repositories.py` | `GenerationTurnRepository.add_listener`, `persist_turns`, `get_for_execution`, `get_for_run`, `mark_execution_outcome` | No generation-turn writes are active. `get_for_execution` is only used by the stale base `Worker.get_output()` path; `ReActWorker` already reads context events. Context event listeners are handled by `ContextEventRepository.add_listener`. | Delete | Once base `Worker.get_output()` and API readers use context events, the generation-turn repository surface is obsolete. | Medium | Migrate base output/readers first, then delete the repository class. |
+| Query namespace | `core/persistence/queries.py` | `queries.evaluations` / `EvaluationsQueries` | No repo-wide `queries.evaluations` usage. Evaluation reads use direct `select(RunTaskEvaluation)` in run read paths or evaluation-specific services. | Delete | Unused namespace branch. With no external consumers, keeping a complete-but-unused query facade is unnecessary. | Medium | Remove `EvaluationsQueries` and `Queries.evaluations`; run import/type checks. |
+| Query namespace | `core/persistence/queries.py` | `ResourcesQueries.list_latest_for_execution` | No repo-wide caller found. Other code uses `list_by_execution`, `list_by_run`, `latest_by_path`, `append`, or direct queries. | Delete | Unused convenience method. | Low | Remove method; run tests that touch resources. |
+| Shared typing | `core/persistence/shared/types.py` | `BenchmarkSlug`, `ExecutionId` | No repo-wide imports beyond definition. Sibling aliases like `TaskSlug`, `AssignedWorkerSlug`, `NodeId`, `RunId`, `DefinitionId`, and `EdgeId` are used. | Delete | They are not part of the live type surface. | Low | Remove only these aliases. |
 
 ## Generation, Judges, and Evaluation Helpers
 
 | Area | File | Symbol / module | Current evidence | Decision | Why | Risk | Follow-up test/check |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| LLM judge provider | `core/providers/judges/llm_judge.py` | Entire module, `LLMJudgeResponse`, `call_llm_judge` | No imports from `core.providers.judges`. Criterion runtime has its own `call_llm_judge()` implementation. | Investigate | If a shared judge wrapper is desired, port the active criterion-runtime implementation to this module and call it. Otherwise delete stale duplicate. | Medium | Decide whether shared judge utility is a desired architecture. |
+| LLM judge provider | `core/providers/judges/llm_judge.py` | Entire module, `LLMJudgeResponse`, `call_llm_judge` | No imports from `core.providers.judges`. Active judge behavior lives on `DefaultCriterionRuntime.call_llm_judge()` and includes runtime options like model, max tokens, and temperature. | Delete | Stale duplicate. If a shared helper is wanted later, extract it from the active runtime method rather than keeping this older subset. | Medium | Delete module and run evaluator tests. |
 | VLLM generation | `core/providers/generation/vllm_model.py` | Entire module, `resolve_model_target`, `ResolvedModel`, `_discover_vllm_model_name`, `VLLMDiscoveryError` | Production imports use `core/providers/generation/model_resolution.py` and builtins vLLM backend. Only tests reference this stale module. | Delete | Duplicate model-resolution path. Keeping two implementations risks divergent behavior. | Medium | Remove/replace stale tests that target this module. |
-| PydanticAI format parsing | `core/providers/generation/pydantic_ai_format.py` | `extract_text`, `extract_tool_calls` | No repo-wide callers. `extract_logprobs` is used by builtins `react_worker`. | Investigate | The module claims to be the single source of truth; either move telemetry parsing here or trim unused functions. | Medium | Compare with `_extract_response_text` / `_extract_tool_calls_json` in telemetry repository. |
+| PydanticAI format parsing | `core/providers/generation/pydantic_ai_format.py` | `extract_text`, `extract_tool_calls` | No repo-wide callers. `extract_logprobs` is used by builtins `react_worker`. Active text/tool extraction uses typed `ModelResponse` / `GenerationTurn.response_parts`, not serialized dict parsing. | Delete | Unused dict parsers. Keep `extract_logprobs` and the module because logprob extraction is active. | Medium | Remove these two functions only; run generation-turn tests. |
 | PydanticAI format parsing | `core/providers/generation/pydantic_ai_format.py` | `extract_logprobs` | Imported by `ergon_builtins/workers/baselines/react_worker.py`. | Keep | Active behavior. | Low | None. |
-| Evaluation schema re-exports | `core/runtime/evaluation/evaluation_schemas.py` | `LLMJudgeResponse` | Listed in `__all__`, no imports from this file found. There is another `LLMJudgeResponse` in stale judge provider. | Deprecate | Public-ish schema export, likely redundant. | Low | Confirm evaluator API expectations. |
-| Evaluation schema re-exports | `core/runtime/evaluation/evaluation_schemas.py` | `CommandResult`, `SandboxResult` re-exports | Imported into this module and re-exported, but no callers import these names from this module. | Deprecate | Barrel/re-export noise. | Low | Confirm no external import path. |
+| Evaluation schema re-exports | `core/runtime/evaluation/evaluation_schemas.py` | `LLMJudgeResponse` | Listed in `__all__`, no imports from this file found. There is another `LLMJudgeResponse` in stale judge provider. | Delete | Redundant schema export with no in-repo caller. | Low | Remove and run evaluator/import tests. |
+| Evaluation schema re-exports | `core/runtime/evaluation/evaluation_schemas.py` | `CommandResult`, `SandboxResult` re-exports | Imported into this module and re-exported, but no callers import these names from this module. | Delete | Barrel/re-export noise with no in-repo caller. | Low | Remove and run evaluator/import tests. |
 
 ## RL and Rollout
 
@@ -104,7 +123,7 @@ accidentally reused.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | RL polling | `core/rl/polling.py` | `PollTimeoutError`, `poll_until_all_complete` | No repo-wide caller. Docstring says used by TRL adapter, but adapter polls through `RolloutService`. | Delete | Stale helper. | Low | Search after deletion. |
 | TRL adapter | `core/rl/trl_adapter.py` | `make_ergon_rollout_func` | No repo-wide caller. Module is explicitly marked deprecated in favor of HTTP adapter. Vulture flags unused `trainer` parameter. | Delete | Sunset path. `ergon_infra/adapters/trl_http.py` is the current replacement. | Medium | Confirm no external in-process TRL users. |
-| RL package exports | `core/rl/__init__.py` | `VLLM_LOGPROB_SETTINGS` | Alias to `LOGPROB_SETTINGS`; no repo-wide caller. | Deprecate | Compatibility alias only. | Low | Remove after one deprecation cycle if public API matters. |
+| RL package exports | `core/rl/__init__.py` | `VLLM_LOGPROB_SETTINGS` | Alias to `LOGPROB_SETTINGS`; no repo-wide caller. | Delete | Compatibility alias only, and external compatibility is not needed. | Low | Remove and run import checks. |
 
 ## Miscellaneous Core
 
@@ -113,7 +132,19 @@ accidentally reused.
 | Core utils | `core/utils.py` | `get_mime_type` | No repo-wide caller. | Delete | Small unused helper. | Low | Search after deletion. |
 | OpenRouter budget | `core/providers/generation/openrouter_budget.py` | `OpenRouterBudget` | Mostly referenced from tests/fixtures/benchmarks rather than active production modules. | Keep | Useful for real-LLM test budget gating. Not dead in the test harness context. | Low | None. |
 | Dashboard emitter | `core/dashboard/emitter.py` | `_RunContextEvent` import | Vulture flags unused import. | Delete | Straight unused import cleanup. | Low | Run lint/type check. |
-| RL extraction | `core/rl/extraction.py` | `add_special_tokens` local/argument | Vulture flags unused variable. | Investigate | Could be a signature/API compatibility argument. | Low | Check tokenizer API and tests before removing. |
+| RL extraction | `core/rl/extraction.py` | `add_special_tokens` parameter on `Tokenizer.encode()` protocol | Vulture flags it, but it is part of a `Protocol` signature matching common tokenizer APIs. Callers intentionally use bare `tokenizer.encode(...)`. | Keep | Static-analysis false positive. The parameter documents compatibility with tokenizer implementations such as Hugging Face tokenizers. | Low | If vulture noise matters, suppress/allowlist instead of deleting the protocol parameter. |
+
+## Frontend / Dashboard Context-Event Migration
+
+| Area | File | Symbol / module | Current evidence | Decision | Why | Risk | Follow-up test/check |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Run state hydration | `ergon-dashboard/src/lib/runState.ts` | `deserializeRunState()` / `deserializeGenerationTurns()` | Snapshot hydration reads `generationTurnsByTask` but initializes `contextEventsByTask` as an empty `Map`. | Port/use | Snapshot state should hydrate `contextEventsByTask` from the backend and stop treating `generationTurnsByTask` as the action source. | High | Add a refresh/snapshot test proving tool calls render from persisted context events. |
+| Run state live updates | `ergon-dashboard/src/hooks/useRunState.ts` | socket listener set | The hook subscribes to `generation:turn` but not `context:event`, even though the socket server broadcasts context events. | Port/use | Live action updates should flow through `context:event`. | High | Add a live delta test that posts/sends a context event and sees it in the task workspace/event stream. |
+| Task action UI | `ergon-dashboard/src/components/workspace/TaskWorkspace.tsx` | `GenerationTracePanel` use | The workspace renders `GenerationTracePanel` from `runState.generationTurns`; `ContextEventLog` exists but is not mounted here. | Port/use | The task workspace should render agent actions from `ContextEventLog` / context-derived events. | High | Replace/demote the generations panel and assert tool calls/tool results appear for the selected task. |
+| Unified event stream | `ergon-dashboard/src/lib/runEvents.ts` | generation/context event conversion | The stream includes both generation turns and context events, but context events are currently generic summaries and may never arrive in state. | Port/use | Use context events for action-level timeline entries; remove generation-turn timeline entries once the old source is gone. | Medium | Snapshot and live-stream tests should cover `tool_call`, `tool_result`, `assistant_text`, and `thinking`. |
+| Dashboard event bridge | `ergon-dashboard/src/inngest/functions/index.ts` | `dashboard/generation.turn_completed` handler | Generation-turn dashboard handler remains, but Python no longer appears to emit generation-turn events; context-event handler is the active bridge. | Delete | Stale frontend event listener around the old generation-turn source. | Medium | Delete after context-event UI path is wired; verify no `generation:turn` tests depend on it. |
+| Dashboard REST/API contracts | `ergon_core/core/api/schemas.py`, `ergon_core/core/runtime/services/run_read_service.py`, `ergon_core/core/api/runs.py`, `ergon-dashboard/src/generated/rest/contracts.ts` | `RunGenerationTurnDto`, `generation_turns_by_task`, `/runs/{run_id}/generations` | Backend snapshots still expose generation turns, and FE generated contracts still include `generationTurnsByTask`. | Delete | Once context-event hydration is exposed and consumed, the generation-turn API surface is stale. | High | Add/verify `contextEventsByTask` in contracts, then remove generation-turn endpoint/DTO fields. |
+| Telemetry schema | `core/persistence/telemetry/models.py` and migrations | `RunGenerationTurn` table/model | The table/model exist for the old turn summary. Current canonical replay/action log is `RunContextEvent`. | Delete | Remove after all readers and tests migrate to context events. | High | Requires migration cleanup or a new migration strategy; do after application code no longer references it. |
 
 ## Recommended Cleanup Order
 
@@ -136,7 +167,12 @@ accidentally reused.
    - Do not remove ORM models as part of repository cleanup.
 
 5. Public-ish exports:
-   - Deprecate event/schema/error aliases before deletion if package compatibility matters.
+   - Delete event/schema/error aliases directly; this repo has no external consumers to protect.
+
+6. Context-event dashboard migration:
+   - Wire snapshots and live socket updates to `contextEventsByTask`.
+   - Render task actions from context events.
+   - Remove generation-turn dashboard listeners, DTOs, API endpoint, repository, and table/model after readers are gone.
 
 ## Propagation-Specific Conclusion
 

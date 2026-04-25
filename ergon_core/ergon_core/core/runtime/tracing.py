@@ -469,23 +469,6 @@ def worker_execute_context(
     )
 
 
-def action_context(
-    run_id: UUID,
-    task_id: UUID,
-    execution_id: UUID,
-    action_id: UUID,
-) -> TraceContext:
-    parent = worker_execute_context(run_id, task_id, execution_id)
-    return TraceContext(
-        trace_id=parent.trace_id,
-        span_id=span_id_from_key("action", str(run_id), str(action_id)),
-        parent_span_id=parent.span_id,
-        run_id=run_id,
-        task_id=task_id,
-        execution_id=execution_id,
-    )
-
-
 def persist_outputs_context(
     run_id: UUID,
     task_id: UUID,

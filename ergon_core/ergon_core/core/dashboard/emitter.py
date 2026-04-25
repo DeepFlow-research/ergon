@@ -5,7 +5,7 @@ client. Errors are caught and logged so callers are never blocked.
 """
 
 import logging
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import inngest
@@ -16,7 +16,6 @@ from ergon_core.core.api.schemas import (
 )
 from ergon_core.core.persistence.context.event_payloads import ContextEventType
 from ergon_core.core.persistence.context.models import (
-    RunContextEvent as _RunContextEvent,
     _PAYLOAD_ADAPTER,
 )
 from ergon_core.core.persistence.graph.models import (
@@ -35,6 +34,9 @@ from ergon_core.core.runtime.services.cohort_stats_service import (
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 from ergon_core.core.utils import utcnow
 from pydantic import TypeAdapter
+
+if TYPE_CHECKING:
+    from ergon_core.core.persistence.context.models import RunContextEvent
 
 from ergon_core.core.dashboard.event_contracts import (
     CohortUpdatedEvent,
@@ -399,7 +401,7 @@ class DashboardEmitter:
         can resolve task_node_id without a DB lookup."""
         self._execution_task_map[execution_id] = task_node_id
 
-    async def on_context_event(self, event: "_RunContextEvent") -> None:
+    async def on_context_event(self, event: "RunContextEvent") -> None:
         """Called by ContextEventRepository after each event is committed."""
         if not self._enabled:
             return

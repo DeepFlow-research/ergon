@@ -11,11 +11,9 @@ from uuid import UUID
 # ── String aliases ────────────────────────────────────────────────
 TaskSlug = NewType("TaskSlug", str)
 AssignedWorkerSlug = NewType("AssignedWorkerSlug", str)
-BenchmarkSlug = NewType("BenchmarkSlug", str)
 
 # ── UUID aliases ──────────────────────────────────────────────────
 RunId = NewType("RunId", UUID)
 NodeId = NewType("NodeId", UUID)
 DefinitionId = NewType("DefinitionId", UUID)
-ExecutionId = NewType("ExecutionId", UUID)
 EdgeId = NewType("EdgeId", UUID)
