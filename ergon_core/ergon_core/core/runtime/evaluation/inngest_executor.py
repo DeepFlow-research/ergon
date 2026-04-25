@@ -95,7 +95,7 @@ class InngestCriterionExecutor:
                         execution_id=self.execution_id,
                         task=task,
                         worker_result=WorkerOutput(
-                            output=task_context.agent_reasoning,
+                            output=task_context.agent_reasoning or "",
                         ),
                         sandbox_id=task_context.sandbox_id or None,
                         runtime=runtime,

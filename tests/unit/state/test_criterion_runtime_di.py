@@ -26,13 +26,21 @@ from ergon_core.core.runtime.evaluation.criterion_runtime import (
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
 
 
+def _criterion_context(run_id=None) -> CriterionContext:
+    return CriterionContext(
+        run_id=run_id or uuid4(),
+        task_input="test task",
+        agent_reasoning="test output",
+    )
+
+
 def _make_runtime(
     *,
     run_id=None,
     task_id=None,
     event_sink=None,
 ) -> DefaultCriterionRuntime:
-    context = CriterionContext(run_id=uuid4())
+    context = _criterion_context()
     sandbox_manager = MagicMock()
     return DefaultCriterionRuntime(
         context=context,
@@ -161,7 +169,7 @@ class TestEventSink:
 class TestRunIdResolution:
     def test_explicit_run_id_overrides_context(self) -> None:
         """When run_id is given explicitly it takes precedence over context.run_id."""
-        context = CriterionContext(run_id=uuid4())
+        context = _criterion_context()
         explicit_id = uuid4()
         runtime = DefaultCriterionRuntime(
             context=context,
@@ -172,7 +180,7 @@ class TestRunIdResolution:
 
     def test_default_falls_back_to_context(self) -> None:
         """When run_id is omitted, _run_id equals context.run_id."""
-        context = CriterionContext(run_id=uuid4())
+        context = _criterion_context()
         runtime = DefaultCriterionRuntime(
             context=context,
             sandbox_manager=MagicMock(),
@@ -181,7 +189,7 @@ class TestRunIdResolution:
 
     def test_task_id_stored(self) -> None:
         """task_id is stored on _task_id when provided."""
-        context = CriterionContext(run_id=uuid4())
+        context = _criterion_context()
         tid = uuid4()
         runtime = DefaultCriterionRuntime(
             context=context,
