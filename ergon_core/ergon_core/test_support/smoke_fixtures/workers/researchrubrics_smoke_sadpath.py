@@ -1,4 +1,4 @@
-"""ResearchRubrics line-cascade sad-path fixture.
+"""ResearchRubrics score-zero sad-path fixture.
 
 Used in researchrubrics cohort slot 3 (see
 ``docs/superpowers/plans/test-refactor/00-program.md §3.2``).  Routes
@@ -6,8 +6,9 @@ Used in researchrubrics cohort slot 3 (see
 command) BEFORE raising; the rest of the 9-subtask topology is
 unchanged.
 
-Driver asserts partial artifact + pre-fail WAL entry persist, l_3 ends
-up BLOCKED/CANCELLED, diamond + singletons stay COMPLETED.
+Driver asserts partial artifact + pre-fail WAL entry persist, all leaves
+complete, and the run evaluation scores zero because l_2 reports a failed
+probe result.
 """
 
 from typing import ClassVar
@@ -35,11 +36,10 @@ class AlwaysFailSubworker:
       2. The sandbox command we already ran still emits a
          ``sandbox_command`` event / WAL entry (the command path writes
          synchronously, before our raise).
-      3. The leaf's task row ends up FAILED because we return
-         ``probe_exit_code=1``; this keeps normal output persistence alive
-         while still failing the task.
-      4. Downstream static sibling ``l_3`` ends up BLOCKED/CANCELLED
-         per RFC ``static-sibling-failure-semantics``.
+      3. The leaf's task row still completes because worker execution itself
+         completed and output persistence should remain exercised.
+      4. The reused smoke criterion scores the run zero after reading the
+         failed probe result.
     """
 
     async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
