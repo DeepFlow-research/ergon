@@ -91,13 +91,16 @@ app.include_router(rollouts_router)
 # Test-only harness: mounted in CI + local-e2e only.
 if os.environ.get("ENABLE_TEST_HARNESS") == "1":
     app.include_router(_test_harness_router)
+
+if os.environ.get("ENABLE_SMOKE_FIXTURES", os.environ.get("ENABLE_TEST_HARNESS")) == "1":
     # Register the canonical-smoke WORKERS / EVALUATORS into this
     # process's registry dicts.  Inngest's ``worker_execute_fn`` runs
     # inside this container, so if the smoke fixtures are only imported
     # host-side (in pytest's process) the container's dicts stay empty
-    # and every smoke run fails at worker resolution.  Gated on the
-    # same env var as the router so production images with the harness
-    # disabled don't import ``tests/`` at all.
+    # and every smoke run fails at worker resolution.  The flag is
+    # separate from ``ENABLE_TEST_HARNESS`` because real-LLM rollouts
+    # need the read-only harness endpoints without replacing production
+    # benchmark registries with smoke fixtures.
     import tests.e2e._fixtures  # noqa: F401, PLC0415
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)

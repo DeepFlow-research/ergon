@@ -142,9 +142,7 @@ class InngestCriterionExecutor:
                 output_type=CriterionResult,
             )
 
-        steps = tuple(make_step(spec) for spec in criteria)
-        if not steps:
-            return []
-
-        results = await self.ctx.group.parallel(steps)
-        return list(results)
+        results: list[CriterionResult] = []
+        for spec in criteria:
+            results.append(await make_step(spec)())
+        return results

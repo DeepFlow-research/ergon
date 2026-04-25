@@ -163,17 +163,32 @@ class ReActWorker(Worker):
         with get_session() as session:
             repo = ContextEventRepository()
             events = repo.get_for_execution(session, context.execution_id)
-        text_events = [e for e in events if e.event_type == "assistant_text"]
-        if not text_events:
-            return WorkerOutput(output="", success=False)
-        last = text_events[-1].parsed_payload()
-        if not isinstance(last, AssistantTextPayload):
-            raise ValueError(f"Expected AssistantTextPayload, got {type(last)}")
         turn_ids: set[str] = set()
         for e in events:
             payload = e.parsed_payload()
             if isinstance(payload, (AssistantTextPayload, ToolCallPayload, ThinkingPayload)):
                 turn_ids.add(payload.turn_id)
+
+        text_events = [e for e in events if e.event_type == "assistant_text"]
+        if not text_events:
+            final_tool_calls = [
+                payload
+                for e in events
+                if e.event_type == "tool_call"
+                and isinstance((payload := e.parsed_payload()), ToolCallPayload)
+                and payload.tool_name == "final_result"
+            ]
+            if not final_tool_calls:
+                return WorkerOutput(output="", success=False)
+            output = str(final_tool_calls[-1].args.get("final_assistant_message", ""))
+            return WorkerOutput(
+                output=output,
+                success=bool(output),
+                metadata={"turn_count": len(turn_ids)},
+            )
+        last = text_events[-1].parsed_payload()
+        if not isinstance(last, AssistantTextPayload):
+            raise ValueError(f"Expected AssistantTextPayload, got {type(last)}")
         return WorkerOutput(
             output=last.text,
             success=True,

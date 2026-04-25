@@ -179,6 +179,10 @@ async def capture_dashboard(
     itself useful rollout signal (dashboard regressed, or run not yet
     visible in index).
     """
+    if playwright_context is None:
+        logger.warning("capture_dashboard: Playwright unavailable; skipping screenshots")
+        return {}
+
     shots_dir = out_dir / "screenshots"
     captured: dict[str, str] = {}
 

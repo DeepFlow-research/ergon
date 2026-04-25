@@ -1,5 +1,7 @@
 """Build Experiment from CLI args using registry lookups."""
 
+import os
+
 from ergon_core.api.experiment import Experiment
 from ergon_core.api.worker_spec import WorkerSpec
 
@@ -12,6 +14,12 @@ def build_experiment(
     workflow: str = "single",
     limit: int | None = None,
 ) -> Experiment:
+    if os.environ.get("ENABLE_SMOKE_FIXTURES", os.environ.get("ENABLE_TEST_HARNESS")) == "1":
+        # reason: host-side real-LLM canaries use the same test-owned smoke
+        # fixtures as the API container, but production CLI paths must not
+        # import tests unless smoke fixtures are explicitly enabled.
+        import tests.e2e._fixtures  # noqa: F401
+
     # Deferred: CLI startup cost
     from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
 

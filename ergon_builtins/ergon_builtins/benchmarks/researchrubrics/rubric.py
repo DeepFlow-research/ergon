@@ -33,12 +33,24 @@ class ResearchRubricsRubric(Rubric):
     def __init__(
         self,
         *,
-        rubric_criteria: list[RubricCriterion],
         name: str = "researchrubrics-rubric",
+        rubric_criteria: list[RubricCriterion] | None = None,
     ) -> None:
-        criteria = build_criteria_from_rubrics(rubric_criteria)
+        criteria = build_criteria_from_rubrics(rubric_criteria or [])
         super().__init__(name=name, criteria=criteria)
-        self._rubric_criteria = rubric_criteria
+        self._rubric_criteria = rubric_criteria or []
+
+    def criteria_for(self, task: BenchmarkTask):
+        """Build task-specific LLM-judge criteria from the task payload."""
+        if self._rubric_criteria:
+            return self.criteria
+
+        payload_rubrics = task.task_payload.get("rubrics", [])
+        rubric_criteria = [
+            item if isinstance(item, RubricCriterion) else RubricCriterion.model_validate(item)
+            for item in payload_rubrics
+        ]
+        return build_criteria_from_rubrics(rubric_criteria)
 
     def aggregate_task(
         self,
@@ -60,8 +72,8 @@ class ResearchRubricsRubric(Rubric):
         max_possible = 0.0
         min_possible = 0.0
 
-        for criterion, result in zip(self.criteria, results, strict=True):
-            weight = criterion.weight
+        for result in results:
+            weight = result.weight
 
             if result.score > 0:
                 total_score += weight

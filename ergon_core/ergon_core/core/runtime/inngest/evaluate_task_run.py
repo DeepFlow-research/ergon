@@ -5,11 +5,17 @@ runs all criteria, aggregates results, persists RunTaskEvaluation.
 """
 
 from datetime import UTC, datetime
+import logging
 
 import inngest
+from sqlmodel import select
 from ergon_builtins.registry import EVALUATORS, SANDBOX_MANAGERS
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.core.persistence.definitions.models import (
+    ExperimentDefinitionInstance,
+    ExperimentDefinitionTask,
+)
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.evaluation_summary import (
@@ -17,6 +23,7 @@ from ergon_core.core.persistence.telemetry.evaluation_summary import (
     EvaluationSummary,
 )
 from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.runtime.errors import ContractViolationError, RegistryLookupError
 from ergon_core.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
@@ -37,6 +44,8 @@ from ergon_core.core.runtime.tracing import (
     evaluation_task_context,
     get_trace_sink,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @inngest_client.create_function(
@@ -90,26 +99,56 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         sandbox_manager=sandbox_manager,
     )
 
+    with get_session() as session:
+        task_row = session.get(ExperimentDefinitionTask, task_id)
+        instance_row = (
+            session.get(ExperimentDefinitionInstance, task_row.instance_id)
+            if task_row is not None
+            else None
+        )
+
+    task_input = task_row.description if task_row is not None else ""
     task_context = TaskEvaluationContext(
         run_id=run_id,
-        task_input="",
+        task_input=task_input,
         agent_reasoning=agent_reasoning,
         sandbox_id=payload.sandbox_id,
     )
 
     task = BenchmarkTask(
-        task_slug="",
-        instance_key="",
-        description="",
+        task_slug=task_row.task_slug if task_row is not None else "",
+        instance_key=instance_row.instance_key if instance_row is not None else "",
+        description=task_input,
+        task_payload=dict(task_row.task_payload) if task_row is not None else {},
     )
 
     service = RubricEvaluationService(criterion_executor=executor)
-    service_result = await service.evaluate(
-        task_context=task_context,
-        evaluator=evaluator,
-        task=task,
-        benchmark_name="",
-    )
+    try:
+        service_result = await service.evaluate(
+            task_context=task_context,
+            evaluator=evaluator,
+            task=task,
+            benchmark_name="",
+        )
+    except Exception as exc:  # slopcop: ignore[no-broad-except]
+        logger.exception(
+            "evaluate_task_run failed run_id=%s task_id=%s evaluator=%s",
+            run_id,
+            task_id,
+            evaluator_type,
+        )
+        _persist_evaluation_failure(
+            run_id=run_id,
+            task_id=task_id,
+            evaluator_id=evaluator_id,
+            evaluator_name=evaluator_binding_key,
+            exc=exc,
+        )
+        return EvaluateTaskRunResult(
+            score=0.0,
+            passed=False,
+            evaluator_name=evaluator_binding_key,
+        )
     result = service_result.result
 
     summary = _build_evaluation_summary(service_result, evaluation_input="")
@@ -130,6 +169,7 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         session.refresh(evaluation)
     finally:
         session.close()
+    _refresh_run_evaluation_summary(run_id)
 
     evaluation_dict = {
         "id": str(evaluation.id),
@@ -185,6 +225,73 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         passed=result.passed,
         evaluator_name=result.evaluator_name,
     )
+
+
+def _persist_evaluation_failure(
+    *,
+    run_id,
+    task_id,
+    evaluator_id,
+    evaluator_name: str,
+    exc: Exception,
+) -> None:
+    session = get_session()
+    try:
+        error_type = type(exc).__name__
+        evaluation = RunTaskEvaluation(
+            run_id=run_id,
+            definition_task_id=task_id,
+            definition_evaluator_id=evaluator_id,
+            score=0.0,
+            passed=False,
+            feedback=f"{error_type}: {exc}",
+            summary_json={
+                "evaluator_name": evaluator_name,
+                "max_score": 0.0,
+                "normalized_score": 0.0,
+                "stages_evaluated": 0,
+                "stages_passed": 0,
+                "criterion_results": [],
+                "error": {
+                    "type": error_type,
+                    "message": str(exc),
+                },
+            },
+        )
+        session.add(evaluation)
+        session.commit()
+    finally:
+        session.close()
+    _refresh_run_evaluation_summary(run_id)
+
+
+def _refresh_run_evaluation_summary(run_id) -> None:
+    session = get_session()
+    try:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            return
+        evaluations = list(
+            session.exec(
+                select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id),
+            ).all()
+        )
+        scores = [evaluation.score for evaluation in evaluations if evaluation.score is not None]
+        final_score = sum(scores) if scores else None
+        normalized_score = final_score / len(scores) if scores and final_score is not None else None
+        existing_summary = dict(run.summary_json or {})
+        existing_summary.update(
+            {
+                "final_score": final_score,
+                "normalized_score": normalized_score,
+                "evaluators_count": len(evaluations),
+            }
+        )
+        run.summary_json = existing_summary
+        session.add(run)
+        session.commit()
+    finally:
+        session.close()
 
 
 def _build_evaluation_summary(

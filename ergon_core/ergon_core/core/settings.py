@@ -79,5 +79,7 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+if settings.openai_api_key:
+    os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key)
 if settings.openrouter_api_key:
     os.environ.setdefault("OPENROUTER_API_KEY", settings.openrouter_api_key)

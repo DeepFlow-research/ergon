@@ -6,8 +6,11 @@ ReActWorker.execute().
 """
 
 from collections.abc import AsyncGenerator
+import time
 from typing import ClassVar
 from uuid import UUID
+
+from pydantic import BaseModel
 
 from ergon_core.api import RunResourceView
 from ergon_core.api.generation import GenerationTurn
@@ -18,6 +21,14 @@ from ergon_core.core.providers.sandbox.research_rubrics_manager import (
 )
 
 from ergon_builtins.tools.graph_toolkit import ResearchGraphToolkit
+from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
+    ReportReadFailure,
+    ReportReadResponse,
+    ReportReadSuccess,
+    ReportWriteFailure,
+    ReportWriteResponse,
+    ReportWriteSuccess,
+)
 from ergon_builtins.tools.research_rubrics_toolkit import (
     ResearchRubricsToolkit,
 )
@@ -40,6 +51,14 @@ _RESEARCHER_SYSTEM_PROMPT = (
     "Write your final report to 'final_output/report.md' using write_report_draft. "
     "Include a # Findings section and a ## Sources section with citations."
 )
+
+
+def _workspace_path(relative_path: str) -> str:
+    """Resolve a user path under /workspace and reject traversal."""
+    cleaned = relative_path.lstrip("/")
+    if not cleaned or ".." in cleaned.split("/"):
+        raise ValueError(f"path escapes /workspace: {relative_path!r}")
+    return f"/workspace/{cleaned}"
 
 
 class ResearchRubricsResearcherWorker(ReActWorker):
@@ -78,7 +97,20 @@ class ResearchRubricsResearcherWorker(ReActWorker):
     ) -> AsyncGenerator[GenerationTurn, None]:
         manager = ResearchRubricsSandboxManager()
 
-        run_skill = make_run_skill(model=self.model)
+        model_run_skill = make_run_skill(model=self.model)
+
+        async def run_skill(
+            skill_name: str,
+            response_model: type[BaseModel],
+            **kwargs: object,
+        ) -> BaseModel:
+            if skill_name in {"write_report_draft", "edit_report_draft", "read_report_draft"}:
+                return await self._run_sandbox_report_skill(
+                    manager=manager,
+                    skill_name=skill_name,
+                    **kwargs,
+                )
+            return await model_run_skill(skill_name, response_model, **kwargs)
 
         async def publisher_sync() -> list[RunResourceView]:
             publisher = manager.publisher_for(
@@ -104,3 +136,85 @@ class ResearchRubricsResearcherWorker(ReActWorker):
 
         async for turn in super().execute(task, context=context):
             yield turn
+
+    async def _run_sandbox_report_skill(
+        self,
+        *,
+        manager: ResearchRubricsSandboxManager,
+        skill_name: str,
+        **kwargs: object,
+    ) -> ReportWriteResponse | ReportReadResponse:
+        started = time.perf_counter()
+        try:
+            relative_path = str(kwargs["relative_path"])
+            path = _workspace_path(relative_path)
+        except Exception as exc:
+            latency_ms = (time.perf_counter() - started) * 1000
+            if skill_name == "read_report_draft":
+                return ReportReadFailure(
+                    path=str(kwargs.get("relative_path", "")),
+                    reason="path_disallowed",
+                    detail=str(exc),
+                    latency_ms=latency_ms,
+                )
+            return ReportWriteFailure(
+                path=str(kwargs.get("relative_path", "")),
+                reason="path_disallowed",
+                detail=str(exc),
+                latency_ms=latency_ms,
+            )
+
+        try:
+            sandbox = manager._get_raw_sandbox(self.task_id)
+            if skill_name == "read_report_draft":
+                content = await sandbox.files.read(path)
+                if isinstance(content, bytes):
+                    content = content.decode("utf-8")
+                latency_ms = (time.perf_counter() - started) * 1000
+                await manager._emit_wal_entry(
+                    self.task_id,
+                    command=f"files.read {path}",
+                    stdout=f"path={path}\nbytes={len(content.encode('utf-8'))}",
+                    exit_code=0,
+                    duration_ms=int(latency_ms),
+                )
+                return ReportReadSuccess(
+                    path=path,
+                    content=content,
+                    size_bytes=len(content.encode("utf-8")),
+                    latency_ms=latency_ms,
+                )
+
+            content = str(
+                kwargs["content"] if skill_name == "write_report_draft" else kwargs["patch"],
+            )
+            await sandbox.files.write(path, content.encode("utf-8"))
+            latency_ms = (time.perf_counter() - started) * 1000
+            manager.register_created_file(self.task_id, path)
+            await manager._emit_wal_entry(
+                self.task_id,
+                command=f"files.write {path}",
+                stdout=f"path={path}\nbytes={len(content.encode('utf-8'))}",
+                exit_code=0,
+                duration_ms=int(latency_ms),
+            )
+            return ReportWriteSuccess(
+                path=path,
+                bytes_written=len(content.encode("utf-8")),
+                latency_ms=latency_ms,
+            )
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
+            latency_ms = (time.perf_counter() - started) * 1000
+            if skill_name == "read_report_draft":
+                return ReportReadFailure(
+                    path=path,
+                    reason="unknown",
+                    detail=f"{type(exc).__name__}: {exc}",
+                    latency_ms=latency_ms,
+                )
+            return ReportWriteFailure(
+                path=path,
+                reason="unknown",
+                detail=f"{type(exc).__name__}: {exc}",
+                latency_ms=latency_ms,
+            )
