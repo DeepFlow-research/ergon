@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 )
 async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
     payload = TaskCompletedEvent.model_validate(ctx.event.data)
-    if payload.task_id is None:
+    if payload.node_id is None:
         await _terminate_sandbox(payload.sandbox_id)
         return EvaluatorsResult(
             task_id=None,
@@ -56,6 +56,7 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
         DispatchEvaluatorsCommand(
             run_id=payload.run_id,
             definition_id=payload.definition_id,
+            node_id=payload.node_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
         )
@@ -77,6 +78,7 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
             data=EvaluateTaskRunRequest(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
+                node_id=payload.node_id,
                 task_id=payload.task_id,
                 execution_id=payload.execution_id,
                 evaluator_id=evaluator_payload.evaluator_id,

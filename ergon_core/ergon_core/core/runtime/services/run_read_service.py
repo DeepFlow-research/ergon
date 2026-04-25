@@ -7,7 +7,6 @@ from statistics import mean
 from uuid import UUID
 
 from ergon_core.core.api.schemas import (
-    RunGenerationTurnDto,
     RunGraphMutationDto,
     RunSnapshotDto,
     TrainingCurvePointDto,
@@ -22,7 +21,6 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
-    RunGenerationTurn,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -93,16 +91,6 @@ class RunReadService:
             thread_messages = list(
                 session.exec(select(ThreadMessage).where(ThreadMessage.run_id == run_id)).all()
             )
-            generation_turns = list(
-                session.exec(
-                    select(RunGenerationTurn)
-                    .where(RunGenerationTurn.run_id == run_id)
-                    .order_by(
-                        RunGenerationTurn.task_execution_id,
-                        RunGenerationTurn.turn_index,
-                    )
-                ).all()
-            )
             context_events = list(
                 session.exec(
                     select(RunContextEvent)
@@ -133,28 +121,6 @@ class RunReadService:
         defn_to_node: dict[UUID, UUID] = {
             n.definition_task_id: n.id for n in nodes if n.definition_task_id is not None
         }
-
-        generation_turns_by_task: dict[str, list[RunGenerationTurnDto]] = defaultdict(list)
-        for turn in generation_turns:
-            node_uuid = execution_task_map.get(turn.task_execution_id)
-            if node_uuid is None:
-                continue
-            generation_turns_by_task[str(node_uuid)].append(
-                RunGenerationTurnDto(
-                    id=str(turn.id),
-                    task_execution_id=str(turn.task_execution_id),
-                    worker_binding_key=turn.worker_binding_key,
-                    turn_index=turn.turn_index,
-                    prompt_text=turn.prompt_text,
-                    raw_response=turn.raw_response,
-                    response_text=turn.response_text,
-                    tool_calls=turn.tool_calls_json,
-                    tool_results=turn.tool_results_json,
-                    policy_version=turn.policy_version,
-                    has_logprobs=turn.token_ids_json is not None,
-                    created_at=turn.created_at.isoformat() if turn.created_at else None,
-                )
-            )
 
         context_events_by_task = run_api_helpers._context_events_by_task(
             context_events,
@@ -196,7 +162,6 @@ class RunReadService:
                 run_id_str,
                 defn_to_node,
             ),
-            generation_turns_by_task=dict(generation_turns_by_task),
             context_events_by_task=dict(context_events_by_task),
             sandboxes_by_task=run_api_helpers._task_keyed_sandboxes(run_summary),
             threads=run_api_helpers._build_communication_threads(threads, thread_messages),
@@ -241,47 +206,6 @@ class RunReadService:
                 created_at=m.created_at.isoformat(),
             )
             for m in mutations
-        ]
-
-    def list_generation_turns(
-        self,
-        run_id: UUID,
-        *,
-        include_logprobs: bool,
-    ) -> list[RunGenerationTurnDto] | None:
-        with get_session() as session:
-            run = session.get(RunRecord, run_id)
-            if run is None:
-                return None
-            turns = list(
-                session.exec(
-                    select(RunGenerationTurn)
-                    .where(RunGenerationTurn.run_id == run_id)
-                    .order_by(
-                        RunGenerationTurn.task_execution_id,
-                        RunGenerationTurn.turn_index,
-                    )
-                ).all()
-            )
-
-        return [
-            RunGenerationTurnDto(
-                id=str(turn.id),
-                task_execution_id=str(turn.task_execution_id),
-                worker_binding_key=turn.worker_binding_key,
-                turn_index=turn.turn_index,
-                prompt_text=turn.prompt_text,
-                raw_response=turn.raw_response,
-                response_text=turn.response_text,
-                tool_calls=turn.tool_calls_json,
-                tool_results=turn.tool_results_json,
-                policy_version=turn.policy_version,
-                has_logprobs=turn.token_ids_json is not None,
-                created_at=turn.created_at.isoformat() if turn.created_at else None,
-                token_ids=turn.token_ids_json if include_logprobs else None,
-                logprobs=turn.logprobs_json if include_logprobs else None,
-            )
-            for turn in turns
         ]
 
     def get_resource_blob(self, run_id: UUID, resource_id: UUID) -> RunResourceBlob | None:

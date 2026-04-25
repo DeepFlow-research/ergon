@@ -50,7 +50,8 @@ evaluation_persistence = EvaluationPersistenceService()
 async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
     payload = EvaluateTaskRunRequest.model_validate(ctx.event.data)
     run_id = payload.run_id
-    task_id = payload.task_id
+    definition_task_id = payload.task_id
+    node_id = payload.node_id
     execution_id = payload.execution_id
     evaluator_id = payload.evaluator_id
     evaluator_binding_key = payload.evaluator_binding_key
@@ -64,7 +65,7 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
             "evaluator",
             evaluator_type,
             run_id=run_id,
-            task_id=task_id,
+            task_id=node_id,
         )
 
     evaluator = evaluator_cls(name=evaluator_binding_key)
@@ -85,13 +86,20 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
 
     executor = InngestCriterionExecutor(
         ctx,
-        task_id=task_id,
+        task_id=node_id,
         execution_id=execution_id,
         evaluator_id=evaluator_id,
         sandbox_manager=sandbox_manager,
     )
 
-    task_row, instance_row = queries.definitions.get_task_with_instance(task_id)
+    if definition_task_id is None:
+        raise ContractViolationError(
+            "task/evaluate requires definition_task_id while evaluator bindings are definition-scoped",
+            run_id=run_id,
+            task_id=node_id,
+        )
+
+    task_row, instance_row = queries.definitions.get_task_with_instance(definition_task_id)
 
     task_input = task_row.description
     task_context = TaskEvaluationContext(
@@ -126,12 +134,14 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         logger.exception(
             "evaluate_task_run failed run_id=%s task_id=%s evaluator=%s",
             run_id,
-            task_id,
+            node_id,
             evaluator_type,
         )
         evaluation_persistence.persist_failure(
             run_id=run_id,
-            task_id=task_id,
+            node_id=node_id,
+            task_execution_id=execution_id,
+            definition_task_id=definition_task_id,
             evaluator_id=evaluator_id,
             evaluator_name=evaluator_binding_key,
             exc=exc,
@@ -145,25 +155,27 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
 
     persisted = evaluation_persistence.persist_success(
         run_id=run_id,
-        task_id=task_id,
+        node_id=node_id,
+        task_execution_id=execution_id,
+        definition_task_id=definition_task_id,
         evaluator_id=evaluator_id,
         service_result=service_result,
     )
     await dashboard_emitter.task_evaluation_updated(
         run_id=run_id,
-        task_id=task_id,
+        task_id=node_id,
         evaluation=persisted.dashboard_dto,
     )
 
     get_trace_sink().emit_span(
         CompletedSpan(
             name="evaluation.task",
-            context=evaluation_task_context(run_id, task_id, execution_id, evaluator_id),
+            context=evaluation_task_context(run_id, node_id, execution_id, evaluator_id),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
                 "run_id": str(run_id),
-                "task_id": str(task_id),
+                "task_id": str(node_id),
                 "execution_id": str(execution_id),
                 "evaluator_id": str(evaluator_id),
                 "evaluator_type": evaluator_type,

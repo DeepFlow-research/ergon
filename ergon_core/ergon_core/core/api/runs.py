@@ -11,7 +11,6 @@ from ergon_core.core.api.schemas import (
     RunContextEventDto,
     RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
-    RunGenerationTurnDto,
     RunGraphMutationDto,
     RunResourceDto,
     RunSandboxCommandDto,
@@ -31,7 +30,6 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
-    RunGenerationTurn,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -208,11 +206,10 @@ def _task_keyed_evaluations(
 ) -> dict[str, RunTaskEvaluationDto]:
     result: dict[str, RunTaskEvaluationDto] = {}
     for ev in evaluations:
-        node_id = defn_to_node.get(ev.definition_task_id)
+        node_id = ev.node_id
         if node_id is None:
-            # Dynamic nodes have no definition_task_id; evaluations for unknown tasks are skipped.
-            # When dynamic-task evaluation is added, RunTaskEvaluation will need a node_id
-            # foreign key so evaluations can be mapped without going through the definition layer.
+            # Evaluation rows without runtime node identity cannot be
+            # truthfully rendered in a task workspace.
             continue
         tid = str(node_id)
         summary = ev.parsed_summary()
@@ -314,6 +311,7 @@ def _build_communication_threads(
                         thread_id=str(m.thread_id),
                         run_id=str(m.run_id),
                         thread_topic=t.topic,
+                        task_execution_id=str(m.task_execution_id) if m.task_execution_id else None,
                         from_agent_id=m.from_agent_id,
                         to_agent_id=m.to_agent_id,
                         content=m.content,
@@ -357,6 +355,8 @@ def _context_events_by_task(
             RunContextEventDto(
                 id=str(event.id),
                 task_execution_id=str(event.task_execution_id),
+                task_node_id=str(task_node_id),
+                worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
                 event_type=event.event_type,
                 payload=event.payload,
@@ -406,36 +406,6 @@ def get_mutations(run_id: UUID) -> list[RunGraphMutationDto]:
     if mutations is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return mutations
-
-
-# ---------------------------------------------------------------------------
-# Generation turns endpoint (RL observability)
-# ---------------------------------------------------------------------------
-
-
-@router.get("/{run_id}/generations", response_model=list[RunGenerationTurnDto])
-def get_generations(
-    run_id: UUID,
-    include: str | None = None,
-) -> list[RunGenerationTurnDto]:
-    """Get lossless generation turns for a run.
-
-    Each turn contains the raw model request/response, extracted text,
-    tool calls, tool results, and optionally logprobs.
-
-    Query params:
-        include: comma-separated fields to include.  ``logprobs`` adds
-            ``token_ids`` and ``logprobs`` arrays (can be large).
-    """
-    include_logprobs = include is not None and "logprobs" in include.split(",")
-
-    turns = RunReadService().list_generation_turns(
-        run_id,
-        include_logprobs=include_logprobs,
-    )
-    if turns is None:
-        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
-    return turns
 
 
 # ---------------------------------------------------------------------------

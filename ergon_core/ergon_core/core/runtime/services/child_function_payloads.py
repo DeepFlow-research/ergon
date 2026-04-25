@@ -63,14 +63,6 @@ class PersistOutputsRequest(InngestEventContract):
     sandbox_id: str | None = None
     output_dir: str | None = None
     benchmark_type: str
-    # Worker's final assistant message (from ``WorkerOutput.output``).  Also
-    # written into ``RunTaskExecution.final_assistant_message`` via
-    # ``finalize_success`` for quick single-column reads; we additionally
-    # publish it as a ``RunResource(kind=OUTPUT, name="worker_output")`` so
-    # evaluators and downstream tooling can treat it like any other resource
-    # (content hashed, blob-backed, append-only).  ``None`` when the worker
-    # produced no text output.
-    worker_final_assistant_message: str | None = None
 
 
 class EvaluateTaskRunRequest(InngestEventContract):
@@ -79,7 +71,8 @@ class EvaluateTaskRunRequest(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None = None
+    node_id: UUID
     execution_id: UUID
     evaluator_id: UUID
     evaluator_binding_key: str

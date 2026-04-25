@@ -33,19 +33,23 @@ class EvaluationPersistenceService:
         self,
         *,
         run_id: UUID,
-        task_id: UUID,
+        node_id: UUID,
+        task_execution_id: UUID,
+        definition_task_id: UUID | None,
         evaluator_id: UUID,
         service_result: EvaluationServiceResult,
         evaluation_input: str | None = None,
     ) -> PersistedEvaluation:
-        summary = build_evaluation_summary(service_result, evaluation_input=evaluation_input or "")
+        summary = build_evaluation_summary(service_result, evaluation_input=evaluation_input)
         result = service_result.result
         session = get_session()
         try:
             evaluation = self.telemetry_repo.create_task_evaluation(
                 session,
                 run_id=run_id,
-                definition_task_id=task_id,
+                node_id=node_id,
+                task_execution_id=task_execution_id,
+                definition_task_id=definition_task_id,
                 definition_evaluator_id=evaluator_id,
                 score=result.score,
                 passed=result.passed,
@@ -60,7 +64,7 @@ class EvaluationPersistenceService:
                 dashboard_dto=build_dashboard_evaluation_dto(
                     evaluation_id=evaluation.id,
                     run_id=run_id,
-                    task_id=task_id,
+                    task_id=node_id,
                     total_score=result.score,
                     created_at=evaluation.created_at,
                     summary=summary,
@@ -73,7 +77,9 @@ class EvaluationPersistenceService:
         self,
         *,
         run_id: UUID,
-        task_id: UUID,
+        node_id: UUID,
+        task_execution_id: UUID,
+        definition_task_id: UUID | None,
         evaluator_id: UUID,
         evaluator_name: str,
         exc: Exception,
@@ -92,7 +98,9 @@ class EvaluationPersistenceService:
             self.telemetry_repo.create_task_evaluation(
                 session,
                 run_id=run_id,
-                definition_task_id=task_id,
+                node_id=node_id,
+                task_execution_id=task_execution_id,
+                definition_task_id=definition_task_id,
                 definition_evaluator_id=evaluator_id,
                 score=0.0,
                 passed=False,
@@ -107,7 +115,7 @@ class EvaluationPersistenceService:
 
 def build_evaluation_summary(
     service_result: EvaluationServiceResult,
-    evaluation_input: str,
+    evaluation_input: str | None,
 ) -> EvaluationSummary:
     """Build a strongly typed evaluation summary from service result + specs."""
     result = service_result.result
@@ -136,7 +144,7 @@ def build_evaluation_summary(
                 max_score=spec.max_score,
                 passed=cr.passed,
                 weight=cr.weight,
-                feedback="" if cr.feedback is None else cr.feedback,
+                feedback=cr.feedback,
                 evaluation_input=evaluation_input,
             )
         )

@@ -30,7 +30,11 @@ def _runtime(*, sandbox_id: str | None) -> DefaultCriterionRuntime:
     manager.reset_timeout = AsyncMock()
 
     runtime = DefaultCriterionRuntime(
-        context=CriterionContext(run_id=run_id),
+        context=CriterionContext(
+            run_id=run_id,
+            task_input="test task",
+            agent_reasoning="test output",
+        ),
         sandbox_manager=manager,
         options=CriterionRuntimeOptions(run_id=run_id, sandbox_id=sandbox_id),
     )

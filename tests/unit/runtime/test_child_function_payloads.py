@@ -12,11 +12,12 @@ from ergon_core.core.runtime.services.child_function_payloads import (
 from pydantic import ValidationError
 
 
-def test_evaluate_task_request_requires_static_task_identity() -> None:
+def test_evaluate_task_request_requires_runtime_node_identity() -> None:
     with pytest.raises(ValidationError):
         EvaluateTaskRunRequest(
             run_id=uuid4(),
             definition_id=uuid4(),
+            task_id=uuid4(),
             execution_id=uuid4(),
             evaluator_id=uuid4(),
             evaluator_binding_key="researchrubrics-rubric",
@@ -29,6 +30,7 @@ def test_evaluate_task_request_requires_evaluator_binding_key() -> None:
         EvaluateTaskRunRequest(
             run_id=uuid4(),
             definition_id=uuid4(),
+            node_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             evaluator_id=uuid4(),

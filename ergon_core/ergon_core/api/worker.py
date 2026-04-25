@@ -11,8 +11,8 @@ from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
+from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.repositories import GenerationTurnRepository
 from sqlmodel import Session
 
 
@@ -46,7 +46,7 @@ class Worker(ABC):
         self.task_id = task_id
         self.sandbox_id = sandbox_id
         self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
-        self._turn_repo = GenerationTurnRepository()
+        self._context_repo = ContextEventRepository()
 
     @abstractmethod
     async def execute(
@@ -83,15 +83,19 @@ class Worker(ABC):
         """Build output from persisted turns. Override for custom output.
 
         Called by the runtime after the async generator is fully consumed.
-        Default reads turns from PG via ``self._turn_repo`` and returns the
-        last turn's response text. Workers that need structured output,
+        Default reads context events from PG via ``self._context_repo`` and returns
+        the last assistant text. Workers that need structured output,
         summaries, or custom logic override this.
         """
         with get_session() as session:
-            turns = self._turn_repo.get_for_execution(session, context.execution_id)
-        last_turn = turns[-1] if turns else None
+            events = self._context_repo.get_for_execution(session, context.execution_id)
+        text_events = [
+            event.payload.get("text")
+            for event in events
+            if event.event_type == "assistant_text" and isinstance(event.payload.get("text"), str)
+        ]
         return WorkerOutput(
-            output=last_turn.response_text if last_turn else "",
+            output=text_events[-1] if text_events else "",
             success=True,
         )
 

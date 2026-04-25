@@ -6,7 +6,7 @@ of truth for the definition itself.
 
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from ergon_core.api.json_types import JsonObject
@@ -25,24 +25,12 @@ if TYPE_CHECKING:
     from ergon_core.core.persistence.telemetry.evaluation_summary import (
         EvaluationSummary,
     )
-    from ergon_core.core.persistence.telemetry.tool_call_types import (
-        ToolCall,
-        ToolResult,
-    )
 
 TZDateTime = DateTime(timezone=True)
 
 # model_validator(mode="after") fires on model_validate() but NOT on direct
 # SQLModel table model construction (SQLModel's __init__ bypasses Pydantic
 # for table=True). Validators here protect the API/deserialization boundary.
-
-# ---------------------------------------------------------------------------
-# Type aliases
-# ---------------------------------------------------------------------------
-
-ExecutionOutcome = Literal["success", "failure"]
-
-_VALID_OUTCOMES = frozenset({"success", "failure"})
 
 # ---------------------------------------------------------------------------
 # Cohort status enum
@@ -123,8 +111,7 @@ class RunTaskExecution(SQLModel, table=True):
         foreign_key="experiment_definition_workers.id",
         index=True,
     )
-    node_id: UUID | None = Field(
-        default=None,
+    node_id: UUID = Field(
         foreign_key="run_graph_nodes.id",
         index=True,
     )
@@ -197,9 +184,11 @@ class RunResourceKind(StrEnum):
     """
 
     OUTPUT = "output"
-    """Text output of a worker's ``WorkerOutput``.  Produced by
-    ``_publish_resources`` in ``core.runtime.inngest.persist_outputs``
-    when the worker completes successfully."""
+    """Explicit text artifact published by a worker/toolkit.
+
+    Worker final assistant messages belong on
+    ``RunTaskExecution.final_assistant_message`` instead of this resource log.
+    """
 
     REPORT = "report"
     """Terminal report written by a worker into a sandbox publish
@@ -279,7 +268,16 @@ class RunTaskEvaluation(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_task_id: UUID = Field(
+    node_id: UUID = Field(
+        foreign_key="run_graph_nodes.id",
+        index=True,
+    )
+    task_execution_id: UUID = Field(
+        foreign_key="run_task_executions.id",
+        index=True,
+    )
+    definition_task_id: UUID | None = Field(
+        default=None,
         foreign_key="experiment_definition_tasks.id",
         index=True,
     )
@@ -415,101 +413,6 @@ class ThreadMessage(SQLModel, table=True):
     content: str
     sequence_num: int
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-
-# ---------------------------------------------------------------------------
-# RunGenerationTurn — lossless per-turn generation record
-# ---------------------------------------------------------------------------
-
-
-class RunGenerationTurn(SQLModel, table=True):
-    """Lossless per-turn record of one model generation within an episode.
-
-    Stores the model response (raw_response) plus convenience extractions
-    and optional RL fields.  One row per model call per task execution.
-    Persisted incrementally — one commit per yield from the worker's
-    async generator.
-
-    ``prompt_text`` is set by the worker on the first turn — the formatted
-    prompt string the model saw.  Used by the RL extraction pipeline for
-    TRL's ``prompt_ids``.
-    """
-
-    __tablename__ = "run_generation_turns"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
-    task_execution_id: UUID = Field(
-        foreign_key="run_task_executions.id",
-        index=True,
-    )
-    worker_binding_key: str = Field(index=True)
-    turn_index: int
-
-    prompt_text: str | None = None
-    raw_response: dict = Field(default_factory=dict, sa_column=Column(JSON))
-
-    # Convenience extractions
-    response_text: str | None = None
-    tool_calls_json: list[JsonObject] | None = Field(default=None, sa_column=Column(JSON))
-    tool_results_json: list[JsonObject] | None = Field(default=None, sa_column=Column(JSON))
-
-    # RL fields (None for cloud APIs, populated for vLLM)
-    token_ids_json: list[int] | None = Field(default=None, sa_column=Column(JSON))
-    logprobs_json: list[JsonObject] | None = Field(default=None, sa_column=Column(JSON))
-    policy_version: str | None = None
-
-    # Execution outcome at time of persist
-    execution_outcome: str | None = Field(
-        default=None, index=True
-    )  # ExecutionOutcome Literal — str for SQLModel compat
-
-    started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-    # -- JSON accessors --
-
-    def parsed_tool_calls(self) -> list["ToolCall"]:
-        # reason: deferred to avoid circular import with tool_call_types
-        from ergon_core.core.persistence.telemetry.tool_call_types import ToolCall
-
-        tool_calls = [] if self.tool_calls_json is None else self.tool_calls_json
-        return [ToolCall.model_validate(tc) for tc in tool_calls]
-
-    def parsed_tool_results(self) -> list["ToolResult"]:
-        # reason: deferred to avoid circular import with tool_call_types
-        from ergon_core.core.persistence.telemetry.tool_call_types import ToolResult
-
-        tool_results = [] if self.tool_results_json is None else self.tool_results_json
-        return [ToolResult.model_validate(tr) for tr in tool_results]
-
-    def parsed_token_ids(self) -> list[int] | None:
-        return self._parse_optional_list("token_ids_json", self.token_ids_json)
-
-    def parsed_logprobs(self) -> list[JsonObject] | None:
-        return self._parse_optional_list("logprobs_json", self.logprobs_json)
-
-    # -- shared helpers --
-
-    @classmethod
-    def _parse_optional_list(cls, field_name: str, data: list | None) -> list | None:
-        if data is None:
-            return None
-        if not isinstance(data, list):
-            raise ValueError(f"{field_name} must be a list, got {type(data).__name__}")
-        return data
-
-    @model_validator(mode="after")
-    def _validate_json_columns(self) -> "RunGenerationTurn":
-        if not isinstance(self.raw_response, dict):
-            raise ValueError(f"raw_response must be a dict, got {type(self.raw_response).__name__}")
-        if self.execution_outcome is not None and self.execution_outcome not in _VALID_OUTCOMES:
-            raise ValueError(
-                f"{self.execution_outcome!r} is not a valid execution_outcome; "
-                f"valid values: {sorted(_VALID_OUTCOMES)}"
-            )
-        return self
 
 
 # ---------------------------------------------------------------------------
