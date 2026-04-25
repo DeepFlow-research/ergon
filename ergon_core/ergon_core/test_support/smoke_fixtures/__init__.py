@@ -1,9 +1,10 @@
 """Test-only worker / criterion registration hook.
 
-Importing this package registers the per-env canonical-smoke workers,
+``register_smoke_fixtures`` registers the per-env canonical-smoke workers,
 leaves, and criteria into the process-level ``WORKERS`` / ``EVALUATORS``
-dicts from ``ergon_builtins.registry``.  Production CLI paths do not
-import ``tests/``, so registrations here are confined to test runtimes.
+dicts from ``ergon_builtins.registry``.  Production CLI paths do not import
+``tests/``, so registrations here are confined to explicitly gated test
+runtimes.
 
 Phase C (this commit) adds the researchrubrics happy + sad-path rows.
 Phase D adds minif2f and swebench-verified.  Idempotent: calling twice
@@ -16,30 +17,30 @@ import os
 
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, SANDBOX_MANAGERS, WORKERS
 
-from tests.e2e._fixtures.benchmarks import (
+from ergon_core.test_support.smoke_fixtures.benchmarks import (
     MiniF2FSmokeBenchmark,
     ResearchRubricsSmokeBenchmark,
     SweBenchSmokeBenchmark,
 )
-from tests.e2e._fixtures.criteria.smoke_rubrics import (
+from ergon_core.test_support.smoke_fixtures.criteria.smoke_rubrics import (
     MiniF2FSmokeRubric,
     ResearchRubricsSmokeRubric,
     SweBenchSmokeRubric,
 )
-from tests.e2e._fixtures.sandbox import SmokeSandboxManager
-from tests.e2e._fixtures.workers.minif2f_smoke import (
+from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
+from ergon_core.test_support.smoke_fixtures.workers.minif2f_smoke import (
     MiniF2FSmokeLeafWorker,
     MiniF2FSmokeWorker,
 )
-from tests.e2e._fixtures.workers.researchrubrics_smoke import (
+from ergon_core.test_support.smoke_fixtures.workers.researchrubrics_smoke import (
     ResearchRubricsSmokeLeafWorker,
     ResearchRubricsSmokeWorker,
 )
-from tests.e2e._fixtures.workers.researchrubrics_smoke_sadpath import (
+from ergon_core.test_support.smoke_fixtures.workers.researchrubrics_smoke_sadpath import (
     ResearchRubricsFailingLeafWorker,
     ResearchRubricsSadPathSmokeWorker,
 )
-from tests.e2e._fixtures.workers.swebench_smoke import (
+from ergon_core.test_support.smoke_fixtures.workers.swebench_smoke import (
     SweBenchSmokeLeafWorker,
     SweBenchSmokeWorker,
 )
@@ -87,6 +88,3 @@ def register_smoke_fixtures() -> None:
     WORKERS[SweBenchSmokeWorker.type_slug] = SweBenchSmokeWorker
     WORKERS[SweBenchSmokeLeafWorker.type_slug] = SweBenchSmokeLeafWorker
     EVALUATORS[SweBenchSmokeRubric.type_slug] = SweBenchSmokeRubric
-
-
-register_smoke_fixtures()

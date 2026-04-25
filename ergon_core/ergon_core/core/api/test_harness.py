@@ -37,7 +37,7 @@ from ergon_core.core.runtime.services.cohort_service import experiment_cohort_se
 from ergon_core.core.runtime.services.run_service import create_run
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, asc, select
 
 router = APIRouter(prefix="/api/test", tags=["test-harness"])
 
@@ -165,7 +165,7 @@ def read_run_state(
         session.exec(
             select(RunGraphMutation)
             .where(RunGraphMutation.run_id == run_id)
-            .order_by(RunGraphMutation.sequence)  # ty: ignore[invalid-argument-type]
+            .order_by(asc(RunGraphMutation.sequence))
         ).all()
     )
     mutations = [
@@ -183,7 +183,7 @@ def read_run_state(
     evaluations = [
         TestEvaluationDto(
             score=float(ev.score) if ev.score is not None else 0.0,
-            reason=ev.feedback or "",
+            reason="" if ev.feedback is None else ev.feedback,
         )
         for ev in eval_rows
     ]
@@ -337,7 +337,7 @@ def reset_test_rows(
         # filter in Python. Bounded by the seed endpoint being test-only.
         candidates = list(s.exec(select(RunRecord)).all())
         for r in candidates:
-            meta = r.summary_json or {}
+            meta = {} if r.summary_json is None else r.summary_json
             if not meta.get("_test_seeded"):
                 continue
             tag = meta.get("_test_cohort")
@@ -354,7 +354,7 @@ def reset_test_rows(
 # harness that cares about cohort-scoped multi-run submission.  Host-side
 # pytest never imports ergon internals; it just POSTs slugs.  That keeps
 # the smoke fixtures single-sourced in the api container's process (one
-# ``import tests.e2e._fixtures`` in app.py) and eliminates the host /
+# ``register_smoke_fixtures()`` call in app.py) and eliminates the host /
 # container fixture-drift risk.
 # ---------------------------------------------------------------------------
 

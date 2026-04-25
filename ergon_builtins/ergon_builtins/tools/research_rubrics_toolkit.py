@@ -57,7 +57,7 @@ class ResearchRubricsToolkit:
         self._run_skill = run_skill
         self._publisher_sync = publisher_sync
 
-    def build_tools(  # noqa: C901
+    def build_tools(
         self,
     ) -> list:  # type: ignore[type-arg]
         """Return the six research skill tools as ``pydantic_ai.tools.Tool``."""

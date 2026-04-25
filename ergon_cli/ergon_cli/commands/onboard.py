@@ -13,7 +13,7 @@ from ergon_cli.onboarding.profile import (
 from ergon_cli.onboarding.prompts import ask_secret, confirm, select_multiple, select_one
 
 
-def handle_onboard(args: Namespace) -> int:  # noqa: ARG001
+def handle_onboard(args: Namespace) -> int:
     print("\nWelcome to Ergon!  Let's get your environment set up.\n")
 
     # reason: deferred import avoids pulling heavy ergon_builtins deps at CLI startup.

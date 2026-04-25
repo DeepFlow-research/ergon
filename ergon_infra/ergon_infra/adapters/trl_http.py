@@ -16,7 +16,7 @@ Usage::
 
 import logging
 import time
-from typing import TypedDict
+from typing import Protocol, TypedDict
 
 import httpx
 
@@ -31,6 +31,10 @@ class RolloutBatch(TypedDict):
     logprobs: list[list[float]]
     completion_reward: list[float]
     env_mask: list[list[int]]
+
+
+class TRLTrainerContext(Protocol):
+    """Opaque trainer callback argument supplied by TRL and unused here."""
 
 
 def make_ergon_http_rollout_func(
@@ -52,7 +56,7 @@ def make_ergon_http_rollout_func(
     """
     client = httpx.Client(base_url=ergon_url, timeout=30.0)
 
-    def rollout_func(prompts: list, trainer: object) -> RolloutBatch:
+    def rollout_func(prompts: list, trainer: TRLTrainerContext) -> RolloutBatch:
         resp = client.post(
             "/rollouts/submit",
             json={

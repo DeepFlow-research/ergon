@@ -148,7 +148,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         try:
             relative_path = str(kwargs["relative_path"])
             path = _workspace_path(relative_path)
-        except Exception as exc:
+        except (KeyError, ValueError) as exc:
             latency_ms = (time.perf_counter() - started) * 1000
             if skill_name == "read_report_draft":
                 return ReportReadFailure(

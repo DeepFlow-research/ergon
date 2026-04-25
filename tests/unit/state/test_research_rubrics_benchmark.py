@@ -93,15 +93,17 @@ class TestResearchRubricsRubric:
             instance_key="default",
             description="Write a report.",
             evaluator_binding_keys=("default",),
-            task_payload=ResearchRubricsTaskPayload.model_validate({
-                "sample_id": "sample",
-                "domain": "quality",
-                "ablated_prompt": "Write a report.",
-                "rubrics": [
-                    {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
-                    {"criterion": "No unsupported claims.", "axis": "quality", "weight": -1.0},
-                ],
-            }),
+            task_payload=ResearchRubricsTaskPayload.model_validate(
+                {
+                    "sample_id": "sample",
+                    "domain": "quality",
+                    "ablated_prompt": "Write a report.",
+                    "rubrics": [
+                        {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
+                        {"criterion": "No unsupported claims.", "axis": "quality", "weight": -1.0},
+                    ],
+                }
+            ),
         )
 
         criteria = list(rubric.criteria_for(task))

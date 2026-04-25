@@ -9,8 +9,9 @@ no dependency on the subtask lifecycle services --- it only needs the
 sandbox_id. Other toolkits can reuse it independently.
 """
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
+
+from ergon_core.api.json_types import JsonObject
 
 
 async def _stub_sandbox_exec(*, sandbox_id: str, command: str, timeout_s: int) -> dict[str, str]:
@@ -20,12 +21,10 @@ async def _stub_sandbox_exec(*, sandbox_id: str, command: str, timeout_s: int) -
     )
 
 
-def make_sandbox_bash_tool(
-    *, sandbox_id: str
-) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+def make_sandbox_bash_tool(*, sandbox_id: str) -> Callable[..., Awaitable[JsonObject]]:
     """Produce a single bash callable bound to the given sandbox."""
 
-    async def bash(command: str, timeout_s: int = 30) -> dict[str, object]:
+    async def bash(command: str, timeout_s: int = 30) -> JsonObject:
         """Run a shell command inside the manager's sandbox. Useful for:
         - `sleep 10` between subtask-status polls;
         - `cat` / `echo` for light inspection;
@@ -43,7 +42,7 @@ def make_sandbox_bash_tool(
                 "stderr": result.get("stderr", ""),
                 "exit_code": result.get("exit_code", 0),
             }
-        except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
             return {"success": False, "error": str(exc)}
 
     return bash

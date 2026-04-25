@@ -21,6 +21,7 @@ from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_te
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import (
     payload_to_swebench_row,
 )
+from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 
 try:
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
@@ -72,7 +73,7 @@ class SWEBenchSandboxManager(BaseSandboxManager):
         ``BaseSandboxManager.create()`` — the early-return at ``create()``
         guards idempotence, so re-entry does not re-run these scripts.
         """
-        payload = queries.task_executions.get_task_payload(task_id)
+        payload = queries.task_executions.get_task_payload(task_id, SWEBenchTaskPayload)
         if payload is None:
             raise SandboxSetupError(
                 f"No task_payload for task_id={task_id}; prepare step must commit "
@@ -95,7 +96,8 @@ class SWEBenchSandboxManager(BaseSandboxManager):
                 timeout=1800,
             )
             if r.exit_code != 0:
-                tail = (r.stdout or "")[-1000:]
+                stdout = "" if r.stdout is None else r.stdout
+                tail = stdout[-1000:]
                 raise SandboxSetupError(
                     f"swebench {label} failed for task_id={task_id}: exit={r.exit_code} "
                     f"tail={tail!r}"

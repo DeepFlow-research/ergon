@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime, Index
@@ -149,11 +150,11 @@ class RunGraphAnnotation(SQLModel, table=True):
     payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
-    def parsed_payload(self) -> dict[str, object]:
+    def parsed_payload(self) -> JsonObject:
         return self.__class__._parse_payload(self.payload)
 
     @classmethod
-    def _parse_payload(cls, data: dict) -> dict[str, object]:
+    def _parse_payload(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"payload must be a dict, got {type(data).__name__}")
         return data

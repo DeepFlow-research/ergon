@@ -11,9 +11,9 @@ import json
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
-from tests.e2e._fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from tests.e2e._fixtures.smoke_base.subworker import SubworkerResult
-from tests.e2e._fixtures.smoke_base.worker_base import SmokeWorkerBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
+from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 # Trivial Lean source used by every leaf.  Deterministic; small enough to
 # parse in <1s even on a cold Lean toolchain.
@@ -43,7 +43,7 @@ class MiniF2FSubworker:
             f"lean --check {proof_path} || true",
             timeout=60,
         )
-        probe_stdout = (probe.stdout or "").strip()[:4096]
+        probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()[:4096]
         probe_path = f"/workspace/final_output/probe_{node_id}.json"
         await sandbox.files.write(
             probe_path,
@@ -60,7 +60,7 @@ class MiniF2FSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``MiniF2FSubworker``."""
 
     type_slug = "minif2f-smoke-leaf"
-    subworker_cls = MiniF2FSubworker  # type: ignore[assignment]
+    subworker_cls = MiniF2FSubworker
 
 
 __all__ = [

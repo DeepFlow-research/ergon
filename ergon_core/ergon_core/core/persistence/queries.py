@@ -9,6 +9,7 @@ transaction management is needed at this layer.
 from typing import Any, Generic, Type, TypeVar
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,
@@ -28,9 +29,11 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskEvaluation,
     RunTaskExecution,
 )
-from sqlmodel import SQLModel, desc, select
+from pydantic import BaseModel
+from sqlmodel import SQLModel, col, desc, select
 
 T = TypeVar("T", bound=SQLModel)
+PayloadModelT = TypeVar("PayloadModelT", bound=BaseModel)
 
 # ---------------------------------------------------------------------------
 # Base
@@ -105,6 +108,13 @@ class RunsQueries(BaseQueries[RunRecord]):
         with get_session() as session:
             stmt = select(RunRecord).order_by(desc(RunRecord.created_at)).limit(limit)
             return list(session.exec(stmt).all())
+
+    def get_cohort_id(self, run_id: UUID) -> UUID | None:
+        with get_session() as session:
+            run = session.get(RunRecord, run_id)
+            if run is None:
+                return None
+            return run.cohort_id
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +257,7 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
                 RunGraphNode.parent_node_id == parent.node_id
             )
             stmt = select(RunTaskExecution).where(
-                RunTaskExecution.node_id.in_(child_node_ids_stmt)  # type: ignore[union-attr]
+                col(RunTaskExecution.node_id).in_(child_node_ids_stmt)
             )
             return list(session.exec(stmt).all())
 
@@ -272,7 +282,8 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
     def get_task_payload(
         self,
         task_execution_id: UUID,
-    ) -> dict[str, Any] | None:  # slopcop: ignore[no-typing-any]
+        payload_model: type[PayloadModelT],
+    ) -> PayloadModelT | None:
         """Return the immutable task_payload for a task execution.
 
         Joins ``run_task_executions`` → ``experiment_definition_tasks``.
@@ -283,7 +294,7 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
         """
         with get_session() as session:
             stmt = (
-                select(ExperimentDefinitionTask.task_payload)
+                select(ExperimentDefinitionTask)
                 .join(
                     RunTaskExecution,
                     RunTaskExecution.definition_task_id == ExperimentDefinitionTask.id,
@@ -293,7 +304,7 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
             result = session.exec(stmt).first()
             if result is None:
                 return None
-            return dict(result)
+            return result.task_payload_as(payload_model)
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +439,7 @@ class ResourcesQueries(BaseQueries[RunResource]):
         size_bytes: int,
         error: str | None,
         content_hash: str | None,
-        metadata: dict[str, object] | None = None,
+        metadata: JsonObject | None = None,
     ) -> RunResource:
         """Append one row to the log. Never updates."""
         with get_session() as session:

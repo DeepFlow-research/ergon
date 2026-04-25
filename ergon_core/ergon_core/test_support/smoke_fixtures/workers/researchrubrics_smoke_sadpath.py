@@ -18,9 +18,9 @@ from ergon_core.api import WorkerContext
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.core.runtime.services.task_management_dto import SubtaskSpec
 
-from tests.e2e._fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from tests.e2e._fixtures.smoke_base.subworker import SubworkerResult
-from tests.e2e._fixtures.smoke_base.worker_base import SmokeWorkerBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
+from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 
 class AlwaysFailSubworker:
@@ -84,7 +84,7 @@ class ResearchRubricsFailingLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that always fails after 2 units of real work."""
 
     type_slug = "researchrubrics-smoke-leaf-failing"
-    subworker_cls = AlwaysFailSubworker  # type: ignore[assignment]
+    subworker_cls = AlwaysFailSubworker
 
     async def _send_completion_message(
         self,

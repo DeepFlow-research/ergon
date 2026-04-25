@@ -23,9 +23,9 @@ from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
-from sqlmodel import select
+from sqlmodel import col, desc, select
 
-from tests.e2e._fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
 
 
 class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
@@ -50,13 +50,13 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
                 resource = session.exec(
                     select(RunResource)
                     .where(
-                        RunResource.task_execution_id.in_(exec_ids),  # ty: ignore[unresolved-attribute]
+                        col(RunResource.task_execution_id).in_(exec_ids),
                     )
                     .where(
-                        RunResource.name.like("report_%.md"),  # ty: ignore[unresolved-attribute]
+                        col(RunResource.name).like("report_%.md"),
                     )
                     .order_by(
-                        RunResource.created_at.desc(),  # ty: ignore[unresolved-attribute]
+                        desc(RunResource.created_at),
                     )
                     .limit(1),
                 ).first()
@@ -88,7 +88,7 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
             "echo OK",
             timeout=10,
         )
-        stdout = result.stdout or ""
+        stdout = "" if result.stdout is None else result.stdout
         if result.exit_code != 0 or "OK" not in stdout:
             raise CriteriaCheckError(
                 f"researchrubrics sandbox health failed: "

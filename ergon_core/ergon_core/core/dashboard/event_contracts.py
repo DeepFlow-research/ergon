@@ -8,18 +8,23 @@ change here that isn't regenerated will fail the CI drift check.
 """
 
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import ClassVar
 from uuid import UUID
 
 from pydantic import BaseModel
 
-from ergon_core.core.api.schemas import RunTaskEvaluationDto
+from ergon_core.core.api.schemas import (
+    RunCommunicationMessageDto,
+    RunCommunicationThreadDto,
+    RunTaskEvaluationDto,
+)
 from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
     ContextEventType,
 )
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.runtime.events.base import InngestEventContract
+from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 
 # ---------------------------------------------------------------------------
@@ -183,19 +188,13 @@ class DashboardSandboxClosedEvent(InngestEventContract):
 
 
 class DashboardThreadMessageCreatedEvent(InngestEventContract):
-    """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto (camelCase).
-
-    TODO(E2b): tighten ``thread`` / ``message`` to
-    ``RunCommunicationThreadDto`` / ``RunCommunicationMessageDto``.
-    Deferred for the same reason as evaluation above — the emitter
-    needs an updated construction path.
-    """
+    """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto."""
 
     name: ClassVar[str] = "dashboard/thread.message_created"
 
     run_id: UUID
-    thread: dict[str, Any]  # slopcop: ignore[no-typing-any]
-    message: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    thread: RunCommunicationThreadDto
+    message: RunCommunicationMessageDto
 
 
 # ---------------------------------------------------------------------------
@@ -204,13 +203,12 @@ class DashboardThreadMessageCreatedEvent(InngestEventContract):
 
 
 class CohortUpdatedEvent(InngestEventContract):
-    """TODO(E2b): tighten ``summary`` to ``CohortSummaryDto`` and update
-    the emitter accordingly."""
+    """Live cohort summary update."""
 
     name: ClassVar[str] = "dashboard/cohort.updated"
 
     cohort_id: UUID
-    summary: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    summary: CohortSummaryDto
 
 
 # ---------------------------------------------------------------------------

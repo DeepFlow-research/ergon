@@ -16,9 +16,10 @@ rather than re-implementing the parsing.
 """
 
 from ergon_core.api.generation import TokenLogprob
+from ergon_core.api.json_types import JsonObject
 
 
-def extract_text(raw: dict[str, object]) -> str | None:
+def extract_text(raw: JsonObject) -> str | None:
     """Extract the first text content from a PydanticAI response dump."""
     parts = raw.get("parts")
     if not isinstance(parts, list):
@@ -32,27 +33,27 @@ def extract_text(raw: dict[str, object]) -> str | None:
 
 
 def extract_tool_calls(
-    raw: dict[str, object],
-) -> list[dict[str, object]] | None:
+    raw: JsonObject,
+) -> list[JsonObject] | None:
     """Extract tool call dicts from a PydanticAI response dump."""
     parts = raw.get("parts")
     if not isinstance(parts, list):
         return None
-    calls: list[dict[str, object]] = []
+    calls: list[JsonObject] = []
     for part in parts:
         if isinstance(part, dict) and part.get("part_kind") == "tool-call":
             calls.append(
                 {
-                    "tool_call_id": part.get("tool_call_id", ""),
-                    "tool_name": part.get("tool_name", ""),
+                    "tool_call_id": str(part.get("tool_call_id", "")),
+                    "tool_name": str(part.get("tool_name", "")),
                     "args": part.get("args"),
                 }
             )
-    return calls or None
+    return None if not calls else calls
 
 
 def extract_logprobs(
-    raw: dict[str, object],
+    raw: JsonObject,
 ) -> list[TokenLogprob] | None:
     """Extract per-token logprobs from a PydanticAI response dump.
 

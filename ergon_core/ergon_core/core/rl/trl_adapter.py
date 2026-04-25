@@ -11,9 +11,11 @@ For new code, use the HTTP API (``POST /rollouts/submit``) instead.
 import logging
 import time
 from collections.abc import Callable
+from typing import Protocol
 from uuid import UUID
 
 import inngest as inngest_lib
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.rl.extraction import Tokenizer
 from ergon_core.core.rl.rewards import RewardStrategy
 from ergon_core.core.rl.rollout_service import RolloutService
@@ -22,7 +24,11 @@ from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 
-PromptInput = str | list[dict[str, object]]
+PromptInput = str | list[JsonObject]
+
+
+class TRLTrainerContext(Protocol):
+    """Opaque trainer callback argument supplied by TRL and unused here."""
 
 
 def make_ergon_rollout_func(
@@ -34,7 +40,7 @@ def make_ergon_rollout_func(
     reward_strategy: RewardStrategy | None = None,
     timeout_s: float = 300.0,
     poll_interval_s: float = 1.0,
-) -> Callable[[list[PromptInput], object], dict[str, object]]:
+) -> Callable[[list[PromptInput], TRLTrainerContext], JsonObject]:
     """Create a TRL-compatible ``rollout_func`` backed by ``RolloutService``.
 
     DEPRECATED: prefer the HTTP adapter for remote training. This in-process
@@ -49,8 +55,8 @@ def make_ergon_rollout_func(
 
     def rollout_func(
         prompts: list[PromptInput],
-        trainer: object,
-    ) -> dict[str, object]:
+        trainer: TRLTrainerContext,
+    ) -> JsonObject:
         batch = service.submit(
             SubmitRequest(
                 definition_id=definition_id,

@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from ergon_core.api.evaluator import Rubric
 from ergon_core.api.handles import PersistedExperimentDefinition
+from ergon_core.api.json_types import JsonObject
+from sqlalchemy.exc import SQLAlchemyError
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,
@@ -73,7 +75,7 @@ class ExperimentPersistenceService:
                     experiment_definition_id=definition_id,
                     binding_key=binding_key,
                     worker_type=spec.worker_slug,
-                    model_target=spec.model or "",
+                    model_target=spec.model,
                     snapshot_json={"name": spec.name, "model": spec.model},
                     created_at=now,
                 )
@@ -85,7 +87,7 @@ class ExperimentPersistenceService:
         evaluator_bindings: dict[str, str] = {}
 
         for binding_key, evaluator in experiment.evaluators.items():
-            snapshot: dict[str, object] = {"name": evaluator.name}
+            snapshot: JsonObject = {"name": evaluator.name}
             if isinstance(evaluator, Rubric):
                 snapshot["criteria"] = [c.name for c in evaluator.criteria]
 
@@ -122,7 +124,7 @@ class ExperimentPersistenceService:
                     instance_id=instance_id,
                     task_slug=task.task_slug,
                     description=task.description,
-                    task_payload=task.task_payload.model_dump(mode="json"),
+                    task_payload_json=task.task_payload.model_dump(mode="json"),
                     created_at=now,
                 )
                 task_rows_by_key[(instance_key, task.task_slug)] = task_row
@@ -243,7 +245,7 @@ class ExperimentPersistenceService:
         try:
             session.add_all(all_rows)
             session.commit()
-        except Exception:  # slopcop: ignore[no-broad-except]
+        except SQLAlchemyError:
             session.rollback()
             raise
         finally:

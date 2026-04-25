@@ -41,7 +41,7 @@ class EvaluatorDispatchService:
                 )
 
             execution = session.get(RunTaskExecution, command.execution_id)
-            agent_reasoning = execution.final_assistant_message or "" if execution else ""
+            agent_reasoning = execution.final_assistant_message if execution is not None else None
 
             valid_evaluators: list[PreparedSingleEvaluator] = []
             for te in task_evals:

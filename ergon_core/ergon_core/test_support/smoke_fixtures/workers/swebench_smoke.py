@@ -9,9 +9,9 @@ import json
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
-from tests.e2e._fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from tests.e2e._fixtures.smoke_base.subworker import SubworkerResult
-from tests.e2e._fixtures.smoke_base.worker_base import SmokeWorkerBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
+from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 PY_SOURCE = """\
 def add(a, b):
@@ -41,7 +41,7 @@ class SweBenchSubworker:
             f"python -m py_compile {patch_path} && python {patch_path}",
             timeout=20,
         )
-        probe_stdout = (probe.stdout or "").strip()[:4096]
+        probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()[:4096]
         probe_path = f"/workspace/final_output/probe_{node_id}.json"
         await sandbox.files.write(
             probe_path,
@@ -58,7 +58,7 @@ class SweBenchSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``SweBenchSubworker``."""
 
     type_slug = "swebench-smoke-leaf"
-    subworker_cls = SweBenchSubworker  # type: ignore[assignment]
+    subworker_cls = SweBenchSubworker
 
 
 __all__ = [

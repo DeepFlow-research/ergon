@@ -38,7 +38,7 @@ from ergon_core.core.runtime.services.task_management_service import (
     TaskManagementService,
 )
 
-from tests.e2e._fixtures.smoke_base.constants import SUBTASK_GRAPH
+from ergon_core.test_support.smoke_fixtures.smoke_base.constants import SUBTASK_GRAPH
 
 _CHILD_WAIT_TERMINAL_STATUSES = TERMINAL_STATUSES | {"blocked"}
 

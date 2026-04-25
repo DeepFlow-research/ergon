@@ -1,16 +1,16 @@
 """``SmokeCriterionBase._check_children_completed`` rejects non-terminal children."""
 
-from dataclasses import dataclass
-
 import pytest
+from pydantic import BaseModel
 
 from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
-from tests.e2e._fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
 
 
-@dataclass
-class _FakeNode:
+class _FakeNode(BaseModel):
+    model_config = {"frozen": True}
+
     task_slug: str
     status: str
 
@@ -31,7 +31,7 @@ def _crit() -> _Crit:
 
 def test_all_completed_passes() -> None:
     children = [_FakeNode(task_slug=f"l_{i}", status=COMPLETED) for i in range(3)]
-    _crit()._check_children_completed(children)  # type: ignore[arg-type]
+    _crit()._check_children_completed(children)
 
 
 def test_any_non_completed_raises() -> None:
@@ -41,7 +41,7 @@ def test_any_non_completed_raises() -> None:
         _FakeNode(task_slug="d_right", status="in_progress"),
     ]
     with pytest.raises(CriteriaCheckError, match="d_right not completed"):
-        _crit()._check_children_completed(children)  # type: ignore[arg-type]
+        _crit()._check_children_completed(children)
 
 
 def test_failed_child_raises_with_slug() -> None:
@@ -52,10 +52,10 @@ def test_failed_child_raises_with_slug() -> None:
         _FakeNode(task_slug="l_3", status="blocked"),
     ]
     with pytest.raises(CriteriaCheckError, match="l_2 not completed"):
-        _crit()._check_children_completed(children)  # type: ignore[arg-type]
+        _crit()._check_children_completed(children)
 
 
 def test_empty_children_passes() -> None:
     """No children ⇒ vacuously true.  Empty-check is the caller's job
     (``_check_graph_shape`` catches it before this method runs)."""
-    _crit()._check_children_completed([])  # type: ignore[arg-type]
+    _crit()._check_children_completed([])

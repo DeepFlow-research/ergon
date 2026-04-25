@@ -1,6 +1,140 @@
 {
+  "$defs": {
+    "RunCommunicationMessageDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "threadId": {
+          "title": "Threadid",
+          "type": "string"
+        },
+        "threadTopic": {
+          "title": "Threadtopic",
+          "type": "string"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskid"
+        },
+        "fromAgentId": {
+          "title": "Fromagentid",
+          "type": "string"
+        },
+        "toAgentId": {
+          "title": "Toagentid",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "sequenceNum": {
+          "title": "Sequencenum",
+          "type": "integer"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "threadId",
+        "threadTopic",
+        "runId",
+        "fromAgentId",
+        "toAgentId",
+        "content",
+        "sequenceNum",
+        "createdAt"
+      ],
+      "title": "RunCommunicationMessageDto",
+      "type": "object"
+    },
+    "RunCommunicationThreadDto": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "runId": {
+          "title": "Runid",
+          "type": "string"
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taskid"
+        },
+        "topic": {
+          "title": "Topic",
+          "type": "string"
+        },
+        "agentAId": {
+          "title": "Agentaid",
+          "type": "string"
+        },
+        "agentBId": {
+          "title": "Agentbid",
+          "type": "string"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "updatedAt": {
+          "format": "date-time",
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/RunCommunicationMessageDto"
+          },
+          "title": "Messages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "topic",
+        "agentAId",
+        "agentBId",
+        "createdAt",
+        "updatedAt"
+      ],
+      "title": "RunCommunicationThreadDto",
+      "type": "object"
+    }
+  },
   "additionalProperties": true,
-  "description": "Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto (camelCase).\n\nTODO(E2b): tighten ``thread`` / ``message`` to\n``RunCommunicationThreadDto`` / ``RunCommunicationMessageDto``.\nDeferred for the same reason as evaluation above \u2014 the emitter\nneeds an updated construction path.",
+  "description": "Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto.",
   "properties": {
     "run_id": {
       "format": "uuid",
@@ -8,14 +142,10 @@
       "type": "string"
     },
     "thread": {
-      "additionalProperties": true,
-      "title": "Thread",
-      "type": "object"
+      "$ref": "#/$defs/RunCommunicationThreadDto"
     },
     "message": {
-      "additionalProperties": true,
-      "title": "Message",
-      "type": "object"
+      "$ref": "#/$defs/RunCommunicationMessageDto"
     }
   },
   "required": [

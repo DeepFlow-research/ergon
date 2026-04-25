@@ -199,7 +199,7 @@ async def test_base_class_omits_template_when_unset(monkeypatch: pytest.MonkeyPa
     )
 
     class _TemplatelessManager(BaseSandboxManager):
-        async def _install_dependencies(self, sandbox, task_id):  # noqa: ANN001, ARG002
+        async def _install_dependencies(self, sandbox, task_id):
             return None
 
     mgr = _TemplatelessManager()

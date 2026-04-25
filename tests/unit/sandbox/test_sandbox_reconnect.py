@@ -137,7 +137,7 @@ async def test_reconnect_raises_sandbox_expired_on_not_found_exception(
     """SandboxNotFoundException → SandboxExpiredError with sandbox_id preserved."""
     import ergon_core.core.providers.sandbox.manager as mgr_mod
 
-    class _FakeSandboxNotFound(Exception):  # noqa: N818
+    class _FakeSandboxNotFound(Exception):
         pass
 
     fake_connect = AsyncMock(side_effect=_FakeSandboxNotFound("E2B says: not found"))

@@ -6,6 +6,7 @@ from uuid import UUID
 
 import inngest
 from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -24,7 +25,7 @@ _POLL_INTERVAL_S = 1.0
 _DEFAULT_TIMEOUT_S = 600.0
 
 
-def _checkpoint_metadata() -> dict[str, object]:
+def _checkpoint_metadata() -> JsonObject:
     """Checkpoint context for ``RunRecord.summary_json`` (eval watcher / checkpoint subprocess).
 
     Values come from ``Settings`` (``.env`` + process env), including ``ERGON_CHECKPOINT_*``
@@ -34,7 +35,7 @@ def _checkpoint_metadata() -> dict[str, object]:
         return {}
     return {
         "checkpoint_step": settings.checkpoint_step,
-        "checkpoint_path": settings.checkpoint_path or "",
+        "checkpoint_path": settings.checkpoint_path,
     }
 
 

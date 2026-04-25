@@ -11,7 +11,9 @@ Core components:
 - ``polling``: DB polling utilities for waiting on episode completion
 """
 
-LOGPROB_SETTINGS: dict[str, object] = {
+from ergon_core.api.json_types import JsonObject
+
+LOGPROB_SETTINGS: JsonObject = {
     "openai_logprobs": True,
     "openai_top_logprobs": 1,
 }

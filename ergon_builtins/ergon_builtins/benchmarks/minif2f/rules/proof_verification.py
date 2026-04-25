@@ -175,7 +175,9 @@ class ProofVerificationCriterion(Criterion):
 
         result = await runtime.run_command(VERIFY_LEAN_CMD, timeout=120)
 
-        output = (result.stdout or "") + (result.stderr or "")
+        stdout = "" if result.stdout is None else result.stdout
+        stderr = "" if result.stderr is None else result.stderr
+        output = stdout + stderr
         verified = result.exit_code == 0
         if not verified and not output:
             output = f"Lean verification failed with exit code {result.exit_code}"

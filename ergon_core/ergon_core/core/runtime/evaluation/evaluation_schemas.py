@@ -4,6 +4,7 @@ from uuid import UUID
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion_runtime import CommandResult, SandboxResult
+from ergon_core.api.json_types import JsonObject
 from pydantic import BaseModel, ConfigDict, Field
 
 # Re-exported for callers that still import from here.
@@ -36,7 +37,7 @@ class CriterionContext(BaseModel):
     run_id: UUID
     task_input: str = ""  # slopcop: ignore[no-str-empty-default]
     agent_reasoning: str = ""  # slopcop: ignore[no-str-empty-default]
-    agent_outputs: list[dict[str, object]] = Field(default_factory=list)
+    agent_outputs: list[JsonObject] = Field(default_factory=list)
     stage_idx: int = 0
     stage_name: str = "default"
     criterion_idx: int = 0
@@ -51,7 +52,7 @@ class TaskEvaluationContext(BaseModel):
     run_id: UUID
     task_input: str = ""  # slopcop: ignore[no-str-empty-default]
     agent_reasoning: str = ""  # slopcop: ignore[no-str-empty-default]
-    agent_outputs: list[dict[str, object]] = Field(default_factory=list)
+    agent_outputs: list[JsonObject] = Field(default_factory=list)
     sandbox_id: str = ""  # slopcop: ignore[no-str-empty-default]
 
 

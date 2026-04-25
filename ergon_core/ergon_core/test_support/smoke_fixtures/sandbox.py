@@ -5,33 +5,46 @@ surface. They should not consume live E2B quota, especially in CI where stale
 remote sandboxes can make unrelated smoke runs fail with account-level limits.
 """
 
-from __future__ import annotations
-
 import os
 from collections.abc import Sequence
-from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 from typing import cast
 from uuid import UUID
 
 from ergon_core.core.providers.sandbox.manager import AsyncSandbox, BaseSandboxManager
 from ergon_core.core.settings import settings
+from pydantic import BaseModel
 
 _SMOKE_SANDBOX_PREFIX = "smoke-sandbox-"
 
 
-@dataclass(frozen=True)
-class _CommandResult:
-    stdout: str = ""
-    stderr: str = ""
+class _CommandResult(BaseModel):
+    model_config = {"frozen": True}
+
+    stdout: str
+    stderr: str
     exit_code: int = 0
 
 
-@dataclass(frozen=True)
-class _EntryInfo:
+class _EntryInfo(BaseModel):
+    model_config = {"frozen": True}
+
     name: str
+
+
+class _ExecutionLogs(BaseModel):
+    model_config = {"frozen": True}
+
+    stdout: list[str]
+    stderr: list[str]
+
+
+class _CodeExecutionResult(BaseModel):
+    model_config = {"frozen": True}
+
+    error: str | None = None
+    logs: _ExecutionLogs
 
 
 class _SmokeFiles:
@@ -41,7 +54,7 @@ class _SmokeFiles:
     def _host_path(self, sandbox_path: str) -> Path:
         return self._root / sandbox_path.lstrip("/")
 
-    async def write(self, path: str, content: object, *args: object, **kwargs: object) -> None:
+    async def write(self, path: str, content: str | bytes, *args: object, **kwargs: object) -> None:
         host_path = self._host_path(path)
         host_path.parent.mkdir(parents=True, exist_ok=True)
         if isinstance(content, str):
@@ -49,7 +62,7 @@ class _SmokeFiles:
         elif isinstance(content, bytes):
             data = content
         else:
-            data = str(content).encode("utf-8")
+            data = content
         host_path.write_bytes(data)
 
     async def read(self, path: str, *args: object, **kwargs: object) -> bytes:
@@ -62,7 +75,9 @@ class _SmokeFiles:
         host_path = self._host_path(path)
         if not host_path.exists():
             raise FileNotFoundError(path)
-        return [_EntryInfo(child.name) for child in sorted(host_path.iterdir()) if child.is_file()]
+        return [
+            _EntryInfo(name=child.name) for child in sorted(host_path.iterdir()) if child.is_file()
+        ]
 
 
 class _SmokeCommands:
@@ -73,16 +88,19 @@ class _SmokeCommands:
         if command.startswith("wc -l "):
             path = command.removeprefix("wc -l ").strip()
             content = (await self._files.read(path)).decode("utf-8")
-            return _CommandResult(stdout=f"{len(content.splitlines())} {path}\n")
+            return _CommandResult(stdout=f"{len(content.splitlines())} {path}\n", stderr="")
         if "wc -l < /tmp/smoke_health.md" in command:
-            return _CommandResult(stdout="OK\n")
+            return _CommandResult(stdout="OK\n", stderr="")
         if command.startswith("lean --check "):
-            return _CommandResult()
+            return _CommandResult(stdout="", stderr="")
         if command.startswith("python -m py_compile ") or "python /tmp/smoke_health.py" in command:
-            return _CommandResult(stdout="HEALTH_OK\n8.0.0\n" if "pytest" in command else "")
+            return _CommandResult(
+                stdout="HEALTH_OK\n8.0.0\n" if "pytest" in command else "",
+                stderr="",
+            )
         if command.startswith("mkdir -p ") or command.startswith("rm -f "):
-            return _CommandResult()
-        return _CommandResult()
+            return _CommandResult(stdout="", stderr="")
+        return _CommandResult(stdout="", stderr="")
 
 
 class SmokeSandbox:
@@ -99,8 +117,8 @@ class SmokeSandbox:
     async def kill(self) -> None:
         return None
 
-    async def run_code(self, code: str, *args: object, **kwargs: object) -> object:
-        return SimpleNamespace(error=None, logs=SimpleNamespace(stdout=[], stderr=[]))
+    async def run_code(self, code: str, *args: object, **kwargs: object) -> _CodeExecutionResult:
+        return _CodeExecutionResult(error=None, logs=_ExecutionLogs(stdout=[], stderr=[]))
 
 
 class SmokeSandboxManager(BaseSandboxManager):

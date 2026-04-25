@@ -11,7 +11,9 @@ _PLAYWRIGHT_CONTEXT_TIMEOUT_SECONDS = 10.0
 
 
 @pytest.fixture(scope="session")
-async def playwright_browser() -> AsyncGenerator[object | None, None]:  # slopcop: ignore[no-typing-any]
+async def playwright_browser() -> AsyncGenerator[
+    object | None, None
+]:  # slopcop: ignore[no-typing-any]
     try:
         # reason: playwright is an optional dependency; skip gracefully if absent
         from playwright.async_api import async_playwright

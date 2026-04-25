@@ -19,11 +19,11 @@ from typing import Any, ClassVar
 
 from ergon_core.api.evaluator import Rubric
 
-from tests.e2e._fixtures.criteria.minif2f_smoke import MiniF2FSmokeCriterion
-from tests.e2e._fixtures.criteria.researchrubrics_smoke import (
+from ergon_core.test_support.smoke_fixtures.criteria.minif2f_smoke import MiniF2FSmokeCriterion
+from ergon_core.test_support.smoke_fixtures.criteria.researchrubrics_smoke import (
     ResearchRubricsSmokeCriterion,
 )
-from tests.e2e._fixtures.criteria.swebench_smoke import SweBenchSmokeCriterion
+from ergon_core.test_support.smoke_fixtures.criteria.swebench_smoke import SweBenchSmokeCriterion
 
 
 class ResearchRubricsSmokeRubric(Rubric):

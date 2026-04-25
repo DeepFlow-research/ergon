@@ -18,9 +18,9 @@ from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
-from sqlmodel import select
+from sqlmodel import col, desc, select
 
-from tests.e2e._fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
 
 HEALTH_PY = """\
 import sys
@@ -48,13 +48,13 @@ class SweBenchSmokeCriterion(SmokeCriterionBase):
                 resource = session.exec(
                     select(RunResource)
                     .where(
-                        RunResource.task_execution_id.in_(exec_ids),  # ty: ignore[unresolved-attribute]
+                        col(RunResource.task_execution_id).in_(exec_ids),
                     )
                     .where(
-                        RunResource.name.like("patch_%.py"),  # ty: ignore[unresolved-attribute]
+                        col(RunResource.name).like("patch_%.py"),
                     )
                     .order_by(
-                        RunResource.created_at.desc(),  # ty: ignore[unresolved-attribute]
+                        desc(RunResource.created_at),
                     )
                     .limit(1),
                 ).first()
@@ -92,9 +92,9 @@ class SweBenchSmokeCriterion(SmokeCriterionBase):
             "python /tmp/smoke_health.py && python -c 'import pytest; print(pytest.__version__)'",
             timeout=15,
         )
-        stdout = result.stdout or ""
+        stdout = "" if result.stdout is None else result.stdout
         if result.exit_code != 0 or "HEALTH_OK" not in stdout:
-            stderr = (result.stderr or "")[:300]
+            stderr = ("" if result.stderr is None else result.stderr)[:300]
             raise CriteriaCheckError(
                 f"swebench sandbox health failed: exit={result.exit_code} "
                 f"stdout={stdout[:300]!r} stderr={stderr!r}",

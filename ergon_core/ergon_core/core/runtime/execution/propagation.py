@@ -9,6 +9,7 @@ RunTaskStateEvent is no longer written or read by this module.
 
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
@@ -45,7 +46,7 @@ async def _update_task_status(
     *,
     graph_repo: WorkflowGraphRepository,
     graph_lookup: GraphNodeLookup,
-    event_metadata: dict[str, object] | None = None,
+    event_metadata: JsonObject | None = None,
 ) -> None:
     node_id = graph_lookup.node_id(task_id)
     if node_id is None:

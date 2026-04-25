@@ -22,9 +22,10 @@ Why per-call Agent construction:
 
 import json
 import logging
-from collections.abc import Awaitable, Callable
-from typing import TypeVar, get_args, get_origin, get_type_hints
+from collections.abc import Awaitable
+from typing import Protocol, TypeVar, get_args, get_origin, get_type_hints
 
+from ergon_core.api.json_types import JsonObject, JsonValue
 from ergon_core.core.providers.generation.model_resolution import resolve_model_target
 from pydantic import BaseModel
 from pydantic_ai import Agent
@@ -32,14 +33,22 @@ from pydantic_ai import Agent
 logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T", bound=BaseModel)
+type SkillValue = JsonValue | BaseModel
 
-RunSkillFn = Callable[..., Awaitable[_T]]  # type: ignore[type-arg]
+
+class RunSkillFn(Protocol):
+    def __call__(
+        self,
+        skill_name: str,
+        response_model: type[_T],
+        **kwargs: SkillValue,
+    ) -> Awaitable[_T]: ...
 
 
 def make_run_skill(
     *,
     model: str | None = None,
-) -> RunSkillFn:  # type: ignore[type-arg]
+) -> RunSkillFn:
     """Return an async callable ``(skill_name, response_model, **kwargs) -> T``.
 
     The callable constructs a pydantic-ai Agent with the given response_model
@@ -58,7 +67,7 @@ def make_run_skill(
     async def run_skill(
         skill_name: str,
         response_model: type[_T],
-        **kwargs: object,
+        **kwargs: SkillValue,
     ) -> _T:
         resolved = resolve_model_target(model)
 
@@ -84,7 +93,7 @@ def make_run_skill(
     return run_skill
 
 
-def _format_skill_prompt(skill_name: str, kwargs: dict[str, object]) -> str:
+def _format_skill_prompt(skill_name: str, kwargs: dict[str, SkillValue]) -> str:
     """Format a skill call into a prompt for the pydantic-ai Agent.
 
     Uses ``default=_json_default`` so BaseModel and other non-JSON-native
@@ -99,7 +108,7 @@ def _format_skill_prompt(skill_name: str, kwargs: dict[str, object]) -> str:
     )
 
 
-def _json_default(value: object) -> object:
+def _json_default(value: SkillValue) -> JsonValue:
     """Fallback serializer for ``json.dumps``.
 
     Pydantic models are dumped via ``model_dump`` so nested fields are
@@ -117,7 +126,7 @@ def _json_default(value: object) -> object:
 
 def _try_build_failure(
     response_model: type[BaseModel],
-    kwargs: dict[str, object],
+    kwargs: dict[str, SkillValue],
     exc: BaseException,
 ) -> BaseModel | None:
     """Best-effort construction of a ``kind='failure'`` variant of ``response_model``.
@@ -134,7 +143,7 @@ def _try_build_failure(
     except Exception:  # slopcop: ignore[no-broad-except]  pragma: no cover -- defensive
         return None
 
-    init_kwargs: dict[str, object] = {
+    init_kwargs: JsonObject = {
         "detail": f"{type(exc).__name__}: {exc}",
         "latency_ms": 0.0,
     }

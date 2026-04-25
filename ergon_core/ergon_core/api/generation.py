@@ -14,6 +14,7 @@ the vLLM provider is updated to extract token IDs from provider_details.
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
+from ergon_core.api.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 
@@ -24,7 +25,7 @@ class TokenLogprob(BaseModel):
 
     token: str
     logprob: float
-    top_logprobs: list[dict[str, object]] = Field(default_factory=list)
+    top_logprobs: list[JsonObject] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

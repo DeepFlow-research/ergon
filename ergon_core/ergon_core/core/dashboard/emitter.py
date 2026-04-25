@@ -9,7 +9,11 @@ from typing import Any, cast
 from uuid import UUID
 
 import inngest
-from ergon_core.core.api.schemas import RunTaskEvaluationDto
+from ergon_core.core.api.schemas import (
+    RunCommunicationMessageDto,
+    RunCommunicationThreadDto,
+    RunTaskEvaluationDto,
+)
 from ergon_core.core.persistence.context.event_payloads import ContextEventType
 from ergon_core.core.persistence.context.models import (
     RunContextEvent as _RunContextEvent,
@@ -20,11 +24,11 @@ from ergon_core.core.persistence.graph.models import (
     MutationType,
     RunGraphMutation,
 )
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.queries import queries
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
+from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
 from ergon_core.core.runtime.services.cohort_stats_service import (
     experiment_cohort_stats_service,
 )
@@ -332,10 +336,10 @@ class DashboardEmitter:
     async def thread_message_created(
         self,
         run_id: UUID,
-        thread: dict[str, Any],  # slopcop: ignore[no-typing-any]
-        message: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        thread: RunCommunicationThreadDto,
+        message: RunCommunicationMessageDto,
     ) -> None:
-        """Send thread message event. `thread` and `message` must be camelCase DTO dicts."""
+        """Send thread message event."""
         if not self._enabled:
             return
         try:
@@ -433,9 +437,9 @@ class DashboardEmitter:
     async def cohort_updated(
         self,
         cohort_id: UUID,
-        summary: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        summary: CohortSummaryDto,
     ) -> None:
-        """Send cohort update. `summary` must be a camelCase CohortSummaryDto dict."""
+        """Send cohort update."""
         if not self._enabled:
             return
         try:
@@ -455,12 +459,9 @@ dashboard_emitter = DashboardEmitter(enabled=True)
 
 async def emit_cohort_updated_for_run(run_id: UUID) -> None:
     """Refresh and emit the current cohort summary for a run, if it has a cohort."""
-    with get_session() as session:
-        run = session.get(RunRecord, run_id)
-        if run is None or run.cohort_id is None:
-            return
-
-        cohort_id = run.cohort_id
+    cohort_id = queries.runs.get_cohort_id(run_id)
+    if cohort_id is None:
+        return
 
     experiment_cohort_stats_service.recompute(cohort_id)
     summary = experiment_cohort_service.get_summary(cohort_id)
@@ -468,5 +469,5 @@ async def emit_cohort_updated_for_run(run_id: UUID) -> None:
         return
     await dashboard_emitter.cohort_updated(
         cohort_id=summary.cohort_id,
-        summary=summary.model_dump(mode="json"),
+        summary=summary,
     )

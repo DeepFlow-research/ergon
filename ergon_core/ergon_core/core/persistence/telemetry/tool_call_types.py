@@ -7,13 +7,15 @@ use these models -- no untyped dict access.
 
 from pydantic import BaseModel
 
+from ergon_core.api.json_types import JsonObject
+
 
 class ToolCall(BaseModel):
     """One tool invocation as stored in tool_calls_json."""
 
     tool_call_id: str
     tool_name: str
-    args: dict[str, object] | None = None
+    args: JsonObject | None = None
 
 
 class ToolResult(BaseModel):

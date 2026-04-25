@@ -20,8 +20,9 @@ See docs/superpowers/plans/test-refactor/01-fixtures.md §2.5 and §2.7.
 
 import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Protocol
 from uuid import UUID
 
 from ergon_core.api.criterion import Criterion
@@ -32,11 +33,35 @@ from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
-from sqlmodel import select
+from pydantic import BaseModel
+from sqlmodel import col, desc, select
 
-from tests.e2e._fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
+from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
 
 logger = logging.getLogger(__name__)
+
+
+class ProbeResult(BaseModel):
+    """Parsed ``probe_*.json`` payload persisted by smoke leaf workers."""
+
+    model_config = {"frozen": True}
+
+    exit_code: int | None = None
+    stdout: str | None = None
+
+
+class ProbeChild(Protocol):
+    id: UUID
+    task_slug: str
+
+
+class SlugChild(Protocol):
+    task_slug: str
+
+
+class CompletionChild(Protocol):
+    task_slug: str
+    status: str
 
 
 class SmokeCriterionBase(Criterion):
@@ -105,7 +130,7 @@ class SmokeCriterionBase(Criterion):
                 session.exec(
                     select(RunGraphNode)
                     .where(RunGraphNode.parent_node_id == parent_exec.node_id)
-                    .order_by(RunGraphNode.task_slug),  # ty: ignore[unresolved-attribute]
+                    .order_by(RunGraphNode.task_slug),
                 ).all(),
             )
         return children
@@ -114,14 +139,14 @@ class SmokeCriterionBase(Criterion):
         self,
         context: EvaluationContext,
         children: list[RunGraphNode],
-    ) -> dict[UUID, dict[str, Any]]:  # slopcop: ignore[no-typing-any]
+    ) -> dict[UUID, ProbeResult]:
         """Return ``{child_node_id: {"exit_code": int, "stdout": str}}``.
 
         For each child, finds its ``RunTaskExecution`` rows, picks the
         latest ``RunResource`` whose name begins with ``probe_`` and
         ends with ``.json``, and parses its blob-stored bytes.
         """
-        results: dict[UUID, dict[str, Any]] = {}  # slopcop: ignore[no-typing-any]
+        results: dict[UUID, ProbeResult] = {}
         with get_session() as session:
             for child in children:
                 exec_ids = [
@@ -139,13 +164,13 @@ class SmokeCriterionBase(Criterion):
                 resource = session.exec(
                     select(RunResource)
                     .where(
-                        RunResource.task_execution_id.in_(exec_ids),  # ty: ignore[unresolved-attribute]
+                        col(RunResource.task_execution_id).in_(exec_ids),
                     )
                     .where(
-                        RunResource.name.like("probe_%.json"),  # ty: ignore[unresolved-attribute]
+                        col(RunResource.name).like("probe_%.json"),
                     )
                     .order_by(
-                        RunResource.created_at.desc(),  # ty: ignore[unresolved-attribute]
+                        desc(RunResource.created_at),
                     )
                     .limit(1),
                 ).first()
@@ -160,14 +185,14 @@ class SmokeCriterionBase(Criterion):
                     raise CriteriaCheckError(
                         f"{child.task_slug}: probe JSON invalid: {err}",
                     ) from err
-                results[child.id] = parsed
+                results[child.id] = ProbeResult.model_validate(parsed)
         return results
 
     # -- structural checks (raise CriteriaCheckError → failed result) --------
 
     def _check_graph_shape(
         self,
-        children: list[RunGraphNode],
+        children: Sequence[SlugChild],
     ) -> None:
         actual = {c.task_slug for c in children}
         expected = set(EXPECTED_SUBTASK_SLUGS)
@@ -178,7 +203,7 @@ class SmokeCriterionBase(Criterion):
 
     def _check_children_completed(
         self,
-        children: list[RunGraphNode],
+        children: Sequence[CompletionChild],
     ) -> None:
         for c in children:
             if c.status != COMPLETED:
@@ -188,16 +213,17 @@ class SmokeCriterionBase(Criterion):
 
     def _check_probes_succeeded(
         self,
-        probes: dict[UUID, dict[str, Any]],  # slopcop: ignore[no-typing-any]
-        children: list[RunGraphNode],
+        probes: dict[UUID, ProbeResult],
+        children: Sequence[ProbeChild],
     ) -> None:
         by_id = {c.id: c for c in children}
         for child_id, probe in probes.items():
             slug = by_id[child_id].task_slug if child_id in by_id else str(child_id)
-            code = probe.get("exit_code")
+            code = probe.exit_code
             if code != 0:
+                stdout = "" if probe.stdout is None else probe.stdout
                 raise CriteriaCheckError(
-                    f"probe for {slug} exited {code}, stdout={probe.get('stdout', '')!r}",
+                    f"probe for {slug} exited {code}, stdout={stdout!r}",
                 )
 
     # -- env-specific hooks (subclasses implement) ---------------------------
@@ -206,7 +232,7 @@ class SmokeCriterionBase(Criterion):
         self,
         context: EvaluationContext,
         children: list[RunGraphNode],
-        probes: dict[UUID, dict[str, Any]],  # slopcop: ignore[no-typing-any]
+        probes: dict[UUID, ProbeResult],
     ) -> None:
         """Subclass hook: read artifacts and check env-specific file shape.
 
@@ -239,4 +265,4 @@ class SmokeCriterionBase(Criterion):
         )
 
 
-__all__ = ["SmokeCriterionBase"]
+__all__ = ["CompletionChild", "ProbeChild", "ProbeResult", "SlugChild", "SmokeCriterionBase"]

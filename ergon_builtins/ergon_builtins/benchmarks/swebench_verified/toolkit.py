@@ -42,10 +42,13 @@ class SWEBenchToolkit:
             """Run a shell command inside the repo workdir."""
             wrapped = f"cd {shlex.quote(self._workdir)} && {command}"
             result = await self._sandbox.commands.run(wrapped, timeout=timeout_sec)
+            stdout = "" if result.stdout is None else result.stdout
+            stderr_value = getattr(result, "stderr", None)  # slopcop: ignore[no-hasattr-getattr]
+            stderr = stderr_value if isinstance(stderr_value, str) else ""
             return BashResponse(
                 exit_code=result.exit_code,
-                stdout=result.stdout or "",
-                stderr=getattr(result, "stderr", "") or "",  # slopcop: ignore[no-hasattr-getattr]
+                stdout=stdout,
+                stderr=stderr,
             )
 
         return Tool(function=bash, takes_ctx=False, name="bash")

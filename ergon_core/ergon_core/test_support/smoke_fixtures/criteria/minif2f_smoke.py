@@ -15,9 +15,9 @@ from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
-from sqlmodel import select
+from sqlmodel import col, desc, select
 
-from tests.e2e._fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
 
 HEALTH_THEOREM = """\
 theorem health_check : True := trivial
@@ -43,13 +43,13 @@ class MiniF2FSmokeCriterion(SmokeCriterionBase):
                 resource = session.exec(
                     select(RunResource)
                     .where(
-                        RunResource.task_execution_id.in_(exec_ids),  # ty: ignore[unresolved-attribute]
+                        col(RunResource.task_execution_id).in_(exec_ids),
                     )
                     .where(
-                        RunResource.name.like("proof_%.lean"),  # ty: ignore[unresolved-attribute]
+                        col(RunResource.name).like("proof_%.lean"),
                     )
                     .order_by(
-                        RunResource.created_at.desc(),  # ty: ignore[unresolved-attribute]
+                        desc(RunResource.created_at),
                     )
                     .limit(1),
                 ).first()
@@ -85,8 +85,8 @@ class MiniF2FSmokeCriterion(SmokeCriterionBase):
             timeout=60,
         )
         if result.exit_code != 0:
-            stdout = (result.stdout or "")[:300]
-            stderr = (result.stderr or "")[:300]
+            stdout = ("" if result.stdout is None else result.stdout)[:300]
+            stderr = ("" if result.stderr is None else result.stderr)[:300]
             raise CriteriaCheckError(
                 f"minif2f sandbox health failed: lean --check "
                 f"exit={result.exit_code} stdout={stdout!r} stderr={stderr!r}",

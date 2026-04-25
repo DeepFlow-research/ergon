@@ -12,7 +12,10 @@ Those are the experiment layer's responsibility.
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
+from typing import Literal
 from uuid import UUID, uuid4
+
+from pydantic import BaseModel
 
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
@@ -96,6 +99,7 @@ class WorkflowGraphRepository:
         *,
         initial_node_status: str,
         initial_edge_status: str,
+        task_payload_model: type[BaseModel],
         meta: MutationMeta,
     ) -> WorkflowGraphDto:
         """Copy definition tables into run graph tables.
@@ -204,7 +208,7 @@ class WorkflowGraphRepository:
             )
             seq += 1
 
-            payload = task.task_payload.model_dump(mode="json")
+            payload = task.task_payload_as(task_payload_model).model_dump(mode="json")
             if payload:
                 annotation_rows.append(
                     RunGraphAnnotation(
@@ -406,7 +410,7 @@ class WorkflowGraphRepository:
         *,
         run_id: UUID,
         node_id: UUID,
-        field: str,
+        field: Literal["description", "assigned_worker_slug"],
         value: str | None,
         meta: MutationMeta,
     ) -> GraphNodeDto:
@@ -415,9 +419,14 @@ class WorkflowGraphRepository:
                 f"Field {field!r} is not updatable. Allowed: {sorted(_UPDATABLE_NODE_FIELDS)}"
             )
         node = self._get_node_row(session, run_id, node_id)
-        old_value = getattr(node, field)  # slopcop: ignore[no-hasattr-getattr]
-
-        setattr(node, field, value)
+        if field == "description":
+            if value is None:
+                raise ValueError("description cannot be cleared")
+            old_value = node.description
+            node.description = value
+        else:
+            old_value = node.assigned_worker_slug
+            node.assigned_worker_slug = value
         node.updated_at = utcnow()
         session.add(node)
         session.flush()
@@ -429,8 +438,8 @@ class WorkflowGraphRepository:
             target_type="node",
             target_id=node_id,
             meta=meta,
-            old_value=NodeFieldChangedMutation(field=field, value=old_value),  # type: ignore[arg-type]
-            new_value=NodeFieldChangedMutation(field=field, value=value),  # type: ignore[arg-type]
+            old_value=NodeFieldChangedMutation(field=field, value=old_value),
+            new_value=NodeFieldChangedMutation(field=field, value=value),
         )
         return _to_node_dto(node)
 

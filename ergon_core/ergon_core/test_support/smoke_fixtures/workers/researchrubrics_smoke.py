@@ -18,9 +18,9 @@ import json
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
-from tests.e2e._fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from tests.e2e._fixtures.smoke_base.subworker import SubworkerResult
-from tests.e2e._fixtures.smoke_base.worker_base import SmokeWorkerBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
+from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 
 class ResearchRubricsSmokeWorker(SmokeWorkerBase):
@@ -49,7 +49,7 @@ class ResearchRubricsSubworker:
         await sandbox.files.write(report_path, contents)
 
         probe = await sandbox.commands.run(f"wc -l {report_path}", timeout=10)
-        probe_stdout = (probe.stdout or "").strip()
+        probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()
         probe_path = f"/workspace/final_output/probe_{node_id}.json"
         await sandbox.files.write(
             probe_path,
@@ -66,7 +66,7 @@ class ResearchRubricsSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``ResearchRubricsSubworker``."""
 
     type_slug = "researchrubrics-smoke-leaf"
-    subworker_cls = ResearchRubricsSubworker  # type: ignore[assignment]
+    subworker_cls = ResearchRubricsSubworker
 
 
 __all__ = [

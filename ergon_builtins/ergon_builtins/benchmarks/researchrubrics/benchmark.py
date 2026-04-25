@@ -103,7 +103,9 @@ class ResearchRubricsBenchmark(Benchmark):
         return [_payload_from_row(train_ds[idx]) for idx in range(len(train_ds))]
 
 
-def _payload_from_row(row: Mapping[str, Any]) -> ResearchRubricsTaskPayload:  # slopcop: ignore[no-typing-any]
+def _payload_from_row(
+    row: Mapping[str, Any],  # slopcop: ignore[no-typing-any]
+) -> ResearchRubricsTaskPayload:
     """Convert one raw HuggingFace row into the benchmark payload schema."""
     return ResearchRubricsTaskPayload(
         sample_id=row["sample_id"],

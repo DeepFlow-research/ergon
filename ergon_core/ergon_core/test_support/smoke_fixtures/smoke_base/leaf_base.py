@@ -36,8 +36,11 @@ from ergon_core.core.runtime.services.communication_service import (
     communication_service,
 )
 
-from tests.e2e._fixtures.smoke_base.subworker import SmokeSubworker, SubworkerResult
-from tests.e2e._fixtures.sandbox import SmokeSandboxManager
+from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import (
+    SmokeSubworker,
+    SubworkerResult,
+)
+from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
 
 
 class BaseSmokeLeafWorker(Worker):

@@ -24,7 +24,7 @@ from ergon_core.core.persistence.shared.db import get_engine, get_session
 pytestmark = pytest.mark.integration
 
 API = os.environ.get("ERGON_API_BASE_URL", "http://127.0.0.1:9000")
-SECRET = os.environ.get("TEST_HARNESS_SECRET", "ci-secret")
+SECRET = os.environ.get("TEST_HARNESS_SECRET", "local-dev")
 
 _HEADERS = {"X-Test-Secret": SECRET}
 _COHORT_PREFIX = "ci-smoke-"

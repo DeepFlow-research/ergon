@@ -5,7 +5,7 @@ import pytest
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
-    _parse_test_list,  # noqa: PLC2701
+    _parse_test_list,
 )
 
 

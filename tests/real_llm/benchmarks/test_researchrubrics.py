@@ -116,8 +116,8 @@ def _wait_for_post_terminal_artifacts(run_id: UUID) -> None:
 
 async def test_researchrubrics_rollout(
     real_llm_stack: None,  # session fixture: stack up
-    harness_client,  # noqa: ANN001  # poll /api/test/read/run/{id}/state
-    playwright_context,  # noqa: ANN001  # dashboard screenshots
+    harness_client,  # poll /api/test/read/run/{id}/state
+    playwright_context,  # dashboard screenshots
     openrouter_budget: OpenRouterBudget | None,
 ) -> None:
     """End-to-end researchrubrics rollout against a real LLM.
@@ -178,7 +178,9 @@ async def test_researchrubrics_rollout(
     screenshots = await capture_dashboard(run_id, playwright_context, out_dir)
 
     finished_at = datetime.now(timezone.utc)
-    budget_after = await openrouter_budget.remaining_usd() if openrouter_budget is not None else None
+    budget_after = (
+        await openrouter_budget.remaining_usd() if openrouter_budget is not None else None
+    )
 
     manifest_path = write_manifest(
         out_dir,

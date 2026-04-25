@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from ergon_core.api.generation import GenerationTurn, TextPart, ToolCallPart
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
@@ -94,8 +95,8 @@ class TelemetryRepository:
         *,
         success: bool,
         final_assistant_message: str | None = None,
-        output_json: dict[str, object] | None = None,
-        error_json: dict[str, object] | None = None,
+        output_json: JsonObject | None = None,
+        error_json: JsonObject | None = None,
     ) -> RunTaskExecution:
         execution = session.get(RunTaskExecution, execution_id)
         if execution is None:
@@ -125,7 +126,7 @@ class TelemetryRepository:
         mime_type: str,
         file_path: str,
         size_bytes: int,
-        metadata_json: dict[str, object] | None = None,
+        metadata_json: JsonObject | None = None,
     ) -> RunResource:
         resource = RunResource(
             id=new_id(),
@@ -136,7 +137,7 @@ class TelemetryRepository:
             mime_type=mime_type,
             file_path=file_path,
             size_bytes=size_bytes,
-            metadata_json=metadata_json or {},
+            metadata_json={} if metadata_json is None else metadata_json,
         )
         session.add(resource)
         session.flush()
@@ -152,7 +153,7 @@ class TelemetryRepository:
         score: float | None = None,
         passed: bool | None = None,
         feedback: str | None = None,
-        summary_json: dict[str, object] | None = None,
+        summary_json: JsonObject | None = None,
     ) -> RunTaskEvaluation:
         evaluation = RunTaskEvaluation(
             id=new_id(),
@@ -162,7 +163,7 @@ class TelemetryRepository:
             score=score,
             passed=passed,
             feedback=feedback,
-            summary_json=summary_json or {},
+            summary_json={} if summary_json is None else summary_json,
         )
         session.add(evaluation)
         session.flush()
@@ -176,7 +177,7 @@ class TelemetryRepository:
         scores = [evaluation.score for evaluation in evaluations if evaluation.score is not None]
         final_score = sum(scores) if scores else None
         normalized_score = final_score / len(scores) if scores and final_score is not None else None
-        existing_summary = dict(run.summary_json or {})
+        existing_summary = dict({} if run.summary_json is None else run.summary_json)
         existing_summary.update(
             {
                 "final_score": final_score,
@@ -339,9 +340,9 @@ def _extract_response_text(turn: GenerationTurn) -> str | None:
 
 def _extract_tool_calls_json(
     turn: GenerationTurn,
-) -> list[dict[str, object]] | None:
+) -> list[JsonObject] | None:
     """Extract tool call dicts from response_parts."""
-    calls: list[dict[str, object]] = []
+    calls: list[JsonObject] = []
     for part in turn.response_parts:
         if isinstance(part, ToolCallPart):
             calls.append(

@@ -177,6 +177,16 @@ def test_tightened_list_types():
     assert turn.token_ids_json == [1, 2, 3]
 
 
+def test_task_execution_rejects_missing_static_or_dynamic_identity():
+    with pytest.raises(ValidationError):
+        RunTaskExecution.model_validate(
+            {
+                "run_id": str(uuid4()),
+                "status": TaskExecutionStatus.RUNNING,
+            }
+        )
+
+
 def test_enum_value_matches_string():
     assert RunStatus.PENDING == "pending"
     assert RunStatus.COMPLETED == "completed"

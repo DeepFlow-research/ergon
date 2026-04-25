@@ -7,8 +7,8 @@ Tests are a pure black-box client of the stack: they do not import any
 ergon internals, do not call ``build_experiment`` / ``create_run`` /
 ``inngest.send`` in-process, and do not register worker / evaluator
 slugs in the test process.  All of that lives inside the api container
-(see ``tests.e2e._fixtures`` imported by ``app.py`` when
-``ENABLE_TEST_HARNESS=1``).  Single source of truth for fixtures ⇒ no
+(see ``register_smoke_fixtures()`` called by ``app.py`` when
+``ENABLE_SMOKE_FIXTURES=1``).  Single source of truth for fixtures ⇒ no
 host / container staleness risk.
 
 Each slot can use a different ``(worker_slug, criterion_slug)`` pair —
@@ -36,7 +36,7 @@ async def submit_cohort(
     benchmark_slug: str,
     slots: list[tuple[str, str]],
     cohort_key: str,
-    timeout: int = 300,  # noqa: ARG001  # reserved — server-side per-run timeout
+    timeout: int = 300,  # reserved — server-side per-run timeout
 ) -> list[UUID]:
     """Submit one run per slot under ``cohort_key``; return run_ids in order.
 

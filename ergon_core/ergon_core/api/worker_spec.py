@@ -41,8 +41,10 @@ class WorkerSpec(BaseModel):
         is constructed via ``Experiment.from_single_worker``.
     model
         Model target identifier (provider-qualified, e.g.
-        ``"openai:gpt-4o"``). ``None`` is permitted for workers that don't
-        call an LLM (e.g. ``stub-worker`` in tests).
+        ``"openai:gpt-4o"``). This is required at the experiment composition
+        boundary so persisted definitions are fully explicit. Workers that
+        do not call an LLM still receive the configured model target; they
+        can ignore it at execution time.
     """
 
     # reason: project standard (slopcop `no-dataclass`) is Pydantic BaseModel;
@@ -51,7 +53,7 @@ class WorkerSpec(BaseModel):
 
     worker_slug: str
     name: str
-    model: str | None = None
+    model: str
 
     def validate_spec(self) -> None:
         """Check that ``worker_slug`` refers to a known registry entry.
@@ -73,3 +75,5 @@ class WorkerSpec(BaseModel):
             )
         if not self.name:
             raise ValueError("WorkerSpec.name must be a non-empty string")
+        if not self.model:
+            raise ValueError("WorkerSpec.model must be a non-empty string")

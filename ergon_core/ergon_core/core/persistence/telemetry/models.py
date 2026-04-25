@@ -9,6 +9,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
     TaskExecutionStatus,
@@ -80,11 +81,11 @@ class RunRecord(SQLModel, table=True):
 
     # -- JSON accessor: summary_json --
 
-    def parsed_summary(self) -> dict[str, object]:
+    def parsed_summary(self) -> JsonObject:
         return self.__class__._parse_summary(self.summary_json)
 
     @classmethod
-    def _parse_summary(cls, data: dict) -> dict[str, object]:
+    def _parse_summary(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"summary_json must be a dict, got {type(data).__name__}")
         return data
@@ -137,32 +138,41 @@ class RunTaskExecution(SQLModel, table=True):
 
     # -- JSON accessor: output_json --
 
-    def parsed_output(self) -> dict[str, object]:
+    def parsed_output(self) -> JsonObject:
         return self.__class__._parse_output(self.output_json)
 
     @classmethod
-    def _parse_output(cls, data: dict) -> dict[str, object]:
+    def _parse_output(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"output_json must be a dict, got {type(data).__name__}")
         return data
 
     # -- JSON accessor: error_json (nullable) --
 
-    def parsed_error(self) -> dict[str, object] | None:
+    def parsed_error(self) -> JsonObject | None:
         return self.__class__._parse_error(self.error_json)
 
     @classmethod
-    def _parse_error(cls, data: dict | None) -> dict[str, object] | None:
+    def _parse_error(cls, data: dict | None) -> JsonObject | None:
         if data is None:
             return None
         if not isinstance(data, dict):
             raise ValueError(f"error_json must be a dict, got {type(data).__name__}")
         return data
 
+    def validate_identity(self) -> None:
+        """Require enough identity to map execution rows to a static or dynamic task."""
+        if self.definition_task_id is None and self.node_id is None:
+            raise ValueError(
+                "RunTaskExecution requires definition_task_id for static tasks "
+                "or node_id for dynamic graph nodes"
+            )
+
     @model_validator(mode="after")
     def _validate_fields(self) -> "RunTaskExecution":
         self.__class__._parse_output(self.output_json)
         self.__class__._parse_error(self.error_json)
+        self.validate_identity()
         try:
             TaskExecutionStatus(self.status)
         except ValueError:
@@ -237,11 +247,11 @@ class RunResource(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, object]:
+    def parsed_metadata(self) -> JsonObject:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, object]:
+    def _parse_metadata(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -321,11 +331,11 @@ class ExperimentCohort(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, object]:
+    def parsed_metadata(self) -> JsonObject:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, object]:
+    def _parse_metadata(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -441,12 +451,12 @@ class RunGenerationTurn(SQLModel, table=True):
 
     # Convenience extractions
     response_text: str | None = None
-    tool_calls_json: list[dict[str, object]] | None = Field(default=None, sa_column=Column(JSON))
-    tool_results_json: list[dict[str, object]] | None = Field(default=None, sa_column=Column(JSON))
+    tool_calls_json: list[JsonObject] | None = Field(default=None, sa_column=Column(JSON))
+    tool_results_json: list[JsonObject] | None = Field(default=None, sa_column=Column(JSON))
 
     # RL fields (None for cloud APIs, populated for vLLM)
     token_ids_json: list[int] | None = Field(default=None, sa_column=Column(JSON))
-    logprobs_json: list[dict[str, object]] | None = Field(default=None, sa_column=Column(JSON))
+    logprobs_json: list[JsonObject] | None = Field(default=None, sa_column=Column(JSON))
     policy_version: str | None = None
 
     # Execution outcome at time of persist
@@ -464,18 +474,20 @@ class RunGenerationTurn(SQLModel, table=True):
         # reason: deferred to avoid circular import with tool_call_types
         from ergon_core.core.persistence.telemetry.tool_call_types import ToolCall
 
-        return [ToolCall.model_validate(tc) for tc in (self.tool_calls_json or [])]
+        tool_calls = [] if self.tool_calls_json is None else self.tool_calls_json
+        return [ToolCall.model_validate(tc) for tc in tool_calls]
 
     def parsed_tool_results(self) -> list["ToolResult"]:
         # reason: deferred to avoid circular import with tool_call_types
         from ergon_core.core.persistence.telemetry.tool_call_types import ToolResult
 
-        return [ToolResult.model_validate(tr) for tr in (self.tool_results_json or [])]
+        tool_results = [] if self.tool_results_json is None else self.tool_results_json
+        return [ToolResult.model_validate(tr) for tr in tool_results]
 
     def parsed_token_ids(self) -> list[int] | None:
         return self._parse_optional_list("token_ids_json", self.token_ids_json)
 
-    def parsed_logprobs(self) -> list[dict[str, object]] | None:
+    def parsed_logprobs(self) -> list[JsonObject] | None:
         return self._parse_optional_list("logprobs_json", self.logprobs_json)
 
     # -- shared helpers --

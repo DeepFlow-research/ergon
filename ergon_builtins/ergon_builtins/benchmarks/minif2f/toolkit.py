@@ -22,6 +22,34 @@ from ergon_builtins.benchmarks.minif2f.constants import LEAN_CMD, LEAN_CMD_PREFI
 # ── Response models ───────────────────────────────────────────────────
 
 
+class _CommandFailureOutput(BaseModel):
+    model_config = {"frozen": True}
+
+    stdout: str
+    stderr: str
+    exit_code: int = 1
+
+    @property
+    def combined_output(self) -> str:
+        return self.stdout + self.stderr
+
+    @classmethod
+    def from_exception(cls, exc: BaseException) -> "_CommandFailureOutput":
+        try:
+            raw = vars(exc)
+        except TypeError:
+            return cls(stdout="", stderr="")
+
+        stdout_value = raw.get("stdout")
+        stderr_value = raw.get("stderr")
+        exit_code_value = raw.get("exit_code")
+        return cls(
+            stdout=stdout_value if isinstance(stdout_value, str) else "",
+            stderr=stderr_value if isinstance(stderr_value, str) else "",
+            exit_code=exit_code_value if isinstance(exit_code_value, int) else 1,
+        )
+
+
 class WriteLeanResponse(BaseModel):
     success: bool = Field(description="Whether the operation succeeded")
     error: str | None = Field(default=None, description="Error message if operation failed")
@@ -190,14 +218,14 @@ class MiniF2FToolkit:
                 cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} {file_path} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=60)
-                    output = (result.stdout or "") + (result.stderr or "")
+                    stdout = "" if result.stdout is None else result.stdout
+                    stderr = "" if result.stderr is None else result.stderr
+                    output = stdout + stderr
                     exit_code = result.exit_code
                 except Exception as cmd_err:  # slopcop: ignore[no-broad-except]
-                    e = cmd_err
-                    _out = getattr(e, "stdout", "")  # slopcop: ignore[no-hasattr-getattr]
-                    _err = getattr(e, "stderr", "")  # slopcop: ignore[no-hasattr-getattr]
-                    output = (_out or "") + (_err or "")
-                    exit_code = getattr(e, "exit_code", 1)  # slopcop: ignore[no-hasattr-getattr]
+                    failure = _CommandFailureOutput.from_exception(cmd_err)
+                    output = failure.combined_output
+                    exit_code = failure.exit_code
 
                 errors, goals = parse_lean_output(output)
                 compiled = exit_code == 0 or "sorry" in output
@@ -244,14 +272,14 @@ class MiniF2FToolkit:
                 cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} {file_path} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=60)
-                    output = (result.stdout or "") + (result.stderr or "")
+                    stdout = "" if result.stdout is None else result.stdout
+                    stderr = "" if result.stderr is None else result.stderr
+                    output = stdout + stderr
                     exit_code = result.exit_code
                 except Exception as cmd_err:  # slopcop: ignore[no-broad-except]
-                    e = cmd_err
-                    _out = getattr(e, "stdout", "")  # slopcop: ignore[no-hasattr-getattr]
-                    _err = getattr(e, "stderr", "")  # slopcop: ignore[no-hasattr-getattr]
-                    output = (_out or "") + (_err or "")
-                    exit_code = getattr(e, "exit_code", 1)  # slopcop: ignore[no-hasattr-getattr]
+                    failure = _CommandFailureOutput.from_exception(cmd_err)
+                    output = failure.combined_output
+                    exit_code = failure.exit_code
 
                 verified = exit_code == 0
 
@@ -317,11 +345,11 @@ class MiniF2FToolkit:
                 cmd = f"{LEAN_CMD_PREFIX} {LEAN_CMD} src/{temp_file} 2>&1"
                 try:  # slopcop: ignore[no-nested-try]
                     result = await sandbox.commands.run(cmd, timeout=30)
-                    output = (result.stdout or "") + (result.stderr or "")
+                    stdout = "" if result.stdout is None else result.stdout
+                    stderr = "" if result.stderr is None else result.stderr
+                    output = stdout + stderr
                 except Exception as cmd_err:  # slopcop: ignore[no-broad-except]
-                    _stdout = getattr(cmd_err, "stdout", "")  # slopcop: ignore[no-hasattr-getattr]
-                    _stderr = getattr(cmd_err, "stderr", "")  # slopcop: ignore[no-hasattr-getattr]
-                    output = (_stdout or "") + (_stderr or "")
+                    output = _CommandFailureOutput.from_exception(cmd_err).combined_output
 
                 cleaned_lines: list[str] = []
                 for line in output.strip().split("\n"):

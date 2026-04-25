@@ -40,8 +40,8 @@ def _latest_run_id_since(since: datetime) -> str:
 
 async def test_harness_canary_smoke_stub(
     real_llm_stack: None,
-    harness_client,  # noqa: ANN001
-    playwright_context,  # noqa: ANN001
+    harness_client,
+    playwright_context,
 ) -> None:
     # Timestamp the boundary so we can filter for a run created *after* this point.
     before = datetime.now(timezone.utc)

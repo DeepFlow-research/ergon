@@ -4,17 +4,17 @@ Pure: constructs fake ``RunGraphNode``-shaped values (only ``task_slug``
 is read) and asserts error behaviour.
 """
 
-from dataclasses import dataclass
-
 import pytest
+from pydantic import BaseModel
 
 from ergon_core.api.errors import CriteriaCheckError
-from tests.e2e._fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
-from tests.e2e._fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
+from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
 
 
-@dataclass
-class _FakeNode:
+class _FakeNode(BaseModel):
+    model_config = {"frozen": True}
+
     task_slug: str
 
 
@@ -35,7 +35,7 @@ def _crit() -> _Crit:
 def test_correct_slug_set_passes() -> None:
     children = [_FakeNode(task_slug=s) for s in EXPECTED_SUBTASK_SLUGS]
     # Should not raise.
-    _crit()._check_graph_shape(children)  # type: ignore[arg-type]
+    _crit()._check_graph_shape(children)
 
 
 def _nodes_missing_slug() -> list[_FakeNode]:
@@ -64,4 +64,4 @@ def _nodes_renamed_slug() -> list[_FakeNode]:
 )
 def test_bad_slug_set_raises(children: list[_FakeNode]) -> None:
     with pytest.raises(CriteriaCheckError, match="graph shape mismatch"):
-        _crit()._check_graph_shape(children)  # type: ignore[arg-type]
+        _crit()._check_graph_shape(children)

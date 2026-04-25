@@ -1,6 +1,5 @@
 """Persistence and DTO shaping for task evaluations."""
 
-from dataclasses import dataclass
 from uuid import UUID
 
 from ergon_core.core.api.schemas import RunEvaluationCriterionDto, RunTaskEvaluationDto
@@ -12,11 +11,13 @@ from ergon_core.core.persistence.telemetry.evaluation_summary import (
 from ergon_core.core.persistence.telemetry.repositories import TelemetryRepository
 from ergon_core.core.runtime.errors import ContractViolationError
 from ergon_core.core.runtime.services.rubric_evaluation_service import EvaluationServiceResult
+from pydantic import BaseModel
 
 
-@dataclass(frozen=True)
-class PersistedEvaluation:
+class PersistedEvaluation(BaseModel):
     """Evaluation row and dashboard DTO produced by persistence."""
+
+    model_config = {"frozen": True}
 
     summary: EvaluationSummary
     dashboard_dto: RunTaskEvaluationDto
@@ -35,9 +36,9 @@ class EvaluationPersistenceService:
         task_id: UUID,
         evaluator_id: UUID,
         service_result: EvaluationServiceResult,
-        evaluation_input: str = "",
+        evaluation_input: str | None = None,
     ) -> PersistedEvaluation:
-        summary = build_evaluation_summary(service_result, evaluation_input=evaluation_input)
+        summary = build_evaluation_summary(service_result, evaluation_input=evaluation_input or "")
         result = service_result.result
         session = get_session()
         try:
@@ -135,7 +136,7 @@ def build_evaluation_summary(
                 max_score=spec.max_score,
                 passed=cr.passed,
                 weight=cr.weight,
-                feedback=cr.feedback or "",
+                feedback="" if cr.feedback is None else cr.feedback,
                 evaluation_input=evaluation_input,
             )
         )
@@ -145,7 +146,9 @@ def build_evaluation_summary(
 
     stage_names = {s.stage_name for s in specs}
     stages_passed = sum(
-        1 for stage_name in stage_names if all(e.passed for e in entries if e.stage_name == stage_name)
+        1
+        for stage_name in stage_names
+        if all(e.passed for e in entries if e.stage_name == stage_name)
     )
 
     return EvaluationSummary(

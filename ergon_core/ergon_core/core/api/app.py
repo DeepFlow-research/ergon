@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     # Wire the dashboard event sink on every sandbox manager subclass.
     # Import ergon_builtins here (deferred) to avoid a circular import at
     # module level; ergon_builtins imports ergon_core, not the reverse.
-    from ergon_builtins.registry import SANDBOX_MANAGERS  # noqa: PLC0415
+    from ergon_builtins.registry import SANDBOX_MANAGERS
 
     sink = CompoundSandboxEventSink(
         DashboardEmitterSandboxEventSink(dashboard_emitter),
@@ -102,8 +102,10 @@ if settings.smoke_fixtures_enabled:
     # separate from ``ENABLE_TEST_HARNESS`` because real-LLM rollouts
     # need the read-only harness endpoints without replacing production
     # benchmark registries with smoke fixtures.
-    # TODO: Move smoke fixtures into a dev/test support package outside
-    # ``tests`` so production entrypoints never import test modules.
-    import tests.e2e._fixtures  # noqa: F401, PLC0415
+    # Test-support package kept outside ``tests`` so runtime entrypoints
+    # never import pytest-owned modules.
+    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+
+    register_smoke_fixtures()
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)

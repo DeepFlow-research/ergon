@@ -1,5 +1,6 @@
 """Workflow initialization: load definitions, seed graph state, find initial tasks."""
 
+from ergon_builtins.registry import BENCHMARKS
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -27,6 +28,10 @@ class WorkflowInitializationService:
                 session.get(ExperimentDefinition, command.definition_id),
                 f"Definition {command.definition_id} not found",
             )
+            benchmark_cls = require_not_none(
+                BENCHMARKS.get(definition.benchmark_type),
+                f"Benchmark {definition.benchmark_type!r} not found",
+            )
 
             tasks_stmt = select(ExperimentDefinitionTask).where(
                 ExperimentDefinitionTask.experiment_definition_id == command.definition_id,
@@ -49,6 +54,7 @@ class WorkflowInitializationService:
                 command.definition_id,
                 initial_node_status=TaskExecutionStatus.PENDING,
                 initial_edge_status="pending",
+                task_payload_model=benchmark_cls.task_payload_model,
                 meta=MutationMeta(actor="system:workflow_init"),
             )
             session.commit()

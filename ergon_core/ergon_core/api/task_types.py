@@ -11,7 +11,12 @@ class EmptyTaskPayload(BaseModel):
     model_config = {"extra": "forbid", "frozen": True}
 
 
-PayloadT = TypeVar("PayloadT", bound=BaseModel, default=EmptyTaskPayload)
+PayloadT = TypeVar(
+    "PayloadT",
+    bound=BaseModel,
+    default=EmptyTaskPayload,
+    covariant=True,
+)
 
 
 class BenchmarkTask(BaseModel, Generic[PayloadT]):
@@ -29,4 +34,4 @@ class BenchmarkTask(BaseModel, Generic[PayloadT]):
     parent_task_slug: str | None = None
     dependency_task_slugs: tuple[str, ...] = ()
     evaluator_binding_keys: tuple[str, ...] = ()
-    task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # type: ignore[assignment]
+    task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # ty: ignore[invalid-assignment]

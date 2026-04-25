@@ -15,6 +15,7 @@ import pytest
 
 from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
+    CriterionRuntimeOptions,
     DefaultCriterionRuntime,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
@@ -31,8 +32,7 @@ def _runtime(*, sandbox_id: str | None) -> DefaultCriterionRuntime:
     runtime = DefaultCriterionRuntime(
         context=CriterionContext(run_id=run_id),
         sandbox_manager=manager,
-        run_id=run_id,
-        sandbox_id=sandbox_id,
+        options=CriterionRuntimeOptions(run_id=run_id, sandbox_id=sandbox_id),
     )
     return runtime
 

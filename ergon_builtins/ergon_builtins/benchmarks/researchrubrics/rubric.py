@@ -39,7 +39,7 @@ class ResearchRubricsRubric(Rubric):
         name: str = "researchrubrics-rubric",
         rubric_criteria: Sequence[RubricCriterion] = (),
     ) -> None:
-        criteria = build_criteria_from_rubrics(rubric_criteria)
+        criteria = build_criteria_from_rubrics(list(rubric_criteria))
         super().__init__(name=name, criteria=criteria)
         self._rubric_criteria = tuple(rubric_criteria)
 

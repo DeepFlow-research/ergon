@@ -30,7 +30,7 @@ async def test_install_runs_setup_and_install_scripts(monkeypatch: pytest.Monkey
     monkeypatch.setattr(
         q_mod.queries.task_executions,
         "get_task_payload",
-        lambda _tid: SAMPLE_PAYLOAD,
+        lambda _tid, _payload_model=None: SAMPLE_PAYLOAD,
     )
 
     fake_spec = MagicMock(
@@ -58,7 +58,11 @@ async def test_install_raises_when_payload_missing(monkeypatch: pytest.MonkeyPat
     from ergon_core.core.persistence import queries as q_mod
     from ergon_core.core.providers.sandbox.errors import SandboxSetupError
 
-    monkeypatch.setattr(q_mod.queries.task_executions, "get_task_payload", lambda _tid: None)
+    monkeypatch.setattr(
+        q_mod.queries.task_executions,
+        "get_task_payload",
+        lambda _tid, _payload_model=None: None,
+    )
 
     manager = SWEBenchSandboxManager()
     with pytest.raises(SandboxSetupError, match="No task_payload"):
@@ -90,7 +94,9 @@ async def test_install_raises_on_nonzero_exit(
     from ergon_core.core.providers.sandbox.errors import SandboxSetupError
 
     monkeypatch.setattr(
-        q_mod.queries.task_executions, "get_task_payload", lambda _tid: SAMPLE_PAYLOAD
+        q_mod.queries.task_executions,
+        "get_task_payload",
+        lambda _tid, _payload_model=None: SAMPLE_PAYLOAD,
     )
     monkeypatch.setattr(
         sm,

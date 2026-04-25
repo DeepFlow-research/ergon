@@ -56,7 +56,7 @@ async def _extract_patch_via_runtime(context: EvaluationContext) -> str:
     )
     if result.exit_code != 0:
         return ""
-    return result.stdout or ""
+    return "" if result.stdout is None else result.stdout
 
 
 def make_test_spec(row: dict[str, Any]) -> Any:  # slopcop: ignore[no-typing-any]
@@ -176,6 +176,7 @@ class SWEBenchTestCriterion(Criterion):
             timeout=EVAL_TIMEOUT_SEC,
         )
         if r.exit_code != 0:
+            detail = r.stdout if r.stdout is not None else r.stderr
             return _error_result(
                 self.name,
                 self.weight,
@@ -184,7 +185,7 @@ class SWEBenchTestCriterion(Criterion):
                 # _error_result requires `str`. Fall back to empty string
                 # so the error message is well-typed even when the sandbox
                 # returns no output on failure.
-                r.stdout or r.stderr or "",
+                "" if detail is None else detail,
             )
 
         # 2. Apply test_patch then agent patch (order matters).
@@ -201,7 +202,7 @@ class SWEBenchTestCriterion(Criterion):
             f"bash -c {shlex.quote(spec.eval_script)} 2>&1",
             timeout=EVAL_TIMEOUT_SEC,
         )
-        log = r.stdout or ""
+        log = "" if r.stdout is None else r.stdout
 
         # 4. Grade: persist log locally, hand path to swebench harness.
         report = _grade_with_log(
@@ -243,7 +244,8 @@ async def _write_and_apply(
             timeout=APPLY_TIMEOUT_SEC,
         )
     if r.exit_code != 0:
-        raise RuntimeError(f"git apply {path} failed: {(r.stdout or '')[-800:]}")
+        stdout = "" if r.stdout is None else r.stdout
+        raise RuntimeError(f"git apply {path} failed: {stdout[-800:]}")
 
 
 def _error_result(name: str, weight: float, kind: str, detail: str) -> CriterionResult:
@@ -252,7 +254,7 @@ def _error_result(name: str, weight: float, kind: str, detail: str) -> Criterion
         score=0.0,
         passed=False,
         weight=weight,
-        feedback=f"{kind}: {(detail or '')[-400:]}",
+        feedback=f"{kind}: {detail[-400:]}",
         metadata={"error": kind},
     )
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import ClassVar, Protocol, runtime_checkable
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonValue
 from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
 from ergon_core.core.providers.sandbox.event_sink import (
     NoopSandboxEventSink,
@@ -35,7 +36,7 @@ except ImportError:
     # Fallback stubs so `except (TimeoutException, SandboxNotFoundException)`
     # stays syntactically valid when the e2b SDK is unavailable. They will
     # never actually be raised because the sandbox code paths require e2b.
-    class _MissingE2BError(Exception):  # noqa: N818  # slopcop: ignore[no-broad-except]
+    class _MissingE2BError(Exception):  # slopcop: ignore[no-broad-except]
         pass
 
     SandboxNotFoundException = _MissingE2BError  # type: ignore[assignment,misc]
@@ -659,7 +660,7 @@ class DefaultSandboxManager(BaseSandboxManager):
 _STUB_SANDBOX_PREFIX = "stub-sandbox-"
 
 
-def is_stub_sandbox_id(sandbox_id: object) -> bool:
+def is_stub_sandbox_id(sandbox_id: JsonValue) -> bool:
     """Return True iff ``sandbox_id`` was produced by :class:`StubSandboxManager`.
 
     Stub sandbox ids are produced by the CI / no-E2B-key code path. Any
@@ -667,8 +668,8 @@ def is_stub_sandbox_id(sandbox_id: object) -> bool:
     returns True, otherwise the call will fail (no API key, no sandbox
     exists on the E2B side).
 
-    Accepts ``object`` because some call sites read ``sandbox_id`` out of
-    a loosely-typed JSON summary (``dict[str, Any]``).
+    Accepts JSON values because some call sites read ``sandbox_id`` out of
+    persisted JSON summaries before checking whether teardown should skip.
     """
     return isinstance(sandbox_id, str) and sandbox_id.startswith(_STUB_SANDBOX_PREFIX)
 

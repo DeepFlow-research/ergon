@@ -64,6 +64,8 @@ from opentelemetry.trace.propagation import set_span_in_context
 from opentelemetry.trace.span import TraceState
 from pydantic import BaseModel, Field
 
+from ergon_core.api.json_types import JsonObject, JsonValue
+
 TRACE_FLAGS_SAMPLED = 0x01
 _MAX_TRACE_ID = (1 << 128) - 1
 _MAX_SPAN_ID = (1 << 64) - 1
@@ -87,7 +89,7 @@ class TraceContext(BaseModel):
     task_id: UUID | None = None
     execution_id: UUID | None = None
     evaluator_id: UUID | None = None
-    attributes: dict[str, object] = Field(default_factory=dict)
+    attributes: JsonObject = Field(default_factory=dict)
 
 
 class SpanEvent(BaseModel):
@@ -95,7 +97,7 @@ class SpanEvent(BaseModel):
 
     name: str
     timestamp: datetime
-    attributes: dict[str, object] = Field(default_factory=dict)
+    attributes: JsonObject = Field(default_factory=dict)
 
 
 class CompletedSpan(BaseModel):
@@ -105,7 +107,7 @@ class CompletedSpan(BaseModel):
     context: TraceContext
     start_time: datetime
     end_time: datetime
-    attributes: dict[str, object] = Field(default_factory=dict)
+    attributes: JsonObject = Field(default_factory=dict)
     status_code: int | str = 0
     status_message: str | None = None
     events: list[SpanEvent] = Field(default_factory=list)
@@ -123,7 +125,7 @@ class TraceSink(Protocol):
         self,
         context: TraceContext,
         name: str,
-        attributes: dict[str, object] | None = None,
+        attributes: JsonObject | None = None,
         timestamp: datetime | None = None,
     ) -> None: ...
 
@@ -136,7 +138,7 @@ class TraceSink(Protocol):
         task_id: UUID | None = None,
         execution_id: UUID | None = None,
         evaluator_id: UUID | None = None,
-        attributes: dict[str, object] | None = None,
+        attributes: JsonObject | None = None,
     ) -> TraceContext: ...
 
 
@@ -150,7 +152,7 @@ class NoopTraceSink:
         self,
         context: TraceContext,
         name: str,
-        attributes: dict[str, object] | None = None,
+        attributes: JsonObject | None = None,
         timestamp: datetime | None = None,
     ) -> None:
         pass
@@ -164,18 +166,18 @@ class NoopTraceSink:
         task_id: UUID | None = None,
         execution_id: UUID | None = None,
         evaluator_id: UUID | None = None,
-        attributes: dict[str, object] | None = None,
+        attributes: JsonObject | None = None,
     ) -> TraceContext:
         child_span = span_id_from_key(str(parent.span_id), span_key)
         return TraceContext(
             trace_id=parent.trace_id,
             span_id=child_span,
             parent_span_id=parent.span_id,
-            run_id=run_id or parent.run_id,
-            task_id=task_id or parent.task_id,
-            execution_id=execution_id or parent.execution_id,
-            evaluator_id=evaluator_id or parent.evaluator_id,
-            attributes=attributes or {},
+            run_id=parent.run_id if run_id is None else run_id,
+            task_id=parent.task_id if task_id is None else task_id,
+            execution_id=parent.execution_id if execution_id is None else execution_id,
+            evaluator_id=parent.evaluator_id if evaluator_id is None else evaluator_id,
+            attributes={} if attributes is None else attributes,
         )
 
 
@@ -193,7 +195,7 @@ def truncate_text(value: str | None, max_length: int | None = None) -> str | Non
     return f"{value[:limit]}...[truncated]"
 
 
-def safe_json_attribute(value: object, max_length: int | None = None) -> str:
+def safe_json_attribute(value: JsonValue, max_length: int | None = None) -> str:
     try:
         serialized = json.dumps(value, default=str, separators=(",", ":"))
     except (TypeError, ValueError):
@@ -201,10 +203,10 @@ def safe_json_attribute(value: object, max_length: int | None = None) -> str:
     return truncate_text(serialized, max_length=max_length) or ""
 
 
-def normalize_attributes(attributes: dict[str, object] | None) -> dict[str, object]:
+def normalize_attributes(attributes: JsonObject | None) -> JsonObject:
     if not attributes:
         return {}
-    normalized: dict[str, object] = {}
+    normalized: JsonObject = {}
     for key, value in attributes.items():
         if value is None:
             continue
@@ -300,7 +302,7 @@ class OtelTraceSink:
         task_id: UUID | None = None,
         execution_id: UUID | None = None,
         evaluator_id: UUID | None = None,
-        attributes: dict[str, object] | None = None,
+        attributes: JsonObject | None = None,
     ) -> TraceContext:
         return TraceContext(
             trace_id=parent.trace_id,
@@ -317,7 +319,7 @@ class OtelTraceSink:
         self,
         context: TraceContext,
         name: str,
-        attributes: dict[str, object] | None = None,
+        attributes: JsonObject | None = None,
         timestamp: datetime | None = None,
     ) -> None:
         now = timestamp or datetime.now(UTC)

@@ -40,9 +40,9 @@ from ergon_core.core.persistence.telemetry.models import (
     ThreadMessage,
 )
 
-from tests.e2e._fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
-from tests.e2e._fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from tests.e2e._fixtures.smoke_base.worker_base import SmokeWorkerBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
+from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 

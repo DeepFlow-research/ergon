@@ -13,7 +13,7 @@ from typing import ClassVar
 from uuid import uuid4
 
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
-from tests.e2e._fixtures.smoke_base.worker_base import SmokeWorkerBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 
 class _HappySubclass(SmokeWorkerBase):

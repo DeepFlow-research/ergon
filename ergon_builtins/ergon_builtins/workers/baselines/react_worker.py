@@ -18,6 +18,7 @@ from ergon_core.api.generation import (
     ToolReturnPart,
     UserPromptPart,
 )
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.context.assembly import assemble_pydantic_ai_messages
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.shared.db import get_session
@@ -109,7 +110,7 @@ class ReActWorker(Worker):
         """Run the underlying pydantic-ai agent and yield the turns it produced."""
         resolved = resolve_model_target(self.model)
 
-        model_settings: dict[str, object] | None = None
+        model_settings: JsonObject | None = None
         if resolved.supports_logprobs and self.model and self.model.startswith("vllm:"):
             model_settings = LOGPROB_SETTINGS
 
@@ -226,7 +227,11 @@ def _latest_final_result_message(
     """Extract fallback text from the latest ``final_result`` tool call."""
     messages: list[str] = []
     for event in events:
-        if getattr(event, "event_type", None) != "tool_call":
+        try:
+            event_type = event.event_type
+        except AttributeError:
+            continue
+        if event_type != "tool_call":
             continue
         payload = event.parsed_payload()
         if not isinstance(payload, payload_type) or payload.tool_name != "final_result":

@@ -8,9 +8,10 @@ from datetime import UTC, datetime
 import logging
 
 import inngest
+from pydantic import BaseModel
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, SANDBOX_MANAGERS
 from ergon_core.core.dashboard.emitter import dashboard_emitter
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.runtime.errors import ContractViolationError, RegistryLookupError
@@ -57,11 +58,6 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
     agent_reasoning = payload.agent_reasoning
     span_start = datetime.now(UTC)
 
-    if task_id is None:
-        raise ContractViolationError("EvaluateTaskRunRequest.task_id is required")
-    if evaluator_binding_key is None:
-        raise ContractViolationError("EvaluateTaskRunRequest.evaluator_binding_key is required")
-
     evaluator_cls = EVALUATORS.get(evaluator_type)
     if evaluator_cls is None:
         raise RegistryLookupError(
@@ -107,21 +103,16 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
 
     benchmark_cls = BENCHMARKS.get(benchmark_type) if benchmark_type is not None else None
     task_payload = (
-        benchmark_cls.parse_task_payload(task_row.task_payload)
+        task_row.task_payload_as(benchmark_cls.task_payload_model)
         if benchmark_cls is not None
         else None
     )
-    task_kwargs = {
-        "task_slug": task_row.task_slug,
-        "instance_key": instance_row.instance_key,
-        "description": task_input,
-    }
-    if task_payload is not None:
-        task_kwargs["task_payload"] = task_payload
-        task_model = BenchmarkTask[type(task_payload)]
-    else:
-        task_model = BenchmarkTask
-    task = task_model(**task_kwargs)
+    task = BenchmarkTask[BaseModel](
+        task_slug=task_row.task_slug,
+        instance_key=instance_row.instance_key,
+        description=task_input,
+        task_payload=task_payload or EmptyTaskPayload(),
+    )
 
     service = RubricEvaluationService(criterion_executor=executor)
     try:
@@ -189,4 +180,3 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         passed=result.passed,
         evaluator_name=result.evaluator_name,
     )
-

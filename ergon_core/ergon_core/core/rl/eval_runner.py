@@ -134,7 +134,7 @@ async def _run_local_eval(
         )
         _stdout, stderr = await proc.communicate()
 
-        exit_code = proc.returncode or 0
+        exit_code = 0 if proc.returncode is None else proc.returncode
         if exit_code == 0:
             logger.info("Eval complete for step %d", ckpt.step)
         else:
@@ -150,7 +150,7 @@ async def _run_local_eval(
         return 1
 
 
-def evaluate_checkpoint(
+async def evaluate_checkpoint(
     checkpoint_path: str,
     benchmark_type: str,
     *,
@@ -166,12 +166,10 @@ def evaluate_checkpoint(
         has_model=True,
     )
 
-    return asyncio.run(
-        _run_local_eval(
-            ckpt,
-            benchmark_type=benchmark_type,
-            evaluator_type=evaluator_type,
-            model_base=model_base,
-            eval_limit=eval_limit,
-        )
+    return await _run_local_eval(
+        ckpt,
+        benchmark_type=benchmark_type,
+        evaluator_type=evaluator_type,
+        model_base=model_base,
+        eval_limit=eval_limit,
     )

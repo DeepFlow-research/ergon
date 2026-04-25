@@ -72,9 +72,7 @@ class SweBenchVerifiedBenchmark(Benchmark):
         return ("default",)
 
 
-def _load_rows(
-    *, limit: int | None = None
-) -> list[SWEBenchInstance]:
+def _load_rows(*, limit: int | None = None) -> list[SWEBenchInstance]:
     """Load and validate SWE-Bench instances from HuggingFace."""
     ds = load_dataset(HF_DATASET_ID, split=HF_SPLIT)
     if limit is not None:

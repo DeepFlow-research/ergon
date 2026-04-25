@@ -25,10 +25,10 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 
-from ergon_core.core.persistence.shared.db import ensure_db  # noqa: E402
+from ergon_core.core.persistence.shared.db import ensure_db
 
-from ergon_infra.training.config import training_config_from_args  # noqa: E402
-from ergon_infra.training.trl_runner import run_trl_training  # noqa: E402
+from ergon_infra.training.config import training_config_from_args
+from ergon_infra.training.trl_runner import run_trl_training
 
 
 def main() -> int:

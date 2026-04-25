@@ -4,7 +4,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api.benchmark_deps import BenchmarkDeps  # noqa: F401 — re-exported for CLI callers
+from ergon_core.api.benchmark_deps import BenchmarkDeps
 
 
 class LLMProvider(str, Enum):

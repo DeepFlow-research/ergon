@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import inngest
 from ergon_core.core.providers.sandbox.manager import StubSandboxManager
-from ergon_core.core.runtime.errors import ConfigurationError, ContractViolationError
+from ergon_core.core.runtime.errors import ContractViolationError
 from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -47,6 +47,136 @@ from ergon_core.core.runtime.tracing import (
 logger = logging.getLogger(__name__)
 
 
+async def _prepare_execution(
+    ctx: inngest.Context,
+    svc: TaskExecutionService,
+    payload: TaskReadyEvent,
+) -> PreparedTaskExecution:
+    async def _prepare() -> PreparedTaskExecution:
+        return await svc.prepare(
+            PrepareTaskExecutionCommand(
+                run_id=payload.run_id,
+                definition_id=payload.definition_id,
+                task_id=payload.task_id,
+                node_id=payload.node_id,
+            )
+        )
+
+    return await ctx.step.run("prepare-execution", _prepare, output_type=PreparedTaskExecution)
+
+
+async def _setup_sandbox(
+    ctx: inngest.Context,
+    payload: TaskReadyEvent,
+    prepared: PreparedTaskExecution,
+) -> SandboxReadyResult:
+    # Dynamic subtasks have no static task_id. Use node_id as the sandbox key
+    # so each subtask gets its own isolated sandbox slot in the manager registry.
+    sandbox_task_key = payload.task_id or prepared.node_id
+    return await ctx.step.invoke(
+        "sandbox-setup",
+        function=sandbox_setup_fn,
+        data=SandboxSetupRequest(
+            run_id=payload.run_id,
+            definition_id=payload.definition_id,
+            task_id=sandbox_task_key,
+            benchmark_type=prepared.benchmark_type,
+        ).model_dump(),
+    )
+
+
+async def _run_worker(
+    ctx: inngest.Context,
+    payload: TaskReadyEvent,
+    prepared: PreparedTaskExecution,
+    sandbox_result: SandboxReadyResult,
+) -> WorkerExecuteResult:
+    return await ctx.step.invoke(
+        "worker-execute",
+        function=worker_execute_fn,
+        data=WorkerExecuteRequest(
+            run_id=payload.run_id,
+            definition_id=payload.definition_id,
+            task_id=payload.task_id,
+            execution_id=prepared.execution_id,
+            sandbox_id=sandbox_result.sandbox_id,
+            task_slug=prepared.task_slug,
+            task_description=prepared.task_description,
+            assigned_worker_slug=prepared.assigned_worker_slug,
+            worker_type=prepared.worker_type,
+            model_target=prepared.model_target,
+            benchmark_type=prepared.benchmark_type,
+            node_id=prepared.node_id,
+        ).model_dump(),
+    )
+
+
+async def _persist_outputs(
+    ctx: inngest.Context,
+    payload: TaskReadyEvent,
+    prepared: PreparedTaskExecution,
+    sandbox_result: SandboxReadyResult,
+    worker_result: WorkerExecuteResult,
+) -> PersistOutputsResult:
+    output_task_key = payload.task_id or prepared.node_id
+    return await ctx.step.invoke(
+        "persist-outputs",
+        function=persist_outputs_fn,
+        data=PersistOutputsRequest(
+            run_id=payload.run_id,
+            definition_id=payload.definition_id,
+            task_id=output_task_key,
+            execution_id=prepared.execution_id,
+            sandbox_id=sandbox_result.sandbox_id,
+            output_dir=sandbox_result.output_dir,
+            benchmark_type=prepared.benchmark_type,
+            worker_final_assistant_message=worker_result.final_assistant_message,
+        ).model_dump(),
+    )
+
+
+async def _emit_task_completed(
+    payload: TaskReadyEvent,
+    prepared: PreparedTaskExecution,
+    sandbox_id: str,
+) -> None:
+    await inngest_client.send(
+        inngest.Event(
+            name=TaskCompletedEvent.name,
+            data=TaskCompletedEvent(
+                run_id=payload.run_id,
+                definition_id=payload.definition_id,
+                task_id=payload.task_id,
+                execution_id=prepared.execution_id,
+                sandbox_id=sandbox_id,
+                node_id=prepared.node_id,
+            ).model_dump(mode="json"),
+        )
+    )
+
+
+async def _emit_task_failed(
+    payload: TaskReadyEvent,
+    prepared: PreparedTaskExecution,
+    error_message: str,
+    sandbox_id: str | None,
+) -> None:
+    await inngest_client.send(
+        inngest.Event(
+            name=TaskFailedEvent.name,
+            data=TaskFailedEvent(
+                run_id=payload.run_id,
+                definition_id=payload.definition_id,
+                task_id=payload.task_id,
+                execution_id=prepared.execution_id,
+                error=error_message,
+                sandbox_id=sandbox_id,
+                node_id=prepared.node_id,
+            ).model_dump(mode="json"),
+        )
+    )
+
+
 # retries=0: side effects (sandbox creation, model API calls, DB writes)
 # would duplicate on retry. Failure propagates via TaskFailedEvent.
 # Concurrency bounded by E2B sandbox quota and Postgres connection pool.
@@ -65,16 +195,6 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
 
     svc = TaskExecutionService()
 
-    async def _prepare() -> PreparedTaskExecution:
-        return await svc.prepare(
-            PrepareTaskExecutionCommand(
-                run_id=payload.run_id,
-                definition_id=payload.definition_id,
-                task_id=payload.task_id,
-                node_id=payload.node_id,
-            )
-        )
-
     # Hoist ``prepared`` above the try so the except handler can branch
     # on "did prepare itself raise?" vs "did a later step raise?".
     # Without this, a Pydantic validation error inside prepare (e.g. a
@@ -90,9 +210,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
     # the old ``"skipped"`` magic string.
     task_sandbox_id: str | None = None
     try:
-        prepared = await ctx.step.run(
-            "prepare-execution", _prepare, output_type=PreparedTaskExecution
-        )
+        prepared = await _prepare_execution(ctx, svc, payload)
 
         if prepared.skipped:
             logger.info(
@@ -104,23 +222,11 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             # representing "this task completed without provisioning a sandbox".
             # Downstream teardown uses ``is_stub_sandbox_id`` to short-circuit.
             stub_sandbox_id = await StubSandboxManager().create(
-                payload.task_id,
+                prepared.node_id,
                 run_id=payload.run_id,
-                display_task_id=payload.task_id,
+                display_task_id=prepared.node_id,
             )
-            await inngest_client.send(
-                inngest.Event(
-                    name=TaskCompletedEvent.name,
-                    data=TaskCompletedEvent(
-                        run_id=payload.run_id,
-                        definition_id=payload.definition_id,
-                        task_id=payload.task_id,
-                        execution_id=prepared.execution_id,
-                        sandbox_id=stub_sandbox_id,
-                        node_id=prepared.node_id,
-                    ).model_dump(mode="json"),
-                )
-            )
+            await _emit_task_completed(payload, prepared, stub_sandbox_id)
             return TaskExecuteResult(
                 run_id=payload.run_id,
                 task_id=payload.task_id,
@@ -130,21 +236,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 skip_reason=prepared.skip_reason,
             )
 
-        # Dynamic subtasks have no static task_id (UUID | None).  Use node_id
-        # as the sandbox key so each subtask gets its own isolated sandbox slot
-        # in the manager's registry rather than all sharing _sandboxes[None].
-        _sandbox_key = payload.task_id or prepared.node_id
-
-        sandbox_result: SandboxReadyResult = await ctx.step.invoke(
-            "sandbox-setup",
-            function=sandbox_setup_fn,
-            data=SandboxSetupRequest(
-                run_id=payload.run_id,
-                definition_id=payload.definition_id,
-                task_id=_sandbox_key,
-                benchmark_type=prepared.benchmark_type,
-            ).model_dump(),
-        )
+        sandbox_result = await _setup_sandbox(ctx, payload, prepared)
         if not sandbox_result.sandbox_id:
             raise ContractViolationError(
                 "sandbox-setup returned empty sandbox_id",
@@ -153,48 +245,13 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             )
         task_sandbox_id = sandbox_result.sandbox_id
 
-        if not prepared.worker_type:
-            raise ConfigurationError(
-                "Task has no worker_type configured",
-                run_id=payload.run_id,
-                task_id=payload.task_id,
-            )
-
-        worker_result: WorkerExecuteResult = await ctx.step.invoke(
-            "worker-execute",
-            function=worker_execute_fn,
-            data=WorkerExecuteRequest(
-                run_id=payload.run_id,
-                definition_id=payload.definition_id,
-                task_id=payload.task_id,
-                execution_id=prepared.execution_id,
-                sandbox_id=sandbox_result.sandbox_id,
-                task_slug=prepared.task_slug,
-                task_description=prepared.task_description,
-                assigned_worker_slug=prepared.assigned_worker_slug or "",
-                worker_type=prepared.worker_type,
-                model_target=prepared.model_target,
-                benchmark_type=prepared.benchmark_type,
-                node_id=prepared.node_id,
-            ).model_dump(),
-        )
+        worker_result = await _run_worker(ctx, payload, prepared, sandbox_result)
 
         if not worker_result.success:
             raise RuntimeError(worker_result.error or "Worker execution failed")
 
-        persist_result: PersistOutputsResult = await ctx.step.invoke(
-            "persist-outputs",
-            function=persist_outputs_fn,
-            data=PersistOutputsRequest(
-                run_id=payload.run_id,
-                definition_id=payload.definition_id,
-                task_id=_sandbox_key,
-                execution_id=prepared.execution_id,
-                sandbox_id=sandbox_result.sandbox_id,
-                output_dir=sandbox_result.output_dir,
-                benchmark_type=prepared.benchmark_type,
-                worker_final_assistant_message=worker_result.final_assistant_message,
-            ).model_dump(),
+        persist_result = await _persist_outputs(
+            ctx, payload, prepared, sandbox_result, worker_result
         )
 
         await svc.finalize_success(
@@ -214,36 +271,24 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 run_id=payload.run_id,
                 task_id=payload.task_id,
             )
-        await inngest_client.send(
-            inngest.Event(
-                name=TaskCompletedEvent.name,
-                data=TaskCompletedEvent(
-                    run_id=payload.run_id,
-                    definition_id=payload.definition_id,
-                    task_id=payload.task_id,
-                    execution_id=prepared.execution_id,
-                    sandbox_id=task_sandbox_id,
-                    node_id=prepared.node_id,
-                ).model_dump(mode="json"),
-            )
-        )
+        await _emit_task_completed(payload, prepared, task_sandbox_id)
 
         get_trace_sink().emit_span(
             CompletedSpan(
                 name="task.execute",
-                context=task_execute_context(payload.run_id, payload.task_id),
+                context=task_execute_context(payload.run_id, prepared.node_id),
                 start_time=span_start,
                 end_time=datetime.now(UTC),
                 attributes={
                     "run_id": str(payload.run_id),
                     "definition_id": str(payload.definition_id),
-                    "task_id": str(payload.task_id),
+                    "task_id": str(prepared.node_id),
                     "execution_id": str(prepared.execution_id),
                     "task_slug": prepared.task_slug,
                     "benchmark_type": prepared.benchmark_type,
-                    "worker_type": prepared.worker_type or "",
-                    "assigned_worker_slug": prepared.assigned_worker_slug or "",
-                    "model_target": prepared.model_target or "",
+                    "worker_type": prepared.worker_type,
+                    "assigned_worker_slug": prepared.assigned_worker_slug,
+                    "model_target": prepared.model_target,
                     "skipped": False,
                     "status": "completed",
                 },
@@ -274,25 +319,12 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 )
             )
 
-            await inngest_client.send(
-                inngest.Event(
-                    name=TaskFailedEvent.name,
-                    data=TaskFailedEvent(
-                        run_id=payload.run_id,
-                        definition_id=payload.definition_id,
-                        task_id=payload.task_id,
-                        execution_id=prepared.execution_id,
-                        error=error_msg,
-                        sandbox_id=task_sandbox_id,
-                        node_id=prepared.node_id,
-                    ).model_dump(mode="json"),
-                )
-            )
+            await _emit_task_failed(payload, prepared, error_msg, task_sandbox_id)
 
             get_trace_sink().emit_span(
                 CompletedSpan(
                     name="task.execute",
-                    context=task_execute_context(payload.run_id, payload.task_id),
+                    context=task_execute_context(payload.run_id, prepared.node_id),
                     start_time=span_start,
                     end_time=datetime.now(UTC),
                     status_code="error",
@@ -300,7 +332,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                     attributes={
                         "run_id": str(payload.run_id),
                         "definition_id": str(payload.definition_id),
-                        "task_id": str(payload.task_id),
+                        "task_id": str(prepared.node_id),
                         "execution_id": str(prepared.execution_id),
                         "task_slug": prepared.task_slug,
                         "benchmark_type": prepared.benchmark_type,

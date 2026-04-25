@@ -6,10 +6,10 @@ add_subtask, plan_subtasks, cancel_task, refine_task, restart_task,
 list_subtasks, get_subtask, and sandboxed bash.
 """
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
@@ -29,6 +29,8 @@ from ergon_core.core.runtime.services.task_management_service import TaskManagem
 from ergon_core.core.runtime.services.task_inspection_service import TaskInspectionService
 
 from ergon_builtins.tools.bash_sandbox_tool import make_sandbox_bash_tool
+
+AsyncToolFn = Callable[..., Awaitable[JsonObject]]
 
 
 class SubtaskLifecycleToolkit:
@@ -64,7 +66,7 @@ class SubtaskLifecycleToolkit:
         self._mgmt = TaskManagementService()
         self._inspect = TaskInspectionService()
 
-    def get_tools(self) -> list[Callable[..., Any]]:  # slopcop: ignore[no-typing-any]
+    def get_tools(self) -> list[AsyncToolFn]:
         """Return the eight subtask lifecycle tools for Agent(tools=[...])."""
         return [
             self._make_add_subtask(),
@@ -79,7 +81,7 @@ class SubtaskLifecycleToolkit:
 
     # -- management --------------------------------------------------------
 
-    def _make_add_subtask(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_add_subtask(self) -> AsyncToolFn:
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
 
         async def add_subtask(
@@ -87,7 +89,7 @@ class SubtaskLifecycleToolkit:
             description: str,
             assigned_worker_slug: str,
             depends_on: list[str] | None = None,
-        ) -> dict[str, object]:
+        ) -> JsonObject:
             """Spawn one subtask under this manager.
 
             The ``task_slug`` is a short kebab-case identifier for this
@@ -117,15 +119,15 @@ class SubtaskLifecycleToolkit:
                         ),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return add_subtask
 
-    def _make_plan_subtasks(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_plan_subtasks(self) -> AsyncToolFn:
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
 
-        async def plan_subtasks(subtasks: list[dict]) -> dict[str, object]:
+        async def plan_subtasks(subtasks: list[JsonObject]) -> JsonObject:
             """Atomically create a sub-DAG. Each entry has ``task_slug``
             (kebab-case identifier, persisted verbatim on the graph node),
             ``description``, required ``assigned_worker_slug``, and
@@ -144,15 +146,15 @@ class SubtaskLifecycleToolkit:
                         ),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return plan_subtasks
 
-    def _make_cancel_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_cancel_task(self) -> AsyncToolFn:
         mgmt, run_id = self._mgmt, self._run_id
 
-        async def cancel_task(node_id: str) -> dict[str, object]:
+        async def cancel_task(node_id: str) -> JsonObject:
             """Cancel a subtask. Any descendants are cancelled via engine cascade."""
             try:
                 with get_session() as session:
@@ -161,15 +163,15 @@ class SubtaskLifecycleToolkit:
                         CancelTaskCommand(run_id=run_id, node_id=NodeId(UUID(node_id))),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return cancel_task
 
-    def _make_refine_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_refine_task(self) -> AsyncToolFn:
         mgmt, run_id = self._mgmt, self._run_id
 
-        async def refine_task(node_id: str, new_description: str) -> dict[str, object]:
+        async def refine_task(node_id: str, new_description: str) -> JsonObject:
             """Refine a subtask's description. Allowed on any status except RUNNING.
 
             Pairs with ``restart_task`` for the edit-then-rerun flow: call
@@ -187,15 +189,15 @@ class SubtaskLifecycleToolkit:
                         ),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return refine_task
 
-    def _make_restart_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_restart_task(self) -> AsyncToolFn:
         mgmt, run_id = self._mgmt, self._run_id
 
-        async def restart_task(node_id: str) -> dict[str, object]:
+        async def restart_task(node_id: str) -> JsonObject:
             """Reset a terminal subtask back to PENDING and re-dispatch.
 
             Only nodes in terminal status (COMPLETED / FAILED / CANCELLED)
@@ -213,17 +215,17 @@ class SubtaskLifecycleToolkit:
                         ),
                     )
                 return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return restart_task
 
     # -- inspection --------------------------------------------------------
 
-    def _make_list_subtasks(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_list_subtasks(self) -> AsyncToolFn:
         inspect, run_id, pid = self._inspect, self._run_id, self._parent_node_id
 
-        async def list_subtasks() -> dict[str, object]:
+        async def list_subtasks() -> JsonObject:
             """Return the current status and output-excerpt of every direct subtask."""
             try:
                 with get_session() as session:
@@ -232,15 +234,15 @@ class SubtaskLifecycleToolkit:
                     "success": True,
                     "subtasks": [i.model_dump(mode="json") for i in infos],
                 }
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return list_subtasks
 
-    def _make_get_subtask(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_get_subtask(self) -> AsyncToolFn:
         inspect, run_id = self._inspect, self._run_id
 
-        async def get_subtask(node_id: str) -> dict[str, object]:
+        async def get_subtask(node_id: str) -> JsonObject:
             """Return the full SubtaskInfo for one node_id."""
             try:
                 with get_session() as session:
@@ -248,7 +250,7 @@ class SubtaskLifecycleToolkit:
                         session, run_id=run_id, node_id=NodeId(UUID(node_id))
                     )
                 return {"success": True, **info.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return {"success": False, "error": str(exc)}
 
         return get_subtask
@@ -259,7 +261,7 @@ def build_subtask_lifecycle_tools(
     run_id: UUID,
     parent_node_id: UUID,
     sandbox_id: str,
-) -> list[Callable[..., Any]]:  # slopcop: ignore[no-typing-any]
+) -> list[AsyncToolFn]:
     """Factory entry point for workers.
 
     Convenience wrapper so workers don't need to know about the toolkit class.

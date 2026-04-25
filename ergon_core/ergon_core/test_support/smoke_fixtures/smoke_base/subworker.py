@@ -19,20 +19,20 @@ MUST NOT call an LLM.  MUST NOT make external network calls.  MUST
 complete in under 20 seconds under normal sandbox conditions.
 """
 
-from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from ergon_core.core.providers.sandbox.manager import AsyncSandbox
+from pydantic import BaseModel
 
 
-@dataclass(frozen=True)
-class SubworkerResult:
+class SubworkerResult(BaseModel):
     """Return payload from one ``SmokeSubworker.work()`` call.
 
-    Plain value-object with positional construction; used in contract /
-    unit tests as fixture returns.  A ``pydantic.BaseModel`` here would
-    force kwargs on every test fixture for no semantic benefit.
+    Frozen value object shared by env-specific smoke subworkers and the
+    ``BaseSmokeLeafWorker`` orchestration layer.
     """
+
+    model_config = {"frozen": True}
 
     file_path: str
     probe_stdout: str

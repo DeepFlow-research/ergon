@@ -12,17 +12,17 @@ import pytest
 # Force-import the pydantic_ai openai module first, then inject the missing
 # name as a stub so that vllm_model.py can be imported cleanly.
 # ---------------------------------------------------------------------------
-import pydantic_ai.models.openai as _pai_openai  # noqa: E402
+import pydantic_ai.models.openai as _pai_openai
 
 if not hasattr(_pai_openai, "OpenAIChatModel"):
     _pai_openai.OpenAIChatModel = type("OpenAIChatModel", (), {})  # type: ignore[attr-defined]
 
-import pydantic_ai.providers.openai as _pai_providers_openai  # noqa: E402
+import pydantic_ai.providers.openai as _pai_providers_openai
 
 if not hasattr(_pai_providers_openai, "OpenAIProvider"):
     _pai_providers_openai.OpenAIProvider = type("OpenAIProvider", (), {})  # type: ignore[attr-defined]
 
-from ergon_core.core.providers.generation.vllm_model import (  # noqa: E402
+from ergon_core.core.providers.generation.vllm_model import (
     VLLMDiscoveryError,
     _discover_vllm_model_name,
 )

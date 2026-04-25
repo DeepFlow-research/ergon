@@ -6,14 +6,17 @@ registry using these identity fields.
 """
 
 from datetime import datetime
+from typing import TypeVar
 from uuid import UUID, uuid4
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.utils import utcnow as _utcnow
-from pydantic import model_validator
+from pydantic import BaseModel, model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
 
 TZDateTime = DateTime(timezone=True)
+PayloadModelT = TypeVar("PayloadModelT", bound=BaseModel)
 
 # ---------------------------------------------------------------------------
 # ExperimentDefinition
@@ -32,11 +35,11 @@ class ExperimentDefinition(SQLModel, table=True):
     # classmethod for reuse, @model_validator for fail-fast at row load.
     # Core code never reads raw dict from a JSON column.
 
-    def parsed_metadata(self) -> dict[str, object]:
+    def parsed_metadata(self) -> JsonObject:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, object]:
+    def _parse_metadata(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -68,11 +71,11 @@ class ExperimentDefinitionWorker(SQLModel, table=True):
 
     # -- JSON accessor: snapshot_json --
 
-    def parsed_snapshot(self) -> dict[str, object]:
+    def parsed_snapshot(self) -> JsonObject:
         return self.__class__._parse_snapshot(self.snapshot_json)
 
     @classmethod
-    def _parse_snapshot(cls, data: dict) -> dict[str, object]:
+    def _parse_snapshot(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"snapshot_json must be a dict, got {type(data).__name__}")
         return data
@@ -103,11 +106,11 @@ class ExperimentDefinitionEvaluator(SQLModel, table=True):
 
     # -- JSON accessor: snapshot_json --
 
-    def parsed_snapshot(self) -> dict[str, object]:
+    def parsed_snapshot(self) -> JsonObject:
         return self.__class__._parse_snapshot(self.snapshot_json)
 
     @classmethod
-    def _parse_snapshot(cls, data: dict) -> dict[str, object]:
+    def _parse_snapshot(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"snapshot_json must be a dict, got {type(data).__name__}")
         return data
@@ -137,11 +140,11 @@ class ExperimentDefinitionInstance(SQLModel, table=True):
 
     # -- JSON accessor: benchmark_instance_state --
 
-    def parsed_instance_state(self) -> dict[str, object]:
+    def parsed_instance_state(self) -> JsonObject:
         return self.__class__._parse_instance_state(self.benchmark_instance_state)
 
     @classmethod
-    def _parse_instance_state(cls, data: dict) -> dict[str, object]:
+    def _parse_instance_state(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"benchmark_instance_state must be a dict, got {type(data).__name__}")
         return data
@@ -176,23 +179,26 @@ class ExperimentDefinitionTask(SQLModel, table=True):
     )
     task_type: str | None = None
     description: str
-    task_payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    task_payload_json: JsonObject = Field(
+        default_factory=dict,
+        sa_column=Column("task_payload", JSON),
+    )
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: task_payload --
 
-    def parsed_task_payload(self) -> dict[str, object]:
-        return self.__class__._parse_task_payload(self.task_payload)
+    def task_payload_as(self, payload_model: type[PayloadModelT]) -> PayloadModelT:
+        return payload_model.model_validate(self.task_payload_json)
 
     @classmethod
-    def _parse_task_payload(cls, data: dict) -> dict[str, object]:
+    def _parse_task_payload_json(cls, data: JsonObject) -> JsonObject:
         if not isinstance(data, dict):
-            raise ValueError(f"task_payload must be a dict, got {type(data).__name__}")
+            raise ValueError(f"task_payload_json must be a dict, got {type(data).__name__}")
         return data
 
     @model_validator(mode="after")
     def _validate_task_payload(self) -> "ExperimentDefinitionTask":
-        self.__class__._parse_task_payload(self.task_payload)
+        self.__class__._parse_task_payload_json(self.task_payload_json)
         return self
 
 
