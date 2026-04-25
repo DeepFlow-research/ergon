@@ -100,7 +100,7 @@ def extract_agent_trajectories(
                 logprobs.extend([0.0] * len(result_tokens))
                 env_mask.extend([0] * len(result_tokens))
 
-        reward = reward_strategy.assign(worker_key, [], eval_scores, execution_ids=execution_ids)
+        reward = reward_strategy.assign(worker_key, eval_scores, execution_ids=execution_ids)
 
         trajectories.append(
             AgentTrajectory(

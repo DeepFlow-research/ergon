@@ -5,10 +5,9 @@ plane and external training frameworks (TRL, veRL).
 
 Core components:
 
-- ``extraction``: per-agent trajectory extraction from RunGenerationTurn rows
+- ``extraction``: per-agent trajectory extraction from RunContextEvent rows
 - ``rewards``: reward strategies for per-agent credit assignment
-- ``trl_adapter``: TRL ``rollout_func`` that fires Inngest events and reads results
-- ``polling``: DB polling utilities for waiting on episode completion
+- ``rollout_service``: service client for managed rollout execution
 """
 
 from ergon_core.api.json_types import JsonObject
@@ -26,6 +25,3 @@ Pass as ``model_settings`` when running the agent::
 
     result = await agent.run(prompt, model_settings=LOGPROB_SETTINGS)
 """
-
-# Backwards-compatible alias
-VLLM_LOGPROB_SETTINGS = LOGPROB_SETTINGS
