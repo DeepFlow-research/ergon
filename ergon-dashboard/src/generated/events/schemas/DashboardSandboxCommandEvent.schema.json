@@ -1,50 +1,23 @@
 {
-  "additionalProperties": false,
-  "description": "Emitted when a command is executed in a sandbox.",
+  "additionalProperties": true,
   "properties": {
-    "command": {
-      "title": "Command",
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
       "type": "string"
     },
-    "duration_ms": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Duration Ms"
-    },
-    "exit_code": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Exit Code"
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
     },
     "sandbox_id": {
       "title": "Sandbox Id",
       "type": "string"
     },
-    "stderr": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Stderr"
+    "command": {
+      "title": "Command",
+      "type": "string"
     },
     "stdout": {
       "anyOf": [
@@ -58,10 +31,41 @@
       "default": null,
       "title": "Stdout"
     },
-    "task_id": {
-      "format": "uuid",
-      "title": "Task Id",
-      "type": "string"
+    "stderr": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stderr"
+    },
+    "exit_code": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Exit Code"
+    },
+    "duration_ms": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ms"
     },
     "timestamp": {
       "format": "date-time",
@@ -70,6 +74,7 @@
     }
   },
   "required": [
+    "run_id",
     "task_id",
     "sandbox_id",
     "command",

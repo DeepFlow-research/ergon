@@ -15,10 +15,12 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import (
+    BLOCKED,
     CANCELLED,
     EDGE_INVALIDATED,
     EDGE_SATISFIED,
     FAILED,
+    RUNNING,
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
@@ -435,6 +437,67 @@ async def on_task_completed_by_node(
     return newly_ready
 
 
+async def _block_successors_bfs(
+    session: Session,
+    run_id: UUID,
+    seed_node_ids: set[UUID],
+    *,
+    failed_node_id: UUID,
+    terminal_status: str,
+    graph_repo: WorkflowGraphRepository,
+) -> None:
+    """BFS: propagate BLOCKED through the entire reachable subgraph.
+
+    Starts from seed_node_ids (direct successors of the failed node). When a
+    node is BLOCKED, its own outgoing edges are INVALIDATED and its successors
+    enqueued so BLOCKED propagates transitively (e.g. A→B→C, A fails → both
+    B and C become BLOCKED in one synchronous pass).
+
+    RUNNING and terminal nodes are skipped.
+    """
+    queue = list(seed_node_ids)
+    while queue:
+        target_id = queue.pop()
+        target_node = session.get(RunGraphNode, target_id)
+        if target_node is None:
+            continue
+        if target_node.status == RUNNING:
+            continue
+        if target_node.status in TERMINAL_STATUSES:
+            continue
+
+        applied = await graph_repo.update_node_status(
+            session,
+            run_id=run_id,
+            node_id=target_id,
+            new_status=BLOCKED,
+            meta=MutationMeta(
+                actor="system:propagation",
+                reason=f"dependency {failed_node_id} {terminal_status}",
+            ),
+            only_if_not_terminal=True,
+        )
+
+        if applied:
+            target_outgoing = list(
+                session.exec(
+                    select(RunGraphEdge).where(
+                        RunGraphEdge.run_id == run_id,
+                        RunGraphEdge.source_node_id == target_id,
+                    )
+                ).all()
+            )
+            for edge in target_outgoing:
+                await graph_repo.update_edge_status(
+                    session,
+                    run_id=run_id,
+                    edge_id=edge.id,
+                    new_status=EDGE_INVALIDATED,
+                    meta=_PROPAGATION_META,
+                )
+                queue.append(edge.target_node_id)
+
+
 async def on_task_completed_or_failed(
     session: Session,
     run_id: UUID,
@@ -488,46 +551,26 @@ async def on_task_completed_or_failed(
     newly_ready: list[UUID] = []
     invalidated: list[UUID] = []
 
+    if not is_success:
+        await _block_successors_bfs(
+            session,
+            run_id=run_id,
+            seed_node_ids=candidate_node_ids,
+            failed_node_id=node_id,
+            terminal_status=terminal_status,
+            graph_repo=graph_repo,
+        )
+        session.commit()
+        return newly_ready, invalidated
+
+    # SUCCESS PATH: source completed — check if candidates can become READY.
     for candidate_id in candidate_node_ids:
         candidate_node = session.get(RunGraphNode, candidate_id)
         if candidate_node is None:
             continue
-        # COMPLETED and FAILED targets are out of scope for any further
-        # action.  CANCELLED is a special case: on the success path, a
-        # CANCELLED managed subtask is eligible for re-activation when all
-        # deps complete (Phase 3).  On the failure path, we only want to
-        # invalidate the edge, not touch the already-terminal target.
         if candidate_node.status in TERMINAL_STATUSES and candidate_node.status != CANCELLED:
             continue
-        if candidate_node.status == CANCELLED and not is_success:
-            continue
 
-        if not is_success:
-            # Dynamic subtasks (parent_node_id set) are manager-owned.
-            # The manager polls via list_subtasks and decides whether to
-            # retry, cancel, or re-plan — so we leave the target PENDING
-            # and only invalidate the edge.  Static workflow nodes
-            # (parent_node_id is None) have no adaptive supervisor, so
-            # auto-cancel is the correct behaviour.
-            if candidate_node.parent_node_id is not None:
-                continue
-
-            await graph_repo.update_node_status(
-                session,
-                run_id=run_id,
-                node_id=candidate_id,
-                new_status=CANCELLED,
-                meta=MutationMeta(
-                    actor="system:propagation",
-                    reason=f"dependency {node_id} {terminal_status}",
-                ),
-                only_if_not_terminal=True,
-            )
-            invalidated.append(candidate_id)
-            continue
-
-        # Source completed — check if this candidate can become READY.
-        #
         # Eligibility:
         #   - PENDING (first activation): normal case.
         #   - CANCELLED managed subtask (parent_node_id is not None):
@@ -541,7 +584,7 @@ async def on_task_completed_or_failed(
         #     NOT re-activated — no supervisor to adapt, and the static
         #     workflow expects terminal nodes to stay terminal.
         #
-        # Everything else (COMPLETED, FAILED, RUNNING) is skipped.
+        # Everything else (COMPLETED, FAILED, RUNNING, BLOCKED) is skipped.
         status = candidate_node.status
         is_managed_subtask = candidate_node.parent_node_id is not None
         is_pending = status == TaskExecutionStatus.PENDING
@@ -601,9 +644,25 @@ def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
     return all(s in TERMINAL_STATUSES for s in statuses) and not any(s == FAILED for s in statuses)
 
 
+_SETTLED_STATUSES = TERMINAL_STATUSES | frozenset({BLOCKED})
+
+
 def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
-    """True when any graph node for this run has reached FAILED."""
+    """All nodes settled (terminal or BLOCKED) AND at least one FAILED.
+
+    BLOCKED nodes represent predecessor-failed state awaiting operator action.
+    Once all remaining work is settled — either terminal or BLOCKED with no
+    PENDING/RUNNING tasks remaining — the run cannot make further autonomous
+    progress. Treat this as a workflow failure so the RunRecord transitions to
+    FAILED and criterion evaluation fires.
+
+    BLOCKED nodes are preserved (not CANCELLED) so the operator can examine
+    them and use operator_unblock / restart_node to resume if desired.
+    """
     statuses = list(
         session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
     )
-    return any(s == TaskExecutionStatus.FAILED for s in statuses)
+    if not statuses:
+        return False
+    all_settled = all(s in _SETTLED_STATUSES for s in statuses)
+    return all_settled and any(s == FAILED for s in statuses)

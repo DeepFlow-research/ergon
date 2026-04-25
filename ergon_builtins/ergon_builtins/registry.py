@@ -37,7 +37,7 @@ log = structlog.get_logger()
 
 # -- Start from core (always available) ------------------------------------
 
-WORKERS: dict[str, type[Worker]] = {**_core_workers}
+WORKERS: dict[str, Callable[..., Worker]] = {**_core_workers}
 BENCHMARKS: dict[str, type[Benchmark]] = {**_core_benchmarks}
 EVALUATORS: dict[str, type[Evaluator]] = {**_core_evaluators}
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {**_core_sandbox_managers}

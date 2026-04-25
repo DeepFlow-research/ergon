@@ -10,6 +10,7 @@ from typing import ClassVar
 import inngest
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
 from ergon_core.api.experiment import Experiment
+from ergon_core.api.worker_spec import WorkerSpec
 from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.events.base import InngestEventContract
 from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
@@ -62,20 +63,28 @@ async def benchmark_run_start_fn(ctx: inngest.Context) -> BenchmarkRunStartResul
     benchmark_cls = BENCHMARKS.get(payload.benchmark_slug)
     if benchmark_cls is None:
         raise RegistryLookupError("benchmark", payload.benchmark_slug)
-    worker_cls = WORKERS.get(payload.worker_slug)
-    if worker_cls is None:
+
+    # reason: RFC 2026-04-22 §1 — config-time composition uses ``WorkerSpec``;
+    # the registry is only hit here to validate the slug so we fail fast with
+    # a ``RegistryLookupError`` instead of a late ``KeyError`` at execute.
+    if payload.worker_slug not in WORKERS:
         raise RegistryLookupError("worker", payload.worker_slug)
+
     evaluator_cls = EVALUATORS.get(payload.evaluator_slug)
     if evaluator_cls is None:
         raise RegistryLookupError("evaluator", payload.evaluator_slug)
 
     benchmark = benchmark_cls()
-    worker = worker_cls(name="worker", model=payload.model)
+    worker_spec = WorkerSpec(
+        worker_slug=payload.worker_slug,
+        name="worker",
+        model=payload.model,
+    )
     evaluator = evaluator_cls(name="evaluator")
 
     experiment = Experiment.from_single_worker(
         benchmark=benchmark,
-        worker=worker,
+        worker=worker_spec,
         evaluators={"default": evaluator},
     )
     persisted = experiment.persist()

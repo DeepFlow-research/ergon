@@ -1,9 +1,50 @@
+# Unified docker-compose: one file for local dev, CI, and the real-LLM
+# harness tier.
+#
+# The three previous overlays (docker-compose.{ci,real-llm}.yml) are
+# replaced by env-var substitution + optional service profiles.  Same
+# set of core services (postgres + api + dashboard + inngest-dev) runs
+# everywhere; only the secrets/passwords/profiles change per caller.
+#
+# Usage
+# -----
+#
+# Local dev (defaults — dashboard + api hot-reload, observability off):
+#
+#     docker compose up -d
+#
+# CI (ephemeral postgres password; minimal set; BuildKit GHA cache):
+#
+#     POSTGRES_PASSWORD=ci_test \
+#     TEST_HARNESS_SECRET="$GH_SECRET" \
+#     docker compose up -d postgres api inngest-dev dashboard
+#
+# Real-LLM harness (dedicated secret + provider keys):
+#
+#     POSTGRES_PASSWORD=ergon \
+#     TEST_HARNESS_SECRET=real-llm-secret \
+#     OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
+#     docker compose up -d
+#
+# Observability stack (otel + jaeger) on demand:
+#
+#     docker compose --profile observability up -d
+#
+# Service port conventions (host:container):
+#   postgres    5433:5432
+#   api         9000:9000
+#   dashboard   3001:3000
+#   inngest-dev 8289:8288
+#
+# All of the above can be overridden via env vars without editing this
+# file (see the ``${VAR:-default}`` forms).
+
 services:
   postgres:
     image: postgres:15
     environment:
       POSTGRES_USER: ergon
-      POSTGRES_PASSWORD: ergon_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ergon_dev}
       POSTGRES_DB: ergon
     ports:
       - "5433:5432"
@@ -11,35 +52,79 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ergon"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      interval: 2s
+      timeout: 3s
+      retries: 10
 
   api:
     build:
       context: .
       dockerfile: Dockerfile
+      # BuildKit GHA cache: CI passes these through via buildx.  Local
+      # developers get a no-op (``type=gha`` is only honoured when the
+      # buildx GHA-cache endpoints are present, which GitHub Actions
+      # sets automatically).  No local setup required.
+      cache_from:
+        - type=gha,scope=ergon-api
+      cache_to:
+        - type=gha,scope=ergon-api,mode=max
+    image: ergon-api:local
     ports:
       - "9000:9000"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      - ERGON_DATABASE_URL=postgresql://ergon:ergon_dev@postgres:5432/ergon
+      - ERGON_DATABASE_URL=postgresql://ergon:${POSTGRES_PASSWORD:-ergon_dev}@postgres:5432/ergon
       - INNGEST_DEV=1
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
+      - ERGON_API_BASE_URL=http://api:9000
+      - ENABLE_TEST_HARNESS=${ENABLE_TEST_HARNESS:-1}
+      - TEST_HARNESS_SECRET=${TEST_HARNESS_SECRET:-local-dev}
+      - ERGON_BLOB_ROOT=/tmp/ergon-blob
       - OTEL_TRACES_ENABLED=false
       - OTEL_SERVICE_NAME=ergon-core
+      - E2B_API_KEY=${E2B_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Put /app on sys.path so ``tests.e2e._fixtures`` resolves when
+      # ``ENABLE_TEST_HARNESS=1`` imports it on startup (see
+      # ``ergon_core/core/api/app.py``).  Narrow purpose — the api
+      # container only reaches into that one subpackage, host-side
+      # pytest is still the test orchestrator.
+      - PYTHONPATH=/app
+      # Unbuffered Python stdio so ``docker compose logs api`` streams
+      # logger output as it happens.  Default (buffered) hides
+      # exceptions behind the uvicorn worker's output queue for many
+      # seconds, turning any "why is this stuck" investigation into a
+      # long stare at stale logs.
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Source mounts: support ``--reload`` in dev.  Harmless in CI —
+      # the same source is on the runner's filesystem from ``checkout``.
+      - ./ergon_core:/app/ergon_core
+      - ./ergon_builtins:/app/ergon_builtins
+      - ./data:/app/data
+      # Smoke fixtures (``tests/e2e/_fixtures``) define workers +
+      # evaluators that the api's Inngest executor must be able to
+      # resolve when ``ENABLE_TEST_HARNESS=1``.  Bind-mounted (not
+      # baked into the image) so production builds ship no test code.
+      - ./tests:/app/tests
+      # Blob store bind mount so host-side pytest can read files the
+      # SandboxResourcePublisher writes from inside the container.  The
+      # mount uses the same path on both sides so the DB-stored
+      # ``file_path`` (computed from ``ERGON_BLOB_ROOT``) resolves on
+      # both ends.
+      - /tmp/ergon-blob:/tmp/ergon-blob
     depends_on:
       postgres:
         condition: service_healthy
     command: >
-      sh -c "uvicorn ergon_core.core.api.app:app --host 0.0.0.0 --port 9000 --reload
-      --reload-dir /app/ergon_core --reload-dir /app/ergon_builtins"
-    volumes:
-      - ./ergon_core:/app/ergon_core
-      - ./ergon_builtins:/app/ergon_builtins
-      - ./data:/app/data
+      uvicorn ergon_core.core.api.app:app
+      --host 0.0.0.0 --port 9000 --reload
+      --reload-dir /app/ergon_core
+      --reload-dir /app/ergon_builtins
+      --timeout-graceful-shutdown 30
 
   dashboard:
     build:
@@ -54,6 +139,7 @@ services:
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
       - WATCHPACK_POLLING=true
+      - NEXT_PUBLIC_ENABLE_TEST_HARNESS=${ENABLE_TEST_HARNESS:-1}
     depends_on:
       - inngest-dev
       - api
@@ -77,7 +163,12 @@ services:
       api:
         condition: service_started
 
+  # -- Observability stack (opt-in via ``--profile observability``) ---
+  #
+  # Not started by default.  Enables OTel trace export to Jaeger for
+  # debugging runtime + execution ordering.
   otel-collector:
+    profiles: ["observability"]
     image: otel/opentelemetry-collector-contrib:latest
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
@@ -86,6 +177,7 @@ services:
       - "4319:4317"
 
   jaeger:
+    profiles: ["observability"]
     image: jaegertracing/all-in-one:latest
     ports:
       - "16687:16686"

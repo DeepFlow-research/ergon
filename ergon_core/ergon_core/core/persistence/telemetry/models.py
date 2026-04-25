@@ -9,6 +9,17 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
+from ergon_core.core.persistence.shared.enums import (
+    RunStatus,
+    TaskExecutionStatus,
+    TrainingStatus,
+)
+from ergon_core.core.utils import utcnow as _utcnow
+from pydantic import model_validator
+import sqlalchemy as sa
+from sqlalchemy import JSON, Column, DateTime
+from sqlmodel import Field, SQLModel
+
 if TYPE_CHECKING:
     from ergon_core.core.persistence.telemetry.evaluation_summary import (
         EvaluationSummary,
@@ -18,23 +29,19 @@ if TYPE_CHECKING:
         ToolResult,
     )
 
-from ergon_core.core.persistence.shared.enums import (
-    RunStatus,
-    TaskExecutionStatus,
-    TrainingStatus,
-)
-from ergon_core.core.utils import utcnow as _utcnow
-from pydantic import model_validator
-from sqlalchemy import JSON, Column, DateTime
-from sqlmodel import Field, SQLModel
-
 TZDateTime = DateTime(timezone=True)
+
+# model_validator(mode="after") fires on model_validate() but NOT on direct
+# SQLModel table model construction (SQLModel's __init__ bypasses Pydantic
+# for table=True). Validators here protect the API/deserialization boundary.
 
 # ---------------------------------------------------------------------------
 # Type aliases
 # ---------------------------------------------------------------------------
 
 ExecutionOutcome = Literal["success", "failure"]
+
+_VALID_OUTCOMES = frozenset({"success", "failure"})
 
 # ---------------------------------------------------------------------------
 # Cohort status enum
@@ -83,8 +90,15 @@ class RunRecord(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_summary_json(self) -> "RunRecord":
+    def _validate_fields(self) -> "RunRecord":
         self.__class__._parse_summary(self.summary_json)
+        try:
+            RunStatus(self.status)
+        except ValueError:
+            raise ValueError(
+                f"{self.status!r} is not a valid RunStatus; "
+                f"valid values: {[e.value for e in RunStatus]}"
+            )
         return self
 
 
@@ -117,7 +131,7 @@ class RunTaskExecution(SQLModel, table=True):
     status: TaskExecutionStatus = Field(index=True)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-    output_text: str | None = None
+    final_assistant_message: str | None = None
     output_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     error_json: dict | None = Field(default=None, sa_column=Column(JSON))
 
@@ -131,11 +145,6 @@ class RunTaskExecution(SQLModel, table=True):
         if not isinstance(data, dict):
             raise ValueError(f"output_json must be a dict, got {type(data).__name__}")
         return data
-
-    @model_validator(mode="after")
-    def _validate_output_json(self) -> "RunTaskExecution":
-        self.__class__._parse_output(self.output_json)
-        return self
 
     # -- JSON accessor: error_json (nullable) --
 
@@ -151,8 +160,16 @@ class RunTaskExecution(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_error_json(self) -> "RunTaskExecution":
+    def _validate_fields(self) -> "RunTaskExecution":
+        self.__class__._parse_output(self.output_json)
         self.__class__._parse_error(self.error_json)
+        try:
+            TaskExecutionStatus(self.status)
+        except ValueError:
+            raise ValueError(
+                f"{self.status!r} is not a valid TaskExecutionStatus; "
+                f"valid values: {[e.value for e in TaskExecutionStatus]}"
+            )
         return self
 
 
@@ -230,8 +247,15 @@ class RunResource(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_metadata_json(self) -> "RunResource":
+    def _validate_fields(self) -> "RunResource":
         self.__class__._parse_metadata(self.metadata_json)
+        try:
+            RunResourceKind(self.kind)
+        except ValueError:
+            raise ValueError(
+                f"{self.kind!r} is not a valid RunResourceKind; "
+                f"valid values: {[e.value for e in RunResourceKind]}"
+            )
         return self
 
 
@@ -262,7 +286,7 @@ class RunTaskEvaluation(SQLModel, table=True):
     # -- JSON accessor: summary_json --
 
     def parsed_summary(self) -> "EvaluationSummary":
-        # Deferred: avoid circular import
+        # reason: breaks import cycle — evaluation_summary imports RunTaskEvaluation for type hints
         from ergon_core.core.persistence.telemetry.evaluation_summary import (
             EvaluationSummary,
         )
@@ -307,8 +331,15 @@ class ExperimentCohort(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_metadata_json(self) -> "ExperimentCohort":
+    def _validate_fields(self) -> "ExperimentCohort":
         self.__class__._parse_metadata(self.metadata_json)
+        try:
+            ExperimentCohortStatus(self.status)
+        except ValueError:
+            raise ValueError(
+                f"{self.status!r} is not a valid ExperimentCohortStatus; "
+                f"valid values: {[e.value for e in ExperimentCohortStatus]}"
+            )
         return self
 
 
@@ -342,6 +373,7 @@ class ExperimentCohortStats(SQLModel, table=True):
 
 class Thread(SQLModel, table=True):
     __tablename__ = "threads"
+    __table_args__ = (sa.UniqueConstraint("run_id", "topic", name="uq_threads_run_topic"),)
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
@@ -460,6 +492,11 @@ class RunGenerationTurn(SQLModel, table=True):
     def _validate_json_columns(self) -> "RunGenerationTurn":
         if not isinstance(self.raw_response, dict):
             raise ValueError(f"raw_response must be a dict, got {type(self.raw_response).__name__}")
+        if self.execution_outcome is not None and self.execution_outcome not in _VALID_OUTCOMES:
+            raise ValueError(
+                f"{self.execution_outcome!r} is not a valid execution_outcome; "
+                f"valid values: {sorted(_VALID_OUTCOMES)}"
+            )
         return self
 
 
@@ -490,6 +527,17 @@ class TrainingSession(SQLModel, table=True):
     output_dir: str | None = None
     total_steps: int | None = None
     final_loss: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_fields(self) -> "TrainingSession":
+        try:
+            TrainingStatus(self.status)
+        except ValueError:
+            raise ValueError(
+                f"{self.status!r} is not a valid TrainingStatus; "
+                f"valid values: {[e.value for e in TrainingStatus]}"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -525,6 +573,8 @@ class TrainingMetric(SQLModel, table=True):
 # RolloutBatch — durable batch state for the rollout service
 # ---------------------------------------------------------------------------
 
+_VALID_BATCH_STATUSES = frozenset({"pending", "running", "complete", "failed", "cancelled"})
+
 
 class RolloutBatch(SQLModel, table=True):
     """One rollout batch submitted by the RL trainer.
@@ -540,6 +590,15 @@ class RolloutBatch(SQLModel, table=True):
     status: str = Field(default="pending", index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
+    @model_validator(mode="after")
+    def _validate_fields(self) -> "RolloutBatch":
+        if self.status not in _VALID_BATCH_STATUSES:
+            raise ValueError(
+                f"{self.status!r} is not a valid RolloutBatch status; "
+                f"valid values: {sorted(_VALID_BATCH_STATUSES)}"
+            )
+        return self
+
 
 class RolloutBatchRun(SQLModel, table=True):
     """Join table: which runs belong to which batch."""
@@ -549,3 +608,57 @@ class RolloutBatchRun(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     batch_id: UUID = Field(foreign_key="rollout_batches.id", index=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
+
+
+# ---------------------------------------------------------------------------
+# SandboxCommandWalEntry — append-only log of bash commands run in a sandbox
+# ---------------------------------------------------------------------------
+
+
+class SandboxCommandWalEntry(SQLModel, table=True):
+    """One row per bash command emitted by ``SandboxEventSink.sandbox_command``.
+
+    ``run_id`` is indexed but carries no FK constraint — the sandbox.closed
+    synthetic WAL entry may arrive with run_id=task_id due to a pre-existing
+    quirk in the manager's teardown sequence.  Queries should filter by
+    run_id; rows with an unexpected run_id will simply not appear.
+    """
+
+    __tablename__ = "sandbox_command_wal_entries"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    run_id: UUID = Field(index=True)
+    task_id: UUID = Field(index=True)
+    sandbox_id: str = Field(index=True)
+    command: str
+    stdout: str | None = None
+    stderr: str | None = None
+    exit_code: int | None = None
+    duration_ms: int | None = None
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+
+# ---------------------------------------------------------------------------
+# SandboxEvent — sandbox_created / sandbox_closed lifecycle events
+# ---------------------------------------------------------------------------
+
+
+class SandboxEvent(SQLModel, table=True):
+    """One row per sandbox lifecycle event emitted by ``SandboxEventSink``.
+
+    ``kind`` is one of ``"sandbox_created"`` or ``"sandbox_closed"``.
+    ``run_id`` carries no FK — same teardown-sequence caveat as
+    ``SandboxCommandWalEntry``.
+    """
+
+    __tablename__ = "sandbox_events"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    run_id: UUID = Field(index=True)
+    task_id: UUID = Field(index=True)
+    sandbox_id: str = Field(index=True)
+    kind: str
+    timeout_minutes: int | None = None
+    template: str | None = None
+    reason: str | None = None
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

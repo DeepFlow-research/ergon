@@ -2,147 +2,176 @@
 
 ## 1. Purpose
 
-Describe the testing posture of Ergon: what each tier is for, what a green
-run implies about production correctness, and where the current layout
-diverges from where the system owner has decided to take it.
+Describe Ergon's standing testing posture: four tiers with non-overlapping roles, a canonical smoke program that every PR runs against real E2B + real Postgres, and the handoff contracts between layers (criteria, runtime, dashboard). A green CI run implies production correctness for everything except non-deterministic model behaviour, which lives in its own tier.
 
-The central design question at this layer is **fidelity vs. speed**: a
-fast tier that bypasses Inngest and Postgres tests code paths that do not
-match production. The target posture trades broad-surface-at-wrong-layer
-for narrower-surface-at-right-layer.
+Transition history + rationale behind this posture live in [`docs/superpowers/plans/test-refactor/`](../superpowers/plans/test-refactor/) (delete that folder after the standing system has been running for a week).
 
-## 2. Core abstractions
+## 2. Tiers
 
-Three tiers, separated by filesystem path (not pytest markers):
+Path-based, not marker-based. The local gate and the CI workflow both dispatch by directory.
 
-- **Fast tier** — in-memory SQLite, direct service-class calls, no Inngest,
-  no Docker. Covers graph propagation, context assembly, repository
-  behavior, RL extraction, state-machine scenarios, and pure-logic
-  helpers. Split today between `tests/state/` (unit-ish + service) and
-  `tests/integration/` (same stack plus a stub worker through the
-  pipeline).
-- **E2E tier** (`tests/e2e/`) — full Docker stack: Postgres, Inngest dev
-  server, FastAPI app. `StubWorker` + `StubRubric` by default; real E2B
-  enabled on `feature/*` branches.
-- **Frontend e2e** (`ergon-dashboard/tests/e2e/`) — Playwright. Not wired
-  into CI yet.
+| Tier | Path | Infra | CI trigger | Proves |
+|------|------|-------|------------|--------|
+| **Unit** | `tests/unit/` | None — no I/O, no fixtures | every PR (`ci-fast.yml`) | Pure logic: Pydantic, validators, registry wiring, pure functions, static lints |
+| **Integration** | `tests/integration/` | Real Postgres 15 + real Inngest dev server (docker-compose.ci.yml) | every PR (`ci-fast.yml`) | Graph / service / persistence semantics; API boundaries; harness round-trips |
+| **E2E smoke** | `tests/e2e/` | Full Docker stack + **real E2B** + dashboard + Playwright | every PR (`e2e-benchmarks.yml` matrix) | Cross-service + cross-process + UI truth; sandbox provisioning at volume; cohort-parallel scheduling; partial-work persistence on FAILED tasks |
+| **Real-LLM** | `tests/real_llm/` | As e2e + real model calls, budget-gated | on demand + nightly | Non-deterministic model behaviour; RL trajectory extraction |
 
-Tier boundaries are paths, not markers. This is load-bearing: the local
-gate and the CI workflow both dispatch by directory.
+`@pytest.mark.slow` is available for local dev ergonomics only; CI runs everything in-tier.
 
-### Code map
+**Decision rule.** Pure function / validator / pydantic model / registry key → unit. Exercises graph, persistence, or an HTTP boundary → integration. Needs sandbox + dashboard + UI → e2e smoke. Needs LLM → real-llm.
 
-| Tier | Location | Infra |
-|------|----------|-------|
-| Fast — graph/service | `tests/state/` | SQLite, no Inngest |
-| Fast — stub-worker pipeline | `tests/integration/` | SQLite, no Inngest |
-| E2E | `tests/e2e/` | Docker + Inngest + optional E2B |
-| Frontend | `ergon-dashboard/tests/e2e/` | Playwright (not in CI) |
+## 3. Canonical smoke program
 
-## 3. Control flow — choosing a tier
+Every PR runs three benchmark legs in parallel via `.github/workflows/e2e-benchmarks.yml`:
+
+| Leg | Slot 1 | Slot 2 | Slot 3 |
+|---|---|---|---|
+| `researchrubrics` | happy | happy | **sad** — `l_2` forced FAIL |
+| `minif2f` | happy | happy | happy |
+| `swebench-verified` | happy | happy | happy |
+
+**9 top-level runs per PR; 80 leaf sandbox acquisitions** (8 happy × 9 leaves + 1 sad × 8 leaves — `l_3` never provisioned because its dependency failed).
+
+### 3.1 Immutable 9-leaf DAG
+
+Every smoke run — happy or sad — spawns exactly this graph:
 
 ```
-Pure function / validator / Pydantic model?
-    yes -> fast tier
-    no  -> next
-
-Drives graph state or service-class behavior, no Inngest runtime?
-    yes -> fast tier
-    no  -> next
-
-Needs Docker, Inngest dev server, or a sandbox?
-    yes -> tests/e2e/ (feature-branch CI only)
+Diamond (4):           Line (3):               Singletons (2):
+    d_root             l_1 → l_2 → l_3             s_a     s_b
+   ↙      ↘
+d_left   d_right
+   ↘      ↙
+    d_join
 ```
 
-The canonical local gate is `pnpm run check:fast && pnpm run test:be:fast`.
-CI mirrors it for the fast tier; the e2e workflow runs on
-`workflow_dispatch` or `feature/*` branches only.
+Topology is enforced by `tests/e2e/_fixtures/smoke_base/worker_base.py::SmokeWorkerBase.execute` being decorated `@typing.final`. Subclasses supply the leaf slug via `leaf_slug` and (optionally) override `_spec_for(slug, deps, desc)` to route specific slugs elsewhere — the sad-path subclass uses this to route `l_2` to a failing leaf. They cannot change the DAG itself.
 
-## 4. Invariants
+The single source of truth for topology is [`tests/e2e/_fixtures/smoke_base/constants.py`](../../tests/e2e/_fixtures/smoke_base/constants.py):
 
-- The fast tier must stay fast enough to be the "ready for review" gate.
-  If it needs Docker, Postgres, or an Inngest runtime, it does not belong
-  in the fast tier.
-- Tier boundaries are filesystem paths. No pytest markers.
-- State tests do not read `RunTaskStateEvent` (deprecated). Assertions go
-  through `RunGraphMutation` or `RunGraphNode.status`.
-- State tests assert against service-class return values or graph
-  mutation shapes, never direct DB writes.
-- E2E tests must not mock the LLM (the point of e2e is to catch
-  provider-layer regressions). A pre-scripted smoke is the only
-  exception.
-- A contract test asserts criterion source files do not instantiate any
-  `SandboxManager` directly. The placeholder currently fails against
-  `ergon_builtins/benchmarks/swebench_verified/criterion.py:72` —
-  documented gap; the fix is scoped to the criterion-runtime-DI RFC.
+```python
+EXPECTED_SUBTASK_SLUGS = (
+    "d_root", "d_left", "d_right", "d_join",
+    "l_1", "l_2", "l_3",
+    "s_a", "s_b",
+)
+```
 
-## 5. Extension points
+### 3.2 Fixture residency — test-only, out of `ergon_builtins`
 
-- **New unit-level test** — place alongside the code under test, or in
-  the fast tier. No I/O fixtures.
-- **New integration test** — fast tier today. Drive through service
-  classes. Post-reset, drive through the Inngest event API against real
-  Postgres.
-- **New e2e test** — `tests/e2e/`. Must run against the Docker + E2B
-  stack. Feature-branch CI gate.
-- **New Playwright test** — `ergon-dashboard/tests/e2e/`. Wiring into CI
-  is an open follow-up.
-- **New benchmark** — once the smoke pattern lands (see §7), every
-  benchmark will be required to ship a paired smoke test; enforced by a
-  discovery test that walks the registry.
+`ergon_builtins/` contains only production baselines (ReActWorker, TrainingStubWorker). All smoke workers, leaves, and criteria live under [`tests/e2e/_fixtures/`](../../tests/e2e/_fixtures/) and register into the process-level `WORKERS` / `EVALUATORS` dicts via an import side-effect in `tests/e2e/_fixtures/__init__.py`, which `tests/e2e/conftest.py` imports at session start.
 
-## 6. Anti-patterns
+11 registry rows total — none production:
 
-- **State-machine assertions via direct DB writes.** Tests must drive
-  the same path production takes.
-- **Pushing a Postgres-requiring test into the fast tier.** Breaks the
-  speed guarantee the tier is built around.
-- **Reading `RunTaskStateEvent` from any test.** Deprecated table.
-- **Fast-tier state tests that skip Inngest when production does not.**
-  This is the root cause motivating the posture-reset follow-up: a green
-  test that bypasses the production event path claims correctness it
-  cannot support.
-- **Mocking the LLM in e2e.** Defeats the purpose of the tier.
+| Slug | Kind |
+|---|---|
+| `{env}-smoke-worker` × 3 | Worker (parent) — inherits `SmokeWorkerBase` |
+| `{env}-smoke-leaf` × 3 | Worker (leaf) — inherits `BaseSmokeLeafWorker` |
+| `researchrubrics-sadpath-smoke-worker` | Worker (sad-path parent) |
+| `researchrubrics-smoke-leaf-failing` | Worker (sad-path failing leaf) |
+| `{env}-smoke-criterion` × 3 | Criterion — inherits `SmokeCriterionBase` |
 
-## 7. Follow-ups
+where `{env} ∈ {researchrubrics, minif2f, swebench}`.
 
-The system owner has decided to retire the fast tier in favor of a single
-real-infrastructure integration tier (Postgres + Inngest dev server +
-stub workers), keeping a pure-logic `tests/unit/` tier beside it. The
-driving invariant under this plan: **tests that exercise graph semantics
-MUST run against real Postgres and real Inngest.** Path-based tier
-boundaries are preserved. CI budgets shift from seconds to minutes.
+### 3.3 Turn persistence
 
-Paired shifts under the same planning arc:
+- Parent `SmokeWorkerBase.execute` yields **3** `GenerationTurn`s (planning → planned → awaiting) so incremental turn persistence is exercised on every run.
+- Each leaf `BaseSmokeLeafWorker.execute` yields **2** turns (attaching → done).
+- Total per happy run: **1 × 3 + 9 × 2 = 21** `GenerationTurn` rows; driver asserts on this.
 
-- A per-benchmark smoke pattern at
-  `tests/integration/smokes/test_<slug>_smoke.py`, using a shared
-  fixed-delegation stub worker to exercise a complex-enough subgraph.
-- Test-harness endpoints (`/api/test/read/*`, `/api/test/write/*`) that
-  mount only when `ENABLE_TEST_HARNESS=1`, so Playwright can assert
-  backend state inside a single test invocation. Writes gated by
-  `X-Test-Secret`.
-- Two contract tests migrated from the dashboard layer: every
-  `DashboardEmitter` method must have a non-trivial call site, and every
-  `RunGraphMutation.kind` must have a matching TypeScript reducer.
+### 3.4 Inter-agent messaging
 
-Tracking:
+Each happy-path leaf calls `CommunicationService.save_message` once on the `smoke-completion` thread (first production caller of that service). 9 `ThreadMessage` rows per happy run, sequence_num 1..9 per thread. Sad-path `l_2` raises before reaching this call — 8 messages on a sad run, with `l_2` missing.
 
-- `docs/rfcs/active/2026-04-18-testing-posture-reset.md`
-- `docs/rfcs/active/2026-04-18-fixed-delegation-stub-worker.md`
-- `docs/rfcs/active/2026-04-18-test-harness-endpoints.md`
-- `docs/rfcs/active/2026-04-18-dashboard-event-wiring-enforcement.md`
-- `docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md`
-- `docs/bugs/open/2026-04-18-ci-docker-caching.md` — Docker rebuild cost
-  becomes load-bearing once the integration tier hits real infra on
-  every PR.
+### 3.5 Sandbox-side checks
 
-**Sandbox test strategy.** No in-memory fake sandbox. Tests that need
-sandbox behavior use real E2B against a pre-warmed template. Rationale:
-E2B is cheap and fast; a fake is an unnecessary maintenance surface.
+The criterion's `_verify_sandbox_setup` hook runs a trivial env-specific command in the parent task's live sandbox via `context.runtime.run_command(...)` (per RFC `2026-04-17-criterion-runtime-di-container`, accepted). The sandbox is kept alive through criterion execution per RFC `2026-04-17-sandbox-lifetime-covers-criteria`. Per env:
 
-**Coverage.** Untracked. No thresholds set, none enforced. Documented
-here so silence is not read as a target; any change is RFC-scoped.
+- **researchrubrics** — bash + coreutils + `/tmp` writability (echo → wc -l → OK marker).
+- **minif2f** — `lean --check` of `theorem health_check : True := trivial`. No `|| true`; toolchain breakage fails loudly.
+- **swebench** — `python` runs a HEALTH_OK marker + `import pytest` resolves.
 
-**Frontend e2e wiring.** Playwright lives in the repo but is not wired
-into CI. Wiring it in is part of the integration-tier rebuild.
+## 4. Per-run assertion surface
+
+For each run in a cohort, the pytest driver asserts:
+
+| Channel | What it checks |
+|---|---|
+| `RunGraphNode` | 10 nodes (1 root + 9 leaves); all COMPLETED (happy) or cascade pattern (sad); `sorted(slugs) == EXPECTED_SUBTASK_SLUGS` |
+| `RunGraphEdge` | 6 expected dependency edges (diamond + line) |
+| `RunResource` | ≥ 18 rows (9 outputs + 9 probes); all with non-empty `content_hash` |
+| `GenerationTurn` | Exactly 21 rows per happy run (derived from `PARENT_TURN_COUNT + 9 × LEAF_TURN_COUNT`) |
+| `ThreadMessage` (topic `smoke-completion`) | 9 messages per happy run / 8 per sad; `sequence_num` strictly 1..N |
+| Blob store round-trip | Re-read of one probe JSON is byte-stable + parses |
+| Temporal ordering | `RunTaskExecution.started_at` of children ≥ `completed_at` of parents |
+| `RunTaskEvaluation` | Exactly 1 row; score 1.0 (happy) / 0.0 (sad); failed slug named in sad feedback |
+
+Sad-path adds: partial artifact persisted (partial_*.md exists as RunResource), pre-failure WAL entry present, `l_3` status BLOCKED/CANCELLED per RFC `static-sibling-failure-semantics`.
+
+## 5. Harness
+
+`/api/test/*` FastAPI router at [`ergon_core/core/api/test_harness.py`](../../ergon_core/ergon_core/core/api/test_harness.py). Mounted only when `ENABLE_TEST_HARNESS=1`; write endpoints additionally gated by `X-Test-Secret: ${TEST_HARNESS_SECRET}`.
+
+Read endpoints (Playwright + pytest consume):
+
+| Endpoint | Shape |
+|---|---|
+| `GET /api/test/read/run/{run_id}/state` | `TestRunStateDto` — graph nodes, mutations, evaluations, resource count |
+| `GET /api/test/read/cohort/{cohort_key}/runs` | `[{run_id, status}]` — returns empty list on miss (not 404) for cheap polling |
+
+Write endpoints (`POST /write/run/seed`, `POST /write/reset`) are dashboard-fixture scaffolding; smoke does not use them.
+
+`tests/e2e/_asserts.py::wait_for_terminal` polls the read endpoint every 2s until `status ∈ {completed, failed, cancelled}`.
+
+## 6. Dashboard + Playwright
+
+Per leg, the pytest driver subprocesses `pnpm --dir ergon-dashboard exec playwright test tests/e2e/{env}.smoke.spec.ts`, passing cohort state via env vars:
+
+- `COHORT_KEY`, `SCREENSHOT_DIR`, `TEST_HARNESS_SECRET`, `ERGON_API_BASE_URL`
+- `SMOKE_COHORT_JSON` — JSON array of `[{run_id, kind}]` enabling per-kind dispatch in the Playwright spec
+
+Per-env spec is a 3-line file that delegates to the shared factory at `ergon-dashboard/tests/e2e/_shared/smoke.ts`. The factory iterates the cohort array, asserts against the backend harness DTO + the dashboard UI (keyed on `data-testid`), and captures screenshots per-run. The harness access goes through `ergon-dashboard/tests/helpers/backendHarnessClient.ts`.
+
+Required `data-testid` attributes: `run-status`, `task-node-{slug}` (one per `EXPECTED_SUBTASK_SLUGS`), `graph-canvas`, `cohort-run-row`, `cohort-env-label`.
+
+## 7. CI workflow
+
+[`.github/workflows/e2e-benchmarks.yml`](../../.github/workflows/e2e-benchmarks.yml):
+
+- Trigger: `pull_request` + `workflow_dispatch`.
+- Matrix: `env ∈ {researchrubrics, minif2f, swebench-verified}`.
+- Per leg: `docker compose up --build --wait` with BuildKit GHA cache (`cache_from/cache_to: type=gha`) → `ci/wait_for_stack.sh` → dashboard prod build + start → `ci/wait_for_dashboard.sh` → Playwright install (cached) → `uv run pytest tests/e2e/test_{env}_smoke.py --timeout=270`.
+- Per leg: 10-min job timeout; pytest hard ceiling 5 min (RFC).
+- Screenshot upload runs `if: always()` so dashboard state is captured even on failure: `ci/push_screenshots.sh` pushes PNGs to the orphan branch `screenshots/pr-{N}`; `ci/pr_comment_screenshots.sh` posts a markdown comment linking them.
+- `cleanup-screenshots.yml` deletes the branch on PR close.
+
+## 8. Invariants
+
+1. **Topology is identical across all envs.** Enforced by `@final` on `SmokeWorkerBase.execute`. Tested by `tests/unit/smoke_base/test_smoke_worker_base_final.py`.
+2. **No LLM calls on the smoke path.** Enforced by convention + grep: `rg 'OPENROUTER|anthropic|openai|pydantic_ai' tests/e2e/` must return zero.
+3. **Test stubs live in `tests/e2e/_fixtures/`, not `ergon_builtins/`.** Production registry (`ergon_builtins/registry_core.py`) contains only production baselines. Exception: `training_stub_worker.py` — it's a real RL-trajectory baseline, not test scaffolding; operators invoke it via CLI.
+4. **Criteria reconnect via the CriterionRuntime DI container, never via `AsyncSandbox.connect` directly.** Enforced by code inspection; the anti-pattern previously fixed by `bugs/fixed/2026-04-18-swebench-criterion-spawns-sandbox.md`.
+5. **Sandbox outlives the task until all criteria finish.** RFC `sandbox-lifetime-covers-criteria`. Smoke is the living regression test for this.
+6. **Cohort parallelism exercised on every PR.** 3-run cohorts prove concurrent workflow submission and cohort aggregation at the scale smoke uses.
+7. **Partial work persists on FAILED leaves.** Sad-path `AlwaysFailSubworker` writes a file + runs a probe command, then raises. Driver asserts the partial artifact and pre-failure WAL entry survive.
+
+## 9. Budget
+
+| Measure | Value |
+|---|---|
+| Per matrix leg | 10-min job timeout; 5-min pytest timeout |
+| Leaf-subtask sandbox acquisitions per leg | 26 or 27 (researchrubrics has 26 because the sad slot skips `l_3`) |
+| Leaf-subtask sandbox acquisitions per PR | 80 across 3 sandbox images |
+| Parent-task sandbox per run | 1 (used by parent worker + attached to by the criterion). Not additional at evaluation time. |
+| Parallel workflow runs per PR | 9 (3 legs × 3-run cohort) |
+| Warm wall-clock per leg | 1–3 min (post-Docker cache) |
+| Cold wall-clock per leg | up to 5 min |
+
+E2B API key required on every PR — accepted for private-repo phase; revisit before open-sourcing.
+
+## 10. Known follow-ups
+
+- **`BaseSandboxManager.reconnect`** shipped in `manager.py` (see `bugs/fixed/2026-04-17-sandbox-lifetime-covers-criteria*` / RFC) but `CriterionRuntime.ensure_sandbox` still uses the in-process `get_sandbox(task_id)` path. Cross-process criterion reconnect (Phase G of the test-refactor program) wires `ensure_sandbox` through `reconnect` so the path is actually exercised.
+- **Sandbox command WAL / lifecycle event persistence.** `SandboxEventSink.sandbox_command` + `sandbox_closed` fire reliably into the dashboard event sink, but no dedicated Postgres persistence exists yet. The corresponding driver assertions in `tests/e2e/_asserts.py` soft-skip when the tables are absent; land persistence to turn those into hard assertions.
+- **Static-sibling-failure-semantics RFC** (`docs/rfcs/active/2026-04-17-static-sibling-failure-semantics.md`) is still active. The sad-path driver accepts `l_3 status ∈ {blocked, cancelled}`; tighten once the RFC pins the exact value.

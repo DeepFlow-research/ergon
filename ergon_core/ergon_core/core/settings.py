@@ -18,6 +18,10 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"),
     )
+    openrouter_base_url: str = Field(
+        default="https://openrouter.ai/api/v1",
+        validation_alias=AliasChoices("OPENROUTER_BASE_URL"),
+    )
 
     e2b_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
     exa_api_key: str = ""  # slopcop: ignore[no-str-empty-default]
@@ -44,6 +48,10 @@ class Settings(BaseSettings):
     checkpoint_path: str | None = Field(
         default=None,
         validation_alias=AliasChoices("ERGON_CHECKPOINT_PATH"),
+    )
+    hf_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("HF_API_KEY"),
     )
 
     @property

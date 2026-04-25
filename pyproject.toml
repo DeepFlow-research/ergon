@@ -77,11 +77,6 @@ max-complexity = 10
 "**/ergon_cli/**" = ["no-print"]
 "**/rendering/**" = ["no-print"]
 
-[tool.ty.rules]
-# try/except ImportError fallback assignments (Tool = None, AsyncSandbox = None, etc.)
-# are correct at runtime but ty can't narrow through except branches.
-invalid-assignment = "warn"
-
 # SQLModel Field(sa_type=DateTime(...)) — ty misreads the overloaded __init__.
 [[tool.ty.overrides]]
 include = ["**/persistence/**/models.py", "**/persistence/graph/**"]
@@ -97,17 +92,24 @@ invalid-argument-type = "warn"
 
 # pydantic-ai Tool(function=...) — ToolFuncEither union doesn't resolve async callables.
 # invalid-return-type: async tool functions return Coroutine but stubs expect plain value.
+# invalid-assignment: try/except ImportError fallback (Tool = None) when pydantic-ai unavailable;
+#   also covers benchmark sandbox files (AsyncSandbox = object fallback).
 [[tool.ty.overrides]]
 include = [
     "**/benchmarks/**/toolkit.py",
+    "**/benchmarks/**/sandbox.py",
+    "**/benchmarks/**/sandbox_manager.py",
     "**/tools/*_toolkit.py",
 ]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"
 invalid-return-type = "warn"
+invalid-assignment = "warn"
 
 # E2B sandbox SDK — untyped package; proxy wrappers forward *args/**kwargs to typed methods.
+# invalid-assignment: try/except ImportError fallbacks (AsyncSandbox = None,
+#   CommandExitException = Exception) when e2b SDK is unavailable.
 [[tool.ty.overrides]]
 include = ["**/providers/sandbox/**"]
 [tool.ty.overrides.rules]
@@ -115,9 +117,12 @@ invalid-argument-type = "warn"
 unresolved-attribute = "warn"
 call-non-callable = "warn"
 no-matching-overload = "warn"
+invalid-assignment = "warn"
 
 # Transformers/torch optional deps — Unknown types cascade from conditional imports.
 # unknown-argument: pydantic AliasChoices on ModelResponse.provider_details.
+# invalid-assignment: tokenizer.pad_token assignment — transformers stubs type pad_token
+#   as a complex union that ty can't verify is assignable from eos_token.
 [[tool.ty.overrides]]
 include = ["**/models/transformers_backend.py"]
 [tool.ty.overrides.rules]
@@ -126,6 +131,7 @@ unresolved-attribute = "warn"
 call-non-callable = "warn"
 invalid-return-type = "warn"
 unknown-argument = "warn"
+invalid-assignment = "warn"
 
 # pydantic-ai message formatting — complex generic dict unions ty can't resolve.
 [[tool.ty.overrides]]
@@ -146,7 +152,8 @@ invalid-return-type = "warn"
 
 # SQLModel .where() / .order_by() column expressions — ty can't resolve SQLAlchemy operator overloads.
 # unresolved-attribute: Column(datetime|UUID).desc() / .in_() — the SQLAlchemy
-# InstrumentedAttribute descriptor exposes these, but ty sees the Python type only.
+#   InstrumentedAttribute descriptor exposes these, but ty sees the Python type only.
+# invalid-assignment: str passed to TaskExecutionStatus field — SQLModel coerces at runtime.
 [[tool.ty.overrides]]
 include = [
     "**/persistence/queries.py",
@@ -157,8 +164,20 @@ include = [
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"
+invalid-assignment = "warn"
+
+# pydantic-ai Agent generic — Agent(output_type=T) constructor return type isn't narrowed by ty;
+# the inferred return is Agent[None, str] regardless of output_type value.
+[[tool.ty.overrides]]
+include = ["**/workers/**"]
+[tool.ty.overrides.rules]
+invalid-assignment = "warn"
 
 # Remaining files with isolated third-party type issues (inngest JSON, pydantic-ai, SQLModel select).
+# invalid-assignment covers:
+#   - tracing.py: OTLPSpanExporter = None try/except ImportError fallback
+#   - runtime/services/: SQLModel str→enum coercion (status fields)
+#   - ergon_infra/: tokenizer.pad_token assignment + TrainingStatus str coercion
 [[tool.ty.overrides]]
 include = [
     "**/core/api/runs.py",
@@ -177,6 +196,7 @@ unresolved-attribute = "warn"
 no-matching-overload = "warn"
 not-iterable = "warn"
 invalid-parameter-default = "warn"
+invalid-assignment = "warn"
 
 # Worker ABC: abstract async generator yield + Unknown response_text.
 [[tool.ty.overrides]]
@@ -204,6 +224,14 @@ invalid-return-type = "warn"
 call-non-callable = "warn"
 not-subscriptable = "warn"
 
+# Alembic migrations — auto-generated files, SQLAlchemy column type submodules not
+# resolvable by ty. Type-checking these provides no value.
+[[tool.ty.overrides]]
+include = ["**/migrations/**"]
+[tool.ty.overrides.rules]
+possibly-missing-submodule = "warn"
+invalid-argument-type = "warn"
+
 [tool.ty.environment]
 extra-paths = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra"]
 
@@ -230,4 +258,5 @@ markers = [
     "slow: marks tests as slow (deselect with '-m not slow')",
     "e2e: end-to-end tests requiring full Docker stack",
     "integration: integration tests requiring a database but no Docker stack",
+    "real_llm: real-LLM end-to-end tests (requires ERGON_REAL_LLM=1 + OPENROUTER_API_KEY)",
 ]

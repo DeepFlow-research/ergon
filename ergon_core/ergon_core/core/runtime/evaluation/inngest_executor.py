@@ -75,6 +75,11 @@ class InngestCriterionExecutor:
                     sandbox_manager=self.sandbox_manager,
                     run_id=task_context.run_id,
                     task_id=self.task_id,
+                    # Per RFC ``sandbox-lifetime-covers-criteria``: pass
+                    # the task's sandbox_id so ensure_sandbox prefers
+                    # ``manager.reconnect(sandbox_id)`` over constructing
+                    # a fresh sandbox when running cross-process.
+                    sandbox_id=task_context.sandbox_id or None,
                 )
 
                 if isinstance(criterion, Criterion):

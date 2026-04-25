@@ -15,6 +15,7 @@ import outlines
 import pydantic_ai.messages as _messages
 import pydantic_ai.models as _models
 import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from ergon_core.core.providers.generation.model_resolution import ResolvedModel
 from pydantic_ai.settings import ModelSettings
 
@@ -50,12 +51,6 @@ class TransformersModel(_models.Model):
     def _ensure_loaded(self) -> None:
         if self._hf_model is not None:
             return
-
-        # reason: defer heavy deps until first use so importing this module does not load torch/transformers.
-        import torch
-
-        # reason: (same as torch above)
-        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         dtypes = {"float32": torch.float32, "float16": torch.float16, "bfloat16": torch.bfloat16}
 
@@ -167,9 +162,6 @@ class TransformersModel(_models.Model):
 
     def _compute_logprobs(self, prompt_text: str, response_text: str) -> list[dict]:
         """Compute per-token logprobs via a forward pass on the full sequence."""
-        # reason: local import keeps torch import out of module load path for tests that mock the model.
-        import torch
-
         full_text = prompt_text + response_text
         input_ids = self._hf_tokenizer.encode(full_text, return_tensors="pt").to(self._device)
         prompt_len = self._hf_tokenizer.encode(prompt_text, return_tensors="pt").shape[1]

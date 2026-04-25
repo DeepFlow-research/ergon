@@ -55,11 +55,11 @@ function syntheticMutation(
   const newValueByType: Record<string, Record<string, unknown>> = {
     "node.added": {
       mutation_type: "node.added",
-      task_key: "test-task",
+      task_slug: "test-task",
       instance_key: "inst-1",
       description: "test",
       status: "pending",
-      assigned_worker_key: null,
+      assigned_worker_slug: null,
     },
     "node.removed": { mutation_type: "node.removed", status: "cancelled" },
     "node.status_changed": {

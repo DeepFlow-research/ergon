@@ -19,18 +19,25 @@ from collections.abc import Iterator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
-from sqlmodel import Session, select
-
+import inngest
+from ergon_cli.composition import build_experiment
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
+    ExperimentCohort,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
+    RunTaskExecution,
 )
+from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
+from ergon_core.core.runtime.services.run_service import create_run
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pydantic import BaseModel
+from sqlmodel import Session, select
 
 router = APIRouter(prefix="/api/test", tags=["test-harness"])
 
@@ -58,13 +65,29 @@ class TestGraphMutationDto(BaseModel):
     target_task_slug: str | None
 
 
+class TestExecutionDto(BaseModel):
+    task_slug: str | None
+    status: str
+    error: str | None
+
+
 class TestRunStateDto(BaseModel):
     run_id: UUID
     status: str
     graph_nodes: list[TestGraphNodeDto]
     mutations: list[TestGraphMutationDto]
     evaluations: list[TestEvaluationDto]
+    executions: list[TestExecutionDto]
     resource_count: int
+
+
+class TestCohortRunDto(BaseModel):
+    run_id: UUID
+    status: str
+
+
+class TestCohortIdDto(BaseModel):
+    cohort_id: UUID
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +123,17 @@ def _require_secret(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
+def _execution_error_message(execution: RunTaskExecution) -> str | None:
+    error = execution.parsed_error()
+    if error is None:
+        return None
+    for key in ("message", "error", "detail"):
+        value = error.get(key)
+        if isinstance(value, str):
+            return value
+    return str(error)
+
+
 # ---------------------------------------------------------------------------
 # Read endpoint
 # ---------------------------------------------------------------------------
@@ -131,7 +165,7 @@ def read_run_state(
         session.exec(
             select(RunGraphMutation)
             .where(RunGraphMutation.run_id == run_id)
-            .order_by(RunGraphMutation.sequence)
+            .order_by(RunGraphMutation.sequence)  # ty: ignore[invalid-argument-type]
         ).all()
     )
     mutations = [
@@ -154,6 +188,18 @@ def read_run_state(
         for ev in eval_rows
     ]
 
+    execution_rows = list(
+        session.exec(select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)).all()
+    )
+    executions = [
+        TestExecutionDto(
+            task_slug=slug_by_node_id.get(ex.node_id) if ex.node_id else None,
+            status=ex.status,
+            error=_execution_error_message(ex),
+        )
+        for ex in execution_rows
+    ]
+
     resource_count = len(
         list(session.exec(select(RunResource).where(RunResource.run_id == run_id)).all())
     )
@@ -166,8 +212,52 @@ def read_run_state(
         graph_nodes=graph_nodes,
         mutations=mutations,
         evaluations=evaluations,
+        executions=executions,
         resource_count=resource_count,
     )
+
+
+@router.get(
+    "/read/cohort/{cohort_key}/id",
+    response_model=TestCohortIdDto,
+)
+def read_cohort_id(
+    cohort_key: str,
+    session: Annotated[Session, Depends(get_session_dep)],
+) -> TestCohortIdDto:
+    """Resolve a cohort name to its UUID for dashboard navigation."""
+    cohort = session.exec(
+        select(ExperimentCohort).where(ExperimentCohort.name == cohort_key),
+    ).first()
+    if cohort is None:
+        raise HTTPException(status_code=404, detail=f"Cohort {cohort_key!r} not found")
+    return TestCohortIdDto(cohort_id=cohort.id)
+
+
+@router.get(
+    "/read/cohort/{cohort_key}/runs",
+    response_model=list[TestCohortRunDto],
+)
+def read_cohort_runs(
+    cohort_key: str,
+    session: Annotated[Session, Depends(get_session_dep)],
+) -> list[TestCohortRunDto]:
+    """List all runs attached to a cohort by name.
+
+    ``cohort_key`` matches ``ExperimentCohort.name`` exactly.  Returns
+    empty list when the cohort does not exist (rather than 404) so
+    Playwright / pytest can poll cheaply while a cohort is being
+    submitted.
+    """
+    cohort = session.exec(
+        select(ExperimentCohort).where(ExperimentCohort.name == cohort_key),
+    ).first()
+    if cohort is None:
+        return []
+    runs = list(
+        session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort.id)).all(),
+    )
+    return [TestCohortRunDto(run_id=r.id, status=r.status) for r in runs]
 
 
 # ---------------------------------------------------------------------------
@@ -255,3 +345,76 @@ def reset_test_rows(
                 s.delete(r)
         s.commit()
     return None
+
+
+# ---------------------------------------------------------------------------
+# Cohort submission endpoint — the single entry point for smoke drivers.
+#
+# Moved here (rather than a separate /runs POST) because it's the test
+# harness that cares about cohort-scoped multi-run submission.  Host-side
+# pytest never imports ergon internals; it just POSTs slugs.  That keeps
+# the smoke fixtures single-sourced in the api container's process (one
+# ``import tests.e2e._fixtures`` in app.py) and eliminates the host /
+# container fixture-drift risk.
+# ---------------------------------------------------------------------------
+
+
+class CohortSlotRequest(BaseModel):
+    worker_slug: str
+    evaluator_slug: str
+
+
+class SubmitCohortRequest(BaseModel):
+    benchmark_slug: str
+    slots: list[CohortSlotRequest]
+    cohort_key: str
+    # Smoke workers don't hit an LLM; the field is required downstream
+    # only because ``WorkerSpec`` models it.  Default matches the CLI.
+    model: str = "openai:gpt-4o"
+    limit: int = 1
+
+
+class SubmitCohortResponse(BaseModel):
+    run_ids: list[UUID]
+    cohort_id: UUID
+
+
+@router.post("/write/cohort", response_model=SubmitCohortResponse)
+async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
+    """Build + persist + dispatch N runs under one cohort.
+
+    Per-slot flow mirrors the CLI's ``ergon benchmark run``:
+    ``build_experiment`` → ``validate`` → ``persist`` → ``create_run``
+    → send ``WorkflowStartedEvent``.  Slots submit sequentially —
+    typical N ≤ 3, so the parallel-gather savings are negligible.
+    """
+    cohort = experiment_cohort_service.resolve_or_create(
+        name=body.cohort_key,
+        description=f"smoke cohort: {body.benchmark_slug}",
+        created_by="test-harness",
+    )
+
+    run_ids: list[UUID] = []
+    for slot in body.slots:
+        experiment = build_experiment(
+            benchmark_slug=body.benchmark_slug,
+            model=body.model,
+            worker_slug=slot.worker_slug,
+            evaluator_slug=slot.evaluator_slug,
+            limit=body.limit,
+        )
+        experiment.validate()
+        persisted = experiment.persist()
+        run = create_run(persisted, cohort_id=cohort.id)
+        await inngest_client.send(
+            inngest.Event(
+                name=WorkflowStartedEvent.name,
+                data=WorkflowStartedEvent(
+                    run_id=run.id,
+                    definition_id=persisted.definition_id,
+                ).model_dump(mode="json"),
+            )
+        )
+        run_ids.append(run.id)
+
+    return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)

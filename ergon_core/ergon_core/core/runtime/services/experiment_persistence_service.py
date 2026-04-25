@@ -59,22 +59,26 @@ class ExperimentPersistenceService:
         )
 
         # -- worker rows --
+        # reason: RFC 2026-04-22 §1 — ``Experiment.workers`` now holds
+        # ``WorkerSpec`` descriptors. ``worker_slug`` maps 1:1 to
+        # ``ExperimentDefinitionWorker.worker_type`` (registry key persisted
+        # verbatim; worker_execute looks it up back through ``WORKERS``).
         worker_rows: list[ExperimentDefinitionWorker] = []
         worker_bindings: dict[str, str] = {}
 
-        for binding_key, worker in experiment.workers.items():
+        for binding_key, spec in experiment.workers.items():
             worker_rows.append(
                 ExperimentDefinitionWorker(
                     id=uuid4(),
                     experiment_definition_id=definition_id,
                     binding_key=binding_key,
-                    worker_type=worker.type_slug,
-                    model_target=worker.model or "",
-                    snapshot_json={"name": worker.name, "model": worker.model},
+                    worker_type=spec.worker_slug,
+                    model_target=spec.model or "",
+                    snapshot_json={"name": spec.name, "model": spec.model},
                     created_at=now,
                 )
             )
-            worker_bindings[binding_key] = worker.type_slug
+            worker_bindings[binding_key] = spec.worker_slug
 
         # -- evaluator rows --
         evaluator_rows: list[ExperimentDefinitionEvaluator] = []

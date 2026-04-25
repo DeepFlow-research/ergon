@@ -3,6 +3,8 @@
 Eager, fully-typed imports.
 """
 
+from collections.abc import Callable
+
 from ergon_core.api import Benchmark, Evaluator, Worker
 
 from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
@@ -10,9 +12,6 @@ from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsB
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.vanilla import (
     ResearchRubricsVanillaBenchmark,
-)
-from ergon_builtins.workers.research_rubrics.manager_worker import (
-    ResearchRubricsManagerWorker,
 )
 from ergon_builtins.workers.research_rubrics.researcher_worker import (
     ResearchRubricsResearcherWorker,
@@ -29,7 +28,11 @@ EVALUATORS: dict[str, type[Evaluator]] = {
     "research-rubric": ResearchRubricsRubric,
 }
 
-WORKERS: dict[str, type[Worker]] = {
-    "researchrubrics-manager": ResearchRubricsManagerWorker,
+# reason: RFC 2026-04-22 §1 — base ``Worker.__init__`` now requires
+# ``task_id`` / ``sandbox_id`` kwargs, and every registered worker subclass
+# forwards them through to ``super().__init__``. The registry therefore
+# stores the bare class (``WorkerFactory = Callable[..., Worker]``) and
+# ``_plain`` has been deleted.
+WORKERS: dict[str, Callable[..., Worker]] = {
     "researchrubrics-researcher": ResearchRubricsResearcherWorker,
 }

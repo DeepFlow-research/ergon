@@ -19,10 +19,11 @@ RUNNING = "running"
 COMPLETED = "completed"
 FAILED = "failed"
 CANCELLED = "cancelled"
+BLOCKED = "blocked"
 
 TERMINAL_STATUSES = frozenset({COMPLETED, FAILED, CANCELLED})
 
-NodeStatus = Literal["pending", "ready", "running", "completed", "failed", "cancelled"]
+NodeStatus = Literal["pending", "ready", "running", "completed", "failed", "cancelled", "blocked"]
 
 # ── Edge status ───────────────────────────────────────────────────
 # Edges are pure dependency relations (containment lives on the node).

@@ -21,17 +21,17 @@ from ergon_core.core.persistence.graph.status_conventions import (
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.shared.types import NodeId, TaskSlug
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
 from ergon_core.core.runtime.errors.delegation_errors import (
     CycleDetectedError,
     DuplicateTaskSlugError,
+    RunRecordMissingError,
     TaskAlreadyTerminalError,
     TaskNotTerminalError,
     TaskRunningError,
     UnknownTaskSlugError,
 )
 from ergon_core.core.runtime.events.task_events import (
-    DYNAMIC_TASK_SENTINEL_ID,
     TaskCancelledEvent,
     TaskReadyEvent,
 )
@@ -87,9 +87,6 @@ def _latest_execution_id(session: Session, node_id: UUID) -> UUID | None:
     Used to attach execution_id to TaskCancelledEvent so the cleanup
     function can release the correct sandbox.
     """
-    # reason: deferred to avoid circular import at module level
-    from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-
     exe = session.exec(
         select(RunTaskExecution.id)
         .where(RunTaskExecution.node_id == node_id)
@@ -677,13 +674,14 @@ class TaskManagementService:
     def _resolve_definition_id(self, session: Session, run_id: UUID) -> UUID:
         """Read experiment_definition_id from RunRecord.
 
-        Every run references exactly one definition, so this is always
-        available. Used to populate event payloads.
+        Every run references exactly one definition, so a missing RunRecord
+        is an invariant violation — callers must always create the RunRecord
+        before invoking a service that mutates the run's graph. Tests must
+        seed a RunRecord via the integration-tier factories/fixtures.
         """
         run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
         if run is None:
-            # Fallback for tests that don't seed RunRecord
-            return DYNAMIC_TASK_SENTINEL_ID
+            raise RunRecordMissingError(run_id)
         return run.experiment_definition_id
 
     async def _dispatch_task_ready(
@@ -697,7 +695,7 @@ class TaskManagementService:
         event = TaskReadyEvent(
             run_id=run_id,
             definition_id=definition_id,
-            task_id=DYNAMIC_TASK_SENTINEL_ID,
+            task_id=None,
             node_id=node_id,
         )
         await inngest_client.send(

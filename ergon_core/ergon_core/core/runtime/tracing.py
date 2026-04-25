@@ -106,7 +106,7 @@ class CompletedSpan(BaseModel):
     start_time: datetime
     end_time: datetime
     attributes: dict[str, object] = Field(default_factory=dict)
-    status_code: int = 0
+    status_code: int | str = 0
     status_message: str | None = None
     events: list[SpanEvent] = Field(default_factory=list)
 
@@ -379,12 +379,12 @@ class OtelTraceSink:
 
 
 def _create_sink() -> TraceSink:
-    if settings.otel_traces_enabled:
-        try:
-            return OtelTraceSink()
-        except Exception:  # slopcop: ignore[no-broad-except]
-            return NoopTraceSink()
-    return NoopTraceSink()
+    if not settings.otel_traces_enabled:
+        return NoopTraceSink()
+    # The operator explicitly opted in to OTEL. Refuse to silently downgrade
+    # to a no-op sink — that has caused real "where are my traces?" debugging
+    # sessions. Surface the construction error so misconfiguration is loud.
+    return OtelTraceSink()
 
 
 _sink: TraceSink = _create_sink()

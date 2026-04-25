@@ -13,7 +13,7 @@ class TaskEvaluationEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     execution_id: UUID
     evaluator_id: UUID
     evaluator_binding_key: str
@@ -26,7 +26,7 @@ class CriterionEvaluationEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     execution_id: UUID
     evaluator_id: UUID
     criterion_idx: int

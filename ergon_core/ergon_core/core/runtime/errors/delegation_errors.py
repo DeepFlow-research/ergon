@@ -92,3 +92,20 @@ class UnknownTaskSlugError(DelegationError):
     def __init__(self, slugs: list[str]) -> None:
         super().__init__(f"Unknown depends_on task_slugs: {slugs}")
         self.slugs = slugs
+
+
+class RunRecordMissingError(DelegationError):
+    """Raised when a service is asked to mutate a run that has no RunRecord.
+
+    Every run must have a RunRecord (with ``experiment_definition_id``)
+    before any task/graph service is invoked on it. This is enforced as a
+    hard invariant so that missing fixtures in tests surface as a loud
+    failure instead of silently resolving to a sentinel definition id.
+    """
+
+    def __init__(self, run_id: UUID) -> None:
+        super().__init__(
+            f"RunRecord missing for run_id={run_id}; seed a RunRecord before "
+            "invoking TaskManagementService.",
+        )
+        self.run_id = run_id

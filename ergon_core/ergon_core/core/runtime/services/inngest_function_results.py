@@ -21,7 +21,7 @@ class TaskExecuteResult(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     execution_id: UUID
     success: bool = False
     skipped: bool = False
@@ -34,7 +34,7 @@ class TaskPropagateResult(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     newly_ready_tasks: int = 0
     workflow_complete: bool = False
     workflow_failed: bool = False
@@ -69,7 +69,7 @@ class WorkerExecuteResult(BaseModel):
     model_config = {"frozen": True}
 
     success: bool = False
-    output_text: str | None = None
+    final_assistant_message: str | None = None
     error: str | None = None
 
 
@@ -83,7 +83,7 @@ class PersistOutputsResult(BaseModel):
 class EvaluatorsResult(BaseModel):
     model_config = {"frozen": True}
 
-    task_id: UUID
+    task_id: UUID | None
     evaluators_found: int = 0
     evaluators_run: int = 0
     scores: list[float | None] = Field(default_factory=list)

@@ -2,16 +2,36 @@
 
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
+
+# Root-logger handler so ``logger.exception`` / ``logger.error`` from
+# anywhere in the app actually reach ``docker compose logs api``.
+# Uvicorn configures its own ``uvicorn``/``uvicorn.error`` loggers but
+# does not touch the root, which leaves every ``logging.getLogger(__
+# name__)`` call effectively silent under default settings.  Without
+# this handler, a worker_execute traceback becomes "silently failing"
+# on the dashboard side without ever surfacing in logs.
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stdout,
+    force=True,
+)
 
 import inngest.fast_api
 from ergon_core.core.api.cohorts import router as cohorts_router
 from ergon_core.core.api.rollouts import init_service as init_rollout_service
 from ergon_core.core.api.rollouts import router as rollouts_router
 from ergon_core.core.api.runs import router as runs_router
+from ergon_core.core.api.test_harness import router as _test_harness_router
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.providers.sandbox.event_sink import DashboardEmitterSandboxEventSink
+from ergon_core.core.providers.sandbox.event_sink import (
+    CompoundSandboxEventSink,
+    DashboardEmitterSandboxEventSink,
+    PostgresSandboxEventSink,
+)
 from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -41,7 +61,10 @@ async def lifespan(app: FastAPI):
     # module level; ergon_builtins imports ergon_core, not the reverse.
     from ergon_builtins.registry import SANDBOX_MANAGERS  # noqa: PLC0415
 
-    sink = DashboardEmitterSandboxEventSink(dashboard_emitter)
+    sink = CompoundSandboxEventSink(
+        DashboardEmitterSandboxEventSink(dashboard_emitter),
+        PostgresSandboxEventSink(),
+    )
     DefaultSandboxManager.set_event_sink(sink)
     for manager_cls in SANDBOX_MANAGERS.values():
         manager_cls.set_event_sink(sink)
@@ -50,7 +73,7 @@ async def lifespan(app: FastAPI):
         1 + len(SANDBOX_MANAGERS),
     )
 
-    logger.info("ready")
+    logger.info("app startup complete — all subsystems initialised")
     yield
 
 
@@ -67,8 +90,14 @@ app.include_router(rollouts_router)
 
 # Test-only harness: mounted in CI + local-e2e only.
 if os.environ.get("ENABLE_TEST_HARNESS") == "1":
-    from ergon_core.core.api.test_harness import router as _test_harness_router  # noqa: PLC0415
-
     app.include_router(_test_harness_router)
+    # Register the canonical-smoke WORKERS / EVALUATORS into this
+    # process's registry dicts.  Inngest's ``worker_execute_fn`` runs
+    # inside this container, so if the smoke fixtures are only imported
+    # host-side (in pytest's process) the container's dicts stay empty
+    # and every smoke run fails at worker resolution.  Gated on the
+    # same env var as the router so production images with the harness
+    # disabled don't import ``tests/`` at all.
+    import tests.e2e._fixtures  # noqa: F401, PLC0415
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)

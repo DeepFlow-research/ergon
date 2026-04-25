@@ -39,60 +39,6 @@ from ergon_core.core.runtime.tracing import (
 )
 
 
-def _build_evaluation_summary(
-    service_result: EvaluationServiceResult,
-    evaluation_input: str,
-) -> EvaluationSummary:
-    """Build a strongly-typed evaluation summary from service result + specs."""
-    result = service_result.result
-    specs = service_result.specs
-
-    spec_by_idx = {s.criterion_idx: s for s in specs}
-    max_score_total = sum(s.max_score for s in specs) if specs else 1.0
-
-    entries: list[CriterionResultEntry] = []
-    for i, cr in enumerate(result.criterion_results):
-        spec = spec_by_idx.get(i)
-        if spec is None:
-            raise ContractViolationError(
-                f"Criterion result at index {i} ({cr.name!r}) has no matching "
-                f"CriterionSpec — specs and results are out of sync",
-            )
-        entries.append(
-            CriterionResultEntry(
-                criterion_name=cr.name,
-                criterion_type=spec.criterion.type_slug,
-                criterion_description=spec.criterion.name,
-                stage_num=spec.stage_idx,
-                stage_name=spec.stage_name,
-                criterion_num=spec.criterion_idx,
-                score=cr.score,
-                max_score=spec.max_score,
-                passed=cr.passed,
-                weight=cr.weight,
-                feedback=cr.feedback or "",
-                evaluation_input=evaluation_input,
-            )
-        )
-
-    total_score = result.score
-    normalized = total_score / max_score_total if max_score_total > 0 else 0.0
-
-    stage_names = {s.stage_name for s in specs}
-    stages_passed = sum(
-        1 for sn in stage_names if all(e.passed for e in entries if e.stage_name == sn)
-    )
-
-    return EvaluationSummary(
-        evaluator_name=result.evaluator_name,
-        max_score=max_score_total,
-        normalized_score=normalized,
-        stages_evaluated=len(stage_names),
-        stages_passed=stages_passed,
-        criterion_results=entries,
-    )
-
-
 @inngest_client.create_function(
     fn_id="evaluate-task-run",
     trigger=inngest.TriggerEvent(event="task/evaluate"),
@@ -238,4 +184,58 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         score=result.score,
         passed=result.passed,
         evaluator_name=result.evaluator_name,
+    )
+
+
+def _build_evaluation_summary(
+    service_result: EvaluationServiceResult,
+    evaluation_input: str,
+) -> EvaluationSummary:
+    """Build a strongly-typed evaluation summary from service result + specs."""
+    result = service_result.result
+    specs = service_result.specs
+
+    spec_by_idx = {s.criterion_idx: s for s in specs}
+    max_score_total = sum(s.max_score for s in specs) if specs else 1.0
+
+    entries: list[CriterionResultEntry] = []
+    for i, cr in enumerate(result.criterion_results):
+        spec = spec_by_idx.get(i)
+        if spec is None:
+            raise ContractViolationError(
+                f"Criterion result at index {i} ({cr.name!r}) has no matching "
+                f"CriterionSpec — specs and results are out of sync",
+            )
+        entries.append(
+            CriterionResultEntry(
+                criterion_name=cr.name,
+                criterion_type=spec.criterion.type_slug,
+                criterion_description=spec.criterion.name,
+                stage_num=spec.stage_idx,
+                stage_name=spec.stage_name,
+                criterion_num=spec.criterion_idx,
+                score=cr.score,
+                max_score=spec.max_score,
+                passed=cr.passed,
+                weight=cr.weight,
+                feedback=cr.feedback or "",
+                evaluation_input=evaluation_input,
+            )
+        )
+
+    total_score = result.score
+    normalized = total_score / max_score_total if max_score_total > 0 else 0.0
+
+    stage_names = {s.stage_name for s in specs}
+    stages_passed = sum(
+        1 for sn in stage_names if all(e.passed for e in entries if e.stage_name == sn)
+    )
+
+    return EvaluationSummary(
+        evaluator_name=result.evaluator_name,
+        max_score=max_score_total,
+        normalized_score=normalized,
+        stages_evaluated=len(stage_names),
+        stages_passed=stages_passed,
+        criterion_results=entries,
     )

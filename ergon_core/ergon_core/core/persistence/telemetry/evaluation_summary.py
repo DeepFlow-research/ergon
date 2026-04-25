@@ -13,7 +13,6 @@ class CriterionResultEntry(BaseModel):
 
     criterion_name: str
     criterion_type: str
-    criterion_description: str = ""  # slopcop: ignore[no-str-empty-default]
     stage_num: int = 0
     stage_name: str = "default"
     criterion_num: int = 0
@@ -21,6 +20,7 @@ class CriterionResultEntry(BaseModel):
     max_score: float = 1.0
     passed: bool
     weight: float = 1.0
+    criterion_description: str = ""  # slopcop: ignore[no-str-empty-default]
     feedback: str = ""  # slopcop: ignore[no-str-empty-default]
     evaluation_input: str = ""  # slopcop: ignore[no-str-empty-default]
     evaluated_action_ids: list[str] = Field(default_factory=list)

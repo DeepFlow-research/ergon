@@ -28,9 +28,7 @@ class AddSubtaskCommand(BaseModel):
     parent_node_id: NodeId
     task_slug: TaskSlug = Field(min_length=1)
     description: str = Field(min_length=1)
-    assigned_worker_slug: AssignedWorkerSlug = Field(
-        default=AssignedWorkerSlug("researcher"),
-    )
+    assigned_worker_slug: AssignedWorkerSlug
     depends_on: list[NodeId] = Field(default_factory=list)
 
     model_config = {"frozen": True}
@@ -54,9 +52,7 @@ class SubtaskSpec(BaseModel):
 
     task_slug: TaskSlug = Field(min_length=1)
     description: str = Field(min_length=1)
-    assigned_worker_slug: AssignedWorkerSlug = Field(
-        default=AssignedWorkerSlug("researcher"),
-    )
+    assigned_worker_slug: AssignedWorkerSlug
     depends_on: list[TaskSlug] = Field(default_factory=list)
 
     model_config = {"frozen": True}

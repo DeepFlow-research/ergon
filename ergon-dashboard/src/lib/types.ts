@@ -210,7 +210,7 @@ export interface ExecutionAttemptState {
   agentName: string | null;
   startedAt: string | null;
   completedAt: string | null;
-  outputText: string | null;
+  finalAssistantMessage: string | null;
   outputResourceIds: string[];
   errorMessage: string | null;
   score: number | null;

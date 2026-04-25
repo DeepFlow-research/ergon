@@ -7,6 +7,7 @@ ReActWorker.execute().
 
 from collections.abc import AsyncGenerator
 from typing import ClassVar
+from uuid import UUID
 
 from ergon_core.api import RunResourceView
 from ergon_core.api.generation import GenerationTurn
@@ -55,11 +56,15 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         self,
         *,
         name: str,
-        model: str | None = None,
+        model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
     ) -> None:
         super().__init__(
             name=name,
             model=model,
+            task_id=task_id,
+            sandbox_id=sandbox_id,
             tools=[],
             system_prompt=_RESEARCHER_SYSTEM_PROMPT,
             max_iterations=25,
@@ -77,7 +82,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
 
         async def publisher_sync() -> list[RunResourceView]:
             publisher = manager.publisher_for(
-                task_id=context.task_id,
+                task_id=self.task_id,
                 run_id=context.run_id,
                 task_execution_id=context.execution_id,
             )

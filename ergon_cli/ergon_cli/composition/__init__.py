@@ -1,17 +1,13 @@
 """Build Experiment from CLI args using registry lookups."""
 
-from collections.abc import Mapping
-
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.experiment import Experiment
-from ergon_core.api.worker import Worker
+from ergon_core.api.worker_spec import WorkerSpec
 
 
 def build_experiment(
     benchmark_slug: str,
     model: str,
-    worker_slug: str = "stub-worker",
+    worker_slug: str = "training-stub",
     evaluator_slug: str = "stub-rubric",
     workflow: str = "single",
     limit: int | None = None,
@@ -19,123 +15,108 @@ def build_experiment(
     # Deferred: CLI startup cost
     from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
 
+    if worker_slug not in WORKERS:
+        raise KeyError(worker_slug)
     benchmark_cls = BENCHMARKS[benchmark_slug]
-    worker_cls = WORKERS[worker_slug]
     evaluator_cls = EVALUATORS[evaluator_slug]
 
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
     evaluator = evaluator_cls(name="evaluator")
 
-    # Composition is driven by the explicit worker selection first; the
-    # benchmark only wins when nothing else matches (delegation-smoke needs
-    # both manager + researcher regardless of which single worker the user
-    # typed).
-    match (worker_slug, benchmark_slug):
-        case (_, "delegation-smoke"):
-            return _build_delegation_experiment(benchmark, model, evaluator, WORKERS)
-        case ("manager-researcher", _):
-            return _build_manager_researcher_experiment(benchmark, model, evaluator, WORKERS)
-        case ("researchrubrics-manager", _):
-            return _build_researchrubrics_experiment(benchmark, model, evaluator, WORKERS)
-        case _:
-            worker = worker_cls(name="worker", model=model)
-            return Experiment.from_single_worker(
-                benchmark=benchmark,
-                worker=worker,
-                evaluators={"default": evaluator},
-            )
+    # Smoke-worker composition: the parent worker spawns 9 subtasks via
+    # ``add_subtask(assigned_worker_slug="{env}-smoke-leaf")``, so the
+    # experiment must also carry a binding for that leaf slug —
+    # otherwise ``task_execution_service._prepare_graph_native`` will
+    # raise ``ConfigurationError: No ExperimentDefinitionWorker with
+    # binding_key='{env}-smoke-leaf'`` when the first subtask fires.
+    # ``researchrubrics-sadpath-smoke-worker`` additionally needs the
+    # failing leaf binding so ``l_2`` can resolve.
+    if _is_smoke_worker(worker_slug):
+        return _build_smoke_experiment(
+            benchmark=benchmark,
+            evaluator=evaluator,
+            worker_slug=worker_slug,
+            model=model,
+        )
+
+    spec = WorkerSpec(worker_slug=worker_slug, name="worker", model=model)
+    return Experiment.from_single_worker(
+        benchmark=benchmark,
+        worker=spec,
+        evaluators={"default": evaluator},
+    )
 
 
-def _build_manager_researcher_experiment(
-    benchmark: Benchmark,
+def _is_smoke_worker(worker_slug: str) -> bool:
+    """Match any parent smoke worker: ``{env}-smoke-worker`` or
+    ``{env}-sadpath-smoke-worker``."""
+    return worker_slug.endswith("-smoke-worker") or worker_slug.endswith(
+        "-sadpath-smoke-worker",
+    )
+
+
+def _build_smoke_experiment(
+    *,
+    benchmark,
+    evaluator,
+    worker_slug: str,
     model: str,
-    evaluator: Evaluator,
-    workers_registry: Mapping[str, type[Worker]],
-) -> Experiment:
-    """Build experiment with manager-researcher + researcher for any benchmark.
+):
+    """Smoke composition: register parent + leaf(s) as experiment workers.
 
-    The manager-researcher is assigned to all static benchmark tasks.
-    The researcher worker is registered as a sub-worker binding only —
-    it receives no static task assignments; dynamic tasks spawned by the
-    manager via add_subtask() will resolve it via ExperimentDefinitionWorker
-    lookup in _prepare_graph_native().
+    The parent worker is assigned to all benchmark tasks (single static
+    assignment).  Leaf worker slugs are registered as sub-worker
+    bindings only — dynamic subtasks spawned by the parent resolve them
+    at runtime via ``ExperimentDefinitionWorker`` lookup in
+    ``task_execution_service._prepare_graph_native``.
     """
-    manager_cls = workers_registry["manager-researcher"]
-    researcher_cls = workers_registry["researcher"]
+    # reason: deferred import keeps CLI startup cost on the hot path low
+    # (matches the pattern at the top of ``build_experiment``).
+    from ergon_builtins.registry import WORKERS
 
-    manager = manager_cls(name="manager-researcher", model=model)
-    researcher = researcher_cls(name="researcher", model=model)
+    parent_name = "parent"
+    parent_spec = WorkerSpec(worker_slug=worker_slug, name=parent_name, model=model)
 
-    # Collect all task slugs so we can explicitly assign the manager to them.
-    # The persistence service only auto-assigns when there is exactly 1 worker;
-    # with 2 workers we must provide explicit assignments.
+    # Infer which leaves this parent needs.  ``{env}-smoke-worker`` needs
+    # ``{env}-smoke-leaf``.  ``{env}-sadpath-smoke-worker`` additionally
+    # needs ``{env}-smoke-leaf-failing`` (for l_2 routing).
+    leaf_slugs: list[str] = []
+    if worker_slug.endswith("-sadpath-smoke-worker"):
+        env = worker_slug.removesuffix("-sadpath-smoke-worker")
+        # Sad-path parent's ``leaf_slug`` attribute is the happy leaf;
+        # its ``FAILING_LEAF_SLUG`` is the second binding.
+        leaf_slugs.append(f"{env}-smoke-leaf")
+        leaf_slugs.append(f"{env}-smoke-leaf-failing")
+    elif worker_slug.endswith("-smoke-worker"):
+        env = worker_slug.removesuffix("-smoke-worker")
+        leaf_slugs.append(f"{env}-smoke-leaf")
+
+    # Best-effort sanity: skip unregistered leaf slugs rather than
+    # failing fast — an operator invoking an env without the fixture
+    # hook imported will see the ``ConfigurationError`` from the
+    # runtime (clearer stack) than a composition-time
+    # ``KeyError: {env}-smoke-leaf``.
+    leaf_slugs = [slug for slug in leaf_slugs if slug in WORKERS]
+
+    workers: dict[str, WorkerSpec] = {parent_name: parent_spec}
+    for leaf_slug in leaf_slugs:
+        workers[leaf_slug] = WorkerSpec(
+            worker_slug=leaf_slug,
+            name=leaf_slug,
+            model=model,
+        )
+
+    # Collect static task slugs so we can explicitly assign the parent
+    # worker.  The persistence service only auto-assigns when there is
+    # exactly one worker; with 2+ workers we must pass ``assignments``.
     instances = benchmark.build_instances()
     all_task_slugs = [task.task_slug for tasks in instances.values() for task in tasks]
 
     return Experiment(
         benchmark=benchmark,
-        workers={
-            "manager-researcher": manager,
-            "researcher": researcher,
-        },
+        workers=workers,
         evaluators={"default": evaluator},
-        assignments={"manager-researcher": all_task_slugs},
-    )
-
-
-def _build_delegation_experiment(
-    benchmark: Benchmark,
-    model: str,
-    evaluator: Evaluator,
-    workers_registry: Mapping[str, type[Worker]],
-) -> Experiment:
-    """Build experiment with both manager and researcher worker bindings."""
-    manager_cls = workers_registry["manager-researcher"]
-    researcher_cls = workers_registry["researcher"]
-
-    manager = manager_cls(name="manager-researcher", model=model)
-    researcher = researcher_cls(name="researcher", model=model)
-
-    return Experiment(
-        benchmark=benchmark,
-        workers={
-            "manager-researcher": manager,
-            "researcher": researcher,
-        },
-        evaluators={"default": evaluator},
-        assignments={"manager-researcher": "manager-task"},
-    )
-
-
-def _build_researchrubrics_experiment(
-    benchmark: Benchmark,
-    model: str,
-    evaluator: Evaluator,
-    workers_registry: Mapping[str, type[Worker]],
-) -> Experiment:
-    """Build experiment with researchrubrics-manager + researcher.
-
-    Manager is assigned to all static benchmark tasks.  Researcher is
-    registered as a sub-worker binding only -- dynamic tasks spawned by
-    the manager via add_subtask() resolve it at runtime.
-    """
-    manager_cls = workers_registry["researchrubrics-manager"]
-    researcher_cls = workers_registry["researchrubrics-researcher"]
-
-    manager = manager_cls(name="researchrubrics-manager", model=model)
-    researcher = researcher_cls(name="researchrubrics-researcher", model=model)
-
-    instances = benchmark.build_instances()
-    all_task_slugs = [task.task_slug for tasks in instances.values() for task in tasks]
-
-    return Experiment(
-        benchmark=benchmark,
-        workers={
-            "researchrubrics-manager": manager,
-            "researchrubrics-researcher": researcher,
-        },
-        evaluators={"default": evaluator},
-        assignments={"researchrubrics-manager": all_task_slugs},
+        assignments={parent_name: all_task_slugs},
     )
 
 

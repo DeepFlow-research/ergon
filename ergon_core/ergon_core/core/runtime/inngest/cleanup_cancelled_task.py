@@ -10,6 +10,7 @@ import logging
 import inngest
 
 from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.task_cleanup_dto import CleanupResult
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
     cancel=RUN_CANCEL,
     retries=3,
 )
-async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> dict:
+async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> dict[str, object]:
     """Clean up a single cancelled task's resources."""
     payload = TaskCancelledEvent.model_validate(ctx.event.data)
     logger.info(
@@ -45,10 +46,7 @@ async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> dict:
 
     svc = TaskCleanupService()
 
-    def _update_db_rows() -> dict:
-        # reason: deferred to avoid circular import at module level
-        from ergon_core.core.persistence.shared.db import get_session
-
+    def _update_db_rows() -> dict[str, object]:
         with get_session() as session:
             result = svc.cleanup(
                 session,

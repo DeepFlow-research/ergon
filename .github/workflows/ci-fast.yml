@@ -26,7 +26,7 @@ jobs:
         run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
 
       - name: Type check (ty)
-        run: uv run ty check ergon_core ergon_builtins ergon_cli ergon_infra
+        run: uv run ty check ergon_core/ergon_core ergon_builtins ergon_cli ergon_infra
 
       - name: slopcop check
         run: uv run slopcop ergon_core ergon_builtins ergon_cli ergon_infra
@@ -49,9 +49,36 @@ jobs:
           node-version: "20"
           cache: pnpm
           cache-dependency-path: ergon-dashboard/pnpm-lock.yaml
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
 
-      - name: Install dependencies
+      - name: Install pnpm dependencies
         run: pnpm -C ergon-dashboard install --frozen-lockfile
+
+      - name: Install Python workspace (for contract exporter)
+        run: uv sync --frozen --all-packages --group dev
+
+      # Contract-gen drift check.  Runs the full pydantic → JSON schema →
+      # json-schema-to-zod pipeline, then fails the build if the output
+      # differs from what's tracked.  Prevents dashboard event contracts
+      # silently drifting from their pydantic source — the bug class we
+      # saw in docs/bugs/open/2026-04-23-inngest-function-failures.md § E.
+      - name: Regenerate contracts
+        run: pnpm -C ergon-dashboard run generate:contracts
+
+      - name: Verify no contract drift
+        run: |
+          if ! git diff --quiet -- \
+            ergon-dashboard/src/generated/events/ \
+            ergon-dashboard/src/generated/rest/; then
+            echo "::error::Generated contracts are out of sync with their pydantic sources."
+            echo "::error::Run 'pnpm -C ergon-dashboard run generate:contracts' locally and commit the result."
+            git --no-pager diff --stat -- \
+              ergon-dashboard/src/generated/events/ \
+              ergon-dashboard/src/generated/rest/
+            exit 1
+          fi
 
       - name: ESLint
         run: pnpm -C ergon-dashboard run lint
@@ -60,7 +87,7 @@ jobs:
         run: pnpm -C ergon-dashboard run typecheck
 
   unit-tests:
-    name: "Unit + state tests (Python)"
+    name: "Unit tests (Python)"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: lint-and-type-check
@@ -73,16 +100,13 @@ jobs:
       - name: Install project
         run: uv sync --frozen --all-packages --group dev
 
-      - name: Run fast test suites with coverage
+      - name: Run unit tests with coverage
         env:
           ERGON_DATABASE_URL: "sqlite:///test.db"
           # Python 3.12+ sys.monitoring backend — faster than the default
           # sys.settrace() tracer for ORM-heavy workloads like SQLAlchemy.
           COVERAGE_CORE: sysmon
-        # pytest-xdist parallelises across runner cores. `--dist=loadfile`
-        # keeps all tests in a single file on one worker, which matches the
-        # module-scoped engine fixture in tests/state/conftest.py.
-        run: uv run pytest tests/state -n auto --dist=loadfile --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
+        run: uv run pytest tests/unit -n auto --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -93,10 +117,33 @@ jobs:
   integration-tests:
     name: "Integration tests (Python)"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     needs: lint-and-type-check
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start CI stack (backend subset)
+        env:
+          # Override unified compose defaults for CI.  The integration
+          # tier doesn't need the dashboard — specify the subset to
+          # keep the job fast.
+          POSTGRES_PASSWORD: ci_test
+          ENABLE_TEST_HARNESS: "1"
+          TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-local' }}
+        run: docker compose up -d --build --wait postgres api inngest-dev
+        timeout-minutes: 10
+
+      - name: Wait for Inngest sync
+        run: |
+          echo "Waiting for Inngest to sync functions..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8289/v1/events/test > /dev/null 2>&1; then
+              echo "Inngest dev server responding"
+              break
+            fi
+            sleep 2
+          done
+          sleep 5
 
       - uses: astral-sh/setup-uv@v4
         with:
@@ -106,5 +153,17 @@ jobs:
 
       - name: Run integration tests
         env:
-          ERGON_DATABASE_URL: "sqlite:///test_integration.db"
-        run: uv run pytest tests/integration -v --timeout=120
+          ERGON_DATABASE_URL: postgresql://ergon:ci_test@localhost:5433/ergon
+          INNGEST_API_BASE_URL: http://localhost:8289
+          INNGEST_DEV: "1"
+          INNGEST_EVENT_KEY: dev
+          TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-local' }}
+        run: uv run pytest tests/integration -v --timeout=300
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml logs api --tail 200
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v

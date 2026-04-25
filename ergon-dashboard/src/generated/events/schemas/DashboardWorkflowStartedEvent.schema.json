@@ -1,92 +1,25 @@
 {
   "$defs": {
-    "EvaluatorRef": {
-      "additionalProperties": true,
-      "description": "Serialized reference to an evaluator/rubric.\n\nContains the evaluator type and its full configuration.\nThe 'type' field is the discriminator for deserialization.",
+    "TaskTreeNode": {
+      "description": "Recursive task tree node embedded in workflow.started.\n\nShape matches the dashboard Zod ``TaskTreeNodeSchema``.  Built from\n``RunGraphNode`` + ``RunGraphEdge`` + ``ExperimentDefinitionWorker``\nat emit time; see ``start_workflow._build_task_tree_for_run``.",
       "properties": {
-        "type": {
-          "description": "Evaluator type (e.g., 'StagedRubric', 'MiniF2FRubric')",
-          "title": "Type",
+        "id": {
+          "title": "Id",
           "type": "string"
-        }
-      },
-      "required": [
-        "type"
-      ],
-      "title": "EvaluatorRef",
-      "type": "object"
-    },
-    "ResourceRef": {
-      "description": "Serialized reference to a resource.\n\nThis mirrors the SDK Resource model's JSON representation.",
-      "properties": {
-        "content": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Content"
-        },
-        "mime_type_override": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Mime Type Override"
         },
         "name": {
           "title": "Name",
           "type": "string"
         },
-        "path": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Path"
+        "description": {
+          "title": "Description",
+          "type": "string"
         },
-        "url": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Url"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "title": "ResourceRef",
-      "type": "object"
-    },
-    "TaskTreeNode": {
-      "description": "Typed representation of a serialized task in the task tree.\n\nThis model represents the JSON structure stored in Experiment.task_tree.\nIt enables type-safe access to task properties without using dict.get()\nwith string keys.\n\nThe structure mirrors what serialize_task_tree() produces from a Task.",
-      "properties": {
         "assigned_to": {
-          "$ref": "#/$defs/WorkerRef",
-          "description": "Primary worker assigned to this task"
+          "$ref": "#/$defs/WorkerRef"
         },
         "children": {
-          "description": "Child tasks (empty for leaf tasks)",
+          "default": [],
           "items": {
             "$ref": "#/$defs/TaskTreeNode"
           },
@@ -94,81 +27,28 @@
           "type": "array"
         },
         "depends_on": {
-          "description": "Task UUIDs this task depends on",
+          "default": [],
           "items": {
-            "format": "uuid",
             "type": "string"
           },
           "title": "Depends On",
           "type": "array"
         },
-        "description": {
-          "description": "Task description/instructions",
-          "title": "Description",
-          "type": "string"
-        },
-        "evaluator": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/EvaluatorRef"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Evaluator/rubric configuration (if any)"
-        },
-        "evaluator_type": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Evaluator class name for quick reference",
-          "title": "Evaluator Type"
-        },
-        "full_team": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/WorkerRef"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Full team of workers (if collaborative task)",
-          "title": "Full Team"
-        },
-        "id": {
-          "description": "Task UUID",
-          "format": "uuid",
-          "title": "Id",
-          "type": "string"
-        },
         "is_leaf": {
-          "default": true,
-          "description": "True if this is an atomic task with no children",
           "title": "Is Leaf",
           "type": "boolean"
         },
-        "name": {
-          "description": "Human-readable task name",
-          "title": "Name",
-          "type": "string"
+        "resources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Resources",
+          "type": "array"
         },
         "parent_id": {
           "anyOf": [
             {
-              "format": "uuid",
               "type": "string"
             },
             {
@@ -176,43 +56,31 @@
             }
           ],
           "default": null,
-          "description": "Parent task UUID (None for root)",
           "title": "Parent Id"
-        },
-        "resources": {
-          "description": "Input resources for this task",
-          "items": {
-            "$ref": "#/$defs/ResourceRef"
-          },
-          "title": "Resources",
-          "type": "array"
         }
       },
       "required": [
         "id",
         "name",
         "description",
-        "assigned_to"
+        "assigned_to",
+        "is_leaf"
       ],
       "title": "TaskTreeNode",
       "type": "object"
     },
     "WorkerRef": {
-      "description": "Serialized reference to a worker.\n\nThis is the JSON representation of a BaseWorker for storage/display.\nThe actual worker instance is retrieved from worker_context at runtime.",
+      "description": "Reference to an ``ExperimentDefinitionWorker`` row as seen by the\ndashboard \u2014 matches the Zod ``WorkerRefSchema``.",
       "properties": {
         "id": {
-          "description": "Worker UUID",
-          "format": "uuid",
           "title": "Id",
           "type": "string"
         },
         "name": {
-          "description": "Human-readable worker name",
           "title": "Name",
           "type": "string"
         },
         "type": {
-          "description": "Worker class name for display/debugging",
           "title": "Type",
           "type": "string"
         }
@@ -226,38 +94,37 @@
       "type": "object"
     }
   },
-  "additionalProperties": false,
-  "description": "Emitted when execute_task() is called - for dashboard visualization.",
+  "additionalProperties": true,
   "properties": {
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
     "experiment_id": {
       "format": "uuid",
       "title": "Experiment Id",
       "type": "string"
     },
-    "run_id": {
-      "format": "uuid",
-      "title": "Run Id",
+    "workflow_name": {
+      "title": "Workflow Name",
       "type": "string"
+    },
+    "task_tree": {
+      "$ref": "#/$defs/TaskTreeNode"
     },
     "started_at": {
       "format": "date-time",
       "title": "Started At",
       "type": "string"
     },
-    "task_tree": {
-      "$ref": "#/$defs/TaskTreeNode"
-    },
-    "total_leaf_tasks": {
-      "title": "Total Leaf Tasks",
-      "type": "integer"
-    },
     "total_tasks": {
       "title": "Total Tasks",
       "type": "integer"
     },
-    "workflow_name": {
-      "title": "Workflow Name",
-      "type": "string"
+    "total_leaf_tasks": {
+      "title": "Total Leaf Tasks",
+      "type": "integer"
     }
   },
   "required": [

@@ -60,6 +60,8 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     worker = worker_cls(
         name=payload.assigned_worker_slug,
         model=payload.model_target,
+        task_id=payload.task_id,
+        sandbox_id=payload.sandbox_id,
     )
 
     task = BenchmarkTask(
@@ -143,7 +145,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
 
     return WorkerExecuteResult(
         success=True,
-        output_text=output.output,
+        final_assistant_message=output.output,
     )
 
 

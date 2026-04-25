@@ -5,9 +5,10 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import ClassVar, Protocol, runtime_checkable
 from uuid import UUID
 
+from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
 from ergon_core.core.providers.sandbox.event_sink import (
     NoopSandboxEventSink,
     SandboxEventSink,
@@ -26,9 +27,19 @@ class UploadableResource(Protocol):
 
 
 try:
+    from e2b import SandboxNotFoundException, TimeoutException
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 except ImportError:
     AsyncSandbox = None  # type: ignore[assignment,misc]
+
+    # Fallback stubs so `except (TimeoutException, SandboxNotFoundException)`
+    # stays syntactically valid when the e2b SDK is unavailable. They will
+    # never actually be raised because the sandbox code paths require e2b.
+    class _MissingE2BError(Exception):  # noqa: N818  # slopcop: ignore[no-broad-except]
+        pass
+
+    SandboxNotFoundException = _MissingE2BError  # type: ignore[assignment,misc]
+    TimeoutException = _MissingE2BError  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +68,22 @@ class BaseSandboxManager(ABC):
     # image — e.g. MiniF2FSandboxManager uses "ergon-minif2f-v1".
     template: str | None = None
 
+    # Environment variables that in-sandbox tools for this benchmark read.
+    # Each entry is the env-var name as it should appear inside the sandbox
+    # (e.g. ``"EXA_API_KEY"``); its value is sourced from the matching
+    # lowercase attribute on ``settings`` (e.g. ``settings.exa_api_key``).
+    # Subclasses override to declare their in-sandbox auth requirements;
+    # ``create()`` merges them into the ``envs`` dict threaded to
+    # ``AsyncSandbox.create``.
+    required_env_keys: ClassVar[tuple[str, ...]] = ()
+
     _instance: "BaseSandboxManager | None" = None
     _sandboxes: dict[UUID, "AsyncSandbox"] = {}
     _file_registries: dict[UUID, dict[str, str]] = {}
     _created_files_registry: dict[UUID, set[str]] = {}
     _run_ids: dict[UUID, UUID] = {}
     _display_task_ids: dict[UUID, UUID] = {}
+    _sandbox_manager_classes: dict[UUID, type["BaseSandboxManager"]] = {}
     _creation_locks: dict[UUID, asyncio.Lock] = {}
     _event_sink: SandboxEventSink = NoopSandboxEventSink()
 
@@ -167,8 +188,12 @@ for dir_path in dirs:
         os.makedirs(dir_path, exist_ok=True)
         try:
             os.chmod(dir_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
-        except Exception:
-            pass
+        except (PermissionError, OSError) as e:
+            # Non-fatal: some sandbox filesystems don't support chmod
+            # (tmpfs, overlayfs, etc). The directory already exists, which
+            # is what we care about; log so an actual access problem is
+            # still visible in operator logs.
+            print(f"chmod skipped for {dir_path}: {e}")
         created.append(dir_path)
     except PermissionError as e:
         failed.append(f"{dir_path}: {e}")
@@ -222,6 +247,32 @@ if created:
             content = py_file.read_bytes()
             await sandbox.files.write(remote_path, content)
 
+    def _compose_envs(self, user_envs: dict[str, str] | None) -> dict[str, str]:
+        """Merge caller-supplied envs with settings-sourced ``required_env_keys``.
+
+        For each name in ``required_env_keys``, read the matching lowercase
+        attribute on ``settings`` (e.g. ``"EXA_API_KEY"`` →
+        ``settings.exa_api_key``). A missing value (empty string / None)
+        raises ``ValueError`` so a misconfigured sandbox fails at
+        ``create()`` time rather than silently provisioning a sandbox whose
+        in-sandbox tools will 401 on every call. Caller-supplied entries
+        take precedence so tests can override individual keys.
+        """
+        composed: dict[str, str] = {}
+        for key in self.required_env_keys:
+            value = getattr(settings, key.lower(), "")  # slopcop: ignore[no-hasattr-getattr]
+            if not value:
+                raise ValueError(
+                    f"{key} is required for "
+                    f"{type(self).__name__} sandbox provisioning but is not set "
+                    f"on settings (attribute '{key.lower()}'). Set it in your "
+                    f".env or environment before creating the sandbox."
+                )
+            composed[key] = value
+        if user_envs:
+            composed.update(user_envs)
+        return composed
+
     @abstractmethod
     async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None: ...
 
@@ -255,14 +306,20 @@ if created:
                     "Please set E2B_API_KEY in your .env file or environment variables."
                 )
 
+            # Pre-flight env composition outside the SDK try/except so the
+            # ValueError from a missing required key propagates cleanly
+            # instead of being re-wrapped as a "sandbox creation failed"
+            # RuntimeError.
+            composed_envs = self._compose_envs(envs)
+
             try:
                 timeout_seconds = timeout_minutes * 60
                 create_kwargs: dict[str, str | int] = {
                     "api_key": settings.e2b_api_key,
                     "timeout": timeout_seconds,
                 }
-                if envs:
-                    create_kwargs["envs"] = envs
+                if composed_envs:
+                    create_kwargs["envs"] = composed_envs  # ty: ignore[invalid-assignment]
                 if self.template:
                     create_kwargs["template"] = self.template
                 sandbox = await AsyncSandbox.create(**create_kwargs)
@@ -278,6 +335,7 @@ if created:
             self._ensure_registries(sandbox_key)
             self._run_ids[sandbox_key] = run_id
             self._display_task_ids[sandbox_key] = display_task_id
+            self._sandbox_manager_classes[sandbox_key] = type(self)
 
             await self._event_sink.sandbox_created(
                 run_id=run_id,
@@ -328,73 +386,64 @@ if created:
         sandbox = self._get_raw_sandbox(task_id)
         try:
             content = await sandbox.files.read(sandbox_path)
-            if isinstance(content, str):
-                content = content.encode("utf-8")
-            return content
-        except Exception as e:  # slopcop: ignore[no-broad-except]
-            error_msg = str(e).lower()
-            if "timeout" in error_msg or "sandbox was not found" in error_msg:
-                logger.warning(
-                    "Sandbox timeout/not found downloading %s for task_id=%s: %s",
-                    sandbox_path,
-                    task_id,
-                    e,
-                )
-                raise RuntimeError(
-                    f"Sandbox timed out or was not found when downloading {sandbox_path}. "
-                    f"Original error: {e}"
-                ) from e
-            raise
+        except (TimeoutException, SandboxNotFoundException) as e:
+            logger.warning(
+                "Sandbox timeout/not found downloading %s for task_id=%s: %s",
+                sandbox_path,
+                task_id,
+                e,
+            )
+            raise RuntimeError(
+                f"Sandbox timed out or was not found when downloading {sandbox_path}. "
+                f"Original error: {e}"
+            ) from e
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+        return content
 
     async def list_files(self, task_id: UUID, sandbox_dir: str = "/workspace") -> list[str]:
         sandbox = self._get_raw_sandbox(task_id)
         try:
             result = await sandbox.commands.run(f"find {sandbox_dir} -type f 2>/dev/null || true")
-            if result.exit_code != 0:
-                return []
-            return [line.strip() for line in result.stdout.split("\n") if line.strip()]
-        except Exception as e:  # slopcop: ignore[no-broad-except]
-            error_msg = str(e).lower()
-            if "timeout" in error_msg or "sandbox was not found" in error_msg:
-                logger.warning(
-                    "Sandbox timeout/not found listing files for task_id=%s: %s",
-                    task_id,
-                    e,
-                )
-                return []
-            raise
-
-    async def download_all_outputs(self, task_id: UUID, output_dir: Path) -> DownloadedFiles:
-        """Download all files from /workspace/final_output to a local directory."""
-        try:
-            files = await self.list_files(task_id, "/workspace/final_output")
-            downloaded: list[DownloadedFile] = []
-
-            for file_path in files:
-                try:  # slopcop: ignore[no-nested-try]
-                    content = await self.download_file(task_id, file_path)
-                    local_path = output_dir / Path(file_path).name
-                    local_path.write_bytes(content)
-                    downloaded.append(
-                        DownloadedFile(
-                            sandbox_path=file_path,
-                            local_path=str(local_path),
-                            size_bytes=len(content),
-                        )
-                    )
-                except RuntimeError as e:
-                    logger.warning("Failed to download %s: %s", file_path, e)
-                    continue
-
-            return DownloadedFiles(files=downloaded)
-
-        except Exception as e:  # slopcop: ignore[no-broad-except]
-            logger.error(
-                "Error downloading outputs for task_id=%s: %s",
+        except (TimeoutException, SandboxNotFoundException) as e:
+            logger.warning(
+                "Sandbox timeout/not found listing files for task_id=%s: %s",
                 task_id,
                 e,
             )
-            return DownloadedFiles(files=[])
+            return []
+        if result.exit_code != 0:
+            return []
+        return [line.strip() for line in result.stdout.split("\n") if line.strip()]
+
+    async def download_all_outputs(self, task_id: UUID, output_dir: Path) -> DownloadedFiles:
+        """Download all files from /workspace/final_output to a local directory.
+
+        Per-file download failures (RuntimeError from ``download_file`` due to
+        sandbox timeout / not found) are logged and skipped. Any other error
+        propagates so unexpected failures (filesystem, permission, OOM, …)
+        do not get silently reported as 'task produced zero outputs'.
+        """
+        files = await self.list_files(task_id, "/workspace/final_output")
+        downloaded: list[DownloadedFile] = []
+
+        for file_path in files:
+            try:  # slopcop: ignore[no-nested-try]
+                content = await self.download_file(task_id, file_path)
+            except RuntimeError as e:
+                logger.warning("Failed to download %s: %s", file_path, e)
+                continue
+            local_path = output_dir / Path(file_path).name
+            local_path.write_bytes(content)
+            downloaded.append(
+                DownloadedFile(
+                    sandbox_path=file_path,
+                    local_path=str(local_path),
+                    size_bytes=len(content),
+                )
+            )
+
+        return DownloadedFiles(files=downloaded)
 
     def get_sandbox(self, task_id: UUID) -> "AsyncSandbox | None":
         """Return the raw AsyncSandbox for the given task_id, or None."""
@@ -439,10 +488,12 @@ if created:
             self._created_files_registry.pop(task_id, None)
             self._run_ids.pop(task_id, None)
             self._display_task_ids.pop(task_id, None)
+            self._sandbox_manager_classes.pop(task_id, None)
             return
 
         sandbox_id = sandbox.sandbox_id
         display_task_id = self._get_display_task_id(task_id)
+        run_id = self._run_ids.get(task_id)
         try:
             await sandbox.kill()
         except Exception as e:  # slopcop: ignore[no-broad-except]
@@ -453,11 +504,13 @@ if created:
             self._created_files_registry.pop(task_id, None)
             self._run_ids.pop(task_id, None)
             self._display_task_ids.pop(task_id, None)
+            self._sandbox_manager_classes.pop(task_id, None)
 
             await self._event_sink.sandbox_closed(
                 task_id=display_task_id,
                 sandbox_id=sandbox_id,
                 reason=reason,
+                run_id=run_id,
             )
             await self._emit_wal_entry(
                 task_id,
@@ -472,6 +525,45 @@ if created:
     @staticmethod
     async def terminate_by_sandbox_id(sandbox_id: str) -> bool:
         """Terminate a sandbox directly by its E2B sandbox_id."""
+        for task_id, sandbox in list(BaseSandboxManager._sandboxes.items()):
+            if sandbox.sandbox_id != sandbox_id:
+                continue
+
+            manager_cls = BaseSandboxManager._sandbox_manager_classes.get(
+                task_id,
+                BaseSandboxManager,
+            )
+            display_task_id = BaseSandboxManager._display_task_ids.get(task_id, task_id)
+            run_id = BaseSandboxManager._run_ids.get(task_id)
+            try:
+                await sandbox.kill()
+            except Exception as e:  # slopcop: ignore[no-broad-except]
+                logger.warning("Error killing sandbox_id=%s: %s", sandbox_id, e)
+            finally:
+                BaseSandboxManager._sandboxes.pop(task_id, None)
+                BaseSandboxManager._file_registries.pop(task_id, None)
+                BaseSandboxManager._created_files_registry.pop(task_id, None)
+                BaseSandboxManager._run_ids.pop(task_id, None)
+                BaseSandboxManager._display_task_ids.pop(task_id, None)
+                BaseSandboxManager._sandbox_manager_classes.pop(task_id, None)
+
+                await manager_cls._event_sink.sandbox_closed(
+                    task_id=display_task_id,
+                    sandbox_id=sandbox_id,
+                    reason="completed",
+                    run_id=run_id,
+                )
+                await manager_cls._event_sink.sandbox_command(
+                    run_id=run_id or task_id,
+                    task_id=display_task_id,
+                    sandbox_id=sandbox_id,
+                    command="sandbox.closed: completed",
+                    stdout=f"sandbox_id={sandbox_id}",
+                    exit_code=0,
+                    duration_ms=0,
+                )
+            return True
+
         if AsyncSandbox is None:
             logger.warning(
                 "e2b_code_interpreter not installed; cannot terminate sandbox %s",
@@ -480,23 +572,58 @@ if created:
             return False
         try:
             await AsyncSandbox.kill(sandbox_id=sandbox_id, api_key=settings.e2b_api_key)
-            logger.info("Successfully terminated sandbox %s", sandbox_id)
-            return True
-        except Exception as e:  # slopcop: ignore[no-broad-except]
-            error_str = str(e).lower()
-            if "not found" in error_str or "404" in error_str:
-                logger.info("Sandbox %s already terminated or not found", sandbox_id)
-                return False
-            logger.warning("Error terminating sandbox %s: %s", sandbox_id, e)
+        except SandboxNotFoundException:
+            logger.info("Sandbox %s already terminated or not found", sandbox_id)
             return False
+        logger.info("Successfully terminated sandbox %s", sandbox_id)
+        return True
+
+    async def reconnect(self, sandbox_id: str) -> "AsyncSandbox":
+        """Attach to a running sandbox by its E2B ``sandbox_id``.
+
+        Returns an ``AsyncSandbox`` handle. Raises ``SandboxExpiredError``
+        if the sandbox is not found or has already timed out. Idempotent:
+        two calls for the same ``sandbox_id`` return equivalent handles.
+
+        Use this path for cross-process criterion reconnect. In-process
+        criteria should prefer ``get_sandbox(task_id)`` which reads shared
+        class state. ``reconnect`` deliberately does NOT register the
+        sandbox in ``_sandboxes``; cross-process callers hold the returned
+        handle directly.
+        """
+        if AsyncSandbox is None:
+            raise RuntimeError(
+                "e2b_code_interpreter is not installed. "
+                "Install it with: pip install e2b-code-interpreter"
+            )
+        try:
+            sandbox = await AsyncSandbox.connect(
+                sandbox_id=sandbox_id,
+                api_key=settings.e2b_api_key,
+            )
+        except SandboxNotFoundException as exc:
+            raise SandboxExpiredError(sandbox_id, detail=str(exc)) from exc
+        except TimeoutException as exc:
+            raise SandboxExpiredError(sandbox_id, detail=str(exc)) from exc
+        except Exception as exc:  # slopcop: ignore[no-broad-except]
+            # Classify by message as a fallback for SDK error shapes that
+            # don't inherit the two named exceptions above. We only catch
+            # the expiry-adjacent cases here; other errors re-raise so
+            # unrelated bugs aren't silently reclassified.
+            err = str(exc).lower()
+            if "not found" in err or "404" in err or "expired" in err or "timeout" in err:
+                raise SandboxExpiredError(sandbox_id, detail=str(exc)) from exc
+            raise
+        return sandbox
 
 
 class DefaultSandboxManager(BaseSandboxManager):
     """No custom dependencies. Used by benchmarks without specific sandbox setup.
 
-    If E2B_API_KEY is not configured (e.g. CI stub runs) the sandbox step is
-    skipped entirely and SANDBOX_SKIPPED is returned so the task can still run
-    with a worker that doesn't need filesystem access.
+    If ``E2B_API_KEY`` is not configured (e.g. CI stub runs) this manager
+    transparently delegates to ``StubSandboxManager`` -- the task still
+    runs, but no E2B sandbox is provisioned and the returned sandbox_id is
+    a well-formed stub id (see :func:`is_stub_sandbox_id`).
     """
 
     async def create(
@@ -508,14 +635,13 @@ class DefaultSandboxManager(BaseSandboxManager):
         display_task_id: UUID | None = None,
     ) -> str:
         if not settings.e2b_api_key:
-            # Deferred: avoid a circular import between providers and runtime events.
-            from ergon_core.core.runtime.events.task_events import SANDBOX_SKIPPED
-
-            logger.info(
-                "E2B_API_KEY not set — skipping sandbox creation for task %s (stub mode)",
+            return await StubSandboxManager().create(
                 sandbox_key,
+                run_id=run_id,
+                timeout_minutes=timeout_minutes,
+                envs=envs,
+                display_task_id=display_task_id,
             )
-            return SANDBOX_SKIPPED
         return await super().create(
             sandbox_key,
             run_id=run_id,
@@ -526,3 +652,64 @@ class DefaultSandboxManager(BaseSandboxManager):
 
     async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         pass
+
+
+# ── Stub sandbox manager ──────────────────────────────────────────────────
+
+_STUB_SANDBOX_PREFIX = "stub-sandbox-"
+
+
+def is_stub_sandbox_id(sandbox_id: object) -> bool:
+    """Return True iff ``sandbox_id`` was produced by :class:`StubSandboxManager`.
+
+    Stub sandbox ids are produced by the CI / no-E2B-key code path. Any
+    teardown or download code that touches the E2B API must skip when this
+    returns True, otherwise the call will fail (no API key, no sandbox
+    exists on the E2B side).
+
+    Accepts ``object`` because some call sites read ``sandbox_id`` out of
+    a loosely-typed JSON summary (``dict[str, Any]``).
+    """
+    return isinstance(sandbox_id, str) and sandbox_id.startswith(_STUB_SANDBOX_PREFIX)
+
+
+class StubSandboxManager(BaseSandboxManager):
+    """No-op sandbox manager used when E2B is not configured.
+
+    ``create`` returns a synthetic id (``stub-sandbox-<uuid>``). ``terminate``
+    and other lifecycle methods are no-ops. Consumers that must distinguish
+    the stub path can call :func:`is_stub_sandbox_id` -- the sentinel string
+    ``"skipped"`` and the ``SandboxId = str | Literal["skipped"]`` union it
+    required have both been retired.
+    """
+
+    async def create(
+        self,
+        sandbox_key: UUID,
+        run_id: UUID,
+        timeout_minutes: int = 30,
+        envs: dict[str, str] | None = None,
+        display_task_id: UUID | None = None,
+    ) -> str:
+        stub_id = f"{_STUB_SANDBOX_PREFIX}{sandbox_key}"
+        logger.info(
+            "E2B_API_KEY not set — returning stub sandbox id %s for task %s (stub mode)",
+            stub_id,
+            sandbox_key,
+        )
+        self._ensure_registries(sandbox_key)
+        self._run_ids[sandbox_key] = run_id
+        self._display_task_ids[sandbox_key] = display_task_id or sandbox_key
+        return stub_id
+
+    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
+        return None
+
+    async def terminate(self, task_id: UUID, reason: str = "completed") -> None:
+        self._file_registries.pop(task_id, None)
+        self._created_files_registry.pop(task_id, None)
+        self._run_ids.pop(task_id, None)
+        self._display_task_ids.pop(task_id, None)
+
+    async def reset_timeout(self, task_id: UUID, timeout_minutes: int = 30) -> bool:
+        return True

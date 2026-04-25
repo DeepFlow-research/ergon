@@ -9,9 +9,11 @@ all evaluations complete.
 import logging
 
 import inngest
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.providers.sandbox.manager import (
+    BaseSandboxManager,
+    is_stub_sandbox_id,
+)
 from ergon_core.core.runtime.events.task_events import (
-    SANDBOX_SKIPPED,
     TaskCompletedEvent,
 )
 from ergon_core.core.runtime.inngest.evaluate_task_run import evaluate_task_run
@@ -91,7 +93,7 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
 
 async def _terminate_sandbox(sandbox_id: str) -> None:
     """Terminate the task's sandbox if one was created."""
-    if sandbox_id == SANDBOX_SKIPPED:
+    if is_stub_sandbox_id(sandbox_id):
         return
     try:
         await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)

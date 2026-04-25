@@ -1,11 +1,14 @@
-"""Integration test: SWEBenchTestCriterion.evaluate() uses runtime.ensure_sandbox().
+"""Integration test: SWEBenchTestCriterion.evaluate() uses Protocol-only runtime ops.
 
 After Task 0 (PR 2 of the criterion-runtime-di-container RFC), the criterion
-must NOT construct ``SWEBenchSandboxManager`` directly.  It must instead call
-``context.runtime.ensure_sandbox()`` and retrieve the sandbox via
-``context.runtime.sandbox_manager.get_sandbox()``.
+must NOT construct ``SWEBenchSandboxManager`` directly.  It calls
+``context.runtime.ensure_sandbox()`` to bring up a sandbox and then drives
+the harness entirely through ``runtime.run_command`` and
+``runtime.write_file`` — no reach-through to the concrete
+``sandbox_manager.get_sandbox`` attribute (RFC 2026-04-22 §3).
 
 Refs: docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md (PR 2 of 2)
+      docs/rfcs/active/2026-04-22-worker-interface-and-artifact-routing.md (§3)
 Closes: docs/bugs/open/2026-04-18-swebench-criterion-spawns-sandbox.md
 """
 
@@ -18,6 +21,7 @@ from uuid import uuid4
 import pytest
 
 from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
+from ergon_core.api.criterion_runtime import CommandResult
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
@@ -49,25 +53,32 @@ def _task() -> BenchmarkTask:
 
 @pytest.mark.asyncio
 async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
-    """Criterion calls runtime.ensure_sandbox(), not the removed _spawn_eval_sandbox."""
-    sandbox = AsyncMock()
-    sandbox.commands.run = AsyncMock(return_value=MagicMock(exit_code=0, stdout="log", stderr=""))
-    sandbox.files.write = AsyncMock()
+    """Criterion calls runtime.ensure_sandbox(), not the removed _spawn_eval_sandbox.
 
+    reason: RFC 2026-04-22 §3 — all sandbox ops go through Protocol methods
+    (``run_command``, ``write_file``); the concrete ``sandbox_manager``
+    attribute is never touched.
+    """
     mock_runtime = MagicMock()
     mock_runtime.ensure_sandbox = AsyncMock()
-    mock_runtime.sandbox_manager.get_sandbox.return_value = sandbox
+    mock_runtime.write_file = AsyncMock()
+    # Criterion extracts the patch, runs install_repo, applies patches, and
+    # runs the eval script — all via run_command. A single benign success
+    # return value is enough to drive the happy-path harness shape.
+    mock_runtime.run_command = AsyncMock(
+        return_value=CommandResult(
+            stdout="diff --git a/foo.py b/foo.py\n+pass\n",
+            stderr="",
+            exit_code=0,
+        )
+    )
 
     ctx = EvaluationContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
         task=_task(),
-        worker_result=WorkerOutput(
-            output="diff --git a/foo.py b/foo.py\n+pass",
-            success=True,
-            artifacts={"patch": "diff --git a/foo.py b/foo.py\n+pass"},
-        ),
+        worker_result=WorkerOutput(output="", success=True),
         runtime=mock_runtime,
     )
 

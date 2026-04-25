@@ -18,16 +18,16 @@ export type MutationType = z.infer<typeof MutationTypeSchema>;
 
 export const UpdatableNodeFieldSchema = z.enum([
   "description",
-  "assigned_worker_key",
+  "assigned_worker_slug",
 ]);
 export type UpdatableNodeField = z.infer<typeof UpdatableNodeFieldSchema>;
 
 export const NodeAddedValueSchema = z.object({
-  task_key: z.string().min(1),
+  task_slug: z.string().min(1),
   instance_key: z.string().min(1),
   description: z.string(),
   status: z.string(),
-  assigned_worker_key: z.string().nullable(),
+  assigned_worker_slug: z.string().nullable(),
 });
 export type NodeAddedValue = z.infer<typeof NodeAddedValueSchema>;
 

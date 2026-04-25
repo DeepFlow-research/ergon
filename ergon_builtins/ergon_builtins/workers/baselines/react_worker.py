@@ -8,7 +8,7 @@ from collections.abc import AsyncGenerator
 from typing import Any, Self
 from uuid import UUID
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerOutput
+from ergon_core.api import BenchmarkTask, Tool, Worker, WorkerContext, WorkerOutput
 from ergon_core.api.generation import (
     GenerationTurn,
     SystemPromptPart,
@@ -24,6 +24,7 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.providers.generation.model_resolution import resolve_model_target
 from ergon_core.core.providers.generation.pydantic_ai_format import extract_logprobs
 from ergon_core.core.rl import LOGPROB_SETTINGS
+
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
@@ -57,15 +58,20 @@ logger = logging.getLogger(__name__)
 class _AgentOutput(BaseModel):
     """Structured output the ReAct agent returns at the end of a run."""
 
-    output_text: str
+    final_assistant_message: str
     reasoning: str | None = None
 
 
 class ReActWorker(Worker):
     """ReAct-style worker that delegates to a pydantic-ai Agent.
 
-    Yields ``GenerationTurn`` objects after the run completes.
-    Each yielded turn is persisted to PG by the runtime.
+    Yields ``GenerationTurn`` objects after the run completes. Each
+    yielded turn is persisted to PG by the runtime.
+
+    All wiring (tool list, system prompt, iteration budget) is supplied
+    at construction time — the worker is framework-agnostic. Registry
+    factories build per-benchmark instances by closing over the sandbox
+    and passing a concrete toolkit through ``tools=``.
     """
 
     type_slug = "react-v1"
@@ -74,15 +80,17 @@ class ReActWorker(Worker):
         self,
         *,
         name: str,
-        model: str | None = None,
-        tools: list[Any] | None = None,  # slopcop: ignore[no-typing-any]
-        system_prompt: str | None = None,
-        max_iterations: int = 10,
+        model: str | None,
+        task_id: UUID,
+        sandbox_id: str,
+        tools: list[Tool],
+        system_prompt: str | None,
+        max_iterations: int,
     ) -> None:
-        super().__init__(name=name, model=model)
-        self.tools: list[Any] = tools or []  # slopcop: ignore[no-typing-any]
+        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
+        self.tools: list[Tool] = tools
         self.system_prompt: str | None = system_prompt
-        self.max_iterations = max_iterations
+        self.max_iterations: int = max_iterations
         self._seed_messages: list[ModelMessage] | None = None
 
     async def execute(
@@ -91,6 +99,14 @@ class ReActWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
+        async for turn in self._run_agent(task):
+            yield turn
+
+    async def _run_agent(
+        self,
+        task: BenchmarkTask,
+    ) -> AsyncGenerator[GenerationTurn, None]:
+        """Run the underlying pydantic-ai agent and yield the turns it produced."""
         resolved = resolve_model_target(self.model)
 
         model_settings: dict[str, object] | None = None
@@ -133,6 +149,10 @@ class ReActWorker(Worker):
 
     def get_output(self, context: WorkerContext) -> WorkerOutput:
         """Extract the agent's text output from the last context event."""
+        return self._base_output(context)
+
+    def _base_output(self, context: WorkerContext) -> WorkerOutput:
+        """Build the worker's output from persisted context events."""
         # reason: avoid circular import at module level
         from ergon_core.core.persistence.context.event_payloads import (
             AssistantTextPayload,

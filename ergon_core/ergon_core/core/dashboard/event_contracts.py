@@ -1,12 +1,17 @@
 """Dashboard event contracts for real-time UI updates via Inngest.
 
 Every contract here must match the corresponding Zod schema in
-ergon-dashboard/src/lib/contracts/events.ts exactly.
+ergon-dashboard/src/generated/events/*.ts — the latter is generated from
+these models via scripts/export_contract_schemas.py +
+json-schema-to-zod (see package.json ``generate:contracts``).  Any
+change here that isn't regenerated will fail the CI drift check.
 """
 
 from datetime import datetime
 from typing import Any, ClassVar
 from uuid import UUID
+
+from pydantic import BaseModel
 
 from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
@@ -21,23 +26,36 @@ from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 # ---------------------------------------------------------------------------
 
 
-class TaskTreeNode(InngestEventContract):
-    """Recursive task tree node embedded in workflow.started."""
+class WorkerRef(BaseModel):
+    """Reference to an ``ExperimentDefinitionWorker`` row as seen by the
+    dashboard — matches the Zod ``WorkerRefSchema``."""
 
-    name: ClassVar[str] = "__embedded__"
+    model_config = {"frozen": True}
 
     id: str
-    name_field: str  # serialized as "name" via alias below
-    status: str
-    is_leaf: bool
+    name: str
+    type: str
+
+
+class TaskTreeNode(BaseModel):
+    """Recursive task tree node embedded in workflow.started.
+
+    Shape matches the dashboard Zod ``TaskTreeNodeSchema``.  Built from
+    ``RunGraphNode`` + ``RunGraphEdge`` + ``ExperimentDefinitionWorker``
+    at emit time; see ``start_workflow._build_task_tree_for_run``.
+    """
+
+    model_config = {"frozen": True}
+
+    id: str
+    name: str
+    description: str
+    assigned_to: WorkerRef
     children: list["TaskTreeNode"] = []
-
-    model_config = {"extra": "allow", "populate_by_name": True}
-
-    def model_dump(self, **kwargs: Any) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
-        d = super().model_dump(**kwargs)
-        d["name"] = d.pop("name_field", "")
-        return d
+    depends_on: list[str] = []
+    is_leaf: bool
+    resources: list[str] = []
+    parent_id: str | None = None
 
 
 TaskTreeNode.model_rebuild()
@@ -53,7 +71,7 @@ class DashboardWorkflowStartedEvent(InngestEventContract):
     run_id: UUID
     experiment_id: UUID
     workflow_name: str
-    task_tree: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    task_tree: TaskTreeNode
     started_at: datetime
     total_tasks: int
     total_leaf_tasks: int
@@ -91,7 +109,15 @@ class DashboardTaskStatusChangedEvent(InngestEventContract):
 
 
 class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
-    """Embeds the full RunTaskEvaluationDto (camelCase) as `evaluation`."""
+    """Embeds the full RunTaskEvaluationDto (camelCase) as `evaluation`.
+
+    TODO(E2b, bug file § D): tighten ``evaluation`` to
+    ``RunTaskEvaluationDto``.  Deferred because the current emitter in
+    ``evaluate_task_run.py`` hand-rolls the dict and doesn't have
+    access to the rich criterion metadata (stage_num, stage_name,
+    criterion_num, criterion_description) the dashboard schema
+    requires.  Fixing both together is an independent unit of work.
+    """
 
     name: ClassVar[str] = "dashboard/task.evaluation_updated"
 
@@ -164,7 +190,13 @@ class DashboardSandboxClosedEvent(InngestEventContract):
 
 
 class DashboardThreadMessageCreatedEvent(InngestEventContract):
-    """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto (camelCase)."""
+    """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto (camelCase).
+
+    TODO(E2b): tighten ``thread`` / ``message`` to
+    ``RunCommunicationThreadDto`` / ``RunCommunicationMessageDto``.
+    Deferred for the same reason as evaluation above — the emitter
+    needs an updated construction path.
+    """
 
     name: ClassVar[str] = "dashboard/thread.message_created"
 
@@ -179,6 +211,9 @@ class DashboardThreadMessageCreatedEvent(InngestEventContract):
 
 
 class CohortUpdatedEvent(InngestEventContract):
+    """TODO(E2b): tighten ``summary`` to ``CohortSummaryDto`` and update
+    the emitter accordingly."""
+
     name: ClassVar[str] = "dashboard/cohort.updated"
 
     cohort_id: UUID

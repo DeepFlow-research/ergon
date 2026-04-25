@@ -65,6 +65,12 @@ pnpm run test:be:e2e    # E2E tests (requires Docker stack)
 - `ty` for type checking (not mypy)
 - New workspace members: add paths in `package.json` and `.github/workflows/ci-fast.yml`
 - `slopcop`: `no-print` is ignored in CLI, infra, rendering, tests, and scripts (see `[tool.slopcop]` in `pyproject.toml`)
+- **Lazy imports are banned.** The only acceptable reason to defer an import
+  to call-site scope is a genuine circular import that cannot be resolved by
+  restructuring modules. "Keeping the import graph narrow", "faster startup",
+  "tests can monkeypatch", and "pulls in heavy deps" are NOT acceptable
+  reasons — restructure the code instead. Any lazy import must be accompanied
+  by a `# reason:` comment that cites the specific cycle it breaks.
 
 ## Architecture docs (canonical reference)
 
@@ -100,3 +106,50 @@ architecture docs out of date are NAK'd regardless of test state.
 and `ls docs/bugs/open/` are the canonical "what's in flight" queries. When an
 RFC is accepted or a bug fixed, move the file — don't just flip a frontmatter
 field.
+
+## Debugging
+
+### Inngest function failures (primary workflow telemetry)
+
+Ergon's workflow engine is Inngest-dev. When tasks/runs misbehave, the api
+container's Python logs are often silent (uvicorn + reloader eats handler
+output), but Inngest-dev keeps a full record of every function run and its
+error payload. Query it via GraphQL at `http://localhost:8289/v0/gql`.
+
+**Reach for this first** when investigating "workflow stuck in EXECUTING",
+"run never completes", "task stuck in RUNNING", dashboard zod schema
+failures, or any "silently failing" workflow behavior. Covers backend
+*and* dashboard function failures — the dashboard's inngest handlers
+surface Zod validation errors in the exact same place.
+
+Minimal one-shot: last N minutes of failures, grouped by function, one
+sample error per function:
+
+```bash
+FROM_TIME=$(date -u -v-15M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+         || date -u -d '15 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+curl -s -X POST http://localhost:8289/v0/gql -H 'Content-Type: application/json' \
+  -d "{\"query\":\"query { runs(first: 40, orderBy: [{field: QUEUED_AT, direction: DESC}], filter: { from: \\\"${FROM_TIME}\\\", status: [FAILED] }) { edges { node { function { slug } output } } } }\"}" \
+  | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+from collections import Counter
+by_fn, samples = Counter(), {}
+for e in d['data']['runs']['edges']:
+    slug = e['node']['function']['slug']
+    by_fn[slug] += 1
+    if slug not in samples:
+        out = e['node'].get('output') or ''
+        try: samples[slug] = json.loads(out).get('message', out)[:400]
+        except Exception: samples[slug] = out[:400]
+for fn, n in by_fn.most_common(): print(f'{n:3}x  {fn}')
+print()
+for fn, msg in samples.items():
+    print(f'--- {fn} ---'); print(msg); print()
+"
+```
+
+Other useful GraphQL queries on the same endpoint: `run(runID:)` for a
+single run's full history, `functions` for the registered function
+catalog, `events(…)` to inspect raw event payloads. Introspection is on:
+`{ __schema { queryType { fields { name } } } }`.

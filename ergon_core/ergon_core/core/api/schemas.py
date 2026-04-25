@@ -61,7 +61,7 @@ class RunExecutionAttemptDto(CamelModel):
     status: str
     started_at: datetime | None = None
     completed_at: datetime | None = None
-    output_text: str | None = None
+    final_assistant_message: str | None = None
     error_message: str | None = None
     score: float | None = None
     agent_id: str | None = None

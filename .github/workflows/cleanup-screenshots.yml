@@ -1,0 +1,19 @@
+name: Cleanup PR screenshots branch
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  delete-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete screenshots/pr-<N>
+        run: |
+          branch="screenshots/pr-${{ github.event.pull_request.number }}"
+          # Graceful: branch may not exist if e2e-benchmarks never ran.
+          git push origin --delete "$branch" || echo "branch $branch already gone"

@@ -25,16 +25,18 @@ import {
   parseDashboardCohortUpdatedData,
   parseDashboardGenerationTurnCompletedData,
   parseDashboardGraphMutationData,
-  parseDashboardResourcePublishedData,
-  parseDashboardSandboxClosedData,
-  parseDashboardSandboxCommandData,
-  parseDashboardSandboxCreatedData,
   parseDashboardTaskEvaluationUpdatedData,
-  parseDashboardTaskStatusChangedData,
   parseDashboardThreadMessageCreatedData,
-  parseDashboardWorkflowCompletedData,
   parseDashboardWorkflowStartedData,
 } from "@/lib/contracts/events";
+import {
+  DashboardResourcePublishedEventSchema,
+  DashboardSandboxClosedEventSchema,
+  DashboardSandboxCommandEventSchema,
+  DashboardSandboxCreatedEventSchema,
+  DashboardTaskStatusChangedEventSchema,
+  DashboardWorkflowCompletedEventSchema,
+} from "@/generated/events";
 import {
   GenerationTurnState,
   ResourceState,
@@ -99,7 +101,7 @@ const onWorkflowCompleted = inngest.createFunction(
   { id: "dashboard-workflow-completed" },
   { event: "dashboard/workflow.completed" },
   async ({ event }) => {
-    const payload = parseDashboardWorkflowCompletedData(event.data);
+    const payload = DashboardWorkflowCompletedEventSchema.parse(event.data);
     const {
       run_id,
       status,
@@ -108,6 +110,9 @@ const onWorkflowCompleted = inngest.createFunction(
       final_score,
       error,
     } = payload;
+    // Generated schema types ``status`` as ``string``; the store/socket
+    // layer narrows to the wire-level literal union.
+    const narrowedStatus = status as "completed" | "failed";
 
     console.log("[Dashboard] Workflow completed:", {
       run_id,
@@ -118,7 +123,7 @@ const onWorkflowCompleted = inngest.createFunction(
     // Update store
     store.completeRun(
       run_id,
-      status,
+      narrowedStatus,
       completed_at,
       duration_seconds,
       final_score ?? null,
@@ -128,7 +133,7 @@ const onWorkflowCompleted = inngest.createFunction(
     // Broadcast to run subscribers
     broadcastRunCompleted(
       run_id,
-      status,
+      narrowedStatus,
       completed_at,
       duration_seconds,
       final_score ?? null,
@@ -183,7 +188,7 @@ const onTaskStatusChanged = inngest.createFunction(
   { id: "dashboard-task-status-changed" },
   { event: "dashboard/task.status_changed" },
   async ({ event }) => {
-    const payload = parseDashboardTaskStatusChangedData(event.data);
+    const payload = DashboardTaskStatusChangedEventSchema.parse(event.data);
     const {
       run_id,
       task_id,
@@ -233,7 +238,7 @@ const onResourcePublished = inngest.createFunction(
   { id: "dashboard-resource-published" },
   { event: "dashboard/resource.published" },
   async ({ event }) => {
-    const payload = parseDashboardResourcePublishedData(event.data);
+    const payload = DashboardResourcePublishedEventSchema.parse(event.data);
     const {
       run_id,
       task_id,
@@ -284,7 +289,7 @@ const onSandboxCreated = inngest.createFunction(
   { id: "dashboard-sandbox-created" },
   { event: "dashboard/sandbox.created" },
   async ({ event }) => {
-    const payload = parseDashboardSandboxCreatedData(event.data);
+    const payload = DashboardSandboxCreatedEventSchema.parse(event.data);
     const { run_id, task_id, sandbox_id, template, timeout_minutes, timestamp } =
       payload;
 
@@ -321,7 +326,7 @@ const onSandboxCommand = inngest.createFunction(
   { id: "dashboard-sandbox-command" },
   { event: "dashboard/sandbox.command" },
   async ({ event }) => {
-    const payload = parseDashboardSandboxCommandData(event.data);
+    const payload = DashboardSandboxCommandEventSchema.parse(event.data);
     const {
       task_id,
       sandbox_id,
@@ -382,9 +387,8 @@ const onSandboxClosed = inngest.createFunction(
   { id: "dashboard-sandbox-closed" },
   { event: "dashboard/sandbox.closed" },
   async ({ event }) => {
-    const { task_id, sandbox_id, reason, timestamp } = parseDashboardSandboxClosedData(
-      event.data,
-    );
+    const { task_id, sandbox_id, reason, timestamp } =
+      DashboardSandboxClosedEventSchema.parse(event.data);
 
     console.log("[Dashboard] Sandbox closed:", {
       task_id,

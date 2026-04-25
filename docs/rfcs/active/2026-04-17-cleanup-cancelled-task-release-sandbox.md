@@ -211,7 +211,7 @@ class TaskCancelledEvent(InngestEventContract):
 
 ```python
 # ergon_core/ergon_core/core/persistence/telemetry/models.py
-# Add to RunTaskExecution (after existing fields, before output_text):
+# Add to RunTaskExecution (after existing fields, before final_assistant_message):
 
     sandbox_id: str | None = Field(
         default=None,

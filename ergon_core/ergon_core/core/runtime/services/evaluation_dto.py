@@ -19,7 +19,7 @@ class PreparedSingleEvaluator(BaseModel):
 class PreparedEvaluatorDispatch(BaseModel):
     model_config = {"frozen": True}
 
-    task_id: UUID
+    task_id: UUID | None
     evaluators_found: int = 0
     invalid_evaluator_ids: list[UUID] = Field(default_factory=list)
     valid_evaluators: list[PreparedSingleEvaluator] = Field(default_factory=list)
@@ -30,5 +30,5 @@ class DispatchEvaluatorsCommand(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     execution_id: UUID

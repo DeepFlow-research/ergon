@@ -201,7 +201,7 @@ class DashboardStore {
           agentName: assignedWorkerName ?? task.assignedWorkerName,
           startedAt: timestamp,
           completedAt: null,
-          outputText: null,
+          finalAssistantMessage: null,
           outputResourceIds: [],
           errorMessage: null,
           score: null,

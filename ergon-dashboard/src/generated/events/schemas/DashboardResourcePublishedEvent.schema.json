@@ -1,13 +1,19 @@
 {
-  "additionalProperties": false,
-  "description": "Emitted when a task produces an output resource.",
+  "additionalProperties": true,
   "properties": {
-    "file_path": {
-      "title": "File Path",
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
       "type": "string"
     },
-    "mime_type": {
-      "title": "Mime Type",
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "task_execution_id": {
+      "format": "uuid",
+      "title": "Task Execution Id",
       "type": "string"
     },
     "resource_id": {
@@ -19,23 +25,16 @@
       "title": "Resource Name",
       "type": "string"
     },
-    "run_id": {
-      "format": "uuid",
-      "title": "Run Id",
+    "mime_type": {
+      "title": "Mime Type",
       "type": "string"
     },
     "size_bytes": {
       "title": "Size Bytes",
       "type": "integer"
     },
-    "task_execution_id": {
-      "format": "uuid",
-      "title": "Task Execution Id",
-      "type": "string"
-    },
-    "task_id": {
-      "format": "uuid",
-      "title": "Task Id",
+    "file_path": {
+      "title": "File Path",
       "type": "string"
     },
     "timestamp": {

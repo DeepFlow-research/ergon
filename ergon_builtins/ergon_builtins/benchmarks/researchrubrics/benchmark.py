@@ -7,6 +7,9 @@ whether agents know when and what to ask stakeholders.
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
+from datasets import load_dataset
+from huggingface_hub import HfApi
+
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
@@ -93,19 +96,19 @@ class ResearchRubricsBenchmark(Benchmark):
 
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
-        # Deferred: optional dependency
-        from datasets import load_dataset
-
-        # Deferred: optional dependency
-        from huggingface_hub import HfApi
-
         dataset_name = self.dataset_name
+        # reason: avoids circular import at module level
+        from ergon_core.core.settings import settings
+
+        token = settings.hf_api_key
         if dataset_name is None:
-            api = HfApi()
+            if token is None:
+                raise RuntimeError("HF_API_KEY must be set when dataset_name is not provided")
+            api = HfApi(token=token)
             user_info = api.whoami()
             dataset_name = f"{user_info['name']}/researchrubrics-ablated"
 
-        ds = load_dataset(dataset_name)
+        ds = load_dataset(dataset_name, token=token)
         train_ds = ds["train"]
 
         if self.limit:

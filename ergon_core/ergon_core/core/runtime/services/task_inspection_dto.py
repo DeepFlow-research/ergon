@@ -6,7 +6,15 @@ from pydantic import BaseModel
 
 from ergon_core.core.persistence.shared.types import NodeId
 
-SubtaskStatus = Literal["pending", "ready", "running", "completed", "failed", "cancelled"]
+SubtaskStatus = Literal[
+    "pending",
+    "ready",
+    "running",
+    "completed",
+    "failed",
+    "blocked",
+    "cancelled",
+]
 
 
 class SubtaskInfo(BaseModel):

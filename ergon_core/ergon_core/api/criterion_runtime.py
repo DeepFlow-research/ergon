@@ -76,6 +76,16 @@ class CriterionRuntime(Protocol):
     # ── resource I/O ──────────────────────────────────────────────────
     async def read_resource(self, name: str) -> bytes: ...
     async def list_resources(self) -> "list[RunResourceView]": ...
+    async def get_all_files_for_task(self) -> "dict[str, bytes]":
+        """Return ``{name: bytes}`` for every resource produced by this task.
+
+        Scoped to the ``(run_id, task_id)`` the runtime was constructed
+        with.  On duplicate ``name`` s (same file published multiple
+        times) the newest ``created_at`` wins.  Not size-capped — callers
+        expecting large resources should use ``list_resources()`` +
+        ``read_resource()`` instead.
+        """
+        ...
 
     # ── DB access ─────────────────────────────────────────────────────
     def db_read_session(self) -> "Session": ...

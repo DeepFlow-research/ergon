@@ -298,7 +298,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         _mark_turns_as_failed(payload.execution_id)
         raise
 
-    return WorkerExecuteResult(success=output.success, output_text=output.output)
+    return WorkerExecuteResult(success=output.success, final_assistant_message=output.output)
 ```
 
 **On crash:** The `except` block fires. Turns 0 through N-1 (everything

@@ -2,17 +2,25 @@
 
 Per-task setup (cloning the repo at ``base_commit``, creating the venv at
 the right Python version, installing deps) is driven by
-``swebench.harness.test_spec`` and is performed by the worker at task
-start, not here.  This manager only provisions the E2B sandbox from the
-pre-built template.
+``swebench.harness.test_spec`` and runs inside
+``_install_dependencies`` so it executes exactly once per sandbox_key.
+The task payload is fetched from the data layer (``queries.task_executions.
+get_task_payload``) rather than piggy-backing on the Inngest event.
 """
 
 import logging
+import shlex
 from uuid import UUID
 
+from ergon_core.core.persistence.queries import queries
+from ergon_core.core.providers.sandbox.errors import SandboxSetupError
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
+from ergon_builtins.benchmarks.swebench_verified.criterion import make_test_spec
 from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
+from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import (
+    payload_to_swebench_row,
+)
 
 try:
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
@@ -56,9 +64,42 @@ class SWEBenchSandboxManager(BaseSandboxManager):
         )
 
     async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
-        # Template is pre-built; per-task repo clone / venv / dep install is
-        # driven by the worker using swebench.harness.test_spec scripts.
-        pass
+        """Clone the repo at base_commit and install deps for this SWE-Bench instance.
+
+        Payload is fetched from the data layer (no event-payload leak);
+        ``make_test_spec`` produces the canonical setup + install shell
+        scripts.  Called exactly once per sandbox by
+        ``BaseSandboxManager.create()`` — the early-return at ``create()``
+        guards idempotence, so re-entry does not re-run these scripts.
+        """
+        payload = queries.task_executions.get_task_payload(task_id)
+        if payload is None:
+            raise SandboxSetupError(
+                f"No task_payload for task_id={task_id}; prepare step must commit "
+                "before sandbox-setup dispatches."
+            )
+        row = payload_to_swebench_row(payload)
+        spec = make_test_spec(row)
+
+        for label, script in (
+            ("setup_env", spec.setup_env_script),
+            ("install_repo", spec.install_repo_script),
+        ):
+            logger.info(
+                "SWE-Bench _install_dependencies running %s for task_id=%s",
+                label,
+                task_id,
+            )
+            r = await sandbox.commands.run(
+                f"bash -c {shlex.quote(script)}",
+                timeout=1800,
+            )
+            if r.exit_code != 0:
+                tail = (r.stdout or "")[-1000:]
+                raise SandboxSetupError(
+                    f"swebench {label} failed for task_id={task_id}: exit={r.exit_code} "
+                    f"tail={tail!r}"
+                )
 
     async def _verify_setup(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         logger.info("Verifying SWE-Bench toolchain in sandbox (task_id=%s) …", task_id)
