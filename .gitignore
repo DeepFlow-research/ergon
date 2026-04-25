@@ -36,6 +36,12 @@ data/
 .ergon/
 checkpoints/
 .worktrees/
+tests/real_llm/.rollouts/
+
+# LaTeX build intermediates
+*.aux
+*.log
+*.out
 
 # Coverage reports
 coverage.xml
