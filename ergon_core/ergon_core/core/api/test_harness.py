@@ -24,12 +24,14 @@ from ergon_cli.composition import build_experiment
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
     RunTaskExecution,
+    Thread,
 )
 from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -48,13 +50,17 @@ router = APIRouter(prefix="/api/test", tags=["test-harness"])
 
 
 class TestGraphNodeDto(BaseModel):
+    id: UUID
     task_slug: str
     level: int
     status: str
+    parent_node_id: UUID | None
     parent_task_slug: str | None
 
 
 class TestEvaluationDto(BaseModel):
+    task_id: UUID
+    task_slug: str | None
     score: float
     reason: str
 
@@ -78,7 +84,11 @@ class TestRunStateDto(BaseModel):
     mutations: list[TestGraphMutationDto]
     evaluations: list[TestEvaluationDto]
     executions: list[TestExecutionDto]
+    execution_count: int
+    mutation_count: int
     resource_count: int
+    thread_count: int
+    context_event_count: int
 
 
 class TestCohortRunDto(BaseModel):
@@ -153,9 +163,11 @@ def read_run_state(
 
     graph_nodes = [
         TestGraphNodeDto(
+            id=n.id,
             task_slug=n.task_slug,
             level=n.level,
             status=n.status,
+            parent_node_id=n.parent_node_id,
             parent_task_slug=(slug_by_node_id.get(n.parent_node_id) if n.parent_node_id else None),
         )
         for n in nodes
@@ -182,6 +194,8 @@ def read_run_state(
     )
     evaluations = [
         TestEvaluationDto(
+            task_id=ev.node_id,
+            task_slug=slug_by_node_id.get(ev.node_id),
             score=float(ev.score) if ev.score is not None else 0.0,
             reason="" if ev.feedback is None else ev.feedback,
         )
@@ -203,6 +217,10 @@ def read_run_state(
     resource_count = len(
         list(session.exec(select(RunResource).where(RunResource.run_id == run_id)).all())
     )
+    thread_count = len(list(session.exec(select(Thread).where(Thread.run_id == run_id)).all()))
+    context_event_count = len(
+        list(session.exec(select(RunContextEvent).where(RunContextEvent.run_id == run_id)).all())
+    )
 
     # RunRecord.status is a str-subclass Enum, so pydantic accepts it directly
     # into ``status: str`` — matches the runs.py RunSnapshotDto precedent.
@@ -213,7 +231,11 @@ def read_run_state(
         mutations=mutations,
         evaluations=evaluations,
         executions=executions,
+        execution_count=len(execution_rows),
+        mutation_count=len(mutation_rows),
         resource_count=resource_count,
+        thread_count=thread_count,
+        context_event_count=context_event_count,
     )
 
 

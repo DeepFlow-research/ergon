@@ -19,6 +19,7 @@ import pytest
 from tests.e2e._asserts import (
     _assert_blob_roundtrip,
     _assert_cohort_membership,
+    _assert_minif2f_artifacts,
     _assert_run_evaluation,
     _assert_run_graph,
     _assert_run_resources,
@@ -66,13 +67,20 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
         _assert_blob_roundtrip(rid)
         _assert_temporal_ordering(rid)
         _assert_run_evaluation(rid)
+        _assert_minif2f_artifacts(rid)
 
     _assert_cohort_membership(cohort_key, run_ids)
 
+    screenshot_dir_env = os.environ.get("SCREENSHOT_DIR")
+    screenshot_dir = (
+        pathlib.Path(screenshot_dir_env)
+        if screenshot_dir_env is not None
+        else tmp_path / "playwright"
+    )
     _invoke_playwright(
         cohort_key=cohort_key,
         cohort=[{"run_id": str(rid), "kind": "happy"} for rid in run_ids],
-        screenshot_dir=tmp_path / "playwright",
+        screenshot_dir=screenshot_dir,
     )
 
 

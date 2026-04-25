@@ -123,10 +123,16 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
     _assert_cohort_membership(cohort_key, run_ids)
 
     # ── Phase 4: Playwright subprocess (screenshots per run) ──────────
+    screenshot_dir_env = os.environ.get("SCREENSHOT_DIR")
+    screenshot_dir = (
+        pathlib.Path(screenshot_dir_env)
+        if screenshot_dir_env is not None
+        else tmp_path / "playwright"
+    )
     _invoke_playwright(
         cohort_key=cohort_key,
         cohort=[{"run_id": str(rid), "kind": s.kind} for s, rid in slotted],
-        screenshot_dir=tmp_path / "playwright",
+        screenshot_dir=screenshot_dir,
     )
 
     # Phase 5 (finalizer) — see tests/e2e/conftest.py ``_screenshot_uploader``.

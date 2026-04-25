@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from ergon_core.core.api import test_harness
 from ergon_core.core.api.test_harness import get_session_dep, router
 
 
@@ -59,6 +60,19 @@ def test_read_endpoint_returns_404_for_unknown_run_id(monkeypatch: pytest.Monkey
     client = TestClient(app)
     resp = client.get(f"/api/test/read/run/{uuid4()}/state")
     assert resp.status_code == 404
+
+
+def test_read_state_dto_exposes_live_playwright_contract_fields() -> None:
+    assert {"id", "parent_node_id"} <= set(test_harness.TestGraphNodeDto.model_fields)
+    assert {"task_id", "task_slug"} <= set(test_harness.TestEvaluationDto.model_fields)
+    assert {
+        "executions",
+        "execution_count",
+        "mutation_count",
+        "resource_count",
+        "thread_count",
+        "context_event_count",
+    } <= set(test_harness.TestRunStateDto.model_fields)
 
 
 def test_read_endpoint_unmounted_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:

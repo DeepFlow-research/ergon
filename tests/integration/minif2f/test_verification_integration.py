@@ -77,7 +77,11 @@ async def _setup_runtime(
         run_id=run_id,
         timeout_minutes=10,
     )
-    ctx = CriterionContext(run_id=run_id)
+    ctx = CriterionContext(
+        run_id=run_id,
+        task_input="test task",
+        agent_reasoning="test output",
+    )
     return DefaultCriterionRuntime(context=ctx, sandbox_manager=sandbox_manager)
 
 

@@ -25,7 +25,6 @@ function emptyState(): WorkflowRunState {
     executionsByTask: new Map(),
     sandboxesByTask: new Map(),
     threads: [],
-    generationTurns: [],
     contextEventsByTask: new Map(),
     evaluationsByTask: new Map(),
     startedAt: new Date().toISOString(),
