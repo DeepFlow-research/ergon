@@ -113,8 +113,8 @@ class SandboxResourcePublisher:
         return created
 
     # ------------------------------------------------------------------
-    # Non-FS artefact publish -- called from persist_outputs_fn for
-    # WorkerOutput.
+    # Non-FS artefact publish -- used by explicit toolkit calls for values
+    # that should appear as task resources.
     # ------------------------------------------------------------------
 
     def publish_value(

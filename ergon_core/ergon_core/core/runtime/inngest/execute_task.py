@@ -116,7 +116,6 @@ async def _persist_outputs(
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
-    worker_result: WorkerExecuteResult,
 ) -> PersistOutputsResult:
     output_task_key = payload.task_id or prepared.node_id
     return await ctx.step.invoke(
@@ -130,7 +129,6 @@ async def _persist_outputs(
             sandbox_id=sandbox_result.sandbox_id,
             output_dir=sandbox_result.output_dir,
             benchmark_type=prepared.benchmark_type,
-            worker_final_assistant_message=worker_result.final_assistant_message,
         ).model_dump(),
     )
 
@@ -250,9 +248,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
         if not worker_result.success:
             raise RuntimeError(worker_result.error or "Worker execution failed")
 
-        persist_result = await _persist_outputs(
-            ctx, payload, prepared, sandbox_result, worker_result
-        )
+        persist_result = await _persist_outputs(ctx, payload, prepared, sandbox_result)
 
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(
