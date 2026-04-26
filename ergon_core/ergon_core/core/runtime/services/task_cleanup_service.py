@@ -25,8 +25,8 @@ class TaskCleanupService:
     """Releases infrastructure for a single CANCELLED task execution.
 
     Called by the Inngest cleanup_cancelled_task_fn after a
-    TaskCancelledEvent. Marks the execution row as CANCELLED and
-    (eventually) tears down the sandbox.
+    TaskCancelledEvent. Marks the execution row as CANCELLED; E2B sandbox
+    release is not implemented on this path yet.
     """
 
     def cleanup(
@@ -50,7 +50,6 @@ class TaskCleanupService:
         execution_updated = self._mark_execution_cancelled(session, execution_id)
         session.commit()
 
-        # slopcop: ignore[no-todo-comment] — sandbox teardown, wire when sandbox management exists
         sandbox_released = False
 
         logger.info(
