@@ -13,6 +13,7 @@ class WorkflowTaskRef(BaseModel):
     level: int
     parent_node_id: UUID | None = None
     assigned_worker_slug: str | None = None
+    description: str | None = None
 
 
 class WorkflowExecutionRef(BaseModel):
@@ -82,3 +83,32 @@ class WorkflowMaterializedResourceRef(BaseModel):
     sandbox_path: str
     dry_run: bool = False
     source_mutated: bool = False
+
+
+class WorkflowMutationRef(BaseModel):
+    model_config = {"frozen": True}
+
+    action: str
+    dry_run: bool
+    node: WorkflowTaskRef | None = None
+    edge: WorkflowDependencyRef | None = None
+    message: str
+    suggested_commands: list[str] = Field(default_factory=list)
+
+
+class WorkflowResourceLocationRef(BaseModel):
+    model_config = {"frozen": True}
+
+    resource: WorkflowResourceRef
+    producer_task_slug: str | None = None
+    local_file_path: str
+    default_sandbox_path: str
+
+
+class WorkflowTaskWorkspaceRef(BaseModel):
+    model_config = {"frozen": True}
+
+    task: WorkflowTaskRef
+    latest_execution: WorkflowExecutionRef | None = None
+    own_resources: list[WorkflowResourceRef] = Field(default_factory=list)
+    input_resources: list[WorkflowResourceRef] = Field(default_factory=list)

@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from pathlib import PurePosixPath
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
@@ -11,13 +11,19 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
 )
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from ergon_core.core.runtime.services.graph_dto import GraphEdgeDto, GraphNodeDto, MutationMeta
+from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.workflow_dto import (
     WorkflowBlockerRef,
     WorkflowDependencyRef,
+    WorkflowExecutionRef,
     WorkflowMaterializedResourceRef,
+    WorkflowMutationRef,
     WorkflowNextActionRef,
+    WorkflowResourceLocationRef,
     WorkflowResourceRef,
     WorkflowTaskRef,
+    WorkflowTaskWorkspaceRef,
 )
 from sqlmodel import Session, col, select
 
@@ -37,8 +43,10 @@ class WorkflowService:
         self,
         *,
         sandbox_manager_factory: Callable[[str], BaseSandboxManager] | None = None,
+        graph_repository: WorkflowGraphRepository | None = None,
     ) -> None:
         self._sandbox_manager_factory = sandbox_manager_factory or self._sandbox_manager_for
+        self._graph_repo = graph_repository or WorkflowGraphRepository()
 
     def list_tasks(
         self,
@@ -156,6 +164,60 @@ class WorkflowService:
         with open(resource.file_path, "rb") as handle:
             return handle.read(max_bytes)
 
+    def get_resource_location(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        resource_id: UUID,
+    ) -> WorkflowResourceLocationRef:
+        resource = self._resource_in_run(session, run_id=run_id, resource_id=resource_id)
+        producer = self._producer_node_for_resource(session, resource)
+        copied_name = self._copy_name(resource.name)
+        default_path = self._sandbox_destination(
+            destination=None,
+            producer_slug=producer.task_slug if producer is not None else "unknown",
+            copied_name=copied_name,
+        )
+        return WorkflowResourceLocationRef(
+            resource=self._resource_ref(session, resource),
+            producer_task_slug=producer.task_slug if producer is not None else None,
+            local_file_path=resource.file_path,
+            default_sandbox_path=default_path,
+        )
+
+    def get_task_workspace(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        node_id: UUID,
+    ) -> WorkflowTaskWorkspaceRef:
+        node = self._resolve_node(session, run_id=run_id, node_id=node_id, task_slug=None)
+        latest = self.get_latest_execution(session, node_id=node_id)
+        own_resources: list[WorkflowResourceRef] = []
+        if latest is not None:
+            own_rows = list(
+                session.exec(
+                    select(RunResource)
+                    .where(RunResource.run_id == run_id)
+                    .where(RunResource.task_execution_id == latest.id),
+                ).all(),
+            )
+            own_rows.sort(key=lambda resource: (resource.created_at, resource.id), reverse=True)
+            own_resources = [self._resource_ref(session, resource) for resource in own_rows]
+        return WorkflowTaskWorkspaceRef(
+            task=self._task_ref(node),
+            latest_execution=self._execution_ref(latest) if latest is not None else None,
+            own_resources=own_resources,
+            input_resources=self.list_resources(
+                session,
+                run_id=run_id,
+                node_id=node_id,
+                scope="input",
+            ),
+        )
+
     def get_task_blockers(
         self,
         session: Session,
@@ -202,6 +264,213 @@ class WorkflowService:
                 suggested_commands=commands,
             )
         ]
+
+    async def add_task(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        parent_node_id: UUID,
+        task_slug: str,
+        description: str,
+        assigned_worker_slug: str,
+        dry_run: bool,
+    ) -> WorkflowMutationRef:
+        parent = self._resolve_node(
+            session,
+            run_id=run_id,
+            node_id=parent_node_id,
+            task_slug=None,
+        )
+        node_ref = WorkflowTaskRef(
+            node_id=uuid4(),
+            task_slug=task_slug,
+            status=TaskExecutionStatus.PENDING.value,
+            level=parent.level + 1,
+            parent_node_id=parent.id,
+            assigned_worker_slug=assigned_worker_slug,
+            description=description,
+        )
+        if dry_run:
+            return WorkflowMutationRef(
+                action="add-task",
+                dry_run=True,
+                node=node_ref,
+                message=f"Would add task {task_slug}",
+            )
+
+        created = await self._graph_repo.add_node(
+            session,
+            run_id,
+            task_slug=task_slug,
+            instance_key=parent.instance_key,
+            description=description,
+            status=TaskExecutionStatus.PENDING.value,
+            assigned_worker_slug=assigned_worker_slug,
+            parent_node_id=parent.id,
+            level=parent.level + 1,
+            meta=self._meta("add-task"),
+        )
+        session.commit()
+        return WorkflowMutationRef(
+            action="add-task",
+            dry_run=False,
+            node=self._task_ref_from_graph(created),
+            message=f"Added task {task_slug}",
+        )
+
+    async def add_edge(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        source_task_slug: str,
+        target_task_slug: str,
+        dry_run: bool,
+    ) -> WorkflowMutationRef:
+        source = self._resolve_node(
+            session,
+            run_id=run_id,
+            node_id=None,
+            task_slug=source_task_slug,
+        )
+        target = self._resolve_node(
+            session,
+            run_id=run_id,
+            node_id=None,
+            task_slug=target_task_slug,
+        )
+        edge_ref = WorkflowDependencyRef(
+            edge_id=uuid4(),
+            edge_status="pending",
+            source=self._task_ref(source),
+            target=self._task_ref(target),
+        )
+        if dry_run:
+            return WorkflowMutationRef(
+                action="add-edge",
+                dry_run=True,
+                edge=edge_ref,
+                message=f"Would add dependency {source_task_slug} -> {target_task_slug}",
+            )
+
+        created = await self._graph_repo.add_edge(
+            session,
+            run_id,
+            source_node_id=source.id,
+            target_node_id=target.id,
+            status="pending",
+            meta=self._meta("add-edge"),
+        )
+        session.commit()
+        return WorkflowMutationRef(
+            action="add-edge",
+            dry_run=False,
+            edge=self._dependency_ref_from_graph(session, run_id, created),
+            message=f"Added dependency {source_task_slug} -> {target_task_slug}",
+        )
+
+    async def update_task_description(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_slug: str,
+        description: str,
+        dry_run: bool,
+    ) -> WorkflowMutationRef:
+        node = self._resolve_node(session, run_id=run_id, node_id=None, task_slug=task_slug)
+        if dry_run:
+            return WorkflowMutationRef(
+                action="update-task-description",
+                dry_run=True,
+                node=self._task_ref(node).model_copy(update={"description": description}),
+                message=f"Would update description for {task_slug}",
+            )
+
+        updated = await self._graph_repo.update_node_field(
+            session,
+            run_id=run_id,
+            node_id=node.id,
+            field="description",
+            value=description,
+            meta=self._meta("update-task-description"),
+        )
+        session.commit()
+        return WorkflowMutationRef(
+            action="update-task-description",
+            dry_run=False,
+            node=self._task_ref_from_graph(updated),
+            message=f"Updated description for {task_slug}",
+        )
+
+    async def restart_task(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_slug: str,
+        dry_run: bool,
+    ) -> WorkflowMutationRef:
+        return await self._set_task_status(
+            session,
+            run_id=run_id,
+            task_slug=task_slug,
+            action="restart-task",
+            status=TaskExecutionStatus.PENDING.value,
+            dry_run=dry_run,
+        )
+
+    async def abandon_task(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_slug: str,
+        dry_run: bool,
+    ) -> WorkflowMutationRef:
+        return await self._set_task_status(
+            session,
+            run_id=run_id,
+            task_slug=task_slug,
+            action="abandon-task",
+            status=TaskExecutionStatus.CANCELLED.value,
+            dry_run=dry_run,
+        )
+
+    async def _set_task_status(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_slug: str,
+        action: str,
+        status: str,
+        dry_run: bool,
+    ) -> WorkflowMutationRef:
+        node = self._resolve_node(session, run_id=run_id, node_id=None, task_slug=task_slug)
+        if dry_run:
+            return WorkflowMutationRef(
+                action=action,
+                dry_run=True,
+                node=self._task_ref(node).model_copy(update={"status": status}),
+                message=f"Would set {task_slug} to {status}",
+            )
+        await self._graph_repo.update_node_status(
+            session,
+            run_id=run_id,
+            node_id=node.id,
+            new_status=status,
+            meta=self._meta(action),
+        )
+        session.commit()
+        refreshed = self._resolve_node(session, run_id=run_id, node_id=None, task_slug=task_slug)
+        return WorkflowMutationRef(
+            action=action,
+            dry_run=False,
+            node=self._task_ref(refreshed),
+            message=f"Set {task_slug} to {status}",
+        )
 
     async def materialize_resource(  # slopcop: ignore[max-function-params] -- mirrors CLI scope fields
         self,
@@ -278,7 +547,38 @@ class WorkflowService:
             level=node.level,
             parent_node_id=node.parent_node_id,
             assigned_worker_slug=node.assigned_worker_slug,
+            description=node.description,
         )
+
+    @staticmethod
+    def _task_ref_from_graph(node: GraphNodeDto) -> WorkflowTaskRef:
+        return WorkflowTaskRef(
+            node_id=node.id,
+            task_slug=node.task_slug,
+            status=node.status,
+            level=node.level,
+            parent_node_id=node.parent_node_id,
+            assigned_worker_slug=node.assigned_worker_slug,
+            description=node.description,
+        )
+
+    def _dependency_ref_from_graph(
+        self,
+        session: Session,
+        run_id: UUID,
+        edge: GraphEdgeDto,
+    ) -> WorkflowDependencyRef:
+        nodes = self._nodes_by_id(session, run_id)
+        return WorkflowDependencyRef(
+            edge_id=edge.id,
+            edge_status=edge.status,
+            source=self._task_ref(nodes[edge.source_node_id]),
+            target=self._task_ref(nodes[edge.target_node_id]),
+        )
+
+    @staticmethod
+    def _meta(action: str) -> MutationMeta:
+        return MutationMeta(actor="workflow-cli", reason=action)
 
     def _resource_ref(self, session: Session, resource: RunResource) -> WorkflowResourceRef:
         producer = self._producer_node_for_resource(session, resource)
@@ -296,6 +596,15 @@ class WorkflowService:
             content_hash=resource.content_hash,
             copied_from_resource_id=resource.copied_from_resource_id,
             created_at=resource.created_at,
+        )
+
+    @staticmethod
+    def _execution_ref(execution: RunTaskExecution) -> WorkflowExecutionRef:
+        return WorkflowExecutionRef(
+            execution_id=execution.id,
+            status=execution.status,
+            attempt_number=execution.attempt_number,
+            final_assistant_message=execution.final_assistant_message,
         )
 
     @staticmethod
