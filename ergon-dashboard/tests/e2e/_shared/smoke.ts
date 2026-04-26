@@ -71,7 +71,11 @@ async function assertRunWorkspace(
     state.graph_nodes.find((node) => node.level > 0);
   expect(selected, `no leaf task found for run ${runId}`).toBeTruthy();
 
-  await page.getByTestId(`graph-node-${selected!.id}`).click();
+  const graphNode = page.getByTestId(`graph-node-${selected!.id}`);
+  await expect(graphNode).toBeVisible();
+  await graphNode.evaluate((node) => {
+    (node as HTMLElement).click();
+  });
   await expect(page.getByTestId("workspace-region")).toBeVisible();
   await expect(page.getByTestId("workspace-header")).toContainText(selected!.task_slug);
   await expect(page.getByTestId("workspace-actions")).toBeVisible();
