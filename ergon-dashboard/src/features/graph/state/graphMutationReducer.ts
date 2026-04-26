@@ -308,19 +308,26 @@ function applyEdgeAdded(
   const updatedTarget = { ...target };
   const updatedSource = { ...source };
 
-  if (updatedTarget.parentId === null) {
+  const sourceAlreadyContainsTarget = updatedSource.childIds.includes(value.target_node_id);
+  const isContainmentEdge =
+    updatedTarget.parentId === value.source_node_id ||
+    (updatedTarget.parentId === null &&
+      (ctx.reason === "parent-child" || sourceAlreadyContainsTarget));
+
+  if (isContainmentEdge) {
     updatedTarget.parentId = value.source_node_id;
     updatedTarget.level = updatedSource.level + 1;
-    updatedSource.childIds = [...updatedSource.childIds, value.target_node_id];
-    if (updatedSource.isLeaf) {
+    updatedSource.childIds = sourceAlreadyContainsTarget
+      ? updatedSource.childIds
+      : [...updatedSource.childIds, value.target_node_id];
+    if (updatedSource.isLeaf && !sourceAlreadyContainsTarget) {
       updatedSource.isLeaf = false;
       state.totalLeafTasks -= 1;
     }
   } else if (updatedTarget.parentId !== value.source_node_id) {
-    updatedTarget.dependsOnIds = [
-      ...updatedTarget.dependsOnIds,
-      value.source_node_id,
-    ];
+    updatedTarget.dependsOnIds = updatedTarget.dependsOnIds.includes(value.source_node_id)
+      ? updatedTarget.dependsOnIds
+      : [...updatedTarget.dependsOnIds, value.source_node_id];
   }
 
   state.tasks.set(value.source_node_id, updatedSource);
@@ -443,6 +450,106 @@ function recalculateMetrics(state: WorkflowRunState): void {
 }
 
 const SNAPSHOT_INTERVAL = 50;
+
+function nodeIdsAddedAtOrBefore(
+  mutations: GraphMutationDto[],
+  upToSequence: number,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const mutation of mutations) {
+    if (mutation.sequence > upToSequence) break;
+    if (mutation.mutation_type === "node.added") {
+      ids.add(mutation.target_id);
+    }
+  }
+  return ids;
+}
+
+function initialNodeValueById(
+  mutations: GraphMutationDto[],
+  upToSequence: number,
+): Map<string, NodeAddedValue> {
+  const values = new Map<string, NodeAddedValue>();
+  for (const mutation of mutations) {
+    if (mutation.sequence > upToSequence) break;
+    if (mutation.mutation_type !== "node.added") continue;
+    const value = NodeAddedValueSchema.parse(mutation.new_value);
+    values.set(mutation.target_id, value);
+  }
+  return values;
+}
+
+function countStatus(
+  tasks: Map<string, TaskState>,
+  status: TaskStatus,
+): number {
+  let count = 0;
+  for (const task of tasks.values()) {
+    if (task.status === status) count += 1;
+  }
+  return count;
+}
+
+/**
+ * Build the initial state used for timeline replay from the persisted REST
+ * snapshot's structural metadata.
+ *
+ * The graph mutation WAL records dependency edges, but it does not encode the
+ * containment tree (`parentId`, `childIds`, `level`). Replaying from a blank
+ * task map would therefore mistake dependency edges for parent-child edges and
+ * produce a different layout from a refresh. This seeds only nodes that already
+ * existed at `upToSequence`, then lets status/annotation mutations replay on top.
+ */
+export function createReplayInitialState(
+  runState: WorkflowRunState,
+  mutations: GraphMutationDto[],
+  upToSequence: number,
+): WorkflowRunState {
+  const includedNodeIds = nodeIdsAddedAtOrBefore(mutations, upToSequence);
+  const initialNodeValues = initialNodeValueById(mutations, upToSequence);
+  const tasks = new Map<string, TaskState>();
+
+  for (const nodeId of includedNodeIds) {
+    const task = runState.tasks.get(nodeId);
+    const initialValue = initialNodeValues.get(nodeId);
+    if (!task) continue;
+
+    const parentId =
+      task.parentId && includedNodeIds.has(task.parentId) ? task.parentId : null;
+    const childIds = task.childIds.filter((childId) => includedNodeIds.has(childId));
+
+    tasks.set(nodeId, {
+      ...task,
+      name: initialValue?.task_slug ?? task.name,
+      description: initialValue?.description ?? task.description,
+      status: (initialValue?.status as TaskStatus | undefined) ?? task.status,
+      assignedWorkerId: null,
+      assignedWorkerName: initialValue?.assigned_worker_slug ?? null,
+      parentId,
+      childIds,
+      dependsOnIds: [],
+      startedAt: null,
+      completedAt: null,
+      isLeaf: childIds.length === 0,
+      level: parentId === null ? 0 : task.level,
+      history: [],
+      lastTrigger: null,
+    });
+  }
+
+  return {
+    ...runState,
+    tasks,
+    totalTasks: tasks.size,
+    totalLeafTasks: Array.from(tasks.values()).filter((task) => task.isLeaf).length,
+    completedTasks: countStatus(tasks, TaskStatus.COMPLETED),
+    runningTasks: countStatus(tasks, TaskStatus.RUNNING),
+    failedTasks: countStatus(tasks, TaskStatus.FAILED),
+    edges: new Map(),
+    annotationsByTarget: new Map(),
+    unhandledMutations: [],
+  };
+}
 
 /**
  * Replay mutations up to a given sequence number from an initial state.

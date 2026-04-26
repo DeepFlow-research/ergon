@@ -2,22 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ═══════════════════════════════════════════════════════════
+   Ergon Design System Tokens
+   Source: ergon.zip design deck · v0.1 · 2026.04.26
+   ═══════════════════════════════════════════════════════════ */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  /* Surfaces */
+  --paper: #f6f7f9;
+  --paper-2: #eef0f3;
+  --paper-3: #e6e9ee;
+  --card: #ffffff;
+  --ink: #0c1118;
+  --ink-2: #1f2733;
+  --muted: #64707f;
+  --faint: #98a2b1;
+  --line: #e2e6ec;
+  --line-strong: #cdd3dc;
+
+  /* Status — oklch single chroma family */
+  --status-pending: oklch(0.72 0.02 250);
+  --status-ready: oklch(0.74 0.10 240);
+  --status-running: oklch(0.78 0.14 80);
+  --status-completed: oklch(0.70 0.13 155);
+  --status-failed: oklch(0.68 0.18 22);
+  --status-cancelled: oklch(0.62 0.02 260);
+
+  /* Accent — indigo; used ONLY for selection and snapshot pin */
+  --accent: oklch(0.62 0.16 252);
+  --accent-soft: oklch(0.94 0.04 252);
+  --accent-ink: oklch(0.32 0.12 252);
+
+  /* Radii */
+  --radius: 10px;
+  --radius-sm: 6px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgb(12 17 24 / 0.04);
+  --shadow: 0 1px 2px rgb(12 17 24 / 0.05), 0 4px 12px rgb(12 17 24 / 0.04);
+  --shadow-pop: 0 8px 24px rgb(12 17 24 / 0.08), 0 1px 2px rgb(12 17 24 / 0.05);
+
+  /* Fonts — resolved by next/font CSS variables */
+  --font: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Legacy compat — old references still work */
+  --background: var(--paper);
+  --foreground: var(--ink);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--font);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
 }
 
 @layer utilities {
@@ -26,86 +65,68 @@ body {
   }
 }
 
-/* React Flow Customizations */
+/* ═══════════════════════════════════════════════════════════
+   React Flow Overrides
+   ═══════════════════════════════════════════════════════════ */
+
 .react-flow__node {
-  /* Remove default react-flow node styles */
   background: transparent;
   border: none;
   padding: 0;
 }
 
 .react-flow__handle {
-  /* Better handle visibility */
-  opacity: 0.8;
+  opacity: 0;
   transition: opacity 0.2s;
 }
 
 .react-flow__node:hover .react-flow__handle {
-  opacity: 1;
+  opacity: 0.6;
 }
 
-/* Dark mode adjustments for react-flow */
-@media (prefers-color-scheme: dark) {
-  .react-flow__controls button {
-    background: #1f2937;
-    border-color: #374151;
-    color: #e5e7eb;
-  }
-  
-  .react-flow__controls button:hover {
-    background: #374151;
-  }
-  
-  .react-flow__controls button svg {
-    fill: #e5e7eb;
-  }
-  
-  .react-flow__minimap {
-    background: #1f2937;
-  }
-  
-  .react-flow__minimap-mask {
-    fill: rgba(0, 0, 0, 0.5);
-  }
-  
-  .react-flow__background pattern {
-    stroke: #374151;
-  }
-}
+/* ═══════════════════════════════════════════════════════════
+   Status Animations
+   ═══════════════════════════════════════════════════════════ */
 
-/* Animation for running status */
 @keyframes status-pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.02);
-  }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
 }
 
 .animate-status-pulse {
-  animation: status-pulse 2s ease-in-out infinite;
+  animation: status-pulse 1.6s ease-in-out infinite;
 }
 
-/* Slide-in animation for panels */
+/* ═══════════════════════════════════════════════════════════
+   Panel Animations
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes drawerEnter {
+  from { transform: translateX(28px); opacity: 0.55; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes drawerExit {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(28px); opacity: 0; }
+}
+
+.animate-drawer-enter {
+  animation: drawerEnter 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-drawer-exit {
+  animation: drawerExit 0.2s ease-in forwards;
+}
+
 @keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
 @keyframes slideOutRight {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(100%);
-  }
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
 }
 
 .animate-slide-in-right {
@@ -116,14 +137,57 @@ body {
   animation: slideOutRight 0.2s ease-in forwards;
 }
 
-/* Responsive adjustments */
+/* ═══════════════════════════════════════════════════════════
+   Custom Edge Animation
+   ═══════════════════════════════════════════════════════════ */
+
+@keyframes ergon-edge-dash {
+  to { stroke-dashoffset: -24; }
+}
+
+.ergon-edge-animated {
+  stroke-dasharray: 6 6;
+  animation: ergon-edge-dash 0.6s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Scrollbar
+   ═══════════════════════════════════════════════════════════ */
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--line-strong);
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Responsive
+   ═══════════════════════════════════════════════════════════ */
+
 @media (max-width: 640px) {
-  /* Hide minimap on small screens */
   .react-flow__minimap {
     display: none;
   }
-  
-  /* Smaller controls on mobile */
+
   .react-flow__controls {
     transform: scale(0.85);
     transform-origin: bottom left;
@@ -131,61 +195,7 @@ body {
 }
 
 @media (max-width: 768px) {
-  /* Adjust panel positioning on tablets */
   .react-flow__panel {
     max-width: calc(100vw - 2rem);
   }
-}
-
-/* Custom scrollbar for better aesthetics */
-@layer utilities {
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(156, 163, 175) transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(156, 163, 175);
-    border-radius: 3px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(107, 114, 128);
-  }
-}
-
-/* Dark mode scrollbar */
-@media (prefers-color-scheme: dark) {
-  .scrollbar-thin {
-    scrollbar-color: rgb(75, 85, 99) transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(75, 85, 99);
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(107, 114, 128);
-  }
-}
-
-/* Custom React Flow edges — dashed “flow” when task is running */
-@keyframes ergon-edge-dash {
-  to {
-    stroke-dashoffset: -24;
-  }
-}
-
-.ergon-edge-animated {
-  stroke-dasharray: 6 6;
-  animation: ergon-edge-dash 0.6s linear infinite;
 }

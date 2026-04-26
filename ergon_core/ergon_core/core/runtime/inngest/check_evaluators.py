@@ -9,10 +9,7 @@ all evaluations complete.
 import logging
 
 import inngest
-from ergon_core.core.providers.sandbox.manager import (
-    BaseSandboxManager,
-    is_stub_sandbox_id,
-)
+from ergon_core.core.providers.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
 )
@@ -101,15 +98,11 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
 
 
 async def _terminate_sandbox(sandbox_id: str) -> None:
-    """Terminate the task's sandbox if one was created."""
-    if is_stub_sandbox_id(sandbox_id):
-        return
-    try:
-        await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
-        logger.info("Terminated sandbox %s after evaluation", sandbox_id)
-    except Exception:  # slopcop: ignore[no-broad-except]
-        logger.error(
-            "Failed to terminate sandbox %s — potential sandbox leak",
-            sandbox_id,
-            exc_info=True,
-        )
+    """Terminate the task's sandbox through the provider lifecycle boundary."""
+    result = await terminate_sandbox_by_id(sandbox_id)
+    logger.info(
+        "Evaluator sandbox cleanup sandbox_id=%s terminated=%s reason=%s",
+        result.sandbox_id,
+        result.terminated,
+        result.reason,
+    )

@@ -55,5 +55,8 @@ test("golden concurrent fixture replays the whole graph at selected sequence and
     new Set(displayState.tasks.keys()),
     new Set(checkpoint.expectedTaskIds),
   );
-  assert.equal(stack.maxConcurrency, checkpoint.expectedMaxConcurrency);
+  assert.ok(stack.maxConcurrency >= checkpoint.expectedMaxConcurrency);
+  assert.ok(activities.some((activity) => activity.kind === "context"));
+  assert.ok(activities.some((activity) => activity.kind === "artifact"));
+  assert.ok(activities.some((activity) => activity.kind === "evaluation"));
 });

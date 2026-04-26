@@ -13,6 +13,7 @@ import inngest
 from pydantic import BaseModel
 from ergon_builtins.registry import BENCHMARKS, WORKERS
 from ergon_core.api.generation import GenerationTurn
+from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
@@ -30,6 +31,14 @@ from ergon_core.core.runtime.tracing import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _worker_execute_result_from_output(output: WorkerOutput) -> WorkerExecuteResult:
+    return WorkerExecuteResult(
+        success=output.success,
+        final_assistant_message=output.output,
+        error=None if output.success else output.output,
+    )
 
 
 @inngest_client.create_function(
@@ -155,10 +164,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         )
     )
 
-    return WorkerExecuteResult(
-        success=True,
-        final_assistant_message=output.output,
-    )
+    return _worker_execute_result_from_output(output)
 
 
 async def _persist_context_events(

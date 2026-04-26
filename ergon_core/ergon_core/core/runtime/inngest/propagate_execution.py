@@ -7,6 +7,7 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
+from ergon_core.core.providers.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.runtime.events.task_events import (
     TaskCancelledEvent,
     TaskCompletedEvent,
@@ -29,6 +30,7 @@ from ergon_core.core.runtime.tracing import (
     get_trace_sink,
     task_propagate_context,
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +162,7 @@ async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult
             node_id=payload.node_id,
         )
     )
+    await _terminate_failed_task_sandbox(payload.sandbox_id)
 
     # BLOCKED successors are a DB write only — no task/cancelled events.
     # propagation.invalidated_targets is always empty from the failure path.
@@ -188,3 +191,13 @@ async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult
         workflow_failed=(propagation.workflow_terminal_state == WorkflowTerminalState.FAILED),
     )
     return result
+
+
+async def _terminate_failed_task_sandbox(sandbox_id: str | None) -> None:
+    result = await terminate_sandbox_by_id(sandbox_id)
+    if not result.terminated:
+        logger.info(
+            "failed-task sandbox cleanup did not terminate sandbox_id=%s reason=%s",
+            result.sandbox_id,
+            result.reason,
+        )

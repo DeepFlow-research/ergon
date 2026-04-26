@@ -39,8 +39,8 @@ def build_experiment(
     # otherwise ``task_execution_service._prepare_graph_native`` will
     # raise ``ConfigurationError: No ExperimentDefinitionWorker with
     # binding_key='{env}-smoke-leaf'`` when the first subtask fires.
-    # ``researchrubrics-sadpath-smoke-worker`` additionally needs the
-    # failing leaf binding so ``l_2`` can resolve.
+    # ``{env}-sadpath-smoke-worker`` additionally needs the failing leaf
+    # binding so ``l_2`` can resolve.
     if _is_smoke_worker(worker_slug):
         return _build_smoke_experiment(
             benchmark=benchmark,

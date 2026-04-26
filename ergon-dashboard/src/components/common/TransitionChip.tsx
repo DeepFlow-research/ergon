@@ -13,6 +13,7 @@
 
 import { TaskStatus, TaskTrigger } from "@/lib/types";
 import { tokensFor } from "@/lib/statusTokens";
+import { formatClockTimeMs } from "@/lib/timeFormat";
 
 const TRIGGER_LABELS: Record<string, string> = {
   [TaskTrigger.WORKFLOW_STARTED]: "workflow started",
@@ -26,16 +27,8 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 function formatTimeMs(iso: string | null): string {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      fractionalSecondDigits: 3,
-    });
-  } catch {
-    return iso;
-  }
+  const label = formatClockTimeMs(iso);
+  return label === "—" ? iso : label;
 }
 
 interface TransitionChipProps {

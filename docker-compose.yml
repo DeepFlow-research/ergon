@@ -81,7 +81,7 @@ services:
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
       - ERGON_API_BASE_URL=http://api:9000
       - ENABLE_TEST_HARNESS=${ENABLE_TEST_HARNESS:-1}
-      - ENABLE_SMOKE_FIXTURES=${ENABLE_SMOKE_FIXTURES:-1}
+      - ERGON_STARTUP_PLUGINS=${ERGON_STARTUP_PLUGINS-ergon_core.test_support.smoke_fixtures:register_smoke_fixtures}
       - TEST_HARNESS_SECRET=${TEST_HARNESS_SECRET:-local-dev}
       - ERGON_BLOB_ROOT=/tmp/ergon-blob
       - OTEL_TRACES_ENABLED=false

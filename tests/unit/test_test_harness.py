@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from ergon_core.core.api import test_harness
+from ergon_core.core.api.startup_plugins import run_startup_plugins
 from ergon_core.core.api.test_harness import get_session_dep, router
 
 
@@ -108,3 +109,8 @@ def test_reset_requires_secret_header(monkeypatch: pytest.MonkeyPatch) -> None:
     client = TestClient(app)
     resp = client.post("/api/test/write/reset", json={"cohort_prefix": "ci-smoke-"})
     assert resp.status_code == 401
+
+
+def test_startup_plugin_loader_rejects_invalid_specs() -> None:
+    with pytest.raises(RuntimeError, match="expected 'module:function'"):
+        run_startup_plugins(("ergon_core.test_support.smoke_fixtures",))

@@ -1,35 +1,8 @@
-"""Sandbox management: provisioning, file I/O, lifecycle."""
+"""Sandbox management: provisioning, file I/O, lifecycle.
 
-from ergon_core.core.providers.sandbox.errors import (
-    SandboxError,
-    SandboxExpiredError,
-    SandboxSetupError,
-)
-from ergon_core.core.providers.sandbox.event_sink import (
-    CompoundSandboxEventSink,
-    DashboardEmitterSandboxEventSink,
-    NoopSandboxEventSink,
-    PostgresSandboxEventSink,
-    SandboxEventSink,
-)
-from ergon_core.core.providers.sandbox.manager import (
-    BaseSandboxManager,
-    DefaultSandboxManager,
-    DownloadedFile,
-    DownloadedFiles,
-)
+Import concrete modules directly, for example
+``ergon_core.core.providers.sandbox.manager``. Keeping this package initializer
+lightweight avoids import cycles between telemetry models and API DTO modules.
+"""
 
-__all__ = [
-    "BaseSandboxManager",
-    "CompoundSandboxEventSink",
-    "DashboardEmitterSandboxEventSink",
-    "DefaultSandboxManager",
-    "DownloadedFile",
-    "DownloadedFiles",
-    "NoopSandboxEventSink",
-    "PostgresSandboxEventSink",
-    "SandboxError",
-    "SandboxEventSink",
-    "SandboxExpiredError",
-    "SandboxSetupError",
-]
+__all__: list[str] = []

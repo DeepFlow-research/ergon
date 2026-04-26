@@ -164,7 +164,11 @@ class RunReadService:
             ),
             context_events_by_task=dict(context_events_by_task),
             sandboxes_by_task=run_api_helpers._task_keyed_sandboxes(run_summary),
-            threads=run_api_helpers._build_communication_threads(threads, thread_messages),
+            threads=run_api_helpers._build_communication_threads(
+                threads,
+                thread_messages,
+                execution_task_map,
+            ),
             started_at=run.started_at or run.created_at,
             completed_at=run.completed_at,
             duration_seconds=duration_seconds,

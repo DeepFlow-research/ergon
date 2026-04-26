@@ -100,7 +100,9 @@ test("cohort detail parser accepts harness payload", () => {
   const parsed = parseCohortDetail(cohortDetail);
 
   assert.equal(parsed.summary.cohort_id, FIXTURE_IDS.cohortId);
-  assert.equal((parsed.runs ?? []).length, 1);
+  assert.equal((parsed.runs ?? []).length, 3);
+  assert.equal(parsed.runs[0]?.total_tasks, 10);
+  assert.equal(parsed.runs[0]?.total_cost_usd, 0.12);
 });
 
 test("workflow started event parser validates recursive task trees", () => {
@@ -173,6 +175,7 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
       run_id: thread.runId,
       task_id: thread.taskId,
       topic: thread.topic,
+      summary: "Leaf workers report completion artifacts and probe exit status.",
       agent_a_id: thread.agentAId,
       agent_b_id: thread.agentBId,
       created_at: thread.createdAt,
@@ -192,6 +195,11 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
       created_at: message.createdAt,
     },
   });
+
+  assert.equal(
+    parsedThread.thread.summary,
+    "Leaf workers report completion artifacts and probe exit status.",
+  );
 
   const parsedEvaluation = parseDashboardTaskEvaluationUpdatedData({
     run_id: FIXTURE_IDS.runId,

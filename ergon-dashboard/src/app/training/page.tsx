@@ -9,6 +9,7 @@ import {
   TrainingMetricsChart,
   type MetricPoint,
 } from "@/components/charts/TrainingMetricsChart";
+import { formatClockTime } from "@/lib/timeFormat";
 
 interface TrainingSessionSummary {
   id: string;
@@ -119,7 +120,7 @@ export default function TrainingPage() {
                 {sessions.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.modelName} ({s.status}) — {s.totalSteps ?? "?"} steps
-                    {s.startedAt ? ` — ${new Date(s.startedAt).toLocaleString()}` : ""}
+                    {s.startedAt ? ` — ${formatClockTime(s.startedAt)}` : ""}
                   </option>
                 ))}
               </select>

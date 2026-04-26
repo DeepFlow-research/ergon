@@ -105,12 +105,23 @@ export interface CohortSummary
 }
 
 export interface CohortRunRow
-  extends Omit<RawCohortRunRow, "completed_at" | "error_message" | "final_score" | "running_time_ms" | "started_at"> {
+  extends Omit<
+    RawCohortRunRow,
+    | "completed_at"
+    | "error_message"
+    | "final_score"
+    | "running_time_ms"
+    | "started_at"
+    | "total_cost_usd"
+    | "total_tasks"
+  > {
   completed_at: string | null;
   error_message: string | null;
   final_score: number | null;
   running_time_ms: number | null;
   started_at: string | null;
+  total_cost_usd: number | null;
+  total_tasks: number | null;
 }
 
 export interface CohortDetail {
@@ -323,6 +334,7 @@ function normalizeRunCommunicationThread(thread: RawRunCommunicationThread): Run
     ...thread,
     messages: (thread.messages ?? []).map(normalizeRunCommunicationMessage),
     taskId: thread.taskId ?? null,
+    summary: thread.summary ?? null,
   };
 }
 
@@ -355,6 +367,8 @@ export function parseCohortDetail(input: unknown): CohortDetail {
       final_score: run.final_score ?? null,
       running_time_ms: run.running_time_ms ?? null,
       started_at: run.started_at ?? null,
+      total_cost_usd: run.total_cost_usd ?? null,
+      total_tasks: run.total_tasks ?? null,
     })),
   };
 }

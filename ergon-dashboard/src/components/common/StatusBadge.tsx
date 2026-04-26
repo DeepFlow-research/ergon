@@ -1,175 +1,149 @@
 "use client";
 
-/**
- * StatusBadge - Color-coded status indicator for tasks and runs.
- *
- * Displays task status with appropriate colors:
- * - pending: gray
- * - ready: blue
- * - running: yellow (with pulse animation)
- * - completed: green
- * - failed: red
- */
-
 import { ExperimentCohortStatus, RunLifecycleStatus, TaskStatus } from "@/lib/types";
 
-// Status type includes TaskStatus enum values and run-level status strings
-// Note: TaskStatus.RUNNING = "running", TaskStatus.COMPLETED = "completed", etc.
-// So "running" | "completed" | "failed" are already covered by TaskStatus
 type StatusType = TaskStatus | RunLifecycleStatus | ExperimentCohortStatus;
 
-interface StatusBadgeProps {
-  status: StatusType;
-  size?: "sm" | "md";
-  showLabel?: boolean;
-}
-
 interface StatusConfig {
-  bg: string;
-  text: string;
-  ring: string;
   label: string;
+  dot: string;
+  solidBg: string;
+  solidBorder: string;
+  solidText: string;
   animate?: boolean;
-  color: string;
 }
 
 const statusConfig: Record<string, StatusConfig> = {
   [TaskStatus.PENDING]: {
-    bg: "bg-gray-100 dark:bg-gray-800",
-    text: "text-gray-600 dark:text-gray-400",
-    ring: "ring-gray-200 dark:ring-gray-700",
     label: "Pending",
-    color: "#9ca3af",
+    dot: "var(--status-pending)",
+    solidBg: "var(--paper-2)",
+    solidBorder: "var(--line)",
+    solidText: "var(--muted)",
   },
   [TaskStatus.READY]: {
-    bg: "bg-blue-100 dark:bg-blue-900/30",
-    text: "text-blue-600 dark:text-blue-400",
-    ring: "ring-blue-200 dark:ring-blue-800",
     label: "Ready",
-    color: "#3b82f6",
+    dot: "var(--status-ready)",
+    solidBg: "oklch(0.97 0.03 240)",
+    solidBorder: "oklch(0.86 0.08 240)",
+    solidText: "oklch(0.40 0.12 240)",
   },
   [TaskStatus.RUNNING]: {
-    bg: "bg-yellow-100 dark:bg-yellow-900/30",
-    text: "text-yellow-700 dark:text-yellow-400",
-    ring: "ring-yellow-200 dark:ring-yellow-800",
     label: "Running",
+    dot: "var(--status-running)",
+    solidBg: "oklch(0.96 0.04 80)",
+    solidBorder: "oklch(0.85 0.10 80)",
+    solidText: "oklch(0.42 0.12 65)",
     animate: true,
-    color: "#eab308",
   },
   [TaskStatus.COMPLETED]: {
-    bg: "bg-green-100 dark:bg-green-900/30",
-    text: "text-green-600 dark:text-green-400",
-    ring: "ring-green-200 dark:ring-green-800",
     label: "Completed",
-    color: "#22c55e",
+    dot: "var(--status-completed)",
+    solidBg: "oklch(0.96 0.04 155)",
+    solidBorder: "oklch(0.85 0.10 155)",
+    solidText: "oklch(0.40 0.12 155)",
   },
   [TaskStatus.FAILED]: {
-    bg: "bg-red-100 dark:bg-red-900/30",
-    text: "text-red-600 dark:text-red-400",
-    ring: "ring-red-200 dark:ring-red-800",
     label: "Failed",
-    color: "#ef4444",
+    dot: "var(--status-failed)",
+    solidBg: "oklch(0.96 0.04 22)",
+    solidBorder: "oklch(0.85 0.10 22)",
+    solidText: "oklch(0.40 0.16 22)",
   },
   [TaskStatus.CANCELLED]: {
-    bg: "bg-gray-100 dark:bg-gray-800",
-    text: "text-gray-500 dark:text-gray-400",
-    ring: "ring-gray-200 dark:ring-gray-700",
     label: "Cancelled",
-    color: "#9ca3af",
+    dot: "var(--status-cancelled)",
+    solidBg: "var(--paper-2)",
+    solidBorder: "var(--line)",
+    solidText: "var(--muted)",
   },
   executing: {
-    bg: "bg-yellow-100 dark:bg-yellow-900/30",
-    text: "text-yellow-700 dark:text-yellow-400",
-    ring: "ring-yellow-200 dark:ring-yellow-800",
     label: "Executing",
+    dot: "var(--status-running)",
+    solidBg: "oklch(0.96 0.04 80)",
+    solidBorder: "oklch(0.85 0.10 80)",
+    solidText: "oklch(0.42 0.12 65)",
     animate: true,
-    color: "#eab308",
   },
   evaluating: {
-    bg: "bg-violet-100 dark:bg-violet-900/30",
-    text: "text-violet-700 dark:text-violet-400",
-    ring: "ring-violet-200 dark:ring-violet-800",
     label: "Evaluating",
+    dot: "oklch(0.74 0.16 295)",
+    solidBg: "oklch(0.96 0.04 295)",
+    solidBorder: "oklch(0.85 0.10 295)",
+    solidText: "oklch(0.40 0.16 295)",
     animate: true,
-    color: "#8b5cf6",
   },
   active: {
-    bg: "bg-blue-100 dark:bg-blue-900/30",
-    text: "text-blue-700 dark:text-blue-400",
-    ring: "ring-blue-200 dark:ring-blue-800",
     label: "Active",
-    color: "#3b82f6",
+    dot: "var(--status-ready)",
+    solidBg: "oklch(0.97 0.03 240)",
+    solidBorder: "oklch(0.86 0.08 240)",
+    solidText: "oklch(0.40 0.12 240)",
   },
   archived: {
-    bg: "bg-gray-100 dark:bg-gray-800",
-    text: "text-gray-600 dark:text-gray-400",
-    ring: "ring-gray-200 dark:ring-gray-700",
     label: "Archived",
-    color: "#9ca3af",
+    dot: "var(--status-cancelled)",
+    solidBg: "var(--paper-2)",
+    solidBorder: "var(--line)",
+    solidText: "var(--muted)",
   },
 };
 
-// Default config for unknown statuses
 const defaultConfig: StatusConfig = {
-  bg: "bg-gray-100 dark:bg-gray-800",
-  text: "text-gray-600 dark:text-gray-400",
-  ring: "ring-gray-200 dark:ring-gray-700",
   label: "Unknown",
-  color: "#9ca3af",
+  dot: "var(--faint)",
+  solidBg: "var(--paper-2)",
+  solidBorder: "var(--line)",
+  solidText: "var(--muted)",
 };
+
+interface StatusBadgeProps {
+  status: StatusType;
+  variant?: "outline" | "solid";
+  size?: "sm" | "md";
+  showLabel?: boolean;
+}
 
 export function StatusBadge({
   status,
+  variant = "solid",
   size = "md",
   showLabel = true,
 }: StatusBadgeProps) {
+  const sizeClass = size === "sm" ? "text-[10px] px-1.5 py-px" : "text-[11px] px-2 py-0.5";
   const config = statusConfig[status] || defaultConfig;
 
-  const sizeClasses = {
-    sm: {
-      badge: "px-1.5 py-0.5 text-xs",
-      dot: "w-1.5 h-1.5",
-    },
-    md: {
-      badge: "px-2 py-1 text-sm",
-      dot: "w-2 h-2",
-    },
-  };
-
-  const sizes = sizeClasses[size];
+  if (variant === "outline") {
+    return (
+      <span className={`inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] bg-[var(--card)] font-medium tracking-[0.01em] text-[var(--ink-2)] ${sizeClass}`}>
+        <span
+          className={`inline-block size-1.5 rounded-full ${config.animate ? "animate-status-pulse" : ""}`}
+          style={{ backgroundColor: config.dot }}
+        />
+        {showLabel && <span>{config.label}</span>}
+      </span>
+    );
+  }
 
   return (
     <span
-      className={`
-        inline-flex items-center gap-1.5 rounded-full font-medium
-        ring-1 ring-inset
-        ${config.bg} ${config.text} ${config.ring}
-        ${sizes.badge}
-      `}
+      className={`inline-flex items-center gap-1.5 rounded-full border font-medium tracking-[0.01em] ${sizeClass}`}
+      style={{
+        backgroundColor: config.solidBg,
+        borderColor: config.solidBorder,
+        color: config.solidText,
+      }}
+      data-status={status}
     >
-      {/* Status dot */}
-      <span className="relative flex">
-        <span
-          className={`rounded-full ${sizes.dot}`}
-          style={{ backgroundColor: config.color }}
-        />
-        {config.animate && (
-          <span
-            className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping"
-            style={{ backgroundColor: config.color }}
-          />
-        )}
-      </span>
-
-      {/* Label */}
+      <span
+        className={`inline-block size-1.5 rounded-full ${config.animate ? "animate-status-pulse" : ""}`}
+        style={{ backgroundColor: config.dot }}
+      />
       {showLabel && <span>{config.label}</span>}
     </span>
   );
 }
 
-/**
- * Compact dot-only status indicator for use in tight spaces.
- */
 export function StatusDot({
   status,
   size = "md",
@@ -178,23 +152,18 @@ export function StatusDot({
   size?: "sm" | "md" | "lg";
 }) {
   const config = statusConfig[status] || defaultConfig;
-
-  const sizeClasses = {
-    sm: "w-2 h-2",
-    md: "w-3 h-3",
-    lg: "w-4 h-4",
-  };
+  const sizeClasses = { sm: "size-2", md: "size-3", lg: "size-4" };
 
   return (
     <span className="relative inline-flex">
       <span
         className={`rounded-full ${sizeClasses[size]}`}
-        style={{ backgroundColor: config.color }}
+        style={{ backgroundColor: config.dot }}
       />
       {config.animate && (
         <span
-          className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping"
-          style={{ backgroundColor: config.color }}
+          className="absolute inline-flex size-full animate-ping rounded-full opacity-75"
+          style={{ backgroundColor: config.dot }}
         />
       )}
     </span>

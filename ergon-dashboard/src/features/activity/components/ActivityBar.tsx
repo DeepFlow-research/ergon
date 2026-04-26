@@ -4,69 +4,65 @@ import type { ActivityStackItem, ActivityKind, RunActivity } from "@/features/ac
 
 const KIND_STYLES: Record<
   ActivityKind,
-  { bar: string; marker: string; text: string; label: string; fill: string; stroke: string }
+  { fill: string; text: string; label: string; legendLabel: string }
 > = {
-  execution: {
-    bar: "bg-amber-400 border-amber-300 text-[#2a1800]",
-    marker: "bg-amber-400 text-amber-400",
-    text: "text-[#2a1800]",
-    label: "Execution",
-    fill: "#fbbf24",
-    stroke: "#fde68a",
-  },
   graph: {
-    bar: "bg-violet-400 border-violet-300 text-[#160b2f]",
-    marker: "bg-violet-400 text-violet-400",
-    text: "text-[#160b2f]",
-    label: "Graph",
-    fill: "#a78bfa",
-    stroke: "#ddd6fe",
+    fill: "oklch(0.78 0.14 305)",
+    text: "white",
+    label: "Graph mutation",
+    legendLabel: "graph mutation",
+  },
+  execution: {
+    fill: "oklch(0.74 0.16 295)",
+    text: "white",
+    label: "Execution",
+    legendLabel: "task",
   },
   message: {
-    bar: "bg-cyan-400 border-cyan-300 text-[#06242a]",
-    marker: "bg-cyan-400 text-cyan-400",
-    text: "text-[#06242a]",
-    label: "Talk",
-    fill: "#22d3ee",
-    stroke: "#a5f3fc",
+    fill: "oklch(0.74 0.14 70)",
+    text: "white",
+    label: "Message",
+    legendLabel: "message",
   },
   artifact: {
-    bar: "bg-emerald-400 border-emerald-300 text-[#052e1d]",
-    marker: "bg-emerald-400 text-emerald-400",
-    text: "text-[#052e1d]",
+    fill: "oklch(0.72 0.16 145)",
+    text: "white",
     label: "Artifact",
-    fill: "#34d399",
-    stroke: "#a7f3d0",
+    legendLabel: "artifact",
   },
   evaluation: {
-    bar: "bg-rose-400 border-rose-300 text-[#3a0610]",
-    marker: "bg-rose-400 text-rose-400",
-    text: "text-[#3a0610]",
+    fill: "oklch(0.68 0.18 345)",
+    text: "white",
     label: "Evaluation",
-    fill: "#fb7185",
-    stroke: "#fecdd3",
+    legendLabel: "evaluation",
   },
   context: {
-    bar: "bg-cyan-300 border-cyan-200 text-[#06242a]",
-    marker: "bg-cyan-300 text-cyan-300",
-    text: "text-[#06242a]",
+    fill: "oklch(0.66 0.12 230)",
+    text: "white",
     label: "Context",
-    fill: "#67e8f9",
-    stroke: "#cffafe",
+    legendLabel: "context/tool",
   },
   sandbox: {
-    bar: "bg-slate-500 border-slate-400 text-white",
-    marker: "bg-slate-500 text-slate-500",
-    text: "text-white",
+    fill: "oklch(0.70 0.12 195)",
+    text: "white",
     label: "Sandbox",
-    fill: "#94a3b8",
-    stroke: "#cbd5e1",
+    legendLabel: "sandbox",
   },
 };
 
 export function activityKindLabel(kind: ActivityKind): string {
   return KIND_STYLES[kind].label;
 }
+
+export function activityKindLegendLabel(kind: ActivityKind): string {
+  return KIND_STYLES[kind].legendLabel;
+}
+
+export function activityKindColor(kind: ActivityKind): string {
+  return KIND_STYLES[kind].fill;
+}
+
+export const ALL_ACTIVITY_KINDS = Object.keys(KIND_STYLES) as ActivityKind[];
 
 function testIdFor(activity: RunActivity): string {
   return `activity-bar-${activity.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
@@ -76,43 +72,69 @@ export function ActivityBar({
   item,
   selected,
   highlighted,
+  current,
+  relation,
   onClick,
+  onHoverStart,
+  onHoverEnd,
 }: {
   item: ActivityStackItem;
   selected: boolean;
   highlighted: boolean;
+  current: boolean;
+  relation: "focused" | "related" | "dimmed" | "none";
   onClick: (activity: RunActivity) => void;
+  onHoverStart: (activity: RunActivity) => void;
+  onHoverEnd: () => void;
 }) {
   const { activity, leftPct, widthPct } = item;
   const styles = KIND_STYLES[activity.kind];
   const isMarker = activity.isInstant;
+
   return (
     <button
       type="button"
       onClick={() => onClick(activity)}
-      className={`absolute top-1 h-[25px] overflow-hidden rounded-full border text-left shadow-[0_8px_20px_rgb(0_0_0/0.24)] transition-all hover:z-20 hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-white/40 ${
-        isMarker ? styles.marker : styles.bar
-      } ${selected ? "z-30 ring-2 ring-rose-400 ring-offset-0" : ""} ${
-        highlighted ? "z-20 ring-2 ring-white/45" : ""
+      onMouseEnter={() => onHoverStart(activity)}
+      onMouseLeave={onHoverEnd}
+      onFocus={() => onHoverStart(activity)}
+      onBlur={onHoverEnd}
+      className={`absolute top-1 flex h-[25px] items-center overflow-visible rounded-full text-left transition-all hover:z-40 hover:brightness-110 focus:z-40 focus:outline-none focus:ring-2 focus:ring-white/40 ${
+        selected ? "z-30 ring-2 ring-[var(--accent)] ring-offset-0" : ""
+      } ${current ? "z-[25] shadow-[0_0_0_3px_oklch(0.92_0.15_95),0_0_0_5px_rgba(7,11,18,0.75)]" : ""} ${
+        current && isMarker ? "scale-125" : ""
+      } ${highlighted ? "z-20 ring-2 ring-white/45" : ""} ${
+        relation === "dimmed" ? "opacity-25 grayscale" : ""
+      } ${relation === "focused" ? "z-30 ring-2 ring-[var(--accent)]" : ""} ${
+        relation === "related" ? "z-20 saturate-150" : ""
       }`}
       style={{
         left: `${leftPct}%`,
         width: `${widthPct}%`,
         minWidth: isMarker ? 11 : 44,
         backgroundColor: styles.fill,
-        borderColor: styles.stroke,
-        color: styles.fill,
+        color: styles.text,
       }}
       title={`${styles.label}: ${activity.label}`}
       aria-label={`Open activity ${activity.label}`}
       data-testid={testIdFor(activity)}
       data-kind={activity.kind}
+      data-activity-id={activity.id}
       data-task-id={activity.taskId ?? ""}
+      data-row={item.row}
+      data-left-pct={leftPct}
+      data-width-pct={widthPct}
+      data-relation={relation}
+      data-current={current ? "true" : "false"}
     >
-      {isMarker ? (
-        <span className="block h-[11px] w-[11px] rounded-full border-2 border-[#070b12] shadow-[0_0_0_2px_rgb(255_255_255/0.12),0_0_14px_currentColor]" aria-hidden />
-      ) : (
-        <span className={`block truncate px-3 py-[5px] text-[10px] font-black ${styles.text}`}>
+      {/* Start marker circle */}
+      <span
+        className="pointer-events-none absolute left-0 top-1/2 -ml-[5px] -mt-[5px] size-[10px] rounded-full shadow-[0_0_0_2px_#070b12]"
+        style={{ backgroundColor: styles.fill }}
+        aria-hidden
+      />
+      {isMarker ? null : (
+        <span className="block truncate pl-3 pr-2 text-[11px] font-semibold">
           {activity.label}
         </span>
       )}

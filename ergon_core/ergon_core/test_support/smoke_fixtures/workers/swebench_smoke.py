@@ -10,6 +10,11 @@ import json
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
 from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.sadpath import (
+    AlwaysFailSubworker,
+    FailingSmokeLeafMixin,
+    SadPathSmokeWorkerMixin,
+)
 from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
 from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
@@ -61,7 +66,24 @@ class SweBenchSmokeLeafWorker(BaseSmokeLeafWorker):
     subworker_cls = SweBenchSubworker
 
 
+class SweBenchFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
+    """Registered leaf that fails after partial work."""
+
+    type_slug = "swebench-smoke-leaf-failing"
+    subworker_cls = AlwaysFailSubworker
+
+
+class SweBenchSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
+    """Parent that routes ``l_2`` to the failing leaf."""
+
+    type_slug = "swebench-sadpath-smoke-worker"
+    leaf_slug = "swebench-smoke-leaf"
+    FAILING_LEAF_SLUG = "swebench-smoke-leaf-failing"
+
+
 __all__ = [
+    "SweBenchFailingLeafWorker",
+    "SweBenchSadPathSmokeWorker",
     "SweBenchSmokeLeafWorker",
     "SweBenchSmokeWorker",
     "SweBenchSubworker",

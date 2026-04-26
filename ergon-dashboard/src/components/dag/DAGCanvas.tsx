@@ -5,23 +5,22 @@
  *
  * Features:
  * - Hierarchical dagre layout with nested container rendering
- * - Depth-based expansion control via DepthSelector
+ * - Depth-based expansion control via floating controls
  * - Search/filter tasks by name
  * - Live updates via useRunState hook
  * - Zoom/pan controls
  */
 
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import {
   ReactFlow,
   Edge,
   Background,
-  Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   ConnectionLineType,
-  Panel,
   BackgroundVariant,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -29,7 +28,6 @@ import "@xyflow/react/dist/style.css";
 import { TaskStatus, type WorkflowRunState } from "@/lib/types";
 import { nodeTypes, type TaskNodeType } from "./TaskNode";
 import { GraphDependencyEdge } from "./edges/GraphDependencyEdge";
-import { DepthSelector } from "@/features/graph/components/DepthSelector";
 import { GraphExpansionProvider } from "@/features/graph/hooks/useGraphExpansion";
 import { computeHierarchicalLayout, calculateExpandedContainers } from "@/features/graph/layout/hierarchicalLayout";
 import { DEFAULT_EXPANDED_DEPTH } from "@/features/graph/layout/layoutTypes";
@@ -72,6 +70,139 @@ function getMinimapNodeColor(node: TaskNodeType): string {
   }
 }
 
+/* ─── Floating control cards ────────────────────────────────────── */
+
+const cardClass =
+  "bg-[var(--card)] border border-[var(--line)] rounded-lg shadow-card";
+
+function ZoomControls() {
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
+  const btn =
+    "flex items-center justify-center w-7 h-7 text-sm font-semibold text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--paper)] rounded transition-colors";
+  return (
+    <div className={`${cardClass} flex items-center`}>
+      <button className={btn} onClick={() => zoomIn()} aria-label="Zoom in">
+        +
+      </button>
+      <span className="w-px h-4 bg-[var(--line)]" />
+      <button className={btn} onClick={() => zoomOut()} aria-label="Zoom out">
+        −
+      </button>
+      <span className="w-px h-4 bg-[var(--line)]" />
+      <button
+        className={btn}
+        onClick={() => fitView({ padding: 0.2 })}
+        aria-label="Fit view"
+      >
+        ⌂
+      </button>
+    </div>
+  );
+}
+
+function DepthSelectorCard({
+  maxAvailableDepth,
+  currentDepth,
+  onDepthChange,
+}: {
+  maxAvailableDepth: number;
+  currentDepth: number | "all";
+  onDepthChange: (depth: number | "all") => void;
+}) {
+  const depths: (number | "all")[] = [];
+  for (let i = 1; i <= Math.min(maxAvailableDepth, 3); i++) depths.push(i);
+  depths.push("all");
+
+  return (
+    <div className={`${cardClass} flex items-center gap-1.5 px-2 py-1`}>
+      <span
+        className="font-mono uppercase tracking-wider"
+        style={{ fontSize: 9, color: "var(--faint)" }}
+      >
+        Depth
+      </span>
+      <div className="flex items-center rounded bg-[var(--paper)] p-0.5">
+        {depths.map((d) => {
+          const isActive = currentDepth === d;
+          return (
+            <button
+              key={String(d)}
+              onClick={() => onDepthChange(d)}
+              className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                isActive
+                  ? "bg-[var(--card)] text-[var(--ink)] shadow-card"
+                  : "text-[var(--muted)] hover:text-[var(--ink)]"
+              }`}
+            >
+              {d === "all" ? "all" : d}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SearchCard({
+  searchQuery,
+  onSearchChange,
+  matchCount,
+}: {
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+  matchCount: number;
+}) {
+  return (
+    <div className={`${cardClass} flex items-center gap-1.5 px-2 py-1`}>
+      <span
+        className="font-mono uppercase tracking-wider shrink-0"
+        style={{ fontSize: 9, color: "var(--faint)" }}
+      >
+        Search
+      </span>
+      <SearchInput
+        value={searchQuery}
+        onChange={onSearchChange}
+        placeholder="tasks..."
+        className="w-36"
+      />
+      {searchQuery && (
+        <span className="text-[10px] whitespace-nowrap" style={{ color: "var(--faint)" }}>
+          {matchCount}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const LEGEND_ITEMS: { status: string; label: string; cssVar: string }[] = [
+  { status: "completed", label: "completed", cssVar: "var(--status-completed)" },
+  { status: "running", label: "running", cssVar: "var(--status-running)" },
+  { status: "ready", label: "ready", cssVar: "var(--status-ready)" },
+  { status: "pending", label: "pending", cssVar: "var(--status-pending)" },
+  { status: "failed", label: "failed", cssVar: "var(--status-failed)" },
+];
+
+function LegendCard() {
+  return (
+    <div className={`${cardClass} flex items-center gap-3 px-3 py-1.5`}>
+      {LEGEND_ITEMS.map((item) => (
+        <div key={item.status} className="flex items-center gap-1.5">
+          <span
+            className="inline-block w-2 h-2 rounded-full"
+            style={{ backgroundColor: item.cssVar }}
+          />
+          <span className="text-[10px] font-medium" style={{ color: "var(--muted)" }}>
+            {item.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Main canvas ───────────────────────────────────────────────── */
+
 function DAGCanvasInner({
   runId,
   runState,
@@ -89,6 +220,8 @@ function DAGCanvasInner({
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [containerDims, setContainerDims] = useState<Map<string, ContainerDimensions>>(new Map());
   const [prevTaskIds, setPrevTaskIds] = useState<Set<string>>(new Set());
+  const { fitView: rfFitView } = useReactFlow();
+  const fitViewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const newNodeIds = useMemo(() => {
     if (!runState?.tasks) return new Set<string>();
@@ -106,7 +239,6 @@ function DAGCanvasInner({
     }
   }, [runState?.tasks]);
 
-  // Compute max available depth from tasks
   const maxAvailableDepth = useMemo(() => {
     if (!runState?.tasks) return 0;
     let max = 0;
@@ -116,12 +248,10 @@ function DAGCanvasInner({
     return max;
   }, [runState?.tasks]);
 
-  // Compute expanded containers from depth + manual overrides
   const expandedContainers = useMemo(() => {
     if (!runState?.tasks) return new Set<string>();
     const maxDepth = expandedDepth === "all" ? Infinity : expandedDepth;
     const fromDepth = calculateExpandedContainers(runState.tasks, maxDepth);
-    // Merge manual expansions (toggled individually)
     for (const id of manualExpansions) {
       if (fromDepth.has(id)) {
         fromDepth.delete(id);
@@ -135,7 +265,6 @@ function DAGCanvasInner({
     return fromDepth;
   }, [runState?.tasks, expandedDepth, manualExpansions]);
 
-  // Calculate matching node count
   const matchCount = useMemo(() => {
     if (!searchQuery.trim() || !runState?.tasks) return 0;
     const searchLower = searchQuery.toLowerCase().trim();
@@ -152,7 +281,6 @@ function DAGCanvasInner({
     return count;
   }, [searchQuery, runState?.tasks]);
 
-  // Compute hierarchical layout when data changes
   useEffect(() => {
     if (!runState?.tasks || runState.tasks.size === 0) return;
 
@@ -170,6 +298,11 @@ function DAGCanvasInner({
     setNodes(result.nodes as TaskNodeType[]);
     setEdges(result.edges);
     setContainerDims(result.containerDimensions);
+
+    if (fitViewTimer.current) clearTimeout(fitViewTimer.current);
+    fitViewTimer.current = setTimeout(() => {
+      rfFitView({ padding: 0.2, duration: 200 });
+    }, 100);
   }, [
     runState?.tasks,
     expandedContainers,
@@ -180,15 +313,14 @@ function DAGCanvasInner({
     highlightedTaskIds,
     setNodes,
     setEdges,
+    rfFitView,
   ]);
 
-  // Handle depth change — reset manual overrides when depth changes
   const handleDepthChange = useCallback((depth: number | "all") => {
     setExpandedDepth(depth);
     setManualExpansions(new Set());
   }, []);
 
-  // Toggle individual container expansion
   const toggleExpand = useCallback((taskId: string) => {
     setManualExpansions((prev) => {
       const next = new Set(prev);
@@ -201,7 +333,6 @@ function DAGCanvasInner({
     });
   }, []);
 
-  // Handle search change
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
   }, []);
@@ -211,25 +342,17 @@ function DAGCanvasInner({
     [expandedContainers, toggleExpand, containerDims],
   );
 
-  // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
-        <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-center h-full" style={{ background: "var(--paper)" }}>
+        <div className="flex items-center gap-3" style={{ color: "var(--muted)" }}>
           <svg
             className="animate-spin h-5 w-5"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
           >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path
               className="opacity-75"
               fill="currentColor"
@@ -242,19 +365,13 @@ function DAGCanvasInner({
     );
   }
 
-  // Error state — only show when we have no data to display
   if (error && (!runState?.tasks || runState.tasks.size === 0)) {
     const isNotFoundError = error.includes("not found");
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-full" style={{ background: "var(--paper)" }}>
         <div className="text-center max-w-md">
-          <div className={`${isNotFoundError ? 'text-amber-500' : 'text-red-500'} dark:${isNotFoundError ? 'text-amber-400' : 'text-red-400'} mb-2`}>
-            <svg
-              className="w-12 h-12 mx-auto"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+          <div className={`${isNotFoundError ? "text-amber-500" : "text-red-500"} mb-2`}>
+            <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               {isNotFoundError ? (
                 <path
                   strokeLinecap="round"
@@ -272,11 +389,11 @@ function DAGCanvasInner({
               )}
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>
             {isNotFoundError ? "Run Data Unavailable" : "Connection Error"}
           </h3>
-          <p className="text-gray-500 dark:text-gray-400">{error}</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 font-mono">
+          <p style={{ color: "var(--muted)" }}>{error}</p>
+          <p className="text-xs mt-2 font-mono" style={{ color: "var(--faint)" }}>
             Run ID: {runId}
           </p>
         </div>
@@ -284,18 +401,12 @@ function DAGCanvasInner({
     );
   }
 
-  // Empty state
   if (!runState?.tasks || runState.tasks.size === 0) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
+      <div className="flex items-center justify-center h-full" style={{ background: "var(--paper)" }}>
         <div className="text-center">
-          <div className="text-gray-400 dark:text-gray-500 mb-2">
-            <svg
-              className="w-12 h-12 mx-auto"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+          <div className="mb-2" style={{ color: "var(--faint)" }}>
+            <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -304,15 +415,15 @@ function DAGCanvasInner({
               />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <h3 className="text-lg font-semibold" style={{ color: "var(--ink)" }}>
             Waiting for tasks...
           </h3>
-          <p className="text-gray-500 dark:text-gray-400">
+          <p style={{ color: "var(--muted)" }}>
             {isSubscribed
               ? "Subscribed to run updates. Tasks will appear when the workflow starts."
               : "Connecting to server..."}
           </p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 font-mono">
+          <p className="text-xs mt-2 font-mono" style={{ color: "var(--faint)" }}>
             Run ID: {runId}
           </p>
         </div>
@@ -321,7 +432,7 @@ function DAGCanvasInner({
   }
 
   return (
-    <div className="h-full min-h-[60vh] w-full" data-testid="graph-canvas">
+    <div className="relative h-full w-full" style={{ minHeight: 300 }} data-testid="graph-canvas">
       <GraphExpansionProvider value={expansionContextValue}>
         <ReactFlow
           nodes={nodes}
@@ -338,102 +449,52 @@ function DAGCanvasInner({
           defaultEdgeOptions={{}}
           proOptions={{ hideAttribution: true }}
         >
-          {/* Background */}
           <Background
             variant={BackgroundVariant.Dots}
             gap={20}
             size={1}
-            className="bg-gray-50 dark:bg-gray-900"
+            color="var(--line)"
+            style={{ backgroundColor: "var(--paper)" }}
           />
 
-          {/* Controls */}
-          <Controls
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm"
-            showZoom
-            showFitView
-            showInteractive={false}
-          />
-
-          {/* MiniMap */}
           <MiniMap
             nodeColor={getMinimapNodeColor}
             nodeStrokeWidth={3}
-            className="hidden 2xl:block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm"
+            className="hidden 2xl:block"
             maskColor="rgba(0, 0, 0, 0.1)"
+            style={{
+              backgroundColor: "var(--card)",
+              border: "1px solid var(--line)",
+              borderRadius: 8,
+            }}
           />
-
-          {/* Top Left: Depth Selector + Search */}
-          <Panel position="top-left" className="m-2 sm:m-4 space-y-2">
-            <div className="hidden sm:block">
-              <DepthSelector
-                tasks={runState.tasks}
-                currentDepth={expandedDepth}
-                onDepthChange={handleDepthChange}
-                maxAvailableDepth={maxAvailableDepth}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <SearchInput
-                value={searchQuery}
-                onChange={handleSearchChange}
-                placeholder="Search tasks..."
-                className="w-40 sm:w-64"
-              />
-              {searchQuery && (
-                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                  {matchCount} match{matchCount !== 1 ? "es" : ""}
-                </span>
-              )}
-            </div>
-            {/* Depth selector on mobile */}
-            <div className="sm:hidden">
-              <DepthSelector
-                tasks={runState.tasks}
-                currentDepth={expandedDepth}
-                onDepthChange={handleDepthChange}
-                maxAvailableDepth={maxAvailableDepth}
-              />
-            </div>
-          </Panel>
-
-          {/* Run Info Panel */}
-          <Panel position="top-right" className="m-2 sm:m-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 px-3 py-2 sm:px-4 sm:py-3">
-              <h2 className="font-semibold text-gray-900 dark:text-white truncate max-w-[120px] sm:max-w-[200px] text-sm sm:text-base">
-                {runState.name}
-              </h2>
-              <div className="flex items-center gap-2 sm:gap-4 mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                <span
-                  className={`flex items-center gap-1 ${
-                    runState.status === "pending" ||
-                    runState.status === "executing" ||
-                    runState.status === "evaluating"
-                      ? "text-yellow-600 dark:text-yellow-400"
-                      : runState.status === "completed"
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-red-600 dark:text-red-400"
-                  }`}
-                >
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      runState.status === "pending" ||
-                      runState.status === "executing" ||
-                      runState.status === "evaluating"
-                        ? "bg-yellow-500 animate-pulse"
-                        : runState.status === "completed"
-                          ? "bg-green-500"
-                          : "bg-red-500"
-                    }`}
-                  />
-                  <span className="hidden sm:inline">{runState.status}</span>
-                </span>
-                {runState.durationSeconds !== null && (
-                  <span>{Math.round(runState.durationSeconds)}s</span>
-                )}
-              </div>
-            </div>
-          </Panel>
         </ReactFlow>
+
+        {/* Floating controls — top-left */}
+        <div
+          className="absolute top-3 left-3 flex items-start gap-2"
+          style={{ zIndex: 5 }}
+        >
+          <ZoomControls />
+          <DepthSelectorCard
+            maxAvailableDepth={maxAvailableDepth}
+            currentDepth={expandedDepth}
+            onDepthChange={handleDepthChange}
+          />
+          <SearchCard
+            searchQuery={searchQuery}
+            onSearchChange={handleSearchChange}
+            matchCount={matchCount}
+          />
+        </div>
+
+        {/* Floating controls — bottom-left */}
+        <div
+          className="absolute bottom-3 left-3"
+          style={{ zIndex: 5 }}
+        >
+          <LegendCard />
+        </div>
       </GraphExpansionProvider>
     </div>
   );

@@ -19,6 +19,10 @@ class CreateMessageRequest(BaseModel):
         description="ID of the receiving agent, e.g. '{run_id}:stakeholder'",
     )
     thread_topic: str
+    thread_summary: str | None = Field(
+        default=None,
+        description="Optional human-readable summary set when the thread is first created.",
+    )
     content: str
     task_execution_id: UUID | None = None
 
@@ -45,6 +49,7 @@ class ThreadSummary(BaseModel):
     thread_id: UUID
     run_id: UUID
     topic: str
+    summary: str | None = None
     agent_a_id: str
     agent_b_id: str
     message_count: int
@@ -56,6 +61,7 @@ class ThreadWithMessages(BaseModel):
     thread_id: UUID
     run_id: UUID
     topic: str
+    summary: str | None = None
     agent_a_id: str
     agent_b_id: str
     messages: list[MessageResponse]

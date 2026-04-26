@@ -119,6 +119,7 @@ const RunCommunicationThreadDto = z.object({
   runId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
   topic: z.string(),
+  summary: z.union([z.string(), z.null()]).optional(),
   agentAId: z.string(),
   agentBId: z.string(),
   createdAt: z.string().datetime({ offset: true }),
@@ -233,6 +234,8 @@ const CohortRunRowDto = z
     completed_at: z.union([z.string(), z.null()]).optional(),
     running_time_ms: z.union([z.number(), z.null()]).optional(),
     final_score: z.union([z.number(), z.null()]).optional(),
+    total_tasks: z.union([z.number().int(), z.null()]).optional(),
+    total_cost_usd: z.union([z.number(), z.null()]).optional(),
     error_message: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();

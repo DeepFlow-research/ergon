@@ -4,9 +4,8 @@ import type { Node } from "@xyflow/react";
 
 import fixture from "../../../../tests/fixtures/mas-runs/concurrent-mas-run.json";
 import { parseGraphMutationDtoArray } from "@/features/graph/contracts/graphMutations";
-import { replayToSequence } from "@/features/graph/state/graphMutationReducer";
+import { createReplayInitialState, replayToSequence } from "@/features/graph/state/graphMutationReducer";
 import { deserializeRunState } from "@/lib/runState";
-import type { WorkflowRunState } from "@/lib/types";
 import { calculateExpandedContainers, computeHierarchicalLayout } from "./hierarchicalLayout";
 import { NODE_VARIANTS, getNodeVariant } from "./layoutTypes";
 
@@ -17,21 +16,6 @@ interface Rect {
   y: number;
   width: number;
   height: number;
-}
-
-function emptyRunStateFrom(runState: WorkflowRunState): WorkflowRunState {
-  return {
-    ...runState,
-    tasks: new Map(),
-    totalTasks: 0,
-    totalLeafTasks: 0,
-    completedTasks: 0,
-    runningTasks: 0,
-    failedTasks: 0,
-    edges: new Map(),
-    annotationsByTarget: new Map(),
-    unhandledMutations: [],
-  };
 }
 
 function rectFor(node: Node): Rect {
@@ -77,7 +61,7 @@ test("golden layout renders the full recursive graph without overlapping sibling
   const displayState = replayToSequence(
     mutations,
     checkpoint.sequence,
-    emptyRunStateFrom(runState),
+    createReplayInitialState(runState, mutations, checkpoint.sequence),
     new Map(),
   );
   const result = computeHierarchicalLayout(
@@ -92,4 +76,10 @@ test("golden layout renders the full recursive graph without overlapping sibling
 
   assert.deepEqual(new Set(result.nodes.map((node) => node.id)), new Set(checkpoint.expectedTaskIds));
   assert.deepEqual(overlappingSiblingPairs(result.nodes), []);
+  for (const taskId of checkpoint.expectedTaskIds) {
+    const expected = runState.tasks.get(taskId);
+    const actual = displayState.tasks.get(taskId);
+    assert.equal(actual?.parentId, expected?.parentId ?? null);
+    assert.equal(actual?.level, expected?.level);
+  }
 });

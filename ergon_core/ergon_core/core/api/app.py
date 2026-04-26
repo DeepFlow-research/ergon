@@ -24,6 +24,7 @@ from ergon_core.core.api.cohorts import router as cohorts_router
 from ergon_core.core.api.rollouts import init_service as init_rollout_service
 from ergon_core.core.api.rollouts import router as rollouts_router
 from ergon_core.core.api.runs import router as runs_router
+from ergon_core.core.api.startup_plugins import run_startup_plugins
 from ergon_core.core.api.test_harness import router as _test_harness_router
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
@@ -93,19 +94,6 @@ app.include_router(rollouts_router)
 if settings.enable_test_harness:
     app.include_router(_test_harness_router)
 
-if settings.smoke_fixtures_enabled:
-    # Register the canonical-smoke WORKERS / EVALUATORS into this
-    # process's registry dicts.  Inngest's ``worker_execute_fn`` runs
-    # inside this container, so if the smoke fixtures are only imported
-    # host-side (in pytest's process) the container's dicts stay empty
-    # and every smoke run fails at worker resolution.  The flag is
-    # separate from ``ENABLE_TEST_HARNESS`` because real-LLM rollouts
-    # need the read-only harness endpoints without replacing production
-    # benchmark registries with smoke fixtures.
-    # Test-support package kept outside ``tests`` so runtime entrypoints
-    # never import pytest-owned modules.
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
-
-    register_smoke_fixtures()
+run_startup_plugins(settings.startup_plugins)
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)

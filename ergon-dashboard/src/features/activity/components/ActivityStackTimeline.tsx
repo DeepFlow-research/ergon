@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useMemo, useState } from "react";
 
 import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
-import { stackActivities } from "@/features/activity/stackLayout";
-import type { ActivityKind, RunActivity } from "@/features/activity/types";
-import { ActivityBar, activityKindLabel } from "./ActivityBar";
+import { ACTIVITY_BAND_ORDER, stackActivities } from "@/features/activity/stackLayout";
+import type { ActivityBand, RunActivity } from "@/features/activity/types";
+import { resolveCurrentActivityId } from "@/features/activity/currentActivity";
+import { formatClockTime } from "@/lib/timeFormat";
+import { ActivityBar, activityKindLegendLabel, activityKindColor } from "./ActivityBar";
 
 interface ActivityStackTimelineProps {
   activities: RunActivity[];
@@ -13,40 +15,138 @@ interface ActivityStackTimelineProps {
   currentSequence: number;
   selectedTaskId: string | null;
   selectedActivityId: string | null;
-  isPlaying: boolean;
-  speed: number;
-  onSequenceChange: (sequence: number) => void;
-  onTogglePlay: () => void;
-  onSpeedChange: (speed: number) => void;
   onActivityClick: (activity: RunActivity) => void;
 }
 
-const SPEED_OPTIONS = [1, 2, 5, 10] as const;
-const MIN_DELAY_MS = 50;
-const MAX_DELAY_MS = 2000;
 const ROW_HEIGHT = 31;
+const BAND_LABELS: Record<ActivityBand, { title: string; note: string }> = {
+  work: {
+    title: "Work spans",
+    note: "Executions and sandbox lifetimes.",
+  },
+  graph: {
+    title: "Graph changes",
+    note: "Node and edge mutations.",
+  },
+  tools: {
+    title: "Tools / context",
+    note: "Tool calls, commands, observations.",
+  },
+  communication: {
+    title: "Communication",
+    note: "Messages and coordination.",
+  },
+  outputs: {
+    title: "Outputs / evals",
+    note: "Artifacts, scores, pass/fail.",
+  },
+};
+const STACK_ACTIVITY_KINDS = [
+  "execution",
+  "graph",
+  "context",
+  "sandbox",
+  "message",
+  "artifact",
+  "evaluation",
+] as const;
 
-function formatTime(ms: number): string {
-  if (!Number.isFinite(ms)) return "—";
-  return new Date(ms).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+function timePositionPct(timestamp: string, startMs: number, endMs: number): number | null {
+  const ms = Date.parse(timestamp);
+  if (!Number.isFinite(ms)) return null;
+  const spanMs = Math.max(1, endMs - startMs);
+  return Math.min(100, Math.max(0, ((ms - startMs) / spanMs) * 100));
 }
 
-function countByKind(activities: RunActivity[]): Record<ActivityKind, number> {
-  const counts = {
-    execution: 0,
-    graph: 0,
-    message: 0,
-    artifact: 0,
-    evaluation: 0,
-    context: 0,
-    sandbox: 0,
-  } satisfies Record<ActivityKind, number>;
-  for (const activity of activities) counts[activity.kind] += 1;
-  return counts;
+function lineageValueMatches(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  return Boolean(a && b && a === b);
+}
+
+function areActivitiesRelated(a: RunActivity, b: RunActivity): boolean {
+  if (a.id === b.id) return true;
+  return (
+    lineageValueMatches(a.lineage.taskExecutionId, b.lineage.taskExecutionId) ||
+    lineageValueMatches(a.lineage.sandboxId, b.lineage.sandboxId) ||
+    lineageValueMatches(a.lineage.threadId, b.lineage.threadId) ||
+    lineageValueMatches(a.lineage.taskId, b.lineage.taskId)
+  );
+}
+
+function debugPreview(activity: RunActivity): string {
+  return JSON.stringify(
+    {
+      kind: activity.kind,
+      band: activity.band,
+      label: activity.label,
+      source: activity.debug.source,
+      lineage: activity.lineage,
+      metadata: activity.metadata,
+      payload: activity.debug.payload,
+    },
+    null,
+    2,
+  );
+}
+
+function ActivityLineageCard({
+  activity,
+  related,
+}: {
+  activity: RunActivity;
+  related: RunActivity[];
+}) {
+  const relatedSummary = related
+    .filter((candidate) => candidate.id !== activity.id)
+    .slice(0, 6);
+
+  return (
+    <div
+      className="absolute right-8 top-14 z-50 w-[360px] rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--card)] p-3 text-left text-xs text-[var(--ink)] shadow-pop"
+      data-testid="activity-debug-preview"
+    >
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
+        Lineage
+      </div>
+      <div className="font-semibold">
+        {activity.kind}: {activity.label}
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-[var(--muted)]">
+        <span>Band: {activity.band}</span>
+        <span>Source: {activity.debug.source}</span>
+        <span>Task: {activity.lineage.taskId ?? "—"}</span>
+        <span>Execution: {activity.lineage.taskExecutionId ?? "—"}</span>
+        <span>Sandbox: {activity.lineage.sandboxId ?? "—"}</span>
+        <span>Seq: {activity.sequence ?? "—"}</span>
+      </div>
+      {relatedSummary.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
+            Related events
+          </div>
+          <ul className="space-y-1 text-[11px] text-[var(--muted)]">
+            {relatedSummary.map((candidate) => (
+              <li key={candidate.id} className="truncate">
+                <span className="font-medium text-[var(--ink)]">{candidate.kind}</span>
+                {" · "}
+                {candidate.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <details className="mt-3 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--paper)] p-2">
+        <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
+          Raw payload
+        </summary>
+        <code className="mt-2 block max-h-44 overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-4 text-[var(--muted)]">
+          {debugPreview(activity)}
+        </code>
+      </details>
+    </div>
+  );
 }
 
 export function ActivityStackTimeline({
@@ -55,66 +155,28 @@ export function ActivityStackTimeline({
   currentSequence,
   selectedTaskId,
   selectedActivityId,
-  isPlaying,
-  speed,
-  onSequenceChange,
-  onTogglePlay,
-  onSpeedChange,
   onActivityClick,
 }: ActivityStackTimelineProps) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const currentSequenceRef = useRef(currentSequence);
-  currentSequenceRef.current = currentSequence;
-
+  const [hoveredActivityId, setHoveredActivityId] = useState<string | null>(null);
   const layout = useMemo(() => stackActivities(activities), [activities]);
-  const counts = useMemo(() => countByKind(activities), [activities]);
   const maxSequence = mutations.length > 0 ? mutations[mutations.length - 1].sequence : 0;
   const minSequence = mutations.length > 0 ? mutations[0].sequence : 0;
   const currentMutation = mutations.find((mutation) => mutation.sequence === currentSequence);
-
-  const stepForward = useCallback(() => {
-    const idx = mutations.findIndex((mutation) => mutation.sequence === currentSequenceRef.current);
-    if (idx >= 0 && idx < mutations.length - 1) {
-      onSequenceChange(mutations[idx + 1].sequence);
-    }
-  }, [mutations, onSequenceChange]);
-
-  const stepBack = useCallback(() => {
-    const idx = mutations.findIndex((mutation) => mutation.sequence === currentSequenceRef.current);
-    if (idx > 0) {
-      onSequenceChange(mutations[idx - 1].sequence);
-    }
-  }, [mutations, onSequenceChange]);
-
-  useEffect(() => {
-    if (!isPlaying || mutations.length === 0) return;
-
-    const scheduleNext = () => {
-      const idx = mutations.findIndex((mutation) => mutation.sequence === currentSequenceRef.current);
-      if (idx < 0 || idx >= mutations.length - 1) {
-        onTogglePlay();
-        return;
-      }
-      const currentTime = Date.parse(mutations[idx].created_at);
-      const nextTime = Date.parse(mutations[idx + 1].created_at);
-      const rawDelay = (nextTime - currentTime) / speed;
-      const delayMs = Math.max(MIN_DELAY_MS, Math.min(MAX_DELAY_MS, rawDelay));
-      timerRef.current = setTimeout(() => {
-        onSequenceChange(mutations[idx + 1].sequence);
-        scheduleNext();
-      }, delayMs);
-    };
-
-    scheduleNext();
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [isPlaying, mutations, onSequenceChange, onTogglePlay, speed]);
+  const hasMutations = mutations.length > 0;
+  const isReplayLocked = currentSequence > 0;
+  const snapshotLeftPct = currentMutation
+    ? timePositionPct(currentMutation.created_at, layout.startMs, layout.endMs)
+    : null;
+  const currentActivityId = resolveCurrentActivityId(
+    activities,
+    currentMutation?.created_at ?? null,
+    currentMutation?.sequence ?? null,
+  );
 
   if (activities.length === 0) {
     return (
       <div
-        className="flex h-[236px] items-center justify-center bg-[#070b12] text-sm text-slate-400"
+        className="flex h-full items-center justify-center bg-[var(--paper)] text-sm text-[var(--muted)]"
         data-testid="activity-stack-region"
       >
         No activity has been recorded for this run yet.
@@ -122,120 +184,204 @@ export function ActivityStackTimeline({
     );
   }
 
+  const timeSlots = 8;
+  const timeRange = layout.endMs - layout.startMs;
+  const timeLabels = Array.from({ length: timeSlots }, (_, i) => {
+    const ms = layout.startMs + (timeRange / (timeSlots - 1)) * i;
+    return formatClockTime(ms);
+  });
+  const focusActivity =
+    activities.find((activity) => activity.id === hoveredActivityId) ??
+    activities.find((activity) => activity.id === selectedActivityId) ??
+    null;
+  const relatedActivities = focusActivity
+    ? activities.filter((activity) => areActivitiesRelated(focusActivity, activity))
+    : [];
+  const relatedActivityIds = new Set(relatedActivities.map((activity) => activity.id));
+
   return (
-    <div className="relative h-[236px] bg-[#070b12] text-slate-200" data-testid="activity-stack-region">
-      <div className="flex h-11 items-center justify-between border-b border-white/10 px-4">
-        <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-            Activity stack <span className="ml-2 font-normal normal-case tracking-normal text-slate-500">rows are overlap layers, not fixed lanes</span>
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-3 font-mono text-[10px] text-slate-500">
-            <span data-testid="activity-current-sequence">
-              seq {currentMutation?.sequence ?? currentSequence}
+    <div className="relative h-full bg-[var(--paper-2)] text-[var(--ink)]" data-testid="activity-stack-region">
+      {/* Header bar */}
+      <div className="flex h-11 items-center justify-between overflow-hidden border-b border-[var(--line)] bg-[var(--card)] px-6">
+        <div className="flex items-center gap-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.10em] text-[var(--faint)]">
+            Concurrent execution{" "}
+            <span className="ml-1.5 font-normal normal-case tracking-normal text-[var(--muted)]">
+              bars are task attempts; dots are graph snapshots.
             </span>
-            <span>{formatTime(layout.startMs)} - {formatTime(layout.endMs)}</span>
-            <span>max concurrency {layout.maxConcurrency}</span>
           </div>
+
+          {!isReplayLocked && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+              <span className="size-1.5 animate-status-pulse rounded-full bg-emerald-500" />
+              Live · auto-tail
+            </span>
+          )}
+
+          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted)]" data-testid="activity-current-sequence">
+            seq {minSequence} — {maxSequence || currentMutation?.sequence || currentSequence} · {isReplayLocked ? "replay" : "streaming"}
+          </span>
+
+          {isReplayLocked && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--accent)]" data-testid="snapshot-lock-label">
+              graph locked · seq {currentSequence}
+            </span>
+          )}
+
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={stepBack}
-            disabled={currentSequence <= minSequence}
-            className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-white/10 disabled:opacity-35"
-            data-testid="activity-step-back"
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            onClick={onTogglePlay}
-            className="rounded-md bg-white px-3 py-1 text-xs font-semibold text-[#070b12] hover:bg-slate-200"
-            data-testid="activity-play-toggle"
-            aria-label={isPlaying ? "Pause timeline" : "Play timeline"}
-          >
-            {isPlaying ? "Pause" : "Play"}
-          </button>
-          <button
-            type="button"
-            onClick={stepForward}
-            disabled={currentSequence >= maxSequence}
-            className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-white/10 disabled:opacity-35"
-            data-testid="activity-step-forward"
-          >
-            Next
-          </button>
-          <select
-            value={speed}
-            onChange={(event) => onSpeedChange(Number(event.target.value))}
-            className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300"
-            data-testid="activity-speed-control"
-            aria-label="Timeline playback speed"
-          >
-            {SPEED_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}x
-              </option>
-            ))}
-          </select>
+        {/* Kind legend */}
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[11px] text-[var(--muted)]" data-testid="activity-kind-legend">
+          <span className="flex items-center gap-1.5 font-medium text-[var(--ink)]">
+            <span className="inline-block h-[7px] w-[18px] rounded-full bg-[var(--accent-soft)] ring-1 ring-[var(--line)]" />
+            Span
+          </span>
+          <span className="flex items-center gap-1.5 font-medium text-[var(--ink)]">
+            <span className="inline-block size-[7px] rounded-full bg-[var(--accent)]" />
+            Point event
+          </span>
+          {STACK_ACTIVITY_KINDS.map((kind) => (
+            <span key={kind} className="flex items-center gap-1.5">
+              <span className="inline-block size-[6px] rounded-full" style={{ backgroundColor: activityKindColor(kind) }} />
+              {activityKindLegendLabel(kind)}
+            </span>
+          ))}
         </div>
       </div>
 
-      {mutations.length > 0 && (
-        <input
-          type="range"
-          min={minSequence}
-          max={maxSequence}
-          value={currentSequence}
-          onChange={(event) => onSequenceChange(Number(event.target.value))}
-          className="mx-4 mt-2 h-1.5 w-[calc(100%-2rem)] cursor-pointer appearance-none rounded-full bg-white/10 accent-indigo-400"
-          aria-label="Run timeline sequence"
-        />
+      {focusActivity && (
+        <ActivityLineageCard activity={focusActivity} related={relatedActivities} />
       )}
 
-      <div className="absolute bottom-4 left-28 right-[430px] z-10 flex flex-wrap gap-2 text-[10px]">
-        {(Object.keys(counts) as ActivityKind[]).map((kind) => (
-          <span
-            key={kind}
-            className="rounded-full border border-white/10 bg-white/5 px-2 py-1 font-semibold uppercase tracking-wide text-slate-400"
-          >
-            {activityKindLabel(kind)} {counts[kind]}
-          </span>
-        ))}
-      </div>
+      {/* Stack content */}
+      <div className="relative px-6 pb-2 pt-3">
+        <div className="grid" style={{ gridTemplateColumns: "140px 1fr", gap: "16px" }}>
+          <div className="text-[11px] leading-[1.45] text-[var(--muted)]">
+            <div className="font-semibold text-[var(--ink)]">Trace spans</div>
+            Band = semantic category. Sub-row = visual overlap.
+          </div>
 
-      <div className="relative mx-4 mt-3 h-[148px] overflow-hidden border-y border-white/10 bg-[radial-gradient(circle,rgb(148_163_184/0.08)_1px,transparent_1px)] [background-size:20px_20px]">
-        <div className="absolute left-0 top-2 w-24 text-[11px] font-semibold leading-snug text-slate-400">
-          Concurrent activity<br />
-          <span className="font-normal text-slate-600">Bars stack only when they overlap</span>
+          <div className="mb-1 grid min-w-0 font-mono text-[10px] text-[var(--faint)]" style={{ gridTemplateColumns: `repeat(${timeSlots}, 1fr)` }}>
+              {timeLabels.map((label, i) => (
+                <span key={i}>
+                  {label}
+                  {i === timeSlots - 2 && !isReplayLocked && <span className="ml-1 text-emerald-600">· now</span>}
+                </span>
+              ))}
+          </div>
         </div>
-        <div
-          className="relative ml-28 min-w-[720px]"
-          style={{ height: Math.max(1, layout.rowCount) * ROW_HEIGHT }}
-        >
-          {Array.from({ length: layout.rowCount }).map((_, row) => (
-            <div
-              key={row}
-              className="absolute left-0 right-0 border-t border-white/10"
-              style={{ top: row * ROW_HEIGHT }}
-              data-testid="activity-stack-row"
-            />
-          ))}
-          {layout.items.map((item) => (
-            <div
-              key={item.activity.id}
-              className="absolute left-0 right-0"
-              style={{ top: item.row * ROW_HEIGHT }}
-            >
-              <ActivityBar
-                item={item}
-                selected={item.activity.id === selectedActivityId}
-                highlighted={Boolean(selectedTaskId && item.activity.taskId === selectedTaskId)}
-                onClick={onActivityClick}
-              />
-            </div>
-          ))}
+
+        <div className="overflow-visible rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--card)]">
+          {ACTIVITY_BAND_ORDER.map((band) => {
+            const bandLayout = layout.bands.find((entry) => entry.band === band);
+            if (!bandLayout) return null;
+            const bandItems = layout.items.filter((item) => item.activity.band === band);
+            const labels = BAND_LABELS[band];
+            return (
+              <div
+                key={band}
+                className="grid border-b border-[var(--line)] last:border-b-0"
+                style={{ gridTemplateColumns: "140px 1fr" }}
+                data-testid={`activity-band-${band}`}
+              >
+                <div className="border-r border-[var(--line)] bg-[var(--paper)] p-3 text-[11px] leading-[1.35] text-[var(--muted)]">
+                  <div className="font-semibold uppercase tracking-[0.08em] text-[var(--ink)]">
+                    {labels.title}
+                  </div>
+                  <div className="mt-1">{labels.note}</div>
+                </div>
+                <div
+                  className="relative min-w-0"
+                  style={{
+                    height: Math.max(1, bandLayout.rowCount) * ROW_HEIGHT + 12,
+                    backgroundImage:
+                      "linear-gradient(to right, transparent calc(12.5% - 1px), var(--line) calc(12.5% - 1px), var(--line) 12.5%, transparent 12.5%)",
+                    backgroundSize: "12.5% 100%",
+                  }}
+                >
+                  {Array.from({ length: bandLayout.rowCount }).map((_, row) => (
+                    <div
+                      key={row}
+                      className="absolute left-0 right-0 border-t border-dashed border-[var(--line)]"
+                      style={{ top: 4 + row * ROW_HEIGHT + 25 + 3 }}
+                      data-testid="activity-stack-row"
+                    />
+                  ))}
+
+                  {bandItems.map((item) => {
+                    const relation = !focusActivity
+                      ? "none"
+                      : item.activity.id === focusActivity.id
+                        ? "focused"
+                        : relatedActivityIds.has(item.activity.id)
+                          ? "related"
+                          : "dimmed";
+                    return (
+                      <div
+                        key={item.activity.id}
+                        className="absolute left-0 right-0"
+                        style={{ top: 4 + item.row * ROW_HEIGHT }}
+                      >
+                        <ActivityBar
+                          item={item}
+                          selected={item.activity.id === selectedActivityId}
+                          highlighted={Boolean(selectedTaskId && item.activity.taskId === selectedTaskId)}
+                          current={item.activity.id === currentActivityId}
+                          relation={relation}
+                          onClick={onActivityClick}
+                          onHoverStart={(activity) => setHoveredActivityId(activity.id)}
+                          onHoverEnd={() => setHoveredActivityId(null)}
+                        />
+                      </div>
+                    );
+                  })}
+
+            {/* Snapshot pin (indigo) */}
+            {hasMutations && isReplayLocked && snapshotLeftPct !== null && (
+              <>
+                <div
+                  className="absolute bottom-0 top-0 w-0.5 bg-[var(--accent)]"
+                  style={{ left: `${snapshotLeftPct}%` }}
+                  data-testid="snapshot-pin"
+                />
+                <div
+                  className="absolute -top-5 -translate-x-1/2 rounded bg-[var(--accent)] px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-[0.04em] text-white"
+                  style={{ left: `${snapshotLeftPct}%` }}
+                >
+                  SEQ {currentSequence}
+                </div>
+              </>
+            )}
+
+            {/* NOW cursor (green, live mode) */}
+            {!isReplayLocked && (
+              <>
+                <div
+                  className="absolute bottom-0 top-0 w-0.5 animate-status-pulse bg-emerald-500"
+                  style={{ left: "85%" }}
+                  data-testid="now-cursor"
+                />
+                <div
+                  className="absolute -top-5 flex -translate-x-1/2 items-center gap-1 rounded bg-emerald-600 px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-[0.04em] text-white"
+                  style={{ left: "85%" }}
+                  data-testid="now-cursor-pill"
+                >
+                  <span className="size-[5px] animate-status-pulse rounded-full bg-white" />
+                  NOW
+                </div>
+              </>
+            )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer hints */}
+        <div className="mt-2 flex flex-wrap gap-4 text-[10px] text-[var(--faint)]" data-testid="activity-footer-hints">
+          <span>{layout.rowCount} trace rows across {layout.bands.length} semantic bands</span>
+          <span>Hover = lineage focus</span>
+          <span>Click = inspect graph snapshot</span>
         </div>
       </div>
     </div>

@@ -4,7 +4,6 @@ from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import SandboxCommandWalEntry, SandboxEvent
 
 
 @runtime_checkable
@@ -151,6 +150,8 @@ class PostgresSandboxEventSink:
         timeout_minutes: int,
         template: str | None = None,
     ) -> None:
+        from ergon_core.core.persistence.telemetry.models import SandboxEvent
+
         with get_session() as s:
             s.add(
                 SandboxEvent(
@@ -175,6 +176,8 @@ class PostgresSandboxEventSink:
         exit_code: int | None = None,
         duration_ms: int | None = None,
     ) -> None:
+        from ergon_core.core.persistence.telemetry.models import SandboxCommandWalEntry
+
         with get_session() as s:
             s.add(
                 SandboxCommandWalEntry(
@@ -199,6 +202,8 @@ class PostgresSandboxEventSink:
     ) -> None:
         if run_id is None:
             return
+        from ergon_core.core.persistence.telemetry.models import SandboxEvent
+
         with get_session() as s:
             s.add(
                 SandboxEvent(

@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trace Spans Semantic Bands Mockup</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --panel-2: #f1f4f8;
+      --line: #d9e0ea;
+      --line-strong: #b8c4d3;
+      --text: #182235;
+      --muted: #617089;
+      --faint: #8a98ad;
+      --execution: #9b6cf3;
+      --sandbox: #18a8bd;
+      --graph: #111827;
+      --context: #0ea5a3;
+      --message: #f59e0b;
+      --artifact: #22c55e;
+      --evaluation: #ec4899;
+      --cursor: #0ea5e9;
+      --shadow: 0 18px 50px rgb(31 41 55 / 0.22);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      padding: 32px;
+    }
+
+    .shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin-top: 5px;
+      max-width: 720px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px 12px;
+      max-width: 430px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .key {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--color);
+    }
+
+    .key.span {
+      width: 22px;
+      height: 8px;
+      border-radius: 999px;
+    }
+
+    .selection-card {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #eef6ff;
+    }
+
+    .selection-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #bfdbfe;
+      padding: 6px 10px;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .selection-copy {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .related-counts {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .related-counts span {
+      border-radius: 999px;
+      border: 1px solid #bfdbfe;
+      background: #fff;
+      padding: 4px 8px;
+      white-space: nowrap;
+    }
+
+    .trace {
+      position: relative;
+      padding: 0 0 18px;
+      overflow-x: auto;
+      overflow-y: visible;
+    }
+
+    .ruler {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 150px repeat(6, 1fr);
+      min-width: 980px;
+      border-bottom: 1px solid var(--line);
+      background: rgb(255 255 255 / 0.94);
+      backdrop-filter: blur(10px);
+      color: var(--faint);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10px;
+    }
+
+    .ruler div {
+      padding: 8px 10px;
+      border-left: 1px solid var(--line);
+    }
+
+    .ruler div:first-child {
+      border-left: 0;
+      color: var(--muted);
+      font-family: inherit;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .band {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      min-width: 980px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .band:nth-child(odd) {
+      background: #fbfcfe;
+    }
+
+    .band-label {
+      padding: 12px 14px;
+      border-right: 1px solid var(--line);
+      background: rgb(241 245 249 / 0.7);
+    }
+
+    .band-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .band-note {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .band-track {
+      position: relative;
+      height: var(--height);
+      background-image:
+        linear-gradient(to right, transparent calc(16.666% - 1px), var(--line) calc(16.666% - 1px), var(--line) 16.666%, transparent 16.666%),
+        linear-gradient(to bottom, transparent calc(34px - 1px), rgb(217 224 234 / 0.7) calc(34px - 1px), rgb(217 224 234 / 0.7) 34px, transparent 34px);
+      background-size: 16.666% 100%, 100% 34px;
+    }
+
+    .span-bar,
+    .marker,
+    .cluster {
+      position: absolute;
+      top: var(--row);
+      left: var(--left);
+    }
+
+    .span-bar {
+      width: var(--width);
+      height: 22px;
+      display: flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0 10px;
+      color: #fff;
+      background: var(--color);
+      font-size: 11px;
+      font-weight: 700;
+      box-shadow: 0 1px 0 rgb(255 255 255 / 0.25) inset;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: default;
+    }
+
+    .span-bar.sandbox {
+      height: 18px;
+      border: 2px solid rgb(255 255 255 / 0.65);
+    }
+
+    .span-bar.secondary {
+      height: 14px;
+      padding: 0 8px;
+      font-size: 10px;
+      opacity: 0.95;
+    }
+
+    .selected {
+      outline: 3px solid rgb(14 165 233 / 0.46);
+      outline-offset: 2px;
+      z-index: 8;
+    }
+
+    .related {
+      filter: saturate(1.25);
+      z-index: 7;
+    }
+
+    .unrelated {
+      opacity: 0.26;
+      filter: grayscale(0.25);
+    }
+
+    .marker {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: var(--color);
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 1px rgb(24 34 53 / 0.28);
+      cursor: help;
+    }
+
+    .marker.diamond {
+      border-radius: 3px;
+      transform: rotate(45deg);
+    }
+
+    .marker.square {
+      border-radius: 4px;
+    }
+
+    .cluster {
+      min-width: 27px;
+      height: 18px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 7px;
+      background: #111827;
+      color: white;
+      border: 2px solid #fff;
+      font-size: 10px;
+      font-weight: 800;
+      box-shadow: 0 0 0 1px rgb(24 34 53 / 0.28);
+      cursor: help;
+    }
+
+    .tooltip {
+      display: none;
+      position: fixed;
+      z-index: 100;
+      width: 330px;
+      max-height: 310px;
+      overflow: auto;
+      padding: 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+      color: var(--text);
+      transform: translate(-20px, -115%);
+    }
+
+    .tooltip.demo {
+      display: block;
+      left: 610px;
+      top: 510px;
+    }
+
+    .has-tooltip:hover .tooltip,
+    .has-tooltip:focus-within .tooltip {
+      display: block;
+    }
+
+    .tooltip h3 {
+      margin: 0 0 2px;
+      font-size: 13px;
+    }
+
+    .tooltip .hint {
+      margin-bottom: 9px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 5px 8px;
+      font-size: 11px;
+    }
+
+    .fields dt {
+      color: var(--faint);
+      margin: 0;
+    }
+
+    .fields dd {
+      margin: 0;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+
+    details {
+      margin-top: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+
+    summary {
+      color: var(--muted);
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    pre {
+      margin: 8px 0 0;
+      padding: 8px;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #dbeafe;
+      font-size: 10px;
+      line-height: 1.45;
+      overflow: auto;
+    }
+
+    .cursor {
+      position: absolute;
+      z-index: 30;
+      top: 0;
+      bottom: 0;
+      left: 47%;
+      width: 2px;
+      background: var(--cursor);
+      box-shadow: 0 0 0 1px rgb(14 165 233 / 0.2);
+      pointer-events: none;
+    }
+
+    .cursor::before {
+      content: "SEQ 37";
+      position: absolute;
+      top: 31px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 3px 6px;
+      border-radius: 999px;
+      background: var(--cursor);
+      color: white;
+      font-size: 9px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .relations {
+      position: absolute;
+      z-index: 20;
+      top: 31px;
+      left: 150px;
+      width: calc(100% - 150px);
+      height: 404px;
+      min-width: 830px;
+      pointer-events: none;
+    }
+
+    .relations path {
+      fill: none;
+      stroke: rgb(14 165 233 / 0.38);
+      stroke-width: 1.5;
+      stroke-dasharray: 5 5;
+    }
+
+    .relations circle {
+      fill: rgb(14 165 233 / 0.76);
+      stroke: white;
+      stroke-width: 2;
+    }
+
+    .footer {
+      padding: 11px 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      background: #fbfcfe;
+    }
+
+    .footer strong {
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="header">
+      <div>
+        <h1>Trace Spans: semantic bands mockup</h1>
+        <div class="subtitle">
+          Bands carry meaning. Sub-rows inside a band are only collision avoidance. The trace layout stays immutable while the blue cursor moves.
+        </div>
+      </div>
+      <div class="legend" aria-label="Trace legend">
+        <span class="legend-item"><span class="key span" style="--color: var(--execution)"></span>execution span</span>
+        <span class="legend-item"><span class="key span" style="--color: var(--sandbox)"></span>sandbox span</span>
+        <span class="legend-item"><span class="key" style="--color: var(--graph)"></span>graph</span>
+        <span class="legend-item"><span class="key" style="--color: var(--context)"></span>tool/context</span>
+        <span class="legend-item"><span class="key" style="--color: var(--message)"></span>message</span>
+        <span class="legend-item"><span class="key" style="--color: var(--artifact)"></span>artifact</span>
+        <span class="legend-item"><span class="key" style="--color: var(--evaluation)"></span>evaluation</span>
+      </div>
+    </section>
+
+    <section class="selection-card">
+      <div class="selection-badge">
+        <span class="key span" style="--color: var(--execution)"></span>
+        Selected: d_left execution
+      </div>
+      <div class="selection-copy">
+        Related events stay bright across semantic bands. Unrelated events fade. Temporary connectors show why the selected work span matters without drawing every relationship all the time.
+      </div>
+      <div class="related-counts">
+        <span>3 graph changes</span>
+        <span>5 tool/context</span>
+        <span>1 message</span>
+        <span>2 outputs/evals</span>
+      </div>
+    </section>
+
+    <section class="trace" aria-label="Trace spans mockup">
+      <div class="cursor" aria-hidden="true"></div>
+      <svg class="relations" viewBox="0 0 830 404" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M 354 58 C 392 88, 286 120, 286 138"></path>
+        <path d="M 354 58 C 430 126, 368 178, 368 206"></path>
+        <path d="M 476 58 C 530 126, 472 178, 472 206"></path>
+        <path d="M 506 58 C 600 178, 516 282, 516 315"></path>
+        <path d="M 354 58 C 456 206, 342 318, 342 360"></path>
+        <circle cx="354" cy="58" r="4"></circle>
+        <circle cx="286" cy="138" r="4"></circle>
+        <circle cx="368" cy="206" r="4"></circle>
+        <circle cx="472" cy="206" r="4"></circle>
+        <circle cx="516" cy="315" r="4"></circle>
+        <circle cx="342" cy="360" r="4"></circle>
+      </svg>
+
+      <div class="ruler">
+        <div>Trace spans</div>
+        <div>10:32</div>
+        <div>10:34</div>
+        <div>10:36</div>
+        <div>10:38</div>
+        <div>10:40</div>
+        <div>10:42</div>
+      </div>
+
+      <section class="band" style="--height: 104px">
+        <aside class="band-label">
+          <div class="band-title">Work spans</div>
+          <div class="band-note">Long-running work. Rows here mean overlap only.</div>
+        </aside>
+        <div class="band-track">
+          <div class="span-bar unrelated" style="--color: var(--execution); --row: 13px; --left: 5%; --width: 36%;">d_root execution</div>
+          <div class="span-bar unrelated" style="--color: var(--execution); --row: 42px; --left: 16%; --width: 27%;">x_a execution</div>
+          <div class="span-bar selected" style="--color: var(--execution); --row: 71px; --left: 39%; --width: 30%;">d_left execution</div>
+          <div class="span-bar related" style="--color: var(--execution); --row: 13px; --left: 53%; --width: 31%;">d_join waits on d_left</div>
+          <div class="span-bar sandbox related" style="--color: var(--sandbox); --row: 43px; --left: 61%; --width: 18%;">sandbox for d_left</div>
+        </div>
+      </section>
+
+      <section class="band" style="--height: 76px">
+        <aside class="band-label">
+          <div class="band-title">Graph changes</div>
+          <div class="band-note">Node/edge mutations that explain graph replay.</div>
+        </aside>
+        <div class="band-track">
+          <div class="has-tooltip marker unrelated" style="--color: var(--graph); --row: 13px; --left: 6%;">
+            <div class="tooltip">
+              <h3>Graph mutation: node.status_changed</h3>
+              <div class="hint">Summary first, raw payload second.</div>
+              <dl class="fields">
+                <dt>task</dt><dd>d_root</dd>
+                <dt>sequence</dt><dd>36</dd>
+                <dt>time</dt><dd>10:37:14</dd>
+                <dt>actor</dt><dd>manager</dd>
+                <dt>status</dt><dd>running to completed</dd>
+              </dl>
+              <details>
+                <summary>Raw payload</summary>
+                <pre>{
+  "mutation_type": "node.status_changed",
+  "target_id": "d_root",
+  "new_value": { "status": "completed" }
+}</pre>
+              </details>
+            </div>
+          </div>
+          <div class="marker unrelated" style="--color: var(--graph); --row: 13px; --left: 23%;"></div>
+          <div class="cluster related" style="--row: 12px; --left: 38%;">+3</div>
+          <div class="marker related" style="--color: var(--graph); --row: 43px; --left: 48%;"></div>
+          <div class="marker unrelated" style="--color: var(--graph); --row: 13px; --left: 73%;"></div>
+          <div class="cluster unrelated" style="--row: 42px; --left: 84%;">+5</div>
+        </div>
+      </section>
+
+      <section class="band" style="--height: 88px">
+        <aside class="band-label">
+          <div class="band-title">Tools / context</div>
+          <div class="band-note">Tool calls, command events, observations, results.</div>
+        </aside>
+        <div class="band-track">
+          <div class="marker diamond unrelated" style="--color: var(--context); --row: 13px; --left: 18%;"></div>
+          <div class="marker diamond related" style="--color: var(--context); --row: 43px; --left: 26%;"></div>
+          <div class="span-bar secondary related" style="--color: var(--context); --row: 13px; --left: 44%; --width: 12%;">browser.search</div>
+          <div class="cluster related" style="--row: 43px; --left: 44%;">+4</div>
+          <div class="span-bar secondary related" style="--color: var(--context); --row: 13px; --left: 56%; --width: 8%;">shell</div>
+          <div class="marker diamond unrelated" style="--color: var(--context); --row: 13px; --left: 74%;"></div>
+          <div class="marker diamond unrelated" style="--color: var(--context); --row: 43px; --left: 77%;"></div>
+        </div>
+      </section>
+
+      <section class="band" style="--height: 58px">
+        <aside class="band-label">
+          <div class="band-title">Communication</div>
+          <div class="band-note">Messages and coordination turns.</div>
+        </aside>
+        <div class="band-track">
+          <div class="marker diamond unrelated" style="--color: var(--message); --row: 13px; --left: 12%;"></div>
+          <div class="marker diamond related" style="--color: var(--message); --row: 13px; --left: 33%;"></div>
+          <div class="marker diamond unrelated" style="--color: var(--message); --row: 13px; --left: 68%;"></div>
+        </div>
+      </section>
+
+      <section class="band" style="--height: 76px">
+        <aside class="band-label">
+          <div class="band-title">Outputs / evals</div>
+          <div class="band-note">Artifacts, resources, scores, pass/fail updates.</div>
+        </aside>
+        <div class="band-track">
+          <div class="marker square related" style="--color: var(--artifact); --row: 13px; --left: 41%;"></div>
+          <div class="span-bar secondary related" style="--color: var(--evaluation); --row: 43px; --left: 62%; --width: 11%;">eval d_left</div>
+          <div class="marker square unrelated" style="--color: var(--artifact); --row: 13px; --left: 76%;"></div>
+          <div class="marker unrelated" style="--color: var(--evaluation); --row: 43px; --left: 88%;"></div>
+        </div>
+      </section>
+
+      <div class="tooltip demo" aria-hidden="true">
+        <h3>Related cluster: 4 tool/context events</h3>
+        <div class="hint">Hover/click on the selected work span highlights related events across bands.</div>
+        <dl class="fields">
+          <dt>window</dt><dd>10:37:10 to 10:37:12</dd>
+          <dt>events</dt><dd>tool_call, tool_result, context.event, sandbox.command</dd>
+          <dt>task</dt><dd>d_left</dd>
+          <dt>click</dt><dd>pins the event list in workspace</dd>
+        </dl>
+        <details open>
+          <summary>Event list</summary>
+          <pre>[
+  { "kind": "tool_call", "tool": "shell" },
+  { "kind": "tool_result", "exitCode": 0 },
+  { "kind": "context.event", "summary": "observed output" },
+  { "kind": "sandbox.command", "command": "pytest -q" }
+]</pre>
+        </details>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span><strong>24 trace rows</strong> across 5 semantic bands · <strong>93 events</strong> · <strong>0 hidden</strong></span>
+      <span>Band = semantic category · sub-row = collision avoidance · cursor = selected replay point</span>
+    </footer>
+  </main>
+</body>
+</html>

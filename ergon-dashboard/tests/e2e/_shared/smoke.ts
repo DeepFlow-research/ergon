@@ -111,14 +111,19 @@ async function openWorkspaceForGraphTask(page: Page, taskId: string): Promise<vo
   }
 }
 
+async function expectNoTimelinePlaybackControls(page: Page): Promise<void> {
+  await expect(page.getByTestId("activity-play-toggle")).toHaveCount(0);
+  await expect(page.getByTestId("activity-speed-control")).toHaveCount(0);
+  await expect(page.getByTestId("activity-step-back")).toHaveCount(0);
+  await expect(page.getByTestId("activity-step-forward")).toHaveCount(0);
+}
+
 async function assertRunWorkspace(
   page: Page,
   state: BackendRunState,
   runId: string,
 ): Promise<void> {
   await expect(page.getByTestId("run-header")).toBeVisible();
-  await expect(page.getByTestId("run-status-bar")).toBeVisible();
-  await expect(page.getByTestId("run-status-count-completed")).toBeVisible();
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
   await expect(page.getByTestId("activity-stack-region")).toBeVisible();
   await expect(page.locator('[data-testid^="activity-bar-"]').first()).toBeVisible();
@@ -129,13 +134,28 @@ async function assertRunWorkspace(
   await openWorkspaceForGraphTask(page, selected.id);
   await expect(page.getByTestId("workspace-region")).toBeVisible();
   await expect(page.getByTestId("workspace-header")).toContainText(selected.task_slug);
+  await expect(page.getByTestId("workspace-tab-overview")).toBeVisible();
+  await expect(page.getByTestId("workspace-tab-actions")).toBeVisible();
+  await expect(page.getByTestId("workspace-tab-communication")).toBeVisible();
+  await expect(page.getByTestId("workspace-tab-outputs")).toBeVisible();
+  await expect(page.getByTestId("workspace-tab-transitions")).toBeVisible();
+  await expect(page.getByTestId("workspace-tab-evaluation")).toBeVisible();
+
+  await page.getByTestId("workspace-tab-actions").click();
   await expect(page.getByTestId("workspace-actions")).toBeVisible();
-  await expect(page.getByTestId("workspace-outputs")).toBeVisible();
   await expect(page.getByTestId("workspace-executions")).toBeVisible();
   await expect(page.getByTestId("workspace-sandbox")).toBeVisible();
+
+  await page.getByTestId("workspace-tab-outputs").click();
+  await expect(page.getByTestId("workspace-outputs")).toBeVisible();
+
+  await page.getByTestId("workspace-tab-communication").click();
   await expect(page.getByTestId("workspace-communication")).toBeVisible();
+
+  await page.getByTestId("workspace-tab-transitions").click();
   await expect(page.getByTestId("workspace-transitions")).toBeVisible();
 
+  await page.getByTestId("workspace-tab-evaluation").click();
   if (evaluatedTaskIds.has(selected.id)) {
     await expect(page.getByTestId("workspace-evaluation")).toContainText("Total score");
   } else {
@@ -150,9 +170,10 @@ async function assertRunWorkspace(
   await expect(page.locator('[data-testid^="event-row-"]').first()).toBeVisible();
 
   if (state.mutation_count > 0) {
-    await page.getByTestId("mode-timeline").click();
+    await page.locator('[data-testid^="activity-bar-"]').first().click();
     await expect(page.getByTestId("timeline-region")).toBeVisible();
     await expect(page.getByTestId("activity-current-sequence")).toContainText(/seq/i);
+    await expectNoTimelinePlaybackControls(page);
   }
 }
 
@@ -224,10 +245,9 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
           return;
         }
 
-        // sad-path run assertions (researchrubrics-only today). A failed leaf
-        // returns score-zero output so persistence still runs.
-        expect(state.status).toBe("completed");
-        expect(state.resource_count).toBeGreaterThanOrEqual(17);
+        // Canonical sad path: l_2 fails, l_3 blocks, independent leaves complete.
+        expect(state.status).toBe("failed");
+        expect(state.resource_count).toBeGreaterThanOrEqual(15);
         expect(state.executions.length).toBe(state.execution_count);
         expect(state.mutations.length).toBe(state.mutation_count);
         expect(state.thread_count).toBeGreaterThan(0);
@@ -235,11 +255,11 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         const statusBySlug = new Map(
           state.graph_nodes.filter((n) => n.level > 0).map((n) => [n.task_slug, n.status]),
         );
-        for (const slug of EXPECTED_SUBTASK_SLUGS) {
+        for (const slug of EXPECTED_SUBTASK_SLUGS.filter((s) => !["l_2", "l_3"].includes(s))) {
           expect(statusBySlug.get(slug)).toBe("completed");
         }
-        const failedEval = state.evaluations.some((e) => e.score === 0.0);
-        expect(failedEval).toBe(true);
+        expect(statusBySlug.get("l_2")).toBe("failed");
+        expect(statusBySlug.get("l_3")).toBe("blocked");
 
         const cohortId = await client.getCohortId(cohortKey);
         await page.goto(`/cohorts/${cohortId}/runs/${run_id}`);

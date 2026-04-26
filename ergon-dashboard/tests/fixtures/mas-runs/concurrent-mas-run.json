@@ -551,7 +551,7 @@
         "10000000-0000-4000-8000-000000000003",
         "10000000-0000-4000-8000-000000000004"
       ],
-      "expectedMaxConcurrency": 5,
+      "expectedMaxConcurrency": 1,
       "selectedTime": "2026-04-26T12:00:10.000Z",
       "hiddenFutureResourceName": "references.md"
     },
@@ -565,7 +565,7 @@
         "10000000-0000-4000-8000-000000000005",
         "10000000-0000-4000-8000-000000000006"
       ],
-      "expectedMaxConcurrency": 5,
+      "expectedMaxConcurrency": 2,
       "selectedTime": "2026-04-26T12:00:18.000Z",
       "hiddenFutureResourceName": "references.md"
     }

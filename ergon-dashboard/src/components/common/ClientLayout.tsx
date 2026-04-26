@@ -1,13 +1,8 @@
 "use client";
 
-/**
- * ClientLayout - Client-side layout wrapper.
- *
- * Includes components that need client-side functionality,
- * like the ConnectionStatus banner.
- */
-
+import { BuildHealthToast } from "./BuildHealthToast";
 import { ConnectionStatus } from "./ConnectionStatus";
+import { Topbar } from "@/components/shell/Topbar";
 
 interface ClientLayoutProps {
   children: React.ReactNode;
@@ -15,9 +10,11 @@ interface ClientLayoutProps {
 
 export function ClientLayout({ children }: ClientLayoutProps) {
   return (
-    <>
-      {children}
+    <div className="flex h-screen flex-col overflow-hidden">
+      <Topbar />
+      <div className="relative min-h-0 flex-1 overflow-auto">{children}</div>
       <ConnectionStatus />
-    </>
+      <BuildHealthToast />
+    </div>
   );
 }

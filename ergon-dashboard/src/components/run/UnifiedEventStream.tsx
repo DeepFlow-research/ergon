@@ -21,19 +21,12 @@ import {
   type RunEvent,
   type RunEventKind,
 } from "@/lib/runEvents";
+import { formatClockTimeMs } from "@/lib/timeFormat";
 import { TransitionChip } from "@/components/common/TransitionChip";
 
 function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      fractionalSecondDigits: 3,
-    });
-  } catch {
-    return iso;
-  }
+  const label = formatClockTimeMs(iso);
+  return label === "—" ? iso : label;
 }
 
 function formatRelative(iso: string, anchorMs: number | null): string {

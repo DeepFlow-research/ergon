@@ -30,8 +30,8 @@ class BenchmarkRunRequest(InngestEventContract):
 
     benchmark_slug: str
     model: str
-    worker_slug: str = "stub-worker"
-    evaluator_slug: str = "stub-rubric"
+    worker_slug: str
+    evaluator_slug: str
     cohort_name: str = ""  # slopcop: ignore[no-str-empty-default]
 
 

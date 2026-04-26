@@ -5,21 +5,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { RunStatusBar } from "@/components/run/RunStatusBar";
+
 import { UnifiedEventStream } from "@/components/run/UnifiedEventStream";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
 import { ActivityStackTimeline } from "@/features/activity/components/ActivityStackTimeline";
 import { buildRunActivities } from "@/features/activity/buildRunActivities";
+import { resolveActivitySnapshotSequence } from "@/features/activity/snapshotSequence";
 import type { RunActivity } from "@/features/activity/types";
 import {
   parseGraphMutationDtoArray,
   type GraphMutationDto,
 } from "@/features/graph/contracts/graphMutations";
-import { replayToSequence } from "@/features/graph/state/graphMutationReducer";
+import { createReplayInitialState, replayToSequence } from "@/features/graph/state/graphMutationReducer";
 import { useCohortDetail } from "@/hooks/useCohortDetail";
 import { useRunState } from "@/hooks/useRunState";
 import { buildRunEvents } from "@/lib/runEvents";
-import type { WorkflowRunState } from "@/lib/types";
 import { CohortDetail, RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus } from "@/lib/types";
 
 function formatSeconds(value: number | null): string {
@@ -50,11 +50,13 @@ export function RunWorkspacePage({
   cohortId,
   initialRunState = null,
   initialCohortDetail = null,
+  ssrError = null,
 }: {
   runId: string;
   cohortId?: string;
   initialRunState?: SerializedWorkflowRunState | null;
   initialCohortDetail?: CohortDetail | null;
+  ssrError?: string | null;
 }) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
@@ -64,63 +66,72 @@ export function RunWorkspacePage({
   const { runState, isLoading, error, isSubscribed } = useRunState(runId, initialRunState);
   const { detail } = useCohortDetail(cohortId ?? "", initialCohortDetail);
 
-  // Timeline playback state
-  const [timelineMode, setTimelineMode] = useState<"live" | "timeline">("live");
-  const [currentSequence, setCurrentSequence] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  // A null snapshot means the graph follows live state; a sequence replays
+  // mutations to that point.
+  const [snapshotSequence, setSnapshotSequence] = useState<number | null>(null);
+  const currentSequence = snapshotSequence ?? 0;
   const [mutations, setMutations] = useState<GraphMutationDto[]>([]);
-  const snapshotCache = useRef(new Map<number, WorkflowRunState>());
   const requestedSequenceRef = useRef<number | null>(null);
+  const pendingActivityResolutionRef = useRef<RunActivity | null>(null);
+  const selectedActivityIdRef = useRef<string | null>(null);
+  const mutationsLoadedRef = useRef(false);
 
-  // Fetch mutations when entering timeline mode
   useEffect(() => {
-    if (timelineMode !== "timeline") return;
+    selectedActivityIdRef.current = selectedActivityId;
+  }, [selectedActivityId]);
+
+  // Fetch mutations once per run load so snapshot selection is always ready.
+  useEffect(() => {
     let cancelled = false;
+    mutationsLoadedRef.current = false;
+    pendingActivityResolutionRef.current = null;
     fetch(`/api/runs/${runId}/mutations`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
         const parsed = parseGraphMutationDtoArray(data);
+        mutationsLoadedRef.current = true;
         setMutations(parsed);
-        snapshotCache.current.clear();
         const requestedSequence = requestedSequenceRef.current;
         requestedSequenceRef.current = null;
-        const defaultMutation = parsed[parsed.length - 1] ?? null;
-        const requestedMutation =
-          requestedSequence === null
-            ? null
-            : nearestMutationAtOrBefore(parsed, requestedSequence);
-        setCurrentSequence((requestedMutation ?? defaultMutation)?.sequence ?? 0);
+        if (requestedSequence !== null) {
+          setSnapshotSequence(nearestMutationAtOrBefore(parsed, requestedSequence)?.sequence ?? null);
+          return;
+        }
+
+        const pendingActivity = pendingActivityResolutionRef.current;
+        pendingActivityResolutionRef.current = null;
+        if (pendingActivity && selectedActivityIdRef.current === pendingActivity.id) {
+          const sequence = resolveActivitySnapshotSequence(pendingActivity, parsed);
+          const resolvedSequence =
+            sequence === null
+              ? null
+              : (nearestMutationAtOrBefore(parsed, sequence)?.sequence ?? sequence);
+          setSnapshotSequence(resolvedSequence);
+        }
       })
       .catch(() => {
-        if (!cancelled) setMutations([]);
+        if (cancelled) return;
+        mutationsLoadedRef.current = true;
+        pendingActivityResolutionRef.current = null;
+        setMutations([]);
       });
     return () => {
       cancelled = true;
     };
-  }, [timelineMode, runId]);
+  }, [runId]);
 
-  // Build display state: replay for timeline mode, live state otherwise
+  // Build display state: replay only for an explicit snapshot; otherwise live.
   const displayState = useMemo(() => {
-    if (timelineMode === "live" || mutations.length === 0) return runState;
+    if (snapshotSequence === null || mutations.length === 0) return runState;
     if (!runState) return runState;
-    const emptyState: WorkflowRunState = {
-      ...runState,
-      tasks: new Map(),
-      totalTasks: 0,
-      totalLeafTasks: 0,
-      completedTasks: 0,
-      runningTasks: 0,
-      failedTasks: 0,
-    };
+    const replayBaseState = createReplayInitialState(runState, mutations, snapshotSequence);
     return replayToSequence(
       mutations,
-      currentSequence,
-      emptyState,
-      snapshotCache.current,
+      snapshotSequence,
+      replayBaseState,
     );
-  }, [timelineMode, runState, mutations, currentSequence]);
+  }, [runState, mutations, snapshotSequence]);
 
   const runRow = useMemo(() => {
     if (!cohortId || !detail) return null;
@@ -132,9 +143,9 @@ export function RunWorkspacePage({
     return displayState.tasks.get(selectedTaskId) ?? null;
   }, [displayState, selectedTaskId]);
 
-  // D7: status counts for the RunStatusBar. Only leaf tasks so the totals
+  // Status counts shown in the run header. Only leaf tasks so the totals
   // match the "units of work" the user is tracking (parents double-count).
-  const { leafStatusCounts, leafTotal } = useMemo(() => {
+  const { leafStatusCounts } = useMemo(() => {
     const empty: Record<TaskStatus, number> = {
       [TaskStatus.PENDING]: 0,
       [TaskStatus.READY]: 0,
@@ -153,36 +164,42 @@ export function RunWorkspacePage({
     return { leafStatusCounts: empty, leafTotal: total };
   }, [displayState]);
 
-  // D4: Unified event log — derived from displayState so timeline scrubbing
-  // trims the feed in lockstep.
+  // D4: Unified event log for the replayed inspector view.
   const events = useMemo(() => buildRunEvents(displayState), [displayState]);
+  // Trace spans are an immutable map of the full run. Replay moves the cursor
+  // over this map; it should not relayout or clip completed spans.
+  const traceEvents = useMemo(() => buildRunEvents(runState), [runState]);
 
   const activities = useMemo(
     () =>
       buildRunActivities({
-        runState: displayState,
-        events,
+        runState,
+        events: traceEvents,
         mutations,
-        currentSequence: timelineMode === "timeline" ? currentSequence : null,
+        currentSequence: snapshotSequence,
       }),
-    [displayState, events, mutations, timelineMode, currentSequence],
+    [runState, traceEvents, mutations, snapshotSequence],
+  );
+
+  const selectedActivity = useMemo(
+    () => activities.find((activity) => activity.id === selectedActivityId) ?? null,
+    [activities, selectedActivityId],
   );
 
   const selectedTimelineTime = useMemo(() => {
-    if (timelineMode !== "timeline") return null;
-    return nearestMutationAtOrBefore(mutations, currentSequence)?.created_at ?? null;
-  }, [timelineMode, mutations, currentSequence]);
+    if (snapshotSequence === null) return null;
+    return nearestMutationAtOrBefore(mutations, snapshotSequence)?.created_at ?? null;
+  }, [mutations, snapshotSequence]);
 
   const highlightedTaskIds = useMemo(() => {
     const ids = new Set<string>();
     if (selectedTaskId) ids.add(selectedTaskId);
-    const selectedActivity = activities.find((activity) => activity.id === selectedActivityId);
     if (selectedActivity?.taskId) ids.add(selectedActivity.taskId);
     return ids;
-  }, [activities, selectedActivityId, selectedTaskId]);
+  }, [selectedActivity, selectedTaskId]);
 
-  // D7: keyboard shortcuts — Esc closes selection, `t` toggles timeline,
-  // `e` toggles event stream, `1-6` filters by lifecycle status.
+  // D7: keyboard shortcuts — Esc unwinds UI state, `e` toggles event stream,
+  // `1-6` filters by lifecycle status.
   useEffect(() => {
     const STATUS_ORDER: TaskStatus[] = [
       TaskStatus.PENDING,
@@ -200,20 +217,36 @@ export function RunWorkspacePage({
           return;
         }
       }
+
       if (e.key === "Escape") {
-        if (selectedTaskId) setSelectedTaskId(null);
-        else if (statusFilter) setStatusFilter(null);
+        if (selectedTaskId) { setSelectedTaskId(null); return; }
+        if (snapshotSequence !== null) { setSnapshotSequence(null); return; }
+        if (statusFilter) { setStatusFilter(null); return; }
         return;
       }
-      if (e.key === "t" || e.key === "T") {
-        setTimelineMode((prev) => (prev === "live" ? "timeline" : "live"));
-        if (timelineMode === "timeline") setIsPlaying(false);
-        return;
-      }
+
       if (e.key === "e" || e.key === "E") {
         setIsStreamOpen((prev) => !prev);
         return;
       }
+
+      if (e.key === "ArrowLeft" && snapshotSequence !== null) {
+        const idx = mutations.findIndex((m) => m.sequence === snapshotSequence);
+        if (idx > 0) setSnapshotSequence(mutations[idx - 1].sequence);
+        return;
+      }
+      if (e.key === "ArrowRight" && snapshotSequence !== null) {
+        const idx = mutations.findIndex((m) => m.sequence === snapshotSequence);
+        if (idx >= 0 && idx < mutations.length - 1) setSnapshotSequence(mutations[idx + 1].sequence);
+        return;
+      }
+
+      if ((e.key === "d" || e.key === "D") && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (selectedTaskId) setSelectedTaskId(null);
+        return;
+      }
+
       const idx = Number(e.key) - 1;
       if (!Number.isNaN(idx) && idx >= 0 && idx < STATUS_ORDER.length) {
         const next = STATUS_ORDER[idx];
@@ -222,7 +255,7 @@ export function RunWorkspacePage({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedTaskId, statusFilter, timelineMode]);
+  }, [selectedTaskId, statusFilter, mutations, snapshotSequence]);
 
   useEffect(() => {
     if (!selectedTaskId || !displayState) return;
@@ -237,22 +270,29 @@ export function RunWorkspacePage({
 
   const handleTaskClick = (taskId: string) => {
     setSelectionNotice(null);
+    pendingActivityResolutionRef.current = null;
+    selectedActivityIdRef.current = null;
     setSelectedActivityId(null);
     setSelectedTaskId((prev) => (prev === taskId ? null : taskId));
   };
 
   const handleSequenceChange = (sequence: number) => {
+    pendingActivityResolutionRef.current = null;
     const mutation = nearestMutationAtOrBefore(mutations, sequence);
-    setCurrentSequence(mutation?.sequence ?? sequence);
+    setSnapshotSequence(mutation?.sequence ?? sequence);
   };
 
   const handleActivityClick = (activity: RunActivity) => {
     setSelectionNotice(null);
+    requestedSequenceRef.current = null;
+    selectedActivityIdRef.current = activity.id;
     setSelectedActivityId(activity.id);
-    if (activity.sequence !== null) {
-      requestedSequenceRef.current = activity.sequence;
-      if (timelineMode !== "timeline") setTimelineMode("timeline");
-      handleSequenceChange(activity.sequence);
+    const sequence = resolveActivitySnapshotSequence(activity, mutations);
+    if (sequence !== null) {
+      handleSequenceChange(sequence);
+    } else {
+      setSnapshotSequence(null);
+      pendingActivityResolutionRef.current = mutationsLoadedRef.current ? null : activity;
     }
     if (activity.taskId) {
       setSelectedTaskId(activity.taskId);
@@ -260,139 +300,135 @@ export function RunWorkspacePage({
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f6f7f9] text-[#0c1118]">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--paper)] text-[var(--ink)]">
+      {/* Run header strip */}
       <header
-        className="h-14 border-b border-[#e2e6ec] bg-white"
+        className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--card)] px-8 py-3"
         data-testid="run-header"
       >
-        <div className="flex h-full w-full items-center justify-between gap-4 px-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-[#0c1118]">
-              <span className="inline-block size-4 rounded bg-[#0c1118]" aria-hidden />
-              Ergon
-            </Link>
-            <div className="flex min-w-0 items-center gap-2 truncate text-xs text-[#64707f]">
-              <Link href="/" className="hover:text-[#0c1118]">
-                Cohorts
-              </Link>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
+            <Link href="/" className="hover:text-[var(--ink)]">Cohorts</Link>
+            <span>›</span>
             {cohortId && (
               <>
-                <span>/</span>
                 <Link
                   href={`/cohorts/${cohortId}`}
-                    className="max-w-[180px] truncate hover:text-[#0c1118]"
+                  className="max-w-[180px] truncate hover:text-[var(--ink)]"
                   data-testid="run-breadcrumb-cohort"
                 >
                   {detail?.summary.name ?? "Cohort"}
                 </Link>
+                <span>›</span>
               </>
             )}
-            <span>/</span>
-              <span className="font-mono text-[#1f2733]">{runId.slice(0, 8)}...</span>
-            </div>
+            <span className="font-mono text-[var(--ink)]">{runId.slice(0, 8)}…</span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-3">
+            <h1 className="max-w-[340px] truncate font-mono text-xl font-semibold tracking-[-0.02em]">
+              {runState?.name ?? runRow?.run_id ?? "Run"}
+            </h1>
+            <StatusBadge status={status as RunLifecycleStatus} />
+            <span className="rounded bg-[var(--paper-2)] px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
+              {snapshotSequence === null ? "live" : `snapshot · seq ${snapshotSequence}`} · {formatSeconds(runState?.durationSeconds ?? null)}
+            </span>
+          </div>
+        </div>
 
-            <div className="flex min-w-0 items-center gap-2">
-              <h1 className="max-w-[260px] truncate text-sm font-semibold tracking-[-0.01em] text-[#0c1118]">
-                {runState?.name ?? runRow?.run_id ?? "Run"}
-              </h1>
-              <StatusBadge status={status as RunLifecycleStatus} />
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Key metrics */}
+          <div className="hidden items-center gap-5 border-r border-[var(--line)] pr-3 lg:flex">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Tasks</div>
+              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-tasks">
+                {leafStatusCounts[TaskStatus.COMPLETED]}·{leafStatusCounts[TaskStatus.RUNNING]}·{leafStatusCounts[TaskStatus.READY]}·{leafStatusCounts[TaskStatus.PENDING]}
+              </span>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Tokens</div>
+              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-tokens">—</span>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Cost</div>
+              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-cost">—</span>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Score</div>
+              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-score">
+                {formatPercent(runState?.finalScore ?? runRow?.final_score ?? null)}
+              </span>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
-            <div className="hidden items-center gap-3 text-[11px] uppercase tracking-[0.08em] text-[#98a2b1] lg:flex">
-              <span>
-                Tasks <b className="ml-1 font-mono text-[#0c1118]">{runState?.totalTasks ?? "—"}</b>
-              </span>
-              <span>
-                Turns <b className="ml-1 font-mono text-[#0c1118]">{runState?.completedTasks ?? 0}</b>
-              </span>
-              <span>
-                Score <b className="ml-1 font-mono text-[#0c1118]">{formatPercent(runState?.finalScore ?? runRow?.final_score ?? null)}</b>
-              </span>
-            </div>
-                <div
-                  role="tablist"
-                  aria-label="Run view mode"
-              className="inline-flex rounded-md border border-[#e2e6ec] bg-[#f6f7f9] p-0.5 text-xs font-medium"
-                >
-                  {(["live", "timeline"] as const).map((mode) => {
-                    const active = timelineMode === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        onClick={() => {
-                          if (mode === timelineMode) return;
-                          setTimelineMode(mode);
-                          if (mode === "live") setIsPlaying(false);
-                        }}
-                  className={`rounded px-2.5 py-1 transition-colors ${
-                          active
-                      ? "bg-white text-[#0c1118] shadow-sm"
-                      : "text-[#64707f] hover:text-[#0c1118]"
-                        }`}
-                        data-testid={`mode-${mode}`}
-                      >
-                        {mode === "live" ? "Live" : "Timeline"}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsStreamOpen((p) => !p)}
-                  aria-pressed={isStreamOpen}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                    isStreamOpen
-                  ? "bg-[#0c1118] text-white"
-                  : "border border-[#e2e6ec] bg-white text-[#64707f] hover:bg-[#eef0f3]"
-                  }`}
-                  title="Toggle event stream (e)"
-                  data-testid="event-stream-toggle"
-                >
-              {isStreamOpen ? "Hide events" : "Event tracks"}
-                </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsStreamOpen((p) => !p)}
+            aria-pressed={isStreamOpen}
+            className={`rounded-[7px] px-2.5 py-1 text-xs font-medium transition-colors ${
+              isStreamOpen
+                ? "bg-[var(--ink)] text-[var(--paper)]"
+                : "border border-[var(--line)] bg-[var(--card)] text-[var(--muted)] hover:bg-[var(--paper-2)]"
+            }`}
+            title="Toggle event stream (e)"
+            data-testid="event-stream-toggle"
+          >
+            {isStreamOpen ? "Hide events" : "Event tracks"}
+          </button>
 
-          {leafTotal > 0 && (
-            <div className="absolute left-4 right-4 top-16 z-20">
-              <RunStatusBar
-                counts={leafStatusCounts}
-                total={leafTotal}
-                activeFilter={statusFilter}
-                onFilter={setStatusFilter}
-              />
-            </div>
-          )}
-
-          {error && (
-            <div
-              className="absolute left-4 right-4 top-16 z-30 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
-              data-testid="run-staleness-banner"
-            >
-              {error}
-            </div>
-          )}
+          <button
+            type="button"
+            disabled
+            title="Re-run is not wired yet: no dashboard API endpoint exists for cloning or dispatching a run."
+            data-testid="rerun-button"
+            className="cursor-not-allowed rounded-[7px] border border-[var(--line)] bg-[var(--paper-2)] px-3 py-1 text-xs font-medium text-[var(--muted)] opacity-60"
+          >
+            Re-run unavailable
+          </button>
+          <button
+            type="button"
+            className="rounded-[7px] border-transparent bg-transparent px-2 py-1 text-xs text-[var(--muted)]"
+          >
+            ⋯
+          </button>
         </div>
       </header>
 
-      <main
-        className="relative min-h-0 flex-1 overflow-hidden px-2 pb-[252px] pt-8"
+      {ssrError && (
+        <div
+          className="mx-4 mt-2 rounded-[var(--radius-sm)] border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+          data-testid="ssr-error-banner"
+        >
+          <span className="mr-1.5 font-semibold">Server-side error:</span>
+          {ssrError}
+        </div>
+      )}
+
+      {error && !ssrError && (
+        <div
+          className="mx-4 mt-2 rounded-[var(--radius-sm)] border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
+          data-testid="run-staleness-banner"
+        >
+          {error}
+        </div>
+      )}
+
+      <main className="relative min-h-0 flex-1 overflow-hidden"
       >
         {selectionNotice && (
           <div
-            className="absolute left-4 right-4 top-4 z-40 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
+            className="absolute left-4 right-4 top-2 z-40 rounded-[var(--radius-sm)] border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
             data-testid="selection-reset-notice"
           >
             {selectionNotice}
           </div>
         )}
         <section
-          className="h-[calc(100vh-340px)] min-h-[430px] overflow-hidden rounded-[10px] border border-[#e2e6ec] bg-white"
+          className="absolute inset-0 overflow-hidden transition-[padding] duration-300 ease-out"
           data-testid="graph-region"
+          style={{
+            bottom: activities.length > 0 ? 300 : 0,
+            paddingRight: isInspectorOpen ? 476 : 0,
+          }}
         >
           <DAGCanvas
             runId={runId}
@@ -408,20 +444,15 @@ export function RunWorkspacePage({
 
         {activities.length > 0 && (
           <section
-            className="fixed inset-x-0 bottom-0 z-30 border-t border-[#18202b] bg-[#070b12]"
+            className="absolute inset-x-0 bottom-0 z-30 h-[300px] overflow-auto border-t border-[var(--line)] bg-[var(--card)]"
             data-testid="timeline-region"
           >
             <ActivityStackTimeline
               activities={activities}
               mutations={mutations}
               currentSequence={currentSequence}
-              onSequenceChange={handleSequenceChange}
               selectedTaskId={selectedTaskId}
               selectedActivityId={selectedActivityId}
-              isPlaying={isPlaying}
-              onTogglePlay={() => setIsPlaying((p) => !p)}
-              speed={playbackSpeed}
-              onSpeedChange={setPlaybackSpeed}
               onActivityClick={handleActivityClick}
             />
           </section>
@@ -429,7 +460,7 @@ export function RunWorkspacePage({
 
         {isStreamOpen && events.length > 0 && (
           <section
-            className="absolute bottom-[370px] left-4 z-20 max-h-[44vh] w-[520px] overflow-hidden rounded-[10px] border border-[#e2e6ec] bg-white shadow-[0_8px_24px_rgb(12_17_24/0.08)]"
+            className="absolute bottom-4 left-4 z-20 max-h-[44vh] w-[520px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-pop"
             data-testid="event-stream-region"
           >
             <UnifiedEventStream
@@ -441,7 +472,6 @@ export function RunWorkspacePage({
                 setSelectedTaskId(id);
               }}
               onSequenceClick={(seq) => {
-                if (timelineMode !== "timeline") setTimelineMode("timeline");
                 requestedSequenceRef.current = seq;
                 handleSequenceChange(seq);
               }}
@@ -451,7 +481,7 @@ export function RunWorkspacePage({
 
         {isInspectorOpen ? (
           <section
-            className="absolute bottom-[370px] right-4 top-4 z-20 w-[360px] overflow-hidden rounded-[10px] border border-[#e2e6ec] bg-white shadow-[0_8px_24px_rgb(12_17_24/0.08)]"
+            className="animate-drawer-enter absolute bottom-4 right-4 top-4 z-20 w-[460px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-pop"
             data-testid="workspace-region"
           >
             <TaskWorkspace
@@ -460,30 +490,30 @@ export function RunWorkspacePage({
               error={error}
               onClearSelection={() => setSelectedTaskId(null)}
               onJumpToSequence={(seq) => {
-                if (timelineMode !== "timeline") setTimelineMode("timeline");
                 requestedSequenceRef.current = seq;
                 handleSequenceChange(seq);
               }}
               selectedTime={selectedTimelineTime}
-              selectedSequence={timelineMode === "timeline" ? currentSequence : null}
+              selectedSequence={snapshotSequence}
+              selectedActivity={selectedActivity}
             />
           </section>
         ) : (
           <section
-            className="pointer-events-none absolute bottom-[370px] right-4 z-10 w-[260px] rounded-[10px] border border-dashed border-[#cdd3dc] bg-white/80 px-4 py-3 text-xs text-[#64707f]"
+            className="pointer-events-none absolute bottom-4 right-4 z-10 w-[260px] rounded-[var(--radius)] border border-dashed border-[var(--line-strong)] bg-white/80 px-4 py-3 text-xs text-[var(--muted)]"
             data-testid="workspace-launcher"
           >
             <div className="max-w-3xl space-y-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#98a2b1]">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
                 Task inspection
               </div>
-              <h2 className="text-sm font-semibold text-[#0c1118]">
-                Click node {"->"} workspace drawer
+              <h2 className="text-sm font-semibold text-[var(--ink)]">
+                Click node → workspace drawer
               </h2>
               <p>State, outputs, turns, and evals appear scoped to the selected sequence.</p>
               {selectedTask && (
-                <div className="rounded-md border border-[#e2e6ec] bg-[#f6f7f9] px-3 py-2">
-                  Ready to inspect <span className="font-semibold text-[#0c1118]">{selectedTask.name}</span>.
+                <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
+                  Ready to inspect <span className="font-semibold text-[var(--ink)]">{selectedTask.name}</span>.
                 </div>
               )}
             </div>

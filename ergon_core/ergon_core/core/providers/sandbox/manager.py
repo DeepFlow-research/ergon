@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import ClassVar, Protocol, runtime_checkable
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonValue
 from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
 from ergon_core.core.providers.sandbox.event_sink import (
     NoopSandboxEventSink,
@@ -33,7 +32,7 @@ try:
 except ImportError:
     AsyncSandbox = None  # type: ignore[assignment,misc]
 
-    # Fallback stubs so `except (TimeoutException, SandboxNotFoundException)`
+    # Fallback exception classes so `except (TimeoutException, SandboxNotFoundException)`
     # stays syntactically valid when the e2b SDK is unavailable. They will
     # never actually be raised because the sandbox code paths require e2b.
     class _MissingE2BError(Exception):  # slopcop: ignore[no-broad-except]
@@ -97,7 +96,8 @@ class BaseSandboxManager(ABC):
         # Sink is configured process-wide via set_event_sink() in app lifespan.
         # Do not accept event_sink= here; the singleton pattern (see __new__ above)
         # makes constructor-level sink assignment a last-write-wins stomp on shared
-        # class state. Tests must use set_event_sink() in fixture setup.
+        # class state. Local verification harnesses should use set_event_sink()
+        # during setup.
         pass
 
     @classmethod
@@ -105,12 +105,12 @@ class BaseSandboxManager(ABC):
         """Install a process-level event sink on this manager subclass.
 
         Called once during FastAPI lifespan startup for each concrete subclass.
-        Tests may call this in fixture setup and reset with
-        ``NoopSandboxEventSink()`` in teardown.
+        Local verification harnesses may call this during setup and reset with
+        ``NoopSandboxEventSink()`` during teardown.
 
         Assigns directly to ``cls._event_sink`` (not to the base class
         attribute), so each subclass carries its own sink and subclasses can
-        be individually targeted in tests.
+        be individually targeted by local verification harnesses.
 
         Production callers MUST NOT call this after startup. The only
         sanctioned call site is inside the ``lifespan`` context manager in
@@ -534,6 +534,10 @@ if created:
                 task_id,
                 BaseSandboxManager,
             )
+            if manager_cls is not BaseSandboxManager:
+                await manager_cls().terminate(task_id)
+                return True
+
             display_task_id = BaseSandboxManager._display_task_ids.get(task_id, task_id)
             run_id = BaseSandboxManager._run_ids.get(task_id)
             try:
@@ -619,98 +623,7 @@ if created:
 
 
 class DefaultSandboxManager(BaseSandboxManager):
-    """No custom dependencies. Used by benchmarks without specific sandbox setup.
-
-    If ``E2B_API_KEY`` is not configured (e.g. CI stub runs) this manager
-    transparently delegates to ``StubSandboxManager`` -- the task still
-    runs, but no E2B sandbox is provisioned and the returned sandbox_id is
-    a well-formed stub id (see :func:`is_stub_sandbox_id`).
-    """
-
-    async def create(
-        self,
-        sandbox_key: UUID,
-        run_id: UUID,
-        timeout_minutes: int = 30,
-        envs: dict[str, str] | None = None,
-        display_task_id: UUID | None = None,
-    ) -> str:
-        if not settings.e2b_api_key:
-            return await StubSandboxManager().create(
-                sandbox_key,
-                run_id=run_id,
-                timeout_minutes=timeout_minutes,
-                envs=envs,
-                display_task_id=display_task_id,
-            )
-        return await super().create(
-            sandbox_key,
-            run_id=run_id,
-            timeout_minutes=timeout_minutes,
-            envs=envs,
-            display_task_id=display_task_id,
-        )
+    """No custom dependencies. Used by benchmarks without specific sandbox setup."""
 
     async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
         pass
-
-
-# ── Stub sandbox manager ──────────────────────────────────────────────────
-
-_STUB_SANDBOX_PREFIX = "stub-sandbox-"
-
-
-def is_stub_sandbox_id(sandbox_id: JsonValue) -> bool:
-    """Return True iff ``sandbox_id`` was produced by :class:`StubSandboxManager`.
-
-    Stub sandbox ids are produced by the CI / no-E2B-key code path. Any
-    teardown or download code that touches the E2B API must skip when this
-    returns True, otherwise the call will fail (no API key, no sandbox
-    exists on the E2B side).
-
-    Accepts JSON values because some call sites read ``sandbox_id`` out of
-    persisted JSON summaries before checking whether teardown should skip.
-    """
-    return isinstance(sandbox_id, str) and sandbox_id.startswith(_STUB_SANDBOX_PREFIX)
-
-
-class StubSandboxManager(BaseSandboxManager):
-    """No-op sandbox manager used when E2B is not configured.
-
-    ``create`` returns a synthetic id (``stub-sandbox-<uuid>``). ``terminate``
-    and other lifecycle methods are no-ops. Consumers that must distinguish
-    the stub path can call :func:`is_stub_sandbox_id` -- the sentinel string
-    ``"skipped"`` and the ``SandboxId = str | Literal["skipped"]`` union it
-    required have both been retired.
-    """
-
-    async def create(
-        self,
-        sandbox_key: UUID,
-        run_id: UUID,
-        timeout_minutes: int = 30,
-        envs: dict[str, str] | None = None,
-        display_task_id: UUID | None = None,
-    ) -> str:
-        stub_id = f"{_STUB_SANDBOX_PREFIX}{sandbox_key}"
-        logger.info(
-            "E2B_API_KEY not set — returning stub sandbox id %s for task %s (stub mode)",
-            stub_id,
-            sandbox_key,
-        )
-        self._ensure_registries(sandbox_key)
-        self._run_ids[sandbox_key] = run_id
-        self._display_task_ids[sandbox_key] = display_task_id or sandbox_key
-        return stub_id
-
-    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
-        return None
-
-    async def terminate(self, task_id: UUID, reason: str = "completed") -> None:
-        self._file_registries.pop(task_id, None)
-        self._created_files_registry.pop(task_id, None)
-        self._run_ids.pop(task_id, None)
-        self._display_task_ids.pop(task_id, None)
-
-    async def reset_timeout(self, task_id: UUID, timeout_minutes: int = 30) -> bool:
-        return True

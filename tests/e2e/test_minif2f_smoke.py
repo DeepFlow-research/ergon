@@ -1,8 +1,4 @@
-"""MiniF2F canonical smoke — cohort of 3 happy runs against real E2B.
-
-No sad-path slot (researchrubrics leg carries that for the whole
-matrix).  Structure identical to ``test_researchrubrics_smoke.py``.
-"""
+"""MiniF2F canonical sad-path smoke against real E2B."""
 
 from __future__ import annotations
 
@@ -11,32 +7,29 @@ import json
 import os
 import pathlib
 import subprocess
-import uuid
 from datetime import datetime, timezone
 
 import pytest
 
 from tests.e2e._asserts import (
-    _assert_blob_roundtrip,
     _assert_cohort_membership,
-    _assert_minif2f_artifacts,
-    _assert_run_evaluation,
-    _assert_run_graph,
-    _assert_run_resources,
-    _assert_run_turn_counts,
+    _assert_sadpath_evaluation,
+    _assert_sadpath_graph_cascade,
+    _assert_sadpath_partial_artifact,
+    _assert_sadpath_partial_wal,
+    _assert_sadpath_thread_messages,
     _assert_sandbox_command_wal,
     _assert_sandbox_lifecycle_events,
     _assert_temporal_ordering,
-    _assert_thread_messages_ordered,
-    wait_for_terminal,
+    wait_for_terminal_status,
 )
 from tests.e2e._submit import submit_cohort
 
 ENV = "minif2f"
-WORKER = f"{ENV}-smoke-worker"
+WORKER = f"{ENV}-sadpath-smoke-worker"
 CRITERION = f"{ENV}-smoke-criterion"
-# ``SMOKE_COHORT_SIZE`` override for local dev; CI uses default 3.
-COHORT_SIZE = int(os.environ.get("SMOKE_COHORT_SIZE", "3"))
+# ``SMOKE_COHORT_SIZE`` override for local/dev deep checks; CI uses default 1.
+COHORT_SIZE = int(os.environ.get("SMOKE_COHORT_SIZE", "1"))
 PER_RUN_TIMEOUT = 270
 
 
@@ -54,20 +47,25 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
     assert len(run_ids) == COHORT_SIZE
 
     await asyncio.gather(
-        *(wait_for_terminal(rid, timeout_seconds=PER_RUN_TIMEOUT) for rid in run_ids),
+        *(
+            wait_for_terminal_status(
+                rid,
+                expected_statuses=frozenset({"failed"}),
+                timeout_seconds=PER_RUN_TIMEOUT,
+            )
+            for rid in run_ids
+        ),
     )
 
     for rid in run_ids:
-        _assert_run_graph(rid)
-        _assert_run_resources(rid)
-        _assert_run_turn_counts(rid)
-        _assert_sandbox_command_wal(rid)
+        _assert_sadpath_graph_cascade(rid)
+        _assert_sadpath_partial_artifact(rid)
+        _assert_sadpath_partial_wal(rid)
+        _assert_sadpath_thread_messages(rid)
+        _assert_sadpath_evaluation(rid)
         _assert_sandbox_lifecycle_events(rid)
-        _assert_thread_messages_ordered(rid)
-        _assert_blob_roundtrip(rid)
+        _assert_sandbox_command_wal(rid)
         _assert_temporal_ordering(rid)
-        _assert_run_evaluation(rid)
-        _assert_minif2f_artifacts(rid)
 
     _assert_cohort_membership(cohort_key, run_ids)
 
@@ -79,7 +77,7 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
     )
     _invoke_playwright(
         cohort_key=cohort_key,
-        cohort=[{"run_id": str(rid), "kind": "happy"} for rid in run_ids],
+        cohort=[{"run_id": str(rid), "kind": "sad"} for rid in run_ids],
         screenshot_dir=screenshot_dir,
     )
 

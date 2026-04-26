@@ -3,11 +3,10 @@ import type {
   ContextEventState,
   ExecutionAttemptState,
   SandboxCommandState,
-  SandboxState,
   WorkflowRunState,
 } from "@/lib/types";
 import type { RunEvent } from "@/lib/runEvents";
-import type { ActivityKind, RunActivity } from "./types";
+import type { RunActivity } from "./types";
 
 export interface BuildRunActivitiesInput {
   runState: WorkflowRunState | null;
@@ -28,28 +27,34 @@ function compareActivity(a: RunActivity, b: RunActivity): number {
   return a.id.localeCompare(b.id);
 }
 
-function capEndAt(endAt: string | null, selectedTime: string | null): string | null {
-  if (!selectedTime || !endAt) return endAt;
-  return Date.parse(endAt) > Date.parse(selectedTime) ? selectedTime : endAt;
-}
-
 function executionLabel(execution: ExecutionAttemptState, run: WorkflowRunState): string {
   const task = run.tasks.get(execution.taskId);
   return task?.name ?? `Attempt ${execution.attemptNumber}`;
 }
 
+function truncate(value: string, length = 64): string {
+  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
+}
+
+function addMs(timestamp: string, durationMs: number | null): string | null {
+  if (durationMs === null || durationMs <= 0) return null;
+  const startMs = Date.parse(timestamp);
+  if (!Number.isFinite(startMs)) return null;
+  return new Date(startMs + durationMs).toISOString();
+}
+
 function executionActivities(
   run: WorkflowRunState,
-  selectedTime: string | null,
 ): RunActivity[] {
   const activities: RunActivity[] = [];
   for (const executions of run.executionsByTask.values()) {
     for (const execution of executions) {
       if (!isFiniteTime(execution.startedAt)) continue;
-      const endAt = capEndAt(execution.completedAt, selectedTime) ?? selectedTime;
+      const endAt = execution.completedAt;
       activities.push({
         id: `execution:${execution.id}`,
         kind: "execution",
+        band: "work",
         label: executionLabel(execution, run),
         taskId: execution.taskId,
         sequence: null,
@@ -62,6 +67,16 @@ function executionActivities(
           attemptNumber: execution.attemptNumber,
           status: execution.status,
           agentId: execution.agentId,
+          openEnded: endAt === null,
+        },
+        lineage: {
+          taskId: execution.taskId,
+          taskExecutionId: execution.id,
+          agentId: execution.agentId,
+        },
+        debug: {
+          source: "execution.span",
+          payload: execution,
         },
       });
     }
@@ -69,165 +84,221 @@ function executionActivities(
   return activities;
 }
 
+function sandboxCommandLabel(command: SandboxCommandState): string {
+  return `cmd: ${truncate(command.command)}`;
+}
+
 function sandboxActivities(
   run: WorkflowRunState,
-  selectedTime: string | null,
 ): RunActivity[] {
   const activities: RunActivity[] = [];
   for (const sandbox of run.sandboxesByTask.values()) {
-    activities.push(sandboxSpanActivity(sandbox, selectedTime));
+    if (isFiniteTime(sandbox.createdAt)) {
+      const endAt = sandbox.closedAt;
+      activities.push({
+        id: `sandbox:${sandbox.sandboxId}`,
+        kind: "sandbox",
+        band: "work",
+        label: `sandbox: ${sandbox.template ?? sandbox.sandboxId}`,
+        taskId: sandbox.taskId,
+        sequence: null,
+        startAt: sandbox.createdAt,
+        endAt,
+        isInstant: !endAt || endAt === sandbox.createdAt,
+        actor: null,
+        sourceKind: "sandbox.span",
+        metadata: {
+          sandboxId: sandbox.sandboxId,
+          status: sandbox.status,
+          closeReason: sandbox.closeReason,
+          openEnded: endAt === null,
+        },
+        lineage: {
+          taskId: sandbox.taskId,
+          sandboxId: sandbox.sandboxId,
+        },
+        debug: {
+          source: "sandbox.span",
+          payload: {
+            ...sandbox,
+            commands: undefined,
+          },
+        },
+      });
+    }
+
     for (let i = 0; i < sandbox.commands.length; i++) {
-      activities.push(commandActivity(sandbox, sandbox.commands[i], i));
+      const command = sandbox.commands[i];
+      if (!isFiniteTime(command.timestamp)) continue;
+      const endAt = addMs(command.timestamp, command.durationMs);
+      activities.push({
+        id: `sandbox.command:${sandbox.sandboxId}:${i}`,
+        kind: "sandbox",
+        band: "tools",
+        label: sandboxCommandLabel(command),
+        taskId: sandbox.taskId,
+        sequence: null,
+        startAt: command.timestamp,
+        endAt,
+        isInstant: !endAt || endAt === command.timestamp,
+        actor: null,
+        sourceKind: "sandbox.command",
+        metadata: {
+          sandboxId: sandbox.sandboxId,
+          exitCode: command.exitCode,
+          durationMs: command.durationMs,
+        },
+        lineage: {
+          taskId: sandbox.taskId,
+          sandboxId: sandbox.sandboxId,
+        },
+        debug: {
+          source: "sandbox.command",
+          payload: command,
+        },
+      });
     }
   }
   return activities;
 }
 
-function sandboxSpanActivity(sandbox: SandboxState, selectedTime: string | null): RunActivity {
-  const endAt = capEndAt(sandbox.closedAt, selectedTime) ?? selectedTime;
-  return {
-    id: `sandbox:${sandbox.sandboxId}`,
-    kind: "sandbox",
-    label: sandbox.template ?? sandbox.sandboxId,
-    taskId: sandbox.taskId,
-    sequence: null,
-    startAt: sandbox.createdAt,
-    endAt,
-    isInstant: !endAt || endAt === sandbox.createdAt,
-    actor: null,
-    sourceKind: "sandbox.span",
-    metadata: {
-      sandboxId: sandbox.sandboxId,
-      status: sandbox.status,
-      closeReason: sandbox.closeReason,
-    },
-  };
-}
-
-function commandActivity(
-  sandbox: SandboxState,
-  command: SandboxCommandState,
-  index: number,
-): RunActivity {
-  const startMs = Date.parse(command.timestamp);
-  const endAt =
-    command.durationMs != null && Number.isFinite(startMs)
-      ? new Date(startMs + command.durationMs).toISOString()
+function contextLabel(event: ContextEventState): string {
+  const payloadType =
+    typeof event.payload === "object" &&
+    event.payload !== null &&
+    "event_type" in event.payload
+      ? String((event.payload as { event_type?: unknown }).event_type)
       : null;
-  return {
-    id: `sandbox.command:${sandbox.sandboxId}:${index}`,
-    kind: "sandbox",
-    label: command.command,
-    taskId: sandbox.taskId,
-    sequence: null,
-    startAt: command.timestamp,
-    endAt,
-    isInstant: !endAt,
-    actor: null,
-    sourceKind: "sandbox.command",
-    metadata: {
-      exitCode: command.exitCode,
-      durationMs: command.durationMs,
-    },
-  };
+  return payloadType ?? event.eventType;
 }
 
 function contextActivities(run: WorkflowRunState): RunActivity[] {
   const activities: RunActivity[] = [];
-  for (const [taskId, contextEvents] of run.contextEventsByTask.entries()) {
-    for (const event of contextEvents) {
-      activities.push(contextActivity(taskId, event));
+  for (const [taskId, events] of run.contextEventsByTask.entries()) {
+    for (const event of events) {
+      const startAt = event.startedAt ?? event.createdAt;
+      if (!isFiniteTime(startAt)) continue;
+      const endAt = event.completedAt;
+      activities.push({
+        id: `context:${event.id}`,
+        kind: "context",
+        band: "tools",
+        label: contextLabel(event),
+        taskId,
+        sequence: null,
+        startAt,
+        endAt,
+        isInstant: !endAt || endAt === startAt,
+        actor: event.workerBindingKey ?? null,
+        sourceKind: endAt ? "context.span" : "context.event",
+        metadata: {
+          eventId: event.id,
+          eventType: event.eventType,
+          contextSequence: event.sequence ?? null,
+          taskExecutionId: event.taskExecutionId,
+        },
+        lineage: {
+          taskId,
+          taskExecutionId: event.taskExecutionId,
+          workerBindingKey: event.workerBindingKey,
+        },
+        debug: {
+          source: "context.event",
+          payload: event,
+        },
+      });
     }
   }
   return activities;
 }
 
-function contextActivity(taskId: string, event: ContextEventState): RunActivity {
-  const label =
-    typeof event.payload === "object" &&
-    event.payload &&
-    "tool_name" in event.payload
-      ? String((event.payload as { tool_name?: unknown }).tool_name)
-      : event.eventType;
-  return {
-    id: `context:${event.id}`,
-    kind: "context",
-    label,
-    taskId,
-    sequence: event.sequence,
-    startAt: event.startedAt ?? event.createdAt,
-    endAt: event.completedAt,
-    isInstant: !event.startedAt || !event.completedAt,
-    actor: event.workerBindingKey,
-    sourceKind: "context.event",
-    metadata: {
-      eventType: event.eventType,
-      taskExecutionId: event.taskExecutionId,
-    },
-  };
-}
-
-function eventKindToActivityKind(event: RunEvent): ActivityKind | null {
-  switch (event.kind) {
-    case "thread.message":
-      return "message";
-    case "task.evaluation":
-      return "evaluation";
-    case "resource.published":
-      return "artifact";
-    case "workflow.started":
-    case "workflow.completed":
-    case "task.transition":
-    case "unhandled.mutation":
-      return "graph";
-    case "sandbox.created":
-    case "sandbox.command":
-    case "sandbox.closed":
-    case "context.event":
-      return null;
-  }
-}
-
-function eventLabel(event: RunEvent): string {
-  switch (event.kind) {
-    case "thread.message":
-      return event.preview;
-    case "task.evaluation":
-      return "Evaluation";
-    case "resource.published":
-      return event.name;
-    case "workflow.started":
-      return "Workflow started";
-    case "workflow.completed":
-      return `Workflow ${event.status}`;
-    case "task.transition":
-      return `${event.taskName}: ${event.to}`;
-    case "unhandled.mutation":
-      return event.mutationType;
-    default:
-      return event.kind;
-  }
-}
-
 function eventMarkerActivities(events: RunEvent[]): RunActivity[] {
-  return events.flatMap((event) => {
-    const kind = eventKindToActivityKind(event);
-    if (!kind) return [];
-    return [
-      {
-        id: `event:${event.id}`,
-        kind,
-        label: eventLabel(event),
-        taskId: event.taskId ?? null,
-        sequence: event.sequence ?? null,
-        startAt: event.at,
-        endAt: null,
-        isInstant: true,
-        actor: "actor" in event && typeof event.actor === "string" ? event.actor : null,
-        sourceKind: event.kind,
-        metadata: { eventKind: event.kind },
-      },
-    ];
+  return events.flatMap((event): RunActivity[] => {
+    switch (event.kind) {
+      case "thread.message":
+        return [
+          {
+            id: `message:${event.id}`,
+            kind: "message",
+            band: "communication",
+            label: truncate(event.preview),
+            taskId: event.taskId ?? null,
+            sequence: event.sequence ?? null,
+            startAt: event.at,
+            endAt: null,
+            isInstant: true,
+            actor: event.authorRole,
+            sourceKind: event.kind,
+            metadata: {
+              threadId: event.threadId,
+            },
+            lineage: {
+              taskId: event.taskId ?? null,
+              threadId: event.threadId,
+            },
+            debug: {
+              source: event.kind,
+              payload: event,
+            },
+          },
+        ];
+      case "resource.published":
+        return [
+          {
+            id: `artifact:${event.id}`,
+            kind: "artifact",
+            band: "outputs",
+            label: `artifact: ${event.name}`,
+            taskId: event.taskId ?? null,
+            sequence: event.sequence ?? null,
+            startAt: event.at,
+            endAt: null,
+            isInstant: true,
+            actor: null,
+            sourceKind: event.kind,
+            metadata: {
+              mimeType: event.mimeType,
+              sizeBytes: event.sizeBytes,
+            },
+            lineage: {
+              taskId: event.taskId ?? null,
+            },
+            debug: {
+              source: event.kind,
+              payload: event,
+            },
+          },
+        ];
+      case "task.evaluation":
+        return [
+          {
+            id: `evaluation:${event.id}`,
+            kind: "evaluation",
+            band: "outputs",
+            label: `Evaluation ${event.passed === null ? "updated" : event.passed ? "passed" : "failed"}`,
+            taskId: event.taskId ?? null,
+            sequence: event.sequence ?? null,
+            startAt: event.at,
+            endAt: null,
+            isInstant: true,
+            actor: null,
+            sourceKind: event.kind,
+            metadata: {
+              score: event.score,
+              passed: event.passed,
+            },
+            lineage: {
+              taskId: event.taskId ?? null,
+            },
+            debug: {
+              source: event.kind,
+              payload: event,
+            },
+          },
+        ];
+      default:
+        return [];
+    }
   });
 }
 
@@ -235,6 +306,7 @@ function graphMutationActivities(mutations: GraphMutationDto[]): RunActivity[] {
   return mutations.map((mutation) => ({
     id: `graph:${mutation.id}`,
     kind: "graph",
+    band: "graph",
     label: mutation.mutation_type,
     taskId: mutation.target_type === "node" ? mutation.target_id : null,
     sequence: mutation.sequence,
@@ -248,19 +320,21 @@ function graphMutationActivities(mutations: GraphMutationDto[]): RunActivity[] {
       targetType: mutation.target_type,
       reason: mutation.reason,
     },
+    lineage: {
+      taskId: mutation.target_type === "node" ? mutation.target_id : null,
+    },
+    debug: {
+      source: "graph.mutation",
+      payload: mutation,
+    },
   }));
 }
 
 export function buildRunActivities(input: BuildRunActivitiesInput): RunActivity[] {
   if (!input.runState) return [];
-  const selectedMutation =
-    input.currentSequence == null
-      ? null
-      : input.mutations.find((mutation) => mutation.sequence === input.currentSequence);
-  const selectedTime = selectedMutation?.created_at ?? null;
   return [
-    ...executionActivities(input.runState, selectedTime),
-    ...sandboxActivities(input.runState, selectedTime),
+    ...executionActivities(input.runState),
+    ...sandboxActivities(input.runState),
     ...contextActivities(input.runState),
     ...eventMarkerActivities(input.events),
     ...graphMutationActivities(input.mutations),

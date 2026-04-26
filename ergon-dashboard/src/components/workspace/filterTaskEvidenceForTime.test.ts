@@ -40,3 +40,42 @@ test("filterTaskEvidenceForTime returns unfiltered task evidence in live mode", 
   assert.equal(filtered.resources.length, 1);
   assert.equal(filtered.sandbox?.commands.length, 1);
 });
+
+test("filterTaskEvidenceForTime keeps only thread messages visible at selected time", () => {
+  const runState = deserializeRunState(fixture.runState);
+  const thread = runState.threads[0];
+  const filtered = filterTaskEvidenceForTime({
+    resources: [],
+    executions: [],
+    sandbox: undefined,
+    threads: [
+      {
+        ...thread,
+        createdAt: "2026-04-26T12:00:10.000Z",
+        messages: [
+          {
+            ...thread.messages[0],
+            id: "visible-message",
+            content: "visible",
+            createdAt: "2026-04-26T12:00:20.000Z",
+          },
+          {
+            ...thread.messages[0],
+            id: "future-message",
+            content: "future",
+            createdAt: "2026-04-26T12:00:30.000Z",
+          },
+        ],
+      },
+    ],
+    evaluation: null,
+    contextEvents: [],
+    selectedTime: "2026-04-26T12:00:25.000Z",
+  });
+
+  assert.equal(filtered.threads.length, 1);
+  assert.deepEqual(
+    filtered.threads[0].messages.map((message) => message.content),
+    ["visible"],
+  );
+});

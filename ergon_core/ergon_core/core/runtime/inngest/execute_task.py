@@ -8,7 +8,6 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from ergon_core.core.providers.sandbox.manager import StubSandboxManager
 from ergon_core.core.runtime.errors import ContractViolationError
 from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
@@ -201,7 +200,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
     # ``finalize_failure`` never runs, ``TaskFailedEvent`` is never
     # emitted, and the run_task_executions row is stuck in RUNNING with
     # ``error_json = null`` forever.  Observed 2026-04-23 on every
-    # smoke subtask; see docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
+    # dynamic subtask; see docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
     prepared: PreparedTaskExecution | None = None
     # ``None`` until sandbox-setup returns. ``TaskFailedEvent.sandbox_id`` is
     # now ``str | None`` so a pre-sandbox failure carries ``None`` instead of
@@ -211,27 +210,11 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
         prepared = await _prepare_execution(ctx, svc, payload)
 
         if prepared.skipped:
-            logger.info(
-                "task-execute skipped task_id=%s reason=%s",
-                payload.task_id,
-                prepared.skip_reason,
-            )
-            # ``TaskCompletedEvent.sandbox_id`` is required, so mint a stub id
-            # representing "this task completed without provisioning a sandbox".
-            # Downstream teardown uses ``is_stub_sandbox_id`` to short-circuit.
-            stub_sandbox_id = await StubSandboxManager().create(
-                prepared.node_id,
-                run_id=payload.run_id,
-                display_task_id=prepared.node_id,
-            )
-            await _emit_task_completed(payload, prepared, stub_sandbox_id)
-            return TaskExecuteResult(
+            raise ContractViolationError(
+                "Skipped task execution cannot emit task/completed without a real sandbox_id. "
+                "Introduce a first-class task/skipped event before supporting skipped tasks.",
                 run_id=payload.run_id,
                 task_id=payload.task_id,
-                execution_id=prepared.execution_id,
-                success=True,
-                skipped=True,
-                skip_reason=prepared.skip_reason,
             )
 
         sandbox_result = await _setup_sandbox(ctx, payload, prepared)
@@ -246,6 +229,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
         worker_result = await _run_worker(ctx, payload, prepared, sandbox_result)
 
         if not worker_result.success:
+            await _persist_outputs(ctx, payload, prepared, sandbox_result)
             raise RuntimeError(worker_result.error or "Worker execution failed")
 
         persist_result = await _persist_outputs(ctx, payload, prepared, sandbox_result)
