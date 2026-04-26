@@ -129,8 +129,9 @@ async def test_researchrubrics_rollout(
     """
     model = os.environ.get("ERGON_REAL_LLM_MODEL", _DEFAULT_MODEL)
     benchmark = "researchrubrics"
-    worker = "researchrubrics-researcher"
+    worker = os.environ.get("ERGON_REAL_LLM_WORKER", "researchrubrics-researcher")
     evaluator = "research-rubric"
+    limit = os.environ.get("ERGON_REAL_LLM_LIMIT", "1")
 
     budget_before = (
         await openrouter_budget.remaining_usd() if openrouter_budget is not None else None
@@ -152,7 +153,7 @@ async def test_researchrubrics_rollout(
             "--model",
             model,
             "--limit",
-            "1",
+            limit,
         ],
         timeout=_CLI_TIMEOUT_SECONDS,
         capture_output=True,

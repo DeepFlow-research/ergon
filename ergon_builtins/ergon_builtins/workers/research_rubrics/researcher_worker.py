@@ -10,7 +10,7 @@ import time
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.api import RunResourceView
+from ergon_core.api import RunResourceView, Tool
 from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
@@ -133,10 +133,14 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         )
         graph_tools = graph_toolkit.build_tools()
 
-        self.tools = [*rr_tools, *graph_tools]
+        self.tools = [*rr_tools, *graph_tools, *self._extra_tools(context)]
 
         async for turn in super().execute(task, context=context):
             yield turn
+
+    def _extra_tools(self, context: WorkerContext) -> list[Tool]:
+        _ = context
+        return []
 
     async def _run_sandbox_report_skill(
         self,

@@ -13,6 +13,9 @@ import pytest
 from ergon_builtins.workers.research_rubrics.researcher_worker import (
     ResearchRubricsResearcherWorker,
 )
+from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
+    ResearchRubricsWorkflowCliReActWorker,
+)
 from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportReadSuccess,
     ReportWriteSuccess,
@@ -119,6 +122,40 @@ class TestResearcherWorker:
         # Graph tools
         assert "list_my_resources" in tool_names
         assert "list_child_resources" in tool_names
+
+    @pytest.mark.asyncio
+    async def test_workflow_cli_worker_adds_workflow_tool(self):
+        context = _make_context()
+        worker = ResearchRubricsWorkflowCliReActWorker(
+            name="test-researcher",
+            model="openai:gpt-4o",
+            task_id=context.task_id,
+            sandbox_id=context.sandbox_id,
+        )
+        task = _make_task()
+
+        fake_manager = MagicMock()
+        fake_manager.publisher_for.return_value = MagicMock()
+        fake_manager.publisher_for.return_value.sync = AsyncMock(return_value=[])
+
+        with (
+            patch(
+                "ergon_builtins.workers.research_rubrics.researcher_worker"
+                ".ResearchRubricsSandboxManager",
+                return_value=fake_manager,
+            ),
+            patch(
+                "ergon_builtins.workers.baselines.react_worker.ReActWorker.execute",
+                return_value=_empty_gen(),
+            ),
+        ):
+            turns = []
+            async for turn in worker.execute(task, context=context):
+                turns.append(turn)
+
+        tool_names = {_tool_name(t) for t in worker.tools}
+        assert worker.type_slug == "researchrubrics-workflow-cli-react"
+        assert "workflow" in tool_names
 
     @pytest.mark.asyncio
     async def test_report_write_uses_manager_public_file_api(self):

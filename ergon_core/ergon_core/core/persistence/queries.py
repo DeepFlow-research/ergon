@@ -379,6 +379,7 @@ class ResourcesQueries(BaseQueries[RunResource]):
         error: str | None,
         content_hash: str | None,
         metadata: JsonObject | None = None,
+        copied_from_resource_id: UUID | None = None,
     ) -> RunResource:
         """Append one row to the log. Never updates."""
         with get_session() as session:
@@ -393,6 +394,7 @@ class ResourcesQueries(BaseQueries[RunResource]):
                 error=error,
                 content_hash=content_hash,
                 metadata_json=metadata or {},
+                copied_from_resource_id=copied_from_resource_id,
             )
             session.add(row)
             session.commit()
