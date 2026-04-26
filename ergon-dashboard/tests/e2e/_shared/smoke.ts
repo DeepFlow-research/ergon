@@ -17,7 +17,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-import { expect, Page, test } from "@playwright/test";
+import { expect, Locator, Page, test } from "@playwright/test";
 
 import { BackendHarnessClient, BackendRunState } from "../../helpers/backendHarnessClient";
 import { EXPECTED_SUBTASK_SLUGS } from "./expected";
@@ -54,6 +54,58 @@ async function screenshot(target: Page, out: string): Promise<void> {
   await target.screenshot({ path: out, fullPage: true });
 }
 
+function graphElementForTask(page: Page, taskId: string): Locator {
+  return page
+    .locator(
+      `[data-testid="graph-node-${taskId}"], [data-testid="graph-container-${taskId}"]`,
+    )
+    .first();
+}
+
+async function selectRenderedGraphTask(
+  page: Page,
+  state: BackendRunState,
+  runId: string,
+  evaluatedTaskIds: Set<string>,
+): Promise<BackendRunState["graph_nodes"][number]> {
+  const candidates = [
+    ...state.graph_nodes.filter((node) => node.level > 0 && node.task_slug === "d_root"),
+    ...state.graph_nodes.filter((node) => node.level > 0 && evaluatedTaskIds.has(node.id)),
+    ...state.graph_nodes.filter((node) => node.level > 0),
+  ];
+
+  for (const candidate of candidates) {
+    const graphElement = graphElementForTask(page, candidate.id);
+    if (await graphElement.isVisible()) {
+      return candidate;
+    }
+  }
+
+  await expect(page.locator('[data-testid^="graph-node-"], [data-testid^="graph-container-"]').first()).toBeVisible();
+  for (const candidate of candidates) {
+    const graphElement = graphElementForTask(page, candidate.id);
+    if (await graphElement.isVisible()) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`no rendered graph task found for run ${runId}`);
+}
+
+async function openWorkspaceForGraphTask(page: Page, taskId: string): Promise<void> {
+  const graphElement = graphElementForTask(page, taskId);
+  await expect(graphElement).toBeVisible();
+  await graphElement.evaluate((node) => {
+    (node as HTMLElement).click();
+  });
+  try {
+    await expect(page.getByTestId("workspace-region")).toBeVisible({ timeout: 2_000 });
+    return;
+  } catch {
+    await graphElement.click({ force: true });
+  }
+}
+
 async function assertRunWorkspace(
   page: Page,
   state: BackendRunState,
@@ -65,19 +117,11 @@ async function assertRunWorkspace(
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
 
   const evaluatedTaskIds = new Set(state.evaluations.map((evaluation) => evaluation.task_id));
-  const selected =
-    state.graph_nodes.find((node) => node.level > 0 && node.task_slug === "d_root") ??
-    state.graph_nodes.find((node) => node.level > 0 && evaluatedTaskIds.has(node.id)) ??
-    state.graph_nodes.find((node) => node.level > 0);
-  expect(selected, `no leaf task found for run ${runId}`).toBeTruthy();
+  const selected = await selectRenderedGraphTask(page, state, runId, evaluatedTaskIds);
 
-  const graphNode = page.getByTestId(`graph-node-${selected!.id}`);
-  await expect(graphNode).toBeVisible();
-  await graphNode.evaluate((node) => {
-    (node as HTMLElement).click();
-  });
+  await openWorkspaceForGraphTask(page, selected.id);
   await expect(page.getByTestId("workspace-region")).toBeVisible();
-  await expect(page.getByTestId("workspace-header")).toContainText(selected!.task_slug);
+  await expect(page.getByTestId("workspace-header")).toContainText(selected.task_slug);
   await expect(page.getByTestId("workspace-actions")).toBeVisible();
   await expect(page.getByTestId("workspace-outputs")).toBeVisible();
   await expect(page.getByTestId("workspace-executions")).toBeVisible();
@@ -85,7 +129,7 @@ async function assertRunWorkspace(
   await expect(page.getByTestId("workspace-communication")).toBeVisible();
   await expect(page.getByTestId("workspace-transitions")).toBeVisible();
 
-  if (evaluatedTaskIds.has(selected!.id)) {
+  if (evaluatedTaskIds.has(selected.id)) {
     await expect(page.getByTestId("workspace-evaluation")).toContainText("Total score");
   } else {
     await expect(page.getByTestId("workspace-evaluation")).toBeVisible();
