@@ -109,6 +109,12 @@ class TestResearchRubricsRubric:
         criteria = list(rubric.criteria_for(task))
 
         assert [criterion.weight for criterion in criteria] == [2.0, -1.0]
+        assert [type(criterion).__name__ for criterion in criteria] == [
+            "ResearchRubricsJudgeCriterion",
+            "ResearchRubricsJudgeCriterion",
+        ]
+        assert "ResearchRubrics" in criteria[0].system_prompt
+        assert "Includes citations." in criteria[0].system_prompt
 
     def test_aggregate_uses_result_weights(self):
         rubric = ResearchRubricsRubric(name="evaluator")

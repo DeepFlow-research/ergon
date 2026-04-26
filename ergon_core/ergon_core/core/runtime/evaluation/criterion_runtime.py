@@ -2,13 +2,12 @@
 
 The Protocol itself lives in ``ergon_core.api.criterion_runtime`` so that
 ``EvaluationContext`` (also in ``api/``) can type it without importing
-from ``core``.  This module is the real implementation backed by the
-sandbox manager + OpenAI LLM judge.
+from ``core``. This module is the real sandbox/resource implementation.
 """
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from e2b import SandboxNotFoundException, TimeoutException
@@ -26,15 +25,12 @@ from ergon_core.core.providers.sandbox.event_sink import (
     SandboxEventSink,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
-from ergon_core.core.settings import settings
-from openai import AsyncOpenAI
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, desc, select
 
 if TYPE_CHECKING:
     from ergon_core.core.providers.sandbox.manager import AsyncSandbox, BaseSandboxManager
 
-T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 # Re-export the Protocol so existing imports from this module keep working.
@@ -58,9 +54,6 @@ class CriterionRuntimeOptions(BaseModel):
     run_id: UUID | None = None
     task_id: UUID | None = None
     sandbox_id: str | None = None
-    llm_model: str = "gpt-4o"
-    llm_max_tokens: int = 1024
-    llm_temperature: float = 0.0
     event_sink: SandboxEventSink | None = None
 
 
@@ -86,12 +79,6 @@ class DefaultCriterionRuntime:
         ``manager.reconnect(sandbox_id)`` over constructing a fresh
         sandbox — the blessed cross-process path per RFC
         ``2026-04-17-sandbox-lifetime-covers-criteria``.
-    llm_model:
-        OpenAI model name for ``call_llm_judge``.
-    llm_max_tokens:
-        Token limit for judge responses.
-    llm_temperature:
-        Sampling temperature for judge calls.
     event_sink:
         Pre-constructed ``SandboxEventSink``.  If ``None`` a
         ``NoopSandboxEventSink`` is used.
@@ -113,9 +100,6 @@ class DefaultCriterionRuntime:
         self._sandbox_id: str | None = runtime_options.sandbox_id
         self._reconnected_sandbox: "AsyncSandbox | None" = None
         self._owns_sandbox = False
-        self._llm_model = runtime_options.llm_model
-        self._llm_max_tokens = runtime_options.llm_max_tokens
-        self._llm_temperature = runtime_options.llm_temperature
         self._event_sink: SandboxEventSink = (
             NoopSandboxEventSink()
             if runtime_options.event_sink is None
@@ -237,20 +221,6 @@ class DefaultCriterionRuntime:
             stdout=list(execution.logs.stdout),
             stderr=list(execution.logs.stderr),
         )
-
-    async def call_llm_judge(self, messages: list, response_type: type[T]) -> T:
-        client = AsyncOpenAI(api_key=settings.openai_api_key)
-        response = await client.beta.chat.completions.parse(
-            model=self._llm_model,
-            messages=messages,
-            max_tokens=self._llm_max_tokens,
-            temperature=self._llm_temperature,
-            response_format=response_type,
-        )
-        message = response.choices[0].message
-        if message.parsed is None:
-            raise ValueError("No parsed response from LLM judge")
-        return message.parsed
 
     async def cleanup(self) -> None:
         if self._owns_sandbox:

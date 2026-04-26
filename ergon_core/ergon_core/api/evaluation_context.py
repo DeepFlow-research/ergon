@@ -18,14 +18,14 @@ class EvaluationContext(BaseModel):
     explore freely.
 
     ``sandbox_id`` is the *identity* of the sandbox the worker used.  A
-    criterion alone cannot do anything with it -- creating a client,
-    running a command, or calling the LLM judge requires the sandbox
-    manager and an OpenAI key.  Rather than giving every criterion its
-    own handle on the provider stack, the executor wraps those
-    capabilities in a ``CriterionRuntime`` and injects it here.  The
-    runtime owns the sandbox lifecycle; the criterion just calls
-    ``context.runtime.call_llm_judge(...)`` / ``execute_code(...)`` /
-    etc.  Criteria that don't need the runtime simply ignore the field.
+    criterion alone cannot do anything with it -- creating a client or
+    running a command requires the sandbox manager. Rather than giving
+    every criterion its own handle on the sandbox provider stack, the
+    executor wraps those capabilities in a ``CriterionRuntime`` and
+    injects it here. The runtime owns the sandbox lifecycle; criteria
+    that need sandbox evidence call methods like ``execute_code(...)``.
+    LLM-as-judge criteria own their provider call and prompt policy
+    outside this runtime.
     """
 
     # ``CriterionRuntime`` is a ``typing.Protocol``.  Pydantic's synthesised
