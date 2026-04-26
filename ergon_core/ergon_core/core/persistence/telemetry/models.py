@@ -212,6 +212,11 @@ class RunResourceKind(StrEnum):
     ``publish_value(kind=NOTE, ...)`` -- used by the manager worker to
     leave breadcrumbs for subsequent researchers."""
 
+    IMPORT = "import"
+    """Copied snapshot materialized from another ``RunResource`` into a task
+    workspace. The source resource remains immutable and owns its original
+    artifact; the import row belongs to the consuming task execution."""
+
 
 class RunResource(SQLModel, table=True):
     __tablename__ = "run_resources"
@@ -233,6 +238,11 @@ class RunResource(SQLModel, table=True):
     # Append-only log support
     error: str | None = Field(default=None)
     content_hash: str | None = Field(default=None, index=True)
+    copied_from_resource_id: UUID | None = Field(
+        default=None,
+        foreign_key="run_resources.id",
+        index=True,
+    )
 
     # -- JSON accessor: metadata_json --
 
