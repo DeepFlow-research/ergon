@@ -8,6 +8,7 @@ from ergon_cli.commands.workflow import (
     execute_workflow_command,
 )
 from ergon_core.api.worker_context import WorkerContext
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.services.workflow_service import WorkflowService
 from sqlmodel import Session
 
@@ -18,17 +19,19 @@ class WorkflowCommandExecutor(Protocol):
         command: str,
         *,
         context: WorkflowCommandContext,
-        session_factory: Callable[[], Session] | None,
-        service: WorkflowService | None,
+        session_factory: Callable[[], Session],
+        service: WorkflowService,
     ) -> WorkflowCommandOutput: ...
 
 
 def make_workflow_cli_tool(
     *,
     worker_context: WorkerContext,
-    sandbox_task_key: UUID | None,
+    sandbox_task_key: UUID,
     benchmark_type: str,
-    execute_command: WorkflowCommandExecutor | None = None,
+    execute_command: WorkflowCommandExecutor = execute_workflow_command,
+    session_factory: Callable[[], Session] = get_session,
+    service_factory: Callable[[], WorkflowService] = WorkflowService,
 ) -> Callable[[str], Awaitable[str]]:
     """Build an agent-facing ``workflow(command)`` callable.
 
@@ -39,9 +42,10 @@ def make_workflow_cli_tool(
 
     async def workflow(command: str) -> str:
         """Inspect workflow topology/resources or dry-run workflow management commands."""
+        if worker_context.node_id is None:
+            raise ValueError("workflow tool requires WorkerContext.node_id")
 
-        executor = execute_command if execute_command is not None else execute_workflow_command
-        output = executor(
+        output = execute_command(
             command,
             context=WorkflowCommandContext(
                 run_id=worker_context.run_id,
@@ -50,8 +54,8 @@ def make_workflow_cli_tool(
                 sandbox_task_key=sandbox_task_key,
                 benchmark_type=benchmark_type,
             ),
-            session_factory=None,
-            service=None,
+            session_factory=session_factory,
+            service=service_factory(),
         )
         if output.exit_code != 0:
             detail = output.stderr or output.stdout
@@ -60,5 +64,4 @@ def make_workflow_cli_tool(
             return f"{output.stdout}\n\nstderr:\n{output.stderr}".strip()
         return output.stdout
 
-    workflow.__name__ = "workflow"
     return workflow

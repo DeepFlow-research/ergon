@@ -25,6 +25,14 @@ ResourceScope = Literal["input", "upstream", "own", "children", "descendants", "
 
 
 class WorkflowService:
+    """Run-scoped workflow navigation and resource-copy policy.
+
+    ``sandbox_manager_factory`` is intentionally injectable so unit tests can
+    verify materialization without opening a real E2B sandbox. Production code
+    uses ``DefaultSandboxManager`` today; benchmark-specific manager routing can
+    be added here once the CLI has callers outside the ResearchRubrics POC.
+    """
+
     def __init__(
         self,
         *,
@@ -112,7 +120,7 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID | None,
+        node_id: UUID,
         scope: ResourceScope,
         kind: str | None = None,
         max_depth: int = 3,
@@ -327,14 +335,12 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID | None,
+        node_id: UUID,
         scope: ResourceScope,
         max_depth: int,
     ) -> set[UUID] | None:
         if scope == "visible":
             return None
-        if node_id is None:
-            raise ValueError(f"node_id is required for {scope} resource scope")
         node_ids = self._node_ids_for_scope(
             session,
             run_id=run_id,

@@ -48,7 +48,13 @@ def test_resource_list_json_uses_injected_context() -> None:
     )
     output = execute_workflow_command(
         "inspect resource-list --scope visible --limit 5 --format json",
-        context=WorkflowCommandContext(run_id=run_id, node_id=node_id),
+        context=WorkflowCommandContext(
+            run_id=run_id,
+            node_id=node_id,
+            execution_id=uuid4(),
+            sandbox_task_key=uuid4(),
+            benchmark_type="researchrubrics",
+        ),
         session_factory=_Session,
         service=_Service(resource),
     )
@@ -64,7 +70,13 @@ def test_agent_command_rejects_user_supplied_context_flags() -> None:
     with pytest.raises(ValueError, match="scope/context flags are injected"):
         execute_workflow_command(
             f"inspect resource-list --scope visible --run-id {uuid4()}",
-            context=WorkflowCommandContext(run_id=uuid4(), node_id=uuid4()),
+            context=WorkflowCommandContext(
+                run_id=uuid4(),
+                node_id=uuid4(),
+                execution_id=uuid4(),
+                sandbox_task_key=uuid4(),
+                benchmark_type="researchrubrics",
+            ),
             session_factory=_Session,
             service=_Service(resource=None),  # type: ignore[arg-type]
         )

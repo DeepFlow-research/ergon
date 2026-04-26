@@ -10,6 +10,7 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.services.workflow_service import WorkflowService
 from pydantic import BaseModel
 from sqlmodel import Session
+from collections.abc import Callable
 
 _FORBIDDEN_CONTEXT_FLAGS = {
     "--run-id",
@@ -25,10 +26,10 @@ class WorkflowCommandContext(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    node_id: UUID | None = None
-    execution_id: UUID | None = None
-    sandbox_task_key: UUID | None = None
-    benchmark_type: str = "default"
+    node_id: UUID
+    execution_id: UUID
+    sandbox_task_key: UUID
+    benchmark_type: str
 
 
 class WorkflowCommandOutput(BaseModel):
@@ -93,20 +94,19 @@ def execute_workflow_command(
     command: str,
     *,
     context: WorkflowCommandContext,
-    session_factory=get_session,
-    service: WorkflowService | None = None,
+    session_factory: Callable[[], Session],
+    service: WorkflowService,
 ) -> WorkflowCommandOutput:
     argv = shlex.split(command)
     _reject_context_flags(argv)
     args = build_workflow_parser().parse_args(argv)
-    workflow_service = service or WorkflowService()
-    session = (session_factory or get_session)()
+    session = session_factory()
     try:
         if args.group == "inspect":
-            return _handle_inspect(args, context=context, session=session, service=workflow_service)
+            return _handle_inspect(args, context=context, session=session, service=service)
         if args.group == "manage":
             return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI/tool sync bridge
-                _handle_manage(args, context=context, session=session, service=workflow_service)
+                _handle_manage(args, context=context, session=session, service=service)
             )
     finally:
         _close_session(session)
@@ -119,16 +119,28 @@ async def handle_workflow(args: argparse.Namespace) -> int:
     if not command:
         build_workflow_parser().print_help()
         return 0
-    if args.run_id is None:
-        raise SystemExit("--run-id is required for local CLI workflow commands")
+    missing = [
+        name
+        for name, value in {
+            "--run-id": args.run_id,
+            "--node-id": args.node_id,
+            "--execution-id": args.execution_id,
+            "--sandbox-task-key": args.sandbox_task_key,
+        }.items()
+        if value is None
+    ]
+    if missing:
+        raise SystemExit(f"{', '.join(missing)} are required for local CLI workflow commands")
     context = WorkflowCommandContext(
         run_id=UUID(args.run_id),
-        node_id=UUID(args.node_id) if args.node_id else None,
-        execution_id=UUID(args.execution_id) if args.execution_id else None,
-        sandbox_task_key=UUID(args.sandbox_task_key) if args.sandbox_task_key else None,
+        node_id=UUID(args.node_id),
+        execution_id=UUID(args.execution_id),
+        sandbox_task_key=UUID(args.sandbox_task_key),
         benchmark_type=args.benchmark_type,
     )
-    output = execute_workflow_command(command, context=context)
+    output = execute_workflow_command(
+        command, context=context, session_factory=get_session, service=WorkflowService()
+    )
     if output.stdout:
         print(output.stdout)
     if output.stderr:
@@ -184,11 +196,10 @@ def _handle_inspect(
             output_format=args.format,
         )
     if args.action == "task-dependencies":
-        node_id = _node_id(context)
         deps = service.list_dependencies(
             session,
             run_id=context.run_id,
-            node_id=node_id,
+            node_id=context.node_id,
             direction=args.direction,
         )
         return _format_output(
@@ -200,11 +211,10 @@ def _handle_inspect(
             output_format=args.format,
         )
     if args.action == "next-actions":
-        node_id = _node_id(context)
         actions = service.get_next_actions(
             session,
             run_id=context.run_id,
-            node_id=node_id,
+            node_id=context.node_id,
             manager_capable=args.manager_capable,
         )
         return _format_output(
@@ -223,15 +233,10 @@ async def _handle_manage(
     service: WorkflowService,
 ) -> WorkflowCommandOutput:
     if args.action == "materialize-resource":
-        node_id = _node_id(context)
-        if context.execution_id is None or context.sandbox_task_key is None:
-            raise ValueError(
-                "execution_id and sandbox_task_key are required to materialize resources"
-            )
         result = await service.materialize_resource(
             session,
             run_id=context.run_id,
-            current_node_id=node_id,
+            current_node_id=context.node_id,
             current_execution_id=context.execution_id,
             sandbox_task_key=context.sandbox_task_key,
             benchmark_type=context.benchmark_type,
@@ -274,12 +279,6 @@ def _dump(value: BaseModel | JsonObject) -> JsonObject:
     if isinstance(value, dict):
         return value
     raise TypeError(f"cannot serialize {type(value).__name__}")
-
-
-def _node_id(context: WorkflowCommandContext) -> UUID:
-    if context.node_id is None:
-        raise ValueError("node_id is required for this workflow command")
-    return context.node_id
 
 
 def _close_session(session: Session) -> None:

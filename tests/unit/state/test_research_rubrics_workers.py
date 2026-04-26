@@ -140,7 +140,7 @@ class TestResearcherWorker:
 
         with (
             patch(
-                "ergon_builtins.workers.research_rubrics.researcher_worker"
+                "ergon_builtins.workers.research_rubrics.workflow_cli_react_worker"
                 ".ResearchRubricsSandboxManager",
                 return_value=fake_manager,
             ),
