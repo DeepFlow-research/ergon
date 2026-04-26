@@ -448,7 +448,9 @@ def _assert_sadpath_thread_messages(run_id: UUID) -> None:
     )
     assert thread is not None, "no smoke-completion thread created"
     msgs = sorted(thread.messages, key=lambda msg: msg.sequence_num)
-    assert len(msgs) == 7, f"expected 7 completion messages (l_2 failed, l_3 blocked), got {len(msgs)}"
+    assert len(msgs) == 7, (
+        f"expected 7 completion messages (l_2 failed, l_3 blocked), got {len(msgs)}"
+    )
     from_slugs = {m.from_agent_id.removeprefix("leaf-") for m in msgs}
     assert "l_2" not in from_slugs, (
         f"l_2 sent a completion message despite suppression: {from_slugs}"

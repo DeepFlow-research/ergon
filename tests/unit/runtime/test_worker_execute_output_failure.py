@@ -10,4 +10,3 @@ def test_worker_execute_result_preserves_worker_output_failure() -> None:
     assert result.success is False
     assert result.final_assistant_message == "probe failed"
     assert result.error == "probe failed"
-

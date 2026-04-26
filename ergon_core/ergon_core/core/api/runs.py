@@ -325,8 +325,7 @@ def _build_communication_threads(
                         thread_topic=t.topic,
                         task_id=(
                             str(execution_task_map[m.task_execution_id])
-                            if m.task_execution_id
-                            and m.task_execution_id in execution_task_map
+                            if m.task_execution_id and m.task_execution_id in execution_task_map
                             else None
                         ),
                         task_execution_id=str(m.task_execution_id) if m.task_execution_id else None,

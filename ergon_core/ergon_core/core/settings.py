@@ -71,11 +71,7 @@ class Settings(BaseSettings):
 
     @property
     def startup_plugins(self) -> tuple[str, ...]:
-        return tuple(
-            spec.strip()
-            for spec in self.startup_plugin_specs.split(",")
-            if spec.strip()
-        )
+        return tuple(spec.strip() for spec in self.startup_plugin_specs.split(",") if spec.strip())
 
     def missing_values(self, names: list[str]) -> list[str]:
         return [

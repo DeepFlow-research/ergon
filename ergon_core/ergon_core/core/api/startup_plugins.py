@@ -8,8 +8,7 @@ def run_startup_plugins(plugin_specs: tuple[str, ...]) -> None:
         module_name, sep, attr_name = spec.partition(":")
         if not sep or not module_name or not attr_name:
             raise RuntimeError(
-                "Invalid ERGON_STARTUP_PLUGINS entry "
-                f"{spec!r}; expected 'module:function'"
+                f"Invalid ERGON_STARTUP_PLUGINS entry {spec!r}; expected 'module:function'"
             )
         module = import_module(module_name)
         plugin = getattr(module, attr_name)
