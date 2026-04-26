@@ -1,7 +1,7 @@
-"""Tests for is_stub_sandbox_id() sentinel check."""
+"""Tests for test-support stub sandbox IDs."""
 
 import pytest
-from ergon_core.core.providers.sandbox.manager import is_stub_sandbox_id
+from ergon_core.test_support.sandbox import is_stub_sandbox_id
 
 
 @pytest.mark.parametrize(

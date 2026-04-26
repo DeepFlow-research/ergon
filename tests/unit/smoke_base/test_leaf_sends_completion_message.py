@@ -102,6 +102,7 @@ async def test_send_completion_message_posts_request(
     assert req.from_agent_id == "leaf-l_2"
     assert req.to_agent_id == "parent"
     assert req.thread_topic == "smoke-completion"
+    assert req.thread_summary is None
     assert "l_2" in req.content
     assert "exit=0" in req.content
 

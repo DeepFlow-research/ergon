@@ -66,6 +66,7 @@ function TaskNodeComponent({ data }: NodeProps<TaskNodeType>) {
           onClick={onClick}
           selected={selected}
           dimmed={dimmed}
+          highlighted={highlighted}
           containerWidth={dims?.width ?? 260}
           containerHeight={dims?.height ?? 100}
           layoutDirection={graphLayoutDirection}

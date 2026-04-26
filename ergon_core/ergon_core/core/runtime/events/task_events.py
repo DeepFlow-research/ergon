@@ -8,15 +8,11 @@ from uuid import UUID
 
 from ergon_core.core.runtime.events.base import InngestEventContract
 
-# SandboxId is just a str. Previously the type was ``str | Literal["skipped"]``
-# with a ``SANDBOX_SKIPPED = "skipped"`` sentinel returned by
-# ``DefaultSandboxManager.create`` when no E2B_API_KEY was configured. That
-# sentinel forced every downstream consumer to branch on a magic string.
-# Stub/CI mode is now served by ``StubSandboxManager`` which returns a
-# structurally identifiable ID (see ``is_stub_sandbox_id``); event payloads
-# carry a plain ``str`` sandbox_id exactly like the real path, and
-# ``TaskFailedEvent.sandbox_id`` is ``str | None`` because a task can fail
-# before sandbox-setup runs (in which case there really is no sandbox).
+# Production task execution emits real sandbox IDs. Test-support managers may
+# use sentinel IDs, but core event consumers must not parse or branch on those
+# sentinel formats. ``TaskFailedEvent.sandbox_id`` is ``str | None`` because a
+# task can fail before sandbox setup runs, in which case there really is no
+# sandbox.
 SandboxId = str
 
 

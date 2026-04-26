@@ -396,6 +396,7 @@ class Thread(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
     topic: str
+    summary: str | None = None
     agent_a_id: str = Field(index=True)
     agent_b_id: str = Field(index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

@@ -50,6 +50,106 @@
         }
       }
     },
+    "/runs/{run_id}/mutations": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Mutations",
+        "description": "Return the append-only mutation log for a run, ordered by sequence.\n\nUsed by the Timeline scrubber to replay DAG state at any point in time.",
+        "operationId": "get_mutations_runs__run_id__mutations_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RunGraphMutationDto"
+                  },
+                  "title": "Response Get Mutations Runs  Run Id  Mutations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/resources/{resource_id}/content": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Resource Content",
+        "description": "Stream the blob bytes for a RunResource.\n\nUsed by the dashboard's file-viewer modal. Enforces:\n- resource must belong to the named run (no cross-run leaks);\n- resolved path must sit under ``ERGON_BLOB_ROOT`` (traversal guard);\n- size <= ``_RESOURCE_CONTENT_MAX_BYTES`` (413 otherwise).",
+        "operationId": "get_resource_content_runs__run_id__resources__resource_id__content_get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/runs/training/curves": {
       "get": {
         "tags": [
@@ -579,6 +679,54 @@
   },
   "components": {
     "schemas": {
+      "AnnotationDeletedMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "annotation.deleted",
+            "title": "Mutation Type",
+            "default": "annotation.deleted"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject"
+          }
+        },
+        "type": "object",
+        "required": [
+          "namespace",
+          "payload"
+        ],
+        "title": "AnnotationDeletedMutation",
+        "description": "annotation.deleted \u2014 tombstone."
+      },
+      "AnnotationSetMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "annotation.set",
+            "title": "Mutation Type",
+            "default": "annotation.set"
+          },
+          "namespace": {
+            "type": "string",
+            "title": "Namespace"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/JsonObject"
+          }
+        },
+        "type": "object",
+        "required": [
+          "namespace",
+          "payload"
+        ],
+        "title": "AnnotationSetMutation",
+        "description": "annotation.set."
+      },
       "BatchStatus": {
         "type": "string",
         "enum": [
@@ -685,6 +833,28 @@
               }
             ],
             "title": "Final Score"
+          },
+          "total_tasks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tasks"
+          },
+          "total_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Usd"
           },
           "error_message": {
             "anyOf": [
@@ -864,6 +1034,86 @@
         "title": "CohortSummaryDto",
         "description": "Summary row for cohort list and live updates."
       },
+      "EdgeAddedMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "edge.added",
+            "title": "Mutation Type",
+            "default": "edge.added"
+          },
+          "source_node_id": {
+            "type": "string",
+            "title": "Source Node Id"
+          },
+          "target_node_id": {
+            "type": "string",
+            "title": "Target Node Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_node_id",
+          "target_node_id",
+          "status"
+        ],
+        "title": "EdgeAddedMutation",
+        "description": "edge.added \u2014 full edge snapshot."
+      },
+      "EdgeRemovedMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "edge.removed",
+            "title": "Mutation Type",
+            "default": "edge.removed"
+          },
+          "source_node_id": {
+            "type": "string",
+            "title": "Source Node Id"
+          },
+          "target_node_id": {
+            "type": "string",
+            "title": "Target Node Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_node_id",
+          "target_node_id",
+          "status"
+        ],
+        "title": "EdgeRemovedMutation",
+        "description": "edge.removed."
+      },
+      "EdgeStatusChangedMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "edge.status_changed",
+            "title": "Mutation Type",
+            "default": "edge.status_changed"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "EdgeStatusChangedMutation",
+        "description": "edge.status_changed."
+      },
       "EpisodeFailure": {
         "properties": {
           "run_id": {
@@ -904,6 +1154,200 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "JsonObject": {
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        },
+        "type": "object"
+      },
+      "JsonScalar": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "JsonValue": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/JsonScalar"
+          },
+          {
+            "items": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "NodeAddedMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "node.added",
+            "title": "Mutation Type",
+            "default": "node.added"
+          },
+          "task_slug": {
+            "type": "string",
+            "title": "Task Slug"
+          },
+          "instance_key": {
+            "type": "string",
+            "title": "Instance Key"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "assigned_worker_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Worker Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_slug",
+          "instance_key",
+          "description",
+          "status",
+          "assigned_worker_slug"
+        ],
+        "title": "NodeAddedMutation",
+        "description": "node.added \u2014 full node snapshot."
+      },
+      "NodeFieldChangedMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "node.field_changed",
+            "title": "Mutation Type",
+            "default": "node.field_changed"
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "description",
+              "assigned_worker_slug"
+            ],
+            "title": "Field"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "value"
+        ],
+        "title": "NodeFieldChangedMutation",
+        "description": "node.field_changed."
+      },
+      "NodeRemovedMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "node.removed",
+            "title": "Mutation Type",
+            "default": "node.removed"
+          },
+          "task_slug": {
+            "type": "string",
+            "title": "Task Slug"
+          },
+          "instance_key": {
+            "type": "string",
+            "title": "Instance Key"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "assigned_worker_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Worker Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_slug",
+          "instance_key",
+          "description",
+          "status",
+          "assigned_worker_slug"
+        ],
+        "title": "NodeRemovedMutation",
+        "description": "node.removed \u2014 node snapshot at removal time."
+      },
+      "NodeStatusChangedMutation": {
+        "properties": {
+          "mutation_type": {
+            "type": "string",
+            "const": "node.status_changed",
+            "title": "Mutation Type",
+            "default": "node.status_changed"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "NodeStatusChangedMutation",
+        "description": "node.status_changed."
       },
       "PollResponse": {
         "properties": {
@@ -1049,6 +1493,17 @@
           "topic": {
             "type": "string",
             "title": "Topic"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
           },
           "agentAId": {
             "type": "string",
@@ -1385,6 +1840,169 @@
         ],
         "title": "RunExecutionAttemptDto"
       },
+      "RunGraphMutationDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "mutation_type": {
+            "type": "string",
+            "title": "Mutation Type"
+          },
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          },
+          "target_id": {
+            "type": "string",
+            "title": "Target Id"
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/NodeAddedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NodeRemovedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NodeStatusChangedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NodeFieldChangedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EdgeAddedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EdgeRemovedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EdgeStatusChangedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AnnotationSetMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AnnotationDeletedMutation"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "mutation_type",
+                  "mapping": {
+                    "annotation.deleted": "#/components/schemas/AnnotationDeletedMutation",
+                    "annotation.set": "#/components/schemas/AnnotationSetMutation",
+                    "edge.added": "#/components/schemas/EdgeAddedMutation",
+                    "edge.removed": "#/components/schemas/EdgeRemovedMutation",
+                    "edge.status_changed": "#/components/schemas/EdgeStatusChangedMutation",
+                    "node.added": "#/components/schemas/NodeAddedMutation",
+                    "node.field_changed": "#/components/schemas/NodeFieldChangedMutation",
+                    "node.removed": "#/components/schemas/NodeRemovedMutation",
+                    "node.status_changed": "#/components/schemas/NodeStatusChangedMutation"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          },
+          "new_value": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NodeAddedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/NodeRemovedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/NodeStatusChangedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/NodeFieldChangedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/EdgeAddedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/EdgeRemovedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/EdgeStatusChangedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/AnnotationSetMutation"
+              },
+              {
+                "$ref": "#/components/schemas/AnnotationDeletedMutation"
+              }
+            ],
+            "title": "New Value",
+            "discriminator": {
+              "propertyName": "mutation_type",
+              "mapping": {
+                "annotation.deleted": "#/components/schemas/AnnotationDeletedMutation",
+                "annotation.set": "#/components/schemas/AnnotationSetMutation",
+                "edge.added": "#/components/schemas/EdgeAddedMutation",
+                "edge.removed": "#/components/schemas/EdgeRemovedMutation",
+                "edge.status_changed": "#/components/schemas/EdgeStatusChangedMutation",
+                "node.added": "#/components/schemas/NodeAddedMutation",
+                "node.field_changed": "#/components/schemas/NodeFieldChangedMutation",
+                "node.removed": "#/components/schemas/NodeRemovedMutation",
+                "node.status_changed": "#/components/schemas/NodeStatusChangedMutation"
+              }
+            }
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "sequence",
+          "mutation_type",
+          "target_type",
+          "target_id",
+          "actor",
+          "old_value",
+          "new_value",
+          "reason",
+          "created_at"
+        ],
+        "title": "RunGraphMutationDto",
+        "description": "One entry in the append-only mutation log for a run.\n\nField names are snake_case to match the frontend GraphMutationDtoSchema.\nCamelModel is intentionally not used here \u2014 the frontend contract uses snake_case."
+      },
       "RunResourceDto": {
         "properties": {
           "id": {
@@ -1714,6 +2332,11 @@
           "runningTasks": {
             "type": "integer",
             "title": "Runningtasks",
+            "default": 0
+          },
+          "cancelledTasks": {
+            "type": "integer",
+            "title": "Cancelledtasks",
             "default": 0
           },
           "finalScore": {

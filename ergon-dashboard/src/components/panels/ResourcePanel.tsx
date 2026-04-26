@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import { ResourceViewerDialog } from "@/components/viewers/ResourceViewerDialog";
 import { ResourceState } from "@/lib/types";
+import { formatDate } from "@/lib/timeFormat";
 
 interface ResourcePanelProps {
   resources: ResourceState[];
@@ -41,7 +42,7 @@ function formatRelativeTime(timestamp: string): string {
   if (diffSeconds < 60) return "just now";
   if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
   if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
-  return time.toLocaleDateString();
+  return formatDate(time);
 }
 
 /**

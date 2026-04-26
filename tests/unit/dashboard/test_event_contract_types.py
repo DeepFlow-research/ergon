@@ -24,5 +24,11 @@ def test_thread_message_dto_exposes_execution_identity() -> None:
     assert "task_execution_id" in RunCommunicationMessageDto.model_fields
 
 
+def test_thread_dto_exposes_summary_and_task_identity() -> None:
+    assert "summary" in RunCommunicationThreadDto.model_fields
+    assert "task_id" in RunCommunicationThreadDto.model_fields
+    assert "task_id" in RunCommunicationMessageDto.model_fields
+
+
 def test_cohort_updated_event_uses_cohort_summary_dto() -> None:
     assert CohortUpdatedEvent.model_fields["summary"].annotation is CohortSummaryDto

@@ -12,6 +12,11 @@ import json
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
 from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.sadpath import (
+    AlwaysFailSubworker,
+    FailingSmokeLeafMixin,
+    SadPathSmokeWorkerMixin,
+)
 from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
 from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
@@ -63,7 +68,24 @@ class MiniF2FSmokeLeafWorker(BaseSmokeLeafWorker):
     subworker_cls = MiniF2FSubworker
 
 
+class MiniF2FFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
+    """Registered leaf that fails after partial work."""
+
+    type_slug = "minif2f-smoke-leaf-failing"
+    subworker_cls = AlwaysFailSubworker
+
+
+class MiniF2FSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
+    """Parent that routes ``l_2`` to the failing leaf."""
+
+    type_slug = "minif2f-sadpath-smoke-worker"
+    leaf_slug = "minif2f-smoke-leaf"
+    FAILING_LEAF_SLUG = "minif2f-smoke-leaf-failing"
+
+
 __all__ = [
+    "MiniF2FFailingLeafWorker",
+    "MiniF2FSadPathSmokeWorker",
     "MiniF2FSmokeLeafWorker",
     "MiniF2FSmokeWorker",
     "MiniF2FSubworker",

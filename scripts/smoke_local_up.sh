@@ -48,6 +48,7 @@ Stack is up.  Export these in your shell before running smoke:
     export ERGON_API_BASE_URL=http://127.0.0.1:9000
     export PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001
     export ENABLE_TEST_HARNESS=1
+    export ERGON_STARTUP_PLUGINS=ergon_core.test_support.smoke_fixtures:register_smoke_fixtures
     export TEST_HARNESS_SECRET=local-dev
     export SCREENSHOT_DIR=/tmp/playwright
     export E2B_API_KEY=<your key>   # required for real sandbox runs

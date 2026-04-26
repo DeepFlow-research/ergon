@@ -17,15 +17,15 @@ export interface LayoutedGraph {
 }
 
 export const NODE_VARIANTS = {
-  full: { width: 220, height: 120 },
-  standard: { width: 180, height: 90 },
-  compact: { width: 140, height: 50 },
+  full: { width: 190, height: 88 },
+  standard: { width: 160, height: 64 },
+  compact: { width: 122, height: 46 },
 } as const;
 
-export const MIN_CONTAINER_WIDTH = 260;
-export const MIN_CONTAINER_HEIGHT = 100;
-export const CONTAINER_HEADER_HEIGHT = 50;
-export const CONTAINER_PADDING = 20;
+export const MIN_CONTAINER_WIDTH = 240;
+export const MIN_CONTAINER_HEIGHT = 92;
+export const CONTAINER_HEADER_HEIGHT = 32;
+export const CONTAINER_PADDING = 16;
 export const DEFAULT_EXPANDED_DEPTH = 2;
 export const MAX_VISIBLE_NODES = 150;
 

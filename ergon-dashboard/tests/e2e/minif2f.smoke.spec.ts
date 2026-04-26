@@ -1,8 +1,7 @@
 /**
  * Canonical smoke Playwright spec for the minif2f leg.
  *
- * 3 happy-path cohort runs.  No sad slot.  All assertions in the
- * shared factory (./._shared/smoke.ts).
+ * One canonical sad-path run. All assertions live in the shared factory.
  */
 
 import { defineSmokeSpec } from "./_shared/smoke";

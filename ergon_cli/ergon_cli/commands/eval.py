@@ -20,7 +20,7 @@ async def _watch(args: Namespace) -> int:
         await watch_and_evaluate(
             checkpoint_dir=args.checkpoint_dir,
             benchmark_type=args.benchmark,
-            evaluator_type=args.evaluator or "stub-rubric",
+            evaluator_type=args.evaluator,
             model_base=args.model_base,
             poll_interval_s=args.poll_interval,
             eval_limit=args.eval_limit,
@@ -35,7 +35,7 @@ async def _checkpoint(args: Namespace) -> int:
     await evaluate_checkpoint(
         checkpoint_path=args.checkpoint,
         benchmark_type=args.benchmark,
-        evaluator_type=args.evaluator or "stub-rubric",
+        evaluator_type=args.evaluator,
         model_base=args.model_base,
         eval_limit=args.eval_limit,
     )

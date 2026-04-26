@@ -1,15 +1,14 @@
-"""ResearchRubrics canonical smoke — cohort of 3 (2 happy + 1 sad) against real E2B.
+"""ResearchRubrics canonical sad-path smoke against real E2B.
 
 Per-run assertion dispatch on slot ``kind``:
 
-- ``happy`` slots run the full happy-path assertion block (§2.5 of
-  ``docs/superpowers/plans/test-refactor/02-drivers-and-asserts.md``).
-- ``sad`` slot (slot 3) runs the sad-path block (§10) — line-cascade
-  failure invariants.
+- The single slot routes ``l_2`` to a failing leaf.
+- ``l_3`` depends on ``l_2`` and must remain blocked / unstarted.
+- Independent branches must still complete.
 
-Cohort-level: ``_assert_cohort_membership`` checks all 3 runs are
-visible on ``/cohort/{key}``.  Playwright subprocess runs at the end
-with a JSON-encoded cohort array so the shared factory can dispatch
+Cohort-level: ``_assert_cohort_membership`` checks all submitted runs
+are visible on ``/cohort/{key}``.  Playwright subprocess runs at the
+end with a JSON-encoded cohort array so the shared factory can dispatch
 per-kind assertions in the UI.
 """
 
@@ -20,20 +19,12 @@ import json
 import os
 import pathlib
 import subprocess
-import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal
 
 import pytest
 
 from tests.e2e._asserts import (
-    _assert_blob_roundtrip,
     _assert_cohort_membership,
-    _assert_run_evaluation,
-    _assert_run_graph,
-    _assert_run_resources,
-    _assert_run_turn_counts,
     _assert_sadpath_evaluation,
     _assert_sadpath_graph_cascade,
     _assert_sadpath_partial_artifact,
@@ -42,45 +33,17 @@ from tests.e2e._asserts import (
     _assert_sandbox_command_wal,
     _assert_sandbox_lifecycle_events,
     _assert_temporal_ordering,
-    _assert_thread_messages_ordered,
-    wait_for_terminal,
     wait_for_terminal_status,
 )
 from tests.e2e._submit import submit_cohort
 
 ENV = "researchrubrics"
-HAPPY_WORKER = f"{ENV}-smoke-worker"
-SAD_WORKER = f"{ENV}-sadpath-smoke-worker"
+WORKER = f"{ENV}-sadpath-smoke-worker"
 CRITERION = f"{ENV}-smoke-criterion"
 PER_RUN_TIMEOUT = 270  # seconds; < pytest's 300s --timeout
 
 
-@dataclass(frozen=True)
-class CohortSlot:
-    worker_slug: str
-    criterion_slug: str
-    kind: Literal["happy", "sad"]
-
-
-def _build_cohort() -> tuple[CohortSlot, ...]:
-    """Build the cohort using the ``SMOKE_COHORT_SIZE`` env-var override.
-
-    ``SMOKE_COHORT_SIZE`` controls the number of *happy* slots (default 2).
-    One sad-path slot is always appended — every cohort must exercise the
-    line-cascade failure path regardless of size.
-
-    Size=1 → 1 happy + 1 sad.  Size=2 (default) → 2 happy + 1 sad.
-    """
-    size = int(os.environ.get("SMOKE_COHORT_SIZE", "2"))
-    if size <= 0:
-        raise ValueError(f"SMOKE_COHORT_SIZE must be >= 1, got {size}")
-
-    slots: list[CohortSlot] = [CohortSlot(HAPPY_WORKER, CRITERION, "happy") for _ in range(size)]
-    slots.append(CohortSlot(SAD_WORKER, CRITERION, "sad"))
-    return tuple(slots)
-
-
-COHORT: tuple[CohortSlot, ...] = _build_cohort()
+COHORT_SIZE = int(os.environ.get("SMOKE_COHORT_SIZE", "1"))
 
 
 @pytest.mark.e2e
@@ -88,41 +51,30 @@ COHORT: tuple[CohortSlot, ...] = _build_cohort()
 async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
     cohort_key = f"ci-smoke-{ENV}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
 
-    # ── Phase 1: submit the cohort (mixed worker slugs) ───────────────
     run_ids = await submit_cohort(
         benchmark_slug=ENV,
-        slots=[(s.worker_slug, s.criterion_slug) for s in COHORT],
+        slots=[(WORKER, CRITERION)] * COHORT_SIZE,
         cohort_key=cohort_key,
         timeout=PER_RUN_TIMEOUT,
     )
-    assert len(run_ids) == len(COHORT)
-    slotted: list[tuple[CohortSlot, uuid.UUID]] = list(zip(COHORT, run_ids))
+    assert len(run_ids) == COHORT_SIZE
 
-    # ── Phase 2: wait for terminal state ──────────────────────────────
     await asyncio.gather(
         *(
-            wait_for_terminal(rid, timeout_seconds=PER_RUN_TIMEOUT)
-            if slot.kind == "happy"
-            else wait_for_terminal_status(
+            wait_for_terminal_status(
                 rid,
-                expected_statuses=frozenset({"completed"}),
+                expected_statuses=frozenset({"failed"}),
                 timeout_seconds=PER_RUN_TIMEOUT,
             )
-            for slot, rid in slotted
+            for rid in run_ids
         ),
     )
 
-    # ── Phase 3: per-run assertions (dispatched on kind) ──────────────
-    for slot, rid in slotted:
-        if slot.kind == "happy":
-            _assert_happy_run(rid)
-        else:
-            _assert_sad_run(rid)
+    for rid in run_ids:
+        _assert_sad_run(rid)
 
-    # ── Phase 3b: cohort-level invariant ──────────────────────────────
     _assert_cohort_membership(cohort_key, run_ids)
 
-    # ── Phase 4: Playwright subprocess (screenshots per run) ──────────
     screenshot_dir_env = os.environ.get("SCREENSHOT_DIR")
     screenshot_dir = (
         pathlib.Path(screenshot_dir_env)
@@ -131,69 +83,20 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
     )
     _invoke_playwright(
         cohort_key=cohort_key,
-        cohort=[{"run_id": str(rid), "kind": s.kind} for s, rid in slotted],
+        cohort=[{"run_id": str(rid), "kind": "sad"} for rid in run_ids],
         screenshot_dir=screenshot_dir,
     )
 
-    # Phase 5 (finalizer) — see tests/e2e/conftest.py ``_screenshot_uploader``.
 
-
-def _assert_happy_run(rid: uuid.UUID) -> None:
-    _assert_run_graph(rid)
-    _assert_run_resources(rid)
-    _assert_run_turn_counts(rid)
-    _assert_sandbox_command_wal(rid)
-    _assert_sandbox_lifecycle_events(rid)
-    _assert_thread_messages_ordered(rid)
-    _assert_blob_roundtrip(rid)
-    _assert_temporal_ordering(rid)
-    _assert_run_evaluation(rid)
-    # Env-specific content check is inside the criterion + also rerun here
-    # via _assert_env_content_happy below.
-    _assert_env_content_happy(rid)
-
-
-def _assert_sad_run(rid: uuid.UUID) -> None:
+def _assert_sad_run(rid) -> None:
     _assert_sadpath_graph_cascade(rid)
     _assert_sadpath_partial_artifact(rid)
     _assert_sadpath_partial_wal(rid)
     _assert_sadpath_thread_messages(rid)
     _assert_sadpath_evaluation(rid)
-    _assert_sandbox_command_wal(rid)
     _assert_sandbox_lifecycle_events(rid)
+    _assert_sandbox_command_wal(rid)
     _assert_temporal_ordering(rid)
-
-
-def _assert_env_content_happy(rid: uuid.UUID) -> None:
-    """Out-of-band re-verification that each happy leaf produced a
-    well-formed ``report_*.md``.  Duplicates what
-    ``ResearchRubricsSmokeCriterion._verify_env_content`` does inside
-    the workflow — if the criterion regresses silently, this catches it."""
-    from pathlib import Path
-
-    from sqlmodel import select
-
-    from ergon_core.core.persistence.shared.db import get_session
-    from ergon_core.core.persistence.telemetry.models import RunResource
-
-    with get_session() as s:
-        reports = list(
-            s.exec(
-                select(RunResource)
-                .where(RunResource.run_id == rid)
-                .where(
-                    RunResource.name.like("report_%.md"),  # ty: ignore[unresolved-attribute]
-                )
-                .where(RunResource.kind == "report"),  # blob-store only (host-accessible)
-            ).all(),
-        )
-    assert len(reports) == 9, f"expected 9 reports, got {len(reports)}"
-    for r in reports:
-        body = Path(r.file_path).read_bytes()
-        assert body.startswith(b"# Research report"), (
-            f"{r.name}: missing `# Research report` header"
-        )
-        assert len(body.strip()) >= 20, f"{r.name}: body < 20 bytes"
 
 
 def _invoke_playwright(

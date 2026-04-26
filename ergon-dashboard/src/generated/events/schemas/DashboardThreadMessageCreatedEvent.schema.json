@@ -106,6 +106,18 @@
           "title": "Topic",
           "type": "string"
         },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
         "agentAId": {
           "title": "Agentaid",
           "type": "string"

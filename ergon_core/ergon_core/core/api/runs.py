@@ -289,6 +289,7 @@ def _task_keyed_sandboxes(
 def _build_communication_threads(
     threads: list[Thread],
     messages: list[ThreadMessage],
+    execution_task_map: dict[UUID, UUID],
 ) -> list[RunCommunicationThreadDto]:
     msgs_by_thread: dict[UUID, list[ThreadMessage]] = defaultdict(list)
     for m in sorted(messages, key=lambda m: m.sequence_num):
@@ -296,11 +297,22 @@ def _build_communication_threads(
 
     result: list[RunCommunicationThreadDto] = []
     for t in threads:
+        thread_messages = msgs_by_thread.get(t.id, [])
+        task_ids = {
+            task_id
+            for message in thread_messages
+            if message.task_execution_id is not None
+            for task_id in [execution_task_map.get(message.task_execution_id)]
+            if task_id is not None
+        }
+        thread_task_id = next(iter(task_ids)) if len(task_ids) == 1 else None
         result.append(
             RunCommunicationThreadDto(
                 id=str(t.id),
                 run_id=str(t.run_id),
+                task_id=str(thread_task_id) if thread_task_id else None,
                 topic=t.topic,
+                summary=t.summary,
                 agent_a_id=t.agent_a_id,
                 agent_b_id=t.agent_b_id,
                 created_at=t.created_at,
@@ -311,6 +323,11 @@ def _build_communication_threads(
                         thread_id=str(m.thread_id),
                         run_id=str(m.run_id),
                         thread_topic=t.topic,
+                        task_id=(
+                            str(execution_task_map[m.task_execution_id])
+                            if m.task_execution_id and m.task_execution_id in execution_task_map
+                            else None
+                        ),
                         task_execution_id=str(m.task_execution_id) if m.task_execution_id else None,
                         from_agent_id=m.from_agent_id,
                         to_agent_id=m.to_agent_id,
@@ -318,7 +335,7 @@ def _build_communication_threads(
                         sequence_num=m.sequence_num,
                         created_at=m.created_at,
                     )
-                    for m in msgs_by_thread.get(t.id, [])
+                    for m in thread_messages
                 ],
             )
         )

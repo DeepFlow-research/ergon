@@ -56,9 +56,9 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("ENABLE_TEST_HARNESS"),
     )
-    enable_smoke_fixtures: bool | None = Field(
-        default=None,
-        validation_alias=AliasChoices("ENABLE_SMOKE_FIXTURES"),
+    startup_plugin_specs: str = Field(
+        default="",
+        validation_alias=AliasChoices("ERGON_STARTUP_PLUGINS"),
     )
 
     @property
@@ -70,12 +70,8 @@ class Settings(BaseSettings):
         return self.data_dir / "runs"
 
     @property
-    def smoke_fixtures_enabled(self) -> bool:
-        return (
-            self.enable_smoke_fixtures
-            if self.enable_smoke_fixtures is not None
-            else self.enable_test_harness
-        )
+    def startup_plugins(self) -> tuple[str, ...]:
+        return tuple(spec.strip() for spec in self.startup_plugin_specs.split(",") if spec.strip())
 
     def missing_values(self, names: list[str]) -> list[str]:
         return [

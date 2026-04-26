@@ -1,4 +1,12 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 import { z } from "zod";
+
+type JsonValue =
+  | (JsonScalar | Array<JsonValue> | {})
+  | Array<JsonScalar | Array<JsonValue> | {}>;
+type JsonScalar =
+  | (string | number | number | boolean | null)
+  | Array<string | number | number | boolean | null>;
 
 const RunTaskDto = z.object({
   id: z.string(),
@@ -119,6 +127,7 @@ const RunCommunicationThreadDto = z.object({
   runId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
   topic: z.string(),
+  summary: z.union([z.string(), z.null()]).optional(),
   agentAId: z.string(),
   agentBId: z.string(),
   createdAt: z.string().datetime({ offset: true }),
@@ -146,6 +155,7 @@ const RunSnapshotDto = z.object({
   completedTasks: z.number().int().optional().default(0),
   failedTasks: z.number().int().optional().default(0),
   runningTasks: z.number().int().optional().default(0),
+  cancelledTasks: z.number().int().optional().default(0),
   finalScore: z.union([z.number(), z.null()]).optional(),
   error: z.union([z.string(), z.null()]).optional(),
 });
@@ -162,6 +172,122 @@ const HTTPValidationError = z
   .object({ detail: z.array(ValidationError) })
   .partial()
   .passthrough();
+const NodeAddedMutation = z
+  .object({
+    mutation_type: z.string().optional().default("node.added"),
+    task_slug: z.string(),
+    instance_key: z.string(),
+    description: z.string(),
+    status: z.string(),
+    assigned_worker_slug: z.union([z.string(), z.null()]),
+  })
+  .passthrough();
+const NodeRemovedMutation = z
+  .object({
+    mutation_type: z.string().optional().default("node.removed"),
+    task_slug: z.string(),
+    instance_key: z.string(),
+    description: z.string(),
+    status: z.string(),
+    assigned_worker_slug: z.union([z.string(), z.null()]),
+  })
+  .passthrough();
+const NodeStatusChangedMutation = z
+  .object({
+    mutation_type: z.string().optional().default("node.status_changed"),
+    status: z.string(),
+  })
+  .passthrough();
+const NodeFieldChangedMutation = z
+  .object({
+    mutation_type: z.string().optional().default("node.field_changed"),
+    field: z.enum(["description", "assigned_worker_slug"]),
+    value: z.union([z.string(), z.null()]),
+  })
+  .passthrough();
+const EdgeAddedMutation = z
+  .object({
+    mutation_type: z.string().optional().default("edge.added"),
+    source_node_id: z.string(),
+    target_node_id: z.string(),
+    status: z.string(),
+  })
+  .passthrough();
+const EdgeRemovedMutation = z
+  .object({
+    mutation_type: z.string().optional().default("edge.removed"),
+    source_node_id: z.string(),
+    target_node_id: z.string(),
+    status: z.string(),
+  })
+  .passthrough();
+const EdgeStatusChangedMutation = z
+  .object({
+    mutation_type: z.string().optional().default("edge.status_changed"),
+    status: z.string(),
+  })
+  .passthrough();
+const JsonScalar = z.union([
+  z.string(),
+  z.number(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+const JsonValue: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([JsonScalar, z.array(JsonValue), z.record(z.string(), JsonValue)])
+);
+const JsonObject = z.record(z.string(), JsonValue);
+const AnnotationSetMutation = z
+  .object({
+    mutation_type: z.string().optional().default("annotation.set"),
+    namespace: z.string(),
+    payload: JsonObject,
+  })
+  .passthrough();
+const AnnotationDeletedMutation = z
+  .object({
+    mutation_type: z.string().optional().default("annotation.deleted"),
+    namespace: z.string(),
+    payload: JsonObject,
+  })
+  .passthrough();
+const RunGraphMutationDto = z.object({
+  id: z.string(),
+  run_id: z.string(),
+  sequence: z.number().int(),
+  mutation_type: z.string(),
+  target_type: z.string(),
+  target_id: z.string(),
+  actor: z.string(),
+  old_value: z.union([
+    z.discriminatedUnion("mutation_type", [
+      NodeAddedMutation,
+      NodeRemovedMutation,
+      NodeStatusChangedMutation,
+      NodeFieldChangedMutation,
+      EdgeAddedMutation,
+      EdgeRemovedMutation,
+      EdgeStatusChangedMutation,
+      AnnotationSetMutation,
+      AnnotationDeletedMutation,
+    ]),
+    z.null(),
+  ]),
+  new_value: z.discriminatedUnion("mutation_type", [
+    NodeAddedMutation,
+    NodeRemovedMutation,
+    NodeStatusChangedMutation,
+    NodeFieldChangedMutation,
+    EdgeAddedMutation,
+    EdgeRemovedMutation,
+    EdgeStatusChangedMutation,
+    AnnotationSetMutation,
+    AnnotationDeletedMutation,
+  ]),
+  reason: z.union([z.string(), z.null()]),
+  created_at: z.string(),
+});
 const definition_id = z.union([z.string(), z.null()]).optional();
 const TrainingCurvePointDto = z.object({
   runId: z.string(),
@@ -233,6 +359,8 @@ const CohortRunRowDto = z
     completed_at: z.union([z.string(), z.null()]).optional(),
     running_time_ms: z.union([z.number(), z.null()]).optional(),
     final_score: z.union([z.number(), z.null()]).optional(),
+    total_tasks: z.union([z.number(), z.null()]).optional(),
+    total_cost_usd: z.union([z.number(), z.null()]).optional(),
     error_message: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
@@ -314,6 +442,19 @@ export const schemas = {
   RunSnapshotDto,
   ValidationError,
   HTTPValidationError,
+  NodeAddedMutation,
+  NodeRemovedMutation,
+  NodeStatusChangedMutation,
+  NodeFieldChangedMutation,
+  EdgeAddedMutation,
+  EdgeRemovedMutation,
+  EdgeStatusChangedMutation,
+  JsonScalar,
+  JsonValue,
+  JsonObject,
+  AnnotationSetMutation,
+  AnnotationDeletedMutation,
+  RunGraphMutationDto,
   definition_id,
   TrainingCurvePointDto,
   TrainingSessionDto,

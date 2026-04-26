@@ -35,6 +35,7 @@ class CommunicationService:
                 agent_a_id=request.from_agent_id,
                 agent_b_id=request.to_agent_id,
                 topic=request.thread_topic,
+                thread_summary=request.thread_summary,
             )
 
             seq_num = (
@@ -80,6 +81,7 @@ class CommunicationService:
             id=str(thread.id),
             run_id=str(thread.run_id),
             topic=thread.topic,
+            summary=thread.summary,
             agent_a_id=thread.agent_a_id,
             agent_b_id=thread.agent_b_id,
             created_at=thread.created_at,
@@ -95,6 +97,7 @@ class CommunicationService:
             to_agent_id=message.to_agent_id,
             content=message.content,
             sequence_num=message.sequence_num,
+            task_execution_id=str(message.task_execution_id) if message.task_execution_id else None,
             created_at=message.created_at,
         )
         try:
@@ -153,6 +156,7 @@ class CommunicationService:
                         thread_id=thread.id,
                         run_id=thread.run_id,
                         topic=thread.topic,
+                        summary=thread.summary,
                         agent_a_id=thread.agent_a_id,
                         agent_b_id=thread.agent_b_id,
                         message_count=count,
@@ -174,6 +178,7 @@ class CommunicationService:
                 thread_id=thread.id,
                 run_id=thread.run_id,
                 topic=thread.topic,
+                summary=thread.summary,
                 agent_a_id=thread.agent_a_id,
                 agent_b_id=thread.agent_b_id,
                 messages=messages,
@@ -193,6 +198,7 @@ class CommunicationService:
         agent_a_id: str,
         agent_b_id: str,
         topic: str,
+        thread_summary: str | None = None,
     ) -> Thread:
         # Threads are keyed by (run_id, topic) only — all senders on the same
         # topic share one thread per run (broadcast/group semantics).
@@ -201,10 +207,19 @@ class CommunicationService:
         stmt = select(Thread).where(Thread.run_id == run_id).where(Thread.topic == topic)
         existing = session.exec(stmt).first()
         if existing is not None:
+            if existing.summary is None and thread_summary:
+                existing.summary = thread_summary
+                session.add(existing)
             return existing
 
         a, b = sorted([agent_a_id, agent_b_id])
-        thread = Thread(run_id=run_id, topic=topic, agent_a_id=a, agent_b_id=b)
+        thread = Thread(
+            run_id=run_id,
+            topic=topic,
+            summary=thread_summary,
+            agent_a_id=a,
+            agent_b_id=b,
+        )
         session.add(thread)
         try:
             session.flush()

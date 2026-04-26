@@ -54,6 +54,8 @@ def test_minif2f_slugs_registered() -> None:
 
     assert "minif2f-smoke-worker" in WORKERS
     assert "minif2f-smoke-leaf" in WORKERS
+    assert "minif2f-sadpath-smoke-worker" in WORKERS
+    assert "minif2f-smoke-leaf-failing" in WORKERS
     assert "minif2f-smoke-criterion" in EVALUATORS
 
 
@@ -65,6 +67,8 @@ def test_swebench_slugs_registered() -> None:
 
     assert "swebench-smoke-worker" in WORKERS
     assert "swebench-smoke-leaf" in WORKERS
+    assert "swebench-sadpath-smoke-worker" in WORKERS
+    assert "swebench-smoke-leaf-failing" in WORKERS
     assert "swebench-smoke-criterion" in EVALUATORS
 
 

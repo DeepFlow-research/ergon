@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphMutationDto } from "@/features/graph/contracts/graphMutations";
+import { formatClockTimeMs } from "@/lib/timeFormat";
 
 interface MutationTimelineProps {
   mutations: GraphMutationDto[];
@@ -134,12 +135,7 @@ export function MutationTimeline({
   }
 
   const formattedTime = currentMutation
-    ? new Date(currentMutation.created_at).toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        fractionalSecondDigits: 3,
-      })
+    ? formatClockTimeMs(currentMutation.created_at)
     : "—";
 
   const seqSpan = Math.max(1, maxSequence - minSequence);

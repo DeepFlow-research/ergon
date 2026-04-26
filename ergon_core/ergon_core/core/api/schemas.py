@@ -140,6 +140,7 @@ class RunCommunicationThreadDto(CamelModel):
     run_id: str
     task_id: str | None = None
     topic: str
+    summary: str | None = None
     agent_a_id: str
     agent_b_id: str
     created_at: datetime

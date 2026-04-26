@@ -97,8 +97,8 @@ def build_parser() -> argparse.ArgumentParser:
     eval_watch = eval_sub.add_parser("watch", help="Watch for new checkpoints and evaluate")
     eval_watch.add_argument("--checkpoint-dir", required=True, help="Directory to watch")
     eval_watch.add_argument("--benchmark", required=True, help="Benchmark slug")
-    eval_watch.add_argument("--evaluator", default=None, help="Evaluator slug")
-    eval_watch.add_argument("--model-base", default=None, help="Base model for local eval")
+    eval_watch.add_argument("--evaluator", required=True, help="Evaluator slug")
+    eval_watch.add_argument("--model-base", required=True, help="Base model for local eval")
     eval_watch.add_argument("--poll-interval", type=int, default=60, help="Seconds between scans")
     eval_watch.add_argument("--eval-limit", type=int, default=None, help="Max tasks per eval")
     eval_watch.add_argument(
@@ -110,8 +110,8 @@ def build_parser() -> argparse.ArgumentParser:
     eval_ckpt = eval_sub.add_parser("checkpoint", help="Evaluate a single checkpoint")
     eval_ckpt.add_argument("--checkpoint", required=True, help="Checkpoint path")
     eval_ckpt.add_argument("--benchmark", required=True, help="Benchmark slug")
-    eval_ckpt.add_argument("--evaluator", default=None, help="Evaluator slug")
-    eval_ckpt.add_argument("--model-base", default=None, help="Base model for local eval")
+    eval_ckpt.add_argument("--evaluator", required=True, help="Evaluator slug")
+    eval_ckpt.add_argument("--model-base", required=True, help="Base model for local eval")
     eval_ckpt.add_argument("--eval-limit", type=int, default=None, help="Max tasks")
 
     # -- onboard / doctor ------------------------------------------------------

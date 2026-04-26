@@ -21,8 +21,8 @@ async def watch_and_evaluate(
     checkpoint_dir: str,
     benchmark_type: str,
     *,
-    evaluator_type: str = "stub-rubric",
-    model_base: str | None = None,
+    evaluator_type: str,
+    model_base: str,
     poll_interval_s: int = 60,
     eval_limit: int | None = None,
     on_checkpoint_cmd: str | None = None,
@@ -94,7 +94,7 @@ async def _run_local_eval(
     *,
     benchmark_type: str,
     evaluator_type: str,
-    model_base: str | None,
+    model_base: str,
     eval_limit: int | None,
 ) -> int:
     """Run benchmark evaluation locally via the CLI.  Returns exit code.
@@ -102,7 +102,7 @@ async def _run_local_eval(
     Uses the checkpoint path as the vLLM model target so each checkpoint
     is actually evaluated (not just the base model).
     """
-    model_target = f"vllm:{ckpt.path}" if model_base else "stub-worker"
+    model_target = f"vllm:{ckpt.path}"
 
     cmd = [
         "ergon",
@@ -154,8 +154,8 @@ async def evaluate_checkpoint(
     checkpoint_path: str,
     benchmark_type: str,
     *,
-    evaluator_type: str = "stub-rubric",
-    model_base: str | None = None,
+    evaluator_type: str,
+    model_base: str,
     eval_limit: int | None = None,
 ) -> int:
     """One-shot checkpoint evaluation.  Returns exit code."""

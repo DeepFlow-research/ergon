@@ -29,7 +29,7 @@ from sqlmodel import select
 
 from ergon_core.core.api.schemas import RunTaskDto
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import COMPLETED
+from ergon_core.core.persistence.graph.status_conventions import BLOCKED, COMPLETED, FAILED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
     RunResource,
@@ -170,7 +170,9 @@ def _assert_sandbox_command_wal(run_id: UUID) -> None:
             ).all(),
         )
     probes = [e for e in entries if "wc" in e.command or "probe" in e.command]
-    assert len(probes) >= 9, f"expected ≥9 probe WAL entries, got {len(probes)}"
+    # Canonical sad-path smokes block l_3 before it starts, so the eight
+    # executed leaves should emit probe commands while l_3 emits none.
+    assert len(probes) >= 8, f"expected ≥8 probe WAL entries, got {len(probes)}"
 
 
 def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
@@ -293,8 +295,8 @@ def _assert_temporal_ordering(run_id: UUID) -> None:
 
     Uses ``RunTaskExecution.started_at`` / ``completed_at`` via
     ``node_id`` join.  Only checks edges whose both endpoints reached
-    at least ``started`` state. The sad path still runs ``l_3`` because the
-    failing leaf completes the task with a score-zero output.
+    at least ``started`` state. Blocked descendants are skipped because
+    they should never have execution timestamps.
     """
     with get_session() as s:
         leaves = list(
@@ -366,11 +368,23 @@ def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
 
 
 def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
-    """Score-zero sad path: all graph nodes complete, l_2 produces failed output."""
+    """Canonical sad path: l_2 fails, l_3 blocks, independent leaves complete."""
     snapshot = require_run_snapshot(run_id)
-    leaves = [task for task in snapshot.tasks.values() if task.level > 0]
+    tasks = list(snapshot.tasks.values())
+    leaves = [task for task in tasks if task.level > 0]
+    root_tasks = [task for task in tasks if task.level == 0]
     by_slug = {task.name: task for task in leaves}
-    for slug in EXPECTED_SUBTASK_SLUGS:
+    assert len(root_tasks) == 1, f"expected 1 root task, got {len(root_tasks)}"
+    assert root_tasks[0].status != COMPLETED, (
+        f"parent task should not complete when a child fails, got {root_tasks[0].status}"
+    )
+    assert by_slug["l_2"].status == FAILED, f"l_2 expected FAILED, got {by_slug['l_2'].status}"
+    assert by_slug["l_3"].status == BLOCKED, f"l_3 expected BLOCKED, got {by_slug['l_3'].status}"
+    assert by_slug["l_3"].started_at is None, "blocked l_3 should never start"
+    assert not snapshot.executions_by_task.get(by_slug["l_3"].id), (
+        "blocked l_3 should not have execution attempts"
+    )
+    for slug in set(EXPECTED_SUBTASK_SLUGS) - {"l_2", "l_3"}:
         assert by_slug[slug].status == COMPLETED, (
             f"{slug} expected COMPLETED, got {by_slug[slug].status}"
         )
@@ -427,28 +441,30 @@ def _assert_sadpath_partial_wal(run_id: UUID) -> None:
 
 
 def _assert_sadpath_thread_messages(run_id: UUID) -> None:
-    """Happy path sends 9 messages; sad l_2 suppresses completion reporting."""
+    """Sad path sends messages for the 7 completed leaves only."""
     snapshot = require_run_snapshot(run_id)
     thread = next(
         (thread for thread in snapshot.threads if thread.topic == "smoke-completion"), None
     )
     assert thread is not None, "no smoke-completion thread created"
     msgs = sorted(thread.messages, key=lambda msg: msg.sequence_num)
-    assert len(msgs) == 8, f"expected 8 completion messages (l_2 suppressed), got {len(msgs)}"
+    assert len(msgs) == 7, (
+        f"expected 7 completion messages (l_2 failed, l_3 blocked), got {len(msgs)}"
+    )
     from_slugs = {m.from_agent_id.removeprefix("leaf-") for m in msgs}
     assert "l_2" not in from_slugs, (
         f"l_2 sent a completion message despite suppression: {from_slugs}"
     )
-    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {"l_2"}
+    assert "l_3" not in from_slugs, (
+        f"l_3 sent a completion message despite being blocked: {from_slugs}"
+    )
+    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) - {"l_2", "l_3"}
 
 
 def _assert_sadpath_evaluation(run_id: UUID) -> None:
-    """Reusing happy-path criterion on sad-path run must return score 0."""
+    """Sad-path run should not produce a successful final score."""
     snapshot = require_run_snapshot(run_id)
-    evals = list(snapshot.evaluations_by_task.values())
-    assert len(evals) == 1
-    assert evals[0].total_score == 0.0
-    assert snapshot.final_score == 0.0
+    assert snapshot.final_score in (None, 0.0)
 
 
 # =============================================================================

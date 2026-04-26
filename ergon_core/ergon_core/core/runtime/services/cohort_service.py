@@ -9,6 +9,7 @@ from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohortStatus,
     RunRecord,
 )
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.runtime.services.cohort_schemas import (
     CohortDetailDto,
     CohortRunRowDto,
@@ -17,7 +18,7 @@ from ergon_core.core.runtime.services.cohort_schemas import (
     UpdateCohortRequest,
 )
 from ergon_core.core.utils import utcnow
-from sqlmodel import select
+from sqlmodel import func, select
 
 
 class ExperimentCohortService:
@@ -79,7 +80,22 @@ class ExperimentCohortService:
             runs = list(
                 session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort_id)).all()
             )
-            run_rows = [self._build_run_row(cohort, run) for run in runs]
+            task_counts = (
+                {
+                    run_id: count
+                    for run_id, count in session.exec(
+                        select(RunGraphNode.run_id, func.count(RunGraphNode.id))
+                        .where(RunGraphNode.run_id.in_([run.id for run in runs]))
+                        .group_by(RunGraphNode.run_id)
+                    ).all()
+                }
+                if runs
+                else {}
+            )
+            run_rows = [
+                self._build_run_row(cohort, run, int(task_counts.get(run.id, 0)) or None)
+                for run in runs
+            ]
             return CohortDetailDto(summary=summary, runs=run_rows)
 
     def get_summary(self, cohort_id: UUID) -> CohortSummaryDto | None:
@@ -143,7 +159,11 @@ class ExperimentCohortService:
         )
 
     @staticmethod
-    def _build_run_row(cohort: ExperimentCohort, run: RunRecord) -> CohortRunRowDto:
+    def _build_run_row(
+        cohort: ExperimentCohort,
+        run: RunRecord,
+        total_tasks: int | None = None,
+    ) -> CohortRunRowDto:
         running_time_ms: int | None = None
         if run.started_at is not None:
             end_time = run.completed_at or utcnow()
@@ -152,7 +172,11 @@ class ExperimentCohortService:
         score: float | None = None
         summary = run.parsed_summary()
         if summary:
-            score = summary.get("normalized_score") or summary.get("final_score")
+            raw_score = summary.get("normalized_score")
+            if raw_score is None:
+                raw_score = summary.get("final_score")
+            score = float(raw_score) if isinstance(raw_score, int | float) else None
+        total_cost_usd = summary.get("total_cost_usd") if summary else None
 
         return CohortRunRowDto(
             run_id=run.id,
@@ -165,6 +189,10 @@ class ExperimentCohortService:
             completed_at=run.completed_at,
             running_time_ms=running_time_ms,
             final_score=score,
+            total_tasks=total_tasks,
+            total_cost_usd=(
+                float(total_cost_usd) if isinstance(total_cost_usd, int | float) else None
+            ),
             error_message=run.error_message,
         )
 

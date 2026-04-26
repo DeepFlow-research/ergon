@@ -19,6 +19,7 @@ from typing import ClassVar, final
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
 from ergon_core.api.generation import GenerationTurn, TextPart
+from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
@@ -60,6 +61,10 @@ class SmokeWorkerBase(Worker):
     # Driver asserts per-run GenerationTurn count against this constant
     # (see tests/e2e/_asserts.py ``_assert_run_turn_counts``).
     PARENT_TURN_COUNT: ClassVar[int] = 3
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._last_child_statuses: dict[str, str] = {}
 
     @final
     async def execute(
@@ -138,8 +143,23 @@ class SmokeWorkerBase(Worker):
                     parent_node_id=context.node_id,
                 )
             if children and all(c.status in _CHILD_WAIT_TERMINAL_STATUSES for c in children):
+                self._last_child_statuses = {c.task_slug: c.status for c in children}
                 break
             await asyncio.sleep(2)
+
+    def get_output(self, context: WorkerContext) -> WorkerOutput:
+        non_completed = {
+            slug: status
+            for slug, status in self._last_child_statuses.items()
+            if status != "completed"
+        }
+        if non_completed:
+            return WorkerOutput(
+                output=f"child tasks did not all complete: {non_completed}",
+                success=False,
+                metadata={"child_statuses": self._last_child_statuses},
+            )
+        return super().get_output(context)
 
     def _spec_for(
         self,

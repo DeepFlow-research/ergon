@@ -103,6 +103,10 @@ function normalizeSandboxCommandState(command: RunSandboxCommand): SandboxComman
   };
 }
 
+export function shouldRequestSocketSnapshot(hasHydratedRunState: boolean): boolean {
+  return !hasHydratedRunState;
+}
+
 export function useRunState(
   runId: string,
   initialRunState: SerializedWorkflowRunState | null = null,
@@ -501,17 +505,21 @@ export function useRunState(
       setIsSubscribed(true);
       setIsLoading((prev) => (hasRunStateRef.current ? false : prev));
 
-      // Request full run state from server
-      console.log("[useRunState] Requesting full state for run", runId, "socket.connected:", socket.connected);
-      socket.emit("request:run", runId);
-      
-      // Set up a retry in case the first request is lost
-      retryTimeout = setTimeout(() => {
-        if (socket.connected) {
-          console.log("[useRunState] Retrying request:run for", runId);
-          socket.emit("request:run", runId);
-        }
-      }, 1000);
+      if (shouldRequestSocketSnapshot(hasRunStateRef.current)) {
+        // Request full run state only when REST/SSR did not hydrate us.
+        console.log("[useRunState] Requesting full state for run", runId, "socket.connected:", socket.connected);
+        socket.emit("request:run", runId);
+
+        // Set up a retry in case the first request is lost
+        retryTimeout = setTimeout(() => {
+          if (socket.connected && shouldRequestSocketSnapshot(hasRunStateRef.current)) {
+            console.log("[useRunState] Retrying request:run for", runId);
+            socket.emit("request:run", runId);
+          }
+        }, 1000);
+      } else {
+        console.log("[useRunState] Skipping full socket state request; REST/SSR snapshot is already loaded", runId);
+      }
     }
 
     // Set up event listeners

@@ -1,3 +1,4 @@
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -94,11 +95,16 @@ async def test_static_teardown_closes_registered_smoke_sandbox() -> None:
 
     try:
         sandbox_id = await manager.create(task_id, run_id=run_id)
+        tempdir = SmokeSandboxManager._tempdirs[task_id]
+        tempdir_path = Path(tempdir.name)
 
         terminated = await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
 
         assert terminated is True
         assert manager.get_sandbox(task_id) is None
+        assert sandbox_id not in SmokeSandboxManager._sandbox_ids
+        assert task_id not in SmokeSandboxManager._tempdirs
+        assert not tempdir_path.exists()
         assert sink.closed == [(str(run_id), sandbox_id)]
     finally:
         SmokeSandboxManager.set_event_sink(NoopSandboxEventSink())

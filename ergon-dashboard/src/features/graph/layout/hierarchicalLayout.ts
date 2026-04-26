@@ -239,6 +239,7 @@ export function computeHierarchicalLayout(
   selectedTaskId?: string | null,
   direction: "TB" | "LR" = "LR",
   newNodeIds: ReadonlySet<string> = new Set(),
+  highlightedTaskIds: ReadonlySet<string> = new Set(),
 ): LayoutedGraph {
   const containerDimensions = new Map<string, ContainerDimensions>();
   const allNodes: TaskNodeType[] = [];
@@ -340,6 +341,7 @@ export function computeHierarchicalLayout(
       const localPos = localPositions.get(cid) ?? { x: 0, y: 0 };
       const isMatch = !searchLower || matchingNodeIds.has(cid);
 
+      const childContainerDimensions = containerDimensions.get(cid);
       allNodes.push({
         id: cid,
         type: "taskNode",
@@ -354,11 +356,19 @@ export function computeHierarchicalLayout(
           onClick: onTaskClick,
           selected: cid === selectedTaskId,
           dimmed: searchLower ? !isMatch : false,
-          highlighted: searchLower ? isMatch : false,
+          highlighted: (searchLower ? isMatch : false) || highlightedTaskIds.has(cid),
           isNew: newNodeIds.has(cid),
           maxGraphDepth,
           graphLayoutDirection: direction,
         },
+        ...(expandedContainers.has(cid) && childContainerDimensions
+          ? {
+              style: {
+                width: childContainerDimensions.width,
+                height: childContainerDimensions.height,
+              },
+            }
+          : {}),
       });
     }
 
@@ -461,7 +471,7 @@ export function computeHierarchicalLayout(
         onClick: onTaskClick,
         selected: taskId === selectedTaskId,
         dimmed: searchLower ? !isMatch : false,
-        highlighted: searchLower ? isMatch : false,
+        highlighted: (searchLower ? isMatch : false) || highlightedTaskIds.has(taskId),
         isNew: newNodeIds.has(taskId),
         maxGraphDepth,
         graphLayoutDirection: direction,

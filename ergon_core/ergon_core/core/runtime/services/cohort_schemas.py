@@ -50,6 +50,8 @@ class CohortRunRowDto(BaseModel):
     completed_at: datetime | None = None
     running_time_ms: int | None = None
     final_score: float | None = None
+    total_tasks: int | None = None
+    total_cost_usd: float | None = None
     error_message: str | None = None
 
 

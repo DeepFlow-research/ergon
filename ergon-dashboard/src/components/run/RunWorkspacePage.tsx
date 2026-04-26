@@ -5,19 +5,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { RunStatusBar } from "@/components/run/RunStatusBar";
+
 import { UnifiedEventStream } from "@/components/run/UnifiedEventStream";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
-import { MutationTimeline } from "@/features/graph/components/MutationTimeline";
+import { ActivityStackTimeline } from "@/features/activity/components/ActivityStackTimeline";
+import { buildRunActivities } from "@/features/activity/buildRunActivities";
+import { resolveActivitySnapshotSequence } from "@/features/activity/snapshotSequence";
+import type { RunActivity } from "@/features/activity/types";
 import {
   parseGraphMutationDtoArray,
   type GraphMutationDto,
 } from "@/features/graph/contracts/graphMutations";
-import { replayToSequence } from "@/features/graph/state/graphMutationReducer";
+import { createReplayInitialState, replayToSequence } from "@/features/graph/state/graphMutationReducer";
 import { useCohortDetail } from "@/hooks/useCohortDetail";
 import { useRunState } from "@/hooks/useRunState";
 import { buildRunEvents } from "@/lib/runEvents";
-import type { WorkflowRunState } from "@/lib/types";
 import { CohortDetail, RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus } from "@/lib/types";
 
 function formatSeconds(value: number | null): string {
@@ -31,75 +33,105 @@ function formatPercent(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function nearestMutationAtOrBefore(
+  mutations: GraphMutationDto[],
+  sequence: number,
+): GraphMutationDto | null {
+  let selected: GraphMutationDto | null = null;
+  for (const mutation of mutations) {
+    if (mutation.sequence > sequence) break;
+    selected = mutation;
+  }
+  return selected ?? mutations[0] ?? null;
+}
+
 export function RunWorkspacePage({
   runId,
   cohortId,
   initialRunState = null,
   initialCohortDetail = null,
+  ssrError = null,
 }: {
   runId: string;
   cohortId?: string;
   initialRunState?: SerializedWorkflowRunState | null;
   initialCohortDetail?: CohortDetail | null;
+  ssrError?: string | null;
 }) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
-  const [isStreamOpen, setIsStreamOpen] = useState(true);
+  const [isStreamOpen, setIsStreamOpen] = useState(false);
   const { runState, isLoading, error, isSubscribed } = useRunState(runId, initialRunState);
   const { detail } = useCohortDetail(cohortId ?? "", initialCohortDetail);
 
-  // Timeline playback state
-  const [timelineMode, setTimelineMode] = useState<"live" | "timeline">("live");
-  const [currentSequence, setCurrentSequence] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  // A null snapshot means the graph follows live state; a sequence replays
+  // mutations to that point.
+  const [snapshotSequence, setSnapshotSequence] = useState<number | null>(null);
+  const currentSequence = snapshotSequence ?? 0;
   const [mutations, setMutations] = useState<GraphMutationDto[]>([]);
-  const snapshotCache = useRef(new Map<number, WorkflowRunState>());
+  const requestedSequenceRef = useRef<number | null>(null);
+  const pendingActivityResolutionRef = useRef<RunActivity | null>(null);
+  const selectedActivityIdRef = useRef<string | null>(null);
+  const mutationsLoadedRef = useRef(false);
 
-  // Fetch mutations when entering timeline mode
   useEffect(() => {
-    if (timelineMode !== "timeline") return;
+    selectedActivityIdRef.current = selectedActivityId;
+  }, [selectedActivityId]);
+
+  // Fetch mutations once per run load so snapshot selection is always ready.
+  useEffect(() => {
     let cancelled = false;
+    mutationsLoadedRef.current = false;
+    pendingActivityResolutionRef.current = null;
     fetch(`/api/runs/${runId}/mutations`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
         const parsed = parseGraphMutationDtoArray(data);
+        mutationsLoadedRef.current = true;
         setMutations(parsed);
-        snapshotCache.current.clear();
-        setCurrentSequence(
-          parsed.length > 0 ? parsed[parsed.length - 1].sequence : 0,
-        );
+        const requestedSequence = requestedSequenceRef.current;
+        requestedSequenceRef.current = null;
+        if (requestedSequence !== null) {
+          setSnapshotSequence(nearestMutationAtOrBefore(parsed, requestedSequence)?.sequence ?? null);
+          return;
+        }
+
+        const pendingActivity = pendingActivityResolutionRef.current;
+        pendingActivityResolutionRef.current = null;
+        if (pendingActivity && selectedActivityIdRef.current === pendingActivity.id) {
+          const sequence = resolveActivitySnapshotSequence(pendingActivity, parsed);
+          const resolvedSequence =
+            sequence === null
+              ? null
+              : (nearestMutationAtOrBefore(parsed, sequence)?.sequence ?? sequence);
+          setSnapshotSequence(resolvedSequence);
+        }
       })
       .catch(() => {
-        if (!cancelled) setMutations([]);
+        if (cancelled) return;
+        mutationsLoadedRef.current = true;
+        pendingActivityResolutionRef.current = null;
+        setMutations([]);
       });
     return () => {
       cancelled = true;
     };
-  }, [timelineMode, runId]);
+  }, [runId]);
 
-  // Build display state: replay for timeline mode, live state otherwise
+  // Build display state: replay only for an explicit snapshot; otherwise live.
   const displayState = useMemo(() => {
-    if (timelineMode === "live" || mutations.length === 0) return runState;
+    if (snapshotSequence === null || mutations.length === 0) return runState;
     if (!runState) return runState;
-    const emptyState: WorkflowRunState = {
-      ...runState,
-      tasks: new Map(),
-      totalTasks: 0,
-      totalLeafTasks: 0,
-      completedTasks: 0,
-      runningTasks: 0,
-      failedTasks: 0,
-    };
+    const replayBaseState = createReplayInitialState(runState, mutations, snapshotSequence);
     return replayToSequence(
       mutations,
-      currentSequence,
-      emptyState,
-      snapshotCache.current,
+      snapshotSequence,
+      replayBaseState,
     );
-  }, [timelineMode, runState, mutations, currentSequence]);
+  }, [runState, mutations, snapshotSequence]);
 
   const runRow = useMemo(() => {
     if (!cohortId || !detail) return null;
@@ -111,9 +143,9 @@ export function RunWorkspacePage({
     return displayState.tasks.get(selectedTaskId) ?? null;
   }, [displayState, selectedTaskId]);
 
-  // D7: status counts for the RunStatusBar. Only leaf tasks so the totals
+  // Status counts shown in the run header. Only leaf tasks so the totals
   // match the "units of work" the user is tracking (parents double-count).
-  const { leafStatusCounts, leafTotal } = useMemo(() => {
+  const { leafStatusCounts } = useMemo(() => {
     const empty: Record<TaskStatus, number> = {
       [TaskStatus.PENDING]: 0,
       [TaskStatus.READY]: 0,
@@ -132,12 +164,42 @@ export function RunWorkspacePage({
     return { leafStatusCounts: empty, leafTotal: total };
   }, [displayState]);
 
-  // D4: Unified event log — derived from displayState so timeline scrubbing
-  // trims the feed in lockstep.
+  // D4: Unified event log for the replayed inspector view.
   const events = useMemo(() => buildRunEvents(displayState), [displayState]);
+  // Trace spans are an immutable map of the full run. Replay moves the cursor
+  // over this map; it should not relayout or clip completed spans.
+  const traceEvents = useMemo(() => buildRunEvents(runState), [runState]);
 
-  // D7: keyboard shortcuts — Esc closes selection, `t` toggles timeline,
-  // `e` toggles event stream, `1-6` filters by lifecycle status.
+  const activities = useMemo(
+    () =>
+      buildRunActivities({
+        runState,
+        events: traceEvents,
+        mutations,
+        currentSequence: snapshotSequence,
+      }),
+    [runState, traceEvents, mutations, snapshotSequence],
+  );
+
+  const selectedActivity = useMemo(
+    () => activities.find((activity) => activity.id === selectedActivityId) ?? null,
+    [activities, selectedActivityId],
+  );
+
+  const selectedTimelineTime = useMemo(() => {
+    if (snapshotSequence === null) return null;
+    return nearestMutationAtOrBefore(mutations, snapshotSequence)?.created_at ?? null;
+  }, [mutations, snapshotSequence]);
+
+  const highlightedTaskIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (selectedTaskId) ids.add(selectedTaskId);
+    if (selectedActivity?.taskId) ids.add(selectedActivity.taskId);
+    return ids;
+  }, [selectedActivity, selectedTaskId]);
+
+  // D7: keyboard shortcuts — Esc unwinds UI state, `e` toggles event stream,
+  // `1-6` filters by lifecycle status.
   useEffect(() => {
     const STATUS_ORDER: TaskStatus[] = [
       TaskStatus.PENDING,
@@ -155,20 +217,36 @@ export function RunWorkspacePage({
           return;
         }
       }
+
       if (e.key === "Escape") {
-        if (selectedTaskId) setSelectedTaskId(null);
-        else if (statusFilter) setStatusFilter(null);
+        if (selectedTaskId) { setSelectedTaskId(null); return; }
+        if (snapshotSequence !== null) { setSnapshotSequence(null); return; }
+        if (statusFilter) { setStatusFilter(null); return; }
         return;
       }
-      if (e.key === "t" || e.key === "T") {
-        setTimelineMode((prev) => (prev === "live" ? "timeline" : "live"));
-        if (timelineMode === "timeline") setIsPlaying(false);
-        return;
-      }
+
       if (e.key === "e" || e.key === "E") {
         setIsStreamOpen((prev) => !prev);
         return;
       }
+
+      if (e.key === "ArrowLeft" && snapshotSequence !== null) {
+        const idx = mutations.findIndex((m) => m.sequence === snapshotSequence);
+        if (idx > 0) setSnapshotSequence(mutations[idx - 1].sequence);
+        return;
+      }
+      if (e.key === "ArrowRight" && snapshotSequence !== null) {
+        const idx = mutations.findIndex((m) => m.sequence === snapshotSequence);
+        if (idx >= 0 && idx < mutations.length - 1) setSnapshotSequence(mutations[idx + 1].sequence);
+        return;
+      }
+
+      if ((e.key === "d" || e.key === "D") && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (selectedTaskId) setSelectedTaskId(null);
+        return;
+      }
+
       const idx = Number(e.key) - 1;
       if (!Number.isNaN(idx) && idx >= 0 && idx < STATUS_ORDER.length) {
         const next = STATUS_ORDER[idx];
@@ -177,7 +255,7 @@ export function RunWorkspacePage({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [selectedTaskId, statusFilter, timelineMode]);
+  }, [selectedTaskId, statusFilter, mutations, snapshotSequence]);
 
   useEffect(() => {
     if (!selectedTaskId || !displayState) return;
@@ -192,164 +270,165 @@ export function RunWorkspacePage({
 
   const handleTaskClick = (taskId: string) => {
     setSelectionNotice(null);
+    pendingActivityResolutionRef.current = null;
+    selectedActivityIdRef.current = null;
+    setSelectedActivityId(null);
     setSelectedTaskId((prev) => (prev === taskId ? null : taskId));
   };
 
+  const handleSequenceChange = (sequence: number) => {
+    pendingActivityResolutionRef.current = null;
+    const mutation = nearestMutationAtOrBefore(mutations, sequence);
+    setSnapshotSequence(mutation?.sequence ?? sequence);
+  };
+
+  const handleActivityClick = (activity: RunActivity) => {
+    setSelectionNotice(null);
+    requestedSequenceRef.current = null;
+    selectedActivityIdRef.current = activity.id;
+    setSelectedActivityId(activity.id);
+    const sequence = resolveActivitySnapshotSequence(activity, mutations);
+    if (sequence !== null) {
+      handleSequenceChange(sequence);
+    } else {
+      setSnapshotSequence(null);
+      pendingActivityResolutionRef.current = mutationsLoadedRef.current ? null : activity;
+    }
+    if (activity.taskId) {
+      setSelectedTaskId(activity.taskId);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--paper)] text-[var(--ink)]">
+      {/* Run header strip */}
       <header
-        className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+        className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--card)] px-8 py-3"
         data-testid="run-header"
       >
-        <div className="w-full px-6 py-5">
-          <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-            <Link href="/" className="hover:text-gray-900 dark:hover:text-white">
-              Experiment Cohorts
-            </Link>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
+            <Link href="/" className="hover:text-[var(--ink)]">Cohorts</Link>
+            <span>›</span>
             {cohortId && (
               <>
-                <span>/</span>
                 <Link
                   href={`/cohorts/${cohortId}`}
-                  className="hover:text-gray-900 dark:hover:text-white"
+                  className="max-w-[180px] truncate hover:text-[var(--ink)]"
                   data-testid="run-breadcrumb-cohort"
                 >
                   {detail?.summary.name ?? "Cohort"}
                 </Link>
+                <span>›</span>
               </>
             )}
-            <span>/</span>
-            <span className="font-mono text-gray-700 dark:text-gray-200">{runId.slice(0, 8)}...</span>
+            <span className="font-mono text-[var(--ink)]">{runId.slice(0, 8)}…</span>
           </div>
+          <div className="mt-1.5 flex items-center gap-3">
+            <h1 className="max-w-[340px] truncate font-mono text-xl font-semibold tracking-[-0.02em]">
+              {runState?.name ?? runRow?.run_id ?? "Run"}
+            </h1>
+            <StatusBadge status={status as RunLifecycleStatus} />
+            <span className="rounded bg-[var(--paper-2)] px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
+              {snapshotSequence === null ? "live" : `snapshot · seq ${snapshotSequence}`} · {formatSeconds(runState?.durationSeconds ?? null)}
+            </span>
+          </div>
+        </div>
 
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex shrink-0 items-center gap-3">
+          {/* Key metrics */}
+          <div className="hidden items-center gap-5 border-r border-[var(--line)] pr-3 lg:flex">
             <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
-                  {runState?.name ?? runRow?.run_id ?? "Run"}
-                </h1>
-                <StatusBadge status={status as RunLifecycleStatus} />
-                <div
-                  role="tablist"
-                  aria-label="Run view mode"
-                  className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-xs font-medium dark:border-gray-700 dark:bg-gray-800"
-                >
-                  {(["live", "timeline"] as const).map((mode) => {
-                    const active = timelineMode === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        onClick={() => {
-                          if (mode === timelineMode) return;
-                          setTimelineMode(mode);
-                          if (mode === "live") setIsPlaying(false);
-                        }}
-                        className={`rounded-md px-3 py-1 transition-colors ${
-                          active
-                            ? "bg-indigo-600 text-white shadow-sm"
-                            : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
-                        }`}
-                        data-testid={`mode-${mode}`}
-                      >
-                        {mode === "live" ? "Live" : "Timeline"}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsStreamOpen((p) => !p)}
-                  aria-pressed={isStreamOpen}
-                  className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                    isStreamOpen
-                      ? "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900"
-                      : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-                  }`}
-                  title="Toggle event stream (e)"
-                  data-testid="event-stream-toggle"
-                >
-                  {isStreamOpen ? "Hide events" : "Show events"}
-                </button>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
-                <span>Workflow: {runState?.name ?? "—"}</span>
-                <span suppressHydrationWarning>Started: {runState?.startedAt ? new Date(runState.startedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" }) : "—"}</span>
-              </div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Tasks</div>
+              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-tasks">
+                {leafStatusCounts[TaskStatus.COMPLETED]}·{leafStatusCounts[TaskStatus.RUNNING]}·{leafStatusCounts[TaskStatus.READY]}·{leafStatusCounts[TaskStatus.PENDING]}
+              </span>
             </div>
-
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                <dt className="text-xs text-gray-500 dark:text-gray-400">Runtime</dt>
-                <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatSeconds(runState?.durationSeconds ?? (runRow?.running_time_ms != null ? runRow.running_time_ms / 1000 : null))}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                <dt className="text-xs text-gray-500 dark:text-gray-400">Score</dt>
-                <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatPercent(runState?.finalScore ?? runRow?.final_score ?? null)}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                <dt className="text-xs text-gray-500 dark:text-gray-400">Tasks</dt>
-                <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {runState?.totalTasks ?? "—"}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                <dt className="text-xs text-gray-500 dark:text-gray-400">Failed tasks</dt>
-                <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {runState?.failedTasks ?? "—"}
-                </dd>
-              </div>
-            </dl>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Tokens</div>
+              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-tokens">—</span>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Cost</div>
+              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-cost">—</span>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Score</div>
+              <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-score">
+                {formatPercent(runState?.finalScore ?? runRow?.final_score ?? null)}
+              </span>
+            </div>
           </div>
 
-          {leafTotal > 0 && (
-            <div className="mt-4">
-              <RunStatusBar
-                counts={leafStatusCounts}
-                total={leafTotal}
-                activeFilter={statusFilter}
-                onFilter={setStatusFilter}
-              />
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setIsStreamOpen((p) => !p)}
+            aria-pressed={isStreamOpen}
+            className={`rounded-[7px] px-2.5 py-1 text-xs font-medium transition-colors ${
+              isStreamOpen
+                ? "bg-[var(--ink)] text-[var(--paper)]"
+                : "border border-[var(--line)] bg-[var(--card)] text-[var(--muted)] hover:bg-[var(--paper-2)]"
+            }`}
+            title="Toggle event stream (e)"
+            data-testid="event-stream-toggle"
+          >
+            {isStreamOpen ? "Hide events" : "Event tracks"}
+          </button>
 
-          {error && (
-            <div
-              className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300"
-              data-testid="run-staleness-banner"
-            >
-              {error}
-            </div>
-          )}
+          <button
+            type="button"
+            disabled
+            title="Re-run is not wired yet: no dashboard API endpoint exists for cloning or dispatching a run."
+            data-testid="rerun-button"
+            className="cursor-not-allowed rounded-[7px] border border-[var(--line)] bg-[var(--paper-2)] px-3 py-1 text-xs font-medium text-[var(--muted)] opacity-60"
+          >
+            Re-run unavailable
+          </button>
+          <button
+            type="button"
+            className="rounded-[7px] border-transparent bg-transparent px-2 py-1 text-xs text-[var(--muted)]"
+          >
+            ⋯
+          </button>
         </div>
       </header>
 
-      <main
-        className={`flex-1 w-full gap-6 px-6 py-6 ${
-          isInspectorOpen
-            ? "grid xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]"
-            : "space-y-6"
-        }`}
+      {ssrError && (
+        <div
+          className="mx-4 mt-2 rounded-[var(--radius-sm)] border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+          data-testid="ssr-error-banner"
+        >
+          <span className="mr-1.5 font-semibold">Server-side error:</span>
+          {ssrError}
+        </div>
+      )}
+
+      {error && !ssrError && (
+        <div
+          className="mx-4 mt-2 rounded-[var(--radius-sm)] border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
+          data-testid="run-staleness-banner"
+        >
+          {error}
+        </div>
+      )}
+
+      <main className="relative min-h-0 flex-1 overflow-hidden"
       >
         {selectionNotice && (
           <div
-            className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 xl:col-span-2"
+            className="absolute left-4 right-4 top-2 z-40 rounded-[var(--radius-sm)] border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
             data-testid="selection-reset-notice"
           >
             {selectionNotice}
           </div>
         )}
         <section
-          className={`min-h-[72vh] rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 ${
-            isInspectorOpen ? "xl:h-full xl:min-h-0" : "h-[78vh]"
-          }`}
+          className="absolute inset-0 overflow-hidden transition-[padding] duration-300 ease-out"
           data-testid="graph-region"
+          style={{
+            bottom: activities.length > 0 ? 300 : 0,
+            paddingRight: isInspectorOpen ? 476 : 0,
+          }}
         >
           <DAGCanvas
             runId={runId}
@@ -359,29 +438,29 @@ export function RunWorkspacePage({
             isSubscribed={isSubscribed}
             onTaskClick={handleTaskClick}
             selectedTaskId={selectedTaskId}
+            highlightedTaskIds={highlightedTaskIds}
           />
         </section>
 
-        {timelineMode === "timeline" && mutations.length > 0 && (
+        {activities.length > 0 && (
           <section
-            className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 xl:col-span-2"
+            className="absolute inset-x-0 bottom-0 z-30 h-[300px] overflow-auto border-t border-[var(--line)] bg-[var(--card)]"
             data-testid="timeline-region"
           >
-            <MutationTimeline
+            <ActivityStackTimeline
+              activities={activities}
               mutations={mutations}
               currentSequence={currentSequence}
-              onSequenceChange={setCurrentSequence}
-              isPlaying={isPlaying}
-              onTogglePlay={() => setIsPlaying((p) => !p)}
-              speed={playbackSpeed}
-              onSpeedChange={setPlaybackSpeed}
+              selectedTaskId={selectedTaskId}
+              selectedActivityId={selectedActivityId}
+              onActivityClick={handleActivityClick}
             />
           </section>
         )}
 
         {isStreamOpen && events.length > 0 && (
           <section
-            className="min-h-[40vh] rounded-3xl border border-gray-200 bg-white p-0 dark:border-gray-800 dark:bg-gray-900 xl:col-span-2 xl:row-start-3"
+            className="absolute bottom-4 left-4 z-20 max-h-[44vh] w-[520px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-pop"
             data-testid="event-stream-region"
           >
             <UnifiedEventStream
@@ -393,46 +472,48 @@ export function RunWorkspacePage({
                 setSelectedTaskId(id);
               }}
               onSequenceClick={(seq) => {
-                if (timelineMode !== "timeline") setTimelineMode("timeline");
-                setCurrentSequence(seq);
+                requestedSequenceRef.current = seq;
+                handleSequenceChange(seq);
               }}
             />
           </section>
         )}
 
         {isInspectorOpen ? (
-          <section className="min-h-[72vh] xl:h-full xl:min-h-0" data-testid="workspace-region">
+          <section
+            className="animate-drawer-enter absolute bottom-4 right-4 top-4 z-20 w-[460px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-pop"
+            data-testid="workspace-region"
+          >
             <TaskWorkspace
               runState={displayState}
               taskId={selectedTaskId}
               error={error}
               onClearSelection={() => setSelectedTaskId(null)}
               onJumpToSequence={(seq) => {
-                if (timelineMode !== "timeline") setTimelineMode("timeline");
-                setCurrentSequence(seq);
+                requestedSequenceRef.current = seq;
+                handleSequenceChange(seq);
               }}
+              selectedTime={selectedTimelineTime}
+              selectedSequence={snapshotSequence}
+              selectedActivity={selectedActivity}
             />
           </section>
         ) : (
           <section
-            className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-8 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+            className="pointer-events-none absolute bottom-4 right-4 z-10 w-[260px] rounded-[var(--radius)] border border-dashed border-[var(--line-strong)] bg-white/80 px-4 py-3 text-xs text-[var(--muted)]"
             data-testid="workspace-launcher"
           >
             <div className="max-w-3xl space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
                 Task inspection
               </div>
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                Graph first, then open a focused task workspace
+              <h2 className="text-sm font-semibold text-[var(--ink)]">
+                Click node → workspace drawer
               </h2>
-              <p>
-                Select a task node to inspect its outputs, execution attempts, actions,
-                communication, and evaluation without keeping the entire page in a cramped
-                permanent split view.
-              </p>
+              <p>State, outputs, turns, and evals appear scoped to the selected sequence.</p>
               {selectedTask && (
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                  Ready to inspect <span className="font-semibold text-gray-900 dark:text-white">{selectedTask.name}</span>.
+                <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
+                  Ready to inspect <span className="font-semibold text-[var(--ink)]">{selectedTask.name}</span>.
                 </div>
               )}
             </div>

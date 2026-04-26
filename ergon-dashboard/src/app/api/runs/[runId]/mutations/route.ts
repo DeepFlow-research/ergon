@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { config } from "@/lib/config";
 import { fetchErgonApi } from "@/lib/serverApi";
+import { getHarnessRunMutations } from "@/lib/testing/dashboardHarness";
 
 interface RouteContext {
   params: Promise<{
@@ -12,6 +14,12 @@ export async function GET(_request: Request, context: RouteContext) {
   const { runId } = await context.params;
 
   try {
+    if (config.enableTestHarness) {
+      const harnessMutations = getHarnessRunMutations(runId);
+      if (harnessMutations) {
+        return NextResponse.json(harnessMutations);
+      }
+    }
     const response = await fetchErgonApi(`/runs/${runId}/mutations`);
     const body = await response.json();
     if (response.ok) {

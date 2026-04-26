@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 
 def _reload_app_with(monkeypatch: pytest.MonkeyPatch, env_value: str | None):
+    monkeypatch.delenv("ERGON_STARTUP_PLUGINS", raising=False)
     if env_value is None:
         monkeypatch.delenv("ENABLE_TEST_HARNESS", raising=False)
     else:

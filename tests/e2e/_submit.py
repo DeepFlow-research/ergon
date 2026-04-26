@@ -7,13 +7,12 @@ Tests are a pure black-box client of the stack: they do not import any
 ergon internals, do not call ``build_experiment`` / ``create_run`` /
 ``inngest.send`` in-process, and do not register worker / evaluator
 slugs in the test process.  All of that lives inside the api container
-(see ``register_smoke_fixtures()`` called by ``app.py`` when
-``ENABLE_SMOKE_FIXTURES=1``).  Single source of truth for fixtures ⇒ no
-host / container staleness risk.
+(see ``ERGON_STARTUP_PLUGINS`` registering smoke fixtures in the API
+container).  Single source of truth for fixtures ⇒ no host / container
+staleness risk.
 
-Each slot can use a different ``(worker_slug, criterion_slug)`` pair —
-used by the researchrubrics leg which has 2 happy + 1 sad slot.  Empty
-slots list is valid (returns ``[]``) but unlikely in practice.
+Each slot can use a different ``(worker_slug, criterion_slug)`` pair.
+Empty slots list is valid (returns ``[]``) but unlikely in practice.
 """
 
 from __future__ import annotations

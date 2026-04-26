@@ -2,7 +2,8 @@
 
 Two durable steps:
 1. update-db-rows — mark execution CANCELLED (idempotent)
-2. release-sandbox — stub (pending sandbox management module)
+2. release-sandbox — routed through the sandbox lifecycle provider when an
+   execution has an associated sandbox.
 """
 
 import logging

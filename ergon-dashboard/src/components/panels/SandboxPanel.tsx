@@ -12,6 +12,7 @@
 
 import { useState } from "react";
 import { SandboxState, SandboxCommandState } from "@/lib/types";
+import { formatClockTimeSeconds } from "@/lib/timeFormat";
 
 interface SandboxPanelProps {
   sandbox: SandboxState | undefined;
@@ -30,13 +31,7 @@ function formatDuration(ms: number | null): string {
  * Format timestamp to time string.
  */
 function formatTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString("en-US", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  return formatClockTimeSeconds(timestamp);
 }
 
 interface CommandItemProps {
