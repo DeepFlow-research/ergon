@@ -8,7 +8,10 @@ from ergon_core.core.persistence.telemetry.evaluation_summary import (
     CriterionResultEntry,
     EvaluationSummary,
 )
-from ergon_core.core.persistence.telemetry.repositories import TelemetryRepository
+from ergon_core.core.persistence.telemetry.repositories import (
+    CreateTaskEvaluation,
+    TelemetryRepository,
+)
 from ergon_core.core.runtime.errors import ContractViolationError
 from ergon_core.core.runtime.services.rubric_evaluation_service import EvaluationServiceResult
 from pydantic import BaseModel
@@ -46,15 +49,17 @@ class EvaluationPersistenceService:
         try:
             evaluation = self.telemetry_repo.create_task_evaluation(
                 session,
-                run_id=run_id,
-                node_id=node_id,
-                task_execution_id=task_execution_id,
-                definition_task_id=definition_task_id,
-                definition_evaluator_id=evaluator_id,
-                score=result.score,
-                passed=result.passed,
-                feedback=result.feedback,
-                summary_json=summary.model_dump(mode="json"),
+                CreateTaskEvaluation(
+                    run_id=run_id,
+                    node_id=node_id,
+                    task_execution_id=task_execution_id,
+                    definition_task_id=definition_task_id,
+                    definition_evaluator_id=evaluator_id,
+                    score=result.score,
+                    passed=result.passed,
+                    feedback=result.feedback,
+                    summary_json=summary.model_dump(mode="json"),
+                ),
             )
             self.telemetry_repo.refresh_run_evaluation_summary(session, run_id)
             session.commit()
@@ -97,15 +102,17 @@ class EvaluationPersistenceService:
         try:
             self.telemetry_repo.create_task_evaluation(
                 session,
-                run_id=run_id,
-                node_id=node_id,
-                task_execution_id=task_execution_id,
-                definition_task_id=definition_task_id,
-                definition_evaluator_id=evaluator_id,
-                score=0.0,
-                passed=False,
-                feedback=f"{error_type}: {exc}",
-                summary_json=summary.model_dump(mode="json"),
+                CreateTaskEvaluation(
+                    run_id=run_id,
+                    node_id=node_id,
+                    task_execution_id=task_execution_id,
+                    definition_task_id=definition_task_id,
+                    definition_evaluator_id=evaluator_id,
+                    score=0.0,
+                    passed=False,
+                    feedback=f"{error_type}: {exc}",
+                    summary_json=summary.model_dump(mode="json"),
+                ),
             )
             self.telemetry_repo.refresh_run_evaluation_summary(session, run_id)
             session.commit()

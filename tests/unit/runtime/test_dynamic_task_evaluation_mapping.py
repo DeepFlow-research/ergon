@@ -1,10 +1,9 @@
-from inspect import signature
 from uuid import UUID, uuid4
 
 import pytest
 from ergon_core.core.api.runs import _task_keyed_evaluations
 from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
-from ergon_core.core.persistence.telemetry.repositories import TelemetryRepository
+from ergon_core.core.persistence.telemetry.repositories import CreateTaskEvaluation
 
 
 def _summary_json() -> dict:
@@ -63,6 +62,7 @@ def test_task_evaluation_requires_runtime_node_id() -> None:
 
 
 def test_create_task_evaluation_requires_runtime_node_id() -> None:
-    node_param = signature(TelemetryRepository.create_task_evaluation).parameters["node_id"]
+    node_field = CreateTaskEvaluation.model_fields["node_id"]
 
-    assert node_param.default is node_param.empty
+    assert node_field.annotation is UUID
+    assert node_field.is_required()

@@ -84,8 +84,12 @@ class InngestCriterionExecutor:
                         # the task's sandbox_id so ensure_sandbox prefers
                         # ``manager.reconnect(sandbox_id)`` over constructing
                         # a fresh sandbox when running cross-process.
-                        sandbox_id=None if not task_context.sandbox_id else task_context.sandbox_id,
+                        sandbox_id=task_context.sandbox_id,
                     ),
+                )
+
+                agent_reasoning = (
+                    "" if task_context.agent_reasoning is None else task_context.agent_reasoning
                 )
 
                 if isinstance(criterion, Criterion):
@@ -95,9 +99,9 @@ class InngestCriterionExecutor:
                         execution_id=self.execution_id,
                         task=task,
                         worker_result=WorkerOutput(
-                            output=task_context.agent_reasoning or "",
+                            output=agent_reasoning,
                         ),
-                        sandbox_id=task_context.sandbox_id or None,
+                        sandbox_id=task_context.sandbox_id,
                         runtime=runtime,
                     )
                     cr_result = await criterion.evaluate(eval_ctx)
