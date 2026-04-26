@@ -4,7 +4,7 @@ Gates:
   - Router is only mounted when ``ENABLE_TEST_HARNESS=1`` (caller-side in
     ``app.py``). When unset or ``0`` the include_router call is skipped and
     the routes do not exist at all.
-  - Write endpoints (Task 7) additionally require the ``X-Test-Secret`` header
+  - Write endpoints additionally require the ``X-Test-Secret`` header
     to match ``TEST_HARNESS_SECRET``. Absence of the env var = 500 (distinct
     from 401 bad secret) so misconfiguration is distinguishable from auth
     failure.
@@ -120,8 +120,7 @@ def _require_secret(
 ) -> None:
     """Gate write endpoints on ``TEST_HARNESS_SECRET``.
 
-    Wired to Task 7 write endpoints; unused in Task 6. Kept here so the
-    secret-gating contract is co-located with the DTOs and env-var policy.
+    Co-located with the DTOs and env-var policy for the test harness.
     """
     configured = os.environ.get("TEST_HARNESS_SECRET")
     if configured is None:
@@ -283,7 +282,7 @@ def read_cohort_runs(
 
 
 # ---------------------------------------------------------------------------
-# Write endpoints (Task 7) — gated on X-Test-Secret
+# Write endpoints — gated on X-Test-Secret
 # ---------------------------------------------------------------------------
 #
 # Schema reality vs. spec:

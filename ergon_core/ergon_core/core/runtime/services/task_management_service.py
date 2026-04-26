@@ -370,11 +370,9 @@ class TaskManagementService:
         EDGE_PENDING so that, when this node completes again, normal
         propagation re-satisfies them.
 
-        In this Phase 1 implementation, downstream invalidation is NOT
-        yet performed — Phase 2 wires in ``_invalidate_downstream`` which
-        cancels non-terminal downstream targets (their input is about to
-        change) and recurses into COMPLETED downstream targets (their
-        output is now stale).
+        Before own edges and status are reset, ``_invalidate_downstream``
+        cancels non-terminal downstream targets (stale input) and
+        recurses into COMPLETED downstream targets (stale output).
         """
         node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
         old_status = node.status
@@ -382,8 +380,6 @@ class TaskManagementService:
         if old_status not in TERMINAL_STATUSES:
             raise TaskNotTerminalError(command.node_id, old_status)
 
-        # Phase 2 hook: invalidate downstream targets before resetting own
-        # edges. Currently a no-op; replaced in Phase 2.
         invalidated_node_ids = await self._invalidate_downstream(
             session,
             run_id=command.run_id,
@@ -454,8 +450,8 @@ class TaskManagementService:
         - Non-terminal (PENDING / READY / RUNNING): they were queued or
           running against the old output. Cancel them; the edge will be
           reset by the caller once we return. PENDING targets will go
-          CANCELLED but become eligible for re-activation once deps
-          re-satisfy (Phase 3).
+          CANCELLED but become eligible for re-activation once upstream
+          dependencies re-satisfy.
         - COMPLETED: their output is now stale because it was computed
           from the old version of this node. Cancel them, reset their
           own outgoing edges, and recurse into their downstream so deeper

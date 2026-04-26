@@ -193,15 +193,10 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
 
     svc = TaskExecutionService()
 
-    # Hoist ``prepared`` above the try so the except handler can branch
-    # on "did prepare itself raise?" vs "did a later step raise?".
-    # Without this, a Pydantic validation error inside prepare (e.g. a
-    # dynamic-subtask graph node producing a ``task_id=None`` that the
-    # PreparedTaskExecution model rejects) propagates up unhandled —
-    # ``finalize_failure`` never runs, ``TaskFailedEvent`` is never
-    # emitted, and the run_task_executions row is stuck in RUNNING with
-    # ``error_json = null`` forever.  Observed 2026-04-23 on every
-    # smoke subtask; see docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
+    # Hoist ``prepared`` so the except handler can branch on prepare vs
+    # post-prepare failure (``finalize_failure`` + ``TaskFailedEvent`` only
+    # when ``prepared`` is set). See
+    # docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
     prepared: PreparedTaskExecution | None = None
     # ``None`` until sandbox-setup returns. ``TaskFailedEvent.sandbox_id`` is
     # now ``str | None`` so a pre-sandbox failure carries ``None`` instead of
@@ -344,10 +339,10 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             # dynamic subtasks, which is why prepare raised in the
             # first place).  Log loudly; the span + event emission
             # requires a non-null task_id which we don't have here.  The
-            # run_graph_node stays in RUNNING on this branch; A2 (see
-            # README.md § Open refactors) removes the null-task_id case
-            # entirely.  Without *this* hoist, even the traceback was
-            # invisible — the function just silently died in Inngest.
+            # run_graph_node stays in RUNNING on this branch. The
+            # ``node_id``/``task_id`` identity cleanup in README (Open refactors)
+            # targets this ambiguity. Without *this* hoist, even the traceback
+            # was invisible — the function just silently died in Inngest.
             logger.error(
                 "task-execute: prepare raised for task_id=%s node_id=%s — "
                 "no execution row to finalize",
