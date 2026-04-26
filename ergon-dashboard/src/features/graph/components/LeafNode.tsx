@@ -29,7 +29,7 @@ function CornerBadge({ status }: { status: TaskStatus }) {
   const tokens = tokensFor(status);
   return (
     <div
-      className={`absolute -right-1 -top-1 z-30 flex size-[22px] items-center justify-center rounded-full border-2 border-white shadow-sm dark:border-slate-900 ${tokens.solidBg} ${tokens.animate ? "animate-pulse" : ""}`}
+      className={`absolute -right-1 -top-1 z-30 flex size-[19px] items-center justify-center rounded-full border border-white shadow-sm ${tokens.solidBg} ${tokens.animate ? "animate-pulse" : ""}`}
       aria-label={`Status: ${tokens.label}`}
       title={tokens.label}
     >
@@ -70,8 +70,6 @@ function LeafNodeComponent({
   };
 
   const tokens = tokensFor(task.status);
-  const borderColor = tokens.border;
-  const bgColor = tokens.softBg;
   const timingLine = getTaskTimingPrimaryLine(task);
 
   if (variant === "compact") {
@@ -83,15 +81,15 @@ function LeafNodeComponent({
         title={`${task.name}\n${task.status}${task.assignedWorkerName ? `\nWorker: ${task.assignedWorkerName}` : ""}${task.description ? `\n${task.description}` : ""}${timingHint}`}
         className={`
           relative cursor-pointer
-          rounded-md border shadow-sm
+          rounded-[8px] border shadow-sm
           transition-all duration-200
-          hover:shadow-md hover:scale-[1.02]
+          hover:shadow-md hover:scale-[1.01]
           px-2 py-1.5 flex items-center gap-1.5
-          ${borderColor} ${bgColor}
-          ${isAnimating ? "ring-2 ring-offset-1 ring-blue-400 dark:ring-blue-500" : ""}
-          ${selected ? "ring-2 ring-offset-1 ring-indigo-500 dark:ring-indigo-400" : ""}
+          border-[#d7dce4] bg-white
+          ${isAnimating ? "ring-2 ring-blue-400" : ""}
+          ${selected ? "ring-2 ring-indigo-500" : ""}
           ${dimmed ? "opacity-30" : ""}
-          ${highlighted ? "ring-2 ring-blue-500 ring-offset-1" : ""}
+          ${highlighted ? "ring-2 ring-blue-500" : ""}
         `}
         style={{ borderLeft: `3px solid ${levelHex}` }}
       >
@@ -101,7 +99,7 @@ function LeafNodeComponent({
           position={targetPos}
           className="!h-2 !w-2 !border-2 !border-white !bg-gray-400 dark:!border-gray-900 dark:!bg-gray-500"
         />
-        <span className="truncate pr-6 text-xs font-medium text-gray-900 dark:text-white">
+        <span className="truncate pr-5 text-[11px] font-semibold text-[#0c1118]">
           {task.name}
         </span>
         <Handle
@@ -119,16 +117,16 @@ function LeafNodeComponent({
         onClick={handleClick}
         data-testid={`graph-node-${task.id}`}
         className={`
-          relative cursor-pointer min-w-[160px] max-w-[200px]
-          rounded-lg border-2 shadow-sm
+          relative cursor-pointer min-w-[148px] max-w-[174px]
+          rounded-[9px] border shadow-sm
           transition-all duration-200
-          hover:shadow-md hover:scale-[1.02]
-          ${borderColor} ${bgColor}
-          ${isAnimating ? "ring-2 ring-offset-2 ring-blue-400 dark:ring-blue-500" : ""}
-          ${task.status === ("running" as TaskStatus) ? "shadow-yellow-200 dark:shadow-yellow-900" : ""}
-          ${selected ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400" : ""}
+          hover:shadow-md hover:scale-[1.01]
+          border-[#d7dce4] bg-white
+          ${isAnimating ? "ring-2 ring-blue-400" : ""}
+          ${task.status === ("running" as TaskStatus) ? "shadow-yellow-200" : ""}
+          ${selected ? "ring-2 ring-indigo-500" : ""}
           ${dimmed ? "opacity-30" : ""}
-          ${highlighted ? "ring-2 ring-blue-500 ring-offset-2" : ""}
+          ${highlighted ? "ring-2 ring-blue-500" : ""}
         `}
         style={{ borderLeft: `3px solid ${levelHex}` }}
       >
@@ -139,19 +137,19 @@ function LeafNodeComponent({
           className="!h-3 !w-3 !border-2 !border-white !bg-gray-400 dark:!border-gray-900 dark:!bg-gray-500"
         />
 
-        <div className="p-2.5 pr-8">
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+        <div className="p-2 pr-7">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64707f]">
               {task.status}
             </span>
           </div>
 
-          <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight truncate">
+          <h3 className="truncate text-xs font-semibold leading-tight text-[#0c1118]">
             {task.name}
           </h3>
 
           {task.assignedWorkerName && (
-            <div className="flex items-center gap-1 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <div className="mt-1 flex items-center gap-1 text-[11px] text-[#64707f]">
               <svg
                 className="w-3 h-3"
                 fill="none"
@@ -169,7 +167,7 @@ function LeafNodeComponent({
             </div>
           )}
           {timingLine && (
-            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400 tabular-nums">{timingLine}</p>
+            <p className="mt-1 text-[10px] tabular-nums text-[#64707f]">{timingLine}</p>
           )}
         </div>
 
@@ -180,7 +178,7 @@ function LeafNodeComponent({
         />
 
         {task.status === ("running" as TaskStatus) && !dimmed && (
-          <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-yellow-400 opacity-50 animate-pulse" />
+          <div className="pointer-events-none absolute inset-0 rounded-[9px] border border-yellow-400 opacity-50 animate-pulse" />
         )}
       </div>
     );
@@ -192,16 +190,16 @@ function LeafNodeComponent({
       onClick={handleClick}
       data-testid={`graph-node-${task.id}`}
       className={`
-        relative cursor-pointer min-w-[180px] max-w-[280px]
-        rounded-lg border-2 shadow-sm
+        relative cursor-pointer min-w-[168px] max-w-[198px]
+        rounded-[10px] border shadow-sm
         transition-all duration-200
-        hover:shadow-md hover:scale-[1.02]
-        ${borderColor} ${bgColor}
-        ${isAnimating ? "ring-2 ring-offset-2 ring-blue-400 dark:ring-blue-500" : ""}
-        ${task.status === ("running" as TaskStatus) ? "shadow-yellow-200 dark:shadow-yellow-900" : ""}
-        ${selected ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400" : ""}
+        hover:shadow-md hover:scale-[1.01]
+        border-[#d7dce4] bg-white
+        ${isAnimating ? "ring-2 ring-blue-400" : ""}
+        ${task.status === ("running" as TaskStatus) ? "shadow-yellow-200" : ""}
+        ${selected ? "ring-2 ring-indigo-500" : ""}
         ${dimmed ? "opacity-30" : ""}
-        ${highlighted ? "ring-2 ring-blue-500 ring-offset-2" : ""}
+        ${highlighted ? "ring-2 ring-blue-500" : ""}
       `}
       style={{ borderLeft: `3px solid ${levelHex}` }}
     >
@@ -212,34 +210,34 @@ function LeafNodeComponent({
         className="!h-3 !w-3 !border-2 !border-white !bg-gray-400 dark:!border-gray-900 dark:!bg-gray-500"
       />
 
-      <div className="p-3 pr-8">
+      <div className="p-2.5 pr-8">
         {/* Header: Status + Level */}
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64707f]">
               {task.status}
             </span>
           </div>
-          <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+          <span className="font-mono text-[10px] text-[#98a2b1]">
             L{task.level}
           </span>
         </div>
 
         {/* Task Name */}
-        <h3 className="font-semibold text-gray-900 dark:text-white text-sm leading-tight truncate">
+        <h3 className="truncate text-sm font-semibold leading-tight text-[#0c1118]">
           {task.name}
         </h3>
 
         {/* Description */}
         {task.description && task.description.length < 60 && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+          <p className="mt-1 line-clamp-2 text-[11px] text-[#64707f]">
             {task.description}
           </p>
         )}
 
         {/* Worker Assignment */}
         {task.assignedWorkerName && (
-          <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500 dark:text-gray-400">
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[#64707f]">
             <svg
               className="w-3.5 h-3.5"
               fill="none"
@@ -257,7 +255,7 @@ function LeafNodeComponent({
           </div>
         )}
         {timingLine && (
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 tabular-nums">{timingLine}</p>
+          <p className="mt-1.5 text-[10px] tabular-nums text-[#64707f]">{timingLine}</p>
         )}
 
         {/* Leaf indicator */}

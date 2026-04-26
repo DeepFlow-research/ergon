@@ -13,7 +13,7 @@ import { formatTaskWallTimestamp } from "@/features/graph/utils/taskTiming";
 import { filterTaskEvidenceForTime } from "./filterTaskEvidenceForTime";
 
 function EmptySection({ message }: { message: string }) {
-  return <div className="text-sm text-gray-500 dark:text-gray-400">{message}</div>;
+  return <div className="text-sm text-[#64707f]">{message}</div>;
 }
 
 function WorkspaceSection({
@@ -27,10 +27,10 @@ function WorkspaceSection({
 }) {
   return (
     <section
-      className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900"
+      className="rounded-[9px] border border-[#e2e6ec] bg-white p-3"
       data-testid={testId}
     >
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-gray-400">
+      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#98a2b1]">
         {title}
       </h3>
       {children}
@@ -72,7 +72,7 @@ export function TaskWorkspace({
   if (!taskId) {
     return (
       <div
-        className="flex h-full min-h-[72vh] items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+        className="flex h-full items-center justify-center p-8 text-center text-sm text-[#64707f]"
         data-testid="workspace-empty"
       >
         Select a task from the graph to open the focused task workspace.
@@ -83,7 +83,7 @@ export function TaskWorkspace({
   if (isLoading) {
     return (
       <div
-        className="flex h-full min-h-[72vh] items-center justify-center rounded-3xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400"
+        className="flex h-full items-center justify-center p-8 text-center text-sm text-[#64707f]"
         data-testid="workspace-loading"
       >
         Loading task workspace...
@@ -94,7 +94,7 @@ export function TaskWorkspace({
   if (!task || error) {
     return (
       <div
-        className="flex h-full min-h-[72vh] items-center justify-center rounded-3xl border border-red-200 bg-white p-8 text-center text-sm text-red-600 dark:border-red-900 dark:bg-gray-900 dark:text-red-400"
+        className="flex h-full items-center justify-center p-8 text-center text-sm text-red-600"
         data-testid="workspace-error"
       >
         {error ?? "Task not found"}
@@ -117,17 +117,22 @@ export function TaskWorkspace({
   const ended = formatTaskWallTimestamp(task.completedAt);
 
   return (
-    <div className="flex h-full min-h-[72vh] flex-col gap-4 xl:min-h-0" data-testid="task-workspace">
+    <div className="flex h-full min-h-0 flex-col bg-white" data-testid="task-workspace">
       <header
-        className="shrink-0 rounded-3xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
+        className="shrink-0 border-b border-[#e2e6ec] bg-white p-4"
         data-testid="workspace-header"
       >
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{task.name}</h2>
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#98a2b1]">
+              Task workspace
+            </div>
+            <h2 className="truncate text-base font-semibold tracking-[-0.01em] text-[#0c1118]">{task.name}</h2>
+          </div>
           <StatusBadge status={task.status} />
           {selectedSequence !== null && (
             <span
-              className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300"
+              className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700"
               data-testid="workspace-timeline-badge"
             >
               Viewing seq {selectedSequence}
@@ -137,14 +142,14 @@ export function TaskWorkspace({
             <button
               type="button"
               onClick={onClearSelection}
-              className="ml-auto rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-gray-800"
+              className="rounded-full border border-[#d7dce4] px-2 py-1 text-[11px] font-medium text-[#64707f] transition-colors hover:bg-[#f6f7f9]"
               data-testid="workspace-close"
             >
-              Back to graph
+              Close
             </button>
           )}
         </div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-gray-500 dark:text-gray-400">
+        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-[#64707f]">
           <span>Worker: {task.assignedWorkerName ?? "—"}</span>
           <span>Level: {task.level}</span>
           <span>Leaf task: {task.isLeaf ? "yes" : "no"}</span>
@@ -156,7 +161,7 @@ export function TaskWorkspace({
               <time
                 dateTime={started.dateTime}
                 title={started.dateTime}
-                className="text-gray-700 dark:text-gray-300"
+                className="text-[#0c1118]"
               >
                 {started.text}
               </time>
@@ -170,7 +175,7 @@ export function TaskWorkspace({
               <time
                 dateTime={ended.dateTime}
                 title={ended.dateTime}
-                className="text-gray-700 dark:text-gray-300"
+                className="text-[#0c1118]"
               >
                 {ended.text}
               </time>
@@ -180,11 +185,11 @@ export function TaskWorkspace({
           </span>
         </div>
         {task.description && (
-          <p className="mt-4 text-sm leading-6 text-gray-600 dark:text-gray-300">{task.description}</p>
+          <p className="mt-3 text-xs leading-5 text-[#64707f]">{task.description}</p>
         )}
       </header>
 
-      <div className="min-h-0 space-y-4 overflow-y-auto pr-1" data-testid="workspace-scroll-region">
+      <div className="min-h-0 space-y-3 overflow-y-auto p-3" data-testid="workspace-scroll-region">
         <WorkspaceSection testId="workspace-transitions" title="State transitions">
           <TaskTransitionLog task={task} onJumpToSequence={onJumpToSequence} />
         </WorkspaceSection>
@@ -246,7 +251,7 @@ export function TaskWorkspace({
           )}
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-3">
           <WorkspaceSection testId="workspace-overview" title="Overview">
             <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
               <div>

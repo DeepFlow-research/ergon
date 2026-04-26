@@ -60,7 +60,7 @@ export function RunWorkspacePage({
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
-  const [isStreamOpen, setIsStreamOpen] = useState(true);
+  const [isStreamOpen, setIsStreamOpen] = useState(false);
   const { runState, isLoading, error, isSubscribed } = useRunState(runId, initialRunState);
   const { detail } = useCohortDetail(cohortId ?? "", initialCohortDetail);
 
@@ -260,22 +260,27 @@ export function RunWorkspacePage({
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950">
+    <div className="flex min-h-screen flex-col bg-[#f6f7f9] text-[#0c1118]">
       <header
-        className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+        className="h-14 border-b border-[#e2e6ec] bg-white"
         data-testid="run-header"
       >
-        <div className="w-full px-6 py-5">
-          <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-            <Link href="/" className="hover:text-gray-900 dark:hover:text-white">
-              Experiment Cohorts
+        <div className="flex h-full w-full items-center justify-between gap-4 px-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <Link href="/" className="flex items-center gap-2 text-sm font-semibold text-[#0c1118]">
+              <span className="inline-block size-4 rounded bg-[#0c1118]" aria-hidden />
+              Ergon
             </Link>
+            <div className="flex min-w-0 items-center gap-2 truncate text-xs text-[#64707f]">
+              <Link href="/" className="hover:text-[#0c1118]">
+                Cohorts
+              </Link>
             {cohortId && (
               <>
                 <span>/</span>
                 <Link
                   href={`/cohorts/${cohortId}`}
-                  className="hover:text-gray-900 dark:hover:text-white"
+                    className="max-w-[180px] truncate hover:text-[#0c1118]"
                   data-testid="run-breadcrumb-cohort"
                 >
                   {detail?.summary.name ?? "Cohort"}
@@ -283,20 +288,33 @@ export function RunWorkspacePage({
               </>
             )}
             <span>/</span>
-            <span className="font-mono text-gray-700 dark:text-gray-200">{runId.slice(0, 8)}...</span>
+              <span className="font-mono text-[#1f2733]">{runId.slice(0, 8)}...</span>
+            </div>
+
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="max-w-[260px] truncate text-sm font-semibold tracking-[-0.01em] text-[#0c1118]">
+                {runState?.name ?? runRow?.run_id ?? "Run"}
+              </h1>
+              <StatusBadge status={status as RunLifecycleStatus} />
+            </div>
           </div>
 
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-3xl font-semibold text-gray-900 dark:text-white">
-                  {runState?.name ?? runRow?.run_id ?? "Run"}
-                </h1>
-                <StatusBadge status={status as RunLifecycleStatus} />
+          <div className="flex shrink-0 items-center gap-3">
+            <div className="hidden items-center gap-3 text-[11px] uppercase tracking-[0.08em] text-[#98a2b1] lg:flex">
+              <span>
+                Tasks <b className="ml-1 font-mono text-[#0c1118]">{runState?.totalTasks ?? "—"}</b>
+              </span>
+              <span>
+                Turns <b className="ml-1 font-mono text-[#0c1118]">{runState?.completedTasks ?? 0}</b>
+              </span>
+              <span>
+                Score <b className="ml-1 font-mono text-[#0c1118]">{formatPercent(runState?.finalScore ?? runRow?.final_score ?? null)}</b>
+              </span>
+            </div>
                 <div
                   role="tablist"
                   aria-label="Run view mode"
-                  className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-xs font-medium dark:border-gray-700 dark:bg-gray-800"
+              className="inline-flex rounded-md border border-[#e2e6ec] bg-[#f6f7f9] p-0.5 text-xs font-medium"
                 >
                   {(["live", "timeline"] as const).map((mode) => {
                     const active = timelineMode === mode;
@@ -311,10 +329,10 @@ export function RunWorkspacePage({
                           setTimelineMode(mode);
                           if (mode === "live") setIsPlaying(false);
                         }}
-                        className={`rounded-md px-3 py-1 transition-colors ${
+                  className={`rounded px-2.5 py-1 transition-colors ${
                           active
-                            ? "bg-indigo-600 text-white shadow-sm"
-                            : "text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700"
+                      ? "bg-white text-[#0c1118] shadow-sm"
+                      : "text-[#64707f] hover:text-[#0c1118]"
                         }`}
                         data-testid={`mode-${mode}`}
                       >
@@ -327,53 +345,20 @@ export function RunWorkspacePage({
                   type="button"
                   onClick={() => setIsStreamOpen((p) => !p)}
                   aria-pressed={isStreamOpen}
-                  className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     isStreamOpen
-                      ? "bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900"
-                      : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
+                  ? "bg-[#0c1118] text-white"
+                  : "border border-[#e2e6ec] bg-white text-[#64707f] hover:bg-[#eef0f3]"
                   }`}
                   title="Toggle event stream (e)"
                   data-testid="event-stream-toggle"
                 >
-                  {isStreamOpen ? "Hide events" : "Show events"}
+              {isStreamOpen ? "Hide events" : "Event tracks"}
                 </button>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500 dark:text-gray-400">
-                <span>Workflow: {runState?.name ?? "—"}</span>
-                <span suppressHydrationWarning>Started: {runState?.startedAt ? new Date(runState.startedAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" }) : "—"}</span>
-              </div>
-            </div>
-
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                <dt className="text-xs text-gray-500 dark:text-gray-400">Runtime</dt>
-                <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatSeconds(runState?.durationSeconds ?? (runRow?.running_time_ms != null ? runRow.running_time_ms / 1000 : null))}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                <dt className="text-xs text-gray-500 dark:text-gray-400">Score</dt>
-                <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {formatPercent(runState?.finalScore ?? runRow?.final_score ?? null)}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                <dt className="text-xs text-gray-500 dark:text-gray-400">Tasks</dt>
-                <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {runState?.totalTasks ?? "—"}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/50">
-                <dt className="text-xs text-gray-500 dark:text-gray-400">Failed tasks</dt>
-                <dd className="text-sm font-semibold text-gray-900 dark:text-white">
-                  {runState?.failedTasks ?? "—"}
-                </dd>
-              </div>
-            </dl>
           </div>
 
           {leafTotal > 0 && (
-            <div className="mt-4">
+            <div className="absolute left-4 right-4 top-16 z-20">
               <RunStatusBar
                 counts={leafStatusCounts}
                 total={leafTotal}
@@ -385,7 +370,7 @@ export function RunWorkspacePage({
 
           {error && (
             <div
-              className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300"
+              className="absolute left-4 right-4 top-16 z-30 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
               data-testid="run-staleness-banner"
             >
               {error}
@@ -395,24 +380,18 @@ export function RunWorkspacePage({
       </header>
 
       <main
-        className={`flex-1 w-full gap-6 px-6 py-6 ${
-          isInspectorOpen
-            ? "grid xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-rows-[auto_minmax(0,1fr)]"
-            : "space-y-6"
-        }`}
+        className="relative min-h-0 flex-1 overflow-hidden px-2 pb-[252px] pt-8"
       >
         {selectionNotice && (
           <div
-            className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200 xl:col-span-2"
+            className="absolute left-4 right-4 top-4 z-40 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
             data-testid="selection-reset-notice"
           >
             {selectionNotice}
           </div>
         )}
         <section
-          className={`min-h-[72vh] rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 ${
-            isInspectorOpen ? "xl:h-full xl:min-h-0" : "h-[78vh]"
-          }`}
+          className="h-[calc(100vh-340px)] min-h-[430px] overflow-hidden rounded-[10px] border border-[#e2e6ec] bg-white"
           data-testid="graph-region"
         >
           <DAGCanvas
@@ -429,7 +408,7 @@ export function RunWorkspacePage({
 
         {activities.length > 0 && (
           <section
-            className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 xl:col-span-2"
+            className="fixed inset-x-0 bottom-0 z-30 border-t border-[#18202b] bg-[#070b12]"
             data-testid="timeline-region"
           >
             <ActivityStackTimeline
@@ -450,7 +429,7 @@ export function RunWorkspacePage({
 
         {isStreamOpen && events.length > 0 && (
           <section
-            className="min-h-[40vh] rounded-3xl border border-gray-200 bg-white p-0 dark:border-gray-800 dark:bg-gray-900 xl:col-span-2 xl:row-start-3"
+            className="absolute bottom-[370px] left-4 z-20 max-h-[44vh] w-[520px] overflow-hidden rounded-[10px] border border-[#e2e6ec] bg-white shadow-[0_8px_24px_rgb(12_17_24/0.08)]"
             data-testid="event-stream-region"
           >
             <UnifiedEventStream
@@ -471,7 +450,10 @@ export function RunWorkspacePage({
         )}
 
         {isInspectorOpen ? (
-          <section className="min-h-[72vh] xl:h-full xl:min-h-0" data-testid="workspace-region">
+          <section
+            className="absolute bottom-[370px] right-4 top-4 z-20 w-[360px] overflow-hidden rounded-[10px] border border-[#e2e6ec] bg-white shadow-[0_8px_24px_rgb(12_17_24/0.08)]"
+            data-testid="workspace-region"
+          >
             <TaskWorkspace
               runState={displayState}
               taskId={selectedTaskId}
@@ -488,24 +470,20 @@ export function RunWorkspacePage({
           </section>
         ) : (
           <section
-            className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-8 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400"
+            className="pointer-events-none absolute bottom-[370px] right-4 z-10 w-[260px] rounded-[10px] border border-dashed border-[#cdd3dc] bg-white/80 px-4 py-3 text-xs text-[#64707f]"
             data-testid="workspace-launcher"
           >
             <div className="max-w-3xl space-y-3">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#98a2b1]">
                 Task inspection
               </div>
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                Graph first, then open a focused task workspace
+              <h2 className="text-sm font-semibold text-[#0c1118]">
+                Click node {"->"} workspace drawer
               </h2>
-              <p>
-                Select a task node to inspect its outputs, execution attempts, actions,
-                communication, and evaluation without keeping the entire page in a cramped
-                permanent split view.
-              </p>
+              <p>State, outputs, turns, and evals appear scoped to the selected sequence.</p>
               {selectedTask && (
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-                  Ready to inspect <span className="font-semibold text-gray-900 dark:text-white">{selectedTask.name}</span>.
+                <div className="rounded-md border border-[#e2e6ec] bg-[#f6f7f9] px-3 py-2">
+                  Ready to inspect <span className="font-semibold text-[#0c1118]">{selectedTask.name}</span>.
                 </div>
               )}
             </div>

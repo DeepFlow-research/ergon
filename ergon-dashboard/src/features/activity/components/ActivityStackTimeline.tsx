@@ -24,7 +24,7 @@ interface ActivityStackTimelineProps {
 const SPEED_OPTIONS = [1, 2, 5, 10] as const;
 const MIN_DELAY_MS = 50;
 const MAX_DELAY_MS = 2000;
-const ROW_HEIGHT = 36;
+const ROW_HEIGHT = 31;
 
 function formatTime(ms: number): string {
   if (!Number.isFinite(ms)) return "—";
@@ -114,7 +114,7 @@ export function ActivityStackTimeline({
   if (activities.length === 0) {
     return (
       <div
-        className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400"
+        className="flex h-[236px] items-center justify-center bg-[#070b12] text-sm text-slate-400"
         data-testid="activity-stack-region"
       >
         No activity has been recorded for this run yet.
@@ -123,13 +123,13 @@ export function ActivityStackTimeline({
   }
 
   return (
-    <div className="space-y-3" data-testid="activity-stack-region">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="relative h-[236px] bg-[#070b12] text-slate-200" data-testid="activity-stack-region">
+      <div className="flex h-11 items-center justify-between border-b border-white/10 px-4">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Activity stack
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+            Activity stack <span className="ml-2 font-normal normal-case tracking-normal text-slate-500">rows are overlap layers, not fixed lanes</span>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-0.5 flex flex-wrap items-center gap-3 font-mono text-[10px] text-slate-500">
             <span data-testid="activity-current-sequence">
               seq {currentMutation?.sequence ?? currentSequence}
             </span>
@@ -138,12 +138,12 @@ export function ActivityStackTimeline({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={stepBack}
             disabled={currentSequence <= minSequence}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-white/10 disabled:opacity-35"
             data-testid="activity-step-back"
           >
             Back
@@ -151,7 +151,7 @@ export function ActivityStackTimeline({
           <button
             type="button"
             onClick={onTogglePlay}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900"
+            className="rounded-md bg-white px-3 py-1 text-xs font-semibold text-[#070b12] hover:bg-slate-200"
             data-testid="activity-play-toggle"
             aria-label={isPlaying ? "Pause timeline" : "Play timeline"}
           >
@@ -161,7 +161,7 @@ export function ActivityStackTimeline({
             type="button"
             onClick={stepForward}
             disabled={currentSequence >= maxSequence}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            className="rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-slate-300 hover:bg-white/10 disabled:opacity-35"
             data-testid="activity-step-forward"
           >
             Next
@@ -169,7 +169,7 @@ export function ActivityStackTimeline({
           <select
             value={speed}
             onChange={(event) => onSpeedChange(Number(event.target.value))}
-            className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300"
             data-testid="activity-speed-control"
             aria-label="Timeline playback speed"
           >
@@ -189,31 +189,35 @@ export function ActivityStackTimeline({
           max={maxSequence}
           value={currentSequence}
           onChange={(event) => onSequenceChange(Number(event.target.value))}
-          className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-indigo-600 dark:bg-slate-700"
+          className="mx-4 mt-2 h-1.5 w-[calc(100%-2rem)] cursor-pointer appearance-none rounded-full bg-white/10 accent-indigo-400"
           aria-label="Run timeline sequence"
         />
       )}
 
-      <div className="flex flex-wrap gap-1.5 text-[10px]">
+      <div className="absolute bottom-4 left-28 right-[430px] z-10 flex flex-wrap gap-2 text-[10px]">
         {(Object.keys(counts) as ActivityKind[]).map((kind) => (
           <span
             key={kind}
-            className="rounded-full border border-slate-200 px-2 py-0.5 font-medium uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-400"
+            className="rounded-full border border-white/10 bg-white/5 px-2 py-1 font-semibold uppercase tracking-wide text-slate-400"
           >
             {activityKindLabel(kind)} {counts[kind]}
           </span>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40">
+      <div className="relative mx-4 mt-3 h-[148px] overflow-hidden border-y border-white/10 bg-[radial-gradient(circle,rgb(148_163_184/0.08)_1px,transparent_1px)] [background-size:20px_20px]">
+        <div className="absolute left-0 top-2 w-24 text-[11px] font-semibold leading-snug text-slate-400">
+          Concurrent activity<br />
+          <span className="font-normal text-slate-600">Bars stack only when they overlap</span>
+        </div>
         <div
-          className="relative min-w-[720px]"
+          className="relative ml-28 min-w-[720px]"
           style={{ height: Math.max(1, layout.rowCount) * ROW_HEIGHT }}
         >
           {Array.from({ length: layout.rowCount }).map((_, row) => (
             <div
               key={row}
-              className="absolute left-0 right-0 border-t border-slate-200/80 dark:border-slate-800"
+              className="absolute left-0 right-0 border-t border-white/10"
               style={{ top: row * ROW_HEIGHT }}
               data-testid="activity-stack-row"
             />
