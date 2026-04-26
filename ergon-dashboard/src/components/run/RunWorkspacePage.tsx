@@ -8,7 +8,9 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { RunStatusBar } from "@/components/run/RunStatusBar";
 import { UnifiedEventStream } from "@/components/run/UnifiedEventStream";
 import { TaskWorkspace } from "@/components/workspace/TaskWorkspace";
-import { MutationTimeline } from "@/features/graph/components/MutationTimeline";
+import { ActivityStackTimeline } from "@/features/activity/components/ActivityStackTimeline";
+import { buildRunActivities } from "@/features/activity/buildRunActivities";
+import type { RunActivity } from "@/features/activity/types";
 import {
   parseGraphMutationDtoArray,
   type GraphMutationDto,
@@ -31,6 +33,18 @@ function formatPercent(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function nearestMutationAtOrBefore(
+  mutations: GraphMutationDto[],
+  sequence: number,
+): GraphMutationDto | null {
+  let selected: GraphMutationDto | null = null;
+  for (const mutation of mutations) {
+    if (mutation.sequence > sequence) break;
+    selected = mutation;
+  }
+  return selected ?? mutations[0] ?? null;
+}
+
 export function RunWorkspacePage({
   runId,
   cohortId,
@@ -43,6 +57,7 @@ export function RunWorkspacePage({
   initialCohortDetail?: CohortDetail | null;
 }) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
   const [isStreamOpen, setIsStreamOpen] = useState(true);
@@ -56,6 +71,7 @@ export function RunWorkspacePage({
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [mutations, setMutations] = useState<GraphMutationDto[]>([]);
   const snapshotCache = useRef(new Map<number, WorkflowRunState>());
+  const requestedSequenceRef = useRef<number | null>(null);
 
   // Fetch mutations when entering timeline mode
   useEffect(() => {
@@ -68,9 +84,14 @@ export function RunWorkspacePage({
         const parsed = parseGraphMutationDtoArray(data);
         setMutations(parsed);
         snapshotCache.current.clear();
-        setCurrentSequence(
-          parsed.length > 0 ? parsed[parsed.length - 1].sequence : 0,
-        );
+        const requestedSequence = requestedSequenceRef.current;
+        requestedSequenceRef.current = null;
+        const defaultMutation = parsed[parsed.length - 1] ?? null;
+        const requestedMutation =
+          requestedSequence === null
+            ? null
+            : nearestMutationAtOrBefore(parsed, requestedSequence);
+        setCurrentSequence((requestedMutation ?? defaultMutation)?.sequence ?? 0);
       })
       .catch(() => {
         if (!cancelled) setMutations([]);
@@ -136,6 +157,30 @@ export function RunWorkspacePage({
   // trims the feed in lockstep.
   const events = useMemo(() => buildRunEvents(displayState), [displayState]);
 
+  const activities = useMemo(
+    () =>
+      buildRunActivities({
+        runState: displayState,
+        events,
+        mutations,
+        currentSequence: timelineMode === "timeline" ? currentSequence : null,
+      }),
+    [displayState, events, mutations, timelineMode, currentSequence],
+  );
+
+  const selectedTimelineTime = useMemo(() => {
+    if (timelineMode !== "timeline") return null;
+    return nearestMutationAtOrBefore(mutations, currentSequence)?.created_at ?? null;
+  }, [timelineMode, mutations, currentSequence]);
+
+  const highlightedTaskIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (selectedTaskId) ids.add(selectedTaskId);
+    const selectedActivity = activities.find((activity) => activity.id === selectedActivityId);
+    if (selectedActivity?.taskId) ids.add(selectedActivity.taskId);
+    return ids;
+  }, [activities, selectedActivityId, selectedTaskId]);
+
   // D7: keyboard shortcuts — Esc closes selection, `t` toggles timeline,
   // `e` toggles event stream, `1-6` filters by lifecycle status.
   useEffect(() => {
@@ -192,7 +237,26 @@ export function RunWorkspacePage({
 
   const handleTaskClick = (taskId: string) => {
     setSelectionNotice(null);
+    setSelectedActivityId(null);
     setSelectedTaskId((prev) => (prev === taskId ? null : taskId));
+  };
+
+  const handleSequenceChange = (sequence: number) => {
+    const mutation = nearestMutationAtOrBefore(mutations, sequence);
+    setCurrentSequence(mutation?.sequence ?? sequence);
+  };
+
+  const handleActivityClick = (activity: RunActivity) => {
+    setSelectionNotice(null);
+    setSelectedActivityId(activity.id);
+    if (activity.sequence !== null) {
+      requestedSequenceRef.current = activity.sequence;
+      if (timelineMode !== "timeline") setTimelineMode("timeline");
+      handleSequenceChange(activity.sequence);
+    }
+    if (activity.taskId) {
+      setSelectedTaskId(activity.taskId);
+    }
   };
 
   return (
@@ -359,22 +423,27 @@ export function RunWorkspacePage({
             isSubscribed={isSubscribed}
             onTaskClick={handleTaskClick}
             selectedTaskId={selectedTaskId}
+            highlightedTaskIds={highlightedTaskIds}
           />
         </section>
 
-        {timelineMode === "timeline" && mutations.length > 0 && (
+        {activities.length > 0 && (
           <section
             className="rounded-3xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 xl:col-span-2"
             data-testid="timeline-region"
           >
-            <MutationTimeline
+            <ActivityStackTimeline
+              activities={activities}
               mutations={mutations}
               currentSequence={currentSequence}
-              onSequenceChange={setCurrentSequence}
+              onSequenceChange={handleSequenceChange}
+              selectedTaskId={selectedTaskId}
+              selectedActivityId={selectedActivityId}
               isPlaying={isPlaying}
               onTogglePlay={() => setIsPlaying((p) => !p)}
               speed={playbackSpeed}
               onSpeedChange={setPlaybackSpeed}
+              onActivityClick={handleActivityClick}
             />
           </section>
         )}
@@ -394,7 +463,8 @@ export function RunWorkspacePage({
               }}
               onSequenceClick={(seq) => {
                 if (timelineMode !== "timeline") setTimelineMode("timeline");
-                setCurrentSequence(seq);
+                requestedSequenceRef.current = seq;
+                handleSequenceChange(seq);
               }}
             />
           </section>
@@ -409,8 +479,11 @@ export function RunWorkspacePage({
               onClearSelection={() => setSelectedTaskId(null)}
               onJumpToSequence={(seq) => {
                 if (timelineMode !== "timeline") setTimelineMode("timeline");
-                setCurrentSequence(seq);
+                requestedSequenceRef.current = seq;
+                handleSequenceChange(seq);
               }}
+              selectedTime={selectedTimelineTime}
+              selectedSequence={timelineMode === "timeline" ? currentSequence : null}
             />
           </section>
         ) : (

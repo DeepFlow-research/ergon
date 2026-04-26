@@ -1,4 +1,5 @@
 import type { DashboardHarnessSeedPayload } from "../../src/lib/testing/dashboardHarness";
+import concurrentMasFixture from "../fixtures/mas-runs/concurrent-mas-run.json";
 import type {
   CommunicationThreadState,
   ContextEventState,
@@ -25,6 +26,14 @@ export const FIXTURE_IDS = {
   toolCallEventId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   toolResultEventId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
   deltaToolCallEventId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+} as const;
+
+export const CONCURRENT_MAS_FIXTURE_IDS = {
+  cohortId: "12121212-1212-4121-8121-121212121212",
+  experimentId: "33333333-3333-4333-8333-333333333333",
+  runId: "99999999-9999-4999-8999-999999999999",
+  searchTaskId: "10000000-0000-4000-8000-000000000002",
+  checkTaskId: "10000000-0000-4000-8000-000000000003",
 } as const;
 
 function taskState(task: Partial<TaskState> & Pick<TaskState, "id" | "name" | "description" | "status" | "isLeaf" | "level">): TaskState {
@@ -452,11 +461,94 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
     ],
   };
 
+  const concurrent = createConcurrentMasSeedOnly();
+  return {
+    cohorts: [summary, ...(concurrent.cohorts ?? [])],
+    cohortDetails: {
+      [FIXTURE_IDS.cohortId]: detail,
+      ...(concurrent.cohortDetails ?? {}),
+    },
+    runs: [runState, ...(concurrent.runs ?? [])],
+    mutations: concurrent.mutations,
+  };
+}
+
+function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
+  const summary = {
+    cohort_id: CONCURRENT_MAS_FIXTURE_IDS.cohortId,
+    name: "concurrent-mas-visual-debugger",
+    description: "Deterministic concurrent MAS fixture for visual debugger tests.",
+    created_by: "playwright",
+    created_at: "2026-04-26T11:59:00.000Z",
+    status: "active" as const,
+    total_runs: 1,
+    status_counts: {
+      pending: 0,
+      executing: 1,
+      evaluating: 0,
+      completed: 0,
+      failed: 0,
+    },
+    average_score: null,
+    best_score: null,
+    worst_score: null,
+    average_duration_ms: null,
+    failure_rate: 0,
+    metadata_summary: {
+      code_commit_sha: "visual-debugger",
+      repo_dirty: false,
+      prompt_version: "visual-debugger-fixture",
+      worker_version: "fixture",
+      model_provider: "fixture",
+      model_name: "fixture",
+      sandbox_config: {
+        template: "research",
+        timeout_minutes: 30,
+      },
+      dispatch_config: {
+        scenario: "concurrent-mas",
+      },
+    },
+    stats_updated_at: "2026-04-26T12:00:30.000Z",
+    extras: {
+      benchmark_counts: {
+        visual_debugger: 1,
+      },
+      latest_run_at: "2026-04-26T12:00:00.000Z",
+    },
+  };
+
+  const detail = {
+    summary,
+    runs: [
+      {
+        run_id: CONCURRENT_MAS_FIXTURE_IDS.runId,
+        definition_id: CONCURRENT_MAS_FIXTURE_IDS.experimentId,
+        cohort_id: CONCURRENT_MAS_FIXTURE_IDS.cohortId,
+        cohort_name: summary.name,
+        status: "executing",
+        created_at: "2026-04-26T11:59:30.000Z",
+        started_at: "2026-04-26T12:00:00.000Z",
+        completed_at: null,
+        running_time_ms: 30_000,
+        final_score: null,
+        error_message: null,
+      },
+    ],
+  };
+
   return {
     cohorts: [summary],
     cohortDetails: {
-      [FIXTURE_IDS.cohortId]: detail,
+      [CONCURRENT_MAS_FIXTURE_IDS.cohortId]: detail,
     },
-    runs: [runState],
-  };
+    runs: [concurrentMasFixture.runState as SerializedWorkflowRunState],
+    mutations: {
+      [CONCURRENT_MAS_FIXTURE_IDS.runId]: concurrentMasFixture.mutations,
+    },
+  } as DashboardHarnessSeedPayload;
+}
+
+export function createConcurrentMasDashboardSeed(): DashboardHarnessSeedPayload {
+  return createDashboardSeed();
 }

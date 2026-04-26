@@ -15,6 +15,7 @@ interface ContainerNodeProps {
   onClick?: (taskId: string) => void;
   selected?: boolean;
   dimmed?: boolean;
+  highlighted?: boolean;
   containerWidth: number;
   containerHeight: number;
   layoutDirection?: "TB" | "LR";
@@ -28,6 +29,7 @@ function ContainerNodeComponent({
   onClick,
   selected = false,
   dimmed = false,
+  highlighted = false,
   containerWidth,
   containerHeight,
   layoutDirection = "LR",
@@ -63,6 +65,7 @@ function ContainerNodeComponent({
         bg-gray-50/40 dark:bg-gray-900/40
         ${borderColor}
         ${selected ? "ring-2 ring-offset-2 ring-indigo-500 dark:ring-indigo-400" : ""}
+        ${highlighted ? "ring-2 ring-offset-2 ring-blue-500 dark:ring-blue-400" : ""}
         ${dimmed ? "opacity-30" : ""}
         ${task.status === ("cancelled" as TaskStatus) ? "bg-gray-50/50 dark:bg-gray-900/30" : ""}
       `}

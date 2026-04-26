@@ -54,6 +54,11 @@ async function screenshot(target: Page, out: string): Promise<void> {
   await target.screenshot({ path: out, fullPage: true });
 }
 
+async function locatorScreenshot(target: Locator, out: string): Promise<void> {
+  await fs.mkdir(path.dirname(out), { recursive: true });
+  await target.screenshot({ path: out });
+}
+
 function graphElementForTask(page: Page, taskId: string): Locator {
   return page
     .locator(
@@ -115,6 +120,8 @@ async function assertRunWorkspace(
   await expect(page.getByTestId("run-status-bar")).toBeVisible();
   await expect(page.getByTestId("run-status-count-completed")).toBeVisible();
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
+  await expect(page.getByTestId("activity-stack-region")).toBeVisible();
+  await expect(page.locator('[data-testid^="activity-bar-"]').first()).toBeVisible();
 
   const evaluatedTaskIds = new Set(state.evaluations.map((evaluation) => evaluation.task_id));
   const selected = await selectRenderedGraphTask(page, state, runId, evaluatedTaskIds);
@@ -145,6 +152,7 @@ async function assertRunWorkspace(
   if (state.mutation_count > 0) {
     await page.getByTestId("mode-timeline").click();
     await expect(page.getByTestId("timeline-region")).toBeVisible();
+    await expect(page.getByTestId("activity-current-sequence")).toContainText(/seq/i);
   }
 }
 
@@ -201,6 +209,14 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
             page,
             path.join(screenshotDir, cfg.env, `${run_id}-happy.png`),
           );
+          await screenshot(
+            page,
+            path.join(screenshotDir, cfg.env, `${run_id}-visual-debugger-full.png`),
+          );
+          await locatorScreenshot(
+            page.getByTestId("activity-stack-region"),
+            path.join(screenshotDir, cfg.env, `${run_id}-activity-stack.png`),
+          );
 
           if (cfg.extraRunAssertions) {
             await cfg.extraRunAssertions(page, run_id);
@@ -231,6 +247,14 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         await screenshot(
           page,
           path.join(screenshotDir, cfg.env, `${run_id}-sad.png`),
+        );
+        await screenshot(
+          page,
+          path.join(screenshotDir, cfg.env, `${run_id}-visual-debugger-full.png`),
+        );
+        await locatorScreenshot(
+          page.getByTestId("activity-stack-region"),
+          path.join(screenshotDir, cfg.env, `${run_id}-activity-stack.png`),
         );
       });
     }

@@ -1,0 +1,573 @@
+{
+  "name": "concurrent-mas-run",
+  "runState": {
+    "id": "99999999-9999-4999-8999-999999999999",
+    "experimentId": "33333333-3333-4333-8333-333333333333",
+    "name": "Concurrent MAS run",
+    "status": "executing",
+    "rootTaskId": "10000000-0000-4000-8000-000000000001",
+    "startedAt": "2026-04-26T12:00:00.000Z",
+    "completedAt": null,
+    "durationSeconds": null,
+    "totalTasks": 6,
+    "totalLeafTasks": 4,
+    "completedTasks": 1,
+    "runningTasks": 3,
+    "failedTasks": 0,
+    "finalScore": null,
+    "error": null,
+    "tasks": {
+      "10000000-0000-4000-8000-000000000001": {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "name": "Root investigation",
+        "description": "Coordinate a multi-agent research pass.",
+        "status": "running",
+        "parentId": null,
+        "childIds": [
+          "10000000-0000-4000-8000-000000000002",
+          "10000000-0000-4000-8000-000000000003",
+          "10000000-0000-4000-8000-000000000004"
+        ],
+        "dependsOnIds": [],
+        "isLeaf": false,
+        "level": 0,
+        "assignedWorkerId": null,
+        "assignedWorkerName": "planner",
+        "startedAt": "2026-04-26T12:00:00.000Z",
+        "completedAt": null
+      },
+      "10000000-0000-4000-8000-000000000002": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "name": "Search literature",
+        "description": "Find candidate references.",
+        "status": "running",
+        "parentId": "10000000-0000-4000-8000-000000000001",
+        "childIds": [],
+        "dependsOnIds": [],
+        "isLeaf": true,
+        "level": 1,
+        "assignedWorkerId": null,
+        "assignedWorkerName": "researcher-a",
+        "startedAt": "2026-04-26T12:00:05.000Z",
+        "completedAt": null
+      },
+      "10000000-0000-4000-8000-000000000003": {
+        "id": "10000000-0000-4000-8000-000000000003",
+        "name": "Check claims",
+        "description": "Verify extracted claims.",
+        "status": "running",
+        "parentId": "10000000-0000-4000-8000-000000000001",
+        "childIds": [],
+        "dependsOnIds": [],
+        "isLeaf": true,
+        "level": 1,
+        "assignedWorkerId": null,
+        "assignedWorkerName": "researcher-b",
+        "startedAt": "2026-04-26T12:00:08.000Z",
+        "completedAt": null
+      },
+      "10000000-0000-4000-8000-000000000004": {
+        "id": "10000000-0000-4000-8000-000000000004",
+        "name": "Synthesize answer",
+        "description": "Write the final synthesis after evidence is available.",
+        "status": "pending",
+        "parentId": "10000000-0000-4000-8000-000000000001",
+        "childIds": [
+          "10000000-0000-4000-8000-000000000005",
+          "10000000-0000-4000-8000-000000000006"
+        ],
+        "dependsOnIds": [
+          "10000000-0000-4000-8000-000000000002",
+          "10000000-0000-4000-8000-000000000003"
+        ],
+        "isLeaf": false,
+        "level": 1,
+        "assignedWorkerId": null,
+        "assignedWorkerName": "writer",
+        "startedAt": null,
+        "completedAt": null
+      },
+      "10000000-0000-4000-8000-000000000005": {
+        "id": "10000000-0000-4000-8000-000000000005",
+        "name": "Draft narrative",
+        "description": "Draft the explanation.",
+        "status": "pending",
+        "parentId": "10000000-0000-4000-8000-000000000004",
+        "childIds": [],
+        "dependsOnIds": [],
+        "isLeaf": true,
+        "level": 2,
+        "assignedWorkerId": null,
+        "assignedWorkerName": "writer-a",
+        "startedAt": null,
+        "completedAt": null
+      },
+      "10000000-0000-4000-8000-000000000006": {
+        "id": "10000000-0000-4000-8000-000000000006",
+        "name": "Validate citations",
+        "description": "Validate citation coverage.",
+        "status": "completed",
+        "parentId": "10000000-0000-4000-8000-000000000004",
+        "childIds": [],
+        "dependsOnIds": [],
+        "isLeaf": true,
+        "level": 2,
+        "assignedWorkerId": null,
+        "assignedWorkerName": "writer-b",
+        "startedAt": "2026-04-26T12:00:18.000Z",
+        "completedAt": "2026-04-26T12:00:25.000Z"
+      }
+    },
+    "resourcesByTask": {
+      "10000000-0000-4000-8000-000000000002": [
+        {
+          "id": "20000000-0000-4000-8000-000000000001",
+          "taskId": "10000000-0000-4000-8000-000000000002",
+          "taskExecutionId": "30000000-0000-4000-8000-000000000001",
+          "name": "references.md",
+          "mimeType": "text/markdown",
+          "filePath": "/workspace/references.md",
+          "sizeBytes": 1024,
+          "createdAt": "2026-04-26T12:00:22.000Z"
+        }
+      ]
+    },
+    "executionsByTask": {
+      "10000000-0000-4000-8000-000000000002": [
+        {
+          "id": "30000000-0000-4000-8000-000000000001",
+          "taskId": "10000000-0000-4000-8000-000000000002",
+          "attemptNumber": 1,
+          "status": "running",
+          "startedAt": "2026-04-26T12:00:05.000Z",
+          "completedAt": "2026-04-26T12:00:24.000Z",
+          "finalAssistantMessage": "Found candidate references.",
+          "errorMessage": null,
+          "score": null,
+          "agentId": "agent-a",
+          "agentName": "researcher-a",
+          "evaluationDetails": {},
+          "outputResourceIds": [
+            "20000000-0000-4000-8000-000000000001"
+          ]
+        }
+      ],
+      "10000000-0000-4000-8000-000000000003": [
+        {
+          "id": "30000000-0000-4000-8000-000000000002",
+          "taskId": "10000000-0000-4000-8000-000000000003",
+          "attemptNumber": 1,
+          "status": "running",
+          "startedAt": "2026-04-26T12:00:08.000Z",
+          "completedAt": "2026-04-26T12:00:21.000Z",
+          "finalAssistantMessage": "Claims verified.",
+          "errorMessage": null,
+          "score": null,
+          "agentId": "agent-b",
+          "agentName": "researcher-b",
+          "evaluationDetails": {},
+          "outputResourceIds": []
+        }
+      ],
+      "10000000-0000-4000-8000-000000000006": [
+        {
+          "id": "30000000-0000-4000-8000-000000000003",
+          "taskId": "10000000-0000-4000-8000-000000000006",
+          "attemptNumber": 1,
+          "status": "completed",
+          "startedAt": "2026-04-26T12:00:18.000Z",
+          "completedAt": "2026-04-26T12:00:25.000Z",
+          "finalAssistantMessage": "Citation check passed.",
+          "errorMessage": null,
+          "score": null,
+          "agentId": "agent-c",
+          "agentName": "writer-b",
+          "evaluationDetails": {},
+          "outputResourceIds": []
+        }
+      ]
+    },
+    "sandboxesByTask": {
+      "10000000-0000-4000-8000-000000000002": {
+        "sandboxId": "sandbox-search",
+        "taskId": "10000000-0000-4000-8000-000000000002",
+        "template": "research",
+        "timeoutMinutes": 30,
+        "status": "closed",
+        "createdAt": "2026-04-26T12:00:04.000Z",
+        "closedAt": "2026-04-26T12:00:26.000Z",
+        "closeReason": "completed",
+        "commands": [
+          {
+            "command": "python search.py",
+            "stdout": "ok",
+            "stderr": null,
+            "exitCode": 0,
+            "durationMs": 2000,
+            "timestamp": "2026-04-26T12:00:12.000Z"
+          }
+        ]
+      }
+    },
+    "threads": [
+      {
+        "id": "40000000-0000-4000-8000-000000000001",
+        "runId": "99999999-9999-4999-8999-999999999999",
+        "taskId": "10000000-0000-4000-8000-000000000003",
+        "topic": "task_clarification",
+        "agentAId": "agent-b",
+        "agentBId": "stakeholder",
+        "createdAt": "2026-04-26T12:00:09.000Z",
+        "updatedAt": "2026-04-26T12:00:16.000Z",
+        "messages": [
+          {
+            "id": "40000000-0000-4000-8000-000000000002",
+            "threadId": "40000000-0000-4000-8000-000000000001",
+            "threadTopic": "task_clarification",
+            "runId": "99999999-9999-4999-8999-999999999999",
+            "taskId": "10000000-0000-4000-8000-000000000003",
+            "taskExecutionId": "30000000-0000-4000-8000-000000000002",
+            "fromAgentId": "agent-b",
+            "toAgentId": "stakeholder",
+            "content": "Should I reject ungrounded claims?",
+            "sequenceNum": 0,
+            "createdAt": "2026-04-26T12:00:16.000Z"
+          }
+        ]
+      }
+    ],
+    "evaluationsByTask": {
+      "10000000-0000-4000-8000-000000000006": {
+        "id": "50000000-0000-4000-8000-000000000001",
+        "runId": "99999999-9999-4999-8999-999999999999",
+        "taskId": "10000000-0000-4000-8000-000000000006",
+        "totalScore": 1,
+        "maxScore": 1,
+        "normalizedScore": 1,
+        "stagesEvaluated": 1,
+        "stagesPassed": 1,
+        "failedGate": null,
+        "createdAt": "2026-04-26T12:00:27.000Z",
+        "criterionResults": [
+          {
+            "id": "50000000-0000-4000-8000-000000000002",
+            "stageNum": 0,
+            "stageName": "citation_validation",
+            "criterionNum": 0,
+            "criterionType": "code_rule",
+            "criterionDescription": "Citations validate",
+            "evaluationInput": null,
+            "score": 1,
+            "maxScore": 1,
+            "feedback": "ok",
+            "evaluatedActionIds": [],
+            "evaluatedResourceIds": [],
+            "error": null
+          }
+        ]
+      }
+    },
+    "contextEventsByTask": {
+      "10000000-0000-4000-8000-000000000002": [
+        {
+          "id": "60000000-0000-4000-8000-000000000001",
+          "taskExecutionId": "30000000-0000-4000-8000-000000000001",
+          "taskNodeId": "10000000-0000-4000-8000-000000000002",
+          "workerBindingKey": "researcher-a",
+          "sequence": 0,
+          "eventType": "tool_call",
+          "payload": {
+            "event_type": "tool_call",
+            "tool_name": "search",
+            "args": {
+              "query": "MAS layout"
+            }
+          },
+          "createdAt": "2026-04-26T12:00:10.000Z",
+          "startedAt": "2026-04-26T12:00:10.000Z",
+          "completedAt": "2026-04-26T12:00:14.000Z"
+        }
+      ]
+    }
+  },
+  "mutations": [
+    {
+      "id": "70000000-0000-4000-8000-000000000001",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 1,
+      "mutation_type": "node.added",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000001",
+      "actor": "planner",
+      "old_value": null,
+      "new_value": {
+        "task_slug": "Root investigation",
+        "instance_key": "root",
+        "description": "Coordinate a multi-agent research pass.",
+        "status": "pending",
+        "assigned_worker_slug": "planner"
+      },
+      "reason": "workflow started",
+      "created_at": "2026-04-26T12:00:00.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000002",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 2,
+      "mutation_type": "node.status_changed",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000001",
+      "actor": "planner",
+      "old_value": {
+        "status": "pending"
+      },
+      "new_value": {
+        "status": "running"
+      },
+      "reason": "worker started",
+      "created_at": "2026-04-26T12:00:00.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000003",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 3,
+      "mutation_type": "node.added",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000002",
+      "actor": "planner",
+      "old_value": null,
+      "new_value": {
+        "task_slug": "Search literature",
+        "instance_key": "search",
+        "description": "Find candidate references.",
+        "status": "pending",
+        "assigned_worker_slug": "researcher-a"
+      },
+      "reason": "delegate",
+      "created_at": "2026-04-26T12:00:03.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000004",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 4,
+      "mutation_type": "edge.added",
+      "target_type": "edge",
+      "target_id": "70000000-0000-4000-8000-100000000004",
+      "actor": "planner",
+      "old_value": null,
+      "new_value": {
+        "source_node_id": "10000000-0000-4000-8000-000000000001",
+        "target_node_id": "10000000-0000-4000-8000-000000000002",
+        "status": "active"
+      },
+      "reason": "parent-child",
+      "created_at": "2026-04-26T12:00:03.100Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000005",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 5,
+      "mutation_type": "node.added",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000003",
+      "actor": "planner",
+      "old_value": null,
+      "new_value": {
+        "task_slug": "Check claims",
+        "instance_key": "check",
+        "description": "Verify extracted claims.",
+        "status": "pending",
+        "assigned_worker_slug": "researcher-b"
+      },
+      "reason": "delegate",
+      "created_at": "2026-04-26T12:00:04.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000006",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 6,
+      "mutation_type": "edge.added",
+      "target_type": "edge",
+      "target_id": "70000000-0000-4000-8000-100000000006",
+      "actor": "planner",
+      "old_value": null,
+      "new_value": {
+        "source_node_id": "10000000-0000-4000-8000-000000000001",
+        "target_node_id": "10000000-0000-4000-8000-000000000003",
+        "status": "active"
+      },
+      "reason": "parent-child",
+      "created_at": "2026-04-26T12:00:04.100Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000007",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 7,
+      "mutation_type": "node.added",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000004",
+      "actor": "planner",
+      "old_value": null,
+      "new_value": {
+        "task_slug": "Synthesize answer",
+        "instance_key": "synth",
+        "description": "Write the final synthesis after evidence is available.",
+        "status": "pending",
+        "assigned_worker_slug": "writer"
+      },
+      "reason": "delegate",
+      "created_at": "2026-04-26T12:00:05.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000008",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 8,
+      "mutation_type": "edge.added",
+      "target_type": "edge",
+      "target_id": "70000000-0000-4000-8000-100000000008",
+      "actor": "planner",
+      "old_value": null,
+      "new_value": {
+        "source_node_id": "10000000-0000-4000-8000-000000000001",
+        "target_node_id": "10000000-0000-4000-8000-000000000004",
+        "status": "active"
+      },
+      "reason": "parent-child",
+      "created_at": "2026-04-26T12:00:05.100Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000009",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 9,
+      "mutation_type": "node.status_changed",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000002",
+      "actor": "researcher-a",
+      "old_value": {
+        "status": "pending"
+      },
+      "new_value": {
+        "status": "running"
+      },
+      "reason": "worker started",
+      "created_at": "2026-04-26T12:00:05.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000010",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 10,
+      "mutation_type": "node.status_changed",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000003",
+      "actor": "researcher-b",
+      "old_value": {
+        "status": "pending"
+      },
+      "new_value": {
+        "status": "running"
+      },
+      "reason": "worker started",
+      "created_at": "2026-04-26T12:00:08.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000011",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 11,
+      "mutation_type": "node.added",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000005",
+      "actor": "writer",
+      "old_value": null,
+      "new_value": {
+        "task_slug": "Draft narrative",
+        "instance_key": "draft",
+        "description": "Draft the explanation.",
+        "status": "pending",
+        "assigned_worker_slug": "writer-a"
+      },
+      "reason": "delegate nested",
+      "created_at": "2026-04-26T12:00:12.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000012",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 12,
+      "mutation_type": "edge.added",
+      "target_type": "edge",
+      "target_id": "70000000-0000-4000-8000-100000000012",
+      "actor": "writer",
+      "old_value": null,
+      "new_value": {
+        "source_node_id": "10000000-0000-4000-8000-000000000004",
+        "target_node_id": "10000000-0000-4000-8000-000000000005",
+        "status": "active"
+      },
+      "reason": "parent-child",
+      "created_at": "2026-04-26T12:00:12.100Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000013",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 13,
+      "mutation_type": "node.added",
+      "target_type": "node",
+      "target_id": "10000000-0000-4000-8000-000000000006",
+      "actor": "writer",
+      "old_value": null,
+      "new_value": {
+        "task_slug": "Validate citations",
+        "instance_key": "validate",
+        "description": "Validate citation coverage.",
+        "status": "pending",
+        "assigned_worker_slug": "writer-b"
+      },
+      "reason": "delegate nested",
+      "created_at": "2026-04-26T12:00:13.000Z"
+    },
+    {
+      "id": "70000000-0000-4000-8000-000000000014",
+      "run_id": "99999999-9999-4999-8999-999999999999",
+      "sequence": 14,
+      "mutation_type": "edge.added",
+      "target_type": "edge",
+      "target_id": "70000000-0000-4000-8000-100000000014",
+      "actor": "writer",
+      "old_value": null,
+      "new_value": {
+        "source_node_id": "10000000-0000-4000-8000-000000000004",
+        "target_node_id": "10000000-0000-4000-8000-000000000006",
+        "status": "active"
+      },
+      "reason": "parent-child",
+      "created_at": "2026-04-26T12:00:13.100Z"
+    }
+  ],
+  "checkpoints": [
+    {
+      "sequence": 10,
+      "expectedTaskIds": [
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000002",
+        "10000000-0000-4000-8000-000000000003",
+        "10000000-0000-4000-8000-000000000004"
+      ],
+      "expectedMaxConcurrency": 5,
+      "selectedTime": "2026-04-26T12:00:10.000Z",
+      "hiddenFutureResourceName": "references.md"
+    },
+    {
+      "sequence": 14,
+      "expectedTaskIds": [
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000002",
+        "10000000-0000-4000-8000-000000000003",
+        "10000000-0000-4000-8000-000000000004",
+        "10000000-0000-4000-8000-000000000005",
+        "10000000-0000-4000-8000-000000000006"
+      ],
+      "expectedMaxConcurrency": 5,
+      "selectedTime": "2026-04-26T12:00:18.000Z",
+      "hiddenFutureResourceName": "references.md"
+    }
+  ]
+}

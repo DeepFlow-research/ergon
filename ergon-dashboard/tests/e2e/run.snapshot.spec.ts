@@ -14,7 +14,7 @@ test("run page keeps cohort breadcrumb context", async ({ page }) => {
   await expect(page.getByTestId("run-breadcrumb-cohort")).toContainText(
     "minif2f-react-worker-gpt5v3",
   );
-  await expect(page.getByTestId("run-header")).toContainText("amc12a_2008_p25");
+  await expect(page.getByTestId("run-header")).toContainText("parallel");
 });
 
 test("graph selection opens workspace evidence sections", async ({ page }) => {

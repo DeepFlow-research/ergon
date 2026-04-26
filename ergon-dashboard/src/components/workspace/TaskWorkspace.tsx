@@ -10,6 +10,7 @@ import { TaskTransitionLog } from "@/components/workspace/TaskTransitionLog";
 import { ContextEventLog } from "@/features/graph/components/ContextEventLog";
 import type { WorkflowRunState } from "@/lib/types";
 import { formatTaskWallTimestamp } from "@/features/graph/utils/taskTiming";
+import { filterTaskEvidenceForTime } from "./filterTaskEvidenceForTime";
 
 function EmptySection({ message }: { message: string }) {
   return <div className="text-sm text-gray-500 dark:text-gray-400">{message}</div>;
@@ -43,17 +44,30 @@ export function TaskWorkspace({
   error,
   onClearSelection,
   onJumpToSequence,
+  selectedTime = null,
+  selectedSequence = null,
 }: {
   runState: WorkflowRunState | null;
   taskId: string | null;
   error: string | null;
   onClearSelection?: () => void;
   onJumpToSequence?: (sequence: number) => void;
+  selectedTime?: string | null;
+  selectedSequence?: number | null;
 }) {
   const { task, resources, executions, sandbox, threads, evaluation, dependencies, isLoading } =
     useTaskDetails(runState, taskId);
 
   const contextEvents = taskId && runState ? (runState.contextEventsByTask.get(taskId) ?? []) : [];
+  const filteredEvidence = filterTaskEvidenceForTime({
+    resources,
+    executions,
+    sandbox,
+    threads,
+    evaluation,
+    contextEvents,
+    selectedTime,
+  });
 
   if (!taskId) {
     return (
@@ -89,13 +103,13 @@ export function TaskWorkspace({
   }
 
   const primarySection =
-    resources.length > 0
+    filteredEvidence.resources.length > 0
       ? "outputs"
-      : evaluation
+      : filteredEvidence.evaluation
         ? "evaluation"
-        : threads.length > 0
+        : filteredEvidence.threads.length > 0
           ? "communication"
-          : sandbox
+          : filteredEvidence.sandbox
             ? "sandbox"
             : "overview";
 
@@ -111,6 +125,14 @@ export function TaskWorkspace({
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">{task.name}</h2>
           <StatusBadge status={task.status} />
+          {selectedSequence !== null && (
+            <span
+              className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300"
+              data-testid="workspace-timeline-badge"
+            >
+              Viewing seq {selectedSequence}
+            </span>
+          )}
           {onClearSelection && (
             <button
               type="button"
@@ -126,8 +148,8 @@ export function TaskWorkspace({
           <span>Worker: {task.assignedWorkerName ?? "—"}</span>
           <span>Level: {task.level}</span>
           <span>Leaf task: {task.isLeaf ? "yes" : "no"}</span>
-          <span>Attempts: {executions.length || 0}</span>
-          <span>Outputs: {resources.length}</span>
+          <span>Attempts: {filteredEvidence.executions.length || 0}</span>
+          <span>Outputs: {filteredEvidence.resources.length}</span>
           <span className="tabular-nums">
             Started:{" "}
             {started.dateTime ? (
@@ -168,28 +190,28 @@ export function TaskWorkspace({
         </WorkspaceSection>
 
         <WorkspaceSection testId="workspace-actions" title="Actions">
-          <ContextEventLog events={contextEvents} />
+          <ContextEventLog events={filteredEvidence.contextEvents} />
         </WorkspaceSection>
 
         <div data-testid="workspace-primary">
           {primarySection === "outputs" && (
             <WorkspaceSection testId="workspace-outputs" title="Outputs">
-              <ResourcePanel resources={resources} runId={runState?.id ?? null} />
+              <ResourcePanel resources={filteredEvidence.resources} runId={runState?.id ?? null} />
             </WorkspaceSection>
           )}
           {primarySection === "evaluation" && (
             <WorkspaceSection testId="workspace-evaluation" title="Evaluation">
-              <EvaluationPanel evaluation={evaluation} />
+              <EvaluationPanel evaluation={filteredEvidence.evaluation} />
             </WorkspaceSection>
           )}
           {primarySection === "communication" && (
             <WorkspaceSection testId="workspace-communication" title="Communication">
-              <CommunicationPanel threads={threads} />
+              <CommunicationPanel threads={filteredEvidence.threads} />
             </WorkspaceSection>
           )}
           {primarySection === "sandbox" && (
             <WorkspaceSection testId="workspace-sandbox" title="Sandbox">
-              <SandboxPanel sandbox={sandbox} />
+              <SandboxPanel sandbox={filteredEvidence.sandbox} />
             </WorkspaceSection>
           )}
           {primarySection === "overview" && (
@@ -255,11 +277,11 @@ export function TaskWorkspace({
           </WorkspaceSection>
 
           <WorkspaceSection testId="workspace-executions" title="Executions">
-            {executions.length === 0 ? (
+            {filteredEvidence.executions.length === 0 ? (
               <EmptySection message="No execution attempts recorded yet." />
             ) : (
               <div className="space-y-3">
-                {executions.map((execution) => (
+                {filteredEvidence.executions.map((execution) => (
                   <div
                     key={execution.id}
                     className="rounded-xl border border-gray-200 p-3 dark:border-gray-700"
@@ -292,25 +314,25 @@ export function TaskWorkspace({
 
           {primarySection !== "communication" && (
             <WorkspaceSection testId="workspace-communication" title="Communication">
-              <CommunicationPanel threads={threads} />
+              <CommunicationPanel threads={filteredEvidence.threads} />
             </WorkspaceSection>
           )}
 
           {primarySection !== "outputs" && (
             <WorkspaceSection testId="workspace-outputs" title="Outputs">
-              <ResourcePanel resources={resources} runId={runState?.id ?? null} />
+              <ResourcePanel resources={filteredEvidence.resources} runId={runState?.id ?? null} />
             </WorkspaceSection>
           )}
 
           {primarySection !== "evaluation" && (
             <WorkspaceSection testId="workspace-evaluation" title="Evaluation">
-              <EvaluationPanel evaluation={evaluation} />
+              <EvaluationPanel evaluation={filteredEvidence.evaluation} />
             </WorkspaceSection>
           )}
 
           {primarySection !== "sandbox" && (
             <WorkspaceSection testId="workspace-sandbox" title="Sandbox">
-              <SandboxPanel sandbox={sandbox} />
+              <SandboxPanel sandbox={filteredEvidence.sandbox} />
             </WorkspaceSection>
           )}
 

@@ -44,6 +44,7 @@ interface DAGCanvasProps {
   isSubscribed?: boolean;
   onTaskClick?: (taskId: string) => void;
   selectedTaskId?: string | null;
+  highlightedTaskIds?: ReadonlySet<string>;
 }
 
 /**
@@ -79,6 +80,7 @@ function DAGCanvasInner({
   isSubscribed = false,
   onTaskClick,
   selectedTaskId,
+  highlightedTaskIds = new Set(),
 }: DAGCanvasProps) {
   const [expandedDepth, setExpandedDepth] = useState<number | "all">(DEFAULT_EXPANDED_DEPTH);
   const [manualExpansions, setManualExpansions] = useState<Set<string>>(new Set());
@@ -162,6 +164,7 @@ function DAGCanvasInner({
       selectedTaskId,
       "LR",
       newNodeIds,
+      highlightedTaskIds,
     );
 
     setNodes(result.nodes as TaskNodeType[]);
@@ -174,6 +177,7 @@ function DAGCanvasInner({
     onTaskClick,
     selectedTaskId,
     newNodeIds,
+    highlightedTaskIds,
     setNodes,
     setEdges,
   ]);
@@ -354,7 +358,7 @@ function DAGCanvasInner({
           <MiniMap
             nodeColor={getMinimapNodeColor}
             nodeStrokeWidth={3}
-            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm"
+            className="hidden 2xl:block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm"
             maskColor="rgba(0, 0, 0, 0.1)"
           />
 

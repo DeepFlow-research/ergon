@@ -26,6 +26,7 @@ declare global {
     | {
         cohorts: CohortSummary[];
         cohortDetails: Record<string, CohortDetail>;
+        mutationsByRun: Record<string, unknown[]>;
       }
     | undefined;
 }
@@ -34,6 +35,7 @@ export interface DashboardHarnessSeedPayload {
   cohorts?: CohortSummary[];
   cohortDetails?: Record<string, CohortDetail>;
   runs?: SerializedWorkflowRunState[];
+  mutations?: Record<string, unknown[]>;
 }
 
 function getHarnessState() {
@@ -41,6 +43,7 @@ function getHarnessState() {
     global.__dashboardHarness = {
       cohorts: [],
       cohortDetails: {},
+      mutationsByRun: {},
     };
   }
   return global.__dashboardHarness;
@@ -58,6 +61,7 @@ export function resetDashboardHarness(): void {
   const harness = getHarnessState();
   harness.cohorts = [];
   harness.cohortDetails = {};
+  harness.mutationsByRun = {};
 }
 
 export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void {
@@ -67,6 +71,7 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
   const harness = getHarnessState();
   harness.cohorts = payload.cohorts ?? [];
   harness.cohortDetails = payload.cohortDetails ?? {};
+  harness.mutationsByRun = payload.mutations ?? {};
 
   for (const run of payload.runs ?? []) {
     store.seedRun(deserializeRunState(run));
@@ -118,6 +123,11 @@ export function getHarnessRun(runId: string): SerializedWorkflowRunState | null 
   requireHarnessEnabled();
   const run = store.getRun(runId);
   return run ? serializeRunState(run) : null;
+}
+
+export function getHarnessRunMutations(runId: string): unknown[] | null {
+  requireHarnessEnabled();
+  return getHarnessState().mutationsByRun[runId] ?? null;
 }
 
 export function emitHarnessRunCompleted(data: {
