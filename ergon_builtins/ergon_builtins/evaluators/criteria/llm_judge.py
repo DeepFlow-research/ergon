@@ -1,10 +1,9 @@
-"""LLM-judge evaluation criterion.
+"""Generic LLM-judge evaluation criterion.
 
-Stores a prompt template for an LLM judge evaluation.  When
-``EvaluationContext.runtime`` is available (injected by the executor),
-``evaluate()`` calls ``context.runtime.call_llm_judge(...)`` for a real
-LLM verdict.  If no runtime is present, raises ``RuntimeError`` -- the
-executor contract guarantees injection.
+This remains available for benchmark presets that want a lightweight judge,
+but it owns its provider call directly instead of reaching through
+``CriterionRuntime``. Benchmark-specific rubrics should prefer dedicated
+criterion classes with their own prompts and evidence formatting.
 """
 
 from typing import ClassVar
@@ -12,6 +11,10 @@ from typing import ClassVar
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
+from ergon_core.core.providers.generation.structured_judge import (
+    JudgeMessage,
+    call_structured_judge,
+)
 from pydantic import BaseModel
 
 
@@ -26,8 +29,7 @@ class LLMJudgeCriterion(Criterion):
     """LLM-judge evaluation criterion.
 
     Holds a ``prompt_template`` that, when sent to an LLM judge model,
-    produces a pass/fail verdict with reasoning via
-    ``context.runtime.call_llm_judge()``.
+    produces a pass/fail verdict with reasoning.
     """
 
     type_slug: ClassVar[str] = "llm-judge"
@@ -49,26 +51,21 @@ class LLMJudgeCriterion(Criterion):
         self.model = model
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
-        if context.runtime is None:
-            raise RuntimeError(
-                "LLMJudgeCriterion requires EvaluationContext.runtime; "
-                "InngestCriterionExecutor should have injected it."
-            )
-
         messages = [
-            {"role": "system", "content": self.prompt_template},
-            {
-                "role": "user",
-                "content": (
+            JudgeMessage(role="system", content=self.prompt_template),
+            JudgeMessage(
+                role="user",
+                content=(
                     f"Task input:\n{context.task.description}\n\n"
                     f"Worker output:\n{context.worker_result.output}"
                 ),
-            },
+            ),
         ]
 
-        verdict: _JudgeVerdict = await context.runtime.call_llm_judge(
-            messages,
-            _JudgeVerdict,
+        verdict: _JudgeVerdict = await call_structured_judge(
+            messages=messages,
+            response_type=_JudgeVerdict,
+            model=self.model,
         )
 
         score = self.max_score if verdict.passed else 0.0

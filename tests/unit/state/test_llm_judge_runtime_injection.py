@@ -1,9 +1,8 @@
-"""Tests for LLM-judge runtime injection via EvaluationContext.
+"""Tests for LLM-judge criteria using provider-owned structured judge calls.
 
 Verifies:
 - EvaluationContext accepts an optional runtime field
-- LLMJudgeCriterion.evaluate() reads context.runtime.call_llm_judge()
-- LLMJudgeCriterion.evaluate() raises when runtime is None
+- LLMJudgeCriterion.evaluate() does not rely on CriterionRuntime LLM policy
 - Legacy criteria that ignore context.runtime keep working
 """
 
@@ -61,18 +60,16 @@ class TestLLMJudgeCriterionWithRuntime:
             (False, 0.0, "Report lacks sources."),
         ],
     )
-    async def test_evaluate_verdict(self, passed, expected_score, reasoning):
+    async def test_evaluate_verdict(self, monkeypatch, passed, expected_score, reasoning):
         from ergon_builtins.evaluators.criteria.llm_judge import (
             LLMJudgeCriterion,
             _JudgeVerdict,
         )
 
-        fake_runtime = AsyncMock()
-        fake_runtime.call_llm_judge = AsyncMock(
-            return_value=_JudgeVerdict(
-                reasoning=reasoning,
-                passed=passed,
-            ),
+        judge = AsyncMock(return_value=_JudgeVerdict(reasoning=reasoning, passed=passed))
+        monkeypatch.setattr(
+            "ergon_builtins.evaluators.criteria.llm_judge.call_structured_judge",
+            judge,
         )
 
         criterion = LLMJudgeCriterion(
@@ -82,31 +79,13 @@ class TestLLMJudgeCriterionWithRuntime:
             max_score=1.0,
         )
 
-        ctx = _make_eval_context(runtime=fake_runtime)
+        ctx = _make_eval_context(runtime=None)
         result = await criterion.evaluate(ctx)
 
         assert result.passed is passed
         assert result.score == expected_score
         assert result.feedback == reasoning
-        fake_runtime.call_llm_judge.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_evaluate_raises_without_runtime(self):
-        from ergon_builtins.evaluators.criteria.llm_judge import (
-            LLMJudgeCriterion,
-        )
-
-        criterion = LLMJudgeCriterion(
-            name="test-criterion",
-            prompt_template="Evaluate the report.",
-        )
-
-        ctx = _make_eval_context(runtime=None)
-        with pytest.raises(
-            RuntimeError,
-            match="LLMJudgeCriterion requires EvaluationContext.runtime",
-        ):
-            await criterion.evaluate(ctx)
+        judge.assert_awaited_once()
 
 
 class TestLegacyCriterionIgnoresRuntime:
@@ -136,5 +115,5 @@ class TestLegacyCriterionIgnoresRuntime:
 
         assert result.passed is True
         assert result.score == 1.0
-        # Runtime was never called
-        fake_runtime.call_llm_judge.assert_not_awaited()
+        # Runtime was never used.
+        assert fake_runtime.mock_calls == []

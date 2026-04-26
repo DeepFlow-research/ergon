@@ -20,6 +20,9 @@ from ergon_builtins.benchmarks.researchrubrics.vanilla import (
 from ergon_builtins.workers.research_rubrics.researcher_worker import (
     ResearchRubricsResearcherWorker,
 )
+from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
+    ResearchRubricsWorkflowCliReActWorker,
+)
 
 BENCHMARKS: dict[str, type[Benchmark]] = {
     "gdpeval": GDPEvalBenchmark,
@@ -40,6 +43,7 @@ EVALUATORS: dict[str, type[Evaluator]] = {
 # ``_plain`` has been deleted.
 WORKERS: dict[str, Callable[..., Worker]] = {
     "researchrubrics-researcher": ResearchRubricsResearcherWorker,
+    "researchrubrics-workflow-cli-react": ResearchRubricsWorkflowCliReActWorker,
 }
 
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {

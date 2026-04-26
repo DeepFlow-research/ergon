@@ -11,6 +11,7 @@ from ergon_cli.commands.evaluator import handle_evaluator
 from ergon_cli.commands.onboard import handle_onboard
 from ergon_cli.commands.run import handle_run
 from ergon_cli.commands.train import handle_train
+from ergon_cli.commands.workflow import handle_workflow
 from ergon_cli.commands.worker import handle_worker
 
 
@@ -74,6 +75,16 @@ def build_parser() -> argparse.ArgumentParser:
     worker = sub.add_parser("worker", help="Worker operations")
     worker_sub = worker.add_subparsers(dest="worker_action")
     worker_sub.add_parser("list", help="List available workers")
+
+    workflow = sub.add_parser("workflow", help="Workflow topology and resource operations")
+    workflow.add_argument("--run-id", default=None, help="Current run UUID")
+    workflow.add_argument("--node-id", default=None, help="Current graph node UUID")
+    workflow.add_argument("--execution-id", default=None, help="Current task execution UUID")
+    workflow.add_argument("--sandbox-task-key", default=None, help="Sandbox task key UUID")
+    workflow.add_argument(
+        "--benchmark-type", default="default", help="Benchmark/sandbox manager slug"
+    )
+    workflow.add_argument("workflow_args", nargs=argparse.REMAINDER)
 
     evaluator = sub.add_parser("evaluator", help="Evaluator operations")
     evaluator_sub = evaluator.add_subparsers(dest="evaluator_action")
@@ -178,6 +189,8 @@ async def _main(argv: list[str] | None = None) -> int:
         return handle_run(args)
     elif args.command == "worker":
         return handle_worker(args)
+    elif args.command == "workflow":
+        return await handle_workflow(args)
     elif args.command == "evaluator":
         return handle_evaluator(args)
     elif args.command == "eval":

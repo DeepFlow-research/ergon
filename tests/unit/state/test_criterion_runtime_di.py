@@ -205,15 +205,14 @@ class TestRunIdResolution:
 
 
 class TestCriterionRuntimeProtocolCompliance:
-    def test_protocol_has_all_twelve_methods(self) -> None:
-        """CriterionRuntime Protocol exposes all 12 expected method names."""
+    def test_protocol_has_runtime_capability_methods_only(self) -> None:
+        """CriterionRuntime exposes sandbox/resource capabilities, not LLM judge policy."""
         expected = {
             "ensure_sandbox",
             "upload_files",
             "write_file",
             "run_command",
             "execute_code",
-            "call_llm_judge",
             "cleanup",
             "read_resource",
             "list_resources",
@@ -224,3 +223,4 @@ class TestCriterionRuntimeProtocolCompliance:
         actual = {name for name in dir(CriterionRuntime) if not name.startswith("_")}
         missing = expected - actual
         assert not missing, f"CriterionRuntime missing methods: {missing}"
+        assert "call_llm_judge" not in actual

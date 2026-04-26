@@ -1,16 +1,14 @@
 """Public Protocol for the criterion runtime + its small result DTOs.
 
 ``CriterionRuntime`` is the capabilities surface criteria use to interact
-with the sandbox and LLM judge while they evaluate.  Lives in ``api/`` so
+with the sandbox while they evaluate.  Lives in ``api/`` so
 that ``EvaluationContext`` (also in ``api/``) can type it without dragging
 in the core runtime package (which would cause a circular import).
 """
 
-from typing import TYPE_CHECKING, Protocol, TypeVar
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, Field
-
-T = TypeVar("T", bound=BaseModel)
 
 if TYPE_CHECKING:
     from sqlmodel import Session
@@ -70,7 +68,6 @@ class CriterionRuntime(Protocol):
     async def write_file(self, path: str, content: bytes) -> None: ...
     async def run_command(self, command: str, timeout: int = 30) -> CommandResult: ...
     async def execute_code(self, code: str) -> SandboxResult: ...
-    async def call_llm_judge(self, messages: list, response_type: type[T]) -> T: ...
     async def cleanup(self) -> None: ...
 
     # ── resource I/O ──────────────────────────────────────────────────
