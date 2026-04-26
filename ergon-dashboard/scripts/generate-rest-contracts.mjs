@@ -19,4 +19,7 @@ if (markerIndex === -1) {
 
 const schemasOnlySource = source.slice(0, markerIndex).trimEnd();
 
-writeFileSync(contractsPath, `${schemasOnlySource}\n`);
+writeFileSync(
+  contractsPath,
+  `/* eslint-disable @typescript-eslint/no-empty-object-type */\n${schemasOnlySource}\n`,
+);
