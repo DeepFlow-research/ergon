@@ -1,12 +1,13 @@
 """Sandbox lifecycle/event sink abstractions."""
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import SandboxCommandWalEntry, SandboxEvent
 
 
+@runtime_checkable
 class SandboxEventSink(Protocol):
     """Observer for sandbox lifecycle and append-only WAL events."""
 

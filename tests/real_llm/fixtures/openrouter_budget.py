@@ -1,4 +1,4 @@
-"""Session-scoped OpenRouter budget fixture + auto-use cost gate."""
+"""Session-scoped OpenRouter budget fixture + cost gate."""
 
 import os
 from collections.abc import AsyncGenerator
@@ -6,13 +6,14 @@ from collections.abc import AsyncGenerator
 import pytest
 
 from ergon_core.core.providers.generation.openrouter_budget import OpenRouterBudget
+from ergon_core.core.settings import settings
 
 
 @pytest.fixture(scope="session")
 async def openrouter_budget() -> AsyncGenerator[OpenRouterBudget, None]:
-    key = os.environ.get("OPENROUTER_API_KEY")
+    key = settings.openrouter_api_key
     if not key:
-        pytest.skip("OPENROUTER_API_KEY not set — skipping real-LLM tests")
+        pytest.skip("OPENROUTER_API_KEY is required for real-LLM rollouts")
     limit = float(os.environ.get("ERGON_REAL_LLM_BUDGET_USD", "5.0"))
     budget = OpenRouterBudget(limit_usd=limit, api_key=key)
     await budget.snapshot_baseline()

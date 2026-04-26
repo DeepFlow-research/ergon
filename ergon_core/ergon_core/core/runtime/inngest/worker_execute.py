@@ -10,12 +10,14 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from ergon_builtins.registry import WORKERS
+from pydantic import BaseModel
+from ergon_builtins.registry import BENCHMARKS, WORKERS
 from ergon_core.api.generation import GenerationTurn
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.context.repository import ContextEventRepository
+from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.inngest_client import inngest_client
@@ -64,10 +66,20 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         sandbox_id=payload.sandbox_id,
     )
 
-    task = BenchmarkTask(
+    task_payload = None
+    instance_key = str(payload.execution_id)
+    if payload.task_id is not None:
+        task_row, instance_row = queries.definitions.get_task_with_instance(payload.task_id)
+        benchmark_cls = BENCHMARKS.get(payload.benchmark_type)
+        if benchmark_cls is not None:
+            task_payload = task_row.task_payload_as(benchmark_cls.task_payload_model)
+        instance_key = instance_row.instance_key
+
+    task = BenchmarkTask[BaseModel](
         task_slug=payload.task_slug,
-        instance_key=str(payload.execution_id),
+        instance_key=instance_key,
         description=payload.task_description,
+        task_payload=task_payload or EmptyTaskPayload(),
     )
 
     worker_context = WorkerContext(

@@ -10,7 +10,10 @@ from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult, WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.core.runtime.evaluation.criterion_runtime import DefaultCriterionRuntime
+from ergon_core.core.runtime.evaluation.criterion_runtime import (
+    CriterionRuntimeOptions,
+    DefaultCriterionRuntime,
+)
 from ergon_core.core.runtime.evaluation.evaluation_schemas import (
     CriterionContext,
     CriterionSpec,
@@ -50,6 +53,7 @@ class InngestCriterionExecutor:
     async def execute_all(
         self,
         task_context: TaskEvaluationContext,
+        task: BenchmarkTask,
         benchmark_name: str,
         criteria: list[CriterionSpec],
     ) -> list[CriterionResult]:
@@ -73,13 +77,19 @@ class InngestCriterionExecutor:
                 runtime = DefaultCriterionRuntime(
                     context=criterion_context,
                     sandbox_manager=self.sandbox_manager,
-                    run_id=task_context.run_id,
-                    task_id=self.task_id,
-                    # Per RFC ``sandbox-lifetime-covers-criteria``: pass
-                    # the task's sandbox_id so ensure_sandbox prefers
-                    # ``manager.reconnect(sandbox_id)`` over constructing
-                    # a fresh sandbox when running cross-process.
-                    sandbox_id=task_context.sandbox_id or None,
+                    options=CriterionRuntimeOptions(
+                        run_id=task_context.run_id,
+                        task_id=self.task_id,
+                        # Per RFC ``sandbox-lifetime-covers-criteria``: pass
+                        # the task's sandbox_id so ensure_sandbox prefers
+                        # ``manager.reconnect(sandbox_id)`` over constructing
+                        # a fresh sandbox when running cross-process.
+                        sandbox_id=task_context.sandbox_id,
+                    ),
+                )
+
+                agent_reasoning = (
+                    "" if task_context.agent_reasoning is None else task_context.agent_reasoning
                 )
 
                 if isinstance(criterion, Criterion):
@@ -87,15 +97,11 @@ class InngestCriterionExecutor:
                         run_id=task_context.run_id,
                         task_id=self.task_id,
                         execution_id=self.execution_id,
-                        task=BenchmarkTask(
-                            task_slug="",
-                            instance_key="",
-                            description=task_context.task_input,
-                        ),
+                        task=task,
                         worker_result=WorkerOutput(
-                            output=task_context.agent_reasoning,
+                            output=agent_reasoning,
                         ),
-                        sandbox_id=task_context.sandbox_id or None,
+                        sandbox_id=task_context.sandbox_id,
                         runtime=runtime,
                     )
                     cr_result = await criterion.evaluate(eval_ctx)
@@ -142,9 +148,4 @@ class InngestCriterionExecutor:
                 output_type=CriterionResult,
             )
 
-        steps = tuple(make_step(spec) for spec in criteria)
-        if not steps:
-            return []
-
-        results = await self.ctx.group.parallel(steps)
-        return list(results)
+        return list(await self.ctx.group.parallel(tuple(make_step(spec) for spec in criteria)))

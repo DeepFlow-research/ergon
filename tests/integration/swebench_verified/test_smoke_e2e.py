@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
+from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchInstance
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.registry import (
     SANDBOX_TEMPLATES,
@@ -35,7 +36,7 @@ def test_build_instances_strips_gold_patch_and_honors_limit() -> None:
     benchmark = SweBenchVerifiedBenchmark(limit=1)
     with patch(
         "ergon_builtins.benchmarks.swebench_verified.benchmark._load_rows",
-        return_value=[FAKE_ROW],
+        return_value=[SWEBenchInstance.from_raw(FAKE_ROW)],
     ):
         instances = benchmark.build_instances()
 

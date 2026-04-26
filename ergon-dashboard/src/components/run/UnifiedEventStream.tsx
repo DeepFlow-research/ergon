@@ -151,22 +151,6 @@ function EventBody({ event }: { event: RunEvent }) {
           </span>
         </div>
       );
-    case "generation.turn":
-      return (
-        <div className="text-xs text-slate-600 dark:text-slate-300">
-          Turn <span className="font-mono">{event.turnIndex}</span> on{" "}
-          <span className="font-semibold">{event.workerName}</span>
-          {event.toolCallCount > 0 && (
-            <> — {event.toolCallCount} tool call{event.toolCallCount !== 1 ? "s" : ""}</>
-          )}
-          {event.toolNames.length > 0 && (
-            <span className="ml-1 font-mono text-slate-500">
-              [{event.toolNames.slice(0, 4).join(", ")}
-              {event.toolNames.length > 4 && `, +${event.toolNames.length - 4}`}]
-            </span>
-          )}
-        </div>
-      );
     case "sandbox.created":
       return (
         <div className="text-xs text-slate-600 dark:text-slate-300">

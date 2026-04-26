@@ -7,7 +7,7 @@ Asserts only the override behaviour — the parent ``execute`` is
 from uuid import uuid4
 
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
-from tests.e2e._fixtures.workers.researchrubrics_smoke_sadpath import (
+from ergon_core.test_support.smoke_fixtures.workers.researchrubrics_smoke_sadpath import (
     ResearchRubricsSadPathSmokeWorker,
 )
 

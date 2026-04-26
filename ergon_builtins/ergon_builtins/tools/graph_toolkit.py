@@ -30,7 +30,7 @@ class ResearchGraphToolkit:
         self._run_id = run_id
         self._task_execution_id = task_execution_id
 
-    def build_tools(self) -> list[object]:
+    def build_tools(self) -> list["Tool"]:
         """Return the six resource-discovery tools for ``Agent(tools=[...])``."""
         if Tool is None:
             raise RuntimeError("pydantic-ai is required to build ResearchGraphToolkit tools")

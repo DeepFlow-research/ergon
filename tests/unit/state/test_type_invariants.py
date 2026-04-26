@@ -24,7 +24,6 @@ from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStatus,
     RolloutBatch,
-    RunGenerationTurn,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -49,6 +48,7 @@ from ergon_core.core.persistence.telemetry.models import (
             lambda: RunTaskExecution(
                 run_id=uuid4(),
                 definition_task_id=uuid4(),
+                node_id=uuid4(),
                 status=TaskExecutionStatus.RUNNING,
             ),
             "status",
@@ -70,41 +70,6 @@ from ergon_core.core.persistence.telemetry.models import (
             ),
             "kind",
             "output",
-        ),
-        (
-            lambda: RunGenerationTurn(
-                run_id=uuid4(),
-                task_execution_id=uuid4(),
-                worker_binding_key="test",
-                turn_index=0,
-                raw_response={},
-                execution_outcome="success",
-            ),
-            "execution_outcome",
-            "success",
-        ),
-        (
-            lambda: RunGenerationTurn(
-                run_id=uuid4(),
-                task_execution_id=uuid4(),
-                worker_binding_key="test",
-                turn_index=0,
-                raw_response={},
-                execution_outcome="failure",
-            ),
-            "execution_outcome",
-            "failure",
-        ),
-        (
-            lambda: RunGenerationTurn(
-                run_id=uuid4(),
-                task_execution_id=uuid4(),
-                worker_binding_key="test",
-                turn_index=0,
-                raw_response={},
-            ),
-            "execution_outcome",
-            None,
         ),
         (
             lambda: TrainingSession(
@@ -161,20 +126,14 @@ def test_field_accepts_valid_value(build_fn, field, expected):
     assert getattr(roundtripped, field) == expected
 
 
-def test_tightened_list_types():
-    """JSON list columns accept typed lists."""
-    turn = RunGenerationTurn(
-        run_id=uuid4(),
-        task_execution_id=uuid4(),
-        worker_binding_key="test",
-        turn_index=0,
-        raw_response={},
-        tool_calls_json=[{"name": "search", "args": {}}],
-        tool_results_json=[{"tool_call_id": "1", "result": "ok"}],
-        token_ids_json=[1, 2, 3],
-        logprobs_json=[{"token": "hi", "logprob": -0.5}],
-    )
-    assert turn.token_ids_json == [1, 2, 3]
+def test_task_execution_rejects_missing_static_or_dynamic_identity():
+    with pytest.raises(ValidationError):
+        RunTaskExecution.model_validate(
+            {
+                "run_id": str(uuid4()),
+                "status": TaskExecutionStatus.RUNNING,
+            }
+        )
 
 
 def test_enum_value_matches_string():
@@ -205,18 +164,6 @@ def test_enum_value_matches_string():
             {"run_id": str(uuid4()), "status": "pending"},
             "status",
             "garbage",
-        ),
-        (
-            RunGenerationTurn,
-            {
-                "run_id": str(uuid4()),
-                "task_execution_id": str(uuid4()),
-                "worker_binding_key": "w",
-                "turn_index": 0,
-                "raw_response": {},
-            },
-            "execution_outcome",
-            "unknown-outcome",
         ),
         (
             RunResource,

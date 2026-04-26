@@ -25,7 +25,7 @@ from ergon_core.core.runtime.tracing import (
     sandbox_setup_context,
 )
 from ergon_core.core.settings import settings
-from sqlmodel import select
+from sqlmodel import col, select
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
                 "run_id": str(run_id),
                 "task_id": str(task_id),
                 "benchmark_type": benchmark_type,
-                "sandbox_id": result.sandbox_id or "",
+                "sandbox_id": result.sandbox_id,
                 "input_resource_count": len(payload.input_resource_ids),
             },
         )
@@ -111,9 +111,7 @@ async def _create_sandbox(
     if input_resource_ids:
         session = get_session()
         try:
-            stmt = select(RunResource).where(
-                RunResource.id.in_(input_resource_ids)  # type: ignore[union-attr]  # ty: ignore[unresolved-attribute]
-            )
+            stmt = select(RunResource).where(col(RunResource.id).in_(input_resource_ids))
             resources = list(session.exec(stmt).all())
         finally:
             session.close()

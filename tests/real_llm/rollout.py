@@ -18,7 +18,6 @@ Artifact layout:
     │   ├── run_task_executions.jsonl
     │   ├── run_resources.jsonl
     │   ├── run_task_evaluations.jsonl
-    │   ├── run_generation_turns.jsonl
     │   ├── sandbox_events.jsonl
     │   ├── run_graph_nodes.jsonl
     │   ├── run_graph_edges.jsonl
@@ -48,7 +47,6 @@ from ergon_core.core.persistence.graph.models import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
-    RunGenerationTurn,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -126,14 +124,6 @@ def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
                 ).all()
             ),
         )
-        counts["run_generation_turns"] = _write_jsonl(
-            db_dir / "run_generation_turns.jsonl",
-            list(
-                session.exec(
-                    select(RunGenerationTurn).where(RunGenerationTurn.run_id == run_id)
-                ).all()
-            ),
-        )
         counts["sandbox_events"] = _write_jsonl(
             db_dir / "sandbox_events.jsonl",
             list(session.exec(select(SandboxEvent).where(SandboxEvent.run_id == run_id)).all()),
@@ -179,6 +169,10 @@ async def capture_dashboard(
     itself useful rollout signal (dashboard regressed, or run not yet
     visible in index).
     """
+    if playwright_context is None:
+        logger.warning("capture_dashboard: Playwright unavailable; skipping screenshots")
+        return {}
+
     shots_dir = out_dir / "screenshots"
     captured: dict[str, str] = {}
 
@@ -300,9 +294,8 @@ def write_report(out_dir: Path, manifest_path: Path) -> Path:
             "",
             "- `db/run_record.json` — one row.  `summary_json` carries the run-wide",
             "  outcome fields; `status`, `started_at`, `completed_at` anchor the timeline.",
-            "- `db/run_generation_turns.jsonl` — every LLM turn in order.  Tool",
-            "  calls + returns + thinking + text.  Read this to reconstruct what the",
-            "  agent actually did.",
+            "- `db/run_context_events.jsonl` — every recorded context event in order.",
+            "  Tool calls + returns + thinking + text reconstruct what the agent did.",
             "- `db/run_graph_nodes.jsonl` + `run_graph_mutations.jsonl` — agent's",
             "  subtask structure over time.",
             "- `db/run_task_evaluations.jsonl` — rubric scores, if the evaluator ran.",

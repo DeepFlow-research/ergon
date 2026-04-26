@@ -21,29 +21,30 @@ from uuid import uuid4
 import pytest
 
 from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
+from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 from ergon_core.api.criterion_runtime import CommandResult
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 
 
-def _task_payload() -> dict:
-    return {
-        "instance_id": "swe-001",
-        "repo": "django/django",
-        "base_commit": "abc123",
-        "version": "4.2",
-        "problem_statement": "Fix the bug",
-        "hints_text": "",
-        "fail_to_pass": ["test_foo"],
-        "pass_to_pass": [],
-        "environment_setup_commit": "abc123",
-        "test_patch": "diff --git a/test.py b/test.py\n+# test",
-    }
+def _task_payload() -> SWEBenchTaskPayload:
+    return SWEBenchTaskPayload(
+        instance_id="swe-001",
+        repo="django/django",
+        base_commit="abc123",
+        version="4.2",
+        problem_statement="Fix the bug",
+        hints_text="",
+        fail_to_pass=["test_foo"],
+        pass_to_pass=[],
+        environment_setup_commit="abc123",
+        test_patch="diff --git a/test.py b/test.py\n+# test",
+    )
 
 
-def _task() -> BenchmarkTask:
-    return BenchmarkTask(
+def _task() -> BenchmarkTask[SWEBenchTaskPayload]:
+    return BenchmarkTask[SWEBenchTaskPayload](
         task_slug="swe-001",
         instance_key="default",
         description="Fix the bug",

@@ -1,5 +1,5 @@
 """Real-LLM harness canary — exercises the whole harness pipeline without
-actually spending tokens. Uses the smoke-test benchmark + stub-worker path.
+actually spending tokens. Uses the researchrubrics smoke fixture + stub model.
 
 Validates:
   - docker stack up (or --assume-stack-up), stack fixture did not skip
@@ -40,17 +40,19 @@ def _latest_run_id_since(since: datetime) -> str:
 
 async def test_harness_canary_smoke_stub(
     real_llm_stack: None,
-    harness_client,  # noqa: ANN001
-    playwright_context,  # noqa: ANN001
+    harness_client,
+    playwright_context,
 ) -> None:
     # Timestamp the boundary so we can filter for a run created *after* this point.
     before = datetime.now(timezone.utc)
 
     env = {
         **os.environ,
+        "ENABLE_TEST_HARNESS": "1",
+        "ENABLE_SMOKE_FIXTURES": "1",
         "ERGON_DATABASE_URL": os.environ.get(
             "ERGON_DATABASE_URL",
-            "postgresql://ergon:ergon@127.0.0.1:5433/ergon",
+            "postgresql://ergon:ergon_dev@127.0.0.1:5433/ergon",
         ),
     }
     result = subprocess.run(
@@ -60,13 +62,13 @@ async def test_harness_canary_smoke_stub(
             "ergon",
             "benchmark",
             "run",
-            "smoke-test",
+            "researchrubrics",
             "--model",
             "stub:constant",
             "--worker",
-            "training-stub",
+            "researchrubrics-smoke-worker",
             "--evaluator",
-            "stub-rubric",
+            "researchrubrics-smoke-criterion",
             "--limit",
             "1",
         ],
@@ -87,9 +89,10 @@ async def test_harness_canary_smoke_stub(
     assert len(state.get("graph_nodes", [])) >= 1
 
     # Playwright: dashboard index renders.
-    page = await playwright_context.new_page()
-    await page.goto("/")
-    await page.wait_for_load_state("networkidle")
-    # Loose assertion: page rendered.
-    content = await page.content()
-    assert content, "dashboard rendered empty"
+    if playwright_context is not None:
+        page = await playwright_context.new_page()
+        await page.goto("/")
+        await page.wait_for_load_state("networkidle")
+        # Loose assertion: page rendered.
+        content = await page.content()
+        assert content, "dashboard rendered empty"

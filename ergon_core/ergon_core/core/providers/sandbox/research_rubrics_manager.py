@@ -116,3 +116,44 @@ class ResearchRubricsSandboxManager(BaseSandboxManager):
             run_id=run_id,
             task_execution_id=task_execution_id,
         )
+
+    async def read_report_file(
+        self,
+        *,
+        task_id: UUID,
+        workspace_path: str,
+        duration_ms: int | None = None,
+    ) -> str:
+        """Read a report file from the sandbox and emit file-read telemetry."""
+        sandbox = self._get_raw_sandbox(task_id)
+        content = await sandbox.files.read(workspace_path)
+        if isinstance(content, bytes):
+            content = content.decode("utf-8")
+        await self._emit_wal_entry(
+            task_id,
+            command=f"files.read {workspace_path}",
+            stdout=f"path={workspace_path}\nbytes={len(content.encode('utf-8'))}",
+            exit_code=0,
+            duration_ms=duration_ms,
+        )
+        return content
+
+    async def write_report_file(
+        self,
+        *,
+        task_id: UUID,
+        workspace_path: str,
+        content: str,
+        duration_ms: int | None = None,
+    ) -> None:
+        """Write a report file to the sandbox and emit file-write telemetry."""
+        sandbox = self._get_raw_sandbox(task_id)
+        await sandbox.files.write(workspace_path, content.encode("utf-8"))
+        self.register_created_file(task_id, workspace_path)
+        await self._emit_wal_entry(
+            task_id,
+            command=f"files.write {workspace_path}",
+            stdout=f"path={workspace_path}\nbytes={len(content.encode('utf-8'))}",
+            exit_code=0,
+            duration_ms=duration_ms,
+        )

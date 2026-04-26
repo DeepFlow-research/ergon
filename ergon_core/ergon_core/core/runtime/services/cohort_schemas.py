@@ -3,6 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.telemetry.models import ExperimentCohortStatus
 from pydantic import BaseModel, Field
 
@@ -71,4 +72,4 @@ class ResolveCohortRequest(BaseModel):
     name: str
     description: str | None = None
     created_by: str | None = None
-    metadata: dict[str, object] = Field(default_factory=dict)
+    metadata: JsonObject = Field(default_factory=dict)

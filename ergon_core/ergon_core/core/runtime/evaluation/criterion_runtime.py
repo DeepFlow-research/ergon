@@ -28,21 +28,40 @@ from ergon_core.core.providers.sandbox.event_sink import (
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
 from ergon_core.core.settings import settings
 from openai import AsyncOpenAI
-from pydantic import BaseModel
-from sqlmodel import Session, select
+from pydantic import BaseModel, ConfigDict
+from sqlmodel import Session, desc, select
 
 if TYPE_CHECKING:
-    from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+    from ergon_core.core.providers.sandbox.manager import AsyncSandbox, BaseSandboxManager
 
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 # Re-export the Protocol so existing imports from this module keep working.
-__all__ = ["CriterionRuntime", "DefaultCriterionRuntime", "ResourceNotFoundError"]
+__all__ = [
+    "CriterionRuntime",
+    "CriterionRuntimeOptions",
+    "DefaultCriterionRuntime",
+    "ResourceNotFoundError",
+]
 
 
 class ResourceNotFoundError(LookupError):
     """Raised by ``read_resource`` when no ``RunResource`` row matches the name."""
+
+
+class CriterionRuntimeOptions(BaseModel):
+    """Optional runtime context for criterion execution."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+
+    run_id: UUID | None = None
+    task_id: UUID | None = None
+    sandbox_id: str | None = None
+    llm_model: str = "gpt-4o"
+    llm_max_tokens: int = 1024
+    llm_temperature: float = 0.0
+    event_sink: SandboxEventSink | None = None
 
 
 class DefaultCriterionRuntime:
@@ -78,35 +97,30 @@ class DefaultCriterionRuntime:
         ``NoopSandboxEventSink`` is used.
     """
 
-    def __init__(  # slopcop: ignore[max-function-params]
+    def __init__(
         self,
         context: CriterionContext,
         sandbox_manager: "BaseSandboxManager",
-        run_id: UUID | None = None,
-        task_id: UUID | None = None,
-        sandbox_id: str | None = None,
-        llm_model: str = "gpt-4o",
-        llm_max_tokens: int = 1024,
-        llm_temperature: float = 0.0,
-        event_sink: SandboxEventSink | None = None,
+        options: CriterionRuntimeOptions | None = None,
     ) -> None:
-        # reason: constructor fans out to three concerns — identity
-        # (run_id, task_id, sandbox_id), LLM-judge config (model, tokens,
-        # temperature), and observability (event_sink).  Grouping into a
-        # single config model would obscure which args come from the
-        # executor vs. which are test defaults; the keyword-only shape
-        # keeps each call site readable.
+        runtime_options = CriterionRuntimeOptions() if options is None else options
         self.context = context
         self.sandbox_manager: "BaseSandboxManager" = sandbox_manager
-        self._run_id: UUID = run_id if run_id is not None else context.run_id
-        self._task_id: UUID | None = task_id
-        self._sandbox_id: str | None = sandbox_id
-        self._reconnected_sandbox: object | None = None
+        self._run_id: UUID = (
+            runtime_options.run_id if runtime_options.run_id is not None else context.run_id
+        )
+        self._task_id: UUID | None = runtime_options.task_id
+        self._sandbox_id: str | None = runtime_options.sandbox_id
+        self._reconnected_sandbox: "AsyncSandbox | None" = None
         self._owns_sandbox = False
-        self._llm_model = llm_model
-        self._llm_max_tokens = llm_max_tokens
-        self._llm_temperature = llm_temperature
-        self._event_sink: SandboxEventSink = event_sink or NoopSandboxEventSink()
+        self._llm_model = runtime_options.llm_model
+        self._llm_max_tokens = runtime_options.llm_max_tokens
+        self._llm_temperature = runtime_options.llm_temperature
+        self._event_sink: SandboxEventSink = (
+            NoopSandboxEventSink()
+            if runtime_options.event_sink is None
+            else runtime_options.event_sink
+        )
 
     # ── sandbox lifecycle ─────────────────────────────────────────────
 
@@ -158,7 +172,7 @@ class DefaultCriterionRuntime:
         )
         self._owns_sandbox = True
 
-    def _current_sandbox(self):  # type: ignore[no-untyped-def]
+    def _current_sandbox(self) -> "AsyncSandbox | None":
         """Return the currently-attached sandbox handle.
 
         Prefers the in-process ``_sandboxes`` entry (populated by
@@ -263,7 +277,7 @@ class DefaultCriterionRuntime:
                 select(RunResource)
                 .where(RunResource.run_id == self._run_id)
                 .where(RunResource.name == name)
-                .order_by(RunResource.created_at.desc())  # type: ignore[arg-type]  # ty: ignore[unresolved-attribute]
+                .order_by(desc(RunResource.created_at))
                 .limit(1)
             )
             row = session.exec(stmt).first()
@@ -286,7 +300,7 @@ class DefaultCriterionRuntime:
             stmt = (
                 select(RunResource)
                 .where(RunResource.run_id == self._run_id)
-                .order_by(RunResource.created_at.desc())  # type: ignore[arg-type]  # ty: ignore[unresolved-attribute]
+                .order_by(desc(RunResource.created_at))
             )
             rows = list(session.exec(stmt).all())
         return [RunResourceView.from_row(r) for r in rows]
@@ -306,7 +320,7 @@ class DefaultCriterionRuntime:
                 select(RunResource)
                 .where(RunResource.run_id == self._run_id)
                 .where(RunResource.task_execution_id == self._task_id)
-                .order_by(RunResource.created_at.desc())  # type: ignore[arg-type]  # ty: ignore[unresolved-attribute]
+                .order_by(desc(RunResource.created_at))
             )
             rows = list(session.exec(stmt).all())
 

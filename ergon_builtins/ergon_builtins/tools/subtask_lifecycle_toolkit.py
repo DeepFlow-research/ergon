@@ -6,9 +6,11 @@ add_subtask, plan_subtasks, cancel_task, refine_task, restart_task,
 list_subtasks, get_subtask, and sandboxed bash.
 """
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Literal
 from uuid import UUID
+
+from pydantic import BaseModel
 
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
@@ -25,10 +27,103 @@ from ergon_core.core.runtime.services.task_management_dto import (
     RestartTaskCommand,
     SubtaskSpec,
 )
+from ergon_core.core.runtime.services.task_inspection_dto import SubtaskInfo
 from ergon_core.core.runtime.services.task_management_service import TaskManagementService
 from ergon_core.core.runtime.services.task_inspection_service import TaskInspectionService
 
 from ergon_builtins.tools.bash_sandbox_tool import make_sandbox_bash_tool
+
+
+class ToolFailure(BaseModel):
+    kind: Literal["failure"] = "failure"
+    error: str
+
+    model_config = {"frozen": True}
+
+
+class AddSubtaskToolSuccess(BaseModel):
+    kind: Literal["success"] = "success"
+    node_id: NodeId
+    task_slug: TaskSlug
+    status: str
+
+    model_config = {"frozen": True}
+
+
+type AddSubtaskToolResponse = AddSubtaskToolSuccess | ToolFailure
+
+
+class PlanSubtasksToolSuccess(BaseModel):
+    kind: Literal["success"] = "success"
+    nodes: dict[TaskSlug, NodeId]
+    roots: list[TaskSlug]
+
+    model_config = {"frozen": True}
+
+
+type PlanSubtasksToolResponse = PlanSubtasksToolSuccess | ToolFailure
+
+
+class CancelTaskToolSuccess(BaseModel):
+    kind: Literal["success"] = "success"
+    node_id: NodeId
+    old_status: str
+    cascaded_count: int
+
+    model_config = {"frozen": True}
+
+
+type CancelTaskToolResponse = CancelTaskToolSuccess | ToolFailure
+
+
+class RefineTaskToolSuccess(BaseModel):
+    kind: Literal["success"] = "success"
+    node_id: NodeId
+    old_description: str
+    new_description: str
+
+    model_config = {"frozen": True}
+
+
+type RefineTaskToolResponse = RefineTaskToolSuccess | ToolFailure
+
+
+class RestartTaskToolSuccess(BaseModel):
+    kind: Literal["success"] = "success"
+    node_id: NodeId
+    old_status: str
+    invalidated_node_ids: list[NodeId]
+
+    model_config = {"frozen": True}
+
+
+type RestartTaskToolResponse = RestartTaskToolSuccess | ToolFailure
+
+
+class ListSubtasksToolSuccess(BaseModel):
+    kind: Literal["success"] = "success"
+    subtasks: list[SubtaskInfo]
+
+    model_config = {"frozen": True}
+
+
+type ListSubtasksToolResponse = ListSubtasksToolSuccess | ToolFailure
+
+
+class GetSubtaskToolSuccess(BaseModel):
+    kind: Literal["success"] = "success"
+    node_id: NodeId
+    task_slug: str
+    description: str
+    status: str
+    depends_on: list[NodeId]
+    output: str | None
+    error: str | None
+
+    model_config = {"frozen": True}
+
+
+type GetSubtaskToolResponse = GetSubtaskToolSuccess | ToolFailure
 
 
 class SubtaskLifecycleToolkit:
@@ -64,7 +159,7 @@ class SubtaskLifecycleToolkit:
         self._mgmt = TaskManagementService()
         self._inspect = TaskInspectionService()
 
-    def get_tools(self) -> list[Callable[..., Any]]:  # slopcop: ignore[no-typing-any]
+    def get_tools(self) -> list[Callable[..., Awaitable[BaseModel]]]:
         """Return the eight subtask lifecycle tools for Agent(tools=[...])."""
         return [
             self._make_add_subtask(),
@@ -79,7 +174,7 @@ class SubtaskLifecycleToolkit:
 
     # -- management --------------------------------------------------------
 
-    def _make_add_subtask(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_add_subtask(self) -> Callable[..., Awaitable[AddSubtaskToolResponse]]:
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
 
         async def add_subtask(
@@ -87,7 +182,7 @@ class SubtaskLifecycleToolkit:
             description: str,
             assigned_worker_slug: str,
             depends_on: list[str] | None = None,
-        ) -> dict[str, object]:
+        ) -> AddSubtaskToolResponse:
             """Spawn one subtask under this manager.
 
             The ``task_slug`` is a short kebab-case identifier for this
@@ -116,16 +211,16 @@ class SubtaskLifecycleToolkit:
                             depends_on=deps,
                         ),
                     )
-                return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
-                return {"success": False, "error": str(exc)}
+                return AddSubtaskToolSuccess.model_validate(result.model_dump())
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
+                return ToolFailure(error=str(exc))
 
         return add_subtask
 
-    def _make_plan_subtasks(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_plan_subtasks(self) -> Callable[..., Awaitable[PlanSubtasksToolResponse]]:
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
 
-        async def plan_subtasks(subtasks: list[dict]) -> dict[str, object]:
+        async def plan_subtasks(subtasks: list[SubtaskSpec]) -> PlanSubtasksToolResponse:
             """Atomically create a sub-DAG. Each entry has ``task_slug``
             (kebab-case identifier, persisted verbatim on the graph node),
             ``description``, required ``assigned_worker_slug``, and
@@ -133,26 +228,25 @@ class SubtaskLifecycleToolkit:
             within this same call. Cycles, duplicate slugs, and unknown
             slugs are rejected."""
             try:
-                specs = [SubtaskSpec.model_validate(s) for s in subtasks]
                 with get_session() as session:
                     result = await mgmt.plan_subtasks(
                         session,
                         PlanSubtasksCommand(
                             run_id=run_id,
                             parent_node_id=pid,
-                            subtasks=specs,
+                            subtasks=subtasks,
                         ),
                     )
-                return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
-                return {"success": False, "error": str(exc)}
+                return PlanSubtasksToolSuccess.model_validate(result.model_dump())
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
+                return ToolFailure(error=str(exc))
 
         return plan_subtasks
 
-    def _make_cancel_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_cancel_task(self) -> Callable[..., Awaitable[CancelTaskToolResponse]]:
         mgmt, run_id = self._mgmt, self._run_id
 
-        async def cancel_task(node_id: str) -> dict[str, object]:
+        async def cancel_task(node_id: str) -> CancelTaskToolResponse:
             """Cancel a subtask. Any descendants are cancelled via engine cascade."""
             try:
                 with get_session() as session:
@@ -160,16 +254,16 @@ class SubtaskLifecycleToolkit:
                         session,
                         CancelTaskCommand(run_id=run_id, node_id=NodeId(UUID(node_id))),
                     )
-                return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
-                return {"success": False, "error": str(exc)}
+                return CancelTaskToolSuccess.model_validate(result.model_dump())
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
+                return ToolFailure(error=str(exc))
 
         return cancel_task
 
-    def _make_refine_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_refine_task(self) -> Callable[..., Awaitable[RefineTaskToolResponse]]:
         mgmt, run_id = self._mgmt, self._run_id
 
-        async def refine_task(node_id: str, new_description: str) -> dict[str, object]:
+        async def refine_task(node_id: str, new_description: str) -> RefineTaskToolResponse:
             """Refine a subtask's description. Allowed on any status except RUNNING.
 
             Pairs with ``restart_task`` for the edit-then-rerun flow: call
@@ -186,16 +280,16 @@ class SubtaskLifecycleToolkit:
                             new_description=new_description,
                         ),
                     )
-                return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
-                return {"success": False, "error": str(exc)}
+                return RefineTaskToolSuccess.model_validate(result.model_dump())
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
+                return ToolFailure(error=str(exc))
 
         return refine_task
 
-    def _make_restart_task(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_restart_task(self) -> Callable[..., Awaitable[RestartTaskToolResponse]]:
         mgmt, run_id = self._mgmt, self._run_id
 
-        async def restart_task(node_id: str) -> dict[str, object]:
+        async def restart_task(node_id: str) -> RestartTaskToolResponse:
             """Reset a terminal subtask back to PENDING and re-dispatch.
 
             Only nodes in terminal status (COMPLETED / FAILED / CANCELLED)
@@ -212,44 +306,41 @@ class SubtaskLifecycleToolkit:
                             node_id=NodeId(UUID(node_id)),
                         ),
                     )
-                return {"success": True, **result.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
-                return {"success": False, "error": str(exc)}
+                return RestartTaskToolSuccess.model_validate(result.model_dump())
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
+                return ToolFailure(error=str(exc))
 
         return restart_task
 
     # -- inspection --------------------------------------------------------
 
-    def _make_list_subtasks(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_list_subtasks(self) -> Callable[..., Awaitable[ListSubtasksToolResponse]]:
         inspect, run_id, pid = self._inspect, self._run_id, self._parent_node_id
 
-        async def list_subtasks() -> dict[str, object]:
+        async def list_subtasks() -> ListSubtasksToolResponse:
             """Return the current status and output-excerpt of every direct subtask."""
             try:
                 with get_session() as session:
                     infos = inspect.list_subtasks(session, run_id=run_id, parent_node_id=pid)
-                return {
-                    "success": True,
-                    "subtasks": [i.model_dump(mode="json") for i in infos],
-                }
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
-                return {"success": False, "error": str(exc)}
+                return ListSubtasksToolSuccess(subtasks=infos)
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
+                return ToolFailure(error=str(exc))
 
         return list_subtasks
 
-    def _make_get_subtask(self) -> Callable[..., Any]:  # slopcop: ignore[no-typing-any]
+    def _make_get_subtask(self) -> Callable[..., Awaitable[GetSubtaskToolResponse]]:
         inspect, run_id = self._inspect, self._run_id
 
-        async def get_subtask(node_id: str) -> dict[str, object]:
+        async def get_subtask(node_id: str) -> GetSubtaskToolResponse:
             """Return the full SubtaskInfo for one node_id."""
             try:
                 with get_session() as session:
                     info = inspect.get_subtask(
                         session, run_id=run_id, node_id=NodeId(UUID(node_id))
                     )
-                return {"success": True, **info.model_dump(mode="json")}
-            except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
-                return {"success": False, "error": str(exc)}
+                return GetSubtaskToolSuccess.model_validate(info.model_dump())
+            except Exception as exc:  # slopcop: ignore[no-broad-except]
+                return ToolFailure(error=str(exc))
 
         return get_subtask
 
@@ -259,7 +350,7 @@ def build_subtask_lifecycle_tools(
     run_id: UUID,
     parent_node_id: UUID,
     sandbox_id: str,
-) -> list[Callable[..., Any]]:  # slopcop: ignore[no-typing-any]
+) -> list[Callable[..., Awaitable[BaseModel]]]:
     """Factory entry point for workers.
 
     Convenience wrapper so workers don't need to know about the toolkit class.

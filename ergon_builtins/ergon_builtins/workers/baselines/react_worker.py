@@ -18,6 +18,7 @@ from ergon_core.api.generation import (
     ToolReturnPart,
     UserPromptPart,
 )
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.context.assembly import assemble_pydantic_ai_messages
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.shared.db import get_session
@@ -109,7 +110,7 @@ class ReActWorker(Worker):
         """Run the underlying pydantic-ai agent and yield the turns it produced."""
         resolved = resolve_model_target(self.model)
 
-        model_settings: dict[str, object] | None = None
+        model_settings: JsonObject | None = None
         if resolved.supports_logprobs and self.model and self.model.startswith("vllm:"):
             model_settings = LOGPROB_SETTINGS
 
@@ -163,17 +164,25 @@ class ReActWorker(Worker):
         with get_session() as session:
             repo = ContextEventRepository()
             events = repo.get_for_execution(session, context.execution_id)
-        text_events = [e for e in events if e.event_type == "assistant_text"]
-        if not text_events:
-            return WorkerOutput(output="", success=False)
-        last = text_events[-1].parsed_payload()
-        if not isinstance(last, AssistantTextPayload):
-            raise ValueError(f"Expected AssistantTextPayload, got {type(last)}")
         turn_ids: set[str] = set()
         for e in events:
             payload = e.parsed_payload()
             if isinstance(payload, (AssistantTextPayload, ToolCallPayload, ThinkingPayload)):
                 turn_ids.add(payload.turn_id)
+
+        text_events = [e for e in events if e.event_type == "assistant_text"]
+        if not text_events:
+            output = _latest_final_result_message(events, ToolCallPayload)
+            if not output:
+                return WorkerOutput(output="", success=False)
+            return WorkerOutput(
+                output=output,
+                success=bool(output),
+                metadata={"turn_count": len(turn_ids)},
+            )
+        last = text_events[-1].parsed_payload()
+        if not isinstance(last, AssistantTextPayload):
+            raise ValueError(f"Expected AssistantTextPayload, got {type(last)}")
         return WorkerOutput(
             output=last.text,
             success=True,
@@ -204,10 +213,31 @@ class ReActWorker(Worker):
 
 def _format_task(task: BenchmarkTask) -> str:
     lines = [f"Task: {task.description}"]
-    if task.task_payload:
+    payload = task.task_payload.model_dump(mode="json")
+    if payload:
         lines.append("")
-        lines.append(f"Payload: {json.dumps(task.task_payload, default=str)}")
+        lines.append(f"Payload: {json.dumps(payload, default=str)}")
     return "\n".join(lines)
+
+
+def _latest_final_result_message(
+    events: list[Any],  # slopcop: ignore[no-typing-any]
+    payload_type: type[Any],  # slopcop: ignore[no-typing-any]
+) -> str:
+    """Extract fallback text from the latest ``final_result`` tool call."""
+    messages: list[str] = []
+    for event in events:
+        try:
+            event_type = event.event_type
+        except AttributeError:
+            continue
+        if event_type != "tool_call":
+            continue
+        payload = event.parsed_payload()
+        if not isinstance(payload, payload_type) or payload.tool_name != "final_result":
+            continue
+        messages.append(str(payload.args.get("final_assistant_message", "")))
+    return messages[-1] if messages else ""
 
 
 def _build_turns(messages: list[ModelMessage]) -> list[GenerationTurn]:

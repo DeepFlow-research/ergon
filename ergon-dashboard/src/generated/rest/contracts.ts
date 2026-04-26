@@ -49,10 +49,10 @@ const RunEvaluationCriterionDto = z.object({
   criterionNum: z.number().int(),
   criterionType: z.string(),
   criterionDescription: z.string(),
-  evaluationInput: z.string(),
+  evaluationInput: z.union([z.string(), z.null()]).optional(),
   score: z.number(),
   maxScore: z.number(),
-  feedback: z.string(),
+  feedback: z.union([z.string(), z.null()]).optional(),
   evaluatedActionIds: z.array(z.string()).optional(),
   evaluatedResourceIds: z.array(z.string()).optional(),
   error: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
@@ -89,25 +89,17 @@ const RunSandboxDto = z.object({
   closeReason: z.union([z.string(), z.null()]).optional(),
   commands: z.array(RunSandboxCommandDto).optional(),
 });
-const RunGenerationTurnDto = z.object({
+const RunContextEventDto = z.object({
   id: z.string(),
   taskExecutionId: z.string(),
+  taskNodeId: z.string(),
   workerBindingKey: z.string(),
-  turnIndex: z.number().int(),
-  promptText: z.union([z.string(), z.null()]).optional(),
-  rawResponse: z.object({}).partial().passthrough(),
-  responseText: z.union([z.string(), z.null()]).optional(),
-  toolCalls: z
-    .union([z.array(z.object({}).partial().passthrough()), z.null()])
-    .optional(),
-  toolResults: z
-    .union([z.array(z.object({}).partial().passthrough()), z.null()])
-    .optional(),
-  policyVersion: z.union([z.string(), z.null()]).optional(),
-  hasLogprobs: z.boolean().optional().default(false),
-  createdAt: z.union([z.string(), z.null()]).optional(),
-  tokenIds: z.union([z.array(z.number().int()), z.null()]).optional(),
-  logprobs: z.union([z.array(z.number()), z.null()]).optional(),
+  sequence: z.number().int(),
+  eventType: z.string(),
+  payload: z.object({}).partial().passthrough(),
+  createdAt: z.string(),
+  startedAt: z.union([z.string(), z.null()]).optional(),
+  completedAt: z.union([z.string(), z.null()]).optional(),
 });
 const RunCommunicationMessageDto = z.object({
   id: z.string(),
@@ -115,6 +107,7 @@ const RunCommunicationMessageDto = z.object({
   threadTopic: z.string(),
   runId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
+  taskExecutionId: z.union([z.string(), z.null()]).optional(),
   fromAgentId: z.string(),
   toAgentId: z.string(),
   content: z.string(),
@@ -143,7 +136,7 @@ const RunSnapshotDto = z.object({
   executionsByTask: z.record(z.string(), z.array(RunExecutionAttemptDto)).optional(),
   evaluationsByTask: z.record(z.string(), RunTaskEvaluationDto).optional(),
   sandboxesByTask: z.record(z.string(), RunSandboxDto).optional(),
-  generationTurnsByTask: z.record(z.string(), z.array(RunGenerationTurnDto)).optional(),
+  contextEventsByTask: z.record(z.string(), z.array(RunContextEventDto)).optional(),
   threads: z.array(RunCommunicationThreadDto).optional(),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
@@ -169,7 +162,7 @@ const HTTPValidationError = z
   .object({ detail: z.array(ValidationError) })
   .partial()
   .passthrough();
-const include = z.union([z.string(), z.null()]).optional();
+const definition_id = z.union([z.string(), z.null()]).optional();
 const TrainingCurvePointDto = z.object({
   runId: z.string(),
   step: z.number().int(),
@@ -315,13 +308,13 @@ export const schemas = {
   RunTaskEvaluationDto,
   RunSandboxCommandDto,
   RunSandboxDto,
-  RunGenerationTurnDto,
+  RunContextEventDto,
   RunCommunicationMessageDto,
   RunCommunicationThreadDto,
   RunSnapshotDto,
   ValidationError,
   HTTPValidationError,
-  include,
+  definition_id,
   TrainingCurvePointDto,
   TrainingSessionDto,
   TrainingMetricDto,

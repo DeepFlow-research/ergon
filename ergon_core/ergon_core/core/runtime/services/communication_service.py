@@ -3,6 +3,10 @@
 import logging
 from uuid import UUID
 
+from ergon_core.core.api.schemas import (
+    RunCommunicationMessageDto,
+    RunCommunicationThreadDto,
+)
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
@@ -72,32 +76,32 @@ class CommunicationService:
                 created_at=message.created_at,
             )
 
-        thread_dict = {
-            "id": str(thread.id),
-            "runId": str(thread.run_id),
-            "topic": thread.topic,
-            "agentAId": thread.agent_a_id,
-            "agentBId": thread.agent_b_id,
-            "createdAt": thread.created_at.isoformat(),
-            "updatedAt": thread.updated_at.isoformat(),
-            "messages": [],
-        }
-        message_dict = {
-            "id": str(message.id),
-            "threadId": str(message.thread_id),
-            "threadTopic": thread.topic,
-            "runId": str(message.run_id),
-            "fromAgentId": message.from_agent_id,
-            "toAgentId": message.to_agent_id,
-            "content": message.content,
-            "sequenceNum": message.sequence_num,
-            "createdAt": message.created_at.isoformat(),
-        }
+        thread_dto = RunCommunicationThreadDto(
+            id=str(thread.id),
+            run_id=str(thread.run_id),
+            topic=thread.topic,
+            agent_a_id=thread.agent_a_id,
+            agent_b_id=thread.agent_b_id,
+            created_at=thread.created_at,
+            updated_at=thread.updated_at,
+            messages=[],
+        )
+        message_dto = RunCommunicationMessageDto(
+            id=str(message.id),
+            thread_id=str(message.thread_id),
+            thread_topic=thread.topic,
+            run_id=str(message.run_id),
+            from_agent_id=message.from_agent_id,
+            to_agent_id=message.to_agent_id,
+            content=message.content,
+            sequence_num=message.sequence_num,
+            created_at=message.created_at,
+        )
         try:
             await dashboard_emitter.thread_message_created(
                 run_id=request.run_id,
-                thread=thread_dict,
-                message=message_dict,
+                thread=thread_dto,
+                message=message_dto,
             )
         except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to emit thread_message_created", exc_info=True)

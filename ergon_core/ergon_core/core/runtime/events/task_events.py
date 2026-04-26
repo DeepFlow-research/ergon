@@ -52,7 +52,7 @@ class TaskCompletedEvent(InngestEventContract):
     task_id: UUID | None = None
     execution_id: UUID
     sandbox_id: SandboxId
-    node_id: UUID | None = None
+    node_id: UUID
 
 
 class TaskFailedEvent(InngestEventContract):

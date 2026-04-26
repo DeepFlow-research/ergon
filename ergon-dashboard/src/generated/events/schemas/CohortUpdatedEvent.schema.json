@@ -1,6 +1,169 @@
 {
+  "$defs": {
+    "CohortStatusCountsDto": {
+      "description": "Aggregate run counts by lifecycle status.",
+      "properties": {
+        "pending": {
+          "default": 0,
+          "title": "Pending",
+          "type": "integer"
+        },
+        "executing": {
+          "default": 0,
+          "title": "Executing",
+          "type": "integer"
+        },
+        "evaluating": {
+          "default": 0,
+          "title": "Evaluating",
+          "type": "integer"
+        },
+        "completed": {
+          "default": 0,
+          "title": "Completed",
+          "type": "integer"
+        },
+        "failed": {
+          "default": 0,
+          "title": "Failed",
+          "type": "integer"
+        }
+      },
+      "title": "CohortStatusCountsDto",
+      "type": "object"
+    },
+    "CohortSummaryDto": {
+      "description": "Summary row for cohort list and live updates.",
+      "properties": {
+        "cohort_id": {
+          "format": "uuid",
+          "title": "Cohort Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created By"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "total_runs": {
+          "default": 0,
+          "title": "Total Runs",
+          "type": "integer"
+        },
+        "status_counts": {
+          "$ref": "#/$defs/CohortStatusCountsDto"
+        },
+        "average_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Average Score"
+        },
+        "best_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Best Score"
+        },
+        "worst_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worst Score"
+        },
+        "average_duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Average Duration Ms"
+        },
+        "failure_rate": {
+          "default": 0.0,
+          "title": "Failure Rate",
+          "type": "number"
+        },
+        "stats_updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stats Updated At"
+        }
+      },
+      "required": [
+        "cohort_id",
+        "name",
+        "created_at",
+        "status"
+      ],
+      "title": "CohortSummaryDto",
+      "type": "object"
+    }
+  },
   "additionalProperties": true,
-  "description": "TODO(E2b): tighten ``summary`` to ``CohortSummaryDto`` and update\nthe emitter accordingly.",
+  "description": "Live cohort summary update.",
   "properties": {
     "cohort_id": {
       "format": "uuid",
@@ -8,9 +171,7 @@
       "type": "string"
     },
     "summary": {
-      "additionalProperties": true,
-      "title": "Summary",
-      "type": "object"
+      "$ref": "#/$defs/CohortSummaryDto"
     }
   },
   "required": [

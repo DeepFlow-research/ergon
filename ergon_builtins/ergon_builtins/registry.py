@@ -65,11 +65,15 @@ try:
         EVALUATORS as _data_evaluators,
     )
     from ergon_builtins.registry_data import (
+        SANDBOX_MANAGERS as _data_sandbox_managers,
+    )
+    from ergon_builtins.registry_data import (
         WORKERS as _data_workers,
     )
 
     BENCHMARKS.update(_data_benchmarks)
     EVALUATORS.update(_data_evaluators)
+    SANDBOX_MANAGERS.update(_data_sandbox_managers)
     WORKERS.update(_data_workers)
 except ImportError:
     log.info(

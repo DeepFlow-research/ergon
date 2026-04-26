@@ -23,7 +23,7 @@ from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxMana
 from ergon_builtins.benchmarks.minif2f.sandbox.utils import REGISTRY_PATH
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
     DefaultCriterionRuntime,
@@ -62,7 +62,7 @@ def _make_task() -> BenchmarkTask:
         instance_key="default",
         description=("theorem mathd_algebra_176 (x : ℝ) : (x + 1) ^ 2 * x = x ^ 3 + 2 * x ^ 2 + x"),
         evaluator_binding_keys=("default",),
-        task_payload={},
+        task_payload=EmptyTaskPayload(),
     )
 
 
@@ -77,7 +77,11 @@ async def _setup_runtime(
         run_id=run_id,
         timeout_minutes=10,
     )
-    ctx = CriterionContext(run_id=run_id)
+    ctx = CriterionContext(
+        run_id=run_id,
+        task_input="test task",
+        agent_reasoning="test output",
+    )
     return DefaultCriterionRuntime(context=ctx, sandbox_manager=sandbox_manager)
 
 

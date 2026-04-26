@@ -5,11 +5,7 @@ Covers the four new methods added in the criterion-runtime-di-container RFC:
 Also covers ``run_id`` / ``task_id`` resolution.
 """
 
-from __future__ import annotations
-
-import asyncio
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -23,25 +19,43 @@ from ergon_core.core.providers.sandbox.event_sink import (
     NoopSandboxEventSink,
 )
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
+    CriterionRuntimeOptions,
     DefaultCriterionRuntime,
     ResourceNotFoundError,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
 
 
-def _make_runtime(**overrides: Any) -> DefaultCriterionRuntime:
-    context = CriterionContext(run_id=uuid4())
+def _criterion_context(run_id=None) -> CriterionContext:
+    return CriterionContext(
+        run_id=run_id or uuid4(),
+        task_input="test task",
+        agent_reasoning="test output",
+    )
+
+
+def _make_runtime(
+    *,
+    run_id=None,
+    task_id=None,
+    event_sink=None,
+) -> DefaultCriterionRuntime:
+    context = _criterion_context()
     sandbox_manager = MagicMock()
-    kwargs: dict[str, Any] = {
-        "context": context,
-        "sandbox_manager": sandbox_manager,
-    }
-    kwargs.update(overrides)
-    return DefaultCriterionRuntime(**kwargs)
+    return DefaultCriterionRuntime(
+        context=context,
+        sandbox_manager=sandbox_manager,
+        options=CriterionRuntimeOptions(
+            run_id=run_id,
+            task_id=task_id,
+            event_sink=event_sink,
+        ),
+    )
 
 
 class TestReadResource:
-    def test_found_reads_blob(self, tmp_path: Path) -> None:
+    @pytest.mark.asyncio
+    async def test_found_reads_blob(self, tmp_path: Path) -> None:
         """read_resource returns bytes from file_path on disk."""
         blob = tmp_path / "abc"
         blob.write_bytes(b"hello-world")
@@ -63,11 +77,12 @@ class TestReadResource:
             "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
-            result = asyncio.run(runtime.read_resource("patch"))
+            result = await runtime.read_resource("patch")
 
         assert result == b"hello-world"
 
-    def test_not_found_raises(self) -> None:
+    @pytest.mark.asyncio
+    async def test_not_found_raises(self) -> None:
         """read_resource raises ResourceNotFoundError when no row matches."""
         runtime = _make_runtime()
 
@@ -81,11 +96,12 @@ class TestReadResource:
             return_value=mock_session,
         ):
             with pytest.raises(ResourceNotFoundError, match="no_such_resource"):
-                asyncio.run(runtime.read_resource("no_such_resource"))
+                await runtime.read_resource("no_such_resource")
 
 
 class TestListResources:
-    def test_returns_dtos_newest_first(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_dtos_newest_first(self) -> None:
         """list_resources maps ORM rows to RunResourceView DTOs."""
         runtime = _make_runtime()
         mock_row = MagicMock()
@@ -102,12 +118,13 @@ class TestListResources:
             ),
             patch.object(RunResourceView, "from_row", return_value=MagicMock()) as mock_from_row,
         ):
-            result = asyncio.run(runtime.list_resources())
+            result = await runtime.list_resources()
 
         assert len(result) == 1
         mock_from_row.assert_called_once_with(mock_row)
 
-    def test_returns_empty_list_when_no_resources(self) -> None:
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_no_resources(self) -> None:
         """list_resources returns [] when there are no run_resources rows."""
         runtime = _make_runtime()
 
@@ -120,7 +137,7 @@ class TestListResources:
             "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
-            result = asyncio.run(runtime.list_resources())
+            result = await runtime.list_resources()
 
         assert result == []
 
@@ -152,18 +169,18 @@ class TestEventSink:
 class TestRunIdResolution:
     def test_explicit_run_id_overrides_context(self) -> None:
         """When run_id is given explicitly it takes precedence over context.run_id."""
-        context = CriterionContext(run_id=uuid4())
+        context = _criterion_context()
         explicit_id = uuid4()
         runtime = DefaultCriterionRuntime(
             context=context,
             sandbox_manager=MagicMock(),
-            run_id=explicit_id,
+            options=CriterionRuntimeOptions(run_id=explicit_id),
         )
         assert runtime._run_id == explicit_id
 
     def test_default_falls_back_to_context(self) -> None:
         """When run_id is omitted, _run_id equals context.run_id."""
-        context = CriterionContext(run_id=uuid4())
+        context = _criterion_context()
         runtime = DefaultCriterionRuntime(
             context=context,
             sandbox_manager=MagicMock(),
@@ -172,12 +189,12 @@ class TestRunIdResolution:
 
     def test_task_id_stored(self) -> None:
         """task_id is stored on _task_id when provided."""
-        context = CriterionContext(run_id=uuid4())
+        context = _criterion_context()
         tid = uuid4()
         runtime = DefaultCriterionRuntime(
             context=context,
             sandbox_manager=MagicMock(),
-            task_id=tid,
+            options=CriterionRuntimeOptions(task_id=tid),
         )
         assert runtime._task_id == tid
 

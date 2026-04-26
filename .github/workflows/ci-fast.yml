@@ -31,6 +31,9 @@ jobs:
       - name: slopcop check
         run: uv run slopcop ergon_core ergon_builtins ergon_cli ergon_infra
 
+      - name: Suppression budget
+        run: uv run python scripts/check_suppression_budget.py
+
       - name: Cyclomatic complexity check (xenon)
         # Thresholds reflect current baseline; tighten as complexity debt is paid down.
         # F/E/C = max-absolute/max-modules/max-average. Radon grades: A(1-5) B(6-10) C(11-15) D(16-20) E(21-25) F(26+)

@@ -134,17 +134,6 @@ export const DashboardTaskEvaluationUpdatedDataSchema = z.object({
   evaluation: RunTaskEvaluationSchema,
 });
 
-export const DashboardGenerationTurnCompletedDataSchema = z.object({
-  run_id: z.string().uuid(),
-  task_execution_id: z.string().uuid(),
-  worker_binding_key: z.string(),
-  worker_name: z.string(),
-  turn_index: z.number().int(),
-  response_text: z.string().nullable().optional(),
-  tool_calls: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
-  policy_version: z.string().nullable().optional(),
-});
-
 export const RunListEntrySchema = z.object({
   runId: z.string(),
   name: z.string(),
@@ -215,9 +204,6 @@ export interface DashboardTaskEvaluationUpdatedData {
   task_id: string | null;
   evaluation: RunTaskEvaluation;
 }
-export type DashboardGenerationTurnCompletedData = z.infer<
-  typeof DashboardGenerationTurnCompletedDataSchema
->;
 export type RunListEntry = z.infer<typeof RunListEntrySchema>;
 export type RunCompletedSocketData = z.infer<typeof RunCompletedSocketDataSchema>;
 export type TaskStatusSocketData = z.infer<typeof TaskStatusSocketDataSchema>;
@@ -236,6 +222,25 @@ export interface SandboxCommandSocketData {
 }
 export type SandboxClosedSocketData = z.infer<typeof SandboxClosedSocketDataSchema>;
 
+function camelizeKey(key: string): string {
+  return key.replace(/_([a-z])/g, (_, char: string) => char.toUpperCase());
+}
+
+function camelizeObjectKeys(input: unknown): unknown {
+  if (Array.isArray(input)) {
+    return input.map(camelizeObjectKeys);
+  }
+  if (input === null || typeof input !== "object") {
+    return input;
+  }
+  return Object.fromEntries(
+    Object.entries(input as Record<string, unknown>).map(([key, value]) => [
+      camelizeKey(key),
+      camelizeObjectKeys(value),
+    ]),
+  );
+}
+
 // TODO(E2b): replace with generated once backend ``summary`` type is tightened
 // (docs/bugs/open/2026-04-23-inngest-function-failures.md § E2b).
 export function parseDashboardCohortUpdatedData(input: unknown): DashboardCohortUpdatedData {
@@ -251,7 +256,12 @@ export function parseDashboardCohortUpdatedData(input: unknown): DashboardCohort
 export function parseDashboardThreadMessageCreatedData(
   input: unknown,
 ): DashboardThreadMessageCreatedData {
-  const parsed = DashboardThreadMessageCreatedDataSchema.parse(input);
+  const raw = z.object({ thread: z.unknown(), message: z.unknown() }).passthrough().parse(input);
+  const parsed = DashboardThreadMessageCreatedDataSchema.parse({
+    ...raw,
+    thread: camelizeObjectKeys(raw.thread),
+    message: camelizeObjectKeys(raw.message),
+  });
   return {
     run_id: parsed.run_id,
     thread: parseRunCommunicationThread(parsed.thread),
@@ -264,7 +274,11 @@ export function parseDashboardThreadMessageCreatedData(
 export function parseDashboardTaskEvaluationUpdatedData(
   input: unknown,
 ): DashboardTaskEvaluationUpdatedData {
-  const parsed = DashboardTaskEvaluationUpdatedDataSchema.parse(input);
+  const raw = z.object({ evaluation: z.unknown() }).passthrough().parse(input);
+  const parsed = DashboardTaskEvaluationUpdatedDataSchema.parse({
+    ...raw,
+    evaluation: camelizeObjectKeys(raw.evaluation),
+  });
   return {
     run_id: parsed.run_id,
     task_id: parsed.task_id ?? null,
@@ -321,12 +335,6 @@ export function parseSandboxClosedSocketData(input: unknown): SandboxClosedSocke
   return SandboxClosedSocketDataSchema.parse(input);
 }
 
-export function parseDashboardGenerationTurnCompletedData(
-  input: unknown,
-): DashboardGenerationTurnCompletedData {
-  return DashboardGenerationTurnCompletedDataSchema.parse(input);
-}
-
 // =============================================================================
 // Graph Mutation Events
 // =============================================================================
@@ -376,6 +384,7 @@ const ContextEventPayloadSchema = z.discriminatedUnion("event_type", [
     event_type: z.literal("assistant_text"),
     text: z.string(),
     turn_id: z.string(),
+    turn_token_ids: z.array(z.number()).nullable(),
     turn_logprobs: z.array(TokenLogprobSchema).nullable(),
   }),
   z.object({
@@ -384,6 +393,7 @@ const ContextEventPayloadSchema = z.discriminatedUnion("event_type", [
     tool_name: z.string(),
     args: z.record(z.string(), z.unknown()),
     turn_id: z.string(),
+    turn_token_ids: z.array(z.number()).nullable(),
     turn_logprobs: z.array(TokenLogprobSchema).nullable(),
   }),
   z.object({
@@ -397,6 +407,7 @@ const ContextEventPayloadSchema = z.discriminatedUnion("event_type", [
     event_type: z.literal("thinking"),
     text: z.string(),
     turn_id: z.string(),
+    turn_token_ids: z.array(z.number()).nullable(),
     turn_logprobs: z.array(TokenLogprobSchema).nullable(),
   }),
 ]);

@@ -77,10 +77,10 @@ class RunEvaluationCriterionDto(CamelModel):
     criterion_num: int
     criterion_type: str
     criterion_description: str
-    evaluation_input: str
+    evaluation_input: str | None = None
     score: float
     max_score: float
-    feedback: str
+    feedback: str | None = None
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
     error: dict[str, Any] | None = None  # slopcop: ignore[no-typing-any]
@@ -127,6 +127,7 @@ class RunCommunicationMessageDto(CamelModel):
     thread_topic: str
     run_id: str
     task_id: str | None = None
+    task_execution_id: str | None = None
     from_agent_id: str
     to_agent_id: str
     content: str
@@ -149,6 +150,8 @@ class RunCommunicationThreadDto(CamelModel):
 class RunContextEventDto(CamelModel):
     id: str
     task_execution_id: str
+    task_node_id: str
+    worker_binding_key: str
     sequence: int
     event_type: str
     payload: dict[str, Any]  # slopcop: ignore[no-typing-any]
@@ -168,7 +171,6 @@ class RunSnapshotDto(CamelModel):
     executions_by_task: dict[str, list[RunExecutionAttemptDto]] = Field(default_factory=dict)
     evaluations_by_task: dict[str, RunTaskEvaluationDto] = Field(default_factory=dict)
     sandboxes_by_task: dict[str, RunSandboxDto] = Field(default_factory=dict)
-    generation_turns_by_task: dict[str, list["RunGenerationTurnDto"]] = Field(default_factory=dict)
     context_events_by_task: dict[str, list[RunContextEventDto]] = Field(default_factory=dict)
     threads: list[RunCommunicationThreadDto] = Field(default_factory=list)
     started_at: datetime | None = None
@@ -182,30 +184,6 @@ class RunSnapshotDto(CamelModel):
     cancelled_tasks: int = 0
     final_score: float | None = None
     error: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Generation turn DTO (RL observability)
-# ---------------------------------------------------------------------------
-
-
-class RunGenerationTurnDto(CamelModel):
-    """One model generation turn in a task execution."""
-
-    id: str
-    task_execution_id: str
-    worker_binding_key: str
-    turn_index: int
-    prompt_text: str | None = None
-    raw_response: dict[str, Any]  # slopcop: ignore[no-typing-any]
-    response_text: str | None = None
-    tool_calls: list[dict[str, Any]] | None = None  # slopcop: ignore[no-typing-any]
-    tool_results: list[dict[str, Any]] | None = None  # slopcop: ignore[no-typing-any]
-    policy_version: str | None = None
-    has_logprobs: bool = False
-    created_at: str | None = None
-    token_ids: list[int] | None = None
-    logprobs: list[float] | None = None
 
 
 # ---------------------------------------------------------------------------

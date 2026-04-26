@@ -21,4 +21,4 @@ def install_extras(extras: list[str], *, dry_run: bool = False) -> None:
         return
 
     print(f"  Running: {' '.join(cmd)}")
-    subprocess.run(cmd, check=True)  # noqa: S603
+    subprocess.run(cmd, check=True)

@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  parseDashboardTaskEvaluationUpdatedData,
+  parseDashboardThreadMessageCreatedData,
   parseDashboardWorkflowStartedData,
   parseTaskStatusSocketData,
 } from "../../src/lib/contracts/events";
 import { parseCohortDetail, parseRunSnapshot } from "../../src/lib/contracts/rest";
+import { deserializeRunState } from "../../src/lib/runState";
 import { createDashboardSeed, FIXTURE_IDS } from "../helpers/dashboardFixtures";
 
 test("run snapshot parser accepts object-map transport", () => {
@@ -21,6 +24,59 @@ test("run snapshot parser accepts object-map transport", () => {
     FIXTURE_IDS.rootTaskId,
     FIXTURE_IDS.solveTaskId,
   ]);
+});
+
+test("run snapshot hydration preserves context event actions", () => {
+  const seed = createDashboardSeed();
+  const run = seed.runs?.[0];
+
+  assert.ok(run);
+  const state = deserializeRunState(run);
+  const events = state.contextEventsByTask.get(FIXTURE_IDS.solveTaskId) ?? [];
+
+  assert.equal(events.length, 2);
+  assert.equal(events[0]?.eventType, "tool_call");
+  assert.deepEqual(events[0]?.payload, {
+    event_type: "tool_call",
+    tool_call_id: "call-lean-check",
+    tool_name: "lean_check",
+    args: { file: "proof.lean" },
+    turn_id: "turn-1",
+    turn_token_ids: [101, 102, 103],
+    turn_logprobs: null,
+  });
+});
+
+test("run snapshot hydration orders context events across retried executions", () => {
+  const seed = createDashboardSeed();
+  const run = seed.runs?.[0];
+
+  assert.ok(run);
+  const first = run.contextEventsByTask?.[FIXTURE_IDS.solveTaskId]?.[0];
+  assert.ok(first);
+  const retryEvent = {
+    ...first,
+    id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    taskExecutionId: "execution-solve-2",
+    sequence: 0,
+    createdAt: "2026-03-18T12:00:30.000Z",
+    payload: {
+      ...first.payload,
+      tool_call_id: "call-retry",
+      tool_name: "retry_check",
+    },
+  };
+
+  const state = deserializeRunState({
+    ...run,
+    contextEventsByTask: {
+      [FIXTURE_IDS.solveTaskId]: [retryEvent, first],
+    },
+  });
+  const events = state.contextEventsByTask.get(FIXTURE_IDS.solveTaskId) ?? [];
+
+  assert.equal(events[0]?.id, first.id);
+  assert.equal(events[1]?.id, retryEvent.id);
 });
 
 test("run snapshot parser rejects legacy tuple-map transport", () => {
@@ -97,6 +153,66 @@ test("workflow started event parser validates recursive task trees", () => {
   const parsed = parseDashboardWorkflowStartedData(payload);
 
   assert.equal(parsed.task_tree.children[0]?.name, "Leaf");
+});
+
+test("dashboard nested DTO event parser accepts backend snake-case payloads", () => {
+  const seed = createDashboardSeed();
+  const run = seed.runs?.[0];
+  const thread = run?.threads?.[0];
+  const message = thread?.messages?.[0];
+  const evaluation = run?.evaluationsByTask?.[FIXTURE_IDS.solveTaskId];
+
+  assert.ok(thread);
+  assert.ok(message);
+  assert.ok(evaluation);
+
+  const parsedThread = parseDashboardThreadMessageCreatedData({
+    run_id: FIXTURE_IDS.runId,
+    thread: {
+      id: thread.id,
+      run_id: thread.runId,
+      task_id: thread.taskId,
+      topic: thread.topic,
+      agent_a_id: thread.agentAId,
+      agent_b_id: thread.agentBId,
+      created_at: thread.createdAt,
+      updated_at: thread.updatedAt,
+      messages: [],
+    },
+    message: {
+      id: message.id,
+      thread_id: message.threadId,
+      thread_topic: message.threadTopic,
+      run_id: message.runId,
+      task_id: message.taskId,
+      from_agent_id: message.fromAgentId,
+      to_agent_id: message.toAgentId,
+      content: message.content,
+      sequence_num: message.sequenceNum,
+      created_at: message.createdAt,
+    },
+  });
+
+  const parsedEvaluation = parseDashboardTaskEvaluationUpdatedData({
+    run_id: FIXTURE_IDS.runId,
+    task_id: FIXTURE_IDS.solveTaskId,
+    evaluation: {
+      id: evaluation.id,
+      run_id: evaluation.runId,
+      task_id: evaluation.taskId,
+      total_score: evaluation.totalScore,
+      max_score: evaluation.maxScore,
+      normalized_score: evaluation.normalizedScore,
+      stages_evaluated: evaluation.stagesEvaluated,
+      stages_passed: evaluation.stagesPassed,
+      failed_gate: evaluation.failedGate,
+      created_at: evaluation.createdAt,
+      criterion_results: [],
+    },
+  });
+
+  assert.equal(parsedThread.message.sequenceNum, message.sequenceNum);
+  assert.equal(parsedEvaluation.evaluation.totalScore, evaluation.totalScore);
 });
 
 test("socket task status parser rejects malformed payloads", () => {

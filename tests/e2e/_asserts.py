@@ -16,6 +16,7 @@ module.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import os
@@ -26,23 +27,21 @@ from uuid import UUID
 import httpx
 from sqlmodel import select
 
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.api.schemas import RunTaskDto
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.telemetry.models import (
     RunResource,
-    RunTaskEvaluation,
     RunTaskExecution,
     SandboxCommandWalEntry,
     SandboxEvent,
-    Thread,
-    ThreadMessage,
 )
 
-from tests.e2e._fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
-from tests.e2e._fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from tests.e2e._fixtures.smoke_base.worker_base import SmokeWorkerBase
+from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
+from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
+from tests.e2e._read_contracts import require_run_snapshot
 
 TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
@@ -53,41 +52,32 @@ TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
 
 def _assert_run_graph(run_id: UUID) -> None:
-    """1 root + 9 leaves = 10 nodes; all COMPLETED; deps honoured."""
-    with get_session() as s:
-        nodes = list(
-            s.exec(
-                select(RunGraphNode)
-                .where(RunGraphNode.run_id == run_id)
-                .order_by(RunGraphNode.level, RunGraphNode.task_slug),  # ty: ignore[unresolved-attribute]
-            ).all(),
-        )
+    """1 root + 9 leaves = 10 tasks; all COMPLETED; deps honoured."""
+    snapshot = require_run_snapshot(run_id)
+    tasks = list(snapshot.tasks.values())
+    leaves = [task for task in tasks if task.level > 0]
+    root_tasks = [task for task in tasks if task.level == 0]
 
-    assert len(nodes) == 10, f"expected 10 nodes, got {len(nodes)}"
-    leaves = [n for n in nodes if n.level > 0]
-    root_nodes = [n for n in nodes if n.level == 0]
-    assert len(root_nodes) == 1, f"expected 1 root node, got {len(root_nodes)}"
-    assert len(leaves) == 9, f"expected 9 leaves, got {len(leaves)}"
-    assert sorted(n.task_slug for n in leaves) == sorted(EXPECTED_SUBTASK_SLUGS)
-    non_completed = [(n.task_slug, n.status) for n in nodes if n.status != COMPLETED]
+    assert snapshot.total_tasks == 10, f"expected 10 tasks, got {snapshot.total_tasks}"
+    assert snapshot.total_leaf_tasks == 9, f"expected 9 leaf tasks, got {snapshot.total_leaf_tasks}"
+    assert len(root_tasks) == 1, f"expected 1 root task, got {len(root_tasks)}"
+    assert snapshot.root_task_id == root_tasks[0].id
+    assert sorted(task.name for task in leaves) == sorted(EXPECTED_SUBTASK_SLUGS)
+    non_completed = [(task.name, task.status) for task in tasks if task.status != COMPLETED]
     assert not non_completed, f"non-completed nodes: {non_completed}"
 
-    _assert_dag_edges(run_id, leaves)
+    _assert_dag_edges(leaves)
 
 
-def _assert_dag_edges(run_id: UUID, leaves: list[RunGraphNode]) -> None:
-    """Verify each dep edge exists in ``run_graph_edges``."""
-    with get_session() as s:
-        edges = list(s.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all())
-    by_slug = {n.task_slug: n.id for n in leaves}
-    actual_pairs: set[tuple[str, str]] = set()
-    id_to_slug = {nid: slug for slug, nid in by_slug.items()}
-    for e in edges:
-        src = id_to_slug.get(e.source_node_id)
-        tgt = id_to_slug.get(e.target_node_id)
-        if src is not None and tgt is not None:
-            actual_pairs.add((src, tgt))
-
+def _assert_dag_edges(leaves: list[RunTaskDto]) -> None:
+    """Verify each dependency edge is exposed by the read-service task DTO."""
+    by_id = {task.id: task for task in leaves}
+    actual_pairs = {
+        (by_id[parent_id].name, task.name)
+        for task in leaves
+        for parent_id in task.depends_on_ids
+        if parent_id in by_id
+    }
     expected_pairs = {
         ("d_root", "d_left"),
         ("d_root", "d_right"),
@@ -101,25 +91,26 @@ def _assert_dag_edges(run_id: UUID, leaves: list[RunGraphNode]) -> None:
 
 
 def _assert_run_resources(run_id: UUID) -> None:
-    """Exactly 18 kind='report' resources: 9 report_*.md + 9 probe_*.json.
-
-    All resources from ``SandboxResourcePublisher.sync()`` land as
-    ``kind='report'``.  The legacy ``kind='output'`` download path has been
-    removed from ``persist_outputs.py``.
-    """
-    with get_session() as s:
-        resources = list(s.exec(select(RunResource).where(RunResource.run_id == run_id)).all())
-
-    report_resources = [r for r in resources if r.kind == "report"]
+    """Exactly 18 task resources: 9 benchmark artifacts + 9 probe_*.json."""
+    snapshot = require_run_snapshot(run_id)
+    resources = [
+        resource
+        for task_resources in snapshot.resources_by_task.values()
+        for resource in task_resources
+    ]
     probes = [
-        r for r in report_resources if r.name.startswith("probe_") and r.name.endswith(".json")
+        resource
+        for resource in resources
+        if resource.name.startswith("probe_") and resource.name.endswith(".json")
     ]
     assert len(probes) == 9, f"expected 9 probe_*.json (kind=report) resources, got {len(probes)}"
-    assert len(report_resources) == 18, (
-        f"expected 18 kind=report resources (9 reports + 9 probes), got {len(report_resources)}"
+    worker_outputs = [resource for resource in resources if resource.name == "worker_output"]
+    assert not worker_outputs, (
+        "worker final assistant messages must stay on executions, not resources"
     )
-    missing_hash = [r.name for r in resources if not r.content_hash]
-    assert not missing_hash, f"resources missing content_hash: {missing_hash}"
+    assert len(resources) == 18, (
+        f"expected 18 task artifact resources (9 outputs + 9 probes), got {len(resources)}"
+    )
 
 
 def _assert_run_turn_counts(run_id: UUID) -> None:
@@ -134,15 +125,13 @@ def _assert_run_turn_counts(run_id: UUID) -> None:
         + len(EXPECTED_SUBTASK_SLUGS) * BaseSmokeLeafWorker.LEAF_TURN_COUNT
     )  # currently 3 + 9×2 = 21
 
-    with get_session() as s:
-        events = list(
-            s.exec(select(RunContextEvent).where(RunContextEvent.run_id == run_id)).all(),
-        )
+    snapshot = require_run_snapshot(run_id)
+    event_count = sum(len(events) for events in snapshot.context_events_by_task.values())
 
-    assert len(events) == expected, (
+    assert event_count == expected, (
         f"turn count mismatch: expected {expected} "
         f"(parent={SmokeWorkerBase.PARENT_TURN_COUNT}, "
-        f"leaves={len(EXPECTED_SUBTASK_SLUGS)}×{BaseSmokeLeafWorker.LEAF_TURN_COUNT}), got {len(events)}"
+        f"leaves={len(EXPECTED_SUBTASK_SLUGS)}×{BaseSmokeLeafWorker.LEAF_TURN_COUNT}), got {event_count}"
     )
 
 
@@ -153,20 +142,18 @@ def _assert_run_evaluation(run_id: UUID) -> None:
     asynchronously after the run reaches terminal state.
     """
     deadline = time.monotonic() + 30
-    evals: list[RunTaskEvaluation] = []
+    evaluations = []
     while time.monotonic() < deadline:
-        with get_session() as s:
-            evals = list(
-                s.exec(select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)).all(),
-            )
-        if evals:
+        snapshot = require_run_snapshot(run_id)
+        evaluations = list(snapshot.evaluations_by_task.values())
+        if evaluations:
             break
         time.sleep(2)
-    assert len(evals) == 1, f"expected 1 evaluation, got {len(evals)}"
-    assert evals[0].score == 1.0, (
-        f"expected score 1.0, got {evals[0].score} ({evals[0].feedback!r})"
+    assert len(evaluations) == 1, f"expected 1 task evaluation, got {len(evaluations)}"
+    assert evaluations[0].total_score == 1.0, (
+        f"expected score 1.0, got {evaluations[0].total_score}"
     )
-    assert evals[0].passed is True
+    assert snapshot.final_score == 1.0
 
 
 # =============================================================================
@@ -209,23 +196,10 @@ def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
 
 def _assert_thread_messages_ordered(run_id: UUID) -> None:
     """9 completion messages on the ``smoke-completion`` thread."""
-    with get_session() as s:
-        threads = list(
-            s.exec(
-                select(Thread)
-                .where(Thread.run_id == run_id)
-                .where(Thread.topic == "smoke-completion"),
-            ).all(),
-        )
-        assert len(threads) == 1, f"expected 1 smoke-completion thread, got {len(threads)}"
-        thread = threads[0]
-        msgs = list(
-            s.exec(
-                select(ThreadMessage)
-                .where(ThreadMessage.thread_id == thread.id)
-                .order_by(ThreadMessage.sequence_num),  # ty: ignore[unresolved-attribute]
-            ).all(),
-        )
+    snapshot = require_run_snapshot(run_id)
+    threads = [thread for thread in snapshot.threads if thread.topic == "smoke-completion"]
+    assert len(threads) == 1, f"expected 1 smoke-completion thread, got {len(threads)}"
+    msgs = sorted(threads[0].messages, key=lambda msg: msg.sequence_num)
     assert len(msgs) == 9, f"expected 9 completion messages, got {len(msgs)}"
     assert [m.sequence_num for m in msgs] == list(range(1, 10))
     from_slugs = {m.from_agent_id.removeprefix("leaf-") for m in msgs}
@@ -268,13 +242,59 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
     assert "exit_code" in parsed, f"probe JSON missing exit_code: {parsed!r}"
 
 
+def _assert_minif2f_artifacts(run_id: UUID) -> None:
+    """Every MiniF2F leaf persists a Lean proof artifact with the smoke theorem."""
+    resources = _require_named_resources(run_id, prefix="proof_", suffix=".lean", expected_count=9)
+    for resource in resources:
+        text = Path(resource.file_path).read_bytes().decode("utf-8")
+        assert "theorem smoke_trivial" in text, f"{resource.name} missing theorem marker"
+        assert ":=" in text, f"{resource.name} missing Lean proof term"
+
+
+def _assert_swebench_artifacts(run_id: UUID) -> None:
+    """Every SWE-Bench leaf persists a parseable Python patch with add()."""
+    resources = _require_named_resources(run_id, prefix="patch_", suffix=".py", expected_count=9)
+    for resource in resources:
+        source = Path(resource.file_path).read_bytes().decode("utf-8")
+        module = ast.parse(source, filename=resource.name)
+        function_names = {
+            node.name for node in ast.walk(module) if isinstance(node, ast.FunctionDef)
+        }
+        assert "add" in function_names, f"{resource.name} missing add() function"
+
+
+def _require_named_resources(
+    run_id: UUID,
+    *,
+    prefix: str,
+    suffix: str,
+    expected_count: int,
+) -> list[RunResource]:
+    with get_session() as s:
+        resources = list(
+            s.exec(
+                select(RunResource)
+                .where(RunResource.run_id == run_id)
+                .where(
+                    RunResource.name.like(f"{prefix}%{suffix}"),  # ty: ignore[unresolved-attribute]
+                ),
+            ).all(),
+        )
+    assert len(resources) == expected_count, (
+        f"expected {expected_count} {prefix}*{suffix} resources, got {len(resources)}"
+    )
+    missing_hash = [resource.name for resource in resources if not resource.content_hash]
+    assert not missing_hash, f"resources missing content_hash: {missing_hash}"
+    return resources
+
+
 def _assert_temporal_ordering(run_id: UUID) -> None:
     """Schedule honours DAG deps: children start no earlier than parents finish.
 
     Uses ``RunTaskExecution.started_at`` / ``completed_at`` via
     ``node_id`` join.  Only checks edges whose both endpoints reached
-    at least ``started`` state; skips silently otherwise (sad-path
-    ``l_3`` never starts, so its edge is skipped).
+    at least ``started`` state. The sad path still runs ``l_3`` because the
+    failing leaf completes the task with a score-zero output.
     """
     with get_session() as s:
         leaves = list(
@@ -347,15 +367,9 @@ def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
 
 def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
     """Score-zero sad path: all graph nodes complete, l_2 produces failed output."""
-    with get_session() as s:
-        leaves = list(
-            s.exec(
-                select(RunGraphNode)
-                .where(RunGraphNode.run_id == run_id)
-                .where(RunGraphNode.level > 0),
-            ).all(),
-        )
-    by_slug = {n.task_slug: n for n in leaves}
+    snapshot = require_run_snapshot(run_id)
+    leaves = [task for task in snapshot.tasks.values() if task.level > 0]
+    by_slug = {task.name: task for task in leaves}
     for slug in EXPECTED_SUBTASK_SLUGS:
         assert by_slug[slug].status == COMPLETED, (
             f"{slug} expected COMPLETED, got {by_slug[slug].status}"
@@ -414,18 +428,12 @@ def _assert_sadpath_partial_wal(run_id: UUID) -> None:
 
 def _assert_sadpath_thread_messages(run_id: UUID) -> None:
     """Happy path sends 9 messages; sad l_2 suppresses completion reporting."""
-    with get_session() as s:
-        thread = s.exec(
-            select(Thread).where(Thread.run_id == run_id).where(Thread.topic == "smoke-completion"),
-        ).first()
-        assert thread is not None, "no smoke-completion thread created"
-        msgs = list(
-            s.exec(
-                select(ThreadMessage)
-                .where(ThreadMessage.thread_id == thread.id)
-                .order_by(ThreadMessage.sequence_num),  # ty: ignore[unresolved-attribute]
-            ).all(),
-        )
+    snapshot = require_run_snapshot(run_id)
+    thread = next(
+        (thread for thread in snapshot.threads if thread.topic == "smoke-completion"), None
+    )
+    assert thread is not None, "no smoke-completion thread created"
+    msgs = sorted(thread.messages, key=lambda msg: msg.sequence_num)
     assert len(msgs) == 8, f"expected 8 completion messages (l_2 suppressed), got {len(msgs)}"
     from_slugs = {m.from_agent_id.removeprefix("leaf-") for m in msgs}
     assert "l_2" not in from_slugs, (
@@ -436,13 +444,11 @@ def _assert_sadpath_thread_messages(run_id: UUID) -> None:
 
 def _assert_sadpath_evaluation(run_id: UUID) -> None:
     """Reusing happy-path criterion on sad-path run must return score 0."""
-    with get_session() as s:
-        evals = list(
-            s.exec(select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)).all(),
-        )
+    snapshot = require_run_snapshot(run_id)
+    evals = list(snapshot.evaluations_by_task.values())
     assert len(evals) == 1
-    assert evals[0].score == 0.0
-    assert evals[0].passed is False
+    assert evals[0].total_score == 0.0
+    assert snapshot.final_score == 0.0
 
 
 # =============================================================================

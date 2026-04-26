@@ -11,22 +11,6 @@ class DelegationError(GraphError):
     pass
 
 
-class TaskNotPendingError(DelegationError):
-    """refine_task called on a non-pending node.
-
-    Retained for backwards compatibility. ``refine_task`` now accepts any
-    non-RUNNING status and raises ``TaskRunningError`` instead; callers
-    that relied on this error should update their except clauses.
-    """
-
-    def __init__(self, node_id: UUID, current_status: str) -> None:
-        super().__init__(
-            f"Cannot refine node {node_id}: status is '{current_status}', expected 'pending'"
-        )
-        self.node_id = node_id
-        self.current_status = current_status
-
-
 class TaskRunningError(DelegationError):
     """refine_task called on a node that is currently RUNNING.
 

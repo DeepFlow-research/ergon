@@ -25,7 +25,7 @@ def _wait_for(url: str, timeout: float) -> None:
             with httpx.Client(timeout=2.0) as client:
                 client.get(url)
             return
-        except (httpx.ConnectError, httpx.ReadTimeout):
+        except (httpx.ConnectError, httpx.ReadError, httpx.ReadTimeout):
             time.sleep(2.0)
     raise RuntimeError(f"timed out waiting for {url}")
 

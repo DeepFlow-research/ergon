@@ -13,7 +13,6 @@ from datetime import UTC, datetime
 
 import inngest
 from ergon_builtins.registry import SANDBOX_MANAGERS
-from ergon_core.core.persistence.telemetry.models import RunResourceKind
 from ergon_core.core.providers.sandbox.manager import (
     BaseSandboxManager,
     DefaultSandboxManager,
@@ -115,19 +114,5 @@ async def _publish_resources(
             count,
             payload.run_id,
         )
-
-    if payload.worker_final_assistant_message:
-        view = publisher.publish_value(
-            kind=RunResourceKind.OUTPUT,
-            name="worker_output",
-            content=payload.worker_final_assistant_message,
-        )
-        if view is not None:
-            count += 1
-            logger.info(
-                "persist-outputs: published worker_output resource_id=%s for run_id=%s",
-                view.id,
-                payload.run_id,
-            )
 
     return count

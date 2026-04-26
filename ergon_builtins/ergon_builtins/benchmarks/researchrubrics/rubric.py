@@ -9,7 +9,7 @@ is the sum of all positive weights, and *min_possible* is the sum of all
 negative weights.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import ClassVar
 
 from ergon_core.api.evaluator import Rubric
@@ -17,7 +17,10 @@ from ergon_core.api.results import CriterionResult, TaskEvaluationResult
 from ergon_core.api.task_types import BenchmarkTask
 
 from ergon_builtins.benchmarks.researchrubrics.criteria import build_criteria_from_rubrics
-from ergon_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
+from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
+    ResearchRubricsTaskPayload,
+    RubricCriterion,
+)
 
 
 class ResearchRubricsRubric(Rubric):
@@ -33,12 +36,21 @@ class ResearchRubricsRubric(Rubric):
     def __init__(
         self,
         *,
-        rubric_criteria: list[RubricCriterion],
         name: str = "researchrubrics-rubric",
+        rubric_criteria: Sequence[RubricCriterion] = (),
     ) -> None:
-        criteria = build_criteria_from_rubrics(rubric_criteria)
+        criteria = build_criteria_from_rubrics(list(rubric_criteria))
         super().__init__(name=name, criteria=criteria)
-        self._rubric_criteria = rubric_criteria
+        self._rubric_criteria = tuple(rubric_criteria)
+
+    def criteria_for(self, task: BenchmarkTask):
+        """Build task-specific LLM-judge criteria from the task payload."""
+        if self._rubric_criteria:
+            return self.criteria
+
+        payload = ResearchRubricsTaskPayload.model_validate(task.task_payload.model_dump())
+        rubric_criteria = list(payload.rubrics)
+        return build_criteria_from_rubrics(rubric_criteria)
 
     def aggregate_task(
         self,
@@ -60,8 +72,8 @@ class ResearchRubricsRubric(Rubric):
         max_possible = 0.0
         min_possible = 0.0
 
-        for criterion, result in zip(self.criteria, results, strict=True):
-            weight = criterion.weight
+        for result in results:
+            weight = result.weight
 
             if result.score > 0:
                 total_score += weight

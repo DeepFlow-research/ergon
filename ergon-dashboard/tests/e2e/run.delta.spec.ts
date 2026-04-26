@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   createDashboardSeed,
+  createDeltaContextEvent,
   createDeltaThread,
   createUpdatedEvaluation,
   FIXTURE_IDS,
@@ -64,4 +65,21 @@ test("communication and evaluation react to controlled deltas", async ({ page })
   await expect(page.getByTestId("workspace-actions")).not.toContainText(
     "I am rewriting the final proof around that parity split now.",
   );
+});
+
+test("workspace actions react to controlled context event deltas", async ({ page }) => {
+  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
+
+  await expect(page.getByTestId("workspace-actions")).toContainText("lean_check");
+  const response = await page.request.post("/api/test/dashboard/events/context-event", {
+    data: {
+      runId: FIXTURE_IDS.runId,
+      taskNodeId: FIXTURE_IDS.solveTaskId,
+      event: createDeltaContextEvent(),
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+
+  await expect(page.getByTestId("workspace-actions")).toContainText("lake_build");
 });

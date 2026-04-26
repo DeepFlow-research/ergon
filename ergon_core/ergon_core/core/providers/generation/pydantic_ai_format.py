@@ -16,43 +16,11 @@ rather than re-implementing the parsing.
 """
 
 from ergon_core.api.generation import TokenLogprob
-
-
-def extract_text(raw: dict[str, object]) -> str | None:
-    """Extract the first text content from a PydanticAI response dump."""
-    parts = raw.get("parts")
-    if not isinstance(parts, list):
-        return None
-    for part in parts:
-        if isinstance(part, dict) and part.get("part_kind") == "text":
-            content = part.get("content")
-            if isinstance(content, str):
-                return content
-    return None
-
-
-def extract_tool_calls(
-    raw: dict[str, object],
-) -> list[dict[str, object]] | None:
-    """Extract tool call dicts from a PydanticAI response dump."""
-    parts = raw.get("parts")
-    if not isinstance(parts, list):
-        return None
-    calls: list[dict[str, object]] = []
-    for part in parts:
-        if isinstance(part, dict) and part.get("part_kind") == "tool-call":
-            calls.append(
-                {
-                    "tool_call_id": part.get("tool_call_id", ""),
-                    "tool_name": part.get("tool_name", ""),
-                    "args": part.get("args"),
-                }
-            )
-    return calls or None
+from ergon_core.api.json_types import JsonObject
 
 
 def extract_logprobs(
-    raw: dict[str, object],
+    raw: JsonObject,
 ) -> list[TokenLogprob] | None:
     """Extract per-token logprobs from a PydanticAI response dump.
 

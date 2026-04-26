@@ -47,22 +47,6 @@ class EdgeNotFoundError(GraphError):
         super().__init__(f"Edge {edge_id} not found", **context)
 
 
-class AnnotationNotFoundError(GraphError):
-    """Referenced annotation does not exist."""
-
-    def __init__(
-        self,
-        target_type: str,
-        target_id: UUID,
-        namespace: str,
-        **context: object,
-    ) -> None:
-        super().__init__(
-            f"Annotation {namespace!r} on {target_type} {target_id} not found",
-            **context,
-        )
-
-
 class DanglingEdgeError(GraphError):
     """Edge references a node that does not exist."""
 

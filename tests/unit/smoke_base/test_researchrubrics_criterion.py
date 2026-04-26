@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from ergon_core.api.errors import CriteriaCheckError
-from tests.e2e._fixtures.criteria.researchrubrics_smoke import (
+from ergon_core.test_support.smoke_fixtures.criteria.researchrubrics_smoke import (
     ResearchRubricsSmokeCriterion,
 )
 

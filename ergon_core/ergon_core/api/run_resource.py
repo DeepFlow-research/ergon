@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.telemetry.models import RunResourceKind
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,7 +58,7 @@ class RunResourceView(BaseModel):
     error: str | None = Field(
         description="Populated only when writing the resource failed; ``None`` on success.",
     )
-    metadata: dict[str, object] = Field(
+    metadata: JsonObject = Field(
         default_factory=dict,
         description='Free-form publisher metadata (e.g. ``{"sandbox_origin": "..."}``).',
     )

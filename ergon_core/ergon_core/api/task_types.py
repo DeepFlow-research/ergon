@@ -1,15 +1,29 @@
 """Public benchmark-owned task type."""
 
-from typing import Any
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
 
-class BenchmarkTask(BaseModel):
+class EmptyTaskPayload(BaseModel):
+    """Default payload for benchmarks that do not need task-specific data."""
+
+    model_config = {"extra": "forbid", "frozen": True}
+
+
+PayloadT = TypeVar(
+    "PayloadT",
+    bound=BaseModel,
+    default=EmptyTaskPayload,
+    covariant=True,
+)
+
+
+class BenchmarkTask(BaseModel, Generic[PayloadT]):
     """Unit of work passed to Worker.execute() and referenced in EvaluationContext.
 
-    Benchmark subclasses may extend this with typed fields for benchmark-specific
-    data rather than relying on task_payload alone.
+    ``task_payload`` is benchmark-owned structured data. Benchmarks should
+    bind ``BenchmarkTask[TheirPayloadModel]`` instead of passing ad hoc dicts.
     """
 
     model_config = {"frozen": True}
@@ -20,4 +34,4 @@ class BenchmarkTask(BaseModel):
     parent_task_slug: str | None = None
     dependency_task_slugs: tuple[str, ...] = ()
     evaluator_binding_keys: tuple[str, ...] = ()
-    task_payload: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # ty: ignore[invalid-assignment]

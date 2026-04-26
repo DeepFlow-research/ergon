@@ -6,6 +6,10 @@ Eager, fully-typed imports.
 from collections.abc import Callable
 
 from ergon_core.api import Benchmark, Evaluator, Worker
+from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.providers.sandbox.research_rubrics_manager import (
+    ResearchRubricsSandboxManager,
+)
 
 from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
@@ -26,6 +30,7 @@ BENCHMARKS: dict[str, type[Benchmark]] = {
 
 EVALUATORS: dict[str, type[Evaluator]] = {
     "research-rubric": ResearchRubricsRubric,
+    "researchrubrics-rubric": ResearchRubricsRubric,
 }
 
 # reason: RFC 2026-04-22 §1 — base ``Worker.__init__`` now requires
@@ -35,4 +40,10 @@ EVALUATORS: dict[str, type[Evaluator]] = {
 # ``_plain`` has been deleted.
 WORKERS: dict[str, Callable[..., Worker]] = {
     "researchrubrics-researcher": ResearchRubricsResearcherWorker,
+}
+
+SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
+    "researchrubrics": ResearchRubricsSandboxManager,
+    "researchrubrics-ablated": ResearchRubricsSandboxManager,
+    "researchrubrics-vanilla": ResearchRubricsSandboxManager,
 }

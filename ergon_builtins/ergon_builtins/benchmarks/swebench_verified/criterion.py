@@ -27,6 +27,7 @@ from ergon_core.api.results import CriterionResult
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import (
     payload_to_swebench_row as _payload_to_swebench_row,
 )
+from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ async def _extract_patch_via_runtime(context: EvaluationContext) -> str:
     )
     if result.exit_code != 0:
         return ""
-    return result.stdout or ""
+    return "" if result.stdout is None else result.stdout
 
 
 def make_test_spec(row: dict[str, Any]) -> Any:  # slopcop: ignore[no-typing-any]
@@ -143,7 +144,7 @@ class SWEBenchTestCriterion(Criterion):
                 metadata={},
             )
 
-        payload = context.task.task_payload
+        payload = SWEBenchTaskPayload.model_validate(context.task.task_payload.model_dump())
         row = _payload_to_swebench_row(payload)
         spec = make_test_spec(row)
 
@@ -166,7 +167,7 @@ class SWEBenchTestCriterion(Criterion):
         *,
         runtime: CriterionRuntime,
         spec: Any,  # slopcop: ignore[no-typing-any]
-        payload: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        payload: SWEBenchTaskPayload,
         patch_text: str,
     ) -> CriterionResult:
         # 1. install_repo_script: clone + checkout base_commit + install deps.
@@ -175,6 +176,7 @@ class SWEBenchTestCriterion(Criterion):
             timeout=EVAL_TIMEOUT_SEC,
         )
         if r.exit_code != 0:
+            detail = r.stdout if r.stdout is not None else r.stderr
             return _error_result(
                 self.name,
                 self.weight,
@@ -183,11 +185,11 @@ class SWEBenchTestCriterion(Criterion):
                 # _error_result requires `str`. Fall back to empty string
                 # so the error message is well-typed even when the sandbox
                 # returns no output on failure.
-                r.stdout or r.stderr or "",
+                "" if detail is None else detail,
             )
 
         # 2. Apply test_patch then agent patch (order matters).
-        test_patch = payload.get("test_patch") or ""
+        test_patch = payload.test_patch
         try:
             if test_patch.strip():
                 await _write_and_apply(runtime, "/tmp/test.patch", test_patch)
@@ -200,16 +202,16 @@ class SWEBenchTestCriterion(Criterion):
             f"bash -c {shlex.quote(spec.eval_script)} 2>&1",
             timeout=EVAL_TIMEOUT_SEC,
         )
-        log = r.stdout or ""
+        log = "" if r.stdout is None else r.stdout
 
         # 4. Grade: persist log locally, hand path to swebench harness.
         report = _grade_with_log(
             spec=spec,
             log=log,
-            instance_id=payload["instance_id"],
+            instance_id=payload.instance_id,
             patch_text=patch_text,
         )
-        entry = report.get(payload["instance_id"], {}) if isinstance(report, dict) else {}
+        entry = report.get(payload.instance_id, {}) if isinstance(report, dict) else {}
         resolved = bool(entry.get("resolved"))
         return CriterionResult(
             name=self.name,
@@ -242,7 +244,8 @@ async def _write_and_apply(
             timeout=APPLY_TIMEOUT_SEC,
         )
     if r.exit_code != 0:
-        raise RuntimeError(f"git apply {path} failed: {(r.stdout or '')[-800:]}")
+        stdout = "" if r.stdout is None else r.stdout
+        raise RuntimeError(f"git apply {path} failed: {stdout[-800:]}")
 
 
 def _error_result(name: str, weight: float, kind: str, detail: str) -> CriterionResult:
@@ -251,7 +254,7 @@ def _error_result(name: str, weight: float, kind: str, detail: str) -> Criterion
         score=0.0,
         passed=False,
         weight=weight,
-        feedback=f"{kind}: {(detail or '')[-400:]}",
+        feedback=f"{kind}: {detail[-400:]}",
         metadata={"error": kind},
     )
 

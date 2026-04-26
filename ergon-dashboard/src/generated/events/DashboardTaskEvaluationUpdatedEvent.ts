@@ -1,3 +1,3 @@
 import { z } from "zod"
 
-export const DashboardTaskEvaluationUpdatedEventSchema = z.object({ "run_id": z.string().uuid(), "task_id": z.string().uuid(), "evaluation": z.record(z.string(), z.any()) }).catchall(z.any()).describe("Embeds the full RunTaskEvaluationDto (camelCase) as `evaluation`.\n\nTODO(E2b, bug file § D): tighten ``evaluation`` to\n``RunTaskEvaluationDto``.  Deferred because the current emitter in\n``evaluate_task_run.py`` hand-rolls the dict and doesn't have\naccess to the rich criterion metadata (stage_num, stage_name,\ncriterion_num, criterion_description) the dashboard schema\nrequires.  Fixing both together is an independent unit of work.")
+export const DashboardTaskEvaluationUpdatedEventSchema = z.object({ "run_id": z.string().uuid(), "task_id": z.string().uuid(), "evaluation": z.any() }).catchall(z.any()).describe("Embeds the full RunTaskEvaluationDto as ``evaluation``.")

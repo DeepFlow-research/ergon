@@ -14,9 +14,9 @@ from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.settings import settings
 from sqlmodel import Session
 
-# NOTE: smoke fixture registration (``tests.e2e._fixtures``) now lives
-# exclusively inside the api container — see the conditional import in
-# ``ergon_core/core/api/app.py`` gated on ``ENABLE_TEST_HARNESS=1``.
+# NOTE: smoke fixture registration now lives exclusively inside the api
+# container — see the conditional ``register_smoke_fixtures()`` call in
+# ``ergon_core/core/api/app.py`` gated on ``ENABLE_SMOKE_FIXTURES=1``.
 # Host-side pytest is a black-box client (``_submit.py`` → HTTP) and
 # doesn't need the fixtures in its own process.  Keeping the registry
 # single-sourced eliminates the drift window where a fixture edit

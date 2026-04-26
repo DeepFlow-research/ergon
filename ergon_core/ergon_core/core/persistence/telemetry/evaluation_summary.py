@@ -20,9 +20,9 @@ class CriterionResultEntry(BaseModel):
     max_score: float = 1.0
     passed: bool
     weight: float = 1.0
-    criterion_description: str = ""  # slopcop: ignore[no-str-empty-default]
-    feedback: str = ""  # slopcop: ignore[no-str-empty-default]
-    evaluation_input: str = ""  # slopcop: ignore[no-str-empty-default]
+    criterion_description: str
+    feedback: str | None = None
+    evaluation_input: str | None = None
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
     error: dict | None = None

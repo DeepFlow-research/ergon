@@ -1,8 +1,8 @@
 import type { RunSnapshot } from "@/lib/contracts/rest";
 import { parseRunSnapshot } from "@/lib/contracts/rest";
 import type {
+  ContextEventState,
   ExecutionAttemptState,
-  GenerationTurnState,
   ResourceState,
   SandboxState,
   SerializedWorkflowRunState,
@@ -66,27 +66,43 @@ function deserializeEvaluation(evaluation: RunSnapshot["evaluationsByTask"][stri
   };
 }
 
-function deserializeGenerationTurns(data: RunSnapshot): GenerationTurnState[] {
-  const byTask = (data as unknown as Record<string, unknown>).generationTurnsByTask as
+function deserializeContextEvents(data: RunSnapshot): Map<string, ContextEventState[]> {
+  const byTask = (data as unknown as Record<string, unknown>).contextEventsByTask as
     | Record<string, Array<Record<string, unknown>>>
     | undefined;
-  if (!byTask) return [];
+  if (!byTask) return new Map();
 
-  const turns: GenerationTurnState[] = [];
-  for (const taskTurns of Object.values(byTask)) {
-    for (const t of taskTurns) {
-      turns.push({
-        taskExecutionId: String(t.taskExecutionId ?? ""),
-        workerBindingKey: String(t.workerBindingKey ?? ""),
-        workerName: String(t.workerName ?? ""),
-        turnIndex: Number(t.turnIndex ?? 0),
-        responseText: (t.responseText as string) ?? null,
-        toolCalls: (t.toolCalls as GenerationTurnState["toolCalls"]) ?? null,
-        policyVersion: (t.policyVersion as string) ?? null,
-      });
-    }
+  return new Map(
+    Object.entries(byTask).map(([taskId, events]) => [
+      taskId,
+      events
+        .map((event) => ({
+          id: String(event.id ?? ""),
+          taskExecutionId: String(event.taskExecutionId ?? ""),
+          taskNodeId: String(event.taskNodeId ?? taskId),
+          workerBindingKey: String(event.workerBindingKey ?? ""),
+          sequence: Number(event.sequence ?? 0),
+          eventType: String(event.eventType ?? "") as ContextEventState["eventType"],
+          payload: event.payload as ContextEventState["payload"],
+          createdAt: String(event.createdAt ?? ""),
+          startedAt: (event.startedAt as string | null | undefined) ?? null,
+          completedAt: (event.completedAt as string | null | undefined) ?? null,
+        }))
+        .sort(compareContextEvents),
+    ]),
+  );
+}
+
+export function compareContextEvents(a: ContextEventState, b: ContextEventState): number {
+  const at = Date.parse(a.createdAt);
+  const bt = Date.parse(b.createdAt);
+  if (Number.isFinite(at) && Number.isFinite(bt) && at !== bt) {
+    return at - bt;
   }
-  return turns.sort((a, b) => a.turnIndex - b.turnIndex);
+  if (a.taskExecutionId !== b.taskExecutionId) {
+    return a.taskExecutionId.localeCompare(b.taskExecutionId);
+  }
+  return a.sequence - b.sequence;
 }
 
 export function deserializeRunState(input: unknown): WorkflowRunState {
@@ -120,8 +136,7 @@ export function deserializeRunState(input: unknown): WorkflowRunState {
       ]),
     ),
     threads: data.threads ?? [],
-    generationTurns: deserializeGenerationTurns(data),
-    contextEventsByTask: new Map(),
+    contextEventsByTask: deserializeContextEvents(data),
     evaluationsByTask: new Map(
       Object.entries(data.evaluationsByTask ?? {}).map(([taskId, evaluation]) => [
         taskId,
@@ -152,5 +167,6 @@ export function serializeRunState(run: WorkflowRunState): SerializedWorkflowRunS
     executionsByTask: Object.fromEntries(run.executionsByTask.entries()),
     sandboxesByTask: Object.fromEntries(run.sandboxesByTask.entries()),
     evaluationsByTask: Object.fromEntries(run.evaluationsByTask.entries()),
+    contextEventsByTask: Object.fromEntries(run.contextEventsByTask.entries()),
   };
 }

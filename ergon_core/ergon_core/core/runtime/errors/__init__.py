@@ -9,10 +9,8 @@ Graph errors are runtime-agnostic (no Inngest dependency).
 from ergon_core.core.runtime.errors.delegation_errors import (
     DelegationError,
     TaskAlreadyTerminalError,
-    TaskNotPendingError,
 )
 from ergon_core.core.runtime.errors.graph_errors import (
-    AnnotationNotFoundError,
     CycleError,
     DanglingEdgeError,
     EdgeNotFoundError,
@@ -30,7 +28,6 @@ from ergon_core.core.runtime.errors.inngest_errors import (
 __all__ = [
     "DelegationError",
     "ErgonNonRetriableError",
-    "AnnotationNotFoundError",
     "ConfigurationError",
     "ContractViolationError",
     "CycleError",
@@ -41,5 +38,4 @@ __all__ = [
     "NodeNotFoundError",
     "RegistryLookupError",
     "TaskAlreadyTerminalError",
-    "TaskNotPendingError",
 ]

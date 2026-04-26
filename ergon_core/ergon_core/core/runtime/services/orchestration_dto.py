@@ -18,6 +18,7 @@ else:
 
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 
@@ -83,9 +84,9 @@ class PreparedTaskExecution(BaseModel):
     task_slug: str
     task_description: str
     benchmark_type: str
-    assigned_worker_slug: str | None = None
-    worker_type: str | None = None
-    model_target: str | None = None
+    assigned_worker_slug: str
+    worker_type: str
+    model_target: str
     execution_id: UUID
     skipped: bool = False
     skip_reason: str | None = None
@@ -160,4 +161,4 @@ class RunCompletionData(BaseModel):
     final_score: float | None = None
     normalized_score: float | None = None
     total_cost_usd: float = 0.0
-    execution_result: dict[str, object] = Field(default_factory=dict)
+    execution_result: JsonObject = Field(default_factory=dict)

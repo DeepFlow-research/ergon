@@ -20,12 +20,11 @@ function emptyState(): WorkflowRunState {
     name: "test",
     status: "executing",
     tasks: new Map(),
-    rootTaskId: "00000000-0000-0000-0000-000000000001",
+    rootTaskId: "11111111-1111-4111-8111-111111111111",
     resourcesByTask: new Map(),
     executionsByTask: new Map(),
     sandboxesByTask: new Map(),
     threads: [],
-    generationTurns: [],
     contextEventsByTask: new Map(),
     evaluationsByTask: new Map(),
     startedAt: new Date().toISOString(),
@@ -51,7 +50,7 @@ function emptyState(): WorkflowRunState {
 function syntheticMutation(
   mutationType: string,
 ): DashboardGraphMutationData {
-  const nodeId = "00000000-0000-0000-0000-000000000001";
+  const nodeId = "11111111-1111-4111-8111-111111111111";
   const newValueByType: Record<string, Record<string, unknown>> = {
     "node.added": {
       mutation_type: "node.added",
@@ -74,7 +73,7 @@ function syntheticMutation(
     "edge.added": {
       mutation_type: "edge.added",
       source_node_id: nodeId,
-      target_node_id: "00000000-0000-0000-0000-000000000002",
+      target_node_id: "22222222-2222-4222-8222-222222222222",
       status: "pending",
     },
     "edge.removed": { mutation_type: "edge.removed" },

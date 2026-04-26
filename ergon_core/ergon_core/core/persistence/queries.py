@@ -9,6 +9,7 @@ transaction management is needed at this layer.
 from typing import Any, Generic, Type, TypeVar
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,
@@ -25,12 +26,13 @@ from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionSta
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
-    RunTaskEvaluation,
     RunTaskExecution,
 )
-from sqlmodel import SQLModel, desc, select
+from pydantic import BaseModel
+from sqlmodel import SQLModel, col, desc, select
 
 T = TypeVar("T", bound=SQLModel)
+PayloadModelT = TypeVar("PayloadModelT", bound=BaseModel)
 
 # ---------------------------------------------------------------------------
 # Base
@@ -106,6 +108,13 @@ class RunsQueries(BaseQueries[RunRecord]):
             stmt = select(RunRecord).order_by(desc(RunRecord.created_at)).limit(limit)
             return list(session.exec(stmt).all())
 
+    def get_cohort_id(self, run_id: UUID) -> UUID | None:
+        with get_session() as session:
+            run = session.get(RunRecord, run_id)
+            if run is None:
+                return None
+            return run.cohort_id
+
 
 # ---------------------------------------------------------------------------
 # Definitions
@@ -150,6 +159,19 @@ class DefinitionsQueries(BaseQueries[ExperimentDefinition]):
                 ExperimentDefinitionTask.experiment_definition_id == definition_id
             )
             return list(session.exec(stmt).all())
+
+    def get_task_with_instance(
+        self,
+        task_id: UUID,
+    ) -> tuple[ExperimentDefinitionTask, ExperimentDefinitionInstance]:
+        with get_session() as session:
+            task = session.get(ExperimentDefinitionTask, task_id)
+            if task is None:
+                raise ValueError(f"ExperimentDefinitionTask {task_id} not found")
+            instance = session.get(ExperimentDefinitionInstance, task.instance_id)
+            if instance is None:
+                raise ValueError(f"ExperimentDefinitionInstance {task.instance_id} not found")
+            return task, instance
 
     def get_task_dependencies(
         self, definition_id: UUID
@@ -234,7 +256,7 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
                 RunGraphNode.parent_node_id == parent.node_id
             )
             stmt = select(RunTaskExecution).where(
-                RunTaskExecution.node_id.in_(child_node_ids_stmt)  # type: ignore[union-attr]
+                col(RunTaskExecution.node_id).in_(child_node_ids_stmt)
             )
             return list(session.exec(stmt).all())
 
@@ -259,7 +281,8 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
     def get_task_payload(
         self,
         task_execution_id: UUID,
-    ) -> dict[str, Any] | None:  # slopcop: ignore[no-typing-any]
+        payload_model: type[PayloadModelT],
+    ) -> PayloadModelT | None:
         """Return the immutable task_payload for a task execution.
 
         Joins ``run_task_executions`` → ``experiment_definition_tasks``.
@@ -270,7 +293,7 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
         """
         with get_session() as session:
             stmt = (
-                select(ExperimentDefinitionTask.task_payload)
+                select(ExperimentDefinitionTask)
                 .join(
                     RunTaskExecution,
                     RunTaskExecution.definition_task_id == ExperimentDefinitionTask.id,
@@ -280,40 +303,7 @@ class TaskExecutionsQueries(BaseQueries[RunTaskExecution]):
             result = session.exec(stmt).first()
             if result is None:
                 return None
-            return dict(result)
-
-
-# ---------------------------------------------------------------------------
-# Evaluations
-# ---------------------------------------------------------------------------
-
-
-class EvaluationsQueries(BaseQueries[RunTaskEvaluation]):
-    def __init__(self) -> None:
-        super().__init__(RunTaskEvaluation)
-
-    def list_by_run(self, run_id: UUID) -> list[RunTaskEvaluation]:
-        with get_session() as session:
-            stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
-            return list(session.exec(stmt).all())
-
-    def get_by_task(self, run_id: UUID, definition_task_id: UUID) -> list[RunTaskEvaluation]:
-        with get_session() as session:
-            stmt = select(RunTaskEvaluation).where(
-                RunTaskEvaluation.run_id == run_id,
-                RunTaskEvaluation.definition_task_id == definition_task_id,
-            )
-            return list(session.exec(stmt).all())
-
-    def get_by_evaluator(
-        self, run_id: UUID, definition_evaluator_id: UUID
-    ) -> list[RunTaskEvaluation]:
-        with get_session() as session:
-            stmt = select(RunTaskEvaluation).where(
-                RunTaskEvaluation.run_id == run_id,
-                RunTaskEvaluation.definition_evaluator_id == definition_evaluator_id,
-            )
-            return list(session.exec(stmt).all())
+            return result.task_payload_as(payload_model)
 
 
 # ---------------------------------------------------------------------------
@@ -374,33 +364,6 @@ class ResourcesQueries(BaseQueries[RunResource]):
             )
             return session.exec(stmt).first()
 
-    def list_latest_for_execution(
-        self,
-        task_execution_id: UUID,
-    ) -> list[RunResource]:
-        """One row per file_path -- the most-recently-inserted row wins.
-
-        Uses a subquery to find the max (created_at, id) per file_path,
-        compatible with both Postgres and SQLite.
-        """
-        with get_session() as session:
-            all_rows = list(
-                session.exec(
-                    select(RunResource)
-                    .where(RunResource.task_execution_id == task_execution_id)
-                    .order_by(
-                        RunResource.file_path,
-                        RunResource.created_at.desc(),
-                        RunResource.id.desc(),
-                    )
-                ).all()
-            )
-            seen: dict[str, RunResource] = {}
-            for row in all_rows:
-                if row.file_path not in seen:
-                    seen[row.file_path] = row
-            return list(seen.values())
-
     # --- append ----------------------------------------------------------
 
     def append(  # slopcop: ignore[max-function-params]
@@ -415,7 +378,7 @@ class ResourcesQueries(BaseQueries[RunResource]):
         size_bytes: int,
         error: str | None,
         content_hash: str | None,
-        metadata: dict[str, object] | None = None,
+        metadata: JsonObject | None = None,
     ) -> RunResource:
         """Append one row to the log. Never updates."""
         with get_session() as session:
@@ -448,14 +411,12 @@ class Queries:
     runs: RunsQueries
     definitions: DefinitionsQueries
     task_executions: TaskExecutionsQueries
-    evaluations: EvaluationsQueries
     resources: ResourcesQueries
 
     def __init__(self) -> None:
         self.runs = RunsQueries()
         self.definitions = DefinitionsQueries()
         self.task_executions = TaskExecutionsQueries()
-        self.evaluations = EvaluationsQueries()
         self.resources = ResourcesQueries()
 
 

@@ -1,6 +1,7 @@
 """Ergon CLI entry point."""
 
 import argparse
+import asyncio
 import sys
 
 from ergon_cli.commands.benchmark import handle_benchmark
@@ -167,12 +168,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+async def _main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "benchmark":
-        return handle_benchmark(args)
+        return await handle_benchmark(args)
     elif args.command == "run":
         return handle_run(args)
     elif args.command == "worker":
@@ -180,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "evaluator":
         return handle_evaluator(args)
     elif args.command == "eval":
-        return handle_eval(args)
+        return await handle_eval(args)
     elif args.command == "train":
         return handle_train(args)
     elif args.command == "onboard":
@@ -190,6 +191,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         parser.print_help()
         return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    coroutine = _main(argv)
+    return asyncio.run(coroutine)  # slopcop: ignore[no-async-from-sync] -- CLI entrypoint
 
 
 if __name__ == "__main__":

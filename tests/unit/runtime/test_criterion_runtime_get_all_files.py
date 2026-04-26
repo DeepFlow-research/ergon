@@ -16,7 +16,10 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.runtime.evaluation.criterion_runtime import DefaultCriterionRuntime
+from ergon_core.core.runtime.evaluation.criterion_runtime import (
+    CriterionRuntimeOptions,
+    DefaultCriterionRuntime,
+)
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
 
 
@@ -34,12 +37,15 @@ def _make_runtime(
     run_id=None,
     task_id=None,
 ) -> DefaultCriterionRuntime:
-    context = CriterionContext(run_id=run_id or uuid4())
+    context = CriterionContext(
+        run_id=run_id or uuid4(),
+        task_input="test task",
+        agent_reasoning="test output",
+    )
     return DefaultCriterionRuntime(
         context=context,
         sandbox_manager=MagicMock(),
-        run_id=run_id,
-        task_id=task_id,
+        options=CriterionRuntimeOptions(run_id=run_id, task_id=task_id),
     )
 
 

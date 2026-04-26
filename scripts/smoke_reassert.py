@@ -35,11 +35,12 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-# Import side-effect: registers smoke fixtures so ``RunGenerationTurn``
-# schema imports + any runtime ClassVars (PARENT_TURN_COUNT etc.) are
+# Register smoke fixtures so runtime ClassVars (PARENT_TURN_COUNT etc.) are
 # wired up identically to how the driver sees them.
-import tests.e2e._fixtures  # noqa: E402, F401
-from tests.e2e._asserts import (  # noqa: E402
+from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+
+register_smoke_fixtures()
+from tests.e2e._asserts import (
     _assert_blob_roundtrip,
     _assert_run_evaluation,
     _assert_run_graph,
@@ -113,7 +114,7 @@ def main() -> int:
     for name, fn in asserts:
         try:
             fn(args.run_id)
-        except BaseException as exc:  # noqa: BLE001 — CLI script; surface everything
+        except BaseException as exc:
             failed.append((name, exc))
             print(f"  ✗ {name}: {type(exc).__name__}: {exc}")
             if args.stop_on_first_fail:

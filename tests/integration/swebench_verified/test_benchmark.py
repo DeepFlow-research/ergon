@@ -5,12 +5,15 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from ergon_builtins.benchmarks.swebench_verified.benchmark import (
+    _load_rows,
     SweBenchVerifiedBenchmark,
 )
+from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchInstance
 
 
 def _fake_load_rows(*, limit=None):
-    return FAKE_ROWS if limit is None else FAKE_ROWS[:limit]
+    rows = [SWEBenchInstance.from_raw(row) for row in FAKE_ROWS]
+    return rows if limit is None else rows[:limit]
 
 
 FAKE_ROWS = [
@@ -91,5 +94,22 @@ def test_task_payload_retains_test_patch_for_evaluator() -> None:
         benchmark = SweBenchVerifiedBenchmark()
         task = benchmark.build_instances()["default"][0]
 
-    assert task.task_payload["test_patch"] == "TP1"
-    assert "patch" not in task.task_payload
+    assert task.task_payload.test_patch == "TP1"
+    assert not hasattr(task.task_payload, "patch")
+
+
+def test_load_rows_returns_typed_instances() -> None:
+    class FakeDataset:
+        def __len__(self):
+            return 1
+
+        def __iter__(self):
+            return iter(FAKE_ROWS[:1])
+
+    with patch(
+        "ergon_builtins.benchmarks.swebench_verified.benchmark.load_dataset",
+        return_value=FakeDataset(),
+    ):
+        rows = _load_rows()
+
+    assert rows == [SWEBenchInstance.from_raw(FAKE_ROWS[0])]

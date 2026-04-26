@@ -30,6 +30,7 @@ class ResearchRubricsBenchmark(Benchmark):
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
+    task_payload_model: ClassVar[type[ResearchRubricsTaskPayload]] = ResearchRubricsTaskPayload
     onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
         extras=("ergon-builtins[data]",),
         optional_keys=("EXA_API_KEY",),
@@ -56,32 +57,17 @@ class ResearchRubricsBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
-        rows = self._load_rows()
-        tasks: list[BenchmarkTask] = []
-        for row in rows:
-            payload = ResearchRubricsTaskPayload(
-                sample_id=row["sample_id"],
-                domain=row.get("domain", ""),
-                ablated_prompt=row["ablated_prompt"],
-                rubrics=[
-                    RubricCriterion(
-                        criterion=r["criterion"],
-                        axis=r["axis"],
-                        weight=r["weight"],
-                    )
-                    for r in row["rubrics"]
-                ],
-                removed_elements=row.get("removed_elements"),
-                ablation_type=row.get("ablation_type"),
-            )
+    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[ResearchRubricsTaskPayload]]]:
+        payloads = self._load_rows()
+        tasks: list[BenchmarkTask[ResearchRubricsTaskPayload]] = []
+        for payload in payloads:
             tasks.append(
-                BenchmarkTask(
-                    task_slug=row["sample_id"],
+                BenchmarkTask[ResearchRubricsTaskPayload](
+                    task_slug=payload.sample_id,
                     instance_key="default",
-                    description=row["ablated_prompt"],
+                    description=payload.ablated_prompt,
                     evaluator_binding_keys=("default",),
-                    task_payload=payload.model_dump(),
+                    task_payload=payload,
                 )
             )
         return {"default": tasks}
@@ -91,8 +77,8 @@ class ResearchRubricsBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def _load_rows(self) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
-        """Load dataset rows from HuggingFace.
+    def _load_rows(self) -> list[ResearchRubricsTaskPayload]:
+        """Load and validate dataset rows from HuggingFace.
 
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
@@ -114,4 +100,25 @@ class ResearchRubricsBenchmark(Benchmark):
         if self.limit:
             train_ds = train_ds.select(range(min(self.limit, len(train_ds))))
 
-        return [train_ds[idx] for idx in range(len(train_ds))]
+        return [_payload_from_row(train_ds[idx]) for idx in range(len(train_ds))]
+
+
+def _payload_from_row(
+    row: Mapping[str, Any],  # slopcop: ignore[no-typing-any]
+) -> ResearchRubricsTaskPayload:
+    """Convert one raw HuggingFace row into the benchmark payload schema."""
+    return ResearchRubricsTaskPayload(
+        sample_id=row["sample_id"],
+        domain=str(row.get("domain", "")),
+        ablated_prompt=row["ablated_prompt"],
+        rubrics=[
+            RubricCriterion(
+                criterion=r["criterion"],
+                axis=r["axis"],
+                weight=r["weight"],
+            )
+            for r in row["rubrics"]
+        ],
+        removed_elements=row.get("removed_elements"),
+        ablation_type=row.get("ablation_type"),
+    )

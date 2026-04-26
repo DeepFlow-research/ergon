@@ -1,24 +1,31 @@
 """Read and write repository for run telemetry tables."""
 
-import logging
-from collections.abc import Awaitable, Callable
 from uuid import UUID
 
-from ergon_core.api.generation import GenerationTurn, TextPart, ToolCallPart
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
-    ExecutionOutcome,
-    RunGenerationTurn,
     RunRecord,
-    RunResource,
     RunTaskEvaluation,
-    RunTaskExecution,
 )
-from ergon_core.core.utils import utcnow as _utcnow
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
-logger = logging.getLogger(__name__)
+
+class CreateTaskEvaluation(BaseModel):
+    """Command object for persisting a task evaluation row."""
+
+    model_config = {"frozen": True}
+
+    run_id: UUID
+    node_id: UUID
+    task_execution_id: UUID
+    definition_task_id: UUID | None
+    definition_evaluator_id: UUID
+    score: float | None = None
+    passed: bool | None = None
+    feedback: str | None = None
+    summary_json: JsonObject | None = None
 
 
 class TelemetryRepository:
@@ -28,307 +35,51 @@ class TelemetryRepository:
     # Reads
     # ------------------------------------------------------------------
 
-    def get_run(self, session: Session, run_id: UUID) -> RunRecord | None:
-        return session.get(RunRecord, run_id)
-
-    def get_task_executions(self, session: Session, run_id: UUID) -> list[RunTaskExecution]:
-        stmt = select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
-        return list(session.exec(stmt).all())
-
     def get_task_evaluations(self, session: Session, run_id: UUID) -> list[RunTaskEvaluation]:
         stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
-        return list(session.exec(stmt).all())
-
-    def get_resources(self, session: Session, run_id: UUID) -> list[RunResource]:
-        stmt = select(RunResource).where(RunResource.run_id == run_id)
         return list(session.exec(stmt).all())
 
     # ------------------------------------------------------------------
     # Writes
     # ------------------------------------------------------------------
 
-    def create_run(
-        self,
-        session: Session,
-        experiment_definition_id: UUID,
-        *,
-        status: str = RunStatus.PENDING,
-    ) -> RunRecord:
-        run = RunRecord(
-            id=new_id(),
-            experiment_definition_id=experiment_definition_id,
-            status=status,
-            created_at=_utcnow(),
-        )
-        session.add(run)
-        session.flush()
-        return run
-
-    def create_task_execution(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        definition_task_id: UUID,
-        definition_worker_id: UUID | None = None,
-        attempt_number: int = 1,
-        status: str = TaskExecutionStatus.PENDING,
-    ) -> RunTaskExecution:
-        execution = RunTaskExecution(
-            id=new_id(),
-            run_id=run_id,
-            definition_task_id=definition_task_id,
-            definition_worker_id=definition_worker_id,
-            attempt_number=attempt_number,
-            status=status,
-            started_at=_utcnow(),
-        )
-        session.add(execution)
-        session.flush()
-        return execution
-
-    def complete_task_execution(
-        self,
-        session: Session,
-        execution_id: UUID,
-        *,
-        success: bool,
-        final_assistant_message: str | None = None,
-        output_json: dict[str, object] | None = None,
-        error_json: dict[str, object] | None = None,
-    ) -> RunTaskExecution:
-        execution = session.get(RunTaskExecution, execution_id)
-        if execution is None:
-            raise ValueError(f"RunTaskExecution {execution_id} not found")
-
-        execution.status = TaskExecutionStatus.COMPLETED if success else TaskExecutionStatus.FAILED
-        execution.completed_at = _utcnow()
-        if final_assistant_message is not None:
-            execution.final_assistant_message = final_assistant_message
-        if output_json is not None:
-            execution.output_json = output_json
-        if error_json is not None:
-            execution.error_json = error_json
-
-        session.add(execution)
-        session.flush()
-        return execution
-
-    def create_resource(  # slopcop: ignore[max-function-params]
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        task_execution_id: UUID | None = None,
-        kind: str,
-        name: str,
-        mime_type: str,
-        file_path: str,
-        size_bytes: int,
-        metadata_json: dict[str, object] | None = None,
-    ) -> RunResource:
-        resource = RunResource(
-            id=new_id(),
-            run_id=run_id,
-            task_execution_id=task_execution_id,
-            kind=kind,
-            name=name,
-            mime_type=mime_type,
-            file_path=file_path,
-            size_bytes=size_bytes,
-            metadata_json=metadata_json or {},
-        )
-        session.add(resource)
-        session.flush()
-        return resource
-
     def create_task_evaluation(
         self,
         session: Session,
-        *,
-        run_id: UUID,
-        definition_task_id: UUID,
-        definition_evaluator_id: UUID,
-        score: float | None = None,
-        passed: bool | None = None,
-        feedback: str | None = None,
-        summary_json: dict[str, object] | None = None,
+        command: CreateTaskEvaluation,
     ) -> RunTaskEvaluation:
         evaluation = RunTaskEvaluation(
             id=new_id(),
-            run_id=run_id,
-            definition_task_id=definition_task_id,
-            definition_evaluator_id=definition_evaluator_id,
-            score=score,
-            passed=passed,
-            feedback=feedback,
-            summary_json=summary_json or {},
+            run_id=command.run_id,
+            node_id=command.node_id,
+            task_execution_id=command.task_execution_id,
+            definition_task_id=command.definition_task_id,
+            definition_evaluator_id=command.definition_evaluator_id,
+            score=command.score,
+            passed=command.passed,
+            feedback=command.feedback,
+            summary_json={} if command.summary_json is None else command.summary_json,
         )
         session.add(evaluation)
         session.flush()
         return evaluation
 
-
-class GenerationTurnRepository:
-    """Read/write operations for lossless per-turn generation records."""
-
-    def __init__(self) -> None:
-        self._listeners: list[Callable[[RunGenerationTurn], Awaitable[None]]] = []
-
-    def add_listener(self, listener: Callable[[RunGenerationTurn], Awaitable[None]]) -> None:
-        """Register a callback invoked after each persist_single() commit."""
-        self._listeners.append(listener)
-
-    # ------------------------------------------------------------------
-    # Writes
-    # ------------------------------------------------------------------
-
-    async def persist_single(  # slopcop: ignore[max-function-params]
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        execution_id: UUID,
-        worker_binding_key: str,
-        turn: GenerationTurn,
-        turn_index: int,
-        execution_outcome: ExecutionOutcome = "success",
-    ) -> RunGenerationTurn:
-        """Persist one turn and commit. Notifies listeners after commit."""
-        row = RunGenerationTurn(
-            id=new_id(),
-            run_id=run_id,
-            task_execution_id=execution_id,
-            worker_binding_key=worker_binding_key,
-            turn_index=turn_index,
-            prompt_text=None,
-            raw_response={},
-            response_text=_extract_response_text(turn),
-            tool_calls_json=_extract_tool_calls_json(turn),
-            tool_results_json=(
-                [tr.model_dump() for tr in turn.tool_results] if turn.tool_results else None
-            ),
-            token_ids_json=turn.turn_token_ids or None,
-            logprobs_json=(
-                [lp.model_dump() for lp in turn.turn_logprobs] if turn.turn_logprobs else None
-            ),
-            policy_version=turn.policy_version,
-            execution_outcome=execution_outcome,
-            started_at=turn.started_at,
-            completed_at=turn.completed_at,
-            created_at=_utcnow(),
+    def refresh_run_evaluation_summary(self, session: Session, run_id: UUID) -> None:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            return
+        evaluations = self.get_task_evaluations(session, run_id)
+        scores = [evaluation.score for evaluation in evaluations if evaluation.score is not None]
+        final_score = sum(scores) if scores else None
+        normalized_score = final_score / len(scores) if scores and final_score is not None else None
+        existing_summary = dict({} if run.summary_json is None else run.summary_json)
+        existing_summary.update(
+            {
+                "final_score": final_score,
+                "normalized_score": normalized_score,
+                "evaluators_count": len(evaluations),
+            }
         )
-        session.add(row)
-        session.commit()
-
-        for listener in self._listeners:
-            try:
-                await listener(row)
-            except Exception:  # slopcop: ignore[no-broad-except]
-                logger.warning("Turn listener failed", exc_info=True)
-
-        return row
-
-    def persist_turns(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        execution_id: UUID,
-        worker_binding_key: str,
-        turns: list[GenerationTurn],
-    ) -> list[RunGenerationTurn]:
-        """Batch persist (legacy path used by RL extraction). Does not notify listeners."""
-        rows: list[RunGenerationTurn] = []
-        for i, turn in enumerate(turns):
-            row = RunGenerationTurn(
-                id=new_id(),
-                run_id=run_id,
-                task_execution_id=execution_id,
-                worker_binding_key=worker_binding_key,
-                turn_index=i,
-                prompt_text=None,
-                raw_response={},
-                response_text=_extract_response_text(turn),
-                tool_calls_json=_extract_tool_calls_json(turn),
-                tool_results_json=(
-                    [tr.model_dump() for tr in turn.tool_results] if turn.tool_results else None
-                ),
-                token_ids_json=turn.turn_token_ids or None,
-                logprobs_json=(
-                    [lp.model_dump() for lp in turn.turn_logprobs] if turn.turn_logprobs else None
-                ),
-                policy_version=turn.policy_version,
-                started_at=turn.started_at,
-                completed_at=turn.completed_at,
-            )
-            session.add(row)
-            rows.append(row)
+        run.summary_json = existing_summary
+        session.add(run)
         session.flush()
-        return rows
-
-    # ------------------------------------------------------------------
-    # Reads
-    # ------------------------------------------------------------------
-
-    def get_for_execution(self, session: Session, execution_id: UUID) -> list[RunGenerationTurn]:
-        stmt = (
-            select(RunGenerationTurn)
-            .where(RunGenerationTurn.task_execution_id == execution_id)
-            .order_by(RunGenerationTurn.turn_index)
-        )
-        return list(session.exec(stmt).all())
-
-    def get_for_run(self, session: Session, run_id: UUID) -> list[RunGenerationTurn]:
-        stmt = (
-            select(RunGenerationTurn)
-            .where(RunGenerationTurn.run_id == run_id)
-            .order_by(
-                RunGenerationTurn.task_execution_id,
-                RunGenerationTurn.turn_index,
-            )
-        )
-        return list(session.exec(stmt).all())
-
-    def mark_execution_outcome(
-        self,
-        session: Session,
-        execution_id: UUID,
-        outcome: ExecutionOutcome,
-    ) -> None:
-        """Update execution_outcome on all turns for an execution."""
-        turns = self.get_for_execution(session, execution_id)
-        for turn in turns:
-            turn.execution_outcome = outcome
-            session.add(turn)
-        session.commit()
-
-
-# ---------------------------------------------------------------------------
-# Helpers — extract convenience fields from new typed GenerationTurn
-# ---------------------------------------------------------------------------
-
-
-def _extract_response_text(turn: GenerationTurn) -> str | None:
-    """Extract the first text content from response_parts."""
-    for part in turn.response_parts:
-        if isinstance(part, TextPart):
-            return part.content
-    return None
-
-
-def _extract_tool_calls_json(
-    turn: GenerationTurn,
-) -> list[dict[str, object]] | None:
-    """Extract tool call dicts from response_parts."""
-    calls: list[dict[str, object]] = []
-    for part in turn.response_parts:
-        if isinstance(part, ToolCallPart):
-            calls.append(
-                {
-                    "tool_call_id": part.tool_call_id,
-                    "tool_name": part.tool_name,
-                    "args": part.args,
-                }
-            )
-    return calls if calls else None

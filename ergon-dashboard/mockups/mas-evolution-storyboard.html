@@ -1,0 +1,850 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MAS Evolution UX Storyboard</title>
+  <style>
+    :root {
+      --page: #070b13;
+      --ink: #ecf5ff;
+      --muted: #91a4bd;
+      --faint: #5c6f88;
+      --panel: #0d1626;
+      --panel-2: #121e31;
+      --panel-3: #182840;
+      --stroke: #263852;
+      --stroke-soft: #1d2a3f;
+      --blue: #38bdf8;
+      --violet: #a78bfa;
+      --green: #34d399;
+      --amber: #fbbf24;
+      --rose: #fb7185;
+      --slate: #94a3b8;
+      --paper: #f8fafc;
+      --paper-ink: #0f172a;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 1540px;
+      background:
+        radial-gradient(circle at 12% 4%, rgb(56 189 248 / 0.16), transparent 26%),
+        radial-gradient(circle at 82% 12%, rgb(167 139 250 / 0.16), transparent 30%),
+        var(--page);
+      color: var(--ink);
+    }
+
+    .board {
+      padding: 32px;
+    }
+
+    .board-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: 36px;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .board-header p {
+      margin-top: 10px;
+      max-width: 840px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 15px;
+    }
+
+    .principles {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      gap: 7px;
+      align-items: center;
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: rgb(18 30 49 / 0.82);
+      padding: 8px 11px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 14px currentColor;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 720px);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .artboard {
+      border: 1px solid var(--stroke-soft);
+      border-radius: 28px;
+      overflow: hidden;
+      background: rgb(10 17 30 / 0.84);
+      box-shadow: 0 24px 80px rgb(0 0 0 / 0.38);
+    }
+
+    .artboard-caption {
+      padding: 20px 22px;
+      border-bottom: 1px solid var(--stroke-soft);
+      background: linear-gradient(180deg, rgb(18 30 49 / 0.95), rgb(13 22 38 / 0.95));
+    }
+
+    .artboard-caption small {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .artboard-caption h2 {
+      font-size: 23px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .artboard-caption p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .screen {
+      position: relative;
+      height: 540px;
+      background:
+        radial-gradient(circle, rgb(148 163 184 / 0.12) 1px, transparent 1px),
+        #09111f;
+      background-size: 20px 20px;
+    }
+
+    .screen-header {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      height: 62px;
+      border: 1px solid var(--stroke-soft);
+      border-radius: 18px;
+      background: rgb(13 22 38 / 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      z-index: 3;
+    }
+
+    .screen-header strong {
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .screen-header span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .mini-metrics {
+      display: flex;
+      gap: 7px;
+    }
+
+    .mini-metric {
+      min-width: 58px;
+      padding: 6px 8px;
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      background: var(--panel-2);
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .mini-metric b {
+      display: block;
+      color: var(--ink);
+      font-size: 14px;
+    }
+
+    .node {
+      position: absolute;
+      width: 132px;
+      min-height: 76px;
+      border-radius: 14px;
+      background: var(--paper);
+      color: var(--paper-ink);
+      box-shadow: 0 14px 34px rgb(0 0 0 / 0.34);
+      border: 1px solid #dbeafe;
+      border-left: 5px solid var(--slate);
+      padding: 10px 11px;
+      z-index: 2;
+    }
+
+    .node h3 {
+      font-size: 12px;
+      line-height: 1.14;
+      margin-top: 7px;
+    }
+
+    .node p {
+      margin-top: 4px;
+      color: #64748b;
+      font-size: 10px;
+      line-height: 1.25;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      font-size: 8px;
+      font-weight: 900;
+    }
+
+    .node.done { border-left-color: var(--green); }
+    .node.run { border-left-color: var(--amber); }
+    .node.ready { border-left-color: var(--blue); }
+    .node.focus {
+      outline: 3px solid rgb(56 189 248 / 0.45);
+      outline-offset: 4px;
+    }
+
+    .badge {
+      position: absolute;
+      top: -9px;
+      right: -9px;
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 3px solid #08111f;
+      background: var(--blue);
+      color: #06111f;
+      font-size: 11px;
+      font-weight: 950;
+    }
+
+    .badge.green { background: var(--green); }
+    .badge.amber { background: var(--amber); }
+    .badge.slate { background: var(--slate); }
+
+    svg.wires {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .wire {
+      fill: none;
+      stroke: #5f7896;
+      stroke-width: 2;
+      stroke-dasharray: 6 6;
+      opacity: 0.7;
+    }
+
+    .wire.hot {
+      stroke: var(--blue);
+      stroke-width: 3;
+      stroke-dasharray: none;
+      filter: drop-shadow(0 0 8px rgb(56 189 248 / 0.6));
+    }
+
+    .rail {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 16px;
+      height: 94px;
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      background: rgb(13 22 38 / 0.94);
+      display: grid;
+      grid-template-columns: 112px 1fr 136px;
+      gap: 14px;
+      padding: 13px;
+      z-index: 5;
+    }
+
+    .play {
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--blue), var(--violet));
+      color: #07111f;
+      display: grid;
+      place-items: center;
+      font-weight: 950;
+      letter-spacing: -0.02em;
+    }
+
+    .ticks {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      align-items: center;
+    }
+
+    .tick {
+      height: 46px;
+      border-radius: 12px;
+      border: 1px solid var(--stroke);
+      background: var(--panel-2);
+      position: relative;
+      padding: 7px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    .tick.active {
+      background: rgb(56 189 248 / 0.16);
+      border-color: var(--blue);
+      color: var(--ink);
+    }
+
+    .tick::after {
+      content: "";
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 7px;
+      height: 5px;
+      border-radius: 999px;
+      background: var(--faint);
+    }
+
+    .tick.active::after { background: var(--blue); }
+    .tick.done::after { background: var(--green); }
+    .tick.run::after { background: var(--amber); }
+
+    .why {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      align-self: center;
+    }
+
+    .drawer {
+      position: absolute;
+      top: 92px;
+      right: 16px;
+      width: 214px;
+      bottom: 124px;
+      border: 1px solid var(--stroke-soft);
+      border-radius: 18px;
+      background: rgb(13 22 38 / 0.96);
+      padding: 14px;
+      z-index: 4;
+    }
+
+    .drawer h3 {
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .drawer .line {
+      margin-top: 11px;
+      border-radius: 12px;
+      background: var(--panel-3);
+      padding: 9px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .drawer .line b { color: var(--ink); }
+
+    .branch-shell {
+      position: absolute;
+      top: 98px;
+      left: 28px;
+      width: 430px;
+      height: 292px;
+      border: 2px dashed rgb(56 189 248 / 0.36);
+      border-radius: 22px;
+      background: rgb(56 189 248 / 0.05);
+    }
+
+    .branch-title {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.11em;
+    }
+
+    .collapsed-group {
+      position: absolute;
+      width: 150px;
+      height: 92px;
+      border-radius: 18px;
+      border: 1px solid var(--stroke);
+      background: rgb(18 30 49 / 0.96);
+      box-shadow: 0 16px 38px rgb(0 0 0 / 0.32);
+      padding: 13px;
+      z-index: 2;
+    }
+
+    .collapsed-group strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    .collapsed-group span {
+      display: inline-flex;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .stack {
+      position: absolute;
+      right: 12px;
+      bottom: 10px;
+      display: flex;
+      gap: 4px;
+    }
+
+    .stack i {
+      display: block;
+      width: 20px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--panel-3);
+      border: 1px solid var(--stroke);
+    }
+
+    .stack i:nth-child(2) { transform: translateY(-5px); background: rgb(56 189 248 / 0.3); }
+    .stack i:nth-child(3) { transform: translateY(-10px); background: rgb(52 211 153 / 0.3); }
+
+    .phase-row {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      top: 108px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      z-index: 2;
+    }
+
+    .phase {
+      min-height: 182px;
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      background: rgb(13 22 38 / 0.94);
+      padding: 13px;
+    }
+
+    .phase b {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .phase .mini {
+      height: 34px;
+      border-radius: 10px;
+      background: var(--panel-3);
+      border-left: 4px solid var(--slate);
+      margin-top: 7px;
+      padding: 7px;
+      color: var(--muted);
+      font-size: 10px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .phase .mini.green { border-left-color: var(--green); }
+    .phase .mini.amber { border-left-color: var(--amber); }
+    .phase .mini.blue { border-left-color: var(--blue); }
+
+    .phase.active {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgb(56 189 248 / 0.16);
+    }
+
+    .phase-note {
+      position: absolute;
+      left: 40px;
+      right: 40px;
+      bottom: 34px;
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      background: rgb(18 30 49 / 0.96);
+      padding: 14px 16px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 13px;
+    }
+
+    .filmstrip {
+      position: absolute;
+      left: 18px;
+      top: 98px;
+      bottom: 20px;
+      width: 218px;
+      border: 1px solid var(--stroke);
+      border-radius: 18px;
+      background: rgb(13 22 38 / 0.95);
+      padding: 12px;
+      overflow: hidden;
+      z-index: 3;
+    }
+
+    .event-card {
+      border-radius: 14px;
+      border: 1px solid var(--stroke-soft);
+      background: var(--panel-2);
+      padding: 10px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .event-card.active {
+      border-color: var(--blue);
+      background: rgb(56 189 248 / 0.14);
+      color: var(--ink);
+    }
+
+    .event-card b {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 3px;
+    }
+
+    .stage {
+      position: absolute;
+      left: 260px;
+      top: 98px;
+      right: 18px;
+      bottom: 20px;
+      border: 1px solid var(--stroke-soft);
+      border-radius: 22px;
+      background:
+        radial-gradient(circle, rgb(148 163 184 / 0.12) 1px, transparent 1px),
+        rgb(9 17 31 / 0.74);
+      background-size: 20px 20px;
+    }
+
+    .caption-note {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .note {
+      border: 1px solid var(--stroke-soft);
+      border-radius: 14px;
+      background: rgb(13 22 38 / 0.76);
+      padding: 10px;
+    }
+
+    .note b {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="board">
+    <header class="board-header">
+      <div>
+        <h1>MAS Sample Evolution: UX Storyboard</h1>
+        <p>
+          Four directions for making a recursive MAS run understandable. The recurring thesis:
+          the user wants to debug how the sample evolved, so the graph should reveal one useful
+          moment at a time instead of trying to expose every nested task at once.
+        </p>
+      </div>
+      <div class="principles">
+        <span class="pill"><span class="dot" style="color: var(--blue)"></span>timeline-first</span>
+        <span class="pill"><span class="dot" style="color: var(--violet)"></span>focused expansion</span>
+        <span class="pill"><span class="dot" style="color: var(--green)"></span>details in inspector</span>
+        <span class="pill"><span class="dot" style="color: var(--amber)"></span>never overlap</span>
+      </div>
+    </header>
+
+    <section class="grid">
+      <article class="artboard">
+        <div class="artboard-caption">
+          <small>Design A · Recommended default</small>
+          <h2>Visual Debugger: current graph + timeline scrubber</h2>
+          <p>
+            Best when the primary question is “what happened next?” The graph shows the selected
+            moment; the bottom rail controls time and explains the causal event.
+          </p>
+        </div>
+        <div class="screen">
+          <div class="screen-header">
+            <div><strong>swebench-verified sample</strong><span>Step 12 of 34 · worker started reproduce_issue</span></div>
+            <div class="mini-metrics">
+              <div class="mini-metric"><b>10</b>tasks</div>
+              <div class="mini-metric"><b>2</b>running</div>
+              <div class="mini-metric"><b>5</b>done</div>
+            </div>
+          </div>
+          <svg class="wires" viewBox="0 0 720 540">
+            <path class="wire hot" d="M142 222 C208 222, 236 166, 290 166" />
+            <path class="wire hot" d="M142 222 C208 222, 236 246, 290 246" />
+            <path class="wire" d="M142 222 C208 222, 236 326, 290 326" />
+            <path class="wire" d="M422 166 C476 166, 494 246, 544 246" />
+            <path class="wire" d="M422 246 C476 246, 494 246, 544 246" />
+            <path class="wire" d="M422 326 C476 326, 494 246, 544 246" />
+          </svg>
+          <div class="node run" style="left: 48px; top: 184px;">
+            <span class="badge amber">▶</span><span class="status"><span class="dot" style="color: var(--amber)"></span>running</span>
+            <h3>Diamond root</h3><p>Delegated three branches.</p>
+          </div>
+          <div class="node done" style="left: 288px; top: 128px;">
+            <span class="badge green">✓</span><span class="status"><span class="dot" style="color: var(--green)"></span>done</span>
+            <h3>Inspect repo</h3><p>Found candidate files.</p>
+          </div>
+          <div class="node run focus" style="left: 288px; top: 208px;">
+            <span class="badge amber">▶</span><span class="status"><span class="dot" style="color: var(--amber)"></span>running</span>
+            <h3>Reproduce issue</h3><p>Current selected event.</p>
+          </div>
+          <div class="node ready" style="left: 288px; top: 288px;">
+            <span class="badge">→</span><span class="status"><span class="dot" style="color: var(--blue)"></span>ready</span>
+            <h3>Patch strategy</h3><p>Waiting on repro.</p>
+          </div>
+          <div class="collapsed-group" style="left: 532px; top: 194px;">
+            <strong>Implementation branch</strong><span>3 subtasks hidden</span><div class="stack"><i></i><i></i><i></i></div>
+          </div>
+          <div class="rail">
+            <div class="play">▶ Step 12</div>
+            <div class="ticks">
+              <div class="tick done">created</div><div class="tick done">delegated</div><div class="tick done">repo</div>
+              <div class="tick active run">repro</div><div class="tick">patch</div><div class="tick">test</div><div class="tick">eval</div>
+            </div>
+            <div class="why"><b style="color: var(--ink)">Why this changed</b><br />d_root became running because worker_started fired.</div>
+          </div>
+        </div>
+        <div class="caption-note">
+          <div class="note"><b>Strength</b>Directly supports replaying the sample’s evolution.</div>
+          <div class="note"><b>Risk</b>Needs good mutation summaries, not raw noisy events.</div>
+          <div class="note"><b>Rule</b>Auto-expand only the branch touched by the selected step.</div>
+        </div>
+      </article>
+
+      <article class="artboard">
+        <div class="artboard-caption">
+          <small>Design B · Focus mode</small>
+          <h2>Focused branch: one expanded path, siblings collapsed</h2>
+          <p>
+            Best when the user has picked a task and wants to understand its local neighborhood.
+            This avoids infinite nesting by turning offscreen complexity into explicit collapsed groups.
+          </p>
+        </div>
+        <div class="screen">
+          <div class="screen-header">
+            <div><strong>Focused path: root → exploration → reproduce</strong><span>Sibling branches summarized as cards</span></div>
+            <div class="mini-metrics"><div class="mini-metric"><b>1</b>path</div><div class="mini-metric"><b>6</b>hidden</div></div>
+          </div>
+          <svg class="wires" viewBox="0 0 720 540">
+            <path class="wire hot" d="M138 256 C196 256, 214 256, 260 256" />
+            <path class="wire hot" d="M410 256 C470 256, 490 256, 540 256" />
+            <path class="wire" d="M138 256 C198 256, 210 150, 272 150" />
+            <path class="wire" d="M410 256 C470 256, 490 370, 552 370" />
+          </svg>
+          <div class="collapsed-group" style="left: 42px; top: 116px;">
+            <strong>Setup branch</strong><span>2 subtasks hidden</span><div class="stack"><i></i><i></i></div>
+          </div>
+          <div class="node run" style="left: 42px; top: 220px;">
+            <span class="badge amber">▶</span><span class="status"><span class="dot" style="color: var(--amber)"></span>running</span>
+            <h3>Diamond root</h3><p>Currently coordinating.</p>
+          </div>
+          <div class="branch-shell">
+            <div class="branch-title"><span>Expanded branch</span><span>3 local tasks</span></div>
+            <div class="node done" style="left: 96px; top: 62px;">
+              <span class="badge green">✓</span><span class="status"><span class="dot" style="color: var(--green)"></span>done</span>
+              <h3>Inspect repo</h3><p>Candidate modules.</p>
+            </div>
+            <div class="node run focus" style="left: 96px; top: 154px;">
+              <span class="badge amber">▶</span><span class="status"><span class="dot" style="color: var(--amber)"></span>running</span>
+              <h3>Reproduce issue</h3><p>Current focus.</p>
+            </div>
+          </div>
+          <div class="node ready" style="left: 540px; top: 220px;">
+            <span class="badge">→</span><span class="status"><span class="dot" style="color: var(--blue)"></span>ready</span>
+            <h3>Patch strategy</h3><p>Next in focused path.</p>
+          </div>
+          <div class="collapsed-group" style="left: 528px; top: 334px;">
+            <strong>Validation branch</strong><span>3 subtasks hidden</span><div class="stack"><i></i><i></i><i></i></div>
+          </div>
+          <div class="drawer">
+            <h3>Reproduce issue</h3>
+            <div class="line"><b>Local context</b><br />Parent: exploration · depends on inspect repo</div>
+            <div class="line"><b>Hidden below</b><br />2 tool calls, 1 resource, no nested subtasks</div>
+            <div class="line"><b>Navigation</b><br />Open siblings · show ancestors · isolate path</div>
+          </div>
+        </div>
+        <div class="caption-note">
+          <div class="note"><b>Strength</b>Readable even with deep recursive task trees.</div>
+          <div class="note"><b>Risk</b>Less global context unless breadcrumbs are excellent.</div>
+          <div class="note"><b>Rule</b>Only one branch expanded unless the user pins another.</div>
+        </div>
+      </article>
+
+      <article class="artboard">
+        <div class="artboard-caption">
+          <small>Design C · Summary-first</small>
+          <h2>Phase map: group noisy mutations into readable chapters</h2>
+          <p>
+            Best for post-run analysis and screenshots. Instead of exposing every mutation,
+            it groups the run into phases and lets the user open a phase to inspect details.
+          </p>
+        </div>
+        <div class="screen">
+          <div class="screen-header">
+            <div><strong>Run story</strong><span>34 raw mutations grouped into 5 phases</span></div>
+            <div class="mini-metrics"><div class="mini-metric"><b>5</b>phases</div><div class="mini-metric"><b>34</b>events</div></div>
+          </div>
+          <svg class="wires" viewBox="0 0 720 540">
+            <path class="wire hot" d="M92 226 C176 226, 196 226, 252 226" />
+            <path class="wire hot" d="M252 226 C334 226, 354 226, 410 226" />
+            <path class="wire" d="M410 226 C488 226, 510 226, 568 226" />
+            <path class="wire" d="M568 226 C612 226, 632 226, 664 226" />
+          </svg>
+          <div class="phase-row">
+            <div class="phase">
+              <b>1. Create</b>
+              <div class="mini green">root created</div>
+              <div class="mini green">initial worker assigned</div>
+            </div>
+            <div class="phase">
+              <b>2. Delegate</b>
+              <div class="mini green">3 branches created</div>
+              <div class="mini green">dependencies added</div>
+              <div class="mini blue">workers assigned</div>
+            </div>
+            <div class="phase active">
+              <b>3. Execute</b>
+              <div class="mini green">inspect repo done</div>
+              <div class="mini amber">repro running</div>
+              <div class="mini blue">patch ready</div>
+            </div>
+            <div class="phase">
+              <b>4. Validate</b>
+              <div class="mini">pending tests</div>
+              <div class="mini">pending resources</div>
+            </div>
+            <div class="phase">
+              <b>5. Evaluate</b>
+              <div class="mini">final score pending</div>
+            </div>
+          </div>
+          <div class="phase-note">
+            <b style="color: var(--ink)">Selected phase: Execute.</b>
+            The system should summarize the phase in human language, then show the exact raw events
+            below for auditability. This is probably the easiest view for “what happened in this sample?”
+          </div>
+        </div>
+        <div class="caption-note">
+          <div class="note"><b>Strength</b>Most approachable for non-authors of the system.</div>
+          <div class="note"><b>Risk</b>Requires backend or frontend event bucketing semantics.</div>
+          <div class="note"><b>Rule</b>Raw events are available, but not the primary navigation.</div>
+        </div>
+      </article>
+
+      <article class="artboard">
+        <div class="artboard-caption">
+          <small>Design D · Event-centric</small>
+          <h2>Event filmstrip: timeline list drives a small graph viewport</h2>
+          <p>
+            Best when debugging is very event-driven. The left filmstrip is the source of truth;
+            the graph is a small preview of the selected event’s affected nodes.
+          </p>
+        </div>
+        <div class="screen">
+          <div class="screen-header">
+            <div><strong>Event debugger</strong><span>Select an event, see affected nodes and state delta</span></div>
+            <div class="mini-metrics"><div class="mini-metric"><b>12</b>selected</div><div class="mini-metric"><b>2</b>nodes</div></div>
+          </div>
+          <div class="filmstrip">
+            <div class="event-card"><b>#09 node.created</b>d_left created under d_root</div>
+            <div class="event-card"><b>#10 edge.created</b>d_left blocks d_join</div>
+            <div class="event-card"><b>#11 status.changed</b>inspect repo completed</div>
+            <div class="event-card active"><b>#12 status.changed</b>reproduce issue started</div>
+            <div class="event-card"><b>#13 resource.published</b>repro.log created</div>
+            <div class="event-card"><b>#14 thread.message</b>worker reported trace</div>
+          </div>
+          <div class="stage">
+            <svg class="wires" viewBox="0 0 442 420">
+              <path class="wire hot" d="M116 190 C182 190, 212 190, 282 190" />
+              <path class="wire" d="M116 190 C182 190, 212 285, 282 285" />
+            </svg>
+            <div class="node done" style="left: 54px; top: 154px;">
+              <span class="badge green">✓</span><span class="status"><span class="dot" style="color: var(--green)"></span>before</span>
+              <h3>Inspect repo</h3><p>completed</p>
+            </div>
+            <div class="node run focus" style="left: 276px; top: 154px;">
+              <span class="badge amber">▶</span><span class="status"><span class="dot" style="color: var(--amber)"></span>after</span>
+              <h3>Reproduce issue</h3><p>pending → running</p>
+            </div>
+            <div class="node ready" style="left: 276px; top: 250px;">
+              <span class="badge">→</span><span class="status"><span class="dot" style="color: var(--blue)"></span>unchanged</span>
+              <h3>Patch strategy</h3><p>waiting</p>
+            </div>
+          </div>
+        </div>
+        <div class="caption-note">
+          <div class="note"><b>Strength</b>Excellent for debugging exact state transitions.</div>
+          <div class="note"><b>Risk</b>Can feel too low-level for normal monitoring.</div>
+          <div class="note"><b>Rule</b>Use as “advanced debugger,” not necessarily default.</div>
+        </div>
+      </article>
+    </section>
+  </div>
+</body>
+</html>

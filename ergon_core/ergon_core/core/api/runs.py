@@ -1,10 +1,7 @@
 """FastAPI router for persisted run-detail snapshots."""
 
-import os
 from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
-from statistics import mean
 from typing import Any
 from uuid import UUID
 
@@ -14,7 +11,6 @@ from ergon_core.core.api.schemas import (
     RunContextEventDto,
     RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
-    RunGenerationTurnDto,
     RunGraphMutationDto,
     RunResourceDto,
     RunSandboxCommandDto,
@@ -34,7 +30,6 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
-    RunGenerationTurn,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -44,6 +39,7 @@ from ergon_core.core.persistence.telemetry.models import (
     TrainingMetric,
     TrainingSession,
 )
+from ergon_core.core.runtime.services.run_read_service import RunReadService
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
@@ -76,7 +72,11 @@ def _build_task_map(
     # Pass 1: build every node DTO from stored columns
     for node in nodes:
         nid = str(node.id)
-        worker = worker_by_binding.get(node.assigned_worker_slug or "")
+        worker = (
+            worker_by_binding.get(node.assigned_worker_slug)
+            if node.assigned_worker_slug is not None
+            else None
+        )
         started_at, completed_at = task_timestamps.get(node.id, (None, None))
         task_map[nid] = RunTaskDto(
             id=nid,
@@ -134,13 +134,17 @@ def _task_keyed_executions(
     worker_map: dict[UUID, ExperimentDefinitionWorker],
 ) -> dict[str, list[RunExecutionAttemptDto]]:
     by_task: dict[str, list[RunExecutionAttemptDto]] = defaultdict(list)
-    for ex in sorted(executions, key=lambda e: (str(e.node_id or ""), e.attempt_number)):
+    for ex in sorted(
+        executions,
+        key=lambda e: ("" if e.node_id is None else str(e.node_id), e.attempt_number),
+    ):
         if ex.node_id is None:
             continue
         tid = str(ex.node_id)
         error_msg: str | None = None
         if ex.error_json:
-            error_msg = ex.error_json.get("message") or str(ex.error_json)
+            message = ex.error_json.get("message")
+            error_msg = message if isinstance(message, str) else str(ex.error_json)
 
         worker = worker_map.get(ex.definition_worker_id) if ex.definition_worker_id else None
         agent_id = str(worker.id) if worker else None
@@ -202,11 +206,10 @@ def _task_keyed_evaluations(
 ) -> dict[str, RunTaskEvaluationDto]:
     result: dict[str, RunTaskEvaluationDto] = {}
     for ev in evaluations:
-        node_id = defn_to_node.get(ev.definition_task_id)
+        node_id = ev.node_id
         if node_id is None:
-            # Dynamic nodes have no definition_task_id; evaluations for unknown tasks are skipped.
-            # When dynamic-task evaluation is added, RunTaskEvaluation will need a node_id
-            # foreign key so evaluations can be mapped without going through the definition layer.
+            # Evaluation rows without runtime node identity cannot be
+            # truthfully rendered in a task workspace.
             continue
         tid = str(node_id)
         summary = ev.parsed_summary()
@@ -234,7 +237,7 @@ def _task_keyed_evaluations(
             id=str(ev.id),
             run_id=run_id,
             task_id=tid,
-            total_score=ev.score or 0.0,
+            total_score=0.0 if ev.score is None else ev.score,
             max_score=summary.max_score,
             normalized_score=summary.normalized_score,
             stages_evaluated=summary.stages_evaluated,
@@ -308,6 +311,7 @@ def _build_communication_threads(
                         thread_id=str(m.thread_id),
                         run_id=str(m.run_id),
                         thread_topic=t.topic,
+                        task_execution_id=str(m.task_execution_id) if m.task_execution_id else None,
                         from_agent_id=m.from_agent_id,
                         to_agent_id=m.to_agent_id,
                         content=m.content,
@@ -338,115 +342,10 @@ def _task_timestamps(
     return result
 
 
-# ---------------------------------------------------------------------------
-# Snapshot builder
-# ---------------------------------------------------------------------------
-
-
-def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
-    run = session.get(RunRecord, run_id)
-    if run is None:
-        return None
-
-    definition = session.get(ExperimentDefinition, run.experiment_definition_id)
-    if definition is None:
-        return None
-
-    def_id = run.experiment_definition_id
-
-    # Graph nodes and edges for this run
-    nodes_stmt = select(RunGraphNode).where(RunGraphNode.run_id == run_id)
-    nodes = list(session.exec(nodes_stmt).all())
-
-    edges_stmt = select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)
-    edges = list(session.exec(edges_stmt).all())
-
-    # Worker definitions for this experiment
-    workers_stmt = select(ExperimentDefinitionWorker).where(
-        ExperimentDefinitionWorker.experiment_definition_id == def_id
-    )
-    def_workers = list(session.exec(workers_stmt).all())
-    worker_by_id: dict[UUID, ExperimentDefinitionWorker] = {w.id: w for w in def_workers}
-    worker_by_binding: dict[str, ExperimentDefinitionWorker] = {
-        w.binding_key: w for w in def_workers
-    }
-
-    # Run telemetry
-    exec_stmt = select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
-    executions = list(session.exec(exec_stmt).all())
-
-    resources_stmt = select(RunResource).where(RunResource.run_id == run_id)
-    resources = list(session.exec(resources_stmt).all())
-
-    evals_stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
-    evaluations = list(session.exec(evals_stmt).all())
-
-    threads_stmt = select(Thread).where(Thread.run_id == run_id)
-    threads = list(session.exec(threads_stmt).all())
-
-    thread_msgs_stmt = select(ThreadMessage).where(ThreadMessage.run_id == run_id)
-    thread_messages = list(session.exec(thread_msgs_stmt).all())
-
-    # Derived maps
-    timestamps = _task_timestamps(executions)
-    (
-        task_map,
-        root_task_id,
-        total_tasks,
-        total_leaf,
-        completed_tasks,
-        failed_tasks,
-        running_tasks,
-        cancelled_tasks,
-    ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
-
-    execution_task_map: dict[UUID, UUID] = {
-        ex.id: ex.node_id for ex in executions if ex.node_id is not None
-    }
-
-    # One RunGraphNode per definition task (initialize_from_definition guarantees this).
-    defn_to_node: dict[UUID, UUID] = {
-        n.definition_task_id: n.id for n in nodes if n.definition_task_id is not None
-    }
-
-    # Generation turns
-    gen_turns_stmt = (
-        select(RunGenerationTurn)
-        .where(RunGenerationTurn.run_id == run_id)
-        .order_by(RunGenerationTurn.task_execution_id, RunGenerationTurn.turn_index)
-    )
-    gen_turns = list(session.exec(gen_turns_stmt).all())
-
-    gen_turns_by_task: dict[str, list[RunGenerationTurnDto]] = defaultdict(list)
-    for turn in gen_turns:
-        node_uuid = execution_task_map.get(turn.task_execution_id)
-        if node_uuid is None:
-            continue
-        gen_turns_by_task[str(node_uuid)].append(
-            RunGenerationTurnDto(
-                id=str(turn.id),
-                task_execution_id=str(turn.task_execution_id),
-                worker_binding_key=turn.worker_binding_key,
-                turn_index=turn.turn_index,
-                prompt_text=turn.prompt_text,
-                raw_response=turn.raw_response,
-                response_text=turn.response_text,
-                tool_calls=turn.tool_calls_json,
-                tool_results=turn.tool_results_json,
-                policy_version=turn.policy_version,
-                has_logprobs=turn.token_ids_json is not None,
-                created_at=turn.created_at.isoformat() if turn.created_at else None,
-            )
-        )
-
-    # Load context events
-    context_events_stmt = (
-        select(RunContextEvent)
-        .where(RunContextEvent.run_id == run_id)
-        .order_by(RunContextEvent.task_execution_id, RunContextEvent.sequence)
-    )
-    context_events_rows = list(session.exec(context_events_stmt).all())
-
+def _context_events_by_task(
+    context_events_rows: list[RunContextEvent],
+    execution_task_map: dict[UUID, UUID],
+) -> dict[str, list[RunContextEventDto]]:
     context_events_by_task: dict[str, list[RunContextEventDto]] = defaultdict(list)
     for event in context_events_rows:
         task_node_id = execution_task_map.get(event.task_execution_id)
@@ -456,6 +355,8 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
             RunContextEventDto(
                 id=str(event.id),
                 task_execution_id=str(event.task_execution_id),
+                task_node_id=str(task_node_id),
+                worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
                 event_type=event.event_type,
                 payload=event.payload,
@@ -464,52 +365,16 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
                 completed_at=event.completed_at.isoformat() if event.completed_at else None,
             )
         )
+    return dict(context_events_by_task)
 
-    # Compute final score from evaluations
-    final_score: float | None = None
-    if evaluations:
-        scores = [ev.score for ev in evaluations if ev.score is not None]
-        if scores:
-            final_score = sum(scores) / len(scores)
 
-    # Duration
-    duration_seconds: float | None = None
-    if run.started_at and run.completed_at:
-        duration_seconds = (run.completed_at - run.started_at).total_seconds()
+# ---------------------------------------------------------------------------
+# Snapshot builder
+# ---------------------------------------------------------------------------
 
-    run_id_str = str(run.id)
-    run_summary = run.parsed_summary()
 
-    # Build run name from definition metadata
-    meta = definition.parsed_metadata()
-    run_name = str(meta.get("name", definition.benchmark_type))
-
-    return RunSnapshotDto(
-        id=run_id_str,
-        experiment_id=str(def_id),
-        name=run_name,
-        status=run.status,
-        tasks=task_map,
-        root_task_id=root_task_id,
-        resources_by_task=_task_keyed_resources(resources, execution_task_map),
-        executions_by_task=_task_keyed_executions(executions, worker_by_id),
-        evaluations_by_task=_task_keyed_evaluations(evaluations, run_id_str, defn_to_node),
-        generation_turns_by_task=dict(gen_turns_by_task),
-        context_events_by_task=dict(context_events_by_task),
-        sandboxes_by_task=_task_keyed_sandboxes(run_summary),
-        threads=_build_communication_threads(threads, thread_messages),
-        started_at=run.started_at or run.created_at,
-        completed_at=run.completed_at,
-        duration_seconds=duration_seconds,
-        total_tasks=total_tasks,
-        total_leaf_tasks=total_leaf,
-        completed_tasks=completed_tasks,
-        failed_tasks=failed_tasks,
-        running_tasks=running_tasks,
-        cancelled_tasks=cancelled_tasks,
-        final_score=final_score,
-        error=run.error_message,
-    )
+def build_run_snapshot(run_id: UUID) -> RunSnapshotDto | None:
+    return RunReadService().build_run_snapshot(run_id)
 
 
 # ---------------------------------------------------------------------------
@@ -520,8 +385,7 @@ def build_run_snapshot(run_id: UUID, session: Session) -> RunSnapshotDto | None:
 @router.get("/{run_id}", response_model=RunSnapshotDto)
 def get_run(run_id: UUID) -> RunSnapshotDto:
     """Get a persisted run-detail snapshot suitable for frontend hydration."""
-    with get_session() as session:
-        snapshot = build_run_snapshot(run_id, session)
+    snapshot = build_run_snapshot(run_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
     return snapshot
@@ -538,90 +402,10 @@ def get_mutations(run_id: UUID) -> list[RunGraphMutationDto]:
 
     Used by the Timeline scrubber to replay DAG state at any point in time.
     """
-    with get_session() as session:
-        run = session.get(RunRecord, run_id)
-        if run is None:
-            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
-
-        stmt = (
-            select(RunGraphMutation)
-            .where(RunGraphMutation.run_id == run_id)
-            .order_by(RunGraphMutation.sequence)
-        )
-        mutations = list(session.exec(stmt).all())
-
-    return [
-        RunGraphMutationDto(
-            id=str(m.id),
-            run_id=str(m.run_id),
-            sequence=m.sequence,
-            mutation_type=m.mutation_type,
-            target_type=m.target_type,
-            target_id=str(m.target_id),
-            actor=m.actor,
-            old_value=m.old_value,
-            new_value=m.new_value,
-            reason=m.reason,
-            created_at=m.created_at.isoformat(),
-        )
-        for m in mutations
-    ]
-
-
-# ---------------------------------------------------------------------------
-# Generation turns endpoint (RL observability)
-# ---------------------------------------------------------------------------
-
-
-@router.get("/{run_id}/generations", response_model=list[RunGenerationTurnDto])
-def get_generations(
-    run_id: UUID,
-    include: str | None = None,
-) -> list[RunGenerationTurnDto]:
-    """Get lossless generation turns for a run.
-
-    Each turn contains the raw model request/response, extracted text,
-    tool calls, tool results, and optionally logprobs.
-
-    Query params:
-        include: comma-separated fields to include.  ``logprobs`` adds
-            ``token_ids`` and ``logprobs`` arrays (can be large).
-    """
-    include_logprobs = include is not None and "logprobs" in include.split(",")
-
-    with get_session() as session:
-        run = session.get(RunRecord, run_id)
-        if run is None:
-            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
-
-        stmt = (
-            select(RunGenerationTurn)
-            .where(RunGenerationTurn.run_id == run_id)
-            .order_by(RunGenerationTurn.task_execution_id, RunGenerationTurn.turn_index)
-        )
-        turns = list(session.exec(stmt).all())
-
-    result: list[RunGenerationTurnDto] = []
-    for turn in turns:
-        dto = RunGenerationTurnDto(
-            id=str(turn.id),
-            task_execution_id=str(turn.task_execution_id),
-            worker_binding_key=turn.worker_binding_key,
-            turn_index=turn.turn_index,
-            prompt_text=turn.prompt_text,
-            raw_response=turn.raw_response,
-            response_text=turn.response_text,
-            tool_calls=turn.tool_calls_json,
-            tool_results=turn.tool_results_json,
-            policy_version=turn.policy_version,
-            has_logprobs=turn.token_ids_json is not None,
-            created_at=turn.created_at.isoformat() if turn.created_at else None,
-            token_ids=turn.token_ids_json if include_logprobs else None,
-            logprobs=turn.logprobs_json if include_logprobs else None,
-        )
-        result.append(dto)
-
-    return result
+    mutations = RunReadService().list_mutations(run_id)
+    if mutations is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+    return mutations
 
 
 # ---------------------------------------------------------------------------
@@ -634,14 +418,6 @@ def get_generations(
 _RESOURCE_CONTENT_MAX_BYTES: int = 10 * 1024 * 1024
 
 
-def _blob_root() -> Path:
-    """Resolve the blob root used by publishers. Mirrors
-    ``ergon_core.core.providers.sandbox.resource_publisher._DEFAULT_BLOB_ROOT``
-    at call time so tests can override via ``ERGON_BLOB_ROOT``.
-    """
-    return Path(os.environ.get("ERGON_BLOB_ROOT", "/var/ergon/blob")).resolve()
-
-
 @router.get("/{run_id}/resources/{resource_id}/content")
 def get_resource_content(run_id: UUID, resource_id: UUID) -> FileResponse:
     """Stream the blob bytes for a RunResource.
@@ -651,43 +427,28 @@ def get_resource_content(run_id: UUID, resource_id: UUID) -> FileResponse:
     - resolved path must sit under ``ERGON_BLOB_ROOT`` (traversal guard);
     - size <= ``_RESOURCE_CONTENT_MAX_BYTES`` (413 otherwise).
     """
-    with get_session() as session:
-        stmt = select(RunResource).where(
-            RunResource.id == resource_id,
-            RunResource.run_id == run_id,
-        )
-        resource = session.exec(stmt).first()
-
-    if resource is None:
-        raise HTTPException(status_code=404, detail=f"Resource {resource_id} not found")
-
-    if resource.file_path is None:
-        raise HTTPException(status_code=404, detail="Resource has no backing blob")
-
     try:
-        blob_path = Path(resource.file_path).resolve(strict=True)
+        blob = RunReadService().get_resource_blob(run_id, resource_id)
     except (FileNotFoundError, OSError) as e:
         raise HTTPException(status_code=404, detail="Resource blob missing on disk") from e
-
-    root = _blob_root()
-    try:
-        blob_path.relative_to(root)
     except ValueError as e:
+        message = str(e)
+        if message.startswith("resource-too-large:"):
+            size = int(message.removeprefix("resource-too-large:"))
+            raise HTTPException(
+                status_code=413,
+                detail=f"Resource content {size} bytes exceeds viewer limit "
+                f"({_RESOURCE_CONTENT_MAX_BYTES} bytes)",
+            ) from e
         raise HTTPException(status_code=404, detail="Resource blob outside blob root") from e
 
-    size = blob_path.stat().st_size
-    if size > _RESOURCE_CONTENT_MAX_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Resource content {size} bytes exceeds viewer limit "
-            f"({_RESOURCE_CONTENT_MAX_BYTES} bytes)",
-        )
+    if blob is None:
+        raise HTTPException(status_code=404, detail=f"Resource {resource_id} not found")
 
-    media_type = resource.mime_type or "application/octet-stream"
     return FileResponse(
-        path=blob_path,
-        media_type=media_type,
-        filename=resource.name,
+        path=blob.path,
+        media_type=blob.media_type,
+        filename=blob.filename,
         content_disposition_type="inline",
     )
 
@@ -710,49 +471,10 @@ def get_training_curves(
 
     Filter by ``definition_id`` or ``cohort_id``.
     """
-    with get_session() as session:
-        stmt = select(RunRecord)
-        if definition_id:
-            stmt = stmt.where(RunRecord.experiment_definition_id == definition_id)
-        if cohort_id:
-            stmt = stmt.where(RunRecord.cohort_id == cohort_id)
-        stmt = stmt.order_by(RunRecord.created_at)
-        runs = list(session.exec(stmt).all())
-
-        all_run_ids = [r.id for r in runs]
-        evals = list(
-            session.exec(
-                select(RunTaskEvaluation).where(RunTaskEvaluation.run_id.in_(all_run_ids))  # type: ignore[union-attr]
-            ).all()
-        )
-
-    scores_by_run: dict[UUID, list[float]] = defaultdict(list)
-    for ev in evals:
-        if ev.score is not None:
-            scores_by_run[ev.run_id].append(ev.score)
-
-    points: list[TrainingCurvePointDto] = []
-    for run in runs:
-        summary: dict[str, Any] = run.summary_json or {}  # slopcop: ignore[no-typing-any]
-        step = summary.get("checkpoint_step")
-        if step is None:
-            continue
-
-        run_scores = scores_by_run.get(run.id, [])
-        if not run_scores:
-            continue
-
-        points.append(
-            TrainingCurvePointDto(
-                run_id=str(run.id),
-                step=int(step),
-                mean_score=mean(run_scores),
-                benchmark_type=summary.get("benchmark_type"),
-                created_at=run.created_at.isoformat() if run.created_at else None,
-            )
-        )
-
-    return points
+    return RunReadService().list_training_curves(
+        definition_id=definition_id,
+        cohort_id=cohort_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -765,52 +487,10 @@ def get_training_sessions(
     definition_id: UUID | None = None,
 ) -> list[TrainingSessionDto]:
     """List training sessions, optionally filtered by definition."""
-    with get_session() as session:
-        stmt = select(TrainingSession).order_by(TrainingSession.started_at.desc())
-        if definition_id:
-            stmt = stmt.where(TrainingSession.experiment_definition_id == definition_id)
-        sessions = list(session.exec(stmt).all())
-
-    return [
-        TrainingSessionDto(
-            id=str(s.id),
-            experiment_definition_id=str(s.experiment_definition_id),
-            model_name=s.model_name,
-            status=s.status,
-            started_at=s.started_at.isoformat() if s.started_at else None,
-            completed_at=s.completed_at.isoformat() if s.completed_at else None,
-            output_dir=s.output_dir,
-            total_steps=s.total_steps,
-            final_loss=s.final_loss,
-        )
-        for s in sessions
-    ]
+    return RunReadService().list_training_sessions(definition_id=definition_id)
 
 
 @router.get("/training/sessions/{session_id}/metrics", response_model=list[TrainingMetricDto])
 def get_training_metrics(session_id: UUID) -> list[TrainingMetricDto]:
     """Get per-step training metrics for a session."""
-    with get_session() as session:
-        metrics = list(
-            session.exec(
-                select(TrainingMetric)
-                .where(TrainingMetric.session_id == session_id)
-                .order_by(TrainingMetric.step)
-            ).all()
-        )
-
-    return [
-        TrainingMetricDto(
-            step=m.step,
-            epoch=m.epoch,
-            loss=m.loss,
-            grad_norm=m.grad_norm,
-            learning_rate=m.learning_rate,
-            reward_mean=m.reward_mean,
-            reward_std=m.reward_std,
-            entropy=m.entropy,
-            completion_mean_length=m.completion_mean_length,
-            step_time_s=m.step_time_s,
-        )
-        for m in metrics
-    ]
+    return RunReadService().list_training_metrics(session_id)

@@ -45,7 +45,7 @@ class _RecordingSink(SandboxEventSink):
 
 @pytest.mark.asyncio
 async def test_smoke_sandbox_manager_ignores_e2b_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    from tests.e2e._fixtures.sandbox import SmokeSandboxManager
+    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
 
     monkeypatch.setenv("E2B_API_KEY", "present-but-smoke-uses-local-fake")
     run_id = uuid4()
@@ -60,7 +60,7 @@ async def test_smoke_sandbox_manager_ignores_e2b_key(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.asyncio
 async def test_smoke_sandbox_health_command_matches_swebench_probe() -> None:
-    from tests.e2e._fixtures.sandbox import SmokeSandboxManager
+    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
 
     run_id = uuid4()
     task_id = uuid4()
@@ -84,7 +84,7 @@ async def test_smoke_sandbox_health_command_matches_swebench_probe() -> None:
 async def test_static_teardown_closes_registered_smoke_sandbox() -> None:
     from ergon_core.core.providers.sandbox.event_sink import NoopSandboxEventSink
     from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-    from tests.e2e._fixtures.sandbox import SmokeSandboxManager
+    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
 
     sink = _RecordingSink()
     SmokeSandboxManager.set_event_sink(sink)
@@ -115,13 +115,13 @@ async def test_static_teardown_closes_registered_smoke_sandbox() -> None:
 def test_smoke_benchmarks_use_smoke_sandbox_manager(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from tests.e2e._fixtures import register_smoke_fixtures
-    from tests.e2e._fixtures.benchmarks import (
+    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+    from ergon_core.test_support.smoke_fixtures.benchmarks import (
         MiniF2FSmokeBenchmark,
         ResearchRubricsSmokeBenchmark,
         SweBenchSmokeBenchmark,
     )
-    from tests.e2e._fixtures.sandbox import SmokeSandboxManager
+    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
     from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
 
     slugs = (
@@ -148,7 +148,9 @@ def test_smoke_benchmarks_use_smoke_sandbox_manager(
 
 def test_smoke_parent_treats_blocked_children_as_terminal() -> None:
     from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
-    from tests.e2e._fixtures.smoke_base.worker_base import _CHILD_WAIT_TERMINAL_STATUSES
+    from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import (
+        _CHILD_WAIT_TERMINAL_STATUSES,
+    )
 
     assert "blocked" not in TERMINAL_STATUSES
     assert "blocked" in _CHILD_WAIT_TERMINAL_STATUSES

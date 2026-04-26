@@ -32,7 +32,7 @@ def init_service(
     vllm_manager: VLLMManager | None = None,
 ) -> None:
     """Called during app lifespan to set singletons."""
-    global _service, _vllm_manager  # noqa: PLW0603
+    global _service, _vllm_manager
     _service = service
     _vllm_manager = vllm_manager
 

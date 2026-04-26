@@ -30,6 +30,7 @@ class SweBenchVerifiedBenchmark(Benchmark):
     """Benchmark backed by SWE-Bench Verified (500 curated instances)."""
 
     type_slug: ClassVar[str] = "swebench-verified"
+    task_payload_model: ClassVar[type[SWEBenchTaskPayload]] = SWEBenchTaskPayload
     onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
         e2b=True,
         extras=("ergon-builtins[data]",),
@@ -50,19 +51,18 @@ class SweBenchVerifiedBenchmark(Benchmark):
         )
         self.limit = limit
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask]]:
-        rows = _load_rows(limit=self.limit)
-        tasks: list[BenchmarkTask] = []
-        for row in rows:
-            instance = SWEBenchInstance.from_raw(row)
+    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[SWEBenchTaskPayload]]]:
+        instances = _load_rows(limit=self.limit)
+        tasks: list[BenchmarkTask[SWEBenchTaskPayload]] = []
+        for instance in instances:
             payload = SWEBenchTaskPayload.from_instance(instance)
             tasks.append(
-                BenchmarkTask(
+                BenchmarkTask[SWEBenchTaskPayload](
                     task_slug=instance.instance_id,
                     instance_key="default",
                     description=payload.build_worker_description(),
                     evaluator_binding_keys=("default",),
-                    task_payload=payload.model_dump(),
+                    task_payload=payload,
                 )
             )
         logger.info("Loaded %d SWE-Bench Verified instances", len(tasks))
@@ -72,11 +72,9 @@ class SweBenchVerifiedBenchmark(Benchmark):
         return ("default",)
 
 
-def _load_rows(
-    *, limit: int | None = None
-) -> list[dict[str, Any]]:  # slopcop: ignore[no-typing-any]
-    """Load rows from the HF dataset. Isolated for testability."""
+def _load_rows(*, limit: int | None = None) -> list[SWEBenchInstance]:
+    """Load and validate SWE-Bench instances from HuggingFace."""
     ds = load_dataset(HF_DATASET_ID, split=HF_SPLIT)
     if limit is not None:
         ds = ds.select(range(min(limit, len(ds))))
-    return [dict(row) for row in ds]
+    return [SWEBenchInstance.from_raw(row) for row in ds]

@@ -136,7 +136,7 @@ def _check_packages() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def handle_doctor(args: Namespace) -> int:  # noqa: ARG001
+def handle_doctor(args: Namespace) -> int:
     print("\nErgon Doctor — checking your environment\n")
 
     checks = [

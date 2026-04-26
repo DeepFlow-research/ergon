@@ -63,7 +63,7 @@ def swebench_execution() -> tuple[UUID, UUID]:
             instance_id=instance.id,
             task_slug="django__django-1",
             description="swebench sandbox manager test task",
-            task_payload=dict(_MINIMAL_SWEBENCH_PAYLOAD),
+            task_payload_json=dict(_MINIMAL_SWEBENCH_PAYLOAD),
         )
         session.add(task)
         session.flush()

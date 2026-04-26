@@ -29,16 +29,6 @@ _NODE_ID_CASES = [
         lambda: TaskReadyEvent(run_id=uuid4(), definition_id=uuid4(), task_id=uuid4()),
     ),
     (
-        "TaskCompletedEvent",
-        lambda: TaskCompletedEvent(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-            execution_id=uuid4(),
-            sandbox_id="sbx-123",
-        ),
-    ),
-    (
         "TaskFailedEvent",
         lambda: TaskFailedEvent(
             run_id=uuid4(),
@@ -96,6 +86,20 @@ def test_node_id_defaults_to_none(label, factory):
     assert data["node_id"] is None
     roundtripped = type(obj).model_validate(data)
     assert roundtripped.node_id is None
+
+
+def test_task_completed_event_requires_node_id() -> None:
+    node_id = uuid4()
+    event = TaskCompletedEvent(
+        run_id=uuid4(),
+        definition_id=uuid4(),
+        task_id=uuid4(),
+        execution_id=uuid4(),
+        sandbox_id="sbx-123",
+        node_id=node_id,
+    )
+
+    assert event.node_id == node_id
 
 
 @pytest.mark.parametrize("label,factory", _NODE_ID_CASES, ids=[c[0] for c in _NODE_ID_CASES])

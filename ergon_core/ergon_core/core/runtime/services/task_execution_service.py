@@ -76,18 +76,24 @@ class TaskExecutionService:
     async def _prepare_graph_native(
         self, command: PrepareTaskExecutionCommand
     ) -> PreparedTaskExecution:
+        node_id = command.node_id
+        if node_id is None:
+            raise ConfigurationError(
+                "Graph-native preparation requires node_id",
+                run_id=command.run_id,
+                task_id=command.task_id,
+            )
         with get_session() as session:
-            node = session.get(RunGraphNode, command.node_id)
+            node = session.get(RunGraphNode, node_id)
             if node is None:
                 raise ConfigurationError(
-                    f"RunGraphNode {command.node_id} not found",
+                    f"RunGraphNode {node_id} not found",
                     run_id=command.run_id,
                     task_id=command.task_id,
                 )
             if node.run_id != command.run_id:
                 raise ConfigurationError(
-                    f"RunGraphNode {command.node_id} belongs to run "
-                    f"{node.run_id}, not {command.run_id}",
+                    f"RunGraphNode {node_id} belongs to run {node.run_id}, not {command.run_id}",
                     run_id=command.run_id,
                     task_id=command.task_id,
                 )
@@ -95,7 +101,7 @@ class TaskExecutionService:
             assigned_worker_slug = node.assigned_worker_slug
             if assigned_worker_slug is None:
                 raise ConfigurationError(
-                    f"RunGraphNode {command.node_id} has no assigned_worker_slug",
+                    f"RunGraphNode {node_id} has no assigned_worker_slug",
                     run_id=command.run_id,
                     task_id=command.task_id,
                 )
@@ -121,9 +127,9 @@ class TaskExecutionService:
 
             execution = RunTaskExecution(
                 run_id=command.run_id,
-                node_id=command.node_id,
+                node_id=node_id,
                 definition_worker_id=worker_row.id,
-                attempt_number=self._next_attempt_number(session, command.run_id, command.node_id),
+                attempt_number=self._next_attempt_number(session, command.run_id, node_id),
                 status=TaskExecutionStatus.RUNNING,
                 started_at=utcnow(),
             )
@@ -133,7 +139,7 @@ class TaskExecutionService:
             await self._graph_repo.update_node_status(
                 session,
                 run_id=command.run_id,
-                node_id=command.node_id,
+                node_id=node_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(
                     actor="task-execution-service",
@@ -144,7 +150,7 @@ class TaskExecutionService:
 
             await _emit_task_status(
                 run_id=command.run_id,
-                node_id=command.node_id,
+                node_id=node_id,
                 task_slug=node.task_slug,
                 new_status=TaskExecutionStatus.RUNNING,
                 old_status=None,
@@ -159,7 +165,7 @@ class TaskExecutionService:
             return PreparedTaskExecution(
                 run_id=command.run_id,
                 definition_id=command.definition_id,
-                node_id=command.node_id,
+                node_id=node_id,
                 definition_task_id=command.task_id,
                 task_slug=node.task_slug,
                 task_description=node.description,
@@ -175,10 +181,17 @@ class TaskExecutionService:
     async def _prepare_definition(
         self, command: PrepareTaskExecutionCommand
     ) -> PreparedTaskExecution:
+        task_id = command.task_id
+        if task_id is None:
+            raise ConfigurationError(
+                "Definition preparation requires task_id",
+                run_id=command.run_id,
+                task_id=None,
+            )
         with get_session() as session:
             task = require_not_none(
-                session.get(ExperimentDefinitionTask, command.task_id),
-                f"Task {command.task_id} not found",
+                session.get(ExperimentDefinitionTask, task_id),
+                f"Task {task_id} not found",
             )
 
             definition = require_not_none(
@@ -189,30 +202,38 @@ class TaskExecutionService:
             assignment_stmt = select(ExperimentDefinitionTaskAssignment).where(
                 ExperimentDefinitionTaskAssignment.experiment_definition_id
                 == command.definition_id,
-                ExperimentDefinitionTaskAssignment.task_id == command.task_id,
+                ExperimentDefinitionTaskAssignment.task_id == task_id,
             )
             assignment = session.exec(assignment_stmt).first()
 
-            assigned_worker_slug: str | None = None
-            worker_type: str | None = None
-            model_target: str | None = None
             definition_worker_id: UUID | None = None
 
-            if assignment is not None:
-                assigned_worker_slug = assignment.worker_binding_key
-
-                worker_stmt = select(ExperimentDefinitionWorker).where(
-                    ExperimentDefinitionWorker.experiment_definition_id == command.definition_id,
-                    ExperimentDefinitionWorker.binding_key == assignment.worker_binding_key,
+            if assignment is None:
+                raise ConfigurationError(
+                    f"Definition task {task_id} has no worker assignment",
+                    run_id=command.run_id,
+                    task_id=task_id,
                 )
-                worker = session.exec(worker_stmt).first()
-                if worker is not None:
-                    worker_type = worker.worker_type
-                    model_target = worker.model_target
-                    definition_worker_id = worker.id
+
+            assigned_worker_slug = assignment.worker_binding_key
+            worker_stmt = select(ExperimentDefinitionWorker).where(
+                ExperimentDefinitionWorker.experiment_definition_id == command.definition_id,
+                ExperimentDefinitionWorker.binding_key == assignment.worker_binding_key,
+            )
+            worker = session.exec(worker_stmt).first()
+            if worker is None:
+                raise ConfigurationError(
+                    f"No ExperimentDefinitionWorker with binding_key="
+                    f"'{assigned_worker_slug}' for definition {command.definition_id}",
+                    run_id=command.run_id,
+                    task_id=task_id,
+                )
+            worker_type = worker.worker_type
+            model_target = worker.model_target
+            definition_worker_id = worker.id
 
             graph_lookup = GraphNodeLookup(session, command.run_id)
-            resolved_node_id = graph_lookup.node_id(command.task_id)
+            resolved_node_id = graph_lookup.node_id(task_id)
             # Workflow initialization creates a RunGraphNode per static
             # definition task; a missing node here means the graph was
             # never initialised or the static FK is stale.  Fail loud
@@ -220,19 +241,17 @@ class TaskExecutionService:
             if resolved_node_id is None:
                 raise ConfigurationError(
                     f"No RunGraphNode resolved for definition task_id="
-                    f"{command.task_id} in run {command.run_id}",
+                    f"{task_id} in run {command.run_id}",
                     run_id=command.run_id,
-                    task_id=command.task_id,
+                    task_id=task_id,
                 )
 
             execution = RunTaskExecution(
                 run_id=command.run_id,
-                definition_task_id=command.task_id,
+                definition_task_id=task_id,
                 definition_worker_id=definition_worker_id,
                 node_id=resolved_node_id,
-                attempt_number=self._next_attempt_number_by_task(
-                    session, command.run_id, command.task_id
-                ),
+                attempt_number=self._next_attempt_number_by_task(session, command.run_id, task_id),
                 status=TaskExecutionStatus.RUNNING,
                 started_at=utcnow(),
             )
@@ -242,7 +261,7 @@ class TaskExecutionService:
             await mark_task_running(
                 session,
                 command.run_id,
-                command.task_id,
+                task_id,
                 execution.id,
                 graph_repo=self._graph_repo,
                 graph_lookup=graph_lookup,
@@ -267,7 +286,7 @@ class TaskExecutionService:
                 run_id=command.run_id,
                 definition_id=command.definition_id,
                 node_id=resolved_node_id,
-                definition_task_id=command.task_id,
+                definition_task_id=task_id,
                 task_slug=task.task_slug,
                 task_description=task.description,
                 benchmark_type=definition.benchmark_type,

@@ -5,6 +5,7 @@ user-facing configuration — not serialized Python objects.
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column
@@ -29,11 +30,11 @@ class SavedBenchmarkSpec(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, object]:
+    def parsed_metadata(self) -> JsonObject:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, object]:
+    def _parse_metadata(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -64,11 +65,11 @@ class SavedWorkerSpec(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, object]:
+    def parsed_metadata(self) -> JsonObject:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, object]:
+    def _parse_metadata(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -98,11 +99,11 @@ class SavedEvaluatorSpec(SQLModel, table=True):
 
     # -- JSON accessor: metadata_json --
 
-    def parsed_metadata(self) -> dict[str, object]:
+    def parsed_metadata(self) -> JsonObject:
         return self.__class__._parse_metadata(self.metadata_json)
 
     @classmethod
-    def _parse_metadata(cls, data: dict) -> dict[str, object]:
+    def _parse_metadata(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
         return data
@@ -131,11 +132,11 @@ class SavedExperimentTemplate(SQLModel, table=True):
 
     # -- JSON accessor: template_json --
 
-    def parsed_template(self) -> dict[str, object]:
+    def parsed_template(self) -> JsonObject:
         return self.__class__._parse_template(self.template_json)
 
     @classmethod
-    def _parse_template(cls, data: dict) -> dict[str, object]:
+    def _parse_template(cls, data: dict) -> JsonObject:
         if not isinstance(data, dict):
             raise ValueError(f"template_json must be a dict, got {type(data).__name__}")
         return data

@@ -8,17 +8,23 @@ change here that isn't regenerated will fail the CI drift check.
 """
 
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import ClassVar
 from uuid import UUID
 
 from pydantic import BaseModel
 
+from ergon_core.core.api.schemas import (
+    RunCommunicationMessageDto,
+    RunCommunicationThreadDto,
+    RunTaskEvaluationDto,
+)
 from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
     ContextEventType,
 )
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.runtime.events.base import InngestEventContract
+from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 
 # ---------------------------------------------------------------------------
@@ -109,21 +115,13 @@ class DashboardTaskStatusChangedEvent(InngestEventContract):
 
 
 class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):
-    """Embeds the full RunTaskEvaluationDto (camelCase) as `evaluation`.
-
-    TODO(E2b, bug file § D): tighten ``evaluation`` to
-    ``RunTaskEvaluationDto``.  Deferred because the current emitter in
-    ``evaluate_task_run.py`` hand-rolls the dict and doesn't have
-    access to the rich criterion metadata (stage_num, stage_name,
-    criterion_num, criterion_description) the dashboard schema
-    requires.  Fixing both together is an independent unit of work.
-    """
+    """Embeds the full RunTaskEvaluationDto as ``evaluation``."""
 
     name: ClassVar[str] = "dashboard/task.evaluation_updated"
 
     run_id: UUID
     task_id: UUID
-    evaluation: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    evaluation: RunTaskEvaluationDto
 
 
 # ---------------------------------------------------------------------------
@@ -190,19 +188,13 @@ class DashboardSandboxClosedEvent(InngestEventContract):
 
 
 class DashboardThreadMessageCreatedEvent(InngestEventContract):
-    """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto (camelCase).
-
-    TODO(E2b): tighten ``thread`` / ``message`` to
-    ``RunCommunicationThreadDto`` / ``RunCommunicationMessageDto``.
-    Deferred for the same reason as evaluation above — the emitter
-    needs an updated construction path.
-    """
+    """Embeds full RunCommunicationThreadDto + RunCommunicationMessageDto."""
 
     name: ClassVar[str] = "dashboard/thread.message_created"
 
     run_id: UUID
-    thread: dict[str, Any]  # slopcop: ignore[no-typing-any]
-    message: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    thread: RunCommunicationThreadDto
+    message: RunCommunicationMessageDto
 
 
 # ---------------------------------------------------------------------------
@@ -211,13 +203,12 @@ class DashboardThreadMessageCreatedEvent(InngestEventContract):
 
 
 class CohortUpdatedEvent(InngestEventContract):
-    """TODO(E2b): tighten ``summary`` to ``CohortSummaryDto`` and update
-    the emitter accordingly."""
+    """Live cohort summary update."""
 
     name: ClassVar[str] = "dashboard/cohort.updated"
 
     cohort_id: UUID
-    summary: dict[str, Any]  # slopcop: ignore[no-typing-any]
+    summary: CohortSummaryDto
 
 
 # ---------------------------------------------------------------------------

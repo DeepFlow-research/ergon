@@ -2,8 +2,8 @@
  * Unified run-event log.
  *
  * Multiple Inngest / Socket.io streams (`task.status_changed`, `sandbox.command`,
- * `generation.turn_completed`, `thread.message_created`, `task.evaluation_updated`,
- * `resource.published`, `graph.mutation`, `context.event`, workflow lifecycle)
+ * `thread.message_created`, `task.evaluation_updated`, `resource.published`,
+ * `graph.mutation`, `context.event`, workflow lifecycle)
  * collectively describe what happened during a run, but each one is rendered in a
  * different panel. The `RunEvent` union gives us one chronologically sortable
  * shape that the UnifiedEventStream and the RunTimeline can both consume.
@@ -13,7 +13,6 @@
  */
 
 import type {
-  GenerationTurnState,
   ResourceState,
   SandboxCommandState,
   SandboxState,
@@ -33,7 +32,6 @@ export type RunEventKind =
   | "workflow.started"
   | "workflow.completed"
   | "task.transition"
-  | "generation.turn"
   | "sandbox.created"
   | "sandbox.command"
   | "sandbox.closed"
@@ -47,7 +45,6 @@ export const RUN_EVENT_KINDS: readonly RunEventKind[] = [
   "workflow.started",
   "workflow.completed",
   "task.transition",
-  "generation.turn",
   "sandbox.created",
   "sandbox.command",
   "sandbox.closed",
@@ -89,17 +86,6 @@ export interface TaskTransitionEvent extends RunEventBase {
   trigger: TaskTrigger | "unknown";
   reason: string | null;
   actor: string | null;
-}
-
-export interface GenerationTurnEvent extends RunEventBase {
-  kind: "generation.turn";
-  turnIndex: number;
-  workerName: string;
-  toolCallCount: number;
-  taskExecutionId: string;
-  /** Names of tools called on this turn, for compact display. */
-  toolNames: string[];
-  policyVersion: string | null;
 }
 
 export interface SandboxCreatedEvent extends RunEventBase {
@@ -157,7 +143,6 @@ export type RunEvent =
   | WorkflowStartedEvent
   | WorkflowCompletedEvent
   | TaskTransitionEvent
-  | GenerationTurnEvent
   | SandboxCreatedEvent
   | SandboxCommandEvent
   | SandboxClosedEvent
@@ -174,7 +159,6 @@ export const RUN_EVENT_KIND_LABELS: Record<RunEventKind, string> = {
   "workflow.started": "Workflow started",
   "workflow.completed": "Workflow completed",
   "task.transition": "Task transition",
-  "generation.turn": "Generation turn",
   "sandbox.created": "Sandbox created",
   "sandbox.command": "Sandbox command",
   "sandbox.closed": "Sandbox closed",
@@ -193,7 +177,6 @@ export const RUN_EVENT_KIND_COLORS: Record<RunEventKind, string> = {
   "workflow.started": "bg-sky-500",
   "workflow.completed": "bg-emerald-500",
   "task.transition": "bg-indigo-500",
-  "generation.turn": "bg-purple-500",
   "sandbox.created": "bg-cyan-500",
   "sandbox.command": "bg-cyan-400",
   "sandbox.closed": "bg-slate-500",
@@ -224,11 +207,6 @@ export function inferTrigger(
   if (to === "completed" && from !== "running")
     return "children_completed" as TaskTrigger;
   return "unknown";
-}
-
-function toolCallPreview(turn: GenerationTurnState): string[] {
-  if (!turn.toolCalls) return [];
-  return turn.toolCalls.map((tc) => tc.tool_name);
 }
 
 function messagePreview(msg: CommunicationMessageState): string {
@@ -276,22 +254,6 @@ export function buildRunEvents(run: WorkflowRunState | null): RunEvent[] {
       const h = history[i];
       events.push(transitionToEvent(task, h, i));
     }
-  }
-
-  for (let i = 0; i < run.generationTurns.length; i++) {
-    const turn = run.generationTurns[i];
-    events.push({
-      id: `generation.turn:${turn.taskExecutionId}:${turn.turnIndex}`,
-      kind: "generation.turn",
-      at: turn.at ?? run.startedAt,
-      taskId: turn.taskId ?? null,
-      turnIndex: turn.turnIndex,
-      workerName: turn.workerName || turn.workerBindingKey,
-      taskExecutionId: turn.taskExecutionId,
-      toolCallCount: turn.toolCalls?.length ?? 0,
-      toolNames: toolCallPreview(turn),
-      policyVersion: turn.policyVersion,
-    });
   }
 
   for (const sandbox of run.sandboxesByTask.values()) {

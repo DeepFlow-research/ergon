@@ -10,6 +10,7 @@ Usage::
 import asyncio
 import logging
 import time
+from typing import Protocol
 
 import httpx
 
@@ -21,6 +22,10 @@ _poll_interval_s: float = 2.0
 _timeout_s: float = 300.0
 
 
+class OpenRLHFCallbackContext(Protocol):
+    """Opaque callback argument supplied by OpenRLHF and unused by this adapter."""
+
+
 def configure(
     ergon_url: str,
     definition_id: str,
@@ -28,7 +33,7 @@ def configure(
     timeout_s: float = 300.0,
 ) -> None:
     """Module-level configuration (called by OpenRLHF before agent_func)."""
-    global _client, _definition_id, _poll_interval_s, _timeout_s  # noqa: PLW0603
+    global _client, _definition_id, _poll_interval_s, _timeout_s
     _client = httpx.AsyncClient(base_url=ergon_url, timeout=30.0)
     _definition_id = definition_id
     _poll_interval_s = poll_interval_s
@@ -37,8 +42,8 @@ def configure(
 
 async def agent_func(
     messages: list[dict],
-    generate_fn: object,
-    tokenizer: object,
+    generate_fn: OpenRLHFCallbackContext,
+    tokenizer: OpenRLHFCallbackContext,
 ) -> dict:
     """OpenRLHF-compatible agent function backed by Ergon's HTTP API.
 

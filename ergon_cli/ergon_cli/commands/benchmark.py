@@ -9,6 +9,7 @@ import tomllib
 from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol
 
 import inngest
 from e2b import Template
@@ -17,6 +18,7 @@ from ergon_cli.composition import build_experiment
 from ergon_cli.discovery import list_benchmarks
 from ergon_cli.rendering import render_run_result, render_table
 from ergon_core.api.handles import ExperimentRunHandle
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -25,6 +27,10 @@ from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
 from ergon_core.core.runtime.services.run_service import create_run
 from ergon_core.core.settings import settings
+
+
+class BuildLog(Protocol):
+    def __str__(self) -> str: ...
 
 
 def _fail(message: str, exit_code: int = 1) -> int:
@@ -38,13 +44,13 @@ def _config_dir() -> Path:
     return Path(os.environ.get("ERGON_CONFIG_DIR", Path.home() / ".ergon"))
 
 
-def handle_benchmark(args: Namespace) -> int:
+async def handle_benchmark(args: Namespace) -> int:
     if args.bench_action == "list":
         benchmarks = list_benchmarks()
         render_table(["Slug", "Name", "Description"], benchmarks)
         return 0
     elif args.bench_action == "run":
-        return run_benchmark(args)
+        return await run_benchmark(args)
     elif args.bench_action == "setup":
         return setup_benchmark(args)
     else:
@@ -57,7 +63,7 @@ def handle_benchmark(args: Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not complex
+def setup_benchmark(args: Namespace) -> int:
     """Build and register the E2B sandbox template for *args.slug*.
 
     Uses the E2B Python SDK's ``Template.build()`` directly instead of shelling
@@ -108,13 +114,13 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
     config = _config_dir()
     registry_path = config / "sandbox_templates.json"
 
-    existing_templates: dict[str, object] = {}
+    existing_templates: dict[str, JsonObject] = {}
     if registry_path.exists():
         with open(registry_path) as f:
             existing_templates = json.load(f)
 
     if not force and slug in existing_templates:
-        tid = existing_templates[slug].get("template_id", "unknown")  # type: ignore[union-attr]
+        tid = existing_templates[slug].get("template_id", "unknown")
         print(f"Template already built: {tid}. Use --force to rebuild.")
         return 0
 
@@ -133,7 +139,7 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
     print(f"Building E2B template '{template_name}' from {template_dir} ...")
     print(f"  cpu_count={cpu_count}, memory_mb={memory_mb}")
 
-    def _on_build_logs(log: object) -> None:
+    def _on_build_logs(log: BuildLog) -> None:
         # LogEntry repr is human-readable; raw print is fine for CLI stream.
         print(f"  [build] {log}", flush=True)
 
@@ -152,7 +158,7 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
             memory_mb=memory_mb,
             on_build_logs=_on_build_logs,
         )
-    except Exception as exc:  # noqa: BLE001  # slopcop: ignore[no-broad-except]
+    except Exception as exc:  # slopcop: ignore[no-broad-except]
         return _fail(f"Error: E2B SDK Template.build() failed: {exc}")
 
     build_time = round(time.monotonic() - t0, 1)
@@ -175,7 +181,7 @@ def setup_benchmark(args: Namespace) -> int:  # noqa: C901 — linear flow, not 
     return 0
 
 
-def run_benchmark(args: Namespace) -> int:
+async def run_benchmark(args: Namespace) -> int:
     ensure_db()
 
     experiment = build_experiment(
@@ -191,7 +197,7 @@ def run_benchmark(args: Namespace) -> int:
     render_run_result(persisted)
     print(f"\nExperiment persisted: {persisted.definition_id}")
 
-    cohort_name = args.cohort or f"{args.slug}"
+    cohort_name = args.slug if args.cohort is None else args.cohort
     cohort = experiment_cohort_service.resolve_or_create(
         name=cohort_name,
         description=f"Benchmark: {args.slug} | worker: {args.worker} | evaluator: {args.evaluator}",
@@ -200,9 +206,7 @@ def run_benchmark(args: Namespace) -> int:
     print(f"\nCohort: {cohort.name} (id={cohort.id})")
 
     print("\nCreating run and dispatching via Inngest...")
-    run_handle = asyncio.run(
-        _create_and_dispatch(persisted, timeout=args.timeout, cohort_id=cohort.id)
-    )
+    run_handle = await _create_and_dispatch(persisted, timeout=args.timeout, cohort_id=cohort.id)
 
     print("\nRun completed:")
     print(f"  Run ID:     {run_handle.run_id}")

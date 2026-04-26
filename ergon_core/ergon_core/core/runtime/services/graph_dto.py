@@ -11,6 +11,7 @@ serialization cost).
 from typing import Annotated, Literal
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.persistence.shared.types import (
     DefinitionId,
@@ -70,7 +71,7 @@ class GraphAnnotationDto(BaseModel):
     target_id: UUID  # polymorphic: NodeId or EdgeId depending on target_type
     namespace: str
     sequence: int
-    payload: dict[str, object]
+    payload: JsonObject
 
 
 class GraphMutationDto(BaseModel):
@@ -186,7 +187,7 @@ class AnnotationSetMutation(BaseModel):
 
     mutation_type: Literal["annotation.set"] = "annotation.set"
     namespace: str
-    payload: dict[str, object]
+    payload: JsonObject
 
 
 class AnnotationDeletedMutation(BaseModel):
@@ -196,7 +197,7 @@ class AnnotationDeletedMutation(BaseModel):
 
     mutation_type: Literal["annotation.deleted"] = "annotation.deleted"
     namespace: str
-    payload: dict[str, object]
+    payload: JsonObject
 
 
 GraphMutationValue = Annotated[

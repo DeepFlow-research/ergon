@@ -81,17 +81,15 @@ services:
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
       - ERGON_API_BASE_URL=http://api:9000
       - ENABLE_TEST_HARNESS=${ENABLE_TEST_HARNESS:-1}
+      - ENABLE_SMOKE_FIXTURES=${ENABLE_SMOKE_FIXTURES:-1}
       - TEST_HARNESS_SECRET=${TEST_HARNESS_SECRET:-local-dev}
       - ERGON_BLOB_ROOT=/tmp/ergon-blob
       - OTEL_TRACES_ENABLED=false
       - OTEL_SERVICE_NAME=ergon-core
       - E2B_API_KEY=${E2B_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      # Put /app on sys.path so ``tests.e2e._fixtures`` resolves when
-      # ``ENABLE_TEST_HARNESS=1`` imports it on startup (see
-      # ``ergon_core/core/api/app.py``).  Narrow purpose — the api
-      # container only reaches into that one subpackage, host-side
-      # pytest is still the test orchestrator.
+      # Put /app on sys.path so editable source mounts resolve in the API
+      # container while the smoke fixtures live in ergon_core.test_support.
       - PYTHONPATH=/app
       # Unbuffered Python stdio so ``docker compose logs api`` streams
       # logger output as it happens.  Default (buffered) hides
@@ -104,12 +102,8 @@ services:
       # the same source is on the runner's filesystem from ``checkout``.
       - ./ergon_core:/app/ergon_core
       - ./ergon_builtins:/app/ergon_builtins
+      - ./ergon_cli:/app/ergon_cli
       - ./data:/app/data
-      # Smoke fixtures (``tests/e2e/_fixtures``) define workers +
-      # evaluators that the api's Inngest executor must be able to
-      # resolve when ``ENABLE_TEST_HARNESS=1``.  Bind-mounted (not
-      # baked into the image) so production builds ship no test code.
-      - ./tests:/app/tests
       # Blob store bind mount so host-side pytest can read files the
       # SandboxResourcePublisher writes from inside the container.  The
       # mount uses the same path on both sides so the DB-stored

@@ -16,7 +16,7 @@ Worker subclasses are responsible for wiring the callables from
 """
 
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
+from typing import cast
 
 try:
     from pydantic_ai.tools import Tool
@@ -30,13 +30,18 @@ from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportWriteResponse,
     SearchResponse,
 )
+from ergon_builtins.workers.research_rubrics._run_skill import (
+    ExaGetContentSkillRequest,
+    ExaQASkillRequest,
+    ExaSearchSkillRequest,
+    ReportEditSkillRequest,
+    ReportReadSkillRequest,
+    ReportWriteSkillRequest,
+    RunSkillFn,
+)
 
-_T = TypeVar("_T")
-
-# Callable signatures expected by the toolkit:
-#   run_skill(skill_name: str, response_model: type[T], **kwargs) -> T
+# Callable signature expected by the toolkit:
 #   publisher_sync() -> list[RunResourceView]
-RunSkillFn = Callable[..., Awaitable[_T]]
 PublisherSyncFn = Callable[[], Awaitable[list]]  # type: ignore[type-arg]
 
 
@@ -51,13 +56,13 @@ class ResearchRubricsToolkit:
     def __init__(
         self,
         *,
-        run_skill: RunSkillFn,  # type: ignore[type-arg]
+        run_skill: RunSkillFn,
         publisher_sync: PublisherSyncFn,
     ) -> None:
         self._run_skill = run_skill
         self._publisher_sync = publisher_sync
 
-    def build_tools(  # noqa: C901
+    def build_tools(
         self,
     ) -> list:  # type: ignore[type-arg]
         """Return the six research skill tools as ``pydantic_ai.tools.Tool``."""
@@ -87,11 +92,11 @@ class ResearchRubricsToolkit:
             ~25 000 chars each).  An empty ``results`` list is legitimate
             and distinct from a transport failure.
             """
-            return await self._run_skill(
-                "exa_search",
+            return cast(
                 SearchResponse,
-                query=query,
-                num_results=num_results,
+                await self._run_skill(
+                    ExaSearchSkillRequest(query=query, num_results=num_results),
+                ),
             )
 
         return Tool(function=exa_search, takes_ctx=False)
@@ -101,10 +106,11 @@ class ResearchRubricsToolkit:
             """Ask Exa a direct question and get a synthesised answer with
             source citations.
             """
-            return await self._run_skill(
-                "exa_qa",
+            return cast(
                 QAResponse,
-                question=question,
+                await self._run_skill(
+                    ExaQASkillRequest(question=question),
+                ),
             )
 
         return Tool(function=exa_qa, takes_ctx=False)
@@ -116,10 +122,11 @@ class ResearchRubricsToolkit:
             Returns the full document text, word count, and publication
             date when available.
             """
-            return await self._run_skill(
-                "exa_get_content",
+            return cast(
                 DocumentResponse,
-                url=url,
+                await self._run_skill(
+                    ExaGetContentSkillRequest(url=url),
+                ),
             )
 
         return Tool(function=exa_get_content, takes_ctx=False)
@@ -139,11 +146,11 @@ class ResearchRubricsToolkit:
             ``run_resources`` log so the manager can observe it via the
             graph toolkit.  Paths that escape ``/workspace/`` are rejected.
             """
-            resp = await self._run_skill(
-                "write_report_draft",
+            resp = cast(
                 ReportWriteResponse,
-                relative_path=relative_path,
-                content=content,
+                await self._run_skill(
+                    ReportWriteSkillRequest(relative_path=relative_path, content=content),
+                ),
             )
             if resp.kind == "success":
                 await self._publisher_sync()
@@ -163,11 +170,11 @@ class ResearchRubricsToolkit:
             the ``run_resources`` log.  Paths that escape ``/workspace/``
             are rejected.
             """
-            resp = await self._run_skill(
-                "edit_report_draft",
+            resp = cast(
                 ReportWriteResponse,
-                relative_path=relative_path,
-                patch=patch,
+                await self._run_skill(
+                    ReportEditSkillRequest(relative_path=relative_path, patch=patch),
+                ),
             )
             if resp.kind == "success":
                 await self._publisher_sync()
@@ -183,10 +190,11 @@ class ResearchRubricsToolkit:
 
             Read-only -- does not trigger a publish.
             """
-            return await self._run_skill(
-                "read_report_draft",
+            return cast(
                 ReportReadResponse,
-                relative_path=relative_path,
+                await self._run_skill(
+                    ReportReadSkillRequest(relative_path=relative_path),
+                ),
             )
 
         return Tool(function=read_report_draft, takes_ctx=False)

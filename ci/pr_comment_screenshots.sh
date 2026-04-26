@@ -13,27 +13,40 @@ set -euo pipefail
 pr="${1:?missing PR number}"
 env="${2:?missing env slug}"
 repo="${GITHUB_REPOSITORY:-DeepFlow-research/ergon}"
-base="https://raw.githubusercontent.com/${repo}/screenshots/pr-${pr}/${env}"
 
-# Enumerate images in the screenshots ref for this env.  We don't have
-# a fetched copy of the ref locally (save the CPU); rely on the git
-# refspec listing instead.
-imgs_hash=$(git ls-remote "https://github.com/${repo}.git" "refs/heads/screenshots/pr-${pr}" | awk '{print $1}' || true)
+# Enumerate images in the screenshots ref for this env so comments
+# match the files Playwright actually emitted for this run.
+imgs_hash=$(git ls-remote origin "refs/heads/screenshots/pr-${pr}" | awk '{print $1}' || true)
 if [ -z "${imgs_hash}" ]; then
   echo "no screenshots ref yet; skipping comment"
   exit 0
 fi
 
-body=$(cat <<EOF
+git fetch --depth=1 origin "refs/heads/screenshots/pr-${pr}:refs/remotes/origin/screenshots/pr-${pr}" >/dev/null
+images=$(git ls-tree -r --name-only "origin/screenshots/pr-${pr}" -- "${env}" | grep '\.png$' | sort || true)
+
+if [ -z "${images}" ]; then
+  body=$(cat <<EOF
+## E2E smoke — \`${env}\`
+
+No PNG screenshots were uploaded for this leg. See [\`screenshots/pr-${pr}\`](https://github.com/${repo}/tree/screenshots/pr-${pr}/${env}) for the uploaded placeholder.
+EOF
+)
+else
+  image_markdown=""
+  while IFS= read -r image; do
+    image_markdown+=$(printf '![%s](https://raw.githubusercontent.com/%s/screenshots/pr-%s/%s)' "$image" "$repo" "$pr" "$image")
+    image_markdown+=$'\n'
+  done <<< "${images}"
+  body=$(cat <<EOF
 ## E2E smoke — \`${env}\`
 
 Screenshots pushed to [\`screenshots/pr-${pr}\`](https://github.com/${repo}/tree/screenshots/pr-${pr}/${env}).
 
-![${env} happy run](${base}/${env}-happy-run-full.png)
-![${env} graph](${base}/${env}-graph.png)
-![cohort](${base}/cohort-${env}.png)
+${image_markdown}
 EOF
 )
+fi
 
 # gh pr comment is idempotent-by-default: a new comment per invocation.
 # Could dedup by matching body prefix, but per-matrix-leg comments are

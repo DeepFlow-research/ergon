@@ -14,9 +14,11 @@ export interface BackendRunState {
   run_id: string;
   status: "completed" | "failed" | "cancelled" | "in_progress" | string;
   graph_nodes: {
+    id: string;
     task_slug: string;
     level: number;
     status: string;
+    parent_node_id: string | null;
     parent_task_slug: string | null;
   }[];
   mutations: {
@@ -24,8 +26,22 @@ export interface BackendRunState {
     mutation_type: string;
     target_task_slug: string | null;
   }[];
-  evaluations: { score: number; reason: string }[];
+  evaluations: {
+    task_id: string;
+    task_slug: string | null;
+    score: number;
+    reason: string;
+  }[];
+  executions: {
+    task_slug: string | null;
+    status: string;
+    error: string | null;
+  }[];
+  execution_count: number;
+  mutation_count: number;
   resource_count: number;
+  thread_count: number;
+  context_event_count: number;
 }
 
 export interface BackendCohortRun {

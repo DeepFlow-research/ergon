@@ -3,7 +3,7 @@
 from __future__ import annotations  # slopcop: ignore[no-future-annotations]
 
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
 try:
@@ -25,6 +25,13 @@ if TYPE_CHECKING:
     from e2b.sandbox_async.commands.command import Commands  # type: ignore[import-untyped]
     from e2b.sandbox_async.filesystem.filesystem import Filesystem  # type: ignore[import-untyped]
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+
+
+class SandboxCallResult(Protocol):
+    """Opaque SDK return value forwarded by sandbox proxy methods."""
+
+
+SandboxFileContent = str | bytes | bytearray | memoryview
 
 
 class InstrumentedSandboxCommands:
@@ -66,7 +73,7 @@ class InstrumentedSandboxCommands:
             duration_ms=duration_ms,
         )
 
-    async def run(self, command: str, *args: object, **kwargs: object) -> object:
+    async def run(self, command: str, *args: object, **kwargs: object) -> SandboxCallResult:
         started_at = time.time()
         try:
             result = await self._commands.run(command, *args, **kwargs)
@@ -95,7 +102,7 @@ class InstrumentedSandboxCommands:
             await self._emit(command, started_at, stderr=str(exc), exit_code=1)
             raise
 
-    def __getattr__(self, name: str) -> object:
+    def __getattr__(self, name: str) -> SandboxCallResult:
         return getattr(self._commands, name)  # slopcop: ignore[no-hasattr-getattr]
 
 
@@ -138,7 +145,13 @@ class InstrumentedSandboxFiles:
             duration_ms=duration_ms,
         )
 
-    async def write(self, path: str, content: object, *args: object, **kwargs: object) -> object:
+    async def write(
+        self,
+        path: str,
+        content: SandboxFileContent,
+        *args: object,
+        **kwargs: object,
+    ) -> SandboxCallResult:
         started_at = time.time()
         size_bytes = bytes_length(content)
         try:
@@ -150,7 +163,7 @@ class InstrumentedSandboxFiles:
             await self._emit(f"file.write: {path}", started_at, stderr=str(exc), exit_code=1)
             raise
 
-    async def read(self, path: str, *args: object, **kwargs: object) -> object:
+    async def read(self, path: str, *args: object, **kwargs: object) -> SandboxCallResult:
         started_at = time.time()
         try:
             result = await self._files.read(path, *args, **kwargs)
@@ -162,7 +175,7 @@ class InstrumentedSandboxFiles:
             await self._emit(f"file.read: {path}", started_at, stderr=str(exc), exit_code=1)
             raise
 
-    async def remove(self, path: str, *args: object, **kwargs: object) -> object:
+    async def remove(self, path: str, *args: object, **kwargs: object) -> SandboxCallResult:
         started_at = time.time()
         try:
             result = await self._files.remove(path, *args, **kwargs)
@@ -172,7 +185,7 @@ class InstrumentedSandboxFiles:
             await self._emit(f"file.delete: {path}", started_at, stderr=str(exc), exit_code=1)
             raise
 
-    async def delete(self, path: str, *args: object, **kwargs: object) -> object:
+    async def delete(self, path: str, *args: object, **kwargs: object) -> SandboxCallResult:
         started_at = time.time()
         try:
             result = await self._files.delete(path, *args, **kwargs)
@@ -182,7 +195,7 @@ class InstrumentedSandboxFiles:
             await self._emit(f"file.delete: {path}", started_at, stderr=str(exc), exit_code=1)
             raise
 
-    def __getattr__(self, name: str) -> object:
+    def __getattr__(self, name: str) -> SandboxCallResult:
         return getattr(self._files, name)  # slopcop: ignore[no-hasattr-getattr]
 
 
@@ -236,7 +249,7 @@ class InstrumentedSandbox:
             duration_ms=duration_ms,
         )
 
-    async def run_code(self, code: str, *args: object, **kwargs: object) -> object:
+    async def run_code(self, code: str, *args: object, **kwargs: object) -> SandboxCallResult:
         started_at = time.time()
         command = f"python: {preview_python_code(code)}"
         try:
@@ -265,7 +278,7 @@ class InstrumentedSandbox:
             await self._emit(command, started_at, stderr=str(exc), exit_code=1)
             raise
 
-    async def set_timeout(self, *args: object, **kwargs: object) -> object:
+    async def set_timeout(self, *args: object, **kwargs: object) -> SandboxCallResult:
         started_at = time.time()
         timeout = kwargs.get("timeout")
         if timeout is None and args:
@@ -283,12 +296,12 @@ class InstrumentedSandbox:
             )
             raise
 
-    async def kill(self, *args: object, **kwargs: object) -> object:
+    async def kill(self, *args: object, **kwargs: object) -> SandboxCallResult:
         return await self._sandbox.kill(*args, **kwargs)
 
     @property
     def sandbox_id(self) -> str:
         return self._sandbox.sandbox_id
 
-    def __getattr__(self, name: str) -> object:
+    def __getattr__(self, name: str) -> SandboxCallResult:
         return getattr(self._sandbox, name)  # slopcop: ignore[no-hasattr-getattr]
