@@ -48,6 +48,7 @@ from ergon_core.core.persistence.telemetry.models import (
             lambda: RunTaskExecution(
                 run_id=uuid4(),
                 definition_task_id=uuid4(),
+                node_id=uuid4(),
                 status=TaskExecutionStatus.RUNNING,
             ),
             "status",
