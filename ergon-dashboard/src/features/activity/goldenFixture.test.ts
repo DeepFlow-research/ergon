@@ -25,6 +25,7 @@ function emptyRunStateFrom(runState: WorkflowRunState): WorkflowRunState {
     completedTasks: 0,
     runningTasks: 0,
     failedTasks: 0,
+    cancelledTasks: 0,
     edges: new Map(),
     annotationsByTarget: new Map(),
     unhandledMutations: [],

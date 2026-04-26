@@ -143,7 +143,7 @@ class SmokeWorkerBase(Worker):
                     parent_node_id=context.node_id,
                 )
             if children and all(c.status in _CHILD_WAIT_TERMINAL_STATUSES for c in children):
-                self._last_child_statuses = {c.name: c.status for c in children}
+                self._last_child_statuses = {c.task_slug: c.status for c in children}
                 break
             await asyncio.sleep(2)
 

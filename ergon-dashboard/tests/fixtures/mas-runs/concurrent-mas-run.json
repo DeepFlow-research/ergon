@@ -14,6 +14,7 @@
     "completedTasks": 1,
     "runningTasks": 3,
     "failedTasks": 0,
+    "cancelledTasks": 0,
     "finalScore": null,
     "error": null,
     "tasks": {

@@ -340,6 +340,7 @@ export interface WorkflowRunState {
   completedTasks: number;
   runningTasks: number;
   failedTasks: number;
+  cancelledTasks: number;
 
   // Result
   finalScore: number | null;

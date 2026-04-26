@@ -1,7 +1,5 @@
 """Runtime-facing sandbox lifecycle helpers."""
 
-from __future__ import annotations
-
 import logging
 from enum import StrEnum
 
@@ -33,7 +31,10 @@ async def terminate_sandbox_by_id(sandbox_id: str | None) -> SandboxTerminationR
         )
 
     try:
-        from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+        # reason: avoid import cycle between sandbox manager/event sink and telemetry models.
+        from ergon_core.core.providers.sandbox.manager import (
+            BaseSandboxManager,
+        )
 
         terminated = await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
     except Exception:  # slopcop: ignore[no-broad-except]

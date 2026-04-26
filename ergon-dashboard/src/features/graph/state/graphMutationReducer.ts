@@ -545,6 +545,7 @@ export function createReplayInitialState(
     completedTasks: countStatus(tasks, TaskStatus.COMPLETED),
     runningTasks: countStatus(tasks, TaskStatus.RUNNING),
     failedTasks: countStatus(tasks, TaskStatus.FAILED),
+    cancelledTasks: countStatus(tasks, TaskStatus.CANCELLED),
     edges: new Map(),
     annotationsByTarget: new Map(),
     unhandledMutations: [],

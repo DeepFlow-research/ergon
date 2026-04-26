@@ -284,6 +284,7 @@ function serializedRunState(): SerializedWorkflowRunState {
     completedTasks: 1,
     runningTasks: 1,
     failedTasks: 0,
+    cancelledTasks: 0,
     finalScore: null,
     error: null,
   };

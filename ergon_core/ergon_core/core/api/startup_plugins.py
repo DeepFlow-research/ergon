@@ -11,5 +11,5 @@ def run_startup_plugins(plugin_specs: tuple[str, ...]) -> None:
                 f"Invalid ERGON_STARTUP_PLUGINS entry {spec!r}; expected 'module:function'"
             )
         module = import_module(module_name)
-        plugin = getattr(module, attr_name)
+        plugin = getattr(module, attr_name)  # slopcop: ignore[no-hasattr-getattr]
         plugin()

@@ -33,7 +33,7 @@ async def test_save_message_persists_thread_summary_and_emits_it(
 ) -> None:
     emitted: list[tuple[object, object]] = []
 
-    async def _record_thread_event(*, run_id, thread, message) -> None:  # noqa: ANN001
+    async def _record_thread_event(*, run_id: object, thread: object, message: object) -> None:
         emitted.append((thread, message))
 
     monkeypatch.setattr(module, "get_session", session_factory)
@@ -70,7 +70,7 @@ async def test_save_message_backfills_missing_summary_without_overwriting_existi
     monkeypatch: pytest.MonkeyPatch,
     session_factory,
 ) -> None:
-    async def _ignore_thread_event(*, run_id, thread, message) -> None:  # noqa: ANN001
+    async def _ignore_thread_event(*, run_id: object, thread: object, message: object) -> None:
         return None
 
     monkeypatch.setattr(module, "get_session", session_factory)

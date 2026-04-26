@@ -37,6 +37,7 @@ function emptyState(): WorkflowRunState {
     completedTasks: 0,
     runningTasks: 0,
     failedTasks: 0,
+    cancelledTasks: 0,
     finalScore: null,
     error: null,
     edges: new Map(),

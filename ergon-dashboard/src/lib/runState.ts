@@ -151,6 +151,7 @@ export function deserializeRunState(input: unknown): WorkflowRunState {
     completedTasks: data.completedTasks,
     runningTasks: data.runningTasks,
     failedTasks: data.failedTasks,
+    cancelledTasks: data.cancelledTasks,
     finalScore: data.finalScore ?? null,
     error: data.error ?? null,
     edges: new Map(),

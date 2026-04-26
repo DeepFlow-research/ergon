@@ -1,8 +1,7 @@
 """Sandbox manager test double."""
 
-from __future__ import annotations
-
 import logging
+from typing import cast
 from uuid import UUID
 
 from ergon_core.core.providers.sandbox.manager import AsyncSandbox, BaseSandboxManager
@@ -33,7 +32,7 @@ class StubSandboxManager(BaseSandboxManager):
         stub_id = f"{STUB_SANDBOX_PREFIX}{sandbox_key}"
         logger.info("Returning test stub sandbox id %s for task %s", stub_id, sandbox_key)
         self._ensure_registries(sandbox_key)
-        self._sandboxes[sandbox_key] = _StubSandbox(stub_id)  # type: ignore[assignment]
+        self._sandboxes[sandbox_key] = cast("AsyncSandbox", _StubSandbox(stub_id))
         self._run_ids[sandbox_key] = run_id
         self._display_task_ids[sandbox_key] = display_task_id or sandbox_key
         self._sandbox_manager_classes[sandbox_key] = type(self)

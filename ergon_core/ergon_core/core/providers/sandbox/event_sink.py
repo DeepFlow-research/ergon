@@ -150,7 +150,10 @@ class PostgresSandboxEventSink:
         timeout_minutes: int,
         template: str | None = None,
     ) -> None:
-        from ergon_core.core.persistence.telemetry.models import SandboxEvent
+        # reason: avoid import cycle with ergon_core.api package exports.
+        from ergon_core.core.persistence.telemetry.models import (
+            SandboxEvent,
+        )
 
         with get_session() as s:
             s.add(
@@ -176,7 +179,10 @@ class PostgresSandboxEventSink:
         exit_code: int | None = None,
         duration_ms: int | None = None,
     ) -> None:
-        from ergon_core.core.persistence.telemetry.models import SandboxCommandWalEntry
+        # reason: avoid import cycle with ergon_core.api package exports.
+        from ergon_core.core.persistence.telemetry.models import (
+            SandboxCommandWalEntry,
+        )
 
         with get_session() as s:
             s.add(
@@ -202,7 +208,10 @@ class PostgresSandboxEventSink:
     ) -> None:
         if run_id is None:
             return
-        from ergon_core.core.persistence.telemetry.models import SandboxEvent
+        # reason: avoid import cycle with ergon_core.api package exports.
+        from ergon_core.core.persistence.telemetry.models import (
+            SandboxEvent,
+        )
 
         with get_session() as s:
             s.add(
