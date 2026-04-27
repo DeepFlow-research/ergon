@@ -454,7 +454,7 @@ async def test_add_task_dry_run_does_not_write_node() -> None:
         parent_node_id=parent.id,
         task_slug="child",
         description="Child task",
-        assigned_worker_slug="worker",
+        assigned_worker_slug="minif2f-react",
         dry_run=True,
     )
 
@@ -486,7 +486,7 @@ async def test_add_task_writes_node_and_mutation() -> None:
         parent_node_id=parent.id,
         task_slug="child",
         description="Child task",
-        assigned_worker_slug="worker",
+        assigned_worker_slug="minif2f-react",
         dry_run=False,
     )
 
@@ -502,6 +502,37 @@ async def test_add_task_writes_node_and_mutation() -> None:
     run = session.get(RunRecord, run_id)
     assert run is not None
     assert dispatched == [(run_id, run.workflow_definition_id, child.id)]
+
+
+@pytest.mark.asyncio
+async def test_add_task_rejects_unknown_worker_slug_before_creating_node() -> None:
+    session = _session()
+    run_id = _run(session)
+    parent = _node(run_id=run_id, slug="parent", status="running")
+    session.add(parent)
+    session.commit()
+
+    async def dispatch_task_ready(run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
+        raise AssertionError("invalid worker should not dispatch")
+
+    with pytest.raises(ValueError, match="Unknown worker slug"):
+        await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
+            session,
+            run_id=run_id,
+            parent_node_id=parent.id,
+            task_slug="bad-worker",
+            description="Should not be inserted",
+            assigned_worker_slug="not-a-real-worker",
+            dry_run=False,
+        )
+
+    inserted = session.exec(
+        select(RunGraphNode).where(
+            RunGraphNode.run_id == run_id,
+            RunGraphNode.task_slug == "bad-worker",
+        )
+    ).first()
+    assert inserted is None
 
 
 @pytest.mark.asyncio

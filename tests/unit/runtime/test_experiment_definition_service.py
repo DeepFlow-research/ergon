@@ -88,4 +88,3 @@ def test_define_benchmark_experiment_creates_experiment_record_without_runs(monk
     assert experiment.default_model_target == "openai:gpt-4o"
     assert experiment.default_evaluator_slug is None
     assert experiment.status == "defined"
-

@@ -78,10 +78,9 @@ Missing for a real-LLM researchrubrics rollout:
   scorer), wired in `registry_data.py:28`.
 - **Sandbox**: `ResearchRubricsSandboxManager` — blank E2B sandbox with
   workspace dirs provisioned. No template file needed.
-- **CLI**: `ergon benchmark run researchrubrics --worker
+- **CLI**: `ergon experiment define researchrubrics --worker
   researchrubrics-researcher --evaluator research-rubric --model <X>
-  --limit 1` composes cleanly via `build_experiment`
-  (`ergon_cli/composition/__init__.py:42`).
+  --limit 1` followed by `ergon experiment run <experiment-id>`.
 
 ## Keys come from `settings`
 

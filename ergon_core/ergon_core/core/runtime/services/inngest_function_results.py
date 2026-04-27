@@ -98,14 +98,6 @@ class EvaluateTaskRunResult(BaseModel):
     error: str | None = None
 
 
-class BenchmarkRunStartResult(BaseModel):
-    model_config = {"frozen": True}
-
-    run_id: UUID
-    definition_id: UUID
-    benchmark: str = ""  # slopcop: ignore[no-str-empty-default]
-
-
 class RunCleanupResult(BaseModel):
     model_config = {"frozen": True}
 

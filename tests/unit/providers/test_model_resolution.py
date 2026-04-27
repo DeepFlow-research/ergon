@@ -19,9 +19,7 @@ def test_cloud_provider_targets_resolve_to_openrouter_provider() -> None:
 def test_anthropic_target_resolves_to_openrouter_namespace() -> None:
     from pydantic_ai.models.openai import OpenAIChatModel
 
-    resolved = resolve_model_target(
-        "anthropic:claude-sonnet-4.6", api_key="test-openrouter-key"
-    )
+    resolved = resolve_model_target("anthropic:claude-sonnet-4.6", api_key="test-openrouter-key")
 
     assert isinstance(resolved.model, OpenAIChatModel)
     assert resolved.model.model_name == "anthropic/claude-sonnet-4.6"

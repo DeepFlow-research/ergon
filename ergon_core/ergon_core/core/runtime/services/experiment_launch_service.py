@@ -8,6 +8,7 @@ from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.experiment import Experiment
 from ergon_core.api.handles import PersistedExperimentDefinition
+from ergon_core.api.json_types import JsonObject
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_spec import WorkerSpec
 from ergon_core.core.persistence.shared.db import get_session
@@ -52,6 +53,7 @@ class ExperimentLaunchService:
             experiment.status = "running"
             session.add(experiment)
             session.commit()
+            session.refresh(experiment)
 
         run_ids: list[UUID] = []
         workflow_definition_ids: list[UUID] = []
@@ -128,7 +130,7 @@ def _metadata_str(experiment: ExperimentRecord, key: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _primary_worker_slug(worker_team: Mapping[str, object]) -> str:
+def _primary_worker_slug(worker_team: JsonObject) -> str:
     value = worker_team.get("primary")
     if not isinstance(value, str) or not value:
         raise ValueError("Run assignment worker_team requires a string 'primary' worker slug")
@@ -138,14 +140,18 @@ def _primary_worker_slug(worker_team: Mapping[str, object]) -> str:
 def _evaluator_bindings(evaluator_slug: str | None) -> dict[str, Evaluator]:
     if evaluator_slug is None:
         return {}
-    from ergon_builtins.registry import EVALUATORS
+    from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: optional plugin registry; load only when launching experiment runs
+        EVALUATORS,
+    )
 
     evaluator_cls = EVALUATORS[evaluator_slug]
     return {"default": evaluator_cls(name="evaluator")}
 
 
 def _single_sample_benchmark(benchmark_slug: str, instance_key: str) -> Benchmark:
-    from ergon_builtins.registry import BENCHMARKS
+    from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: optional plugin registry; load only when launching experiment runs
+        BENCHMARKS,
+    )
 
     source = BENCHMARKS[benchmark_slug]()
     instances = source.build_instances()
@@ -153,7 +159,8 @@ def _single_sample_benchmark(benchmark_slug: str, instance_key: str) -> Benchmar
         raise ValueError(
             f"Experiment sample {instance_key!r} not found in benchmark {benchmark_slug!r}"
         )
-    return _SingleSampleBenchmark(source, instance_key, instances[instance_key])
+    wrapper_cls = _single_sample_benchmark_cls(source)
+    return wrapper_cls(source, instance_key, instances[instance_key])
 
 
 class _SingleSampleBenchmark(Benchmark):
@@ -170,10 +177,6 @@ class _SingleSampleBenchmark(Benchmark):
             description=source.description,
             metadata=source.metadata,
         )
-        self.type_slug = source.type_slug
-        self.task_payload_model = source.task_payload_model
-        self.required_packages = source.required_packages
-        self.install_hint = source.install_hint
         self._source = source
         self._instance_key = instance_key
         self._tasks = list(tasks)
@@ -185,6 +188,19 @@ class _SingleSampleBenchmark(Benchmark):
         return self._source.evaluator_requirements()
 
 
+def _single_sample_benchmark_cls(source: Benchmark) -> type[_SingleSampleBenchmark]:
+    return type(
+        f"SingleSample{source.type_slug.replace('-', '_').title()}Benchmark",
+        (_SingleSampleBenchmark,),
+        {
+            "type_slug": source.type_slug,
+            "task_payload_model": source.task_payload_model,
+            "required_packages": source.required_packages,
+            "install_hint": source.install_hint,
+        },
+    )
+
+
 async def _emit_workflow_started(run_id: UUID, definition_id: UUID) -> None:
     event = WorkflowStartedEvent(run_id=run_id, definition_id=definition_id)
     await inngest_client.send(
@@ -193,4 +209,3 @@ async def _emit_workflow_started(run_id: UUID, definition_id: UUID) -> None:
             data=event.model_dump(mode="json"),
         )
     )
-

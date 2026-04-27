@@ -1,4 +1,4 @@
-"""Benchmark subcommand: list, run, and setup benchmarks."""
+"""Benchmark subcommand: list and setup benchmarks."""
 
 import json
 import os
@@ -38,8 +38,6 @@ async def handle_benchmark(args: Namespace) -> int:
         benchmarks = list_benchmarks()
         render_table(["Slug", "Name", "Description"], benchmarks)
         return 0
-    elif args.bench_action == "run":
-        return await run_benchmark(args)
     elif args.bench_action == "setup":
         return setup_benchmark(args)
     else:
@@ -166,14 +164,8 @@ def setup_benchmark(args: Namespace) -> int:
 
     # 7. Report
     print(f"\nSuccess! Template ID: {template_id} (build {build_info.build_id}, {build_time}s)")
-    print(f"Now run: `ergon benchmark run {slug} --worker minif2f-react --model <model> --limit 1`")
-    return 0
-
-
-async def run_benchmark(args: Namespace) -> int:
-    return _fail(
-        "`ergon benchmark run` has been replaced.\n\n"
-        "Use:\n"
-        f"  ergon experiment define {args.slug} ...\n"
-        "  ergon experiment run <experiment-id>"
+    print(
+        "Now run: "
+        f"`ergon experiment define {slug} --worker minif2f-react --model <model> --limit 1`"
     )
+    return 0

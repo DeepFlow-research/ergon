@@ -98,9 +98,7 @@ class ExperimentRecord(SQLModel, table=True):
     @model_validator(mode="after")
     def _validate_fields(self) -> "ExperimentRecord":
         self.__class__._parse_json_object(self.sample_selection_json, "sample_selection_json")
-        self.__class__._parse_json_object(
-            self.default_worker_team_json, "default_worker_team_json"
-        )
+        self.__class__._parse_json_object(self.default_worker_team_json, "default_worker_team_json")
         self.__class__._parse_json_object(self.design_json, "design_json")
         self.__class__._parse_json_object(self.metadata_json, "metadata_json")
         return self

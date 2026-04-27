@@ -51,22 +51,22 @@ def test_define_request_requires_assignment_defaults_without_arms() -> None:
         )
 
 
-def test_define_request_accepts_design_arms_without_defaults() -> None:
-    request = ExperimentDefineRequest(
-        benchmark_slug="researchrubrics",
-        sample_ids=["a"],
-        design={
-            "arms": {
-                "baseline": {
-                    "worker_team": {"primary": "worker"},
-                    "model_target": "anthropic:claude-sonnet-4.6",
+def test_define_request_rejects_design_arms_until_launch_support_exists() -> None:
+    with pytest.raises(ValidationError, match="design\\.arms"):
+        ExperimentDefineRequest(
+            benchmark_slug="researchrubrics",
+            sample_ids=["a"],
+            default_model_target="anthropic:claude-sonnet-4.6",
+            default_worker_team={"primary": "worker"},
+            design={
+                "arms": {
+                    "baseline": {
+                        "worker_team": {"primary": "worker"},
+                        "model_target": "anthropic:claude-sonnet-4.6",
+                    },
                 },
             },
-        },
-    )
-
-    assert request.default_worker_team == {}
-    assert request.design["arms"]["baseline"]["worker_team"] == {"primary": "worker"}
+        )
 
 
 def test_run_request_identifies_defined_experiment() -> None:
@@ -76,4 +76,3 @@ def test_run_request_identifies_defined_experiment() -> None:
 
     assert request.experiment_id == experiment_id
     assert request.wait is True
-

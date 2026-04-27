@@ -156,7 +156,7 @@ A brief index of where runtime functions live. The architectural claims above st
 
 | Concern | File |
 | --- | --- |
-| Entry + init | `runtime/inngest/benchmark_run_start.py`, `runtime/inngest/start_workflow.py` |
+| Entry + init | `runtime/services/experiment_launch_service.py`, `runtime/inngest/start_workflow.py` |
 | Task orchestration | `runtime/inngest/execute_task.py` |
 | Task child steps | `runtime/inngest/sandbox_setup.py`, `runtime/inngest/worker_execute.py`, `runtime/inngest/persist_outputs.py` |
 | Propagation | `runtime/inngest/propagate_execution.py` |

@@ -61,4 +61,3 @@ def test_create_run_requires_experiment_identity_and_records_workflow_assignment
     assert run.assignment_json == {"arm_key": "default"}
     assert run.seed == 123
     assert run.status == RunStatus.PENDING
-

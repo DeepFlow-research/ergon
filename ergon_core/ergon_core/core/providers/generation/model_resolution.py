@@ -38,14 +38,16 @@ def resolve_model_target(
     prefix = target.split(":", 1)[0] if ":" in target else ""
 
     if prefix == "vllm":
-        from ergon_core.core.providers.generation.openai_compatible import resolve_vllm
+        from ergon_core.core.providers.generation.openai_compatible import (  # slopcop: ignore[guarded-function-import] -- reason: avoid import cycle; provider modules import ResolvedModel
+            resolve_vllm,
+        )
 
         return resolve_vllm(
             target, model_name=model_name, policy_version=policy_version, api_key=api_key
         )
 
     if prefix == "openai-compatible":
-        from ergon_core.core.providers.generation.openai_compatible import (
+        from ergon_core.core.providers.generation.openai_compatible import (  # slopcop: ignore[guarded-function-import] -- reason: avoid import cycle; provider modules import ResolvedModel
             resolve_openai_compatible,
         )
 
@@ -54,14 +56,18 @@ def resolve_model_target(
         )
 
     if prefix in {"openai", "anthropic", "google"}:
-        from ergon_core.core.providers.generation.openrouter import resolve_cloud_via_openrouter
+        from ergon_core.core.providers.generation.openrouter import (  # slopcop: ignore[guarded-function-import] -- reason: avoid import cycle; provider modules import ResolvedModel
+            resolve_cloud_via_openrouter,
+        )
 
         return resolve_cloud_via_openrouter(
             target, model_name=model_name, policy_version=policy_version, api_key=api_key
         )
 
     if prefix == "openrouter":
-        from ergon_core.core.providers.generation.openrouter import resolve_openrouter_alias
+        from ergon_core.core.providers.generation.openrouter import (  # slopcop: ignore[guarded-function-import] -- reason: avoid import cycle; provider modules import ResolvedModel
+            resolve_openrouter_alias,
+        )
 
         return resolve_openrouter_alias(
             target, model_name=model_name, policy_version=policy_version, api_key=api_key

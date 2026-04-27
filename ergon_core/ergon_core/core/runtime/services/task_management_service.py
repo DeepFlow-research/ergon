@@ -123,6 +123,12 @@ class TaskManagementService:
         dependency edges (source=dep, target=new_node).
         """
         task_slug = command.task_slug
+        from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: dynamic task creation validates plugin worker slugs only when manager tools run
+            WORKERS,
+        )
+
+        if command.assigned_worker_slug not in WORKERS:
+            raise ValueError(f"Unknown worker slug: {command.assigned_worker_slug!r}")
 
         parent = self._graph_repo.get_node(
             session, run_id=command.run_id, node_id=command.parent_node_id
@@ -248,6 +254,13 @@ class TaskManagementService:
         root tasks (those with no depends_on).
         """
         self._validate_plan(command.subtasks)
+        from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: dynamic task creation validates plugin worker slugs only when manager tools run
+            WORKERS,
+        )
+
+        for spec in command.subtasks:
+            if spec.assigned_worker_slug not in WORKERS:
+                raise ValueError(f"Unknown worker slug: {spec.assigned_worker_slug!r}")
 
         parent = self._graph_repo.get_node(
             session, run_id=command.run_id, node_id=command.parent_node_id

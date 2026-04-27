@@ -100,9 +100,11 @@ test("cohort detail parser accepts harness payload", () => {
   const parsed = parseCohortDetail(cohortDetail);
 
   assert.equal(parsed.summary.cohort_id, FIXTURE_IDS.cohortId);
-  assert.equal((parsed.runs ?? []).length, 3);
-  assert.equal(parsed.runs[0]?.total_tasks, 10);
-  assert.equal(parsed.runs[0]?.total_cost_usd, 0.12);
+  assert.equal((parsed.experiments ?? []).length, 1);
+  assert.equal(parsed.experiments[0]?.total_runs, 3);
+  assert.equal(parsed.experiments[0]?.status_counts.completed, 3);
+  assert.equal(parsed.experiments[0]?.final_score, 1);
+  assert.equal(parsed.experiments[0]?.total_cost_usd, 0.42);
 });
 
 test("workflow started event parser validates recursive task trees", () => {

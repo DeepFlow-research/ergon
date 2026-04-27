@@ -42,8 +42,9 @@ cp .env.example .env
 # Start the stack (Postgres, API, Inngest, dashboard)
 docker compose up
 
-# Run a benchmark
-ergon benchmark run smoke_test
+# Define and run an experiment
+ergon experiment define smoke_test --worker training-stub --model stub:constant --limit 1
+ergon experiment run <experiment-id>
 ```
 
 ## Configuration

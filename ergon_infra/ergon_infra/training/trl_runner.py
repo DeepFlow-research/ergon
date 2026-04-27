@@ -49,7 +49,8 @@ def run_trl_training(config: TrainingConfig) -> int:
     definition_id = config.definition_id
     if not definition_id:
         raise ValueError(
-            "--definition-id is required. Create one via: ergon benchmark run <slug> --limit 1"
+            "--definition-id is required. Create one via: "
+            "ergon experiment define <slug> --limit 1 --worker <worker> --model <model>"
         )
 
     tokenizer = AutoTokenizer.from_pretrained(config.model)

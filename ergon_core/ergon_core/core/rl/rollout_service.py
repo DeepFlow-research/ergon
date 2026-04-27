@@ -91,9 +91,7 @@ class RolloutService:
                 benchmark_type=benchmark_type,
                 sample_count=request.num_episodes,
                 sample_selection_json={
-                    "instance_keys": [
-                        f"episode-{index}" for index in range(request.num_episodes)
-                    ]
+                    "instance_keys": [f"episode-{index}" for index in range(request.num_episodes)]
                 },
                 default_worker_team_json={"primary": "rl-rollout"},
                 default_model_target=request.model_target_override,

@@ -282,6 +282,12 @@ class WorkflowService:
         assigned_worker_slug: str,
         dry_run: bool,
     ) -> WorkflowMutationRef:
+        from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: workflow mutation validates plugin worker slugs only when CLI tools run
+            WORKERS,
+        )
+
+        if assigned_worker_slug not in WORKERS:
+            raise ValueError(f"Unknown worker slug: {assigned_worker_slug!r}")
         parent = self._resolve_node(
             session,
             run_id=run_id,

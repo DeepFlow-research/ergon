@@ -5,14 +5,14 @@ from typing import Any
 
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.evaluator import Evaluator
-from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
+from ergon_core.api.handles import PersistedExperimentDefinition
 from ergon_core.api.worker_spec import WorkerSpec
 
 
 class Experiment:
     """Composition root binding a benchmark, worker specs, evaluators, and assignments.
 
-    This is the main object users build and hand to ``persist()`` / ``run()``.
+    This is the main object users build and hand to ``persist()``.
 
     reason: RFC 2026-04-22 §1 — workers are described here as ``WorkerSpec``
     (config-time descriptor), not as live ``Worker`` instances. The
@@ -161,17 +161,6 @@ class Experiment:
         persisted = ExperimentPersistenceService().persist_definition(self)
         self._persisted = persisted
         return persisted
-
-    # ------------------------------------------------------------------
-    # Execution
-    # ------------------------------------------------------------------
-
-    async def run(self) -> ExperimentRunHandle:
-        """Deprecated: use ExperimentLaunchService for experiment execution."""
-        raise RuntimeError(
-            "Experiment.run() no longer defines and launches implicitly; "
-            "create an ExperimentRecord, then use ExperimentLaunchService.run_experiment()."
-        )
 
 
 # ------------------------------------------------------------------

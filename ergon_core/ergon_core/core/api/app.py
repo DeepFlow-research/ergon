@@ -91,6 +91,12 @@ app.include_router(experiments_router)
 app.include_router(cohorts_router)
 app.include_router(rollouts_router)
 
+
+@app.get("/health", include_in_schema=False)
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 # Test-only harness: mounted in CI + local-e2e only.
 if settings.enable_test_harness:
     app.include_router(_test_harness_router)

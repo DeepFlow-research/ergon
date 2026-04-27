@@ -5,8 +5,6 @@ Revises: 0a1b2c3d4e5f
 Create Date: 2026-04-27 11:35:00.000000
 """
 
-from __future__ import annotations
-
 import json
 from typing import Sequence, Union
 from uuid import uuid4
@@ -51,13 +49,25 @@ def upgrade() -> None:
 
     op.add_column("runs", sa.Column("experiment_id", sa.Uuid(), nullable=True))
     op.add_column("runs", sa.Column("workflow_definition_id", sa.Uuid(), nullable=True))
-    op.add_column("runs", sa.Column("benchmark_type", sqlmodel.sql.sqltypes.AutoString(), nullable=True))
-    op.add_column("runs", sa.Column("instance_key", sqlmodel.sql.sqltypes.AutoString(), nullable=True))
+    op.add_column(
+        "runs", sa.Column("benchmark_type", sqlmodel.sql.sqltypes.AutoString(), nullable=True)
+    )
+    op.add_column(
+        "runs", sa.Column("instance_key", sqlmodel.sql.sqltypes.AutoString(), nullable=True)
+    )
     op.add_column("runs", sa.Column("sample_id", sqlmodel.sql.sqltypes.AutoString(), nullable=True))
-    op.add_column("runs", sa.Column("worker_team_json", sa.JSON(), nullable=False, server_default="{}"))
-    op.add_column("runs", sa.Column("evaluator_slug", sqlmodel.sql.sqltypes.AutoString(), nullable=True))
-    op.add_column("runs", sa.Column("model_target", sqlmodel.sql.sqltypes.AutoString(), nullable=True))
-    op.add_column("runs", sa.Column("assignment_json", sa.JSON(), nullable=False, server_default="{}"))
+    op.add_column(
+        "runs", sa.Column("worker_team_json", sa.JSON(), nullable=False, server_default="{}")
+    )
+    op.add_column(
+        "runs", sa.Column("evaluator_slug", sqlmodel.sql.sqltypes.AutoString(), nullable=True)
+    )
+    op.add_column(
+        "runs", sa.Column("model_target", sqlmodel.sql.sqltypes.AutoString(), nullable=True)
+    )
+    op.add_column(
+        "runs", sa.Column("assignment_json", sa.JSON(), nullable=False, server_default="{}")
+    )
     op.add_column("runs", sa.Column("seed", sa.Integer(), nullable=True))
     op.create_foreign_key("fk_runs_experiment_id", "runs", "experiments", ["experiment_id"], ["id"])
     op.create_foreign_key(
@@ -166,7 +176,9 @@ def _migrate_existing_runs() -> None:
 
     for row in rows:
         experiment_id = uuid4()
-        instance_key = _first_instance_key(connection, row["definition_id"]) or f"migrated-{row['run_id']}"
+        instance_key = (
+            _first_instance_key(connection, row["definition_id"]) or f"migrated-{row['run_id']}"
+        )
         metadata = {
             "migrated_from_legacy_run": True,
             "source_run_id": str(row["run_id"]),

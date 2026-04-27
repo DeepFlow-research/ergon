@@ -58,7 +58,7 @@ _WORKFLOW_PROMPT = (
     "`manage materialize-resource --resource-id <id> --dry-run`. "
     "Use `--format json` when you need stable IDs. Resource copies are snapshots: "
     "materialized files become resources owned by this task, not edits to the source.\n\n"
-    "First call `workflow(\"inspect task-workspace --format json\")`. Use only "
+    'First call `workflow("inspect task-workspace --format json")`. Use only '
     "`task_workspace.task.level` from that response to decide whether this current "
     "task may delegate. Ignore level-0 tasks shown elsewhere in task-tree. If "
     "`task_workspace.task.level is exactly 0`, create exactly three specialist "
@@ -66,7 +66,7 @@ _WORKFLOW_PROMPT = (
     "(1) a source scout for finding citations, "
     "(2) a rubric compliance checker for mapping requirements to an outline, and "
     "(3) a synthesis reviewer for risks, gaps, and counterclaims. "
-    "Use `workflow(\"manage add-task --task-slug <short_unique_slug> --worker worker "
+    'Use `workflow("manage add-task --task-slug <short_unique_slug> --worker worker '
     "--description '<specialist task description>'\")` for each child. "
     "Give each child a role-specific description that includes the original task "
     "goal and asks for a concise markdown report in `final_output/report.md`. "
@@ -74,7 +74,7 @@ _WORKFLOW_PROMPT = (
     "resources are already available.\n\n"
     "If your current `task_workspace.task.level` is not 0, you are already a "
     "specialist child. You must do only your assigned specialist work; do not call "
-    "`workflow(\"manage add-task` under any "
+    '`workflow("manage add-task` under any '
     "circumstances. Do not inspect the workflow repeatedly. Use at most 2 "
     "workflow inspections and at most 3 exa_search calls, then write your "
     "specialist markdown report to `final_output/report.md`."

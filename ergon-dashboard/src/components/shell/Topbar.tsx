@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
   { label: "Experiments", href: "/experiments" },
-  { label: "Cohorts", href: "/" },
+  { label: "Cohorts", href: "/cohorts" },
   { label: "Runs", href: "/runs" },
   { label: "Training", href: "/training" },
   { label: "Models", href: "/models" },
@@ -13,7 +13,7 @@ const NAV_ITEMS = [
 ] as const;
 
 function isActive(href: string, pathname: string): boolean {
-  if (href === "/") {
+  if (href === "/cohorts") {
     return pathname === "/" || pathname.startsWith("/cohorts");
   }
   if (href === "/experiments") {

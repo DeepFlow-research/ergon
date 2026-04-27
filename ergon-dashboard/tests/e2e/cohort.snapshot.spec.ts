@@ -25,7 +25,7 @@ test.afterEach(async () => {
 });
 
 test("cohort index renders cohort-first snapshot truth", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/cohorts");
 
   await expect(page.getByTestId("cohort-index-header")).toContainText("Cohorts");
   await expect(page.getByTestId(`cohort-row-${FIXTURE_IDS.cohortId}`)).toContainText(
@@ -34,28 +34,32 @@ test("cohort index renders cohort-first snapshot truth", async ({ page }) => {
   await expect(page.getByTestId("cohort-index-list")).toContainText("Runs");
 });
 
-test("cohort detail renders summary and run list", async ({ page }) => {
+test("cohort detail renders summary and experiment list", async ({ page }) => {
   await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}`);
 
   await expect(page.getByTestId("cohort-header")).toContainText("minif2f-react-worker-gpt5v3");
-  await expect(page.getByTestId("cohort-summary-cards")).toContainText("Runs · pass / fail");
-  await expect(page.getByTestId("cohort-summary-cards")).toContainText("3 of 3 runs");
-  await expect(page.getByTestId("cohort-summary-cards")).toContainText("Avg tasks");
-  await expect(page.getByTestId("cohort-summary-cards")).toContainText("10.0");
+  await expect(page.getByTestId("cohort-summary-cards")).toContainText("Experiments");
+  await expect(page.getByTestId("cohort-summary-cards")).toContainText("3 total runs");
+  await expect(page.getByTestId("cohort-summary-cards")).toContainText("$0.42");
   await expect(page.getByRole("button", { name: "Compare" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Re-run failed" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open in training" })).toHaveCount(0);
-  await expect(page.getByTestId("cohort-run-distribution")).toBeVisible();
-  await expect(page.getByTestId("cohort-run-distribution")).toContainText("Score distribution");
-  await expect(page.getByTestId("cohort-distribution-point")).toHaveCount(3);
-  await page.getByTestId("cohort-distribution-metric-runtime").click();
-  await expect(page.getByTestId("cohort-run-distribution")).toContainText("Runtime distribution");
-  await expect(page.getByTestId("cohort-distribution-point")).toHaveCount(3);
-  const runRow = page.getByTestId(`cohort-run-row-${FIXTURE_IDS.runId}`);
-  await expect(runRow).toContainText("minif2f-react-worker-gpt5v3");
-  await expect(runRow).toContainText("Started");
-  await expect(runRow.locator("time[datetime]")).toHaveAttribute(
-    "datetime",
-    "2026-03-18T12:00:00.000Z",
+  const experimentRow = page.getByTestId(`cohort-experiment-row-${FIXTURE_IDS.experimentId}`);
+  await expect(experimentRow).toContainText("minif2f smoke n=3");
+  await expect(experimentRow).toContainText("3 done · 0 failed · 0 active");
+  await expect(experimentRow).toContainText("lean-evaluator");
+});
+
+test("experiment detail renders restored run analytics surface", async ({ page }) => {
+  await page.goto(`/experiments/${FIXTURE_IDS.experimentId}`);
+
+  await expect(page.getByRole("heading", { name: "minif2f smoke n=3" })).toBeVisible();
+  await expect(page.getByTestId("experiment-summary-cards")).toContainText("Score");
+  await expect(page.getByTestId("experiment-summary-cards")).toContainText("10");
+  await expect(page.getByTestId("experiment-run-distribution")).toContainText("algebra_sample");
+  await expect(page.getByTestId("experiment-run-distribution")).toContainText("score 1");
+  await expect(page.getByRole("link", { name: FIXTURE_IDS.runId })).toHaveAttribute(
+    "href",
+    `/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`,
   );
 });

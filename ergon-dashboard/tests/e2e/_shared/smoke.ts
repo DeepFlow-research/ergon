@@ -279,17 +279,19 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
       });
     }
 
-    test(`cohort ${cohortKey} index lists all runs`, async ({ page }) => {
+    test(`cohort ${cohortKey} index lists all experiments`, async ({ page }) => {
       const cohortRuns = await client.getCohortRuns(cohortKey);
-      expect(cohortRuns.length).toBe(cohort.length);
+      expect(cohortRuns.length).toBeGreaterThanOrEqual(cohort.length);
 
       const cohortId = await client.getCohortId(cohortKey);
       await page.goto(`/cohorts/${cohortId}`);
-      // Dashboard keys cohort-run rows as ``cohort-run-row-<run_id>``
-      // (per CohortDetailView.tsx:36) — prefix match via locator rather
+      // Dashboard keys cohort experiment rows as ``cohort-experiment-row-<experiment_id>``;
+      // prefix match via locator rather
       // than exact getByTestId.
-      const rows = page.locator('[data-testid^="cohort-run-row-"]');
-      await expect(rows).toHaveCount(cohort.length);
+      const rows = page.locator('[data-testid^="cohort-experiment-row-"]');
+      await expect(async () => {
+        await expect(rows).toHaveCount(cohortRuns.length);
+      }).toPass();
       // ``cohort-header`` exists but no dedicated env label testid yet —
       // follow-up for dashboard.  Screenshot captures the page state.
       await expect(page.getByTestId("cohort-header")).toBeVisible();

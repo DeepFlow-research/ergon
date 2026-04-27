@@ -94,7 +94,11 @@ class TestResearchRubricsDatasetLoading:
                     "domain": "planning",
                     "prompt": "Plan a day in Washington DC.",
                     "rubrics": [
-                        {"criterion": "Includes a timed itinerary.", "axis": "quality", "weight": 5.0},
+                        {
+                            "criterion": "Includes a timed itinerary.",
+                            "axis": "quality",
+                            "weight": 5.0,
+                        },
                     ],
                 }
 

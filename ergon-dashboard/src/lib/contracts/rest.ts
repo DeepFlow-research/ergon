@@ -9,6 +9,7 @@ export const TaskStatusSchema = z.string();
 
 export const CohortSummarySchema = schemas.CohortSummaryDto;
 export const CohortDetailSchema = schemas.CohortDetailDto;
+export const ExperimentDetailSchema = schemas.ExperimentDetailDto;
 export const UpdateCohortRequestSchema = schemas.UpdateCohortRequest;
 
 export const RunExecutionAttemptSchema = schemas.RunExecutionAttemptDto;
@@ -36,7 +37,9 @@ export type TaskStatusValue = z.infer<typeof TaskStatusSchema>;
 
 type RawCohortSummary = KnownKeys<z.infer<typeof CohortSummarySchema>>;
 type RawCohortDetail = KnownKeys<z.infer<typeof CohortDetailSchema>>;
-type RawCohortRunRow = KnownKeys<NonNullable<RawCohortDetail["runs"]>[number]>;
+type RawCohortExperimentRow = KnownKeys<NonNullable<RawCohortDetail["experiments"]>[number]>;
+type RawExperimentDetail = KnownKeys<z.infer<typeof ExperimentDetailSchema>>;
+type RawExperimentRunRow = KnownKeys<NonNullable<RawExperimentDetail["runs"]>[number]>;
 type RawRunExecutionAttempt = KnownKeys<z.infer<typeof RunExecutionAttemptSchema>>;
 type RawRunResource = KnownKeys<z.infer<typeof RunResourceSchema>>;
 type RawRunSandboxCommand = KnownKeys<z.infer<typeof RunSandboxCommandSchema>>;
@@ -69,6 +72,10 @@ export interface CohortStatusCounts {
   evaluating: number;
   completed: number;
   failed: number;
+}
+
+export interface ExperimentStatusCounts extends CohortStatusCounts {
+  cancelled: number;
 }
 
 export interface CohortStatsExtras {
@@ -104,29 +111,69 @@ export interface CohortSummary
   worst_score: number | null;
 }
 
-export interface CohortRunRow
+export interface CohortExperimentRow
   extends Omit<
-    RawCohortRunRow,
-    | "completed_at"
+    RawCohortExperimentRow,
+    | "default_evaluator_slug"
+    | "default_model_target"
     | "error_message"
     | "final_score"
-    | "running_time_ms"
-    | "started_at"
+    | "status_counts"
     | "total_cost_usd"
-    | "total_tasks"
   > {
-  completed_at: string | null;
+  default_evaluator_slug: string | null;
+  default_model_target: string | null;
   error_message: string | null;
   final_score: number | null;
-  running_time_ms: number | null;
-  started_at: string | null;
+  status_counts: CohortStatusCounts;
   total_cost_usd: number | null;
-  total_tasks: number | null;
 }
 
 export interface CohortDetail {
   summary: CohortSummary;
-  runs: CohortRunRow[];
+  experiments: CohortExperimentRow[];
+}
+
+export interface ExperimentRunRow
+  extends Omit<
+    RawExperimentRunRow,
+    | "completed_at"
+    | "error_message"
+    | "evaluator_slug"
+    | "final_score"
+    | "model_target"
+    | "running_time_ms"
+    | "seed"
+    | "started_at"
+    | "total_cost_usd"
+    | "total_tasks"
+    | "worker_team"
+  > {
+  completed_at: string | null;
+  error_message: string | null;
+  evaluator_slug: string | null;
+  final_score: number | null;
+  model_target: string | null;
+  running_time_ms: number | null;
+  seed: number | null;
+  started_at: string | null;
+  total_cost_usd: number | null;
+  total_tasks: number | null;
+  worker_team: Record<string, unknown>;
+}
+
+export interface ExperimentDetail extends Omit<RawExperimentDetail, "runs" | "analytics"> {
+  runs: ExperimentRunRow[];
+  analytics: {
+    total_runs: number;
+    status_counts: ExperimentStatusCounts;
+    average_score: number | null;
+    average_duration_ms: number | null;
+    average_tasks: number | null;
+    total_cost_usd: number | null;
+    latest_activity_at: string | null;
+    error_count: number;
+  };
 }
 
 export interface RunExecutionAttempt
@@ -360,15 +407,58 @@ export function parseCohortDetail(input: unknown): CohortDetail {
   const detail = CohortDetailSchema.parse(input);
   return {
     summary: normalizeCohortSummary(detail.summary),
+    experiments: (detail.experiments ?? []).map((experiment) => ({
+      ...experiment,
+      default_evaluator_slug: experiment.default_evaluator_slug ?? null,
+      default_model_target: experiment.default_model_target ?? null,
+      error_message: experiment.error_message ?? null,
+      final_score: experiment.final_score ?? null,
+      status_counts: {
+        pending: experiment.status_counts?.pending ?? 0,
+        executing: experiment.status_counts?.executing ?? 0,
+        evaluating: experiment.status_counts?.evaluating ?? 0,
+        completed: experiment.status_counts?.completed ?? 0,
+        failed: experiment.status_counts?.failed ?? 0,
+      },
+      total_cost_usd: experiment.total_cost_usd ?? null,
+    })),
+  };
+}
+
+export function parseExperimentDetail(input: unknown): ExperimentDetail {
+  const detail = ExperimentDetailSchema.parse(input);
+  return {
+    ...detail,
+    analytics: {
+      total_runs: detail.analytics?.total_runs ?? 0,
+      average_duration_ms: detail.analytics?.average_duration_ms ?? null,
+      average_score: detail.analytics?.average_score ?? null,
+      average_tasks: detail.analytics?.average_tasks ?? null,
+      error_count: detail.analytics?.error_count ?? 0,
+      latest_activity_at: detail.analytics?.latest_activity_at ?? null,
+      status_counts: {
+        pending: detail.analytics?.status_counts?.pending ?? 0,
+        executing: detail.analytics?.status_counts?.executing ?? 0,
+        evaluating: detail.analytics?.status_counts?.evaluating ?? 0,
+        completed: detail.analytics?.status_counts?.completed ?? 0,
+        failed: detail.analytics?.status_counts?.failed ?? 0,
+        cancelled: detail.analytics?.status_counts?.cancelled ?? 0,
+      },
+      total_cost_usd: detail.analytics?.total_cost_usd ?? null,
+    },
     runs: (detail.runs ?? []).map((run) => ({
       ...run,
       completed_at: run.completed_at ?? null,
       error_message: run.error_message ?? null,
+      evaluator_slug: run.evaluator_slug ?? null,
       final_score: run.final_score ?? null,
+      model_target: run.model_target ?? null,
       running_time_ms: run.running_time_ms ?? null,
+      seed: run.seed ?? null,
       started_at: run.started_at ?? null,
       total_cost_usd: run.total_cost_usd ?? null,
       total_tasks: run.total_tasks ?? null,
+      worker_team: run.worker_team ?? {},
     })),
   };
 }

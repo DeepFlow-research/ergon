@@ -281,9 +281,7 @@ def read_cohort_runs(
         return []
     runs = list(
         session.exec(
-            select(RunRecord)
-            .join(ExperimentRecord)
-            .where(ExperimentRecord.cohort_id == cohort.id)
+            select(RunRecord).join(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort.id)
         ).all(),
     )
     return [TestCohortRunDto(run_id=r.id, status=r.status) for r in runs]
@@ -448,10 +446,9 @@ class SubmitCohortResponse(BaseModel):
 async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
     """Build + persist + dispatch N runs under one cohort.
 
-    Per-slot flow mirrors the CLI's ``ergon benchmark run``:
-    ``build_experiment`` → ``validate`` → ``persist`` → ``create_run``
-    → send ``WorkflowStartedEvent``.  Slots submit sequentially —
-    typical N ≤ 3, so the parallel-gather savings are negligible.
+    Per-slot flow mirrors the CLI's ``ergon experiment define`` followed by
+    ``ergon experiment run``. Slots submit sequentially — typical N ≤ 3,
+    so the parallel-gather savings are negligible.
     """
     cohort = experiment_cohort_service.resolve_or_create(
         name=body.cohort_key,

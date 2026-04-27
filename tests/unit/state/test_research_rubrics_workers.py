@@ -162,7 +162,7 @@ class TestResearcherWorker:
         assert "inspect task-workspace --format json" in _WORKFLOW_PROMPT
         assert "task_workspace.task.level is exactly 0" in _WORKFLOW_PROMPT
         assert "Ignore level-0 tasks shown elsewhere in task-tree" in _WORKFLOW_PROMPT
-        assert "do not call `workflow(\"manage add-task" in _WORKFLOW_PROMPT
+        assert 'do not call `workflow("manage add-task' in _WORKFLOW_PROMPT
 
     @pytest.mark.asyncio
     async def test_report_write_uses_manager_public_file_api(self):

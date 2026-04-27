@@ -175,9 +175,7 @@ class ExperimentCohortService:
 
         status_counts = CohortStatusCountsDto()
         for run in runs:
-            status_value = str(run.status)
-            if hasattr(status_counts, status_value):
-                setattr(status_counts, status_value, getattr(status_counts, status_value) + 1)
+            _increment_status_count(status_counts, str(run.status))
 
         return CohortExperimentRowDto(
             experiment_id=experiment.id,
@@ -186,7 +184,7 @@ class ExperimentCohortService:
             sample_count=experiment.sample_count,
             total_runs=len(runs),
             status_counts=status_counts,
-            status=experiment.status,
+            status=_experiment_row_status(experiment.status, status_counts, len(runs)),
             created_at=experiment.created_at,
             default_model_target=experiment.default_model_target,
             default_evaluator_slug=experiment.default_evaluator_slug,
@@ -194,6 +192,39 @@ class ExperimentCohortService:
             total_cost_usd=total_cost_usd,
             error_message=None,
         )
+
+
+def _increment_status_count(counts: CohortStatusCountsDto, status: str) -> None:
+    match status:
+        case "pending":
+            counts.pending += 1
+        case "executing":
+            counts.executing += 1
+        case "evaluating":
+            counts.evaluating += 1
+        case "completed":
+            counts.completed += 1
+        case "failed":
+            counts.failed += 1
+
+
+def _experiment_row_status(
+    experiment_status: str,
+    counts: CohortStatusCountsDto,
+    total_runs: int,
+) -> str:
+    if total_runs == 0:
+        return experiment_status
+    active_runs = counts.pending + counts.executing + counts.evaluating
+    if active_runs > 0:
+        return experiment_status
+    if counts.failed == total_runs:
+        return "failed"
+    if counts.completed == total_runs:
+        return "completed"
+    if counts.failed > 0 and counts.completed > 0:
+        return "completed_with_failures"
+    return experiment_status
 
 
 experiment_cohort_service = ExperimentCohortService()

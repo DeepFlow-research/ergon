@@ -1,9 +1,9 @@
 import { RunWorkspacePage } from "@/components/run/RunWorkspacePage";
 import { config } from "@/lib/config";
-import { parseCohortDetail, parseRunSnapshot } from "@/lib/contracts/rest";
+import { parseRunSnapshot } from "@/lib/contracts/rest";
 import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessCohort, getHarnessRun } from "@/lib/testing/dashboardHarness";
-import type { CohortDetail, SerializedWorkflowRunState } from "@/lib/types";
+import { getHarnessRun } from "@/lib/testing/dashboardHarness";
+import type { SerializedWorkflowRunState } from "@/lib/types";
 
 interface CohortRunPageProps {
   params: Promise<{
@@ -15,25 +15,17 @@ interface CohortRunPageProps {
 export default async function CohortRunPage({ params }: CohortRunPageProps) {
   const { cohortId, runId } = await params;
   let initialRunState: SerializedWorkflowRunState | null = null;
-  let initialCohortDetail: CohortDetail | null = null;
   let ssrError: string | null = null;
 
   if (config.enableTestHarness) {
     initialRunState = getHarnessRun(runId);
-    initialCohortDetail = getHarnessCohort(cohortId);
   } else {
     try {
-      const [runResponse, cohortResponse] = await Promise.all([
-        fetchErgonApi(`/runs/${runId}`),
-        fetchErgonApi(`/cohorts/${cohortId}`),
-      ]);
+      const runResponse = await fetchErgonApi(`/runs/${runId}`);
       if (runResponse.ok) {
         initialRunState = parseRunSnapshot(await runResponse.json());
       } else {
         ssrError = `Run API returned ${runResponse.status}`;
-      }
-      if (cohortResponse.ok) {
-        initialCohortDetail = parseCohortDetail(await cohortResponse.json());
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -42,7 +34,6 @@ export default async function CohortRunPage({ params }: CohortRunPageProps) {
         ? "Stale build — the .next cache is corrupted. Restart the dev server (rm -rf .next && docker compose restart dashboard)."
         : `Server-side data fetch failed: ${msg}`;
       initialRunState = null;
-      initialCohortDetail = null;
     }
   }
 
@@ -51,7 +42,6 @@ export default async function CohortRunPage({ params }: CohortRunPageProps) {
       cohortId={cohortId}
       runId={runId}
       initialRunState={initialRunState}
-      initialCohortDetail={initialCohortDetail}
       ssrError={ssrError}
     />
   );

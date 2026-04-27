@@ -30,6 +30,9 @@ class _FakeSession:
     def commit(self) -> None:
         return None
 
+    def refresh(self, row) -> None:
+        return None
+
 
 @pytest.mark.asyncio
 async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
@@ -92,4 +95,3 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
         {"primary": "test-worker"},
     ]
     assert len(emitted) == 2
-

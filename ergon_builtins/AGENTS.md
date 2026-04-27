@@ -13,13 +13,13 @@ add a new component, update the dicts there *and* this doc.
 
 | Goal | Command |
 |---|---|
-| Populate **SANDBOX** panel (stdin/stdout events) with no LLM | `ergon benchmark run researchrubrics-smoke --worker canonical-smoke` |
-| Populate **GENERATIONS** without calling a model | `ergon benchmark run smoke-test --worker training-stub` |
+| Populate **SANDBOX** panel (stdin/stdout events) with no LLM | `ergon experiment define researchrubrics-smoke --worker canonical-smoke --model stub:constant --limit 1 && ergon experiment run <experiment-id>` |
+| Populate **GENERATIONS** without calling a model | `ergon experiment define smoke-test --worker training-stub --model stub:constant --limit 1 && ergon experiment run <experiment-id>` |
 | Populate **EVALUATION** with a passing gate, no LLM | any benchmark + `--evaluator stub-rubric` |
 | Populate **EVALUATION** with varied scores (RL reward-shape test) | any benchmark + `--evaluator varied-stub-rubric` |
-| Test a real ReAct agent end-to-end | `ergon benchmark run swebench-verified --worker swebench-react --model openai:gpt-4o` |
-| Test manager → researcher delegation with a real LLM | `ergon benchmark run researchrubrics-smoke --worker researchrubrics-researcher --model openai:gpt-4o` |
-| Test Lean 4 proof verification | `ergon benchmark run minif2f --worker minif2f-react --model openai:gpt-4o` (needs Lean sandbox) |
+| Test a real ReAct agent end-to-end | `ergon experiment define swebench-verified --worker swebench-react --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` |
+| Test manager → researcher delegation with a real LLM | `ergon experiment define researchrubrics-smoke --worker researchrubrics-researcher --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` |
+| Test Lean 4 proof verification | `ergon experiment define minif2f --worker minif2f-react --model openai:gpt-4o --limit 1 && ergon experiment run <experiment-id>` (needs Lean sandbox) |
 
 ---
 

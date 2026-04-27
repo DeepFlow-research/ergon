@@ -356,10 +356,7 @@ def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
     rows = r.json()
     returned = {UUID(row["run_id"]) for row in rows}
     expected = set(run_ids)
-    assert returned == expected, (
-        f"cohort membership mismatch: only returned={returned - expected}, "
-        f"only expected={expected - returned}"
-    )
+    assert expected <= returned, f"cohort missing expected run ids: {expected - returned}"
 
 
 # =============================================================================

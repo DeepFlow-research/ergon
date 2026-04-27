@@ -27,12 +27,13 @@ class ExperimentDefineRequest(BaseModel):
         if self.limit is not None and self.limit < 1:
             raise ValueError("limit must be >= 1")
 
+        if self.design.get("arms"):
+            raise ValueError("design.arms is not supported until multi-arm launch semantics exist")
+
         has_default_assignment = bool(self.default_worker_team) and bool(self.default_model_target)
-        has_design_arms = bool(self.design.get("arms"))
-        if not (has_default_assignment or has_design_arms):
+        if not has_default_assignment:
             raise ValueError(
-                "Experiment definition requires either default_worker_team + "
-                "default_model_target or design.arms with per-arm assignments"
+                "Experiment definition requires default_worker_team + default_model_target"
             )
         return self
 
@@ -72,4 +73,3 @@ class RunAssignment(BaseModel):
         if not self.worker_team:
             raise ValueError("Run assignment requires a worker team")
         return self
-

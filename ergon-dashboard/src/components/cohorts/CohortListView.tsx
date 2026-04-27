@@ -252,7 +252,7 @@ export function CohortListView() {
               No cohorts yet
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              Start a benchmark run with a compulsory cohort name to create the first cohort.
+              Define an experiment with an optional cohort name to create the first cohort.
             </p>
           </div>
         ) : (

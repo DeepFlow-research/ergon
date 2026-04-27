@@ -46,4 +46,3 @@ async def run_experiment(experiment_id: UUID, request: ExperimentRunRequest | No
     if launch_request.experiment_id != experiment_id:
         raise HTTPException(status_code=400, detail="experiment_id mismatch")
     return await ExperimentLaunchService().run_experiment(launch_request)
-

@@ -1,7 +1,7 @@
 """Rollout artifact dump for the real-LLM tier.
 
 A rollout harness (not a TDD tier): its job is to trigger a real-LLM
-benchmark run and then dump an exhaustive snapshot of what happened into
+experiment run and then dump an exhaustive snapshot of what happened into
 a per-run directory so a future agent session (or a human) can read the
 artifacts and reason about whether the agent succeeded, and what to
 tweak in either the model or the simulator to iterate.

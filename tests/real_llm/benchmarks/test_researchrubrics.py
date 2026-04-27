@@ -178,8 +178,7 @@ async def test_researchrubrics_rollout(
     run_ids = _parse_uuid_lines("RUN_ID", run_proc.stdout)
     if not run_ids:
         raise RuntimeError(
-            "experiment run produced no RUN_ID lines:\n"
-            f"{run_proc.stdout}\n{run_proc.stderr}"
+            f"experiment run produced no RUN_ID lines:\n{run_proc.stdout}\n{run_proc.stderr}"
         )
 
     terminal_states = [
