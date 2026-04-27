@@ -10,6 +10,10 @@ import json
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
 from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
+    RecursiveSmokeWorkerBase,
+    RecursiveSmokeWorkerMixin,
+)
 from ergon_core.test_support.smoke_fixtures.smoke_base.sadpath import (
     AlwaysFailSubworker,
     FailingSmokeLeafMixin,
@@ -28,11 +32,12 @@ if __name__ == "__main__":
 """
 
 
-class SweBenchSmokeWorker(SmokeWorkerBase):
+class SweBenchSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
     """Happy-path parent for the swebench-verified leg."""
 
     type_slug = "swebench-smoke-worker"
     leaf_slug = "swebench-smoke-leaf"
+    RECURSIVE_WORKER_SLUG = "swebench-smoke-recursive-worker"
 
 
 class SweBenchSubworker:
@@ -66,6 +71,13 @@ class SweBenchSmokeLeafWorker(BaseSmokeLeafWorker):
     subworker_cls = SweBenchSubworker
 
 
+class SweBenchRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
+    """Nested ``l_2`` worker that delegates nested leaves to SWE-Bench."""
+
+    type_slug = "swebench-smoke-recursive-worker"
+    leaf_slug = "swebench-smoke-leaf"
+
+
 class SweBenchFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
     """Registered leaf that fails after partial work."""
 
@@ -83,6 +95,7 @@ class SweBenchSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
 
 __all__ = [
     "SweBenchFailingLeafWorker",
+    "SweBenchRecursiveSmokeWorker",
     "SweBenchSadPathSmokeWorker",
     "SweBenchSmokeLeafWorker",
     "SweBenchSmokeWorker",

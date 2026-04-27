@@ -3,6 +3,7 @@
 import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import type { TaskState, TaskStatus } from "@/lib/types";
+import type { EvaluationRollup } from "@/features/evaluation/contracts";
 
 interface ContainerNodeProps {
   task: TaskState;
@@ -16,6 +17,8 @@ interface ContainerNodeProps {
   containerHeight: number;
   layoutDirection?: "TB" | "LR";
   maxGraphDepth?: number;
+  evaluationRollup?: EvaluationRollup | null;
+  evaluationLensActive?: boolean;
 }
 
 function ContainerNodeComponent(props: ContainerNodeProps) {
@@ -30,6 +33,7 @@ function ContainerNodeComponent(props: ContainerNodeProps) {
     containerWidth,
     containerHeight,
     layoutDirection = "LR",
+    evaluationRollup = null,
   } = props;
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -98,6 +102,15 @@ function ContainerNodeComponent(props: ContainerNodeProps) {
           >
             {task.childIds.length} subtask{task.childIds.length !== 1 ? "s" : ""}
           </span>
+          {evaluationRollup && (
+            <span
+              className="rounded-full bg-[var(--ink)] px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none text-[var(--card)]"
+              data-testid={`graph-node-rubric-glyph-${task.id}`}
+              title={`${evaluationRollup.status}: ${evaluationRollup.totalCriteria} criteria`}
+            >
+              R
+            </span>
+          )}
 
           <button
             onClick={handleToggle}

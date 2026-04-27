@@ -19,6 +19,10 @@ import json
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
 from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
+    RecursiveSmokeWorkerBase,
+    RecursiveSmokeWorkerMixin,
+)
 from ergon_core.test_support.smoke_fixtures.smoke_base.sadpath import (
     AlwaysFailSubworker,
     FailingSmokeLeafMixin,
@@ -28,11 +32,12 @@ from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import Subworke
 from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 
-class ResearchRubricsSmokeWorker(SmokeWorkerBase):
+class ResearchRubricsSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
     """Happy-path parent worker for the researchrubrics leg."""
 
     type_slug = "researchrubrics-smoke-worker"
     leaf_slug = "researchrubrics-smoke-leaf"
+    RECURSIVE_WORKER_SLUG = "researchrubrics-smoke-recursive-worker"
 
 
 class ResearchRubricsSubworker:
@@ -74,6 +79,13 @@ class ResearchRubricsSmokeLeafWorker(BaseSmokeLeafWorker):
     subworker_cls = ResearchRubricsSubworker
 
 
+class ResearchRubricsRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
+    """Nested ``l_2`` worker that delegates nested leaves to ResearchRubrics."""
+
+    type_slug = "researchrubrics-smoke-recursive-worker"
+    leaf_slug = "researchrubrics-smoke-leaf"
+
+
 class ResearchRubricsFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
     """Registered leaf that fails after partial work."""
 
@@ -91,6 +103,7 @@ class ResearchRubricsSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase
 
 __all__ = [
     "ResearchRubricsFailingLeafWorker",
+    "ResearchRubricsRecursiveSmokeWorker",
     "ResearchRubricsSadPathSmokeWorker",
     "ResearchRubricsSmokeLeafWorker",
     "ResearchRubricsSmokeWorker",

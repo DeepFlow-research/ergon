@@ -1,6 +1,7 @@
 import dagre from "dagre";
 import type { Edge } from "@xyflow/react";
 import type { TaskState } from "@/lib/types";
+import type { EvaluationRollup } from "@/features/evaluation/contracts";
 import type { TaskNodeType } from "@/components/dag/TaskNode";
 import {
   type ContainerDimensions,
@@ -240,6 +241,8 @@ export function computeHierarchicalLayout(
   direction: "TB" | "LR" = "LR",
   newNodeIds: ReadonlySet<string> = new Set(),
   highlightedTaskIds: ReadonlySet<string> = new Set(),
+  evaluationRollups: ReadonlyMap<string, EvaluationRollup | null> = new Map(),
+  evaluationLensActive = false,
 ): LayoutedGraph {
   const containerDimensions = new Map<string, ContainerDimensions>();
   const allNodes: TaskNodeType[] = [];
@@ -340,6 +343,8 @@ export function computeHierarchicalLayout(
 
       const localPos = localPositions.get(cid) ?? { x: 0, y: 0 };
       const isMatch = !searchLower || matchingNodeIds.has(cid);
+      const evaluationRollup = evaluationRollups.get(cid) ?? null;
+      const hasEvaluation = evaluationRollup !== null;
 
       const childContainerDimensions = containerDimensions.get(cid);
       allNodes.push({
@@ -355,11 +360,16 @@ export function computeHierarchicalLayout(
           task: childTask,
           onClick: onTaskClick,
           selected: cid === selectedTaskId,
-          dimmed: searchLower ? !isMatch : false,
-          highlighted: (searchLower ? isMatch : false) || highlightedTaskIds.has(cid),
+          dimmed: (searchLower ? !isMatch : false) || (evaluationLensActive && !hasEvaluation),
+          highlighted:
+            (searchLower ? isMatch : false) ||
+            highlightedTaskIds.has(cid) ||
+            (evaluationLensActive && hasEvaluation),
           isNew: newNodeIds.has(cid),
           maxGraphDepth,
           graphLayoutDirection: direction,
+          evaluationRollup,
+          evaluationLensActive,
         },
         ...(expandedContainers.has(cid) && childContainerDimensions
           ? {
@@ -461,6 +471,8 @@ export function computeHierarchicalLayout(
 
     const globalPos = rootPositions.get(taskId) ?? { x: 0, y: 0 };
     const isMatch = !searchLower || matchingNodeIds.has(taskId);
+    const evaluationRollup = evaluationRollups.get(taskId) ?? null;
+    const hasEvaluation = evaluationRollup !== null;
 
     allNodes.push({
       id: taskId,
@@ -470,11 +482,16 @@ export function computeHierarchicalLayout(
         task,
         onClick: onTaskClick,
         selected: taskId === selectedTaskId,
-        dimmed: searchLower ? !isMatch : false,
-        highlighted: (searchLower ? isMatch : false) || highlightedTaskIds.has(taskId),
+        dimmed: (searchLower ? !isMatch : false) || (evaluationLensActive && !hasEvaluation),
+        highlighted:
+          (searchLower ? isMatch : false) ||
+          highlightedTaskIds.has(taskId) ||
+          (evaluationLensActive && hasEvaluation),
         isNew: newNodeIds.has(taskId),
         maxGraphDepth,
         graphLayoutDirection: direction,
+        evaluationRollup,
+        evaluationLensActive,
       },
       // Container nodes need explicit dimensions so React Flow sizes them
       ...(expandedContainers.has(taskId) && containerDimensions.has(taskId)

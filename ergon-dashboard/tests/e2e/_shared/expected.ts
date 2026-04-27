@@ -17,3 +17,5 @@ export const EXPECTED_SUBTASK_SLUGS = [
   "s_a",
   "s_b",
 ] as const;
+
+export const EXPECTED_NESTED_SUBTASK_SLUGS = ["l_2_a", "l_2_b"] as const;

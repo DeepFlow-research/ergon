@@ -37,13 +37,13 @@ class _SingleTaskSmokeBenchmark(Benchmark):
             task_slug=self.task_slug,
             instance_key="default",
             description=self.task_description,
-            evaluator_binding_keys=("default",),
+            evaluator_binding_keys=("default", "post-root"),
             task_payload=payload,
         )
         return {"default": [task]}
 
     def evaluator_requirements(self) -> Sequence[str]:
-        return ("default",)
+        return ("default", "post-root")
 
 
 class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):

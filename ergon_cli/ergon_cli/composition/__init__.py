@@ -39,8 +39,10 @@ def build_experiment(
     # otherwise ``task_execution_service._prepare_graph_native`` will
     # raise ``ConfigurationError: No ExperimentDefinitionWorker with
     # binding_key='{env}-smoke-leaf'`` when the first subtask fires.
-    # ``{env}-sadpath-smoke-worker`` additionally needs the failing leaf
-    # binding so ``l_2`` can resolve.
+    # Happy smoke parents additionally route top-level ``l_2`` to
+    # ``{env}-smoke-recursive-worker`` so dependency propagation waits on
+    # a non-leaf dynamic task. ``{env}-sadpath-smoke-worker`` instead needs
+    # the failing leaf binding so ``l_2`` can resolve.
     if _is_smoke_worker(worker_slug):
         return _build_smoke_experiment(
             benchmark=benchmark,
@@ -83,6 +85,9 @@ def _build_smoke_experiment(
     # reason: deferred import keeps CLI startup cost on the hot path low
     # (matches the pattern at the top of ``build_experiment``).
     from ergon_builtins.registry import WORKERS
+    from ergon_core.test_support.smoke_fixtures.criteria.timing import (
+        SmokePostRootTimingRubric,
+    )
 
     parent_name = "parent"
     parent_spec = WorkerSpec(worker_slug=worker_slug, name=parent_name, model=model)
@@ -100,6 +105,7 @@ def _build_smoke_experiment(
     elif worker_slug.endswith("-smoke-worker"):
         env = worker_slug.removesuffix("-smoke-worker")
         leaf_slugs.append(f"{env}-smoke-leaf")
+        leaf_slugs.append(f"{env}-smoke-recursive-worker")
 
     # Best-effort sanity: skip unregistered leaf slugs rather than
     # failing fast — an operator invoking an env without the fixture
@@ -125,7 +131,10 @@ def _build_smoke_experiment(
     return Experiment(
         benchmark=benchmark,
         workers=workers,
-        evaluators={"default": evaluator},
+        evaluators={
+            "default": evaluator,
+            "post-root": SmokePostRootTimingRubric(name="post-root"),
+        },
         assignments={parent_name: all_task_slugs},
     )
 

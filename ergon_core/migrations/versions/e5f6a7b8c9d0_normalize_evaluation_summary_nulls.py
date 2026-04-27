@@ -6,7 +6,7 @@ Create Date: 2026-04-25 20:57:00.000000
 
 Normalize persisted evaluation summary JSON so optional criterion text fields
 use JSON null instead of empty-string sentinels, and every criterion result has
-an explicit description before the typed parser requires it.
+explicit required rubric fields before the typed parser requires them.
 """
 
 from copy import deepcopy
@@ -50,6 +50,36 @@ def _normalize_summary_json(summary_json: dict) -> dict:
         else:
             entry.setdefault("evaluation_input", None)
 
+        if entry.get("error") == "":
+            entry["error"] = None
+        elif isinstance(entry.get("error"), str):
+            entry["error"] = {"kind": entry["error"]}
+        else:
+            entry.setdefault("error", None)
+
+        skipped_reason = entry.get("skipped_reason")
+        if skipped_reason == "":
+            entry["skipped_reason"] = None
+        else:
+            entry.setdefault("skipped_reason", None)
+
+        entry.setdefault("model_reasoning", None)
+
+        passed = entry.get("passed")
+        if entry.get("status") not in {"passed", "failed", "errored", "skipped"}:
+            if entry.get("error") is not None:
+                entry["status"] = "errored"
+            elif entry.get("skipped_reason") is not None:
+                entry["status"] = "skipped"
+            else:
+                entry["status"] = "passed" if passed is True else "failed"
+
+        if "weight" not in entry:
+            entry["weight"] = 1.0
+        if "contribution" not in entry:
+            score = entry.get("score")
+            entry["contribution"] = score if isinstance(score, int | float) else 0.0
+
     return normalized
 
 
@@ -66,6 +96,10 @@ def _denormalize_summary_json(summary_json: dict) -> dict:
             entry["feedback"] = ""
         if entry.get("evaluation_input") is None:
             entry["evaluation_input"] = ""
+        entry.pop("status", None)
+        entry.pop("contribution", None)
+        entry.pop("model_reasoning", None)
+        entry.pop("skipped_reason", None)
 
     return denormalized
 

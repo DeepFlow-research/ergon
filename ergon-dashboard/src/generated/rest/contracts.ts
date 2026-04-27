@@ -57,10 +57,17 @@ const RunEvaluationCriterionDto = z.object({
   criterionNum: z.number().int(),
   criterionType: z.string(),
   criterionDescription: z.string(),
+  criterionName: z.string(),
+  status: z.enum(["passed", "failed", "errored", "skipped"]),
+  passed: z.boolean(),
+  weight: z.number(),
+  contribution: z.number(),
   evaluationInput: z.union([z.string(), z.null()]).optional(),
   score: z.number(),
   maxScore: z.number(),
   feedback: z.union([z.string(), z.null()]).optional(),
+  modelReasoning: z.union([z.string(), z.null()]).optional(),
+  skippedReason: z.union([z.string(), z.null()]).optional(),
   evaluatedActionIds: z.array(z.string()).optional(),
   evaluatedResourceIds: z.array(z.string()).optional(),
   error: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
@@ -69,6 +76,8 @@ const RunTaskEvaluationDto = z.object({
   id: z.string(),
   runId: z.string(),
   taskId: z.union([z.string(), z.null()]).optional(),
+  evaluatorName: z.string(),
+  aggregationRule: z.string(),
   totalScore: z.number(),
   maxScore: z.number(),
   normalizedScore: z.number(),
@@ -347,6 +356,25 @@ const CohortSummaryDto = z
     stats_updated_at: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
+const CohortRubricStatusSummaryDto = z
+  .object({
+    status: z.enum([
+      "passing",
+      "failing",
+      "errored",
+      "skipped",
+      "mixed",
+      "none",
+    ]),
+    total_criteria: z.number().int(),
+    passed: z.number().int(),
+    failed: z.number().int(),
+    errored: z.number().int(),
+    skipped: z.number().int(),
+    criterion_statuses: z.array(z.string()),
+    evaluator_names: z.array(z.string()),
+  })
+  .passthrough();
 const CohortRunRowDto = z
   .object({
     run_id: z.string().uuid(),
@@ -362,6 +390,7 @@ const CohortRunRowDto = z
     total_tasks: z.union([z.number(), z.null()]).optional(),
     total_cost_usd: z.union([z.number(), z.null()]).optional(),
     error_message: z.union([z.string(), z.null()]).optional(),
+    rubric_status_summary: CohortRubricStatusSummaryDto,
   })
   .passthrough();
 const CohortDetailDto = z
@@ -461,6 +490,7 @@ export const schemas = {
   TrainingMetricDto,
   CohortStatusCountsDto,
   CohortSummaryDto,
+  CohortRubricStatusSummaryDto,
   CohortRunRowDto,
   CohortDetailDto,
   ExperimentCohortStatus,

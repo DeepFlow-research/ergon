@@ -6,10 +6,12 @@ not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 from pydantic import BaseModel, ConfigDict, Field
+
+EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 
 
 def _to_camel(value: str) -> str:
@@ -77,10 +79,17 @@ class RunEvaluationCriterionDto(CamelModel):
     criterion_num: int
     criterion_type: str
     criterion_description: str
+    criterion_name: str
+    status: EvalCriterionStatus
+    passed: bool
+    weight: float
+    contribution: float
     evaluation_input: str | None = None
     score: float
     max_score: float
     feedback: str | None = None
+    model_reasoning: str | None = None
+    skipped_reason: str | None = None
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
     error: dict[str, Any] | None = None  # slopcop: ignore[no-typing-any]
@@ -90,6 +99,8 @@ class RunTaskEvaluationDto(CamelModel):
     id: str
     run_id: str
     task_id: str | None = None
+    evaluator_name: str
+    aggregation_rule: str
     total_score: float
     max_score: float
     normalized_score: float

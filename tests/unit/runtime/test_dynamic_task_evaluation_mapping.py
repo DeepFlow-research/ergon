@@ -18,9 +18,12 @@ def _summary_json() -> dict:
                 "criterion_name": "criterion",
                 "criterion_type": "test",
                 "criterion_description": "Dynamic node criterion",
+                "status": "passed",
                 "score": 1.0,
                 "max_score": 1.0,
                 "passed": True,
+                "weight": 1.0,
+                "contribution": 1.0,
             }
         ],
     }

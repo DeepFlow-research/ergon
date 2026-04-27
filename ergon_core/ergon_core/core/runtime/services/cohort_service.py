@@ -1,17 +1,21 @@
 """Application service for experiment cohort queries and resolution."""
 
+from collections import Counter, defaultdict
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.evaluation_summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStats,
     ExperimentCohortStatus,
     RunRecord,
+    RunTaskEvaluation,
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.runtime.services.cohort_schemas import (
     CohortDetailDto,
+    CohortRubricStatusSummaryDto,
     CohortRunRowDto,
     CohortStatusCountsDto,
     CohortSummaryDto,
@@ -19,6 +23,46 @@ from ergon_core.core.runtime.services.cohort_schemas import (
 )
 from ergon_core.core.utils import utcnow
 from sqlmodel import func, select
+
+
+def _rubric_status_summary(
+    summaries: list[EvaluationSummary],
+) -> CohortRubricStatusSummaryDto:
+    """Build a compact rubric status summary for a cohort run row."""
+    counts: Counter[str] = Counter()
+    evaluator_names: set[str] = set()
+    statuses: list[str] = []
+
+    for summary in summaries:
+        evaluator_names.add(summary.evaluator_name)
+        for criterion in summary.criterion_results:
+            counts[criterion.status] += 1
+            statuses.append(criterion.status)
+
+    total = len(statuses)
+    if total == 0:
+        status = "none"
+    elif counts["errored"] > 0:
+        status = "errored"
+    elif counts["failed"] > 0:
+        status = "failing"
+    elif counts["passed"] > 0 and counts["skipped"] > 0:
+        status = "mixed"
+    elif counts["skipped"] == total:
+        status = "skipped"
+    else:
+        status = "passing"
+
+    return CohortRubricStatusSummaryDto(
+        status=status,
+        total_criteria=total,
+        passed=counts["passed"],
+        failed=counts["failed"],
+        errored=counts["errored"],
+        skipped=counts["skipped"],
+        criterion_statuses=statuses,
+        evaluator_names=sorted(evaluator_names),
+    )
 
 
 class ExperimentCohortService:
@@ -92,8 +136,20 @@ class ExperimentCohortService:
                 if runs
                 else {}
             )
+            evaluations_by_run: defaultdict[UUID, list[EvaluationSummary]] = defaultdict(list)
+            if runs:
+                evaluations = session.exec(
+                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id.in_([run.id for run in runs]))
+                ).all()
+                for evaluation in evaluations:
+                    evaluations_by_run[evaluation.run_id].append(evaluation.parsed_summary())
             run_rows = [
-                self._build_run_row(cohort, run, int(task_counts.get(run.id, 0)) or None)
+                self._build_run_row(
+                    cohort,
+                    run,
+                    int(task_counts.get(run.id, 0)) or None,
+                    rubric_status_summary=_rubric_status_summary(evaluations_by_run[run.id]),
+                )
                 for run in runs
             ]
             return CohortDetailDto(summary=summary, runs=run_rows)
@@ -163,6 +219,8 @@ class ExperimentCohortService:
         cohort: ExperimentCohort,
         run: RunRecord,
         total_tasks: int | None = None,
+        *,
+        rubric_status_summary: CohortRubricStatusSummaryDto,
     ) -> CohortRunRowDto:
         running_time_ms: int | None = None
         if run.started_at is not None:
@@ -194,6 +252,7 @@ class ExperimentCohortService:
                 float(total_cost_usd) if isinstance(total_cost_usd, int | float) else None
             ),
             error_message=run.error_message,
+            rubric_status_summary=rubric_status_summary,
         )
 
 

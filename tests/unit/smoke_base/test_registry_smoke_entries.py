@@ -18,6 +18,7 @@ def test_researchrubrics_slugs_registered() -> None:
     expected_workers = {
         "researchrubrics-smoke-worker",
         "researchrubrics-smoke-leaf",
+        "researchrubrics-smoke-recursive-worker",
         "researchrubrics-sadpath-smoke-worker",
         "researchrubrics-smoke-leaf-failing",
     }
@@ -25,6 +26,7 @@ def test_researchrubrics_slugs_registered() -> None:
         assert slug in WORKERS, f"worker slug missing from registry: {slug}"
 
     assert "researchrubrics-smoke-criterion" in EVALUATORS
+    assert "smoke-post-root-timing-criterion" in EVALUATORS
 
 
 def test_no_retired_slugs_present() -> None:
@@ -54,6 +56,7 @@ def test_minif2f_slugs_registered() -> None:
 
     assert "minif2f-smoke-worker" in WORKERS
     assert "minif2f-smoke-leaf" in WORKERS
+    assert "minif2f-smoke-recursive-worker" in WORKERS
     assert "minif2f-sadpath-smoke-worker" in WORKERS
     assert "minif2f-smoke-leaf-failing" in WORKERS
     assert "minif2f-smoke-criterion" in EVALUATORS
@@ -67,6 +70,7 @@ def test_swebench_slugs_registered() -> None:
 
     assert "swebench-smoke-worker" in WORKERS
     assert "swebench-smoke-leaf" in WORKERS
+    assert "swebench-smoke-recursive-worker" in WORKERS
     assert "swebench-sadpath-smoke-worker" in WORKERS
     assert "swebench-smoke-leaf-failing" in WORKERS
     assert "swebench-smoke-criterion" in EVALUATORS

@@ -20,7 +20,7 @@ import * as path from "node:path";
 import { expect, Locator, Page, test } from "@playwright/test";
 
 import { BackendHarnessClient, BackendRunState } from "../../helpers/backendHarnessClient";
-import { EXPECTED_SUBTASK_SLUGS } from "./expected";
+import { EXPECTED_NESTED_SUBTASK_SLUGS, EXPECTED_SUBTASK_SLUGS } from "./expected";
 
 export interface SmokeSpecConfig {
   env: string;
@@ -140,6 +140,11 @@ async function assertRunWorkspace(
   await expect(page.getByTestId("workspace-tab-outputs")).toBeVisible();
   await expect(page.getByTestId("workspace-tab-transitions")).toBeVisible();
   await expect(page.getByTestId("workspace-tab-evaluation")).toBeVisible();
+  await expect(page.getByTestId("evaluation-lens-toggle")).toBeVisible();
+  await page.getByTestId("evaluation-lens-toggle").click();
+  if (evaluatedTaskIds.size > 0) {
+    await expect(page.locator('[data-testid^="graph-node-rubric-glyph-"]').first()).toBeVisible();
+  }
 
   await page.getByTestId("workspace-tab-actions").click();
   await expect(page.getByTestId("workspace-actions")).toBeVisible();
@@ -158,6 +163,8 @@ async function assertRunWorkspace(
   await page.getByTestId("workspace-tab-evaluation").click();
   if (evaluatedTaskIds.has(selected.id)) {
     await expect(page.getByTestId("workspace-evaluation")).toContainText("Total score");
+    await expect(page.getByTestId("workspace-evaluation")).toContainText("Evaluator");
+    await expect(page.locator('[data-testid^="evaluation-criterion-status-"]').first()).toBeVisible();
   } else {
     await expect(page.getByTestId("workspace-evaluation")).toBeVisible();
   }
@@ -200,8 +207,8 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
 
         if (kind === "happy") {
           expect(state.status).toBe("completed");
-          expect(state.graph_nodes.length).toBe(10);
-          expect(state.resource_count).toBeGreaterThanOrEqual(18);
+          expect(state.graph_nodes.length).toBe(12);
+          expect(state.resource_count).toBeGreaterThanOrEqual(20);
           expect(state.mutation_count).toBeGreaterThan(0);
           expect(state.mutations.length).toBe(state.mutation_count);
           expect(state.executions.length).toBeGreaterThan(0);
@@ -210,10 +217,16 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
           expect(state.context_event_count).toBeGreaterThan(0);
 
           const leafSlugs = state.graph_nodes
-            .filter((n) => n.level > 0)
+            .filter((n) => n.level === 1)
             .map((n) => n.task_slug)
             .sort();
           expect(leafSlugs).toEqual([...EXPECTED_SUBTASK_SLUGS].sort());
+
+          const nestedSlugs = state.graph_nodes
+            .filter((n) => n.level === 2)
+            .map((n) => n.task_slug)
+            .sort();
+          expect(nestedSlugs).toEqual([...EXPECTED_NESTED_SUBTASK_SLUGS].sort());
 
           for (const n of state.graph_nodes) {
             expect(n.status).toBe("completed");
@@ -290,6 +303,7 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
       // than exact getByTestId.
       const rows = page.locator('[data-testid^="cohort-run-row-"]');
       await expect(rows).toHaveCount(cohort.length);
+      await expect(page.locator('[data-testid^="cohort-rubric-status-pips-"]')).toHaveCount(cohort.length);
       // ``cohort-header`` exists but no dedicated env label testid yet —
       // follow-up for dashboard.  Screenshot captures the page state.
       await expect(page.getByTestId("cohort-header")).toBeVisible();

@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useState } from "react";
 import type { TaskState, TaskStatus } from "@/lib/types";
+import type { EvaluationRollup } from "@/features/evaluation/contracts";
 import { Handle, Position } from "@xyflow/react";
 
 interface LeafNodeProps {
@@ -13,6 +14,8 @@ interface LeafNodeProps {
   highlighted?: boolean;
   layoutDirection?: "TB" | "LR";
   maxGraphDepth?: number;
+  evaluationRollup?: EvaluationRollup | null;
+  evaluationLensActive?: boolean;
 }
 
 const STATUS_STYLES: Record<
@@ -71,6 +74,21 @@ function StatusDot({ status }: { status: string }) {
   );
 }
 
+function evaluationGlyphClass(status: EvaluationRollup["status"]): string {
+  switch (status) {
+    case "passing":
+      return "bg-emerald-600 text-white";
+    case "failing":
+      return "bg-rose-600 text-white";
+    case "errored":
+      return "bg-amber-500 text-white";
+    case "skipped":
+      return "bg-slate-400 text-white";
+    case "mixed":
+      return "bg-indigo-500 text-white";
+  }
+}
+
 function LeafNodeComponent(props: LeafNodeProps) {
   const {
     task,
@@ -79,6 +97,7 @@ function LeafNodeComponent(props: LeafNodeProps) {
     dimmed = false,
     highlighted = false,
     layoutDirection = "LR",
+    evaluationRollup = null,
   } = props;
   const [isAnimating, setIsAnimating] = useState(false);
   const [prevStatus, setPrevStatus] = useState(task.status);
@@ -139,6 +158,15 @@ function LeafNodeComponent(props: LeafNodeProps) {
       }}
     >
       <StatusDot status={task.status} />
+      {evaluationRollup && (
+        <span
+          className={`absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none ${evaluationGlyphClass(evaluationRollup.status)}`}
+          data-testid={`graph-node-rubric-glyph-${task.id}`}
+          title={`${evaluationRollup.status}: ${evaluationRollup.passed} passed, ${evaluationRollup.failed} failed, ${evaluationRollup.errored} errored, ${evaluationRollup.skipped} skipped`}
+        >
+          R
+        </span>
+      )}
 
       <Handle
         type="target"

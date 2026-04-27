@@ -120,6 +120,35 @@ class EvaluationPersistenceService:
             session.close()
 
 
+def _dict_metadata_value(metadata: dict, key: str) -> dict | None:
+    value = metadata.get(key)
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    return {"kind": str(value)}
+
+
+def _list_metadata_value(metadata: dict, key: str) -> list[str]:
+    value = metadata.get(key)
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
+
+
+def _str_metadata_value(metadata: dict, key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str | None) -> str:
+    if error is not None:
+        return "errored"
+    if skipped_reason is not None:
+        return "skipped"
+    return "passed" if passed else "failed"
+
+
 def build_evaluation_summary(
     service_result: EvaluationServiceResult,
     evaluation_input: str | None,
@@ -139,6 +168,9 @@ def build_evaluation_summary(
                 f"Criterion result at index {i} ({cr.name!r}) has no matching "
                 f"CriterionSpec - specs and results are out of sync",
             )
+        metadata = cr.metadata
+        error = _dict_metadata_value(metadata, "error")
+        skipped_reason = _str_metadata_value(metadata, "skipped_reason")
         entries.append(
             CriterionResultEntry(
                 criterion_name=cr.name,
@@ -147,12 +179,23 @@ def build_evaluation_summary(
                 stage_num=spec.stage_idx,
                 stage_name=spec.stage_name,
                 criterion_num=spec.criterion_idx,
+                status=_criterion_status(
+                    passed=cr.passed,
+                    error=error,
+                    skipped_reason=skipped_reason,
+                ),
                 score=cr.score,
                 max_score=spec.max_score,
                 passed=cr.passed,
                 weight=cr.weight,
+                contribution=cr.score,
                 feedback=cr.feedback,
-                evaluation_input=evaluation_input,
+                model_reasoning=_str_metadata_value(metadata, "model_reasoning"),
+                skipped_reason=skipped_reason,
+                evaluation_input=_str_metadata_value(metadata, "evaluation_input") or evaluation_input,
+                evaluated_action_ids=_list_metadata_value(metadata, "evaluated_action_ids"),
+                evaluated_resource_ids=_list_metadata_value(metadata, "evaluated_resource_ids"),
+                error=error,
             )
         )
 
@@ -193,10 +236,17 @@ def build_dashboard_evaluation_dto(
             criterion_num=cr.criterion_num,
             criterion_type=cr.criterion_type,
             criterion_description=cr.criterion_description,
+            criterion_name=cr.criterion_name,
+            status=cr.status,
+            passed=cr.passed,
+            weight=cr.weight,
+            contribution=cr.contribution,
             evaluation_input=cr.evaluation_input,
             score=cr.score,
             max_score=cr.max_score,
             feedback=cr.feedback,
+            model_reasoning=cr.model_reasoning,
+            skipped_reason=cr.skipped_reason,
             evaluated_action_ids=cr.evaluated_action_ids,
             evaluated_resource_ids=cr.evaluated_resource_ids,
             error=cr.error,
@@ -207,6 +257,8 @@ def build_dashboard_evaluation_dto(
         id=str(evaluation_id),
         run_id=str(run_id),
         task_id=str(task_id),
+        evaluator_name=summary.evaluator_name,
+        aggregation_rule="weighted_sum",
         total_score=total_score,
         max_score=summary.max_score,
         normalized_score=summary.normalized_score,

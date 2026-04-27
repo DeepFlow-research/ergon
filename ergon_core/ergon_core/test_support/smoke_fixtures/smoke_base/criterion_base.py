@@ -79,9 +79,10 @@ class SmokeCriterionBase(Criterion):
             children = await self._pull_children(context)
             self._check_graph_shape(children)
             self._check_children_completed(children)
-            probes = await self._pull_probe_results(context, children)
-            self._check_probes_succeeded(probes, children)
-            await self._verify_env_content(context, children, probes)
+            artifact_children = await self._artifact_children(children)
+            probes = await self._pull_probe_results(context, artifact_children)
+            self._check_probes_succeeded(probes, artifact_children)
+            await self._verify_env_content(context, artifact_children, probes)
 
             # 2. Sandbox-side check: attach to the parent task's OWN sandbox
             #    (kept alive by the runtime per RFC
@@ -134,6 +135,28 @@ class SmokeCriterionBase(Criterion):
                 ).all(),
             )
         return children
+
+    async def _artifact_children(
+        self,
+        children: list[RunGraphNode],
+    ) -> list[RunGraphNode]:
+        """Return leaf descendants that should publish probe/artifact resources.
+
+        The happy smoke path routes direct child ``l_2`` to a recursive worker.
+        ``l_2`` is still part of the direct-child topology check, but its
+        nested children are the artifact-producing leaves.
+        """
+        with get_session() as session:
+            nested = list(
+                session.exec(
+                    select(RunGraphNode)
+                    .where(RunGraphNode.parent_node_id.in_([child.id for child in children]))  # ty: ignore[unresolved-attribute]
+                    .order_by(RunGraphNode.task_slug),
+                ).all(),
+            )
+        nested_parent_ids = {node.parent_node_id for node in nested}
+        direct_artifact_children = [child for child in children if child.id not in nested_parent_ids]
+        return [*direct_artifact_children, *nested]
 
     async def _pull_probe_results(
         self,

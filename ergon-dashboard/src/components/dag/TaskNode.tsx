@@ -10,6 +10,7 @@
 import { memo } from "react";
 import { type Node, type NodeProps } from "@xyflow/react";
 import type { TaskState } from "@/lib/types";
+import type { EvaluationRollup } from "@/features/evaluation/contracts";
 import { useGraphExpansion } from "@/features/graph/hooks/useGraphExpansion";
 import { getNodeVariant } from "@/features/graph/layout/layoutTypes";
 import { ContainerNode } from "@/features/graph/components/ContainerNode";
@@ -27,6 +28,8 @@ export type TaskNodeData = {
   maxGraphDepth?: number;
   /** Dagre rank direction used for this layout pass (drives handle positions). */
   graphLayoutDirection?: "TB" | "LR";
+  evaluationRollup?: EvaluationRollup | null;
+  evaluationLensActive?: boolean;
 };
 
 export type TaskNodeType = Node<TaskNodeData, "taskNode">;
@@ -41,6 +44,8 @@ function TaskNodeComponent({ data }: NodeProps<TaskNodeType>) {
     isNew = false,
     maxGraphDepth,
     graphLayoutDirection = "LR",
+    evaluationRollup = null,
+    evaluationLensActive = false,
   } = data;
   const { expandedContainers, toggleExpand, containerDimensions } = useGraphExpansion();
 
@@ -71,6 +76,8 @@ function TaskNodeComponent({ data }: NodeProps<TaskNodeType>) {
           containerHeight={dims?.height ?? 100}
           layoutDirection={graphLayoutDirection}
           maxGraphDepth={maxGraphDepth}
+          evaluationRollup={evaluationRollup}
+          evaluationLensActive={evaluationLensActive}
         />
       </div>
     );
@@ -89,6 +96,8 @@ function TaskNodeComponent({ data }: NodeProps<TaskNodeType>) {
         highlighted={highlighted}
         layoutDirection={graphLayoutDirection}
         maxGraphDepth={maxGraphDepth}
+        evaluationRollup={evaluationRollup}
+        evaluationLensActive={evaluationLensActive}
       />
     </div>
   );

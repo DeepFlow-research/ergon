@@ -27,6 +27,32 @@
           "title": "Criteriondescription",
           "type": "string"
         },
+        "criterionName": {
+          "title": "Criterionname",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "errored",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "weight": {
+          "title": "Weight",
+          "type": "number"
+        },
+        "contribution": {
+          "title": "Contribution",
+          "type": "number"
+        },
         "evaluationInput": {
           "anyOf": [
             {
@@ -58,6 +84,30 @@
           ],
           "default": null,
           "title": "Feedback"
+        },
+        "modelReasoning": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modelreasoning"
+        },
+        "skippedReason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Skippedreason"
         },
         "evaluatedActionIds": {
           "items": {
@@ -94,6 +144,11 @@
         "criterionNum",
         "criterionType",
         "criterionDescription",
+        "criterionName",
+        "status",
+        "passed",
+        "weight",
+        "contribution",
         "score",
         "maxScore"
       ],
@@ -122,6 +177,14 @@
           ],
           "default": null,
           "title": "Taskid"
+        },
+        "evaluatorName": {
+          "title": "Evaluatorname",
+          "type": "string"
+        },
+        "aggregationRule": {
+          "title": "Aggregationrule",
+          "type": "string"
         },
         "totalScore": {
           "title": "Totalscore",
@@ -171,6 +234,8 @@
       "required": [
         "id",
         "runId",
+        "evaluatorName",
+        "aggregationRule",
         "totalScore",
         "maxScore",
         "normalizedScore",

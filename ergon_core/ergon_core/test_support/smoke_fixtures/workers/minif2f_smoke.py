@@ -12,6 +12,10 @@ import json
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 
 from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
+from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
+    RecursiveSmokeWorkerBase,
+    RecursiveSmokeWorkerMixin,
+)
 from ergon_core.test_support.smoke_fixtures.smoke_base.sadpath import (
     AlwaysFailSubworker,
     FailingSmokeLeafMixin,
@@ -27,11 +31,12 @@ theorem smoke_trivial : 1 + 1 = 2 := by norm_num
 """
 
 
-class MiniF2FSmokeWorker(SmokeWorkerBase):
+class MiniF2FSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
     """Happy-path parent for the minif2f leg."""
 
     type_slug = "minif2f-smoke-worker"
     leaf_slug = "minif2f-smoke-leaf"
+    RECURSIVE_WORKER_SLUG = "minif2f-smoke-recursive-worker"
 
 
 class MiniF2FSubworker:
@@ -68,6 +73,13 @@ class MiniF2FSmokeLeafWorker(BaseSmokeLeafWorker):
     subworker_cls = MiniF2FSubworker
 
 
+class MiniF2FRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
+    """Nested ``l_2`` worker that delegates nested leaves to MiniF2F."""
+
+    type_slug = "minif2f-smoke-recursive-worker"
+    leaf_slug = "minif2f-smoke-leaf"
+
+
 class MiniF2FFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
     """Registered leaf that fails after partial work."""
 
@@ -85,6 +97,7 @@ class MiniF2FSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
 
 __all__ = [
     "MiniF2FFailingLeafWorker",
+    "MiniF2FRecursiveSmokeWorker",
     "MiniF2FSadPathSmokeWorker",
     "MiniF2FSmokeLeafWorker",
     "MiniF2FSmokeWorker",

@@ -250,6 +250,8 @@ function serializedRunState(): SerializedWorkflowRunState {
         id: FIXTURE_IDS.evaluationId,
         runId: FIXTURE_IDS.runId,
         taskId: FIXTURE_IDS.solveTaskId,
+        evaluatorName: "rubric",
+        aggregationRule: "weighted_sum",
         totalScore: 0.8,
         maxScore: 1,
         normalizedScore: 0.8,
@@ -265,10 +267,17 @@ function serializedRunState(): SerializedWorkflowRunState {
             criterionNum: 0,
             criterionType: "code_rule",
             criterionDescription: "Proof compiles and closes all goals",
+            criterionName: "proof compiles",
+            status: "passed",
+            passed: true,
+            weight: 1,
+            contribution: 0.8,
             score: 0.8,
             maxScore: 1,
             feedback: "Compilation succeeds, but the proof uses a slightly verbose intermediate lemma.",
             evaluationInput: "lake env lean proof.lean",
+            modelReasoning: "Compilation succeeds with a verbose intermediate lemma.",
+            skippedReason: null,
             error: null,
             evaluatedActionIds: [FIXTURE_IDS.actionId],
             evaluatedResourceIds: ["resource-proof"],
@@ -369,6 +378,8 @@ export function createUpdatedEvaluation(): TaskEvaluationState {
     id: FIXTURE_IDS.evaluationId,
     runId: FIXTURE_IDS.runId,
     taskId: FIXTURE_IDS.solveTaskId,
+    evaluatorName: "rubric",
+    aggregationRule: "weighted_sum",
     totalScore: 1,
     maxScore: 1,
     normalizedScore: 1,
@@ -384,10 +395,17 @@ export function createUpdatedEvaluation(): TaskEvaluationState {
         criterionNum: 0,
         criterionType: "code_rule",
         criterionDescription: "Proof compiles and closes all goals",
+        criterionName: "proof compiles",
+        status: "passed",
+        passed: true,
+        weight: 1,
+        contribution: 1,
         score: 1,
         maxScore: 1,
         feedback: "The updated proof compiles cleanly and closes every goal with no remaining placeholders.",
         evaluationInput: "lake env lean proof.lean",
+        modelReasoning: "The updated proof compiles cleanly.",
+        skippedReason: null,
         error: null,
         evaluatedActionIds: [FIXTURE_IDS.actionId],
         evaluatedResourceIds: ["resource-proof"],
@@ -401,6 +419,8 @@ export function createEmptyCriteriaEvaluation(): TaskEvaluationState {
     id: FIXTURE_IDS.evaluationId,
     runId: FIXTURE_IDS.runId,
     taskId: FIXTURE_IDS.solveTaskId,
+    evaluatorName: "rubric",
+    aggregationRule: "weighted_sum",
     totalScore: 0,
     maxScore: 0,
     normalizedScore: 0,
@@ -414,6 +434,16 @@ export function createEmptyCriteriaEvaluation(): TaskEvaluationState {
 
 export function createDashboardSeed(): DashboardHarnessSeedPayload {
   const runState = serializedRunState();
+  const passingRubricStatus = {
+    status: "passing" as const,
+    total_criteria: 1,
+    passed: 1,
+    failed: 0,
+    errored: 0,
+    skipped: 0,
+    criterion_statuses: ["passed"],
+    evaluator_names: ["rubric"],
+  };
   const summary = {
     cohort_id: FIXTURE_IDS.cohortId,
     name: "minif2f-react-worker-gpt5v3",
@@ -476,6 +506,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
         total_tasks: 10,
         total_cost_usd: 0.12,
         error_message: null,
+        rubric_status_summary: passingRubricStatus,
       },
       {
         run_id: "22222222-2222-4222-8222-222222222223",
@@ -491,6 +522,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
         total_tasks: 10,
         total_cost_usd: 0.14,
         error_message: null,
+        rubric_status_summary: passingRubricStatus,
       },
       {
         run_id: "22222222-2222-4222-8222-222222222224",
@@ -506,6 +538,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
         total_tasks: 10,
         total_cost_usd: 0.16,
         error_message: null,
+        rubric_status_summary: passingRubricStatus,
       },
     ],
   };
@@ -523,6 +556,16 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
 }
 
 function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
+  const noRubricStatus = {
+    status: "none" as const,
+    total_criteria: 0,
+    passed: 0,
+    failed: 0,
+    errored: 0,
+    skipped: 0,
+    criterion_statuses: [],
+    evaluator_names: [],
+  };
   const summary = {
     cohort_id: CONCURRENT_MAS_FIXTURE_IDS.cohortId,
     name: "concurrent-mas-visual-debugger",
@@ -584,6 +627,7 @@ function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
         total_tasks: null,
         total_cost_usd: null,
         error_message: null,
+        rubric_status_summary: noRubricStatus,
       },
     ],
   };

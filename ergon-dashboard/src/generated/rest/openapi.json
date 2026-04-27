@@ -758,6 +758,69 @@
         "title": "CohortDetailDto",
         "description": "Full payload for a single cohort detail page."
       },
+      "CohortRubricStatusSummaryDto": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "passing",
+              "failing",
+              "errored",
+              "skipped",
+              "mixed",
+              "none"
+            ],
+            "title": "Status"
+          },
+          "total_criteria": {
+            "type": "integer",
+            "title": "Total Criteria"
+          },
+          "passed": {
+            "type": "integer",
+            "title": "Passed"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "errored": {
+            "type": "integer",
+            "title": "Errored"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "criterion_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Criterion Statuses"
+          },
+          "evaluator_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evaluator Names"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "total_criteria",
+          "passed",
+          "failed",
+          "errored",
+          "skipped",
+          "criterion_statuses",
+          "evaluator_names"
+        ],
+        "title": "CohortRubricStatusSummaryDto",
+        "description": "Backend-owned rubric status summary for one cohort run row."
+      },
       "CohortRunRowDto": {
         "properties": {
           "run_id": {
@@ -866,6 +929,9 @@
               }
             ],
             "title": "Error Message"
+          },
+          "rubric_status_summary": {
+            "$ref": "#/components/schemas/CohortRubricStatusSummaryDto"
           }
         },
         "type": "object",
@@ -875,7 +941,8 @@
           "cohort_id",
           "cohort_name",
           "status",
-          "created_at"
+          "created_at",
+          "rubric_status_summary"
         ],
         "title": "CohortRunRowDto",
         "description": "One run inside a cohort detail view."
@@ -1642,6 +1709,32 @@
             "type": "string",
             "title": "Criteriondescription"
           },
+          "criterionName": {
+            "type": "string",
+            "title": "Criterionname"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "errored",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          },
+          "contribution": {
+            "type": "number",
+            "title": "Contribution"
+          },
           "evaluationInput": {
             "anyOf": [
               {
@@ -1671,6 +1764,28 @@
               }
             ],
             "title": "Feedback"
+          },
+          "modelReasoning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelreasoning"
+          },
+          "skippedReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skippedreason"
           },
           "evaluatedActionIds": {
             "items": {
@@ -1708,6 +1823,11 @@
           "criterionNum",
           "criterionType",
           "criterionDescription",
+          "criterionName",
+          "status",
+          "passed",
+          "weight",
+          "contribution",
           "score",
           "maxScore"
         ],
@@ -2503,6 +2623,14 @@
             ],
             "title": "Taskid"
           },
+          "evaluatorName": {
+            "type": "string",
+            "title": "Evaluatorname"
+          },
+          "aggregationRule": {
+            "type": "string",
+            "title": "Aggregationrule"
+          },
           "totalScore": {
             "type": "number",
             "title": "Totalscore"
@@ -2552,6 +2680,8 @@
         "required": [
           "id",
           "runId",
+          "evaluatorName",
+          "aggregationRule",
           "totalScore",
           "maxScore",
           "normalizedScore",

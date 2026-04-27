@@ -208,6 +208,8 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
       id: evaluation.id,
       run_id: evaluation.runId,
       task_id: evaluation.taskId,
+      evaluator_name: evaluation.evaluatorName,
+      aggregation_rule: evaluation.aggregationRule,
       total_score: evaluation.totalScore,
       max_score: evaluation.maxScore,
       normalized_score: evaluation.normalizedScore,

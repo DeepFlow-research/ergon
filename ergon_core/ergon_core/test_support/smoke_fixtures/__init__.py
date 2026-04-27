@@ -27,21 +27,25 @@ from ergon_core.test_support.smoke_fixtures.criteria.smoke_rubrics import (
     ResearchRubricsSmokeRubric,
     SweBenchSmokeRubric,
 )
+from ergon_core.test_support.smoke_fixtures.criteria.timing import SmokePostRootTimingRubric
 from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
 from ergon_core.test_support.smoke_fixtures.workers.minif2f_smoke import (
     MiniF2FFailingLeafWorker,
+    MiniF2FRecursiveSmokeWorker,
     MiniF2FSadPathSmokeWorker,
     MiniF2FSmokeLeafWorker,
     MiniF2FSmokeWorker,
 )
 from ergon_core.test_support.smoke_fixtures.workers.researchrubrics_smoke import (
     ResearchRubricsFailingLeafWorker,
+    ResearchRubricsRecursiveSmokeWorker,
     ResearchRubricsSadPathSmokeWorker,
     ResearchRubricsSmokeLeafWorker,
     ResearchRubricsSmokeWorker,
 )
 from ergon_core.test_support.smoke_fixtures.workers.swebench_smoke import (
     SweBenchFailingLeafWorker,
+    SweBenchRecursiveSmokeWorker,
     SweBenchSadPathSmokeWorker,
     SweBenchSmokeLeafWorker,
     SweBenchSmokeWorker,
@@ -75,15 +79,18 @@ def register_smoke_fixtures() -> None:
     # ResearchRubrics happy-path
     WORKERS[ResearchRubricsSmokeWorker.type_slug] = ResearchRubricsSmokeWorker
     WORKERS[ResearchRubricsSmokeLeafWorker.type_slug] = ResearchRubricsSmokeLeafWorker
+    WORKERS[ResearchRubricsRecursiveSmokeWorker.type_slug] = ResearchRubricsRecursiveSmokeWorker
     EVALUATORS[ResearchRubricsSmokeRubric.type_slug] = ResearchRubricsSmokeRubric
+    EVALUATORS[SmokePostRootTimingRubric.type_slug] = SmokePostRootTimingRubric
 
-    # ResearchRubrics sad-path (cohort slot 3)
+    # ResearchRubrics sad-path (paired with the happy run in each smoke cohort)
     WORKERS[ResearchRubricsSadPathSmokeWorker.type_slug] = ResearchRubricsSadPathSmokeWorker
     WORKERS[ResearchRubricsFailingLeafWorker.type_slug] = ResearchRubricsFailingLeafWorker
 
     # MiniF2F happy + sad-path
     WORKERS[MiniF2FSmokeWorker.type_slug] = MiniF2FSmokeWorker
     WORKERS[MiniF2FSmokeLeafWorker.type_slug] = MiniF2FSmokeLeafWorker
+    WORKERS[MiniF2FRecursiveSmokeWorker.type_slug] = MiniF2FRecursiveSmokeWorker
     WORKERS[MiniF2FSadPathSmokeWorker.type_slug] = MiniF2FSadPathSmokeWorker
     WORKERS[MiniF2FFailingLeafWorker.type_slug] = MiniF2FFailingLeafWorker
     EVALUATORS[MiniF2FSmokeRubric.type_slug] = MiniF2FSmokeRubric
@@ -91,6 +98,7 @@ def register_smoke_fixtures() -> None:
     # SWE-Bench Verified happy + sad-path
     WORKERS[SweBenchSmokeWorker.type_slug] = SweBenchSmokeWorker
     WORKERS[SweBenchSmokeLeafWorker.type_slug] = SweBenchSmokeLeafWorker
+    WORKERS[SweBenchRecursiveSmokeWorker.type_slug] = SweBenchRecursiveSmokeWorker
     WORKERS[SweBenchSadPathSmokeWorker.type_slug] = SweBenchSadPathSmokeWorker
     WORKERS[SweBenchFailingLeafWorker.type_slug] = SweBenchFailingLeafWorker
     EVALUATORS[SweBenchSmokeRubric.type_slug] = SweBenchSmokeRubric

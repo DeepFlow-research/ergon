@@ -25,17 +25,17 @@ Path-based, not marker-based. The local gate and the CI workflow both dispatch b
 
 Every PR runs three benchmark legs in parallel via `.github/workflows/e2e-benchmarks.yml`:
 
-| Leg | Slot 1 | Slot 2 | Slot 3 |
-|---|---|---|---|
-| `researchrubrics` | happy | happy | **sad** — `l_2` forced FAIL |
-| `minif2f` | happy | happy | happy |
-| `swebench-verified` | happy | happy | happy |
+| Leg | Slot 1 | Slot 2 |
+|---|---|---|
+| `researchrubrics` | happy | **sad** — `l_2` forced FAIL |
+| `minif2f` | happy | **sad** — `l_2` forced FAIL |
+| `swebench-verified` | happy | **sad** — `l_2` forced FAIL |
 
-**9 top-level runs per PR; 80 leaf sandbox acquisitions** (8 happy × 9 leaves + 1 sad × 8 leaves — `l_3` never provisioned because its dependency failed).
+**6 top-level runs per PR; 57 dynamic child sandbox acquisitions** (3 happy × 11 child tasks + 3 sad × 8 child tasks — `l_3` never provisions on sad runs because its dependency failed).
 
-### 3.1 Immutable 9-leaf DAG
+### 3.1 Smoke DAG
 
-Every smoke run — happy or sad — spawns exactly this graph:
+Every smoke run starts with the same 9 direct children:
 
 ```
 Diamond (4):           Line (3):               Singletons (2):
@@ -46,9 +46,18 @@ d_left   d_right
     d_join
 ```
 
-Topology is enforced by `tests/e2e/_fixtures/smoke_base/worker_base.py::SmokeWorkerBase.execute` being decorated `@typing.final`. Subclasses supply the leaf slug via `leaf_slug` and (optionally) override `_spec_for(slug, deps, desc)` to route specific slugs elsewhere — the sad-path subclass uses this to route `l_2` to a failing leaf. They cannot change the DAG itself.
+Happy-path runs route top-level `l_2` to `{env}-smoke-recursive-worker`, which plans a nested two-node line under `l_2`:
 
-The single source of truth for topology is [`tests/e2e/_fixtures/smoke_base/constants.py`](../../tests/e2e/_fixtures/smoke_base/constants.py):
+```text
+l_2
+└─ l_2_a → l_2_b
+```
+
+Top-level `l_3` depends on `l_2`, so the smoke proves dependency propagation waits for a non-leaf dynamic task before releasing downstream work. Sad-path runs route `l_2` to the failing leaf instead, so `l_3` remains blocked.
+
+Topology is enforced by `ergon_core/test_support/smoke_fixtures/smoke_base/worker_base.py::SmokeWorkerBase.execute` being decorated `@typing.final`. Subclasses supply the leaf slug via `leaf_slug` and override `_spec_for(slug, deps, desc)` only to route specific slugs elsewhere. They cannot change the direct-child DAG itself.
+
+The single source of truth for the direct-child topology is [`ergon_core/test_support/smoke_fixtures/smoke_base/constants.py`](../../ergon_core/ergon_core/test_support/smoke_fixtures/smoke_base/constants.py):
 
 ```python
 EXPECTED_SUBTASK_SLUGS = (
@@ -60,29 +69,32 @@ EXPECTED_SUBTASK_SLUGS = (
 
 ### 3.2 Fixture residency — test-only, out of `ergon_builtins`
 
-`ergon_builtins/` contains only production baselines (ReActWorker, TrainingStubWorker). All smoke workers, leaves, and criteria live under [`tests/e2e/_fixtures/`](../../tests/e2e/_fixtures/) and register into the process-level `WORKERS` / `EVALUATORS` dicts via an import side-effect in `tests/e2e/_fixtures/__init__.py`, which `tests/e2e/conftest.py` imports at session start.
+`ergon_builtins/` contains only production baselines (ReActWorker, TrainingStubWorker). All smoke workers, leaves, and criteria live under [`ergon_core/test_support/smoke_fixtures/`](../../ergon_core/ergon_core/test_support/smoke_fixtures/) and register into the process-level `WORKERS` / `EVALUATORS` dicts through `register_smoke_fixtures()`.
 
-11 registry rows total — none production:
+19 registry rows total — none production:
 
 | Slug | Kind |
 |---|---|
 | `{env}-smoke-worker` × 3 | Worker (parent) — inherits `SmokeWorkerBase` |
 | `{env}-smoke-leaf` × 3 | Worker (leaf) — inherits `BaseSmokeLeafWorker` |
-| `researchrubrics-sadpath-smoke-worker` | Worker (sad-path parent) |
-| `researchrubrics-smoke-leaf-failing` | Worker (sad-path failing leaf) |
+| `{env}-smoke-recursive-worker` × 3 | Worker (nested `l_2` parent) — inherits `RecursiveSmokeWorkerBase` |
+| `{env}-sadpath-smoke-worker` × 3 | Worker (sad-path parent) |
+| `{env}-smoke-leaf-failing` × 3 | Worker (sad-path failing leaf) |
 | `{env}-smoke-criterion` × 3 | Criterion — inherits `SmokeCriterionBase` |
+| `smoke-post-root-timing-criterion` | Criterion — second root evaluator used for timing assertions |
 
 where `{env} ∈ {researchrubrics, minif2f, swebench}`.
 
 ### 3.3 Turn persistence
 
 - Parent `SmokeWorkerBase.execute` yields **3** `GenerationTurn`s (planning → planned → awaiting) so incremental turn persistence is exercised on every run.
+- Happy-path recursive `l_2` yields **3** `GenerationTurn`s.
 - Each leaf `BaseSmokeLeafWorker.execute` yields **2** turns (attaching → done).
-- Total per happy run: **1 × 3 + 9 × 2 = 21** `GenerationTurn` rows; driver asserts on this.
+- Total per happy run: **3 + 3 + 10 × 2 = 26** `GenerationTurn` rows; driver asserts on this.
 
 ### 3.4 Inter-agent messaging
 
-Each happy-path leaf calls `CommunicationService.save_message` once on the `smoke-completion` thread (first production caller of that service). 9 `ThreadMessage` rows per happy run, sequence_num 1..9 per thread. Sad-path `l_2` raises before reaching this call — 8 messages on a sad run, with `l_2` missing.
+Each happy-path leaf calls `CommunicationService.save_message` once on the `smoke-completion` thread (first production caller of that service). The recursive `l_2` worker also sends one completion message after nested children finish. Happy runs emit 11 `ThreadMessage` rows (`9` direct slugs + `l_2_a`, `l_2_b`), sequence_num 1..11 per thread. Sad-path `l_2` raises before reaching this call and `l_3` blocks — 7 messages on a sad run, with `l_2` and `l_3` missing.
 
 ### 3.5 Sandbox-side checks
 
@@ -98,14 +110,14 @@ For each run in a cohort, the pytest driver asserts:
 
 | Channel | What it checks |
 |---|---|
-| `RunGraphNode` | 10 nodes (1 root + 9 leaves); all COMPLETED (happy) or cascade pattern (sad); `sorted(slugs) == EXPECTED_SUBTASK_SLUGS` |
-| `RunGraphEdge` | 6 expected dependency edges (diamond + line) |
-| `RunResource` | ≥ 18 rows (9 outputs + 9 probes); all with non-empty `content_hash` |
-| `GenerationTurn` | Exactly 21 rows per happy run (derived from `PARENT_TURN_COUNT + 9 × LEAF_TURN_COUNT`) |
-| `ThreadMessage` (topic `smoke-completion`) | 9 messages per happy run / 8 per sad; `sequence_num` strictly 1..N |
+| `RunGraphNode` | Happy: 12 nodes (1 root + 9 direct children + 2 nested children), all COMPLETED; sad: cascade pattern with `l_2` FAILED and `l_3` BLOCKED |
+| `RunGraphEdge` | Expected dependency edges (diamond, top-level line, nested `l_2_a → l_2_b`) |
+| `RunResource` | Happy: 20 rows (10 outputs + 10 probes); all with non-empty `content_hash` |
+| `GenerationTurn` | Exactly 26 rows per happy run |
+| `ThreadMessage` (topic `smoke-completion`) | 11 messages per happy run / 7 per sad; `sequence_num` strictly 1..N |
 | Blob store round-trip | Re-read of one probe JSON is byte-stable + parses |
 | Temporal ordering | `RunTaskExecution.started_at` of children ≥ `completed_at` of parents |
-| `RunTaskEvaluation` | Exactly 1 row; score 1.0 (happy) / 0.0 (sad); failed slug named in sad feedback |
+| `RunTaskEvaluation` | Happy: 2 root rows, both score 1.0 and created after root execution completion; sad: no successful final score |
 
 Sad-path adds: partial artifact persisted (partial_*.md exists as RunResource), pre-failure WAL entry present, `l_3` status BLOCKED/CANCELLED per RFC `static-sibling-failure-semantics`.
 
@@ -153,7 +165,7 @@ Required `data-testid` attributes: `run-status`, `task-node-{slug}` (one per `EX
 3. **Test stubs live in `tests/e2e/_fixtures/`, not `ergon_builtins/`.** Production registry (`ergon_builtins/registry_core.py`) contains only production baselines. Exception: `training_stub_worker.py` — it's a real RL-trajectory baseline, not test scaffolding; operators invoke it via CLI.
 4. **Criteria reconnect via the CriterionRuntime DI container, never via `AsyncSandbox.connect` directly.** Enforced by code inspection; the anti-pattern previously fixed by `bugs/fixed/2026-04-18-swebench-criterion-spawns-sandbox.md`.
 5. **Sandbox outlives the task until all criteria finish.** RFC `sandbox-lifetime-covers-criteria`. Smoke is the living regression test for this.
-6. **Cohort parallelism exercised on every PR.** 3-run cohorts prove concurrent workflow submission and cohort aggregation at the scale smoke uses.
+6. **Cohort parallelism exercised on every PR.** 2-run happy/sad cohorts prove concurrent workflow submission and cohort aggregation at the scale smoke uses.
 7. **Partial work persists on FAILED leaves.** Sad-path `AlwaysFailSubworker` writes a file + runs a probe command, then raises. Driver asserts the partial artifact and pre-failure WAL entry survive.
 
 ## 9. Budget
@@ -161,10 +173,10 @@ Required `data-testid` attributes: `run-status`, `task-node-{slug}` (one per `EX
 | Measure | Value |
 |---|---|
 | Per matrix leg | 10-min job timeout; 5-min pytest timeout |
-| Leaf-subtask sandbox acquisitions per leg | 26 or 27 (researchrubrics has 26 because the sad slot skips `l_3`) |
-| Leaf-subtask sandbox acquisitions per PR | 80 across 3 sandbox images |
+| Dynamic child sandbox acquisitions per leg | 19 (1 happy × 11 child tasks + 1 sad × 8 child tasks) |
+| Dynamic child sandbox acquisitions per PR | 57 across 3 sandbox images |
 | Parent-task sandbox per run | 1 (used by parent worker + attached to by the criterion). Not additional at evaluation time. |
-| Parallel workflow runs per PR | 9 (3 legs × 3-run cohort) |
+| Parallel workflow runs per PR | 6 (3 legs × 2-run cohort) |
 | Warm wall-clock per leg | 1–3 min (post-Docker cache) |
 | Cold wall-clock per leg | up to 5 min |
 

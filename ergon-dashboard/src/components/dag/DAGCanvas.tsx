@@ -28,6 +28,7 @@ import "@xyflow/react/dist/style.css";
 import { TaskStatus, type WorkflowRunState } from "@/lib/types";
 import { nodeTypes, type TaskNodeType } from "./TaskNode";
 import { GraphDependencyEdge } from "./edges/GraphDependencyEdge";
+import { buildContainerEvaluationRollup } from "@/features/evaluation/selectors";
 import { GraphExpansionProvider } from "@/features/graph/hooks/useGraphExpansion";
 import { computeHierarchicalLayout, calculateExpandedContainers } from "@/features/graph/layout/hierarchicalLayout";
 import { DEFAULT_EXPANDED_DEPTH } from "@/features/graph/layout/layoutTypes";
@@ -175,6 +176,36 @@ function SearchCard({
   );
 }
 
+function EvaluationLensCard({
+  active,
+  count,
+  onToggle,
+}: {
+  active: boolean;
+  count: number;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`${cardClass} flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors ${
+        active ? "text-[var(--ink)]" : "text-[var(--muted)] hover:text-[var(--ink)]"
+      }`}
+      data-testid="evaluation-lens-toggle"
+      aria-pressed={active}
+      onClick={onToggle}
+      title="Highlight graph nodes with rubric evidence"
+    >
+      <span className="font-mono uppercase tracking-wider" style={{ fontSize: 9 }}>
+        Rubric
+      </span>
+      <span className="rounded-full bg-[var(--paper)] px-1.5 py-0.5 text-[10px]">
+        {count}
+      </span>
+    </button>
+  );
+}
+
 const LEGEND_ITEMS: { status: string; label: string; cssVar: string }[] = [
   { status: "completed", label: "completed", cssVar: "var(--status-completed)" },
   { status: "running", label: "running", cssVar: "var(--status-running)" },
@@ -220,6 +251,7 @@ function DAGCanvasInner({
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [containerDims, setContainerDims] = useState<Map<string, ContainerDimensions>>(new Map());
   const [prevTaskIds, setPrevTaskIds] = useState<Set<string>>(new Set());
+  const [evaluationLensActive, setEvaluationLensActive] = useState(false);
   const { fitView: rfFitView } = useReactFlow();
   const fitViewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -281,6 +313,20 @@ function DAGCanvasInner({
     return count;
   }, [searchQuery, runState?.tasks]);
 
+  const evaluationRollups = useMemo(() => {
+    const rollups = new Map<string, ReturnType<typeof buildContainerEvaluationRollup>>();
+    if (!runState?.tasks) return rollups;
+    for (const taskId of runState.tasks.keys()) {
+      rollups.set(taskId, buildContainerEvaluationRollup(runState, taskId));
+    }
+    return rollups;
+  }, [runState]);
+
+  const evaluationBearingCount = useMemo(
+    () => Array.from(evaluationRollups.values()).filter((rollup) => rollup !== null).length,
+    [evaluationRollups],
+  );
+
   useEffect(() => {
     if (!runState?.tasks || runState.tasks.size === 0) return;
 
@@ -293,6 +339,8 @@ function DAGCanvasInner({
       "LR",
       newNodeIds,
       highlightedTaskIds,
+      evaluationRollups,
+      evaluationLensActive,
     );
 
     setNodes(result.nodes as TaskNodeType[]);
@@ -311,6 +359,8 @@ function DAGCanvasInner({
     selectedTaskId,
     newNodeIds,
     highlightedTaskIds,
+    evaluationRollups,
+    evaluationLensActive,
     setNodes,
     setEdges,
     rfFitView,
@@ -485,6 +535,11 @@ function DAGCanvasInner({
             searchQuery={searchQuery}
             onSearchChange={handleSearchChange}
             matchCount={matchCount}
+          />
+          <EvaluationLensCard
+            active={evaluationLensActive}
+            count={evaluationBearingCount}
+            onToggle={() => setEvaluationLensActive((active) => !active)}
           />
         </div>
 

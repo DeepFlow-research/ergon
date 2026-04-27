@@ -292,13 +292,58 @@ function RunDistribution({ cohortId, runs }: { cohortId: string; runs: CohortRun
 /* Run Row                                                    */
 /* ────────────────────────────────────────────────────────── */
 
+function rubricPipClass(status: string): string {
+  switch (status) {
+    case "passed":
+      return "bg-emerald-500";
+    case "failed":
+      return "bg-rose-500";
+    case "errored":
+      return "bg-amber-500";
+    case "skipped":
+      return "bg-slate-300";
+    default:
+      return "bg-[var(--line-strong)]";
+  }
+}
+
+function RubricStatusPips({ run }: { run: CohortRunRow }) {
+  const summary = run.rubric_status_summary;
+  const label =
+    summary.total_criteria === 0
+      ? "No rubric results"
+      : `${summary.status}: ${summary.passed} passed, ${summary.failed} failed, ${summary.errored} errored, ${summary.skipped} skipped`;
+
+  return (
+    <div data-testid={`cohort-rubric-status-pips-${run.run_id}`} title={label}>
+      <div className="text-xs text-[var(--faint)]">Rubric</div>
+      {summary.total_criteria === 0 ? (
+        <div className="text-sm font-medium text-[var(--muted)]">No rubric</div>
+      ) : (
+        <div className="mt-1 flex flex-wrap items-center gap-1" aria-label={label}>
+          {summary.criterion_statuses.map((status, index) => (
+            <span
+              key={`${run.run_id}-${status}-${index}`}
+              className={`h-2.5 w-2.5 rounded-full ${rubricPipClass(status)}`}
+              data-testid={`cohort-rubric-pip-${status}`}
+            />
+          ))}
+          <span className="ml-1 text-xs font-medium capitalize text-[var(--ink)]">
+            {summary.status}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CohortRunRowCard({ cohortId, run }: { cohortId: string; run: CohortRunRow }) {
   const started = formatStartedAt(run.started_at);
 
   return (
     <Link
       href={`/cohorts/${cohortId}/runs/${run.run_id}`}
-      className="grid grid-cols-1 gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] px-4 py-4 transition-colors hover:bg-[var(--paper)] lg:grid-cols-[minmax(0,1.2fr)_repeat(6,minmax(0,0.7fr))]"
+      className="grid grid-cols-1 gap-3 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] px-4 py-4 transition-colors hover:bg-[var(--paper)] lg:grid-cols-[minmax(0,1.2fr)_repeat(7,minmax(0,0.7fr))]"
       data-testid={`cohort-run-row-${run.run_id}`}
     >
       <div className="min-w-0">
@@ -352,6 +397,7 @@ function CohortRunRowCard({ cohortId, run }: { cohortId: string; run: CohortRunR
           {formatScore(run.final_score)}
         </div>
       </div>
+      <RubricStatusPips run={run} />
     </Link>
   );
 }

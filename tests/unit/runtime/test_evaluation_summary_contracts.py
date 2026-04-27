@@ -25,20 +25,29 @@ class _Criterion(Criterion):
         return CriterionResult(name=self.name, score=1.0, passed=True)
 
 
-def _service_result(*, feedback: str | None) -> EvaluationServiceResult:
+def _service_result(
+    *,
+    feedback: str | None,
+    criterion_score: float = 1.0,
+    criterion_weight: float = 1.0,
+    passed: bool = True,
+    metadata: dict | None = None,
+) -> EvaluationServiceResult:
     criterion = _Criterion(name="Criterion description")
     return EvaluationServiceResult(
         result=TaskEvaluationResult(
             task_slug="task",
-            score=1.0,
-            passed=True,
+            score=criterion_score,
+            passed=passed,
             evaluator_name="rubric",
             criterion_results=[
                 CriterionResult(
                     name="criterion result",
-                    score=1.0,
-                    passed=True,
+                    score=criterion_score,
+                    passed=passed,
+                    weight=criterion_weight,
                     feedback=feedback,
+                    metadata=metadata or {},
                 )
             ],
         ),
@@ -67,8 +76,10 @@ def test_criterion_result_entry_allows_nullable_optional_text_fields() -> None:
         criterion_name="criterion",
         criterion_type="test-criterion",
         criterion_description="Criterion description",
+        status="passed",
         score=1.0,
         passed=True,
+        contribution=1.0,
         feedback=None,
         evaluation_input=None,
     )
@@ -89,6 +100,27 @@ def test_build_evaluation_summary_preserves_missing_feedback_and_input() -> None
     assert entry.evaluation_input is None
 
 
+def test_build_evaluation_summary_includes_required_criterion_status_fields() -> None:
+    summary = build_evaluation_summary(
+        _service_result(
+            feedback="needs supporting artifact",
+            criterion_score=0.5,
+            criterion_weight=2.0,
+            passed=False,
+            metadata={"model_reasoning": "missing supporting artifact"},
+        ),
+        evaluation_input="task evidence",
+    )
+
+    entry = summary.criterion_results[0]
+    assert entry.status == "failed"
+    assert entry.passed is False
+    assert entry.weight == 2.0
+    assert entry.contribution == 0.5
+    assert entry.model_reasoning == "missing supporting artifact"
+    assert entry.skipped_reason is None
+
+
 def test_dashboard_evaluation_dto_allows_nullable_feedback_and_input() -> None:
     summary = build_evaluation_summary(
         _service_result(feedback=None),
@@ -107,6 +139,36 @@ def test_dashboard_evaluation_dto_allows_nullable_feedback_and_input() -> None:
     criterion = dto.criterion_results[0]
     assert criterion.feedback is None
     assert criterion.evaluation_input is None
+
+
+def test_dashboard_evaluation_dto_exposes_required_rubric_metadata() -> None:
+    summary = build_evaluation_summary(
+        _service_result(
+            feedback="root timing marker criterion ran",
+            metadata={"model_reasoning": "root completed before evaluation"},
+        ),
+        evaluation_input="root task evidence",
+    )
+
+    dto = build_dashboard_evaluation_dto(
+        evaluation_id=uuid4(),
+        run_id=uuid4(),
+        task_id=uuid4(),
+        total_score=1.0,
+        created_at="2026-04-25T20:00:00Z",
+        summary=summary,
+    )
+
+    criterion = dto.criterion_results[0]
+    assert dto.evaluator_name == "rubric"
+    assert dto.aggregation_rule == "weighted_sum"
+    assert criterion.criterion_name == "criterion result"
+    assert criterion.status == "passed"
+    assert criterion.passed is True
+    assert criterion.weight == 1.0
+    assert criterion.contribution == 1.0
+    assert criterion.model_reasoning == "root completed before evaluation"
+    assert criterion.skipped_reason is None
 
 
 def test_summary_migration_normalizes_missing_criterion_fields() -> None:
@@ -139,5 +201,11 @@ def test_summary_migration_normalizes_missing_criterion_fields() -> None:
 
     entry = summary["criterion_results"][0]
     assert entry["criterion_description"] == "named criterion"
+    assert entry["status"] == "passed"
+    assert entry["weight"] == 1.0
+    assert entry["contribution"] == 1.0
     assert entry["feedback"] is None
+    assert entry["model_reasoning"] is None
+    assert entry["skipped_reason"] is None
     assert entry["evaluation_input"] is None
+    assert entry["error"] is None

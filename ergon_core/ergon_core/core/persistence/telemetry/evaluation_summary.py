@@ -5,7 +5,11 @@ Both the write side (evaluate_task_run.py) and read side (runs.py)
 use this model — no untyped dict access.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 
 
 class CriterionResultEntry(BaseModel):
@@ -16,12 +20,16 @@ class CriterionResultEntry(BaseModel):
     stage_num: int = 0
     stage_name: str = "default"
     criterion_num: int = 0
+    status: EvalCriterionStatus
     score: float
     max_score: float = 1.0
     passed: bool
     weight: float = 1.0
+    contribution: float
     criterion_description: str
     feedback: str | None = None
+    model_reasoning: str | None = None
+    skipped_reason: str | None = None
     evaluation_input: str | None = None
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)

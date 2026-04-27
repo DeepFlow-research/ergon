@@ -1,10 +1,9 @@
-"""ResearchRubrics canonical sad-path smoke against real E2B.
+"""ResearchRubrics canonical happy/sad smoke cohort against real E2B.
 
 Per-run assertion dispatch on slot ``kind``:
 
-- The single slot routes ``l_2`` to a failing leaf.
-- ``l_3`` depends on ``l_2`` and must remain blocked / unstarted.
-- Independent branches must still complete.
+- ``happy`` uses the old fully-completing smoke worker.
+- ``sad`` routes ``l_2`` to a failing leaf; ``l_3`` remains blocked.
 
 Cohort-level: ``_assert_cohort_membership`` checks all submitted runs
 are visible on ``/cohort/{key}``.  Playwright subprocess runs at the
@@ -24,7 +23,12 @@ from datetime import datetime, timezone
 import pytest
 
 from tests.e2e._asserts import (
+    _assert_blob_roundtrip,
     _assert_cohort_membership,
+    _assert_run_evaluation,
+    _assert_run_graph,
+    _assert_run_resources,
+    _assert_run_turn_counts,
     _assert_sadpath_evaluation,
     _assert_sadpath_graph_cascade,
     _assert_sadpath_partial_artifact,
@@ -32,46 +36,64 @@ from tests.e2e._asserts import (
     _assert_sadpath_thread_messages,
     _assert_sandbox_command_wal,
     _assert_sandbox_lifecycle_events,
+    _assert_thread_messages_ordered,
     _assert_temporal_ordering,
     wait_for_terminal_status,
 )
 from tests.e2e._submit import submit_cohort
 
 ENV = "researchrubrics"
-WORKER = f"{ENV}-sadpath-smoke-worker"
+HAPPY_WORKER = f"{ENV}-smoke-worker"
+SAD_WORKER = f"{ENV}-sadpath-smoke-worker"
 CRITERION = f"{ENV}-smoke-criterion"
 PER_RUN_TIMEOUT = 270  # seconds; < pytest's 300s --timeout
 
 
 COHORT_SIZE = int(os.environ.get("SMOKE_COHORT_SIZE", "1"))
+SmokeSlot = tuple[str, str, str]
+
+
+def _smoke_slots(cohort_size: int) -> list[SmokeSlot]:
+    return [
+        slot
+        for _ in range(cohort_size)
+        for slot in (
+            ("happy", HAPPY_WORKER, CRITERION),
+            ("sad", SAD_WORKER, CRITERION),
+        )
+    ]
 
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
     cohort_key = f"ci-smoke-{ENV}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+    smoke_slots = _smoke_slots(COHORT_SIZE)
 
     run_ids = await submit_cohort(
         benchmark_slug=ENV,
-        slots=[(WORKER, CRITERION)] * COHORT_SIZE,
+        slots=[(worker, criterion) for _, worker, criterion in smoke_slots],
         cohort_key=cohort_key,
         timeout=PER_RUN_TIMEOUT,
     )
-    assert len(run_ids) == COHORT_SIZE
+    assert len(run_ids) == len(smoke_slots)
 
     await asyncio.gather(
         *(
             wait_for_terminal_status(
                 rid,
-                expected_statuses=frozenset({"failed"}),
+                expected_statuses=frozenset({"completed"} if kind == "happy" else {"failed"}),
                 timeout_seconds=PER_RUN_TIMEOUT,
             )
-            for rid in run_ids
+            for (kind, _, _), rid in zip(smoke_slots, run_ids, strict=True)
         ),
     )
 
-    for rid in run_ids:
-        _assert_sad_run(rid)
+    for (kind, _, _), rid in zip(smoke_slots, run_ids, strict=True):
+        if kind == "happy":
+            _assert_happy_run(rid)
+        else:
+            _assert_sad_run(rid)
 
     _assert_cohort_membership(cohort_key, run_ids)
 
@@ -83,9 +105,24 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
     )
     _invoke_playwright(
         cohort_key=cohort_key,
-        cohort=[{"run_id": str(rid), "kind": "sad"} for rid in run_ids],
+        cohort=[
+            {"run_id": str(rid), "kind": kind}
+            for (kind, _, _), rid in zip(smoke_slots, run_ids, strict=True)
+        ],
         screenshot_dir=screenshot_dir,
     )
+
+
+def _assert_happy_run(rid) -> None:
+    _assert_run_graph(rid)
+    _assert_run_resources(rid)
+    _assert_run_turn_counts(rid)
+    _assert_thread_messages_ordered(rid)
+    _assert_blob_roundtrip(rid)
+    _assert_run_evaluation(rid)
+    _assert_sandbox_lifecycle_events(rid)
+    _assert_sandbox_command_wal(rid)
+    _assert_temporal_ordering(rid)
 
 
 def _assert_sad_run(rid) -> None:
