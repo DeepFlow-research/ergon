@@ -19,7 +19,6 @@ import json
 import os
 import pathlib
 import subprocess
-from datetime import datetime, timezone
 
 import pytest
 
@@ -35,7 +34,7 @@ from tests.e2e._asserts import (
     _assert_temporal_ordering,
     wait_for_terminal_status,
 )
-from tests.e2e._submit import submit_cohort
+from tests.e2e._submit import smoke_cohort_key, submit_cohort
 
 ENV = "researchrubrics"
 WORKER = f"{ENV}-sadpath-smoke-worker"
@@ -49,7 +48,7 @@ COHORT_SIZE = int(os.environ.get("SMOKE_COHORT_SIZE", "1"))
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
-    cohort_key = f"ci-smoke-{ENV}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+    cohort_key = smoke_cohort_key(ENV)
 
     run_ids = await submit_cohort(
         benchmark_slug=ENV,

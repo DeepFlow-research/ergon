@@ -1,7 +1,7 @@
-import { CohortDetailView } from "@/components/cohorts/CohortDetailView";
-import { parseCohortDetail } from "@/lib/contracts/rest";
+import { CohortExperimentDetailView } from "@/components/cohorts/CohortExperimentDetailView";
+import { config } from "@/lib/config";
 import { fetchErgonApi } from "@/lib/serverApi";
-import type { CohortDetail } from "@/lib/types";
+import { getHarnessCohort } from "@/lib/testing/dashboardHarness";
 
 interface CohortPageProps {
   params: Promise<{
@@ -11,16 +11,20 @@ interface CohortPageProps {
 
 export default async function CohortPage({ params }: CohortPageProps) {
   const { cohortId } = await params;
-  let initialDetail: CohortDetail | null = null;
+  let initialDetail = null;
 
   try {
-    const response = await fetchErgonApi(`/cohorts/${cohortId}`);
-    if (response.ok) {
-      initialDetail = parseCohortDetail(await response.json());
+    if (config.enableTestHarness) {
+      initialDetail = getHarnessCohort(cohortId);
+    } else {
+      const response = await fetchErgonApi(`/cohorts/${cohortId}`);
+      if (response.ok) {
+        initialDetail = await response.json();
+      }
     }
   } catch {
     initialDetail = null;
   }
 
-  return <CohortDetailView cohortId={cohortId} initialDetail={initialDetail} />;
+  return <CohortExperimentDetailView detail={initialDetail} />;
 }

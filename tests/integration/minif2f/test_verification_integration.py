@@ -12,6 +12,7 @@ on this machine).
 
 import json
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -24,11 +25,23 @@ from ergon_builtins.benchmarks.minif2f.sandbox.utils import REGISTRY_PATH
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
+from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.telemetry.models import (
+    ExperimentRecord,
+    RunRecord,
+    RunTaskExecution,
+)
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.providers.sandbox.resource_publisher import SandboxResourcePublisher
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
     DefaultCriterionRuntime,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
+
+_FIXTURE_PROOF = Path(__file__).parents[2] / "fixtures" / "minif2f" / "known_good_proof.lean"
 
 
 def _require_setup() -> None:
@@ -85,15 +98,91 @@ async def _setup_runtime(
     return DefaultCriterionRuntime(context=ctx, sandbox_manager=sandbox_manager)
 
 
+async def _publish_fixture_proof(
+    runtime: DefaultCriterionRuntime,
+    sandbox_manager: MiniF2FSandboxManager,
+    *,
+    run_id,
+    task_execution_id,
+    blob_root: Path,
+) -> None:
+    await runtime.run_command("mkdir -p /workspace/final_output")
+    await runtime.write_file(
+        "/workspace/final_output/final_solution.lean",
+        _FIXTURE_PROOF.read_bytes(),
+    )
+    sandbox = sandbox_manager.get_sandbox(run_id)
+    assert sandbox is not None
+    publisher = SandboxResourcePublisher(
+        sandbox=sandbox,
+        run_id=run_id,
+        task_execution_id=task_execution_id,
+        blob_root=blob_root,
+    )
+    await publisher.sync()
+
+
+def _seed_run_record(run_id, task_execution_id) -> None:
+    with get_session() as session:
+        definition = ExperimentDefinition(benchmark_type="minif2f")
+        session.add(definition)
+        session.flush()
+        experiment = ExperimentRecord(
+            name="minif2f verification fixture",
+            benchmark_type="minif2f",
+            sample_count=1,
+            sample_selection_json={"instance_keys": ["default"]},
+            default_worker_team_json={"primary": "minif2f-react"},
+            design_json={},
+            metadata_json={},
+            status="running",
+        )
+        session.add(experiment)
+        session.flush()
+        run = RunRecord(
+            id=run_id,
+            experiment_id=experiment.id,
+            workflow_definition_id=definition.id,
+            benchmark_type="minif2f",
+            instance_key="default",
+            worker_team_json={"primary": "minif2f-react"},
+            status=RunStatus.EXECUTING,
+        )
+        session.add(run)
+        session.flush()
+        node = RunGraphNode(
+            run_id=run_id,
+            instance_key="default",
+            task_slug="mathd_algebra_176",
+            description=_make_task().description,
+            status="completed",
+            assigned_worker_slug="minif2f-react",
+            level=0,
+        )
+        session.add(node)
+        session.flush()
+        execution = RunTaskExecution(
+            id=task_execution_id,
+            run_id=run_id,
+            node_id=node.id,
+            status=TaskExecutionStatus.COMPLETED,
+            final_assistant_message="fixture proof written",
+        )
+        session.add(execution)
+        session.commit()
+
+
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 @pytest.mark.timeout(600)  # template pull + first mathlib import can be slow
-async def test_fixture_proof_verifies_to_score_1() -> None:
+async def test_fixture_proof_verifies_to_score_1(tmp_path: Path) -> None:
     _require_setup()
 
     run_id = uuid4()
+    task_execution_id = uuid4()
+    _seed_run_record(run_id, task_execution_id)
 
     mgr = MiniF2FSandboxManager()
     runtime = await _setup_runtime(mgr, run_id)
@@ -102,10 +191,17 @@ async def test_fixture_proof_verifies_to_score_1() -> None:
             output="",
             success=True,
         )
+        await _publish_fixture_proof(
+            runtime,
+            mgr,
+            run_id=run_id,
+            task_execution_id=task_execution_id,
+            blob_root=tmp_path / "blob",
+        )
         eval_ctx = EvaluationContext(
             run_id=run_id,
             task_id=uuid4(),
-            execution_id=uuid4(),
+            execution_id=task_execution_id,
             task=_make_task(),
             worker_result=worker_output,
             sandbox_id=mgr.get_sandbox(run_id).sandbox_id,  # type: ignore[union-attr]

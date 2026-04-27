@@ -7,7 +7,7 @@ a Literal field so Pydantic can discriminate on deserialisation.
 
 from typing import Annotated, Any, Literal
 
-from ergon_core.api.generation import TokenLogprob
+from ergon_core.core.providers.generation.types import TokenLogprob
 from pydantic import BaseModel, Field
 
 # Exported type alias — use everywhere event_type is stored as a string field.
@@ -49,7 +49,7 @@ class ToolCallPayload(BaseModel):
     args: dict[str, Any]  # slopcop: ignore[no-typing-any]
     turn_id: str  # links events from the same generation call
     turn_token_ids: list[int] | None = None  # None if another event in this turn holds them
-    turn_logprobs: list[TokenLogprob] | None = None  # None if another event in this turn holds them
+    turn_logprobs: list[TokenLogprob] | None = None
 
 
 class ToolResultPayload(BaseModel):

@@ -9,7 +9,13 @@ const contractsPath = path.resolve(__dirname, "../src/generated/rest/contracts.t
 const source = readFileSync(contractsPath, "utf8")
   .replace('import { makeApi, Zodios, type ZodiosOptions } from "@zodios/core";\n', "")
   // openapi-zod-client generates z.record(V) but Zod requires z.record(K, V).
-  .replace(/z\.record\((?!z\.string\(\))/g, "z.record(z.string(), ");
+  .replace(/z\.record\((?!z\.string\(\))/g, "z.record(z.string(), ")
+  // Recursive JSON schemas must be lazy or the generated module dereferences
+  // JsonValue_Input before it has been initialized.
+  .replace(
+    /const JsonValue_(Input|Output): z\.ZodType<JsonValue_\1> = z\.union\(\[\n([\s\S]*?)\n\]\);/g,
+    "const JsonValue_$1: z.ZodType<JsonValue_$1> = z.lazy(() => z.union([\n$2\n]));",
+  );
 const endpointMarker = "\nconst endpoints = makeApi([";
 const markerIndex = source.indexOf(endpointMarker);
 

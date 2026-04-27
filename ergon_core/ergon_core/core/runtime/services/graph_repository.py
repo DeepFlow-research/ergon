@@ -22,6 +22,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionTaskDependency,
+    ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.graph.models import (
     RunGraphAnnotation,
@@ -134,9 +135,16 @@ class WorkflowGraphRepository:
             ExperimentDefinitionTaskAssignment.experiment_definition_id == definition_id,
         )
         assignments = list(session.exec(assignments_stmt).all())
+
+        workers_stmt = select(ExperimentDefinitionWorker).where(
+            ExperimentDefinitionWorker.experiment_definition_id == definition_id,
+        )
+        worker_type_by_binding = {
+            worker.binding_key: worker.worker_type for worker in session.exec(workers_stmt).all()
+        }
         worker_by_task: dict[UUID, str] = {}
         for a in assignments:
-            worker_by_task[a.task_id] = a.worker_binding_key
+            worker_by_task[a.task_id] = worker_type_by_binding[a.worker_binding_key]
 
         deps = list(
             session.exec(

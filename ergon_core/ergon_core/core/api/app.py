@@ -21,6 +21,7 @@ logging.basicConfig(
 
 import inngest.fast_api
 from ergon_core.core.api.cohorts import router as cohorts_router
+from ergon_core.core.api.experiments import router as experiments_router
 from ergon_core.core.api.rollouts import init_service as init_rollout_service
 from ergon_core.core.api.rollouts import router as rollouts_router
 from ergon_core.core.api.runs import router as runs_router
@@ -36,9 +37,8 @@ from ergon_core.core.providers.sandbox.event_sink import (
 from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.runtime.inngest_client import inngest_client
-from ergon_core.core.settings import settings
 from ergon_core.core.runtime.inngest_registry import ALL_FUNCTIONS
-from ergon_core.core.settings import Settings
+from ergon_core.core.settings import Settings, settings
 from fastapi import FastAPI
 
 logger = logging.getLogger(__name__)
@@ -87,8 +87,15 @@ app = FastAPI(
 )
 
 app.include_router(runs_router)
+app.include_router(experiments_router)
 app.include_router(cohorts_router)
 app.include_router(rollouts_router)
+
+
+@app.get("/health", include_in_schema=False)
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
 
 # Test-only harness: mounted in CI + local-e2e only.
 if settings.enable_test_harness:

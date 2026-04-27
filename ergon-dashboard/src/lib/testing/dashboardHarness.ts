@@ -13,6 +13,7 @@ import {
   CohortDetail,
   CohortSummary,
   ContextEventState,
+  ExperimentDetail,
   ExperimentCohortStatus,
   SerializedWorkflowRunState,
   TaskEvaluationState,
@@ -26,6 +27,7 @@ declare global {
     | {
         cohorts: CohortSummary[];
         cohortDetails: Record<string, CohortDetail>;
+        experimentDetails: Record<string, ExperimentDetail>;
         mutationsByRun: Record<string, unknown[]>;
       }
     | undefined;
@@ -34,6 +36,7 @@ declare global {
 export interface DashboardHarnessSeedPayload {
   cohorts?: CohortSummary[];
   cohortDetails?: Record<string, CohortDetail>;
+  experimentDetails?: Record<string, ExperimentDetail>;
   runs?: SerializedWorkflowRunState[];
   mutations?: Record<string, unknown[]>;
 }
@@ -43,6 +46,7 @@ function getHarnessState() {
     global.__dashboardHarness = {
       cohorts: [],
       cohortDetails: {},
+      experimentDetails: {},
       mutationsByRun: {},
     };
   }
@@ -61,6 +65,7 @@ export function resetDashboardHarness(): void {
   const harness = getHarnessState();
   harness.cohorts = [];
   harness.cohortDetails = {};
+  harness.experimentDetails = {};
   harness.mutationsByRun = {};
 }
 
@@ -71,6 +76,7 @@ export function seedDashboardHarness(payload: DashboardHarnessSeedPayload): void
   const harness = getHarnessState();
   harness.cohorts = payload.cohorts ?? [];
   harness.cohortDetails = payload.cohortDetails ?? {};
+  harness.experimentDetails = payload.experimentDetails ?? {};
   harness.mutationsByRun = payload.mutations ?? {};
 
   for (const run of payload.runs ?? []) {
@@ -86,6 +92,11 @@ export function listHarnessCohorts(): CohortSummary[] {
 export function getHarnessCohort(cohortId: string): CohortDetail | null {
   requireHarnessEnabled();
   return getHarnessState().cohortDetails[cohortId] ?? null;
+}
+
+export function getHarnessExperiment(experimentId: string): ExperimentDetail | null {
+  requireHarnessEnabled();
+  return getHarnessState().experimentDetails[experimentId] ?? null;
 }
 
 export function updateHarnessCohortStatus(
@@ -160,37 +171,24 @@ export function emitHarnessRunCompleted(data: {
     const harness = getHarnessState();
     const detail = harness.cohortDetails[data.cohortId];
     if (detail) {
-      const updatedRuns = (detail.runs ?? []).map((run) =>
-        run.run_id === data.runId
-          ? {
-              ...run,
-              status: data.status,
-              final_score: data.finalScore,
-              error_message: data.error,
-              completed_at: new Date().toISOString(),
-              running_time_ms: data.durationSeconds * 1000,
-            }
-          : run,
-      );
-      const completed = updatedRuns.filter((run) => run.status === "completed").length;
-      const failed = updatedRuns.filter((run) => run.status === "failed").length;
-      const executing = updatedRuns.filter((run) => run.status === "executing").length;
-      const pending = updatedRuns.filter((run) => run.status === "pending").length;
-      const evaluating = updatedRuns.filter((run) => run.status === "evaluating").length;
       const summary: CohortSummary = {
         ...detail.summary,
-        total_runs: updatedRuns.length,
+        total_runs: detail.summary.total_runs,
         status_counts: {
-          pending,
-          executing,
-          evaluating,
-          completed,
-          failed,
+          ...detail.summary.status_counts,
+          completed:
+            data.status === "completed"
+              ? detail.summary.status_counts.completed + 1
+              : detail.summary.status_counts.completed,
+          failed:
+            data.status === "failed"
+              ? detail.summary.status_counts.failed + 1
+              : detail.summary.status_counts.failed,
         },
       };
       const updatedDetail: CohortDetail = {
+        ...detail,
         summary,
-        runs: updatedRuns,
       };
       harness.cohortDetails[data.cohortId] = updatedDetail;
       harness.cohorts = harness.cohorts.map((cohort) =>

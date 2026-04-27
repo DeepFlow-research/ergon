@@ -10,7 +10,6 @@ from typing import Any
 from uuid import UUID
 
 from ergon_core.api import Benchmark, Evaluator, Worker
-from ergon_core.core.providers.generation.model_resolution import ResolvedModel
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
@@ -25,8 +24,6 @@ from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
 )
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
-from ergon_builtins.models.cloud_passthrough import resolve_cloud
-from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.workers.baselines.react_prompts import (
     MINIF2F_SYSTEM_PROMPT,
     SWEBENCH_SYSTEM_PROMPT,
@@ -177,11 +174,4 @@ SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
 SANDBOX_TEMPLATES: dict[str, Path] = {
     "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox",
     "swebench-verified": Path(__file__).parent / "benchmarks/swebench_verified/sandbox",
-}
-
-MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
-    "vllm": resolve_vllm,
-    "openai": resolve_cloud,
-    "anthropic": resolve_cloud,
-    "google": resolve_cloud,
 }

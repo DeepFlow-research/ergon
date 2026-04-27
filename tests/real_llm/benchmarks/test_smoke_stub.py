@@ -3,39 +3,34 @@ actually spending tokens. Uses the researchrubrics smoke fixture + stub model.
 
 Validates:
   - docker stack up (or --assume-stack-up), stack fixture did not skip
-  - `ergon benchmark run` CLI path works
+  - `ergon experiment define` and `ergon experiment run` CLI paths work
   - /api/test/read/run/{id}/state returns a terminal state
   - Postgres row exists with the right relationships
   - Playwright can find the cohort in the dashboard
 """
 
 import os
+import re
 import subprocess
-from datetime import datetime, timezone
 
 import pytest
-from sqlmodel import select
-
-from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
 
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 
+_UUID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
 
-def _latest_run_id_since(since: datetime) -> str:
-    """Query the most recent RunRecord created at or after `since`."""
-    ensure_db()
-    with get_session() as session:
-        stmt = (
-            select(RunRecord)
-            .where(RunRecord.created_at >= since)
-            .order_by(RunRecord.created_at.desc())
-            .limit(1)
-        )
-        row = session.exec(stmt).first()
-        if row is None:
-            raise RuntimeError("no RunRecord found after canary CLI invocation")
-        return str(row.id)
+
+def _parse_uuid_line(prefix: str, output: str) -> str:
+    for line in output.splitlines():
+        if not line.startswith(prefix):
+            continue
+        match = _UUID_RE.search(line)
+        if match is not None:
+            return match.group(0)
+    raise AssertionError(f"missing {prefix} line in CLI output:\n{output}")
 
 
 async def test_harness_canary_smoke_stub(
@@ -43,9 +38,6 @@ async def test_harness_canary_smoke_stub(
     harness_client,
     playwright_context,
 ) -> None:
-    # Timestamp the boundary so we can filter for a run created *after* this point.
-    before = datetime.now(timezone.utc)
-
     env = {
         **os.environ,
         "ENABLE_TEST_HARNESS": "1",
@@ -55,18 +47,18 @@ async def test_harness_canary_smoke_stub(
             "postgresql://ergon:ergon_dev@127.0.0.1:5433/ergon",
         ),
     }
-    result = subprocess.run(
+    define = subprocess.run(
         [
             "uv",
             "run",
             "ergon",
-            "benchmark",
-            "run",
+            "experiment",
+            "define",
             "researchrubrics",
-            "--model",
-            "stub:constant",
             "--worker",
             "researchrubrics-smoke-worker",
+            "--model",
+            "stub:constant",
             "--evaluator",
             "researchrubrics-smoke-criterion",
             "--limit",
@@ -77,11 +69,22 @@ async def test_harness_canary_smoke_stub(
         timeout=180,
         env=env,
     )
-    assert result.returncode == 0, (
-        f"CLI failed (rc={result.returncode}):\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    assert define.returncode == 0, (
+        f"CLI failed (rc={define.returncode}):\nstdout: {define.stdout}\nstderr: {define.stderr}"
     )
+    experiment_id = _parse_uuid_line("EXPERIMENT_ID=", define.stdout + define.stderr)
 
-    run_id = _latest_run_id_since(before)
+    run = subprocess.run(
+        ["uv", "run", "ergon", "experiment", "run", experiment_id],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env=env,
+    )
+    assert run.returncode == 0, (
+        f"CLI failed (rc={run.returncode}):\nstdout: {run.stdout}\nstderr: {run.stderr}"
+    )
+    run_id = _parse_uuid_line("RUN_ID=", run.stdout + run.stderr)
 
     # Poll the harness until terminal.
     state = harness_client.wait_for_terminal(run_id, timeout_s=120)

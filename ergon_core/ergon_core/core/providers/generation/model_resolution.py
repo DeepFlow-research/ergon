@@ -1,19 +1,7 @@
-"""Prefix-based model target resolution.
-
-Dispatches ``model_target`` strings to the appropriate backend based on
-their prefix (``vllm:``, ``transformers:``, ``openai:``, etc.).
-
-Concrete backend implementations live in ``ergon_builtins.models``.
-This module owns the contract (``ResolvedModel``) and the dispatch logic.
-"""
-
-import logging
-from typing import Callable
+"""Prefix-based model target resolution."""
 
 import pydantic_ai.models
 from pydantic import BaseModel
-
-logger = logging.getLogger(__name__)
 
 
 class ResolvedModel(BaseModel):
@@ -32,16 +20,6 @@ class ResolvedModel(BaseModel):
     supports_logprobs: bool = False
 
 
-# Backend resolver registry: prefix -> callable
-# Populated by ergon_builtins.registry at import time.
-_BACKEND_REGISTRY: dict[str, Callable[..., ResolvedModel]] = {}
-
-
-def register_model_backend(prefix: str, resolver: Callable[..., ResolvedModel]) -> None:
-    """Register a model backend resolver for a given prefix."""
-    _BACKEND_REGISTRY[prefix] = resolver
-
-
 def resolve_model_target(
     model_target: str | None,
     *,
@@ -51,20 +29,48 @@ def resolve_model_target(
 ) -> ResolvedModel:
     """Resolve a ``model_target`` string to a PydanticAI-compatible model.
 
-    Dispatches by prefix to registered backends. Unrecognised prefixes
-    are passed through to PydanticAI's ``infer_model``.
+    Cloud provider targets (``openai:*``, ``anthropic:*``, ``google:*``)
+    intentionally resolve to OpenRouter-hosted models. Direct cloud provider
+    API access is not part of Ergon's model-target grammar.
     """
+
     target = model_target or "openai:gpt-4o"
+    prefix = target.split(":", 1)[0] if ":" in target else ""
 
-    prefix = target.split(":")[0] if ":" in target else ""
-
-    resolver = _BACKEND_REGISTRY.get(prefix)
-    if resolver is not None:
-        return resolver(
-            target,
-            model_name=model_name,
-            policy_version=policy_version,
-            api_key=api_key,
+    if prefix == "vllm":
+        from ergon_core.core.providers.generation.openai_compatible import (  # slopcop: ignore[guarded-function-import] -- reason: avoid import cycle; provider modules import ResolvedModel
+            resolve_vllm,
         )
 
-    return ResolvedModel(model=target, supports_logprobs=False)
+        return resolve_vllm(
+            target, model_name=model_name, policy_version=policy_version, api_key=api_key
+        )
+
+    if prefix == "openai-compatible":
+        from ergon_core.core.providers.generation.openai_compatible import (  # slopcop: ignore[guarded-function-import] -- reason: avoid import cycle; provider modules import ResolvedModel
+            resolve_openai_compatible,
+        )
+
+        return resolve_openai_compatible(
+            target, model_name=model_name, policy_version=policy_version, api_key=api_key
+        )
+
+    if prefix in {"openai", "anthropic", "google"}:
+        from ergon_core.core.providers.generation.openrouter import (  # slopcop: ignore[guarded-function-import] -- reason: avoid import cycle; provider modules import ResolvedModel
+            resolve_cloud_via_openrouter,
+        )
+
+        return resolve_cloud_via_openrouter(
+            target, model_name=model_name, policy_version=policy_version, api_key=api_key
+        )
+
+    if prefix == "openrouter":
+        from ergon_core.core.providers.generation.openrouter import (  # slopcop: ignore[guarded-function-import] -- reason: avoid import cycle; provider modules import ResolvedModel
+            resolve_openrouter_alias,
+        )
+
+        return resolve_openrouter_alias(
+            target, model_name=model_name, policy_version=policy_version, api_key=api_key
+        )
+
+    raise ValueError(f"Unsupported model target: {target!r}")

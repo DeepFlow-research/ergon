@@ -5,6 +5,7 @@ and require ERGON_DATABASE_URL to point at the shared Postgres instance.
 """
 
 import os
+import re
 import socket
 import subprocess
 from urllib.parse import urlparse
@@ -13,6 +14,11 @@ import pytest
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.settings import settings
 from sqlmodel import Session
+
+_UUID_RE = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
 
 # NOTE: smoke fixture registration now lives exclusively inside the api
 # container via ``ERGON_STARTUP_PLUGINS``.
@@ -91,29 +97,57 @@ def run_benchmark(
     *,
     worker: str,
     evaluator: str,
+    model: str = "stub:constant",
     limit: int = 1,
     cohort: str = "ci",
     timeout: int = 120,
 ) -> subprocess.CompletedProcess:
-    """Run a benchmark via the ergon CLI and return the process result."""
-    cmd = [
+    """Define and run an experiment via the ergon CLI."""
+    define_cmd = [
         "ergon",
-        "benchmark",
-        "run",
+        "experiment",
+        "define",
         slug,
         "--worker",
         worker,
+        "--model",
+        model,
         "--evaluator",
         evaluator,
         "--limit",
         str(limit),
         "--cohort",
         cohort,
-        "--timeout",
-        str(timeout),
     ]
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-    return subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=timeout + 30)
+    define = subprocess.run(
+        define_cmd,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=timeout + 30,
+    )
+    if define.returncode != 0:
+        return define
+
+    experiment_id = _parse_uuid_line("EXPERIMENT_ID=", define.stdout + define.stderr)
+    return subprocess.run(
+        ["ergon", "experiment", "run", experiment_id, "--timeout", str(timeout)],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=timeout + 30,
+    )
+
+
+def _parse_uuid_line(prefix: str, output: str) -> str:
+    for line in output.splitlines():
+        if not line.startswith(prefix):
+            continue
+        match = _UUID_RE.search(line)
+        if match is not None:
+            return match.group(0)
+    raise AssertionError(f"missing {prefix} line in CLI output:\n{output}")
 
 
 @pytest.fixture(scope="session")

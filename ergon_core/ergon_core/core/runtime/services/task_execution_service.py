@@ -13,7 +13,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
 from ergon_core.core.runtime.errors.inngest_errors import ConfigurationError
 from ergon_core.core.runtime.execution.propagation import (
     mark_task_failed,
@@ -106,29 +106,63 @@ class TaskExecutionService:
                     task_id=command.task_id,
                 )
 
-            worker_row = session.exec(
-                select(ExperimentDefinitionWorker).where(
-                    ExperimentDefinitionWorker.experiment_definition_id == command.definition_id,
-                    ExperimentDefinitionWorker.binding_key == assigned_worker_slug,
-                )
-            ).first()
-            if worker_row is None:
-                raise ConfigurationError(
-                    f"No ExperimentDefinitionWorker with binding_key="
-                    f"'{assigned_worker_slug}' for definition {command.definition_id}",
-                    run_id=command.run_id,
-                    task_id=command.task_id,
-                )
-
             definition = require_not_none(
                 session.get(ExperimentDefinition, command.definition_id),
                 f"Definition {command.definition_id} not found",
             )
+            definition_worker_id: UUID | None
+            worker_type: str
+            model_target: str
+
+            if node.definition_task_id is None:
+                from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: dynamic graph tasks resolve test/plugin workers at execution time
+                    WORKERS,
+                )
+
+                if assigned_worker_slug not in WORKERS:
+                    raise ConfigurationError(
+                        f"Unknown worker slug '{assigned_worker_slug}' for dynamic graph task",
+                        run_id=command.run_id,
+                        task_id=command.task_id,
+                    )
+                run = require_not_none(
+                    session.get(RunRecord, command.run_id),
+                    f"RunRecord {command.run_id} not found",
+                )
+                definition_worker_id = None
+                worker_type = assigned_worker_slug
+                model_target = run.model_target or "openai:gpt-4o"
+            else:
+                assignment = require_not_none(
+                    session.exec(
+                        select(ExperimentDefinitionTaskAssignment).where(
+                            ExperimentDefinitionTaskAssignment.experiment_definition_id
+                            == command.definition_id,
+                            ExperimentDefinitionTaskAssignment.task_id == node.definition_task_id,
+                        )
+                    ).first(),
+                    f"Definition task {node.definition_task_id} has no worker assignment",
+                )
+                worker_row = require_not_none(
+                    session.exec(
+                        select(ExperimentDefinitionWorker).where(
+                            ExperimentDefinitionWorker.experiment_definition_id
+                            == command.definition_id,
+                            ExperimentDefinitionWorker.binding_key == assignment.worker_binding_key,
+                        )
+                    ).first(),
+                    f"No ExperimentDefinitionWorker with binding_key="
+                    f"'{assignment.worker_binding_key}' for definition {command.definition_id}",
+                )
+                definition_worker_id = worker_row.id
+                worker_type = worker_row.worker_type
+                model_target = worker_row.model_target
 
             execution = RunTaskExecution(
                 run_id=command.run_id,
                 node_id=node_id,
-                definition_worker_id=worker_row.id,
+                definition_task_id=node.definition_task_id,
+                definition_worker_id=definition_worker_id,
                 attempt_number=self._next_attempt_number(session, command.run_id, node_id),
                 status=TaskExecutionStatus.RUNNING,
                 started_at=utcnow(),
@@ -154,7 +188,7 @@ class TaskExecutionService:
                 task_slug=node.task_slug,
                 new_status=TaskExecutionStatus.RUNNING,
                 old_status=None,
-                worker_id=worker_row.id,
+                worker_id=definition_worker_id,
                 worker_name=assigned_worker_slug,
             )
 
@@ -171,8 +205,8 @@ class TaskExecutionService:
                 task_description=node.description,
                 benchmark_type=definition.benchmark_type,
                 assigned_worker_slug=assigned_worker_slug,
-                worker_type=worker_row.worker_type,
-                model_target=worker_row.model_target,
+                worker_type=worker_type,
+                model_target=model_target,
                 execution_id=execution.id,
             )
 

@@ -38,15 +38,6 @@ class WorkflowInitializationService:
             )
             all_tasks = list(session.exec(tasks_stmt).all())
 
-            task_descriptors = [
-                TaskDescriptor(
-                    task_id=t.id,
-                    task_slug=t.task_slug,
-                    parent_task_id=t.parent_task_id,
-                )
-                for t in all_tasks
-            ]
-
             graph_repo = WorkflowGraphRepository()
             graph_repo.initialize_from_definition(
                 session,
@@ -60,6 +51,15 @@ class WorkflowInitializationService:
             session.commit()
 
             graph_lookup = GraphNodeLookup(session, command.run_id)
+            task_descriptors = [
+                TaskDescriptor(
+                    task_id=t.id,
+                    task_slug=t.task_slug,
+                    parent_task_id=t.parent_task_id,
+                    node_id=graph_lookup.node_id(t.id),
+                )
+                for t in all_tasks
+            ]
 
             run_record = require_not_none(
                 session.get(RunRecord, command.run_id),

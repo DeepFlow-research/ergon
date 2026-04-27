@@ -52,10 +52,11 @@ runnable — not a catalog of registered implementations.
     Rubric nesting is not supported and there are no plans to change that.
   - Third-party users primarily extend at the Criterion layer.
 
-- Model backend registry.
-  - Concrete LLM backends register via
-    `register_model_backend(prefix, resolver)` at import time.
-  - Freeze status: stable API; adding a backend is additive.
+- Model target resolution.
+  - Builtins do not register cloud model backends. Model target strings are
+    resolved centrally by `resolve_model_target` in `ergon_core`.
+  - Freeze status: stable API; adding a backend is additive inside the
+    providers layer.
 
 - ReAct toolkit composition.
   - There is one concrete ReAct worker class — `ReActWorker` (slug `react-v1`,
@@ -145,8 +146,8 @@ Benchmark loader → Task instances → Worker
 - **New worker.** Add under `ergon_builtins/workers/baselines/` if it is
   cross-benchmark; alongside the benchmark otherwise. The contract is which
   task schemas it supports.
-- **New model backend.** Call `register_model_backend(prefix, resolver)` at
-  import time; prefer short, stable prefixes.
+- **New model backend.** Add an explicit `resolve_model_target` branch in
+  `ergon_core/core/providers/generation/`; prefer short, stable prefixes.
 - **New Criterion.** Place in `ergon_builtins/evaluators/criteria/` if
   reusable, alongside the benchmark if benchmark-specific. This is the
   layer third-party users most often extend.

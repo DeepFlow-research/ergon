@@ -8,11 +8,12 @@ from ergon_cli.commands.benchmark import handle_benchmark
 from ergon_cli.commands.doctor import handle_doctor
 from ergon_cli.commands.eval import handle_eval
 from ergon_cli.commands.evaluator import handle_evaluator
+from ergon_cli.commands.experiment import handle_experiment
 from ergon_cli.commands.onboard import handle_onboard
 from ergon_cli.commands.run import handle_run
 from ergon_cli.commands.train import handle_train
-from ergon_cli.commands.workflow import handle_workflow
 from ergon_cli.commands.worker import handle_worker
+from ergon_cli.commands.workflow import handle_workflow
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,35 +31,42 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="Rebuild even if the template already exists"
     )
 
-    run_parser = bench_sub.add_parser("run", help="Run a benchmark")
-    run_parser.add_argument("slug", help="Benchmark slug")
-    run_parser.add_argument("--model", default="openai:gpt-4o", help="Model to use")
-    run_parser.add_argument("--worker", default="training-stub", help="Worker slug")
-    run_parser.add_argument("--evaluator", default="stub-rubric", help="Evaluator slug")
-    run_parser.add_argument("--workflow", default="single", help="Workflow variant")
-    run_parser.add_argument(
-        "--limit",
-        type=int,
+    experiment = sub.add_parser("experiment", help="Experiment lifecycle")
+    experiment_sub = experiment.add_subparsers(dest="experiment_action")
+    experiment_define = experiment_sub.add_parser("define", help="Define an experiment")
+    experiment_define.add_argument("benchmark_slug", help="Benchmark slug")
+    sample_group = experiment_define.add_mutually_exclusive_group(required=True)
+    sample_group.add_argument("--limit", type=int, default=None, help="Number of samples")
+    sample_group.add_argument(
+        "--sample-id",
+        action="append",
         default=None,
-        help="Number of samples/tasks to run (benchmark-specific)",
+        help="Specific benchmark sample id; can be repeated",
     )
-    run_parser.add_argument(
-        "--timeout",
-        type=int,
-        default=600,
-        help="Timeout in seconds per run",
-    )
-    run_parser.add_argument(
+    experiment_define.add_argument("--name", default=None, help="Experiment name")
+    experiment_define.add_argument("--cohort", default=None, help="Optional cohort/project folder")
+    experiment_define.add_argument("--worker", required=True, help="Primary worker slug")
+    experiment_define.add_argument("--model", required=True, help="Primary model target")
+    experiment_define.add_argument("--evaluator", default=None, help="Optional evaluator slug")
+    experiment_define.add_argument("--workflow", default="single", help="Workflow variant")
+    experiment_define.add_argument(
         "--max-questions",
         type=int,
         default=10,
         help="Max questions workers can ask",
     )
-    run_parser.add_argument(
-        "--cohort",
-        default=None,
-        help="Cohort name to group this run under (auto-generated from slug if omitted)",
+    experiment_run = experiment_sub.add_parser("run", help="Run a defined experiment")
+    experiment_run.add_argument("experiment_id", help="Experiment UUID")
+    experiment_run.add_argument("--timeout", type=int, default=600, help="Timeout seconds")
+    experiment_run.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="Do not wait for terminal runs",
     )
+    experiment_show = experiment_sub.add_parser("show", help="Show experiment detail")
+    experiment_show.add_argument("experiment_id", help="Experiment UUID")
+    experiment_list = experiment_sub.add_parser("list", help="List experiments")
+    experiment_list.add_argument("--limit", type=int, default=50, help="Number of experiments")
 
     run = sub.add_parser("run", help="Run management")
     run_sub = run.add_subparsers(dest="run_action")
@@ -183,24 +191,25 @@ async def _main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "benchmark":
-        return await handle_benchmark(args)
-    elif args.command == "run":
-        return handle_run(args)
-    elif args.command == "worker":
-        return handle_worker(args)
-    elif args.command == "workflow":
-        return await handle_workflow(args)
-    elif args.command == "evaluator":
-        return handle_evaluator(args)
-    elif args.command == "eval":
-        return await handle_eval(args)
-    elif args.command == "train":
-        return handle_train(args)
-    elif args.command == "onboard":
-        return handle_onboard(args)
-    elif args.command == "doctor":
-        return handle_doctor(args)
+    async_handlers = {
+        "benchmark": handle_benchmark,
+        "experiment": handle_experiment,
+        "workflow": handle_workflow,
+        "eval": handle_eval,
+    }
+    sync_handlers = {
+        "run": handle_run,
+        "worker": handle_worker,
+        "evaluator": handle_evaluator,
+        "train": handle_train,
+        "onboard": handle_onboard,
+        "doctor": handle_doctor,
+    }
+
+    if args.command in async_handlers:
+        return await async_handlers[args.command](args)
+    if args.command in sync_handlers:
+        return sync_handlers[args.command](args)
     else:
         parser.print_help()
         return 0

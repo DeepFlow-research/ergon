@@ -1,11 +1,10 @@
 """Run creation, dispatch, and cancellation via Inngest."""
 
-import asyncio
 import logging
 from uuid import UUID
 
 import inngest
-from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
+from ergon_core.api.handles import PersistedExperimentDefinition
 from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
@@ -14,15 +13,11 @@ from ergon_core.core.runtime.events.infrastructure_events import (
     RunCancelledEvent,
     RunCleanupEvent,
 )
-from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.settings import settings
 from ergon_core.core.utils import utcnow
 
 logger = logging.getLogger(__name__)
-
-_POLL_INTERVAL_S = 1.0
-_DEFAULT_TIMEOUT_S = 600.0
 
 
 def _checkpoint_metadata() -> JsonObject:
@@ -39,14 +34,29 @@ def _checkpoint_metadata() -> JsonObject:
     }
 
 
-def create_run(
+def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirrors RunRecord provenance fields
     definition: PersistedExperimentDefinition,
-    cohort_id: UUID | None = None,
+    *,
+    experiment_id: UUID,
+    workflow_definition_id: UUID,
+    instance_key: str,
+    worker_team_json: JsonObject,
+    evaluator_slug: str | None = None,
+    model_target: str | None = None,
+    assignment_json: JsonObject | None = None,
+    seed: int | None = None,
 ) -> RunRecord:
     with get_session() as session:
         run = RunRecord(
-            experiment_definition_id=definition.definition_id,
-            cohort_id=cohort_id,
+            experiment_id=experiment_id,
+            workflow_definition_id=workflow_definition_id,
+            benchmark_type=definition.benchmark_type,
+            instance_key=instance_key,
+            worker_team_json=worker_team_json,
+            evaluator_slug=evaluator_slug,
+            model_target=model_target,
+            assignment_json=assignment_json or {},
+            seed=seed,
             status=RunStatus.PENDING,
             created_at=utcnow(),
             summary_json=_checkpoint_metadata(),
@@ -55,54 +65,6 @@ def create_run(
         session.commit()
         session.refresh(run)
         return run
-
-
-async def create_experiment_run(
-    definition: PersistedExperimentDefinition,
-    timeout_s: float = _DEFAULT_TIMEOUT_S,
-) -> ExperimentRunHandle:
-    run = create_run(definition)
-
-    event = WorkflowStartedEvent(
-        run_id=run.id,
-        definition_id=definition.definition_id,
-    )
-    await inngest_client.send(
-        inngest.Event(
-            name=WorkflowStartedEvent.name,
-            data=event.model_dump(mode="json"),
-        )
-    )
-
-    logger.info("Dispatched workflow/started for run %s", run.id)
-
-    elapsed = 0.0
-    final_status = RunStatus.PENDING
-    while elapsed < timeout_s:
-        await asyncio.sleep(_POLL_INTERVAL_S)
-        elapsed += _POLL_INTERVAL_S
-
-        with get_session() as session:
-            current = session.get(RunRecord, run.id)
-            if current is None:
-                raise RuntimeError(f"RunRecord {run.id} vanished during polling")
-            final_status = current.status
-            if final_status in TERMINAL_RUN_STATUSES:
-                break
-
-    if final_status not in TERMINAL_RUN_STATUSES:
-        logger.warning("Run %s did not reach terminal state within %ss", run.id, timeout_s)
-
-    return ExperimentRunHandle(
-        run_id=run.id,
-        definition_id=definition.definition_id,
-        benchmark_type=definition.benchmark_type,
-        status=final_status,
-        worker_bindings=definition.worker_bindings,
-        created_at=run.created_at,
-        started_at=run.started_at,
-        metadata=definition.metadata,
-    )
 
 
 def cancel_run(run_id: UUID) -> RunRecord:

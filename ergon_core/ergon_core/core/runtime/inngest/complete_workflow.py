@@ -7,7 +7,7 @@ import inngest
 from ergon_core.core.dashboard import emit_cohort_updated_for_run
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
 from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
 from ergon_core.core.runtime.events.task_events import WorkflowCompletedEvent
 from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
@@ -99,6 +99,7 @@ async def complete_workflow_fn(ctx: inngest.Context) -> WorkflowCompleteResult:
 
     with get_session() as session:
         run = session.get(RunRecord, payload.run_id)
+        experiment = session.get(ExperimentRecord, run.experiment_id) if run else None
         if run and run.started_at and run.completed_at:
             sink.emit_span(
                 CompletedSpan(
@@ -109,7 +110,9 @@ async def complete_workflow_fn(ctx: inngest.Context) -> WorkflowCompleteResult:
                     attributes={
                         "run_id": str(payload.run_id),
                         "definition_id": str(payload.definition_id),
-                        "cohort_id": str(run.cohort_id) if run.cohort_id else "",
+                        "cohort_id": str(experiment.cohort_id)
+                        if experiment and experiment.cohort_id
+                        else "",
                         "status": run.status,
                         "final_score": finalized.final_score,
                         "normalized_score": finalized.normalized_score,

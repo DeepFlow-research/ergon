@@ -21,11 +21,11 @@ from ergon_core.api.generation import (
     ModelResponsePart,
     TextPart,
     ThinkingPart,
-    TokenLogprob,
     ToolCallPart,
     ToolReturnPart,
     UserPromptPart,
 )
+from ergon_core.core.providers.generation.types import TokenLogprob
 
 
 class TrainingStubWorker(Worker):

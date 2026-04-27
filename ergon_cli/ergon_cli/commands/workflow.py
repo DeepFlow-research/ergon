@@ -8,6 +8,7 @@ from uuid import UUID
 from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.services.workflow_service import WorkflowService
+from ergon_core.core.runtime.services.workflow_dto import WorkflowMutationRef
 from pydantic import BaseModel
 from sqlmodel import Session
 from collections.abc import Callable
@@ -59,9 +60,16 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     resource_content.add_argument("--max-bytes", type=int, default=100_000)
     resource_content.add_argument("--format", choices=["text", "json"], default="text")
 
+    resource_location = inspect_sub.add_parser("resource-location")
+    resource_location.add_argument("--resource-id", required=True)
+    resource_location.add_argument("--format", choices=["text", "json"], default="text")
+
     task_tree = inspect_sub.add_parser("task-tree")
     task_tree.add_argument("--format", choices=["text", "json"], default="text")
     task_tree.add_argument("--parent-node-id", default=None)
+
+    task_workspace = inspect_sub.add_parser("task-workspace")
+    task_workspace.add_argument("--format", choices=["text", "json"], default="text")
 
     dependencies = inspect_sub.add_parser("task-dependencies")
     dependencies.add_argument(
@@ -81,8 +89,32 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--dry-run", action="store_true")
     materialize.add_argument("--format", choices=["text", "json"], default="text")
 
-    for action in ("add-task", "add-edge", "restart-task", "abandon-task"):
+    add_task = manage_sub.add_parser("add-task")
+    add_task.add_argument("--task-slug", required=True)
+    add_task.add_argument("--description", required=True)
+    add_task.add_argument("--worker", required=True)
+    add_task.add_argument("--parent-node-id", default=None)
+    add_task.add_argument("--dry-run", action="store_true")
+    add_task.add_argument("--format", choices=["text", "json"], default="text")
+    add_task.add_argument("--reason", default=None)
+
+    add_edge = manage_sub.add_parser("add-edge")
+    add_edge.add_argument("--source-task-slug", required=True)
+    add_edge.add_argument("--target-task-slug", required=True)
+    add_edge.add_argument("--dry-run", action="store_true")
+    add_edge.add_argument("--format", choices=["text", "json"], default="text")
+    add_edge.add_argument("--reason", default=None)
+
+    update_description = manage_sub.add_parser("update-task-description")
+    update_description.add_argument("--task-slug", required=True)
+    update_description.add_argument("--description", required=True)
+    update_description.add_argument("--dry-run", action="store_true")
+    update_description.add_argument("--format", choices=["text", "json"], default="text")
+    update_description.add_argument("--reason", default=None)
+
+    for action in ("restart-task", "abandon-task"):
         parser_for_action = manage_sub.add_parser(action)
+        parser_for_action.add_argument("--task-slug", required=True)
         parser_for_action.add_argument("--dry-run", action="store_true")
         parser_for_action.add_argument("--format", choices=["text", "json"], default="text")
         parser_for_action.add_argument("--reason", default=None)
@@ -97,6 +129,23 @@ def execute_workflow_command(
     session_factory: Callable[[], Session],
     service: WorkflowService,
 ) -> WorkflowCommandOutput:
+    return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI sync bridge
+        execute_workflow_command_async(
+            command,
+            context=context,
+            session_factory=session_factory,
+            service=service,
+        )
+    )
+
+
+async def execute_workflow_command_async(
+    command: str,
+    *,
+    context: WorkflowCommandContext,
+    session_factory: Callable[[], Session],
+    service: WorkflowService,
+) -> WorkflowCommandOutput:
     argv = shlex.split(command)
     _reject_context_flags(argv)
     args = build_workflow_parser().parse_args(argv)
@@ -105,9 +154,7 @@ def execute_workflow_command(
         if args.group == "inspect":
             return _handle_inspect(args, context=context, session=session, service=service)
         if args.group == "manage":
-            return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI/tool sync bridge
-                _handle_manage(args, context=context, session=session, service=service)
-            )
+            return await _handle_manage(args, context=context, session=session, service=service)
     finally:
         _close_session(session)
     raise ValueError(f"unsupported workflow command group: {args.group}")
@@ -184,6 +231,22 @@ def _handle_inspect(
         if args.format == "json":
             return _format_output({"content": content.decode(errors="replace")}, [], "json")
         return WorkflowCommandOutput(stdout=content.decode(errors="replace"))
+    if args.action == "resource-location":
+        location = service.get_resource_location(
+            session,
+            run_id=context.run_id,
+            resource_id=UUID(args.resource_id),
+        )
+        return _format_output(
+            {"resource_location": _dump(location)},
+            text_lines=[
+                f"resource {location.resource.name}",
+                f"producer={location.producer_task_slug or '-'}",
+                f"local={location.local_file_path}",
+                f"default_sandbox_path={location.default_sandbox_path}",
+            ],
+            output_format=args.format,
+        )
     if args.action == "task-tree":
         parent = UUID(args.parent_node_id) if args.parent_node_id else None
         tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
@@ -193,6 +256,28 @@ def _handle_inspect(
                 f"{'  ' * task.level}{task.task_slug} {task.status} {task.node_id}"
                 for task in tasks
             ],
+            output_format=args.format,
+        )
+    if args.action == "task-workspace":
+        workspace = service.get_task_workspace(
+            session,
+            run_id=context.run_id,
+            node_id=context.node_id,
+        )
+        lines = [
+            f"task {workspace.task.task_slug} status={workspace.task.status}",
+        ]
+        if workspace.latest_execution is not None:
+            lines.append(
+                "execution "
+                f"{workspace.latest_execution.execution_id} "
+                f"status={workspace.latest_execution.status}"
+            )
+        lines.extend(f"own: {resource.name}" for resource in workspace.own_resources)
+        lines.extend(f"input: {resource.name}" for resource in workspace.input_resources)
+        return _format_output(
+            {"task_workspace": _dump(workspace)},
+            text_lines=lines,
             output_format=args.format,
         )
     if args.action == "task-dependencies":
@@ -249,18 +334,52 @@ async def _handle_manage(
             text_lines=[f"{result.source_resource_id} -> {result.sandbox_path}"],
             output_format=args.format,
         )
-    try:
-        dry_run = args.dry_run
-    except AttributeError:
-        dry_run = False
-    if dry_run:
-        payload: JsonObject = {
-            "action": args.action,
-            "dry_run": True,
-            "message": "Graph lifecycle command validated; no changes applied.",
-        }
-        return _format_output(payload, [str(payload["message"])], args.format)
-    raise ValueError(f"{args.action} requires --dry-run in workflow CLI v1")
+    if args.action == "add-task":
+        result = await service.add_task(
+            session,
+            run_id=context.run_id,
+            parent_node_id=UUID(args.parent_node_id) if args.parent_node_id else context.node_id,
+            task_slug=args.task_slug,
+            description=args.description,
+            assigned_worker_slug=args.worker,
+            dry_run=args.dry_run,
+        )
+        return _mutation_output(result, args.format)
+    if args.action == "add-edge":
+        result = await service.add_edge(
+            session,
+            run_id=context.run_id,
+            source_task_slug=args.source_task_slug,
+            target_task_slug=args.target_task_slug,
+            dry_run=args.dry_run,
+        )
+        return _mutation_output(result, args.format)
+    if args.action == "update-task-description":
+        result = await service.update_task_description(
+            session,
+            run_id=context.run_id,
+            task_slug=args.task_slug,
+            description=args.description,
+            dry_run=args.dry_run,
+        )
+        return _mutation_output(result, args.format)
+    if args.action == "restart-task":
+        result = await service.restart_task(
+            session,
+            run_id=context.run_id,
+            task_slug=args.task_slug,
+            dry_run=args.dry_run,
+        )
+        return _mutation_output(result, args.format)
+    if args.action == "abandon-task":
+        result = await service.abandon_task(
+            session,
+            run_id=context.run_id,
+            task_slug=args.task_slug,
+            dry_run=args.dry_run,
+        )
+        return _mutation_output(result, args.format)
+    raise ValueError(f"unsupported manage action: {args.action}")
 
 
 def _format_output(
@@ -271,6 +390,11 @@ def _format_output(
     if output_format == "json":
         return WorkflowCommandOutput(stdout=json.dumps(payload, indent=2, sort_keys=True))
     return WorkflowCommandOutput(stdout="\n".join(text_lines))
+
+
+def _mutation_output(result: WorkflowMutationRef, output_format: str) -> WorkflowCommandOutput:
+    payload: JsonObject = {"mutation": _dump(result)}
+    return _format_output(payload, [result.message], output_format)
 
 
 def _dump(value: BaseModel | JsonObject) -> JsonObject:

@@ -8,10 +8,6 @@ from collections.abc import Callable
 
 import structlog
 from ergon_core.api import Benchmark, Evaluator, Worker
-from ergon_core.core.providers.generation.model_resolution import (
-    ResolvedModel,
-    register_model_backend,
-)
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.registry_core import (
@@ -19,9 +15,6 @@ from ergon_builtins.registry_core import (
 )
 from ergon_builtins.registry_core import (
     EVALUATORS as _core_evaluators,
-)
-from ergon_builtins.registry_core import (
-    MODEL_BACKENDS as _core_model_backends,
 )
 from ergon_builtins.registry_core import (
     SANDBOX_MANAGERS as _core_sandbox_managers,
@@ -41,19 +34,6 @@ WORKERS: dict[str, Callable[..., Worker]] = {**_core_workers}
 BENCHMARKS: dict[str, type[Benchmark]] = {**_core_benchmarks}
 EVALUATORS: dict[str, type[Evaluator]] = {**_core_evaluators}
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {**_core_sandbox_managers}
-
-_model_backends: dict[str, Callable[..., ResolvedModel]] = {**_core_model_backends}
-
-# -- Capability: local-models ----------------------------------------------
-
-try:
-    from ergon_builtins.registry_local_models import (
-        MODEL_BACKENDS as _local_model_backends,
-    )
-
-    _model_backends.update(_local_model_backends)
-except ImportError:
-    log.info("ergon-builtins[local-models] not installed; local transformers inference unavailable")
 
 # -- Capability: data ------------------------------------------------------
 
@@ -79,11 +59,6 @@ except ImportError:
     log.info(
         "ergon-builtins[data] not installed; gdpeval and researchrubrics benchmarks unavailable"
     )
-
-# -- Register model backends -----------------------------------------------
-
-for prefix, resolver in _model_backends.items():
-    register_model_backend(prefix, resolver)
 
 # -- Install hints for slugs that require optional capabilities -------------
 

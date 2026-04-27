@@ -4,6 +4,7 @@ export type { ContextEventState };
 import type {
   BenchmarkName as RestBenchmarkName,
   CohortDetail as RestCohortDetail,
+  ExperimentDetail as RestExperimentDetail,
   CohortSummary as RestCohortSummary,
   ExperimentCohortStatusValue,
   RunCommunicationMessage as RestRunCommunicationMessage,
@@ -91,8 +92,9 @@ export type DashboardEventName =
 export type DashboardWorkflowStartedData = GeneratedDashboardWorkflowStartedData;
 export type DashboardWorkflowCompletedData = GeneratedDashboardWorkflowCompletedData;
 export type CohortSummary = RestCohortSummary;
-export type CohortRunRow = NonNullable<RestCohortDetail["runs"]>[number];
+export type CohortExperimentRow = NonNullable<RestCohortDetail["experiments"]>[number];
 export type CohortDetail = RestCohortDetail;
+export type ExperimentDetail = RestExperimentDetail;
 export type DashboardCohortUpdatedData = GeneratedDashboardCohortUpdatedData;
 export type DashboardTaskStatusChangedData = GeneratedDashboardTaskStatusChangedData;
 export type DashboardResourcePublishedData = GeneratedDashboardResourcePublishedData;

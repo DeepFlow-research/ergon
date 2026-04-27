@@ -19,26 +19,30 @@ from collections.abc import Iterator
 from typing import Annotated
 from uuid import UUID
 
-import inngest
-from ergon_cli.composition import build_experiment
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
+    ExperimentRecord,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
     RunTaskExecution,
     Thread,
 )
-from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
-from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
-from ergon_core.core.runtime.services.run_service import create_run
+from ergon_core.core.runtime.services.experiment_definition_service import (
+    ExperimentDefinitionService,
+)
+from ergon_core.core.runtime.services.experiment_launch_service import ExperimentLaunchService
+from ergon_core.core.runtime.services.experiment_schemas import (
+    ExperimentDefineRequest,
+    ExperimentRunRequest,
+)
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, asc, select
 
 router = APIRouter(prefix="/api/test", tags=["test-harness"])
@@ -276,7 +280,9 @@ def read_cohort_runs(
     if cohort is None:
         return []
     runs = list(
-        session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort.id)).all(),
+        session.exec(
+            select(RunRecord).join(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort.id)
+        ).all(),
     )
     return [TestCohortRunDto(run_id=r.id, status=r.status) for r in runs]
 
@@ -299,14 +305,18 @@ def read_cohort_runs(
 # ``experiment_definition_id`` passes validation and the secret gate (which
 # runs inside the handler body, after FastAPI's validation phase) can surface
 # 401/500 without 422 noise. ``experiment_definition_id`` is required because
-# ``RunRecord.experiment_definition_id`` is a NOT NULL FK to
-# ``experiment_definitions.id`` — no synthetic definition is created here.
+# ``RunRecord.workflow_definition_id`` is a NOT NULL FK to
+# ``experiment_definitions.id``; callers pass that existing definition id.
 # ``ResetRequest.cohort_prefix`` has no default: reset is destructive, so
 # callers must always specify what to nuke.
 
 
 class SeedRunRequest(BaseModel):
-    experiment_definition_id: UUID
+    workflow_definition_id: UUID
+    experiment_id: UUID | None = None
+    benchmark_type: str = "test-harness"
+    instance_key: str = "seeded"
+    worker_team: dict = Field(default_factory=lambda: {"primary": "test-harness-worker"})
     cohort: str = "_test_"
     status: str = "completed"
     task_slugs: list[str] = []
@@ -332,8 +342,34 @@ def seed_run(
             detail=f"unknown run status: {body.status!r}",
         ) from exc
     with Session(get_engine()) as s:
+        cohort = experiment_cohort_service.resolve_or_create(
+            name=body.cohort,
+            description="test harness seeded cohort",
+            created_by="test-harness",
+        )
+        experiment_kwargs = {}
+        if body.experiment_id is not None:
+            experiment_kwargs["id"] = body.experiment_id
+        experiment = ExperimentRecord(
+            **experiment_kwargs,
+            cohort_id=cohort.id,
+            name=f"Seeded {body.cohort}",
+            benchmark_type=body.benchmark_type,
+            sample_count=1,
+            sample_selection_json={"instance_keys": [body.instance_key]},
+            default_worker_team_json=body.worker_team,
+            design_json={},
+            metadata_json={"_test_seeded": True, "_test_cohort": body.cohort},
+            status="seeded",
+        )
+        s.add(experiment)
+        s.flush()
         run = RunRecord(
-            experiment_definition_id=body.experiment_definition_id,
+            experiment_id=experiment.id,
+            workflow_definition_id=body.workflow_definition_id,
+            benchmark_type=body.benchmark_type,
+            instance_key=body.instance_key,
+            worker_team_json=body.worker_team,
             status=run_status,
             summary_json={
                 "_test_seeded": True,
@@ -364,6 +400,12 @@ def reset_test_rows(
             tag = meta.get("_test_cohort")
             if isinstance(tag, str) and tag.startswith(body.cohort_prefix):
                 s.delete(r)
+        experiments = list(s.exec(select(ExperimentRecord)).all())
+        for experiment in experiments:
+            meta = {} if experiment.metadata_json is None else experiment.metadata_json
+            tag = meta.get("_test_cohort")
+            if isinstance(tag, str) and tag.startswith(body.cohort_prefix):
+                s.delete(experiment)
         s.commit()
     return None
 
@@ -404,10 +446,9 @@ class SubmitCohortResponse(BaseModel):
 async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
     """Build + persist + dispatch N runs under one cohort.
 
-    Per-slot flow mirrors the CLI's ``ergon benchmark run``:
-    ``build_experiment`` → ``validate`` → ``persist`` → ``create_run``
-    → send ``WorkflowStartedEvent``.  Slots submit sequentially —
-    typical N ≤ 3, so the parallel-gather savings are negligible.
+    Per-slot flow mirrors the CLI's ``ergon experiment define`` followed by
+    ``ergon experiment run``. Slots submit sequentially — typical N ≤ 3,
+    so the parallel-gather savings are negligible.
     """
     cohort = experiment_cohort_service.resolve_or_create(
         name=body.cohort_key,
@@ -417,25 +458,20 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
 
     run_ids: list[UUID] = []
     for slot in body.slots:
-        experiment = build_experiment(
-            benchmark_slug=body.benchmark_slug,
-            model=body.model,
-            worker_slug=slot.worker_slug,
-            evaluator_slug=slot.evaluator_slug,
-            limit=body.limit,
-        )
-        experiment.validate()
-        persisted = experiment.persist()
-        run = create_run(persisted, cohort_id=cohort.id)
-        await inngest_client.send(
-            inngest.Event(
-                name=WorkflowStartedEvent.name,
-                data=WorkflowStartedEvent(
-                    run_id=run.id,
-                    definition_id=persisted.definition_id,
-                ).model_dump(mode="json"),
+        defined = ExperimentDefinitionService().define_benchmark_experiment(
+            ExperimentDefineRequest(
+                benchmark_slug=body.benchmark_slug,
+                cohort_id=cohort.id,
+                limit=body.limit,
+                default_model_target=body.model,
+                default_worker_team={"primary": slot.worker_slug},
+                default_evaluator_slug=slot.evaluator_slug,
+                metadata={"source": "test-harness"},
             )
         )
-        run_ids.append(run.id)
+        launched = await ExperimentLaunchService().run_experiment(
+            ExperimentRunRequest(experiment_id=defined.experiment_id)
+        )
+        run_ids.extend(launched.run_ids)
 
     return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)
