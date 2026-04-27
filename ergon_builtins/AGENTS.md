@@ -108,16 +108,16 @@ and is instantiated directly by `researchrubrics-researcher`; it is not in
 
 ---
 
-## Model backends (`MODEL_BACKENDS` in registry_core.py)
+## Model targets (`resolve_model_target`)
 
 | prefix | file | notes |
 |---|---|---|
-| `vllm:` | `models/vllm_backend.py` | Points at a running vLLM server; supports logprobs. |
-| `openai:`, `anthropic:`, `google:` | `models/cloud_passthrough.py` | Passes through to pydantic-ai's provider.  No logprobs. |
-| *(no prefix)* | fallthrough | Handed to pydantic-ai's `infer_model` — may pick a default or fail. |
+| `vllm:<base-url>[#<model>]` | `ergon_core/core/providers/generation/openai_compatible.py` | Points at a running vLLM server; supports logprobs. |
+| `openai-compatible:<base-url>#<model>` | `ergon_core/core/providers/generation/openai_compatible.py` | Generic OpenAI-compatible endpoints such as Ollama. |
+| `openai:`, `anthropic:`, `google:` | `ergon_core/core/providers/generation/openrouter.py` | Always routed through OpenRouter, not direct cloud APIs. |
 
 Default when `--model` is omitted: `openai:gpt-4o`
-(`ergon_core/core/providers/generation/model_resolution.py:57`).
+(`ergon_core/core/providers/generation/model_resolution.py`).
 
 ---
 

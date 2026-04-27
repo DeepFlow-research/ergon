@@ -53,9 +53,9 @@ from tests.real_llm.rollout import _fingerprint as fingerprint
 
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 
-# Default to Sonnet 4.6 via OpenRouter.  Override with ERGON_REAL_LLM_MODEL
-# to roll out against a different model without editing the test.
-_DEFAULT_MODEL = "openrouter:anthropic/claude-sonnet-4.6"
+# Cloud provider prefixes resolve through OpenRouter. Override with
+# ERGON_REAL_LLM_MODEL to roll out against a different model.
+_DEFAULT_MODEL = "anthropic:claude-sonnet-4.6"
 
 # Wall-clock caps.  Real-LLM + real-sandbox rollouts are slow; keep
 # these generous enough to absorb E2B startup + Exa retries but bounded
@@ -68,9 +68,7 @@ _POST_TERMINAL_ARTIFACT_TIMEOUT_SECONDS = 300
 @pytest.fixture(autouse=True)
 def _require_keys() -> None:
     """Skip unless every settings key this rollout touches is populated."""
-    missing = settings.missing_values(
-        ["openrouter_api_key", "openai_api_key", "exa_api_key", "e2b_api_key"]
-    )
+    missing = settings.missing_values(["openrouter_api_key", "exa_api_key", "e2b_api_key"])
     if missing:
         pytest.skip(
             f"researchrubrics rollout requires {missing} — set them in .env "

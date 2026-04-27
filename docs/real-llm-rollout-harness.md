@@ -195,7 +195,7 @@ async def test_researchrubrics_rollout(
             "--evaluator", "research-rubric",
             "--model", os.environ.get(
                 "ERGON_REAL_LLM_MODEL",
-                "openrouter:anthropic/claude-sonnet-4.6",
+                "anthropic:claude-sonnet-4.6",
             ),
             "--limit", "1",
         ],
@@ -215,16 +215,13 @@ async def test_researchrubrics_rollout(
 
 ## Spike results
 
-**1. OpenRouter model routing — works out of the box.**
-`pydantic_ai.models.infer_model("openrouter:anthropic/claude-sonnet-4.6")`
-resolves to an `OpenAIModel` backed by
-`pydantic_ai.providers.openrouter.OpenRouterProvider`. The only
-requirement is `OPENROUTER_API_KEY` in the process env, which
-`settings.py:82-83` already exports from `settings.openrouter_api_key`.
-`resolve_model_target`'s fallback branch passes `openrouter:*` strings
-straight through to pydantic-ai. **No backend registration needed.** An
-optional one-line `"openrouter": resolve_cloud` entry in
-`MODEL_BACKENDS` is nice-to-have for symmetry, not required.
+**1. OpenRouter model routing.**
+`resolve_model_target("anthropic:claude-sonnet-4.6")` resolves to a
+PydanticAI chat model backed by
+`pydantic_ai.providers.openrouter.OpenRouterProvider`. Cloud provider
+prefixes (`openai:`, `anthropic:`, `google:`) are OpenRouter-hosted in
+Ergon; use `OPENROUTER_API_KEY` in the process env and do not route
+through direct provider APIs.
 
 **2. Exa inside the sandbox — confirmed not wired.** The plumbing
 exists but nothing populates it:
@@ -342,10 +339,9 @@ Files:
    `write_manifest`, `_rollout_dir`.
 2. `tests/real_llm/benchmarks/test_researchrubrics.py` — the 30-line
    trigger above.
-3. *(optional)* `ergon_builtins/registry_core.py` — one-line
-   `"openrouter": resolve_cloud` entry in `MODEL_BACKENDS` for
-   symmetry with the other cloud prefixes. Not required — pydantic-ai
-   handles the prefix natively via the fallback branch.
+3. Model targets resolve centrally in `resolve_model_target`; use
+   provider-prefixed targets such as `anthropic:claude-sonnet-4.6`.
+   Cloud provider prefixes route through OpenRouter.
 
 Estimated effort: **half a day** on top of the pre-work PR.
 

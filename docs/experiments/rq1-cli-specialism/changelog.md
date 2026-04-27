@@ -282,4 +282,16 @@ Runs append below. Each entry should include command, env knobs, rollout artifac
 - Main residual issue:
   - Dynamic specialist children now schedule and some complete, but child failures still propagate run failure. Next core-code direction would be either (a) make advisory child tasks non-fatal for parent benchmark return, or (b) harden child-worker prompting/tooling so specialist children reliably write `final_output/report.md`.
 
+## 2026-04-27 10:05 UTC+1 - Model Resolution Refactor
+
+- Intent:
+  - Make Ergon cloud model targets (`openai:*`, `anthropic:*`, `google:*`) route through OpenRouter instead of direct provider APIs or PydanticAI fallback inference.
+- Changes:
+  - Upgraded `pydantic-ai` from `0.7.2` to `0.8.1`, the latest resolvable version in this environment.
+  - Centralized dispatch in `ergon_core/core/providers/generation/model_resolution.py`.
+  - Added `openrouter.py` for OpenRouter-hosted cloud targets and `openai_compatible.py` for `vllm:` plus `openai-compatible:` endpoint targets.
+  - Removed the builtins model-backend registration path and the old `cloud_passthrough.py` / `vllm_backend.py` modules.
+- Note:
+  - The installed PydanticAI version exposes `OpenRouterProvider` but not `OpenRouterModel`; the implementation uses `OpenAIChatModel(..., provider=OpenRouterProvider(...))`, which gives the desired OpenRouter routing semantics.
+
 

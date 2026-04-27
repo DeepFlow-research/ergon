@@ -15,8 +15,8 @@ All code that needs to read these dumps should call into this module
 rather than re-implementing the parsing.
 """
 
-from ergon_core.api.generation import TokenLogprob
 from ergon_core.api.json_types import JsonObject
+from ergon_core.core.providers.generation.types import TokenLogprob
 
 
 def extract_logprobs(

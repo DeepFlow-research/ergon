@@ -15,17 +15,8 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from ergon_core.api.json_types import JsonObject
+from ergon_core.core.providers.generation.types import TokenLogprob
 from pydantic import BaseModel, Field
-
-
-class TokenLogprob(BaseModel):
-    """Per-token log probability from the serving backend."""
-
-    model_config = {"frozen": True}
-
-    token: str
-    logprob: float
-    top_logprobs: list[JsonObject] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
