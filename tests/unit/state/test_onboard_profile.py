@@ -152,10 +152,6 @@ class TestPreviouslyMissingBenchmarks:
         assert "E2B_API_KEY" not in p.required_keys()
         assert p.required_extras() == []
 
-    def test_researchrubrics_ablated_needs_data_extra(self) -> None:
-        p = OnboardProfile(benchmarks=["researchrubrics-ablated"])
-        assert "ergon-builtins[data]" in p.required_extras()
-
     def test_researchrubrics_vanilla_needs_data_extra(self) -> None:
         p = OnboardProfile(benchmarks=["researchrubrics-vanilla"])
         assert "ergon-builtins[data]" in p.required_extras()
@@ -176,7 +172,6 @@ class TestOnboardingWizardSeesAllBenchmarks:
             "swebench-verified",
             "gdpeval",
             "researchrubrics",
-            "researchrubrics-ablated",
             "researchrubrics-vanilla",
         }
         assert expected <= set(BENCHMARKS.keys())

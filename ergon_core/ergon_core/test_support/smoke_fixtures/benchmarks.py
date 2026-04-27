@@ -54,7 +54,7 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
     task_payload: ClassVar[JsonObject] = {
         "sample_id": "smoke-001",
         "domain": "smoke",
-        "ablated_prompt": "Write a short smoke-test research report.",
+        "prompt": "Write a short smoke-test research report.",
         "rubrics": [
             {
                 "criterion": "Report contains the expected smoke-test marker.",

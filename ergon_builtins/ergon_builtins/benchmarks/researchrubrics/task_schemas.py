@@ -32,9 +32,5 @@ class ResearchRubricsTaskPayload(BaseModel):
             "Business Planning & Research, Technical Documentation, etc."
         ),
     )
-    ablated_prompt: str = Field(description="Ablated prompt (what worker sees)")
+    prompt: str = Field(description="Official ResearchRubrics task prompt")
     rubrics: list[RubricCriterion] = Field(description="List of evaluation criteria")
-    removed_elements: list[str] | None = Field(
-        default=None, description="Elements removed during ablation"
-    )
-    ablation_type: str | None = Field(default=None, description="Type of ablation applied")

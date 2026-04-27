@@ -1,7 +1,6 @@
-"""ResearchRubrics vanilla benchmark (ScaleAI's official dataset).
+"""ResearchRubrics vanilla benchmark alias.
 
-Used for the paper's headline number.  Inherits all logic from the base
-``ResearchRubricsBenchmark`` and overrides only the dataset name.
+Kept as a registry-compatible alias for the official ScaleAI dataset.
 """
 
 from collections.abc import Mapping
@@ -13,7 +12,7 @@ from ergon_builtins.benchmarks.researchrubrics.benchmark import (
 
 
 class ResearchRubricsVanillaBenchmark(ResearchRubricsBenchmark):
-    """ScaleAI's official ResearchRubrics dataset (un-ablated).
+    """Compatibility alias for ScaleAI's official ResearchRubrics dataset.
 
     Used for the paper's headline number.
     """
@@ -27,7 +26,6 @@ class ResearchRubricsVanillaBenchmark(ResearchRubricsBenchmark):
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         super().__init__(
-            dataset_name="ScaleAI/researchrubrics",
             limit=limit,
             name="researchrubrics-vanilla",
             description=(

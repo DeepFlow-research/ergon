@@ -27,7 +27,6 @@ from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
 BENCHMARKS: dict[str, type[Benchmark]] = {
     "gdpeval": GDPEvalBenchmark,
     "researchrubrics": ResearchRubricsBenchmark,
-    "researchrubrics-ablated": ResearchRubricsBenchmark,
     "researchrubrics-vanilla": ResearchRubricsVanillaBenchmark,
 }
 
@@ -48,6 +47,5 @@ WORKERS: dict[str, Callable[..., Worker]] = {
 
 SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
     "researchrubrics": ResearchRubricsSandboxManager,
-    "researchrubrics-ablated": ResearchRubricsSandboxManager,
     "researchrubrics-vanilla": ResearchRubricsSandboxManager,
 }

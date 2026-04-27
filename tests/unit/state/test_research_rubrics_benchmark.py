@@ -14,10 +14,10 @@ from ergon_core.api.task_types import BenchmarkTask
 class TestResearchRubricsBenchmarkRegistration:
     """Verify benchmark slugs resolve correctly in the registry."""
 
-    def test_researchrubrics_ablated_registered(self):
-        """researchrubrics-ablated resolves to ResearchRubricsBenchmark."""
-        assert "researchrubrics-ablated" in BENCHMARKS
-        assert BENCHMARKS["researchrubrics-ablated"] is ResearchRubricsBenchmark
+    def test_researchrubrics_registered(self):
+        """researchrubrics resolves to the official ScaleAI dataset benchmark."""
+        assert BENCHMARKS["researchrubrics"] is ResearchRubricsBenchmark
+        assert set(BENCHMARKS) == {"gdpeval", "researchrubrics", "researchrubrics-vanilla"}
         assert issubclass(ResearchRubricsBenchmark, Benchmark)
 
     def test_researchrubrics_vanilla_registered(self):
@@ -50,7 +50,7 @@ class TestResearchRubricsBenchmarkRegistration:
                 return {
                     "sample_id": "sample",
                     "domain": "quality",
-                    "ablated_prompt": "Write a report.",
+                    "prompt": "Write a report.",
                     "rubrics": [
                         {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
                     ],
@@ -105,7 +105,7 @@ class TestResearchRubricsDatasetLoading:
                 return {
                     "sample_id": "sample",
                     "domain": "quality",
-                    "ablated_prompt": "Write a report.",
+                    "prompt": "Write a report.",
                     "rubrics": [
                         {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
                     ],
@@ -116,16 +116,21 @@ class TestResearchRubricsDatasetLoading:
             lambda *args, **kwargs: {"train": FakeTrainDataset()},
         )
 
-        rows = ResearchRubricsBenchmark(dataset_name="fake/researchrubrics")._load_rows()
+        rows = ResearchRubricsBenchmark()._load_rows()
 
         assert rows == [
             ResearchRubricsTaskPayload(
                 sample_id="sample",
                 domain="quality",
-                ablated_prompt="Write a report.",
+                prompt="Write a report.",
                 rubrics=[{"criterion": "Includes citations.", "axis": "quality", "weight": 2.0}],
             )
         ]
+
+    def test_default_dataset_is_official_scaleai_dataset(self):
+        benchmark = ResearchRubricsBenchmark(limit=1)
+
+        assert benchmark.dataset_name == "ScaleAI/researchrubrics"
 
 
 class TestResearchRubricsRubric:
@@ -142,7 +147,7 @@ class TestResearchRubricsRubric:
                 {
                     "sample_id": "sample",
                     "domain": "quality",
-                    "ablated_prompt": "Write a report.",
+                    "prompt": "Write a report.",
                     "rubrics": [
                         {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
                         {"criterion": "No unsupported claims.", "axis": "quality", "weight": -1.0},
