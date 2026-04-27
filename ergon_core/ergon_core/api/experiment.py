@@ -81,11 +81,12 @@ class Experiment:
         for evaluator in self.evaluators.values():
             evaluator.validate()
 
-        required_slots = set(self.benchmark.evaluator_requirements())
-        missing_slots = required_slots - set(self.evaluators)
-        if missing_slots:
-            missing = ", ".join(sorted(missing_slots))
-            raise ValueError(f"Missing required evaluator bindings: {missing}")
+        if self.evaluators:
+            required_slots = set(self.benchmark.evaluator_requirements())
+            missing_slots = required_slots - set(self.evaluators)
+            if missing_slots:
+                missing = ", ".join(sorted(missing_slots))
+                raise ValueError(f"Missing required evaluator bindings: {missing}")
 
         instances = self.benchmark.build_instances()
         all_task_slugs_by_instance: dict[str, set[str]] = {}
@@ -166,15 +167,11 @@ class Experiment:
     # ------------------------------------------------------------------
 
     async def run(self) -> ExperimentRunHandle:
-        """Ensure a persisted definition exists, create a run, and dispatch execution."""
-        # Deferred: api/ should not depend on core/ at module level (same as persist).
-        from ergon_core.core.runtime.services.run_service import create_experiment_run
-
-        if self._persisted is None:
-            self.persist()
-        if self._persisted is None:
-            raise RuntimeError("persist() did not produce a persisted definition")
-        return await create_experiment_run(self._persisted)
+        """Deprecated: use ExperimentLaunchService for experiment execution."""
+        raise RuntimeError(
+            "Experiment.run() no longer defines and launches implicitly; "
+            "create an ExperimentRecord, then use ExperimentLaunchService.run_experiment()."
+        )
 
 
 # ------------------------------------------------------------------

@@ -1,6 +1,5 @@
 """Benchmark subcommand: list, run, and setup benchmarks."""
 
-import asyncio
 import json
 import os
 import sys
@@ -11,22 +10,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
-import inngest
 from e2b import Template
-
-from ergon_cli.composition import build_experiment
-from ergon_cli.discovery import list_benchmarks
-from ergon_cli.rendering import render_run_result, render_table
-from ergon_core.api.handles import ExperimentRunHandle
 from ergon_core.api.json_types import JsonObject
-from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
-from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
-from ergon_core.core.runtime.inngest_client import inngest_client
-from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
-from ergon_core.core.runtime.services.run_service import create_run
 from ergon_core.core.settings import settings
+
+from ergon_cli.discovery import list_benchmarks
+from ergon_cli.rendering import render_table
 
 
 class BuildLog(Protocol):
@@ -182,85 +171,9 @@ def setup_benchmark(args: Namespace) -> int:
 
 
 async def run_benchmark(args: Namespace) -> int:
-    ensure_db()
-
-    experiment = build_experiment(
-        benchmark_slug=args.slug,
-        model=args.model,
-        worker_slug=args.worker,
-        evaluator_slug=args.evaluator,
-        workflow=args.workflow,
-        limit=args.limit,
+    return _fail(
+        "`ergon benchmark run` has been replaced.\n\n"
+        "Use:\n"
+        f"  ergon experiment define {args.slug} ...\n"
+        "  ergon experiment run <experiment-id>"
     )
-    experiment.validate()
-    persisted = experiment.persist()
-    render_run_result(persisted)
-    print(f"\nExperiment persisted: {persisted.definition_id}")
-
-    cohort_name = args.slug if args.cohort is None else args.cohort
-    cohort = experiment_cohort_service.resolve_or_create(
-        name=cohort_name,
-        description=f"Benchmark: {args.slug} | worker: {args.worker} | evaluator: {args.evaluator}",
-        created_by="ergon-cli",
-    )
-    print(f"\nCohort: {cohort.name} (id={cohort.id})")
-
-    print("\nCreating run and dispatching via Inngest...")
-    run_handle = await _create_and_dispatch(persisted, timeout=args.timeout, cohort_id=cohort.id)
-
-    print("\nRun completed:")
-    print(f"  Run ID:     {run_handle.run_id}")
-    print(f"  Status:     {run_handle.status}")
-    print(f"  Benchmark:  {run_handle.benchmark_type}")
-    return 0 if run_handle.status == "completed" else 1
-
-
-async def _create_and_dispatch(persisted, timeout: int = 600, cohort_id=None):
-    run = create_run(persisted, cohort_id=cohort_id)
-    print(f"  Run ID: {run.id}")
-
-    event = WorkflowStartedEvent(
-        run_id=run.id,
-        definition_id=persisted.definition_id,
-    )
-    await inngest_client.send(
-        inngest.Event(
-            name=WorkflowStartedEvent.name,
-            data=event.model_dump(mode="json"),
-        )
-    )
-    print("  WorkflowStartedEvent emitted. Polling for completion...")
-
-    start = time.time()
-    terminal = TERMINAL_RUN_STATUSES
-    poll_interval = 2.0
-
-    while True:
-        elapsed = time.time() - start
-        if elapsed > timeout:
-            print(f"  TIMEOUT after {timeout}s")
-            return ExperimentRunHandle(
-                run_id=run.id,
-                definition_id=persisted.definition_id,
-                benchmark_type=persisted.benchmark_type,
-                status="timeout",
-            )
-
-        session = get_session()
-        try:
-            current = session.get(RunRecord, run.id)
-            if current and current.status in terminal:
-                return ExperimentRunHandle(
-                    run_id=run.id,
-                    definition_id=persisted.definition_id,
-                    benchmark_type=persisted.benchmark_type,
-                    status=current.status,
-                )
-            status = current.status if current else "unknown"
-        finally:
-            session.close()
-
-        mins = int(elapsed) // 60
-        secs = int(elapsed) % 60
-        print(f"  [{mins:02d}:{secs:02d}] status={status}")
-        await asyncio.sleep(poll_interval)

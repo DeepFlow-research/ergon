@@ -7,18 +7,18 @@ from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStats,
     ExperimentCohortStatus,
+    ExperimentRecord,
     RunRecord,
 )
-from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.runtime.services.cohort_schemas import (
     CohortDetailDto,
-    CohortRunRowDto,
+    CohortExperimentRowDto,
     CohortStatusCountsDto,
     CohortSummaryDto,
     UpdateCohortRequest,
 )
 from ergon_core.core.utils import utcnow
-from sqlmodel import func, select
+from sqlmodel import select
 
 
 class ExperimentCohortService:
@@ -66,7 +66,7 @@ class ExperimentCohortService:
             return results
 
     def get_detail(self, cohort_id: UUID) -> CohortDetailDto | None:
-        """Get a cohort detail DTO with all current run rows."""
+        """Get a cohort detail DTO with all experiments in the project folder."""
         with get_session() as session:
             cohort = session.get(ExperimentCohort, cohort_id)
             if cohort is None:
@@ -77,26 +77,23 @@ class ExperimentCohortService:
             ).first()
             summary = self._build_summary(cohort, stats)
 
-            runs = list(
-                session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort_id)).all()
+            experiments = list(
+                session.exec(
+                    select(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort_id)
+                ).all()
             )
-            task_counts = (
-                {
-                    run_id: count
-                    for run_id, count in session.exec(
-                        select(RunGraphNode.run_id, func.count(RunGraphNode.id))
-                        .where(RunGraphNode.run_id.in_([run.id for run in runs]))
-                        .group_by(RunGraphNode.run_id)
-                    ).all()
-                }
-                if runs
-                else {}
-            )
-            run_rows = [
-                self._build_run_row(cohort, run, int(task_counts.get(run.id, 0)) or None)
-                for run in runs
+            experiment_rows = [
+                self._build_experiment_row(
+                    experiment,
+                    list(
+                        session.exec(
+                            select(RunRecord).where(RunRecord.experiment_id == experiment.id)
+                        ).all()
+                    ),
+                )
+                for experiment in experiments
             ]
-            return CohortDetailDto(summary=summary, runs=run_rows)
+            return CohortDetailDto(summary=summary, experiments=experiment_rows)
 
     def get_summary(self, cohort_id: UUID) -> CohortSummaryDto | None:
         """Get a single cohort summary DTO."""
@@ -159,41 +156,43 @@ class ExperimentCohortService:
         )
 
     @staticmethod
-    def _build_run_row(
-        cohort: ExperimentCohort,
-        run: RunRecord,
-        total_tasks: int | None = None,
-    ) -> CohortRunRowDto:
-        running_time_ms: int | None = None
-        if run.started_at is not None:
-            end_time = run.completed_at or utcnow()
-            running_time_ms = max(int((end_time - run.started_at).total_seconds() * 1000), 0)
-
+    def _build_experiment_row(
+        experiment: ExperimentRecord,
+        runs: list[RunRecord],
+    ) -> CohortExperimentRowDto:
         score: float | None = None
-        summary = run.parsed_summary()
-        if summary:
+        total_cost_usd: float | None = None
+        for run in runs:
+            summary = run.parsed_summary()
             raw_score = summary.get("normalized_score")
             if raw_score is None:
                 raw_score = summary.get("final_score")
-            score = float(raw_score) if isinstance(raw_score, int | float) else None
-        total_cost_usd = summary.get("total_cost_usd") if summary else None
+            if isinstance(raw_score, int | float):
+                score = float(raw_score)
+            raw_cost = summary.get("total_cost_usd")
+            if isinstance(raw_cost, int | float):
+                total_cost_usd = (total_cost_usd or 0.0) + float(raw_cost)
 
-        return CohortRunRowDto(
-            run_id=run.id,
-            definition_id=run.experiment_definition_id,
-            cohort_id=cohort.id,
-            cohort_name=cohort.name,
-            status=run.status,
-            created_at=run.created_at,
-            started_at=run.started_at,
-            completed_at=run.completed_at,
-            running_time_ms=running_time_ms,
+        status_counts = CohortStatusCountsDto()
+        for run in runs:
+            status_value = str(run.status)
+            if hasattr(status_counts, status_value):
+                setattr(status_counts, status_value, getattr(status_counts, status_value) + 1)
+
+        return CohortExperimentRowDto(
+            experiment_id=experiment.id,
+            name=experiment.name,
+            benchmark_type=experiment.benchmark_type,
+            sample_count=experiment.sample_count,
+            total_runs=len(runs),
+            status_counts=status_counts,
+            status=experiment.status,
+            created_at=experiment.created_at,
+            default_model_target=experiment.default_model_target,
+            default_evaluator_slug=experiment.default_evaluator_slug,
             final_score=score,
-            total_tasks=total_tasks,
-            total_cost_usd=(
-                float(total_cost_usd) if isinstance(total_cost_usd, int | float) else None
-            ),
-            error_message=run.error_message,
+            total_cost_usd=total_cost_usd,
+            error_message=None,
         )
 
 

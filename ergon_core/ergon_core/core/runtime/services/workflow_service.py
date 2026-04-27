@@ -592,7 +592,7 @@ class WorkflowService:
         run = session.get(RunRecord, run_id)
         if run is None:
             raise ValueError(f"run {run_id} not found")
-        return run.experiment_definition_id
+        return run.workflow_definition_id
 
     async def _dispatch_task_ready(self, run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
         event = TaskReadyEvent(

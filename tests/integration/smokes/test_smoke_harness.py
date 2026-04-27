@@ -15,11 +15,10 @@ import os
 
 import httpx
 import pytest
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import get_engine, get_session
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 pytestmark = pytest.mark.integration
 
@@ -114,7 +113,7 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
             seed_resp = client.post(
                 f"{API}/api/test/write/run/seed",
                 json={
-                    "experiment_definition_id": str(defn_id),
+                    "workflow_definition_id": str(defn_id),
                     "cohort": _COHORT,
                     "status": "completed",
                 },

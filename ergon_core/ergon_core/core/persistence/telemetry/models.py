@@ -9,6 +9,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from ergon_core.api.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
@@ -17,7 +18,6 @@ from ergon_core.core.persistence.shared.enums import (
 )
 from ergon_core.core.utils import utcnow as _utcnow
 from pydantic import model_validator
-import sqlalchemy as sa
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
 
@@ -43,6 +43,70 @@ class ExperimentCohortStatus(StrEnum):
 
 
 # ---------------------------------------------------------------------------
+# ExperimentRecord
+# ---------------------------------------------------------------------------
+
+
+class ExperimentRecord(SQLModel, table=True):
+    """One launched experiment definition and sample selection."""
+
+    __tablename__ = "experiments"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    cohort_id: UUID | None = Field(
+        default=None,
+        foreign_key="experiment_cohorts.id",
+        index=True,
+    )
+    name: str = Field(index=True)
+    benchmark_type: str = Field(index=True)
+    sample_count: int
+    sample_selection_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    default_worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    default_evaluator_slug: str | None = Field(default=None, index=True)
+    default_model_target: str | None = None
+    design_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    seed: int | None = None
+    metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    status: str = Field(default="defined", index=True)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+    started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
+    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
+
+    def parsed_sample_selection(self) -> JsonObject:
+        return self.__class__._parse_json_object(
+            self.sample_selection_json, "sample_selection_json"
+        )
+
+    def parsed_default_worker_team(self) -> JsonObject:
+        return self.__class__._parse_json_object(
+            self.default_worker_team_json, "default_worker_team_json"
+        )
+
+    def parsed_design(self) -> JsonObject:
+        return self.__class__._parse_json_object(self.design_json, "design_json")
+
+    def parsed_metadata(self) -> JsonObject:
+        return self.__class__._parse_json_object(self.metadata_json, "metadata_json")
+
+    @classmethod
+    def _parse_json_object(cls, data: dict, field_name: str) -> JsonObject:
+        if not isinstance(data, dict):
+            raise ValueError(f"{field_name} must be a dict, got {type(data).__name__}")
+        return data
+
+    @model_validator(mode="after")
+    def _validate_fields(self) -> "ExperimentRecord":
+        self.__class__._parse_json_object(self.sample_selection_json, "sample_selection_json")
+        self.__class__._parse_json_object(
+            self.default_worker_team_json, "default_worker_team_json"
+        )
+        self.__class__._parse_json_object(self.design_json, "design_json")
+        self.__class__._parse_json_object(self.metadata_json, "metadata_json")
+        return self
+
+
+# ---------------------------------------------------------------------------
 # RunRecord
 # ---------------------------------------------------------------------------
 
@@ -51,15 +115,19 @@ class RunRecord(SQLModel, table=True):
     __tablename__ = "runs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    experiment_definition_id: UUID = Field(
+    experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
+    workflow_definition_id: UUID = Field(
         foreign_key="experiment_definitions.id",
         index=True,
     )
-    cohort_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_cohorts.id",
-        index=True,
-    )
+    benchmark_type: str = Field(index=True)
+    instance_key: str = Field(index=True)
+    sample_id: str | None = Field(default=None, index=True)
+    worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    evaluator_slug: str | None = Field(default=None, index=True)
+    model_target: str | None = None
+    assignment_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    seed: int | None = None
     status: RunStatus = Field(index=True)
     error_message: str | None = None
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
@@ -67,20 +135,26 @@ class RunRecord(SQLModel, table=True):
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     summary_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
-    # -- JSON accessor: summary_json --
+    def parsed_worker_team(self) -> JsonObject:
+        return self.__class__._parse_json_object(self.worker_team_json, "worker_team_json")
+
+    def parsed_assignment(self) -> JsonObject:
+        return self.__class__._parse_json_object(self.assignment_json, "assignment_json")
 
     def parsed_summary(self) -> JsonObject:
-        return self.__class__._parse_summary(self.summary_json)
+        return self.__class__._parse_json_object(self.summary_json, "summary_json")
 
     @classmethod
-    def _parse_summary(cls, data: dict) -> JsonObject:
+    def _parse_json_object(cls, data: dict, field_name: str) -> JsonObject:
         if not isinstance(data, dict):
-            raise ValueError(f"summary_json must be a dict, got {type(data).__name__}")
+            raise ValueError(f"{field_name} must be a dict, got {type(data).__name__}")
         return data
 
     @model_validator(mode="after")
     def _validate_fields(self) -> "RunRecord":
-        self.__class__._parse_summary(self.summary_json)
+        self.__class__._parse_json_object(self.worker_team_json, "worker_team_json")
+        self.__class__._parse_json_object(self.assignment_json, "assignment_json")
+        self.__class__._parse_json_object(self.summary_json, "summary_json")
         try:
             RunStatus(self.status)
         except ValueError:

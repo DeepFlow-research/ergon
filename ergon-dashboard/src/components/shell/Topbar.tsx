@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
+  { label: "Experiments", href: "/experiments" },
   { label: "Cohorts", href: "/" },
   { label: "Runs", href: "/runs" },
   { label: "Training", href: "/training" },
@@ -14,6 +15,9 @@ const NAV_ITEMS = [
 function isActive(href: string, pathname: string): boolean {
   if (href === "/") {
     return pathname === "/" || pathname.startsWith("/cohorts");
+  }
+  if (href === "/experiments") {
+    return pathname.startsWith("/experiments");
   }
   if (href === "/runs") {
     return pathname.startsWith("/run/") || pathname.startsWith("/runs");
@@ -77,7 +81,7 @@ export function Topbar() {
           data-testid="topbar-search"
         >
           <span className="opacity-50">⌕</span>
-          <span>Search cohorts, runs, tasks…</span>
+          <span>Search experiments, cohorts, runs, tasks…</span>
           <kbd className="ml-auto rounded border border-[var(--line)] bg-[var(--card)] px-1.5 py-0.5 font-mono text-[10px]">
             ⌘K
           </kbd>

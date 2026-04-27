@@ -5,8 +5,6 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-from sqlmodel import select
-
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -14,7 +12,12 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import (
+    ExperimentRecord,
+    RunRecord,
+    RunTaskExecution,
+)
+from sqlmodel import select
 
 _MINIMAL_SWEBENCH_PAYLOAD: dict[str, object] = {
     "instance_id": "django__django-1",
@@ -69,8 +72,26 @@ def swebench_execution() -> tuple[UUID, UUID]:
         session.flush()
         session.refresh(task)
 
+        experiment = ExperimentRecord(
+            name="swebench verified fixture",
+            benchmark_type="swebench-verified",
+            sample_count=1,
+            sample_selection_json={"instance_keys": ["django__django-1"]},
+            default_worker_team_json={"primary": "swebench-verified"},
+            design_json={},
+            metadata_json={},
+            status="running",
+        )
+        session.add(experiment)
+        session.flush()
+        session.refresh(experiment)
+
         run = RunRecord(
-            experiment_definition_id=defn.id,
+            experiment_id=experiment.id,
+            workflow_definition_id=defn.id,
+            benchmark_type="swebench-verified",
+            instance_key="django__django-1",
+            worker_team_json={"primary": "swebench-verified"},
             status=RunStatus.EXECUTING,
         )
         session.add(run)

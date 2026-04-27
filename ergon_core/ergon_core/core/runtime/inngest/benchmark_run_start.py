@@ -9,16 +9,21 @@ from typing import ClassVar
 
 import inngest
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
-from ergon_core.api.experiment import Experiment
-from ergon_core.api.worker_spec import WorkerSpec
 from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.events.base import InngestEventContract
-from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
+from ergon_core.core.runtime.services.experiment_definition_service import (
+    ExperimentDefinitionService,
+)
+from ergon_core.core.runtime.services.experiment_launch_service import ExperimentLaunchService
+from ergon_core.core.runtime.services.experiment_schemas import (
+    ExperimentDefineRequest,
+    ExperimentRunRequest,
+)
 from ergon_core.core.runtime.services.inngest_function_results import (
     BenchmarkRunStartResult,
 )
-from ergon_core.core.runtime.services.run_service import create_run
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +65,7 @@ async def benchmark_run_start_fn(ctx: inngest.Context) -> BenchmarkRunStartResul
         payload.evaluator_slug,
     )
 
-    benchmark_cls = BENCHMARKS.get(payload.benchmark_slug)
-    if benchmark_cls is None:
+    if BENCHMARKS.get(payload.benchmark_slug) is None:
         raise RegistryLookupError("benchmark", payload.benchmark_slug)
 
     # reason: RFC 2026-04-22 §1 — config-time composition uses ``WorkerSpec``;
@@ -70,40 +74,37 @@ async def benchmark_run_start_fn(ctx: inngest.Context) -> BenchmarkRunStartResul
     if payload.worker_slug not in WORKERS:
         raise RegistryLookupError("worker", payload.worker_slug)
 
-    evaluator_cls = EVALUATORS.get(payload.evaluator_slug)
-    if evaluator_cls is None:
+    if EVALUATORS.get(payload.evaluator_slug) is None:
         raise RegistryLookupError("evaluator", payload.evaluator_slug)
 
-    benchmark = benchmark_cls()
-    worker_spec = WorkerSpec(
-        worker_slug=payload.worker_slug,
-        name="worker",
-        model=payload.model,
-    )
-    evaluator = evaluator_cls(name="evaluator")
+    cohort_id = None
+    if payload.cohort_name:
+        cohort = experiment_cohort_service.resolve_or_create(
+            name=payload.cohort_name,
+            description=f"benchmark run request: {payload.benchmark_slug}",
+            created_by="inngest",
+        )
+        cohort_id = cohort.id
 
-    experiment = Experiment.from_single_worker(
-        benchmark=benchmark,
-        worker=worker_spec,
-        evaluators={"default": evaluator},
-    )
-    persisted = experiment.persist()
-
-    run = create_run(persisted)
-
-    event = WorkflowStartedEvent(
-        run_id=run.id,
-        definition_id=persisted.definition_id,
-    )
-    await inngest_client.send(
-        inngest.Event(
-            name=WorkflowStartedEvent.name,
-            data=event.model_dump(mode="json"),
+    defined = ExperimentDefinitionService().define_benchmark_experiment(
+        ExperimentDefineRequest(
+            benchmark_slug=payload.benchmark_slug,
+            cohort_id=cohort_id,
+            limit=1,
+            default_model_target=payload.model,
+            default_worker_team={"primary": payload.worker_slug},
+            default_evaluator_slug=payload.evaluator_slug,
+            metadata={"source": BenchmarkRunRequest.name},
         )
     )
+    launched = await ExperimentLaunchService().run_experiment(
+        ExperimentRunRequest(experiment_id=defined.experiment_id)
+    )
+    run_id = launched.run_ids[0]
+    definition_id = launched.workflow_definition_ids[0]
 
     return BenchmarkRunStartResult(
-        run_id=run.id,
-        definition_id=persisted.definition_id,
+        run_id=run_id,
+        definition_id=definition_id,
         benchmark=payload.benchmark_slug,
     )

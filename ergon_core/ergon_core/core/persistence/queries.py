@@ -20,10 +20,11 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskEvaluator,
     ExperimentDefinitionWorker,
 )
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
+    ExperimentRecord,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -93,7 +94,7 @@ class RunsQueries(BaseQueries[RunRecord]):
         with get_session() as session:
             stmt = (
                 select(RunRecord)
-                .where(RunRecord.experiment_definition_id == definition_id)
+                .where(RunRecord.workflow_definition_id == definition_id)
                 .order_by(desc(RunRecord.created_at))
             )
             return list(session.exec(stmt).all())
@@ -113,7 +114,10 @@ class RunsQueries(BaseQueries[RunRecord]):
             run = session.get(RunRecord, run_id)
             if run is None:
                 return None
-            return run.cohort_id
+            experiment = session.get(ExperimentRecord, run.experiment_id)
+            if experiment is None:
+                return None
+            return experiment.cohort_id
 
 
 # ---------------------------------------------------------------------------

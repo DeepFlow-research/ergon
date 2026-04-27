@@ -41,12 +41,27 @@ def _checkpoint_metadata() -> JsonObject:
 
 def create_run(
     definition: PersistedExperimentDefinition,
-    cohort_id: UUID | None = None,
+    *,
+    experiment_id: UUID,
+    workflow_definition_id: UUID,
+    instance_key: str,
+    worker_team_json: JsonObject,
+    evaluator_slug: str | None = None,
+    model_target: str | None = None,
+    assignment_json: JsonObject | None = None,
+    seed: int | None = None,
 ) -> RunRecord:
     with get_session() as session:
         run = RunRecord(
-            experiment_definition_id=definition.definition_id,
-            cohort_id=cohort_id,
+            experiment_id=experiment_id,
+            workflow_definition_id=workflow_definition_id,
+            benchmark_type=definition.benchmark_type,
+            instance_key=instance_key,
+            worker_team_json=worker_team_json,
+            evaluator_slug=evaluator_slug,
+            model_target=model_target,
+            assignment_json=assignment_json or {},
+            seed=seed,
             status=RunStatus.PENDING,
             created_at=utcnow(),
             summary_json=_checkpoint_metadata(),
@@ -59,9 +74,27 @@ def create_run(
 
 async def create_experiment_run(
     definition: PersistedExperimentDefinition,
+    *,
+    experiment_id: UUID,
+    instance_key: str,
+    worker_team_json: JsonObject,
+    evaluator_slug: str | None = None,
+    model_target: str | None = None,
+    assignment_json: JsonObject | None = None,
+    seed: int | None = None,
     timeout_s: float = _DEFAULT_TIMEOUT_S,
 ) -> ExperimentRunHandle:
-    run = create_run(definition)
+    run = create_run(
+        definition,
+        experiment_id=experiment_id,
+        workflow_definition_id=definition.definition_id,
+        instance_key=instance_key,
+        worker_team_json=worker_team_json,
+        evaluator_slug=evaluator_slug,
+        model_target=model_target,
+        assignment_json=assignment_json,
+        seed=seed,
+    )
 
     event = WorkflowStartedEvent(
         run_id=run.id,

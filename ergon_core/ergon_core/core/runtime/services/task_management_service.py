@@ -668,7 +668,7 @@ class TaskManagementService:
             raise CycleDetectedError(remaining)
 
     def _resolve_definition_id(self, session: Session, run_id: UUID) -> UUID:
-        """Read experiment_definition_id from RunRecord.
+        """Read workflow_definition_id from RunRecord.
 
         Every run references exactly one definition, so a missing RunRecord
         is an invariant violation — callers must always create the RunRecord
@@ -678,7 +678,7 @@ class TaskManagementService:
         run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
         if run is None:
             raise RunRecordMissingError(run_id)
-        return run.experiment_definition_id
+        return run.workflow_definition_id
 
     async def _dispatch_task_ready(
         self,

@@ -21,6 +21,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
+    ExperimentRecord,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -56,11 +57,11 @@ class RunReadService:
             if run is None:
                 return None
 
-            definition = session.get(ExperimentDefinition, run.experiment_definition_id)
+            definition = session.get(ExperimentDefinition, run.workflow_definition_id)
             if definition is None:
                 return None
 
-            def_id = run.experiment_definition_id
+            def_id = run.workflow_definition_id
             nodes = list(
                 session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
             )
@@ -144,7 +145,7 @@ class RunReadService:
 
         return RunSnapshotDto(
             id=run_id_str,
-            experiment_id=str(def_id),
+            experiment_id=str(run.experiment_id),
             name=run_name,
             status=run.status,
             tasks=task_map,
@@ -244,9 +245,9 @@ class RunReadService:
         with get_session() as session:
             stmt = select(RunRecord)
             if definition_id:
-                stmt = stmt.where(RunRecord.experiment_definition_id == definition_id)
+                stmt = stmt.where(RunRecord.workflow_definition_id == definition_id)
             if cohort_id:
-                stmt = stmt.where(RunRecord.cohort_id == cohort_id)
+                stmt = stmt.join(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort_id)
             stmt = stmt.order_by(RunRecord.created_at)
             runs = list(session.exec(stmt).all())
 

@@ -8,11 +8,12 @@ from ergon_cli.commands.benchmark import handle_benchmark
 from ergon_cli.commands.doctor import handle_doctor
 from ergon_cli.commands.eval import handle_eval
 from ergon_cli.commands.evaluator import handle_evaluator
+from ergon_cli.commands.experiment import handle_experiment
 from ergon_cli.commands.onboard import handle_onboard
 from ergon_cli.commands.run import handle_run
 from ergon_cli.commands.train import handle_train
-from ergon_cli.commands.workflow import handle_workflow
 from ergon_cli.commands.worker import handle_worker
+from ergon_cli.commands.workflow import handle_workflow
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,6 +60,42 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Cohort name to group this run under (auto-generated from slug if omitted)",
     )
+
+    experiment = sub.add_parser("experiment", help="Experiment lifecycle")
+    experiment_sub = experiment.add_subparsers(dest="experiment_action")
+    experiment_define = experiment_sub.add_parser("define", help="Define an experiment")
+    experiment_define.add_argument("benchmark_slug", help="Benchmark slug")
+    sample_group = experiment_define.add_mutually_exclusive_group(required=True)
+    sample_group.add_argument("--limit", type=int, default=None, help="Number of samples")
+    sample_group.add_argument(
+        "--sample-id",
+        action="append",
+        default=None,
+        help="Specific benchmark sample id; can be repeated",
+    )
+    experiment_define.add_argument("--name", default=None, help="Experiment name")
+    experiment_define.add_argument("--cohort", default=None, help="Optional cohort/project folder")
+    experiment_define.add_argument("--worker", required=True, help="Primary worker slug")
+    experiment_define.add_argument("--model", required=True, help="Primary model target")
+    experiment_define.add_argument("--evaluator", default=None, help="Optional evaluator slug")
+    experiment_define.add_argument("--workflow", default="single", help="Workflow variant")
+    experiment_define.add_argument(
+        "--max-questions",
+        type=int,
+        default=10,
+        help="Max questions workers can ask",
+    )
+    experiment_run = experiment_sub.add_parser("run", help="Run a defined experiment")
+    experiment_run.add_argument("experiment_id", help="Experiment UUID")
+    experiment_run.add_argument("--timeout", type=int, default=600, help="Timeout seconds")
+    experiment_run.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="Do not wait for terminal runs",
+    )
+    experiment_show = experiment_sub.add_parser("show", help="Show experiment detail")
+    experiment_show.add_argument("experiment_id", help="Experiment UUID")
+    experiment_sub.add_parser("list", help="List experiments")
 
     run = sub.add_parser("run", help="Run management")
     run_sub = run.add_subparsers(dest="run_action")
@@ -185,6 +222,8 @@ async def _main(argv: list[str] | None = None) -> int:
 
     if args.command == "benchmark":
         return await handle_benchmark(args)
+    elif args.command == "experiment":
+        return await handle_experiment(args)
     elif args.command == "run":
         return handle_run(args)
     elif args.command == "worker":

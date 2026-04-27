@@ -7,10 +7,9 @@ accepts any string without raising ValidationError.  The rejection test table
 is empty as a result; see the inline comment for details.
 """
 
-import pytest
-from pydantic import ValidationError
 from uuid import uuid4
 
+import pytest
 from ergon_core.core.persistence.graph.models import (
     RunGraphAnnotation,
     RunGraphMutation,
@@ -23,13 +22,14 @@ from ergon_core.core.persistence.shared.enums import (
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStatus,
+    ExperimentRecord,
     RolloutBatch,
     RunRecord,
     RunResource,
     RunTaskExecution,
     TrainingSession,
 )
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Happy path — field accepts valid value and stores it
@@ -40,7 +40,14 @@ from ergon_core.core.persistence.telemetry.models import (
     "build_fn,field,expected",
     [
         (
-            lambda: RunRecord(experiment_definition_id=uuid4(), status=RunStatus.PENDING),
+            lambda: RunRecord(
+                experiment_id=uuid4(),
+                workflow_definition_id=uuid4(),
+                benchmark_type="ci-test",
+                instance_key="sample-1",
+                worker_team_json={"primary": "test-worker"},
+                status=RunStatus.PENDING,
+            ),
             "status",
             RunStatus.PENDING,
         ),
@@ -136,6 +143,49 @@ def test_task_execution_rejects_missing_static_or_dynamic_identity():
         )
 
 
+def test_experiment_record_accepts_optional_cohort_and_required_name():
+    experiment = ExperimentRecord.model_validate(
+        {
+            "name": "ci experiment",
+            "benchmark_type": "ci-benchmark",
+            "sample_count": 1,
+            "sample_selection_json": {"instance_keys": ["sample-1"]},
+            "default_worker_team_json": {"primary": "test-worker"},
+            "design_json": {},
+            "metadata_json": {},
+        }
+    )
+
+    assert experiment.cohort_id is None
+    assert experiment.name == "ci experiment"
+    assert experiment.parsed_sample_selection() == {"instance_keys": ["sample-1"]}
+    assert experiment.parsed_default_worker_team() == {"primary": "test-worker"}
+
+
+def test_run_record_uses_experiment_and_workflow_definition_identity():
+    experiment_id = uuid4()
+    workflow_definition_id = uuid4()
+
+    run = RunRecord.model_validate(
+        {
+            "experiment_id": str(experiment_id),
+            "workflow_definition_id": str(workflow_definition_id),
+            "benchmark_type": "ci-benchmark",
+            "instance_key": "sample-1",
+            "worker_team_json": {"primary": "test-worker"},
+            "status": "pending",
+        }
+    )
+
+    assert run.experiment_id == experiment_id
+    assert run.workflow_definition_id == workflow_definition_id
+    assert run.benchmark_type == "ci-benchmark"
+    assert run.instance_key == "sample-1"
+    assert run.parsed_worker_team() == {"primary": "test-worker"}
+    assert not hasattr(run, "experiment_definition_id")
+    assert not hasattr(run, "cohort_id")
+
+
 def test_enum_value_matches_string():
     assert RunStatus.PENDING == "pending"
     assert RunStatus.COMPLETED == "completed"
@@ -155,7 +205,14 @@ def test_enum_value_matches_string():
     [
         (
             RunRecord,
-            {"experiment_definition_id": str(uuid4()), "status": "pending"},
+            {
+                "experiment_id": str(uuid4()),
+                "workflow_definition_id": str(uuid4()),
+                "benchmark_type": "ci-test",
+                "instance_key": "sample-1",
+                "worker_team_json": {"primary": "test-worker"},
+                "status": "pending",
+            },
             "status",
             "not-a-status",
         ),

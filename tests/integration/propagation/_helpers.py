@@ -3,14 +3,11 @@
 import time
 from uuid import UUID
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
-from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
+from sqlmodel import Session, select
 
 
 def poll_until(condition, *, timeout: float = 30, interval: float = 0.5) -> None:
@@ -84,8 +81,24 @@ def make_experiment_definition(session: Session) -> ExperimentDefinition:
 
 def make_run(session: Session, definition_id: UUID) -> RunRecord:
     """Create a minimal RunRecord row for test scaffolding."""
+    experiment = ExperimentRecord(
+        name="ci propagation experiment",
+        benchmark_type="ci-propagation-test",
+        sample_count=1,
+        sample_selection_json={"instance_keys": ["test"]},
+        default_worker_team_json={"primary": "test-worker"},
+        design_json={},
+        metadata_json={},
+        status="running",
+    )
+    session.add(experiment)
+    session.flush()
     run = RunRecord(
-        experiment_definition_id=definition_id,
+        experiment_id=experiment.id,
+        workflow_definition_id=definition_id,
+        benchmark_type="ci-propagation-test",
+        instance_key="test",
+        worker_team_json={"primary": "test-worker"},
         status=RunStatus.EXECUTING,
     )
     session.add(run)
