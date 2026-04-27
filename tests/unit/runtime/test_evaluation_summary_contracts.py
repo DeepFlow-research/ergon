@@ -31,7 +31,12 @@ def _service_result(
     criterion_score: float = 1.0,
     criterion_weight: float = 1.0,
     passed: bool = True,
-    metadata: dict | None = None,
+    model_reasoning: str | None = None,
+    skipped_reason: str | None = None,
+    error: dict | None = None,
+    evaluated_action_ids: list[str] | None = None,
+    evaluated_resource_ids: list[str] | None = None,
+    criterion_evaluation_input: str | None = None,
 ) -> EvaluationServiceResult:
     criterion = _Criterion(name="Criterion description")
     return EvaluationServiceResult(
@@ -47,7 +52,12 @@ def _service_result(
                     passed=passed,
                     weight=criterion_weight,
                     feedback=feedback,
-                    metadata=metadata or {},
+                    model_reasoning=model_reasoning,
+                    skipped_reason=skipped_reason,
+                    error=error,
+                    evaluated_action_ids=evaluated_action_ids or [],
+                    evaluated_resource_ids=evaluated_resource_ids or [],
+                    evaluation_input=criterion_evaluation_input,
                 )
             ],
         ),
@@ -107,7 +117,7 @@ def test_build_evaluation_summary_includes_required_criterion_status_fields() ->
             criterion_score=0.5,
             criterion_weight=2.0,
             passed=False,
-            metadata={"model_reasoning": "missing supporting artifact"},
+            model_reasoning="missing supporting artifact",
         ),
         evaluation_input="task evidence",
     )
@@ -145,7 +155,7 @@ def test_dashboard_evaluation_dto_exposes_required_rubric_metadata() -> None:
     summary = build_evaluation_summary(
         _service_result(
             feedback="root timing marker criterion ran",
-            metadata={"model_reasoning": "root completed before evaluation"},
+            model_reasoning="root completed before evaluation",
         ),
         evaluation_input="root task evidence",
     )
@@ -169,6 +179,27 @@ def test_dashboard_evaluation_dto_exposes_required_rubric_metadata() -> None:
     assert criterion.contribution == 1.0
     assert criterion.model_reasoning == "root completed before evaluation"
     assert criterion.skipped_reason is None
+
+
+def test_build_evaluation_summary_reads_first_class_criterion_detail_fields() -> None:
+    summary = build_evaluation_summary(
+        _service_result(
+            feedback="runtime unavailable",
+            passed=False,
+            error={"kind": "RuntimeError", "message": "sandbox unavailable"},
+            evaluated_action_ids=["action-1"],
+            evaluated_resource_ids=["resource-1"],
+            criterion_evaluation_input="criterion-specific evidence",
+        ),
+        evaluation_input="fallback evidence",
+    )
+
+    entry = summary.criterion_results[0]
+    assert entry.status == "errored"
+    assert entry.error == {"kind": "RuntimeError", "message": "sandbox unavailable"}
+    assert entry.evaluation_input == "criterion-specific evidence"
+    assert entry.evaluated_action_ids == ["action-1"]
+    assert entry.evaluated_resource_ids == ["resource-1"]
 
 
 def test_summary_migration_normalizes_missing_criterion_fields() -> None:

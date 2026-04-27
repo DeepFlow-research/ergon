@@ -231,4 +231,4 @@ async def test_criterion_returns_error_when_install_repo_fails() -> None:
 
     assert result.score == 0.0
     assert result.passed is False
-    assert "install_repo" in str(result.metadata)
+    assert result.error == {"kind": "install_repo failed"}

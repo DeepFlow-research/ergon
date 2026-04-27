@@ -78,7 +78,7 @@ class ProofVerificationCriterion(Criterion):
                     "The worker must write to /workspace/final_output/final_solution.lean "
                     "so SandboxResourcePublisher.sync picks it up."
                 ),
-                metadata={"evaluated_resource_ids": []},
+                evaluated_resource_ids=[],
             )
         proof_code = proof_data.proof_code
         problem_stmt = self.problem_statement or context.task.description
@@ -103,10 +103,8 @@ class ProofVerificationCriterion(Criterion):
             passed=outcome.verified,
             weight=self.weight,
             feedback=feedback,
-            metadata={
-                "evaluation_input": evaluation_log,
-                "evaluated_resource_ids": proof_data.evaluated_resource_ids,
-            },
+            evaluation_input=evaluation_log,
+            evaluated_resource_ids=proof_data.evaluated_resource_ids,
         )
 
     # ------------------------------------------------------------------

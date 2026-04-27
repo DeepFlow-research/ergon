@@ -120,27 +120,6 @@ class EvaluationPersistenceService:
             session.close()
 
 
-def _dict_metadata_value(metadata: dict, key: str) -> dict | None:
-    value = metadata.get(key)
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        return value
-    return {"kind": str(value)}
-
-
-def _list_metadata_value(metadata: dict, key: str) -> list[str]:
-    value = metadata.get(key)
-    if not isinstance(value, list):
-        return []
-    return [str(item) for item in value]
-
-
-def _str_metadata_value(metadata: dict, key: str) -> str | None:
-    value = metadata.get(key)
-    return value if isinstance(value, str) else None
-
-
 def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str | None) -> str:
     if error is not None:
         return "errored"
@@ -168,9 +147,6 @@ def build_evaluation_summary(
                 f"Criterion result at index {i} ({cr.name!r}) has no matching "
                 f"CriterionSpec - specs and results are out of sync",
             )
-        metadata = cr.metadata
-        error = _dict_metadata_value(metadata, "error")
-        skipped_reason = _str_metadata_value(metadata, "skipped_reason")
         entries.append(
             CriterionResultEntry(
                 criterion_name=cr.name,
@@ -181,8 +157,8 @@ def build_evaluation_summary(
                 criterion_num=spec.criterion_idx,
                 status=_criterion_status(
                     passed=cr.passed,
-                    error=error,
-                    skipped_reason=skipped_reason,
+                    error=cr.error,
+                    skipped_reason=cr.skipped_reason,
                 ),
                 score=cr.score,
                 max_score=spec.max_score,
@@ -190,12 +166,12 @@ def build_evaluation_summary(
                 weight=cr.weight,
                 contribution=cr.score,
                 feedback=cr.feedback,
-                model_reasoning=_str_metadata_value(metadata, "model_reasoning"),
-                skipped_reason=skipped_reason,
-                evaluation_input=_str_metadata_value(metadata, "evaluation_input") or evaluation_input,
-                evaluated_action_ids=_list_metadata_value(metadata, "evaluated_action_ids"),
-                evaluated_resource_ids=_list_metadata_value(metadata, "evaluated_resource_ids"),
-                error=error,
+                model_reasoning=cr.model_reasoning,
+                skipped_reason=cr.skipped_reason,
+                evaluation_input=cr.evaluation_input or evaluation_input,
+                evaluated_action_ids=cr.evaluated_action_ids,
+                evaluated_resource_ids=cr.evaluated_resource_ids,
+                error=cr.error,
             )
         )
 

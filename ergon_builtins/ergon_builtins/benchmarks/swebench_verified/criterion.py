@@ -255,7 +255,7 @@ def _error_result(name: str, weight: float, kind: str, detail: str) -> Criterion
         passed=False,
         weight=weight,
         feedback=f"{kind}: {detail[-400:]}",
-        metadata={"error": kind},
+        error={"kind": kind},
     )
 
 
