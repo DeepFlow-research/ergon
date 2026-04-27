@@ -105,7 +105,7 @@ function ContainerNodeComponent(props: ContainerNodeProps) {
           {evaluationRollup && (
             <span
               className="rounded-full bg-[var(--ink)] px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none text-[var(--card)]"
-              data-testid={`graph-node-rubric-glyph-${task.id}`}
+              data-testid={`graph-rubric-glyph-${task.id}`}
               title={`${evaluationRollup.status}: ${evaluationRollup.totalCriteria} criteria`}
             >
               R

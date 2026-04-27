@@ -143,7 +143,7 @@ async function assertRunWorkspace(
   await expect(page.getByTestId("evaluation-lens-toggle")).toBeVisible();
   await page.getByTestId("evaluation-lens-toggle").click();
   if (evaluatedTaskIds.size > 0) {
-    await expect(page.locator('[data-testid^="graph-node-rubric-glyph-"]').first()).toBeVisible();
+    await expect(page.locator('[data-testid^="graph-rubric-glyph-"]').first()).toBeVisible();
   }
 
   await page.getByTestId("workspace-tab-actions").click();

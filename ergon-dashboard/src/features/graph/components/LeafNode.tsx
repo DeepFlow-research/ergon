@@ -161,7 +161,7 @@ function LeafNodeComponent(props: LeafNodeProps) {
       {evaluationRollup && (
         <span
           className={`absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-none ${evaluationGlyphClass(evaluationRollup.status)}`}
-          data-testid={`graph-node-rubric-glyph-${task.id}`}
+          data-testid={`graph-rubric-glyph-${task.id}`}
           title={`${evaluationRollup.status}: ${evaluationRollup.passed} passed, ${evaluationRollup.failed} failed, ${evaluationRollup.errored} errored, ${evaluationRollup.skipped} skipped`}
         >
           R
