@@ -6,7 +6,7 @@ from uuid import UUID
 from ergon_cli.commands.workflow import (
     WorkflowCommandContext,
     WorkflowCommandOutput,
-    execute_workflow_command,
+    execute_workflow_command_async,
 )
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.persistence.shared.db import get_session
@@ -23,7 +23,7 @@ _MANAGER_ONLY_ACTIONS = {
 
 
 class WorkflowCommandExecutor(Protocol):
-    def __call__(
+    async def __call__(
         self,
         command: str,
         *,
@@ -38,7 +38,7 @@ def make_workflow_cli_tool(
     worker_context: WorkerContext,
     sandbox_task_key: UUID,
     benchmark_type: str,
-    execute_command: WorkflowCommandExecutor = execute_workflow_command,
+    execute_command: WorkflowCommandExecutor = execute_workflow_command_async,
     session_factory: Callable[[], Session] = get_session,
     service_factory: Callable[[], WorkflowService] = WorkflowService,
     manager_capable: bool = False,
@@ -59,7 +59,7 @@ def make_workflow_cli_tool(
             return f"workflow denied: {denial}"
 
         try:
-            output = execute_command(
+            output = await execute_command(
                 command,
                 context=WorkflowCommandContext(
                     run_id=worker_context.run_id,

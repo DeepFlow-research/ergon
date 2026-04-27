@@ -5,3 +5,9 @@ def test_telemetry_models_import_before_run_resource_api() -> None:
 
     assert RunResource.__tablename__ == "run_resources"
     assert RunResourceView.__name__ == "RunResourceView"
+
+
+def test_context_models_import_without_worker_cycle() -> None:
+    from ergon_core.core.persistence.context.models import RunContextEvent
+
+    assert RunContextEvent.__tablename__ == "run_context_events"

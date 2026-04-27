@@ -82,6 +82,40 @@ class TestResearchRubricsDatasetLoading:
             )
         ]
 
+    def test_load_rows_accepts_vanilla_prompt_field(self, monkeypatch: pytest.MonkeyPatch):
+        class FakeTrainDataset:
+            def __len__(self):
+                return 1
+
+            def __getitem__(self, idx):
+                assert idx == 0
+                return {
+                    "sample_id": "vanilla-sample",
+                    "domain": "planning",
+                    "prompt": "Plan a day in Washington DC.",
+                    "rubrics": [
+                        {"criterion": "Includes a timed itinerary.", "axis": "quality", "weight": 5.0},
+                    ],
+                }
+
+        monkeypatch.setattr(
+            "ergon_builtins.benchmarks.researchrubrics.benchmark.load_dataset",
+            lambda *args, **kwargs: {"train": FakeTrainDataset()},
+        )
+
+        rows = ResearchRubricsBenchmark(dataset_name="ScaleAI/researchrubrics")._load_rows()
+
+        assert rows == [
+            ResearchRubricsTaskPayload(
+                sample_id="vanilla-sample",
+                domain="planning",
+                ablated_prompt="Plan a day in Washington DC.",
+                rubrics=[
+                    {"criterion": "Includes a timed itinerary.", "axis": "quality", "weight": 5.0}
+                ],
+            )
+        ]
+
 
 class TestResearchRubricsRubric:
     """Verify task-payload-driven rubric construction."""

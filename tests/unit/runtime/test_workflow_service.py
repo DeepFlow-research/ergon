@@ -470,8 +470,12 @@ async def test_add_task_writes_node_and_mutation() -> None:
     parent = _node(run_id=run_id, slug="parent", level=1)
     session.add(parent)
     session.commit()
+    dispatched = []
 
-    result = await WorkflowService().add_task(
+    async def dispatch_task_ready(run_id, definition_id, node_id):
+        dispatched.append((run_id, definition_id, node_id))
+
+    result = await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
         session,
         run_id=run_id,
         parent_node_id=parent.id,
@@ -490,6 +494,9 @@ async def test_add_task_writes_node_and_mutation() -> None:
     assert child.parent_node_id == parent.id
     assert child.level == 2
     assert child.status == TaskExecutionStatus.PENDING.value
+    run = session.get(RunRecord, run_id)
+    assert run is not None
+    assert dispatched == [(run_id, run.experiment_definition_id, child.id)]
 
 
 @pytest.mark.asyncio

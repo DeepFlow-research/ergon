@@ -37,6 +37,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
     RunTaskEvaluation,
+    RunTaskExecution,
 )
 from ergon_core.core.providers.generation.openrouter_budget import OpenRouterBudget
 from ergon_core.core.settings import settings
@@ -67,7 +68,9 @@ _POST_TERMINAL_ARTIFACT_TIMEOUT_SECONDS = 300
 @pytest.fixture(autouse=True)
 def _require_keys() -> None:
     """Skip unless every settings key this rollout touches is populated."""
-    missing = settings.missing_values(["openrouter_api_key", "exa_api_key", "e2b_api_key"])
+    missing = settings.missing_values(
+        ["openrouter_api_key", "openai_api_key", "exa_api_key", "e2b_api_key"]
+    )
     if missing:
         pytest.skip(
             f"researchrubrics rollout requires {missing} — set them in .env "
@@ -99,6 +102,7 @@ def _wait_for_post_terminal_artifacts(run_id: UUID) -> None:
     deadline = time.monotonic() + _POST_TERMINAL_ARTIFACT_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         with get_session() as session:
+            run = session.get(RunRecord, run_id)
             resources = len(
                 list(session.exec(select(RunResource).where(RunResource.run_id == run_id)).all())
             )
@@ -109,7 +113,21 @@ def _wait_for_post_terminal_artifacts(run_id: UUID) -> None:
                     ).all()
                 )
             )
+            executions = list(
+                session.exec(select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)).all()
+            )
         if resources > 0 and evaluations > 0:
+            return
+        run_status = str(getattr(run.status, "value", run.status)).lower() if run else ""
+        running_executions = {
+            "pending",
+            "running",
+            "executing",
+        }
+        if run_status in {"failed", "cancelled"} and not any(
+            str(getattr(execution.status, "value", execution.status)).lower() in running_executions
+            for execution in executions
+        ):
             return
         time.sleep(2)
 
@@ -128,7 +146,7 @@ async def test_researchrubrics_rollout(
     state inside the time budget.
     """
     model = os.environ.get("ERGON_REAL_LLM_MODEL", _DEFAULT_MODEL)
-    benchmark = "researchrubrics"
+    benchmark = os.environ.get("ERGON_REAL_LLM_BENCHMARK", "researchrubrics")
     worker = os.environ.get("ERGON_REAL_LLM_WORKER", "researchrubrics-researcher")
     evaluator = "research-rubric"
     limit = os.environ.get("ERGON_REAL_LLM_LIMIT", "1")

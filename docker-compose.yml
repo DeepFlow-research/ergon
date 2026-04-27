@@ -24,6 +24,9 @@
 #     POSTGRES_PASSWORD=ergon \
 #     TEST_HARNESS_SECRET=real-llm-secret \
 #     OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
+#     OPENAI_API_KEY="$OPENAI_API_KEY" \
+#     EXA_API_KEY="$EXA_API_KEY" \
+#     HF_API_KEY="$HF_API_KEY" \
 #     docker compose up -d
 #
 # Observability stack (otel + jaeger) on demand:
@@ -88,6 +91,9 @@ services:
       - OTEL_SERVICE_NAME=ergon-core
       - E2B_API_KEY=${E2B_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - EXA_API_KEY=${EXA_API_KEY:-}
+      - HF_API_KEY=${HF_API_KEY:-}
       # Put /app on sys.path so editable source mounts resolve in the API
       # container while the smoke fixtures live in ergon_core.test_support.
       - PYTHONPATH=/app

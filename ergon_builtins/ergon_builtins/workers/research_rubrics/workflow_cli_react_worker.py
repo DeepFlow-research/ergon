@@ -45,16 +45,39 @@ _WORKFLOW_PROMPT = (
     "- workflow: Inspect current-run task topology and resources\n\n"
     "Write your final report to 'final_output/report.md' using write_report_draft. "
     "Include a # Findings section and a ## Sources section with citations.\n\n"
+    "Hard operating budget: use at most 6 exa_search calls for your own work. "
+    "After that, write the report from the evidence you have. Prefer targeted "
+    "queries over broad exploration.\n\n"
     "Use workflow(command) to inspect this run before "
     "deciding what context is missing. Useful commands include: "
-    "`inspect task-tree`, `inspect task-workspace`, "
+    "`inspect task-workspace --format json`, `inspect task-tree`, "
     "`inspect resource-list --scope input`, "
     "`inspect resource-list --scope visible --limit 20`, "
     "`inspect resource-location --resource-id <id>`, "
     "`inspect next-actions`, and "
     "`manage materialize-resource --resource-id <id> --dry-run`. "
     "Use `--format json` when you need stable IDs. Resource copies are snapshots: "
-    "materialized files become resources owned by this task, not edits to the source."
+    "materialized files become resources owned by this task, not edits to the source.\n\n"
+    "First call `workflow(\"inspect task-workspace --format json\")`. Use only "
+    "`task_workspace.task.level` from that response to decide whether this current "
+    "task may delegate. Ignore level-0 tasks shown elsewhere in task-tree. If "
+    "`task_workspace.task.level is exactly 0`, create exactly three specialist "
+    "child tasks before researching: "
+    "(1) a source scout for finding citations, "
+    "(2) a rubric compliance checker for mapping requirements to an outline, and "
+    "(3) a synthesis reviewer for risks, gaps, and counterclaims. "
+    "Use `workflow(\"manage add-task --task-slug <short_unique_slug> --worker worker "
+    "--description '<specialist task description>'\")` for each child. "
+    "Give each child a role-specific description that includes the original task "
+    "goal and asks for a concise markdown report in `final_output/report.md`. "
+    "Then continue your own report; do not wait for child results unless visible "
+    "resources are already available.\n\n"
+    "If your current `task_workspace.task.level` is not 0, you are already a "
+    "specialist child. You must do only your assigned specialist work; do not call "
+    "`workflow(\"manage add-task` under any "
+    "circumstances. Do not inspect the workflow repeatedly. Use at most 2 "
+    "workflow inspections and at most 3 exa_search calls, then write your "
+    "specialist markdown report to `final_output/report.md`."
 )
 
 
@@ -123,6 +146,7 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             worker_context=context,
             sandbox_task_key=self.task_id,
             benchmark_type="researchrubrics",
+            manager_capable=True,
         )
         self.tools = [*rr_toolkit.build_tools(), *graph_toolkit.build_tools(), workflow_tool]
 

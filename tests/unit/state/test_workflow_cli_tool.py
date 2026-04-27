@@ -17,7 +17,7 @@ async def test_workflow_tool_injects_worker_context() -> None:
     )
     seen = {}
 
-    def execute(command, *, context, session_factory, service):
+    async def execute(command, *, context, session_factory, service):
         seen["command"] = command
         seen["context"] = context
 
@@ -55,7 +55,7 @@ async def test_workflow_tool_reports_nonzero_exit() -> None:
         node_id=uuid4(),
     )
 
-    def execute(command, *, context, session_factory, service):
+    async def execute(command, *, context, session_factory, service):
         class Output:
             stdout = ""
             stderr = "bad command"
@@ -84,7 +84,7 @@ async def test_leaf_workflow_tool_rejects_graph_edit_commands() -> None:
         node_id=uuid4(),
     )
 
-    def execute(command, *, context, session_factory, service):
+    async def execute(command, *, context, session_factory, service):
         raise AssertionError("denied commands must not reach executor")
 
     workflow = make_workflow_cli_tool(
@@ -112,7 +112,7 @@ async def test_manager_workflow_tool_allows_graph_edit_commands() -> None:
     )
     seen = {}
 
-    def execute(command, *, context, session_factory, service):
+    async def execute(command, *, context, session_factory, service):
         seen["command"] = command
 
         class Output:
@@ -145,7 +145,7 @@ async def test_workflow_tool_rejects_multiline_commands() -> None:
         node_id=uuid4(),
     )
 
-    def execute(command, *, context, session_factory, service):
+    async def execute(command, *, context, session_factory, service):
         raise AssertionError("multiline commands must not reach executor")
 
     workflow = make_workflow_cli_tool(

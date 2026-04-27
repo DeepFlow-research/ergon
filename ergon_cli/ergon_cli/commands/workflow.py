@@ -129,6 +129,23 @@ def execute_workflow_command(
     session_factory: Callable[[], Session],
     service: WorkflowService,
 ) -> WorkflowCommandOutput:
+    return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI sync bridge
+        execute_workflow_command_async(
+            command,
+            context=context,
+            session_factory=session_factory,
+            service=service,
+        )
+    )
+
+
+async def execute_workflow_command_async(
+    command: str,
+    *,
+    context: WorkflowCommandContext,
+    session_factory: Callable[[], Session],
+    service: WorkflowService,
+) -> WorkflowCommandOutput:
     argv = shlex.split(command)
     _reject_context_flags(argv)
     args = build_workflow_parser().parse_args(argv)
@@ -137,9 +154,7 @@ def execute_workflow_command(
         if args.group == "inspect":
             return _handle_inspect(args, context=context, session=session, service=service)
         if args.group == "manage":
-            return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI/tool sync bridge
-                _handle_manage(args, context=context, session=session, service=service)
-            )
+            return await _handle_manage(args, context=context, session=session, service=service)
     finally:
         _close_session(session)
     raise ValueError(f"unsupported workflow command group: {args.group}")

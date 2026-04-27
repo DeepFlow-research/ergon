@@ -107,10 +107,11 @@ def _payload_from_row(
     row: Mapping[str, Any],  # slopcop: ignore[no-typing-any]
 ) -> ResearchRubricsTaskPayload:
     """Convert one raw HuggingFace row into the benchmark payload schema."""
+    ablated_prompt = row.get("ablated_prompt") or row["prompt"]
     return ResearchRubricsTaskPayload(
         sample_id=row["sample_id"],
         domain=str(row.get("domain", "")),
-        ablated_prompt=row["ablated_prompt"],
+        ablated_prompt=ablated_prompt,
         rubrics=[
             RubricCriterion(
                 criterion=r["criterion"],

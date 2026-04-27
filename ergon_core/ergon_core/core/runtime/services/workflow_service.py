@@ -1,16 +1,20 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import PurePosixPath
 from typing import Literal
 from uuid import UUID, uuid4
 
+import inngest
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
+    RunRecord,
     RunResource,
     RunResourceKind,
     RunTaskExecution,
 )
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from ergon_core.core.runtime.events.task_events import TaskReadyEvent
+from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.graph_dto import GraphEdgeDto, GraphNodeDto, MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.workflow_dto import (
@@ -44,9 +48,11 @@ class WorkflowService:
         *,
         sandbox_manager_factory: Callable[[str], BaseSandboxManager] | None = None,
         graph_repository: WorkflowGraphRepository | None = None,
+        task_ready_dispatcher: Callable[[UUID, UUID, UUID], Awaitable[None]] | None = None,
     ) -> None:
         self._sandbox_manager_factory = sandbox_manager_factory or self._sandbox_manager_for
         self._graph_repo = graph_repository or WorkflowGraphRepository()
+        self._task_ready_dispatcher = task_ready_dispatcher or self._dispatch_task_ready
 
     def list_tasks(
         self,
@@ -312,6 +318,8 @@ class WorkflowService:
             meta=self._meta("add-task"),
         )
         session.commit()
+        definition_id = self._resolve_definition_id(session, run_id)
+        await self._task_ready_dispatcher(run_id, definition_id, created.id)
         return WorkflowMutationRef(
             action="add-task",
             dry_run=False,
@@ -579,6 +587,26 @@ class WorkflowService:
     @staticmethod
     def _meta(action: str) -> MutationMeta:
         return MutationMeta(actor="workflow-cli", reason=action)
+
+    def _resolve_definition_id(self, session: Session, run_id: UUID) -> UUID:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            raise ValueError(f"run {run_id} not found")
+        return run.experiment_definition_id
+
+    async def _dispatch_task_ready(self, run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
+        event = TaskReadyEvent(
+            run_id=run_id,
+            definition_id=definition_id,
+            task_id=None,
+            node_id=node_id,
+        )
+        await inngest_client.send(
+            inngest.Event(
+                name=TaskReadyEvent.name,
+                data=event.model_dump(mode="json"),
+            )
+        )
 
     def _resource_ref(self, session: Session, resource: RunResource) -> WorkflowResourceRef:
         producer = self._producer_node_for_resource(session, resource)

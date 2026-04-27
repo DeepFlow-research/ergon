@@ -14,6 +14,7 @@ from ergon_builtins.workers.research_rubrics.researcher_worker import (
     ResearchRubricsResearcherWorker,
 )
 from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
+    _WORKFLOW_PROMPT,
     ResearchRubricsWorkflowCliReActWorker,
 )
 from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
@@ -156,6 +157,12 @@ class TestResearcherWorker:
         tool_names = {_tool_name(t) for t in worker.tools}
         assert worker.type_slug == "researchrubrics-workflow-cli-react"
         assert "workflow" in tool_names
+
+    def test_workflow_cli_prompt_uses_current_task_level_for_delegation(self):
+        assert "inspect task-workspace --format json" in _WORKFLOW_PROMPT
+        assert "task_workspace.task.level is exactly 0" in _WORKFLOW_PROMPT
+        assert "Ignore level-0 tasks shown elsewhere in task-tree" in _WORKFLOW_PROMPT
+        assert "do not call `workflow(\"manage add-task" in _WORKFLOW_PROMPT
 
     @pytest.mark.asyncio
     async def test_report_write_uses_manager_public_file_api(self):
