@@ -26,6 +26,7 @@ from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
+from ergon_builtins.models.openrouter_backend import resolve_openrouter
 from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.workers.baselines.react_prompts import (
     MINIF2F_SYSTEM_PROMPT,
@@ -184,4 +185,5 @@ MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
     "openai": resolve_cloud,
     "anthropic": resolve_cloud,
     "google": resolve_cloud,
+    "openrouter": resolve_openrouter,
 }

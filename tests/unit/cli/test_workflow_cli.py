@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from ergon_cli.commands.workflow import WorkflowCommandContext, execute_workflow_command
+from ergon_core.core.runtime.services.task_management_dto import AddSubtaskResult
 from ergon_core.core.runtime.services.workflow_dto import WorkflowResourceRef
 
 
@@ -26,6 +27,38 @@ class _Service:
         assert max_depth == 3
         assert limit == 5
         return [self.resource]
+
+
+class _ManagingService:
+    def __init__(self) -> None:
+        self.added = None
+
+    async def add_task(
+        self,
+        session,
+        *,
+        run_id,
+        parent_node_id,
+        task_slug,
+        description,
+        assigned_worker_slug,
+        depends_on_task_slugs,
+    ):
+        assert isinstance(session, _Session)
+        self.added = {
+            "run_id": run_id,
+            "parent_node_id": parent_node_id,
+            "task_slug": task_slug,
+            "description": description,
+            "assigned_worker_slug": assigned_worker_slug,
+            "depends_on_task_slugs": depends_on_task_slugs,
+        }
+
+        return AddSubtaskResult(
+            node_id=uuid4(),
+            task_slug="source-scout",
+            status="pending",
+        )
 
 
 def test_resource_list_json_uses_injected_context() -> None:
@@ -80,3 +113,57 @@ def test_agent_command_rejects_user_supplied_context_flags() -> None:
             session_factory=_Session,
             service=_Service(resource=None),  # type: ignore[arg-type]
         )
+
+
+def test_parse_error_returns_nonzero_output_instead_of_system_exit() -> None:
+    output = execute_workflow_command(
+        "manage materialize-resource",
+        context=WorkflowCommandContext(
+            run_id=uuid4(),
+            node_id=uuid4(),
+            execution_id=uuid4(),
+            sandbox_task_key=uuid4(),
+            benchmark_type="researchrubrics",
+        ),
+        session_factory=_Session,
+        service=_Service(resource=None),  # type: ignore[arg-type]
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "--resource-id" in output.stderr
+
+
+def test_manage_add_task_creates_subtask_with_injected_parent_context() -> None:
+    run_id = uuid4()
+    node_id = uuid4()
+    service = _ManagingService()
+
+    output = execute_workflow_command(
+        "manage add-task --task-slug source-scout "
+        "--worker researchrubrics-researcher "
+        "--description 'Find authoritative sources' "
+        "--depends-on-task-slug prior-step "
+        "--format json",
+        context=WorkflowCommandContext(
+            run_id=run_id,
+            node_id=node_id,
+            execution_id=uuid4(),
+            sandbox_task_key=uuid4(),
+            benchmark_type="researchrubrics",
+        ),
+        session_factory=_Session,
+        service=service,
+    )
+
+    payload = json.loads(output.stdout)
+    assert output.exit_code == 0
+    assert payload["task"]["task_slug"] == "source-scout"
+    assert service.added == {
+        "run_id": run_id,
+        "parent_node_id": node_id,
+        "task_slug": "source-scout",
+        "description": "Find authoritative sources",
+        "assigned_worker_slug": "researchrubrics-researcher",
+        "depends_on_task_slugs": ["prior-step"],
+    }

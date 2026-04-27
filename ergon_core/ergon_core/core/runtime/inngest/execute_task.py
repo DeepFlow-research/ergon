@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 import inngest
 from ergon_core.core.runtime.errors import ContractViolationError
+from ergon_core.core.runtime.errors.error_payload import build_error_json
 from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -225,7 +226,24 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
 
         if not worker_result.success:
             await _persist_outputs(ctx, payload, prepared, sandbox_result)
-            raise RuntimeError(worker_result.error or "Worker execution failed")
+            error_msg = worker_result.error or "Worker execution failed"
+            await svc.finalize_failure(
+                FailTaskExecutionCommand(
+                    execution_id=prepared.execution_id,
+                    run_id=payload.run_id,
+                    task_id=payload.task_id,
+                    error_message=error_msg,
+                    error_json=worker_result.error_json,
+                )
+            )
+            await _emit_task_failed(payload, prepared, error_msg, task_sandbox_id)
+            return TaskExecuteResult(
+                run_id=payload.run_id,
+                task_id=payload.task_id,
+                execution_id=prepared.execution_id,
+                success=False,
+                error=error_msg,
+            )
 
         persist_result = await _persist_outputs(ctx, payload, prepared, sandbox_result)
 
@@ -291,6 +309,18 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                     run_id=payload.run_id,
                     task_id=payload.task_id,
                     error_message=error_msg,
+                    error_json=build_error_json(
+                        exc,
+                        phase="task_execute",
+                        context={
+                            "task_slug": prepared.task_slug,
+                            "assigned_worker_slug": prepared.assigned_worker_slug,
+                            "worker_type": prepared.worker_type,
+                            "model_target": prepared.model_target,
+                            "node_id": prepared.node_id,
+                            "execution_id": prepared.execution_id,
+                        },
+                    ),
                 )
             )
 

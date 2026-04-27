@@ -52,7 +52,10 @@ _RESEARCHER_SYSTEM_PROMPT = (
     "- read_report_draft: Read a draft file\n"
     "- Resource discovery tools to observe peer outputs\n\n"
     "Write your final report to 'final_output/report.md' using write_report_draft. "
-    "Include a # Findings section and a ## Sources section with citations."
+    "Include a # Findings section and a ## Sources section with citations. "
+    "For scoped child tasks, keep the evidence pass bounded: use at most six "
+    "search/QA/content tool calls total, then write a concise report and call "
+    "final_result. Do not keep searching indefinitely."
 )
 
 
@@ -89,7 +92,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             sandbox_id=sandbox_id,
             tools=[],
             system_prompt=_RESEARCHER_SYSTEM_PROMPT,
-            max_iterations=25,
+            max_iterations=60,
         )
 
     async def execute(

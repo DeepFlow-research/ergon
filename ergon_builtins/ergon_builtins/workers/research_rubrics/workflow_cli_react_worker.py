@@ -42,7 +42,7 @@ _WORKFLOW_PROMPT = (
     "- write_report_draft: Write a markdown report draft\n"
     "- edit_report_draft: Edit an existing draft\n"
     "- read_report_draft: Read a draft file\n"
-    "- workflow: Inspect current-run task topology and resources\n\n"
+    "- workflow: Inspect current-run task topology/resources and manage subtasks\n\n"
     "Write your final report to 'final_output/report.md' using write_report_draft. "
     "Include a # Findings section and a ## Sources section with citations.\n\n"
     "Use workflow(command) to inspect this run before "
@@ -51,6 +51,18 @@ _WORKFLOW_PROMPT = (
     "`inspect resource-list --scope visible --limit 20`, "
     "`inspect next-actions`, and "
     "`manage materialize-resource --resource-id <id> --dry-run`. "
+    "For ResearchRubrics benchmark tasks, start by creating at least one real "
+    "child research subtask unless the request is truly trivial. First dry-run "
+    "the shape, then create focused children with commands like: "
+    "`manage add-task --task-slug source-scout --worker researchrubrics-researcher "
+    "--description 'Find high-quality sources for ...' --dry-run`, then repeat "
+    "without `--dry-run` once the command is correct. Use worker "
+    "`researchrubrics-researcher` for child research tasks, and use "
+    "`researchrubrics-workflow-cli-react` only when a child should itself be "
+    "manager-capable. After creating children, do not duplicate their research "
+    "yourself; use `inspect task-tree --wait-seconds 60` until children are terminal, then inspect "
+    "`resource-list --scope children` and use their reports as evidence before "
+    "composing the final report. "
     "Use `--format json` when you need stable IDs. Resource copies are snapshots: "
     "materialized files become resources owned by this task, not edits to the source."
 )
@@ -81,7 +93,7 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             sandbox_id=sandbox_id,
             tools=[],
             system_prompt=_WORKFLOW_PROMPT,
-            max_iterations=25,
+            max_iterations=60,
         )
 
     async def execute(

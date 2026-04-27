@@ -153,6 +153,14 @@ class TaskManagementService:
 
         session.commit()
 
+        if not command.depends_on:
+            definition_id = self._resolve_definition_id(session, command.run_id)
+            await self._dispatch_task_ready(
+                run_id=command.run_id,
+                definition_id=definition_id,
+                node_id=node.id,
+            )
+
         logger.info(
             "add_subtask: created node %s (slug=%s) under parent %s",
             node.id,

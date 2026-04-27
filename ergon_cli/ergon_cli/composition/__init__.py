@@ -50,6 +50,12 @@ def build_experiment(
             worker_slug=worker_slug,
             model=model,
         )
+    if worker_slug == "researchrubrics-workflow-cli-react":
+        return _build_researchrubrics_workflow_experiment(
+            benchmark=benchmark,
+            evaluator=evaluator,
+            model=model,
+        )
 
     spec = WorkerSpec(worker_slug=worker_slug, name="worker", model=model)
     return Experiment.from_single_worker(
@@ -136,6 +142,49 @@ def _build_smoke_experiment(
             "post-root": SmokePostRootTimingRubric(name="post-root"),
         },
         assignments={parent_name: all_task_slugs},
+    )
+
+
+def _build_researchrubrics_workflow_experiment(
+    *,
+    benchmark,
+    evaluator,
+    model: str,
+):
+    """Register CLI-manager plus child worker bindings for dynamic subtasks."""
+    manager_name = "manager"
+    workers = {
+        manager_name: WorkerSpec(
+            worker_slug="researchrubrics-workflow-cli-react",
+            name=manager_name,
+            model=model,
+        ),
+        "researchrubrics-workflow-cli-react": WorkerSpec(
+            worker_slug="researchrubrics-workflow-cli-react",
+            name="researchrubrics-workflow-cli-react",
+            model=model,
+        ),
+        "researchrubrics-researcher": WorkerSpec(
+            worker_slug="researchrubrics-researcher",
+            name="researchrubrics-researcher",
+            model=model,
+        ),
+    }
+    instances = benchmark.build_instances()
+    all_task_slugs = [task.task_slug for tasks in instances.values() for task in tasks]
+    evaluators = {"default": evaluator}
+    if "post-root" in benchmark.evaluator_requirements():
+        from ergon_core.test_support.smoke_fixtures.criteria.timing import (
+            SmokePostRootTimingRubric,
+        )
+
+        evaluators["post-root"] = SmokePostRootTimingRubric(name="post-root")
+
+    return Experiment(
+        benchmark=benchmark,
+        workers=workers,
+        evaluators=evaluators,
+        assignments={manager_name: all_task_slugs},
     )
 
 

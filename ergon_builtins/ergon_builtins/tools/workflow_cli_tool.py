@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 from uuid import UUID
@@ -45,7 +46,8 @@ def make_workflow_cli_tool(
         if worker_context.node_id is None:
             raise ValueError("workflow tool requires WorkerContext.node_id")
 
-        output = execute_command(
+        output = await asyncio.to_thread(
+            execute_command,
             command,
             context=WorkflowCommandContext(
                 run_id=worker_context.run_id,

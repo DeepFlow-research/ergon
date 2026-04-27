@@ -27,13 +27,58 @@ class TestResearchRubricsBenchmarkRegistration:
         assert issubclass(ResearchRubricsVanillaBenchmark, Benchmark)
 
     def test_worker_slugs_registered(self):
-        expected = {"researchrubrics-researcher"}
+        expected = {
+            "researchrubrics-researcher",
+            "researchrubrics-workflow-cli-react",
+        }
         missing = expected - set(WORKERS.keys())
         assert not missing, f"Expected worker slugs missing from registry: {missing}"
 
     def test_rubric_registered_by_cli_and_type_slug(self):
         assert EVALUATORS["research-rubric"] is ResearchRubricsRubric
         assert EVALUATORS["researchrubrics-rubric"] is ResearchRubricsRubric
+
+    def test_manager_composition_registers_specialist_bindings(self, monkeypatch):
+        from ergon_cli.composition import build_experiment
+
+        class FakeTrainDataset:
+            def __len__(self):
+                return 1
+
+            def __getitem__(self, idx):
+                assert idx == 0
+                return {
+                    "sample_id": "sample",
+                    "domain": "quality",
+                    "ablated_prompt": "Write a report.",
+                    "rubrics": [
+                        {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
+                    ],
+                }
+
+            def select(self, indexes):
+                assert list(indexes) == [0]
+                return self
+
+        monkeypatch.setattr(
+            "ergon_builtins.benchmarks.researchrubrics.benchmark.load_dataset",
+            lambda *args, **kwargs: {"train": FakeTrainDataset()},
+        )
+
+        experiment = build_experiment(
+            "researchrubrics",
+            model="stub:constant",
+            worker_slug="researchrubrics-workflow-cli-react",
+            evaluator_slug="research-rubric",
+            limit=1,
+        )
+
+        assert set(experiment.workers) == {
+            "manager",
+            "researchrubrics-researcher",
+            "researchrubrics-workflow-cli-react",
+        }
+        assert experiment.assignments == {"manager": ["sample"]}
 
 
 class TestResearchRubricsVanillaBenchmark:

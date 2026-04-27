@@ -4,6 +4,12 @@ from typing import Literal
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.persistence.shared.types import (
+    AssignedWorkerSlug,
+    NodeId,
+    RunId,
+    TaskSlug,
+)
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
     RunResource,
@@ -19,6 +25,11 @@ from ergon_core.core.runtime.services.workflow_dto import (
     WorkflowResourceRef,
     WorkflowTaskRef,
 )
+from ergon_core.core.runtime.services.task_management_dto import (
+    AddSubtaskCommand,
+    AddSubtaskResult,
+)
+from ergon_core.core.runtime.services.task_management_service import TaskManagementService
 from sqlmodel import Session, col, select
 
 ResourceScope = Literal["input", "upstream", "own", "children", "descendants", "visible"]
@@ -202,6 +213,40 @@ class WorkflowService:
                 suggested_commands=commands,
             )
         ]
+
+    async def add_task(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        parent_node_id: UUID,
+        task_slug: str,
+        description: str,
+        assigned_worker_slug: str,
+        depends_on_task_slugs: list[str],
+    ) -> AddSubtaskResult:
+        deps = [
+            NodeId(
+                self._resolve_node(
+                    session,
+                    run_id=run_id,
+                    node_id=None,
+                    task_slug=dep_slug,
+                ).id
+            )
+            for dep_slug in depends_on_task_slugs
+        ]
+        return await TaskManagementService().add_subtask(
+            session,
+            AddSubtaskCommand(
+                run_id=RunId(run_id),
+                parent_node_id=NodeId(parent_node_id),
+                task_slug=TaskSlug(task_slug),
+                description=description,
+                assigned_worker_slug=AssignedWorkerSlug(assigned_worker_slug),
+                depends_on=deps,
+            ),
+        )
 
     async def materialize_resource(  # slopcop: ignore[max-function-params] -- mirrors CLI scope fields
         self,

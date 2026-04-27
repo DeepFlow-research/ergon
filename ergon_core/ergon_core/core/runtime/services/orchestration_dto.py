@@ -107,6 +107,7 @@ class FailTaskExecutionCommand(BaseModel):
     run_id: UUID
     task_id: UUID | None
     error_message: str
+    error_json: JsonObject | None = None
 
 
 class WorkflowTerminalState(StrEnum):

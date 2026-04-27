@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 from ergon_builtins.tools.workflow_cli_tool import make_workflow_cli_tool
+from ergon_cli.commands.workflow import WorkflowCommandOutput, execute_workflow_command
 from ergon_core.api.worker_context import WorkerContext
 
 
@@ -69,3 +70,56 @@ async def test_workflow_tool_reports_nonzero_exit() -> None:
     )
 
     assert await workflow("inspect nope") == "workflow exited 2: bad command"
+
+
+@pytest.mark.asyncio
+async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None:
+    context = WorkerContext(
+        run_id=uuid4(),
+        task_id=uuid4(),
+        execution_id=uuid4(),
+        sandbox_id="sandbox",
+        node_id=uuid4(),
+    )
+
+    def execute(command, *, context, session_factory, service):
+        assert command.startswith("manage add-task")
+        return WorkflowCommandOutput(stdout="created")
+
+    workflow = make_workflow_cli_tool(
+        worker_context=context,
+        sandbox_task_key=context.task_id,
+        benchmark_type="researchrubrics",
+        execute_command=execute,
+    )
+
+    assert await workflow("manage add-task --task-slug source --worker worker --description x") == (
+        "created"
+    )
+
+
+@pytest.mark.asyncio
+async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> None:
+    context = WorkerContext(
+        run_id=uuid4(),
+        task_id=uuid4(),
+        execution_id=uuid4(),
+        sandbox_id="sandbox",
+        node_id=uuid4(),
+    )
+
+    class Session:
+        def close(self):
+            pass
+
+    workflow = make_workflow_cli_tool(
+        worker_context=context,
+        sandbox_task_key=context.task_id,
+        benchmark_type="researchrubrics",
+        execute_command=execute_workflow_command,
+        session_factory=Session,
+    )
+
+    result = await workflow("manage add-task --task-slug source --worker worker --description x --dry-run")
+
+    assert "Graph lifecycle command validated" in result

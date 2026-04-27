@@ -1,7 +1,10 @@
 import argparse
 import asyncio
+import contextlib
+import io
 import json
 import shlex
+import time
 from typing import cast
 from uuid import UUID
 
@@ -62,6 +65,7 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     task_tree = inspect_sub.add_parser("task-tree")
     task_tree.add_argument("--format", choices=["text", "json"], default="text")
     task_tree.add_argument("--parent-node-id", default=None)
+    task_tree.add_argument("--wait-seconds", type=float, default=0)
 
     dependencies = inspect_sub.add_parser("task-dependencies")
     dependencies.add_argument(
@@ -86,6 +90,11 @@ def build_workflow_parser() -> argparse.ArgumentParser:
         parser_for_action.add_argument("--dry-run", action="store_true")
         parser_for_action.add_argument("--format", choices=["text", "json"], default="text")
         parser_for_action.add_argument("--reason", default=None)
+        if action == "add-task":
+            parser_for_action.add_argument("--task-slug", required=True)
+            parser_for_action.add_argument("--description", required=True)
+            parser_for_action.add_argument("--worker", required=True)
+            parser_for_action.add_argument("--depends-on-task-slug", action="append", default=[])
 
     return parser
 
@@ -97,9 +106,18 @@ def execute_workflow_command(
     session_factory: Callable[[], Session],
     service: WorkflowService,
 ) -> WorkflowCommandOutput:
-    argv = shlex.split(command)
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
     _reject_context_flags(argv)
-    args = build_workflow_parser().parse_args(argv)
+    stderr = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(stderr):
+            args = build_workflow_parser().parse_args(argv)
+    except SystemExit as exc:
+        exit_code = exc.code if isinstance(exc.code, int) else 2
+        return WorkflowCommandOutput(stdout="", stderr=stderr.getvalue() or str(exc), exit_code=exit_code)
     session = session_factory()
     try:
         if args.group == "inspect":
@@ -186,7 +204,14 @@ def _handle_inspect(
         return WorkflowCommandOutput(stdout=content.decode(errors="replace"))
     if args.action == "task-tree":
         parent = UUID(args.parent_node_id) if args.parent_node_id else None
+        deadline = time.monotonic() + max(args.wait_seconds, 0)
         tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
+        while args.wait_seconds > 0 and time.monotonic() < deadline:
+            children = [task for task in tasks if task.parent_node_id == context.node_id]
+            if children and all(task.status in {"completed", "failed", "cancelled"} for task in children):
+                break
+            time.sleep(2)
+            tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
         return _format_output(
             {"tasks": [_dump(task) for task in tasks]},
             text_lines=[
@@ -247,6 +272,31 @@ async def _handle_manage(
         return _format_output(
             {"materialized_resource": _dump(result)},
             text_lines=[f"{result.source_resource_id} -> {result.sandbox_path}"],
+            output_format=args.format,
+        )
+    if args.action == "add-task":
+        if args.dry_run:
+            payload: JsonObject = {
+                "action": args.action,
+                "dry_run": True,
+                "task_slug": args.task_slug,
+                "assigned_worker_slug": args.worker,
+                "depends_on_task_slugs": args.depends_on_task_slug,
+                "message": "Graph lifecycle command validated; no changes applied.",
+            }
+            return _format_output(payload, [str(payload["message"])], args.format)
+        result = await service.add_task(
+            session,
+            run_id=context.run_id,
+            parent_node_id=context.node_id,
+            task_slug=args.task_slug,
+            description=args.description,
+            assigned_worker_slug=args.worker,
+            depends_on_task_slugs=args.depends_on_task_slug,
+        )
+        return _format_output(
+            {"task": _dump(result)},
+            text_lines=[f"{result.task_slug} {result.status} {result.node_id}"],
             output_format=args.format,
         )
     try:

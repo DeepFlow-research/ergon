@@ -14,6 +14,7 @@ from ergon_builtins.workers.research_rubrics.researcher_worker import (
     ResearchRubricsResearcherWorker,
 )
 from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
+    _WORKFLOW_PROMPT,
     ResearchRubricsWorkflowCliReActWorker,
 )
 from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
@@ -156,6 +157,11 @@ class TestResearcherWorker:
         tool_names = {_tool_name(t) for t in worker.tools}
         assert worker.type_slug == "researchrubrics-workflow-cli-react"
         assert "workflow" in tool_names
+
+    def test_workflow_cli_prompt_exposes_real_subtask_creation(self):
+        assert "manage add-task" in _WORKFLOW_PROMPT
+        assert "researchrubrics-researcher" in _WORKFLOW_PROMPT
+        assert "--dry-run" in _WORKFLOW_PROMPT
 
     @pytest.mark.asyncio
     async def test_report_write_uses_manager_public_file_api(self):

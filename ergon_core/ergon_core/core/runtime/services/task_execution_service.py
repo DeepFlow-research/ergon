@@ -330,7 +330,7 @@ class TaskExecutionService:
             )
             execution.status = TaskExecutionStatus.FAILED
             execution.completed_at = utcnow()
-            execution.error_json = {"message": command.error_message}
+            execution.error_json = command.error_json or {"message": command.error_message}
             session.add(execution)
 
             graph_repo = WorkflowGraphRepository()

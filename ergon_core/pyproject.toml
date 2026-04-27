@@ -15,7 +15,7 @@ dependencies = [
     "uvicorn>=0.24.0",
     "e2b-code-interpreter",
     "openai",
-    "pydantic-ai",
+    "pydantic-ai>=1.87.0",
     "litellm",
     "opentelemetry-api",
     "opentelemetry-sdk",

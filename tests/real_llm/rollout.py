@@ -37,22 +37,7 @@ from pathlib import Path
 from typing import Any  # slopcop: ignore[no-typing-any]
 from uuid import UUID
 
-from sqlmodel import select
-
-from ergon_core.core.persistence.context.models import RunContextEvent
-from ergon_core.core.persistence.graph.models import (
-    RunGraphEdge,
-    RunGraphMutation,
-    RunGraphNode,
-)
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import (
-    RunRecord,
-    RunResource,
-    RunTaskEvaluation,
-    RunTaskExecution,
-    SandboxEvent,
-)
+from tests.real_llm.artifact_health import analyze_rollout_artifacts
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +68,15 @@ def _write_json_model(path: Path, row: Any) -> None:  # slopcop: ignore[no-typin
     path.write_text(row.model_dump_json(indent=2))
 
 
+def _write_mapping_jsonl(path: Path, rows: list[dict[str, Any]]) -> int:  # slopcop: ignore[no-typing-any]
+    """Write plain DB mapping rows as JSONL. Returns row count."""
+    with path.open("w") as f:
+        for row in rows:
+            f.write(json.dumps(row, default=str))
+            f.write("\n")
+    return len(rows)
+
+
 def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
     """Dump every persistence table for a run into ``out_dir/db/``.
 
@@ -94,6 +88,27 @@ def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
     exact Pydantic schema — downstream readers can ``RunRecord.model_validate_json``
     to round-trip.
     """
+    # reason: importing persistence models at module import time triggers a
+    # context event payload <-> worker API cycle when unit tests import the
+    # pure report helpers from this module. The DB models are only needed for
+    # live rollout dumping, so keep this import scoped to that operation.
+    from sqlalchemy import text
+    from sqlmodel import select
+
+    from ergon_core.core.persistence.graph.models import (
+        RunGraphEdge,
+        RunGraphMutation,
+        RunGraphNode,
+    )
+    from ergon_core.core.persistence.shared.db import get_session
+    from ergon_core.core.persistence.telemetry.models import (
+        RunRecord,
+        RunResource,
+        RunTaskEvaluation,
+        RunTaskExecution,
+        SandboxEvent,
+    )
+
     db_dir = out_dir / "db"
     counts: dict[str, int] = {}
 
@@ -144,11 +159,24 @@ def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
                 ).all()
             ),
         )
-        counts["run_context_events"] = _write_jsonl(
+        # Avoid importing RunContextEvent here: that model depends on context
+        # payloads, which currently have a circular import through api.Worker.
+        rows = [
+            dict(row)
+            for row in session.connection()
+            .execute(
+                text(
+                    "select * from run_context_events "
+                    "where run_id = :run_id order by sequence asc, created_at asc"
+                ),
+                {"run_id": str(run_id)},
+            )
+            .mappings()
+            .all()
+        ]
+        counts["run_context_events"] = _write_mapping_jsonl(
             db_dir / "run_context_events.jsonl",
-            list(
-                session.exec(select(RunContextEvent).where(RunContextEvent.run_id == run_id)).all()
-            ),
+            rows,
         )
 
     return counts
@@ -280,6 +308,34 @@ def write_report(out_dir: Path, manifest_path: Path) -> Path:
     for table, n in sorted(counts.items()):
         lines.append(f"- `{table}`: {n}")
     lines.append("")
+
+    health = analyze_rollout_artifacts(out_dir)
+    lines.extend(
+        [
+            "## Artifact health",
+            "",
+            f"- status: **{'ok' if health.ok else 'unhealthy'}**",
+            f"- task executions: {health.task_count}",
+            f"- evaluations: {health.evaluation_count}",
+            f"- resources: {health.resource_count}",
+            f"- graph nodes: {health.graph_node_count}",
+            f"- criterion results: {health.criterion_count}",
+        ]
+    )
+    if health.normalized_scores:
+        scores = ", ".join(f"{score:.3f}" for score in health.normalized_scores)
+        lines.append(f"- normalized scores: {scores}")
+    if health.worker_slugs:
+        slugs = ", ".join(f"`{slug}`" for slug in health.worker_slugs)
+        lines.append(f"- worker slugs: {slugs}")
+    if health.issues:
+        lines.append("")
+        lines.append("### Health issues")
+        lines.append("")
+        for issue in health.issues:
+            lines.append(f"- `{issue.code}`: {issue.message}")
+    lines.append("")
+
     shots = manifest.get("screenshots") or {}
     if shots:
         lines.append("## Screenshots")

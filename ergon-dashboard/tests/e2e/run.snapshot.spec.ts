@@ -204,3 +204,65 @@ test("persisted run snapshot remains inspectable after refresh", async ({ page }
   await page.getByTestId("workspace-tab-actions").click();
   await expect(page.getByTestId("workspace-executions")).toContainText("Attempt 1");
 });
+
+test("run debugger panels can be resized and persist across reloads", async ({ page }) => {
+  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+
+  await expect(page.getByTestId("graph-canvas")).toBeVisible();
+  await expect(page.getByTestId("timeline-region")).toBeVisible();
+
+  const timelineBefore = await page.getByTestId("timeline-region").boundingBox();
+  const timelineHandle = page.getByTestId("timeline-resize-handle");
+  const timelineHandleBox = await timelineHandle.boundingBox();
+  expect(timelineBefore).not.toBeNull();
+  expect(timelineHandleBox).not.toBeNull();
+
+  await page.mouse.move(timelineHandleBox!.x + timelineHandleBox!.width / 2, timelineHandleBox!.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(timelineHandleBox!.x + timelineHandleBox!.width / 2, timelineHandleBox!.y - 90);
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => (await page.getByTestId("timeline-region").boundingBox())?.height ?? 0)
+    .toBeGreaterThan(timelineBefore!.height + 40);
+  const savedVerticalLayout = await page.evaluate(() =>
+    window.localStorage.getItem("ergon-run-debugger-vertical-layout:v1"),
+  );
+  expect(savedVerticalLayout).not.toBeNull();
+  expect(JSON.parse(savedVerticalLayout!).timeline).toBeGreaterThan(38);
+
+  await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
+  await expect(page.getByTestId("workspace-region")).toBeVisible();
+
+  const workspaceBefore = await page.getByTestId("workspace-region").boundingBox();
+  const workspaceHandle = page.getByTestId("workspace-resize-handle");
+  const workspaceHandleBox = await workspaceHandle.boundingBox();
+  expect(workspaceBefore).not.toBeNull();
+  expect(workspaceHandleBox).not.toBeNull();
+
+  await page.mouse.move(workspaceHandleBox!.x + 2, workspaceHandleBox!.y + workspaceHandleBox!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(workspaceHandleBox!.x - 90, workspaceHandleBox!.y + workspaceHandleBox!.height / 2);
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => (await page.getByTestId("workspace-region").boundingBox())?.width ?? 0)
+    .toBeGreaterThan(workspaceBefore!.width + 40);
+
+  const timelineAfterDrag = await page.getByTestId("timeline-region").boundingBox();
+  const workspaceAfterDrag = await page.getByTestId("workspace-region").boundingBox();
+  expect(timelineAfterDrag).not.toBeNull();
+  expect(workspaceAfterDrag).not.toBeNull();
+
+  await page.reload();
+  await expect(page.getByTestId("graph-canvas")).toBeVisible();
+  await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
+  await expect(page.getByTestId("workspace-region")).toBeVisible();
+
+  await expect
+    .poll(async () => (await page.getByTestId("timeline-region").boundingBox())?.height ?? 0)
+    .toBeGreaterThan(timelineBefore!.height + 40);
+  await expect
+    .poll(async () => (await page.getByTestId("workspace-region").boundingBox())?.width ?? 0)
+    .toBeGreaterThan(workspaceBefore!.width + 40);
+});

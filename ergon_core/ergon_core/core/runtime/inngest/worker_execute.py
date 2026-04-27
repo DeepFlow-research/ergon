@@ -21,6 +21,7 @@ from ergon_core.core.persistence.context.repository import ContextEventRepositor
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.errors import RegistryLookupError
+from ergon_core.core.runtime.errors.error_payload import build_error_json
 from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import WorkerExecuteRequest
 from ergon_core.core.runtime.services.inngest_function_results import WorkerExecuteResult
@@ -38,6 +39,14 @@ def _worker_execute_result_from_output(output: WorkerOutput) -> WorkerExecuteRes
         success=output.success,
         final_assistant_message=output.output,
         error=None if output.success else output.output,
+    )
+
+
+def _worker_execute_result_from_exception(exc: BaseException) -> WorkerExecuteResult:
+    return WorkerExecuteResult(
+        success=False,
+        error=str(exc),
+        error_json=build_error_json(exc, phase="worker_execute"),
     )
 
 
@@ -137,7 +146,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
             turn_count,
             error_msg,
         )
-        raise
+        return _worker_execute_result_from_exception(exc)
 
     sink = get_trace_sink()
     sink.emit_span(

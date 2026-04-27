@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Group, Panel, Separator, type Layout } from "react-resizable-panels";
 
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -21,6 +22,43 @@ import { useCohortDetail } from "@/hooks/useCohortDetail";
 import { useRunState } from "@/hooks/useRunState";
 import { buildRunEvents } from "@/lib/runEvents";
 import { CohortDetail, RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus } from "@/lib/types";
+
+const VERTICAL_LAYOUT_STORAGE_KEY = "ergon-run-debugger-vertical-layout:v1";
+const HORIZONTAL_LAYOUT_STORAGE_KEY = "ergon-run-debugger-horizontal-layout:v1";
+const DEFAULT_VERTICAL_LAYOUT: Layout = { "graph-workspace": 62, timeline: 38 };
+const DEFAULT_HORIZONTAL_LAYOUT: Layout = { graph: 58, workspace: 42 };
+const FULL_GRAPH_LAYOUT: Layout = { graph: 100, "graph-workspace": 100 };
+
+function loadPanelLayout(storageKey: string, fallback: Layout): Layout {
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Layout;
+    return Object.fromEntries(
+      Object.entries(fallback).map(([id, defaultSize]) => {
+        const size = parsed[id];
+        return [id, Number.isFinite(size) ? size : defaultSize];
+      }),
+    );
+  } catch {
+    return fallback;
+  }
+}
+
+function savePanelLayout(storageKey: string, layout: Layout): void {
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(layout));
+  } catch {
+    // Ignore storage failures; resizing should still work for the session.
+  }
+}
+
+function panelPercent(layout: Layout, id: string, fallback: number): string {
+  const size = layout[id];
+  return `${Number.isFinite(size) ? size : fallback}%`;
+}
 
 function formatSeconds(value: number | null): string {
   if (value == null) return "—";
@@ -63,6 +101,13 @@ export function RunWorkspacePage({
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
   const [isStreamOpen, setIsStreamOpen] = useState(false);
+  const [verticalLayout, setVerticalLayout] = useState<Layout>(() =>
+    loadPanelLayout(VERTICAL_LAYOUT_STORAGE_KEY, DEFAULT_VERTICAL_LAYOUT),
+  );
+  const [horizontalLayout, setHorizontalLayout] = useState<Layout>(() =>
+    loadPanelLayout(HORIZONTAL_LAYOUT_STORAGE_KEY, DEFAULT_HORIZONTAL_LAYOUT),
+  );
+  const [hasLoadedPanelLayouts, setHasLoadedPanelLayouts] = useState(false);
   const { runState, isLoading, error, isSubscribed } = useRunState(runId, initialRunState);
   const { detail } = useCohortDetail(cohortId ?? "", initialCohortDetail);
 
@@ -79,6 +124,12 @@ export function RunWorkspacePage({
   useEffect(() => {
     selectedActivityIdRef.current = selectedActivityId;
   }, [selectedActivityId]);
+
+  useEffect(() => {
+    setVerticalLayout(loadPanelLayout(VERTICAL_LAYOUT_STORAGE_KEY, DEFAULT_VERTICAL_LAYOUT));
+    setHorizontalLayout(loadPanelLayout(HORIZONTAL_LAYOUT_STORAGE_KEY, DEFAULT_HORIZONTAL_LAYOUT));
+    setHasLoadedPanelLayouts(true);
+  }, []);
 
   // Fetch mutations once per run load so snapshot selection is always ready.
   useEffect(() => {
@@ -412,8 +463,7 @@ export function RunWorkspacePage({
         </div>
       )}
 
-      <main className="relative min-h-0 flex-1 overflow-hidden"
-      >
+      <main className="relative min-h-0 flex-1 overflow-hidden">
         {selectionNotice && (
           <div
             className="absolute left-4 right-4 top-2 z-40 rounded-[var(--radius-sm)] border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800"
@@ -422,103 +472,183 @@ export function RunWorkspacePage({
             {selectionNotice}
           </div>
         )}
-        <section
-          className="absolute inset-0 overflow-hidden transition-[padding] duration-300 ease-out"
-          data-testid="graph-region"
-          style={{
-            bottom: activities.length > 0 ? 300 : 0,
-            paddingRight: isInspectorOpen ? 476 : 0,
+        <Group
+          key={`${hasLoadedPanelLayouts ? "hydrated" : "initial"}-${
+            activities.length > 0 ? "with-timeline" : "without-timeline"
+          }`}
+          orientation="vertical"
+          defaultLayout={activities.length > 0 ? verticalLayout : { "graph-workspace": 100 }}
+          onLayoutChange={(layout) => {
+            if (activities.length > 0) {
+              setVerticalLayout(layout);
+              savePanelLayout(VERTICAL_LAYOUT_STORAGE_KEY, layout);
+            }
           }}
+          className="size-full"
         >
-          <DAGCanvas
-            runId={runId}
-            runState={displayState}
-            isLoading={isLoading}
-            error={error}
-            isSubscribed={isSubscribed}
-            onTaskClick={handleTaskClick}
-            selectedTaskId={selectedTaskId}
-            highlightedTaskIds={highlightedTaskIds}
-          />
-        </section>
-
-        {activities.length > 0 && (
-          <section
-            className="absolute inset-x-0 bottom-0 z-30 h-[300px] overflow-auto border-t border-[var(--line)] bg-[var(--card)]"
-            data-testid="timeline-region"
+          <Panel
+            id="graph-workspace"
+            defaultSize={
+              activities.length > 0
+                ? panelPercent(verticalLayout, "graph-workspace", 62)
+                : "100%"
+            }
+            minSize="28%"
           >
-            <ActivityStackTimeline
-              activities={activities}
-              mutations={mutations}
-              currentSequence={currentSequence}
-              selectedTaskId={selectedTaskId}
-              selectedActivityId={selectedActivityId}
-              onActivityClick={handleActivityClick}
-            />
-          </section>
-        )}
-
-        {isStreamOpen && events.length > 0 && (
-          <section
-            className="absolute bottom-4 left-4 z-20 max-h-[44vh] w-[520px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-pop"
-            data-testid="event-stream-region"
-          >
-            <UnifiedEventStream
-              events={events}
-              anchor={runState?.startedAt ?? null}
-              highlightedTaskId={selectedTaskId}
-              onTaskClick={(id) => {
-                setSelectionNotice(null);
-                setSelectedTaskId(id);
+            <Group
+              key={`${hasLoadedPanelLayouts ? "hydrated" : "initial"}-${
+                isInspectorOpen ? "with-workspace" : "without-workspace"
+              }`}
+              orientation="horizontal"
+              defaultLayout={isInspectorOpen ? horizontalLayout : { graph: 100 }}
+              onLayoutChange={(layout) => {
+                if (isInspectorOpen) {
+                  setHorizontalLayout(layout);
+                  savePanelLayout(HORIZONTAL_LAYOUT_STORAGE_KEY, layout);
+                }
               }}
-              onSequenceClick={(seq) => {
-                requestedSequenceRef.current = seq;
-                handleSequenceChange(seq);
-              }}
-            />
-          </section>
-        )}
+              className="size-full"
+            >
+              <Panel
+                id="graph"
+                defaultSize={
+                  isInspectorOpen
+                    ? panelPercent(horizontalLayout, "graph", 58)
+                    : "100%"
+                }
+                minSize="28%"
+              >
+                <section
+                  className="relative h-full min-h-0 overflow-hidden"
+                  data-testid="graph-region"
+                >
+                  <DAGCanvas
+                    runId={runId}
+                    runState={displayState}
+                    isLoading={isLoading}
+                    error={error}
+                    isSubscribed={isSubscribed}
+                    onTaskClick={handleTaskClick}
+                    selectedTaskId={selectedTaskId}
+                    highlightedTaskIds={highlightedTaskIds}
+                  />
 
-        {isInspectorOpen ? (
-          <section
-            className="animate-drawer-enter absolute bottom-4 right-4 top-4 z-20 w-[460px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-pop"
-            data-testid="workspace-region"
-          >
-            <TaskWorkspace
-              runState={displayState}
-              taskId={selectedTaskId}
-              error={error}
-              onClearSelection={() => setSelectedTaskId(null)}
-              onJumpToSequence={(seq) => {
-                requestedSequenceRef.current = seq;
-                handleSequenceChange(seq);
-              }}
-              selectedTime={selectedTimelineTime}
-              selectedSequence={snapshotSequence}
-              selectedActivity={selectedActivity}
-            />
-          </section>
-        ) : (
-          <section
-            className="pointer-events-none absolute bottom-4 right-4 z-10 w-[260px] rounded-[var(--radius)] border border-dashed border-[var(--line-strong)] bg-white/80 px-4 py-3 text-xs text-[var(--muted)]"
-            data-testid="workspace-launcher"
-          >
-            <div className="max-w-3xl space-y-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
-                Task inspection
-              </div>
-              <h2 className="text-sm font-semibold text-[var(--ink)]">
-                Click node → workspace drawer
-              </h2>
-              <p>State, outputs, turns, and evals appear scoped to the selected sequence.</p>
-              {selectedTask && (
-                <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
-                  Ready to inspect <span className="font-semibold text-[var(--ink)]">{selectedTask.name}</span>.
-                </div>
+                  {isStreamOpen && events.length > 0 && (
+                    <section
+                      className="absolute bottom-4 left-4 z-20 max-h-[44vh] w-[520px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] shadow-pop"
+                      data-testid="event-stream-region"
+                    >
+                      <UnifiedEventStream
+                        events={events}
+                        anchor={runState?.startedAt ?? null}
+                        highlightedTaskId={selectedTaskId}
+                        onTaskClick={(id) => {
+                          setSelectionNotice(null);
+                          setSelectedTaskId(id);
+                        }}
+                        onSequenceClick={(seq) => {
+                          requestedSequenceRef.current = seq;
+                          handleSequenceChange(seq);
+                        }}
+                      />
+                    </section>
+                  )}
+
+                  {!isInspectorOpen && (
+                    <section
+                      className="pointer-events-none absolute bottom-4 right-4 z-10 w-[260px] rounded-[var(--radius)] border border-dashed border-[var(--line-strong)] bg-white/80 px-4 py-3 text-xs text-[var(--muted)]"
+                      data-testid="workspace-launcher"
+                    >
+                      <div className="max-w-3xl space-y-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">
+                          Task inspection
+                        </div>
+                        <h2 className="text-sm font-semibold text-[var(--ink)]">
+                          Click node → workspace drawer
+                        </h2>
+                        <p>State, outputs, turns, and evals appear scoped to the selected sequence.</p>
+                        {selectedTask && (
+                          <div className="rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--paper)] px-3 py-2">
+                            Ready to inspect <span className="font-semibold text-[var(--ink)]">{selectedTask.name}</span>.
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  )}
+                </section>
+              </Panel>
+
+              {isInspectorOpen && (
+                <>
+                  <Separator
+                    id="workspace-resize-handle"
+                    className="group relative z-30 w-3 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-[var(--accent-soft)] data-[separator=drag]:bg-[var(--accent-soft)]"
+                    aria-label="Resize task workspace"
+                  >
+                    <div className="mx-auto h-full w-px bg-[var(--line)] transition-colors group-hover:bg-[var(--accent)]" />
+                  </Separator>
+                  <Panel
+                    id="workspace"
+                    defaultSize={panelPercent(horizontalLayout, "workspace", 42)}
+                    minSize="24%"
+                    maxSize="70%"
+                  >
+                    <section
+                      className="h-full overflow-hidden rounded-l-[var(--radius)] border-l border-[var(--line)] bg-[var(--card)] shadow-pop"
+                      data-testid="workspace-region"
+                    >
+                      <TaskWorkspace
+                        runState={displayState}
+                        taskId={selectedTaskId}
+                        error={error}
+                        onClearSelection={() => setSelectedTaskId(null)}
+                        onJumpToSequence={(seq) => {
+                          requestedSequenceRef.current = seq;
+                          handleSequenceChange(seq);
+                        }}
+                        selectedTime={selectedTimelineTime}
+                        selectedSequence={snapshotSequence}
+                        selectedActivity={selectedActivity}
+                      />
+                    </section>
+                  </Panel>
+                </>
               )}
-            </div>
-          </section>
-        )}
+            </Group>
+          </Panel>
+
+          {activities.length > 0 && (
+            <>
+              <Separator
+                id="timeline-resize-handle"
+                className="group relative z-30 h-3 shrink-0 cursor-row-resize bg-transparent transition-colors hover:bg-[var(--accent-soft)] data-[separator=drag]:bg-[var(--accent-soft)]"
+                aria-label="Resize trace timeline"
+              >
+                <div className="my-auto h-px w-full bg-[var(--line)] transition-colors group-hover:bg-[var(--accent)]" />
+              </Separator>
+              <Panel
+                id="timeline"
+                defaultSize={panelPercent(verticalLayout, "timeline", 38)}
+                minSize="18%"
+                maxSize="70%"
+              >
+                <section
+                  className="h-full overflow-auto border-t border-[var(--line)] bg-[var(--card)]"
+                  data-testid="timeline-region"
+                >
+                  <ActivityStackTimeline
+                    activities={activities}
+                    mutations={mutations}
+                    currentSequence={currentSequence}
+                    selectedTaskId={selectedTaskId}
+                    selectedActivityId={selectedActivityId}
+                    onActivityClick={handleActivityClick}
+                  />
+                </section>
+              </Panel>
+            </>
+          )}
+        </Group>
       </main>
     </div>
   );

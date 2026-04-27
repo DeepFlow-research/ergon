@@ -6,6 +6,7 @@ Each Inngest function has an output_type for structured returns.
 from typing import Literal
 from uuid import UUID
 
+from ergon_core.api.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 
@@ -71,6 +72,7 @@ class WorkerExecuteResult(BaseModel):
     success: bool = False
     final_assistant_message: str | None = None
     error: str | None = None
+    error_json: JsonObject | None = None
 
 
 class PersistOutputsResult(BaseModel):
