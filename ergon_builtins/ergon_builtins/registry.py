@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 import structlog
 from ergon_core.api import Benchmark, Evaluator, Worker
-from ergon_core.core.providers.generation.model_resolution import (
+from ergon_builtins.models.resolution import (
     ResolvedModel,
     register_model_backend,
 )

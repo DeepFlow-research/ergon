@@ -51,3 +51,12 @@ def test_construct_with_minimal_explicit_kwargs() -> None:
     assert worker.tools == []
     assert worker.system_prompt is None
     assert worker.max_iterations == 1
+
+
+def test_pydantic_ai_transcript_adapter_lives_outside_worker() -> None:
+    import ergon_builtins.workers.baselines.react_worker as react_worker
+
+    assert not hasattr(react_worker, "_build_turns")
+    assert not hasattr(react_worker, "_extract_request_parts")
+    assert not hasattr(react_worker, "_extract_response_parts")
+    assert not hasattr(react_worker, "_extract_tool_results")

@@ -1,4 +1,4 @@
-from ergon_core.core.providers.generation.model_resolution import resolve_model_target
+from ergon_builtins.models.resolution import resolve_model_target
 
 # Importing the builtins registry registers production model backends.
 import ergon_builtins.registry  # noqa: F401
@@ -11,3 +11,6 @@ def test_openrouter_target_resolves_to_openrouter_provider_model() -> None:
     assert resolved.model.model_name == "anthropic/claude-sonnet-4.6"
     assert resolved.model.system == "openrouter"
     assert resolved.supports_logprobs is False
+    assert resolved.capture_model_settings == {
+        "openrouter_reasoning": {"enabled": True, "exclude": False},
+    }

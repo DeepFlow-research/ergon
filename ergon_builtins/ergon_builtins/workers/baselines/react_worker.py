@@ -1,56 +1,22 @@
 # ergon_builtins/ergon_builtins/workers/baselines/react_worker.py
 """ReAct-style worker using pydantic-ai Agent for tool-augmented execution."""
 
-import dataclasses  # slopcop: ignore[no-dataclass]
 import json
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any, Self
 from uuid import UUID
 
+from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
+from ergon_builtins.models.resolution import resolve_model_target
 from ergon_core.api import BenchmarkTask, Tool, Worker, WorkerContext, WorkerOutput
-from ergon_core.api.generation import (
-    GenerationTurn,
-    SystemPromptPart,
-    TextPart,
-    ThinkingPart,
-    ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
-)
-from ergon_core.api.json_types import JsonObject
-from ergon_core.core.persistence.context.assembly import assemble_pydantic_ai_messages
+from ergon_core.api.generation import GenerationTurn
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.providers.generation.model_resolution import resolve_model_target
-from ergon_core.core.providers.generation.pydantic_ai_format import extract_logprobs
-from ergon_core.core.rl import LOGPROB_SETTINGS
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
-from pydantic_ai.messages import (
-    ModelMessage,
-    ModelRequest,
-    ModelResponse,
-)
-from pydantic_ai.messages import (
-    SystemPromptPart as PydanticSystemPromptPart,
-)
-from pydantic_ai.messages import (
-    TextPart as PydanticTextPart,
-)
-from pydantic_ai.messages import (
-    ThinkingPart as PydanticThinkingPart,
-)
-from pydantic_ai.messages import (
-    ToolCallPart as PydanticToolCallPart,
-)
-from pydantic_ai.messages import (
-    ToolReturnPart as PydanticToolReturnPart,
-)
-from pydantic_ai.messages import (
-    UserPromptPart as PydanticUserPromptPart,
-)
+from pydantic_ai.messages import ModelMessage
 from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
@@ -110,10 +76,6 @@ class ReActWorker(Worker):
         """Run the underlying pydantic-ai agent and yield the turns it produced."""
         resolved = resolve_model_target(self.model)
 
-        model_settings: JsonObject | None = None
-        if resolved.supports_logprobs and self.model and self.model.startswith("vllm:"):
-            model_settings = LOGPROB_SETTINGS
-
         agent: Agent[None, _AgentOutput] = Agent(
             model=resolved.model,
             instructions=self.system_prompt or None,
@@ -126,7 +88,7 @@ class ReActWorker(Worker):
 
         async with agent.iter(
             task_prompt,
-            model_settings=model_settings,
+            model_settings=resolved.capture_model_settings,
             message_history=self._seed_messages,
         ) as run:
             async for _node in run:
@@ -144,7 +106,7 @@ class ReActWorker(Worker):
         # Works for both complete and partial (max_iterations) runs —
         # pydantic-ai 0.7.x moved all_messages() to AgentRunResult, but
         # ctx.state.message_history is always populated incrementally.
-        turns = _build_turns(run.ctx.state.message_history)
+        turns = PydanticAITranscriptAdapter().build_turns(run.ctx.state.message_history)
         for turn in turns:
             yield turn
 
@@ -202,13 +164,8 @@ class ReActWorker(Worker):
         if not events:
             return None
         worker = cls(**kwargs)
-        worker._seed_messages = assemble_pydantic_ai_messages(events)
+        worker._seed_messages = PydanticAITranscriptAdapter().assemble_replay(events)
         return worker
-
-
-# ---------------------------------------------------------------------------
-# PydanticAI message → GenerationTurn
-# ---------------------------------------------------------------------------
 
 
 def _format_task(task: BenchmarkTask) -> str:
@@ -238,110 +195,3 @@ def _latest_final_result_message(
             continue
         messages.append(str(payload.args.get("final_assistant_message", "")))
     return messages[-1] if messages else ""
-
-
-def _build_turns(messages: list[ModelMessage]) -> list[GenerationTurn]:
-    """Build GenerationTurn objects from a complete PydanticAI message list.
-
-    Caller must pass the full message history — NOT incremental slices.
-    Using incremental slices causes tool_results to always be empty because
-    ToolReturnParts appear in the *next* ModelRequest, which is not in the slice.
-    """
-    turns: list[GenerationTurn] = []
-    pending_response: ModelResponse | None = None
-    pending_request_in: ModelRequest | None = None
-
-    for message in messages:
-        if isinstance(message, ModelRequest):
-            if pending_response is not None:
-                turns.append(
-                    _to_turn(
-                        pending_request_in,
-                        pending_response,
-                        tool_result_request=message,
-                    )
-                )
-                pending_response = None
-                pending_request_in = None
-            pending_request_in = message
-        elif isinstance(message, ModelResponse):
-            pending_response = message
-
-    if pending_response is not None:
-        turns.append(_to_turn(pending_request_in, pending_response, tool_result_request=None))
-
-    return turns
-
-
-def _to_turn(
-    request_in: ModelRequest | None,
-    response: ModelResponse,
-    tool_result_request: ModelRequest | None,
-) -> GenerationTurn:
-    raw_resp = _make_json_safe(dataclasses.asdict(response))
-    return GenerationTurn(
-        messages_in=_extract_request_parts(request_in) if request_in else [],
-        response_parts=_extract_response_parts(response),
-        tool_results=_extract_tool_results(tool_result_request) if tool_result_request else [],
-        turn_logprobs=extract_logprobs(raw_resp),
-    )
-
-
-def _extract_request_parts(request: ModelRequest) -> list[Any]:  # slopcop: ignore[no-typing-any]
-    parts: list[Any] = []  # slopcop: ignore[no-typing-any]
-    for part in request.parts:
-        if isinstance(part, PydanticSystemPromptPart):
-            parts.append(SystemPromptPart(content=part.content))
-        elif isinstance(part, PydanticUserPromptPart) and isinstance(part.content, str):
-            parts.append(UserPromptPart(content=part.content))
-        # ToolReturnParts are extracted separately as tool_results — skip here
-    return parts
-
-
-def _extract_response_parts(response: ModelResponse) -> list[Any]:  # slopcop: ignore[no-typing-any]
-    parts: list[Any] = []  # slopcop: ignore[no-typing-any]
-    for part in response.parts:
-        if isinstance(part, PydanticTextPart):
-            parts.append(TextPart(content=part.content))
-        elif isinstance(part, PydanticToolCallPart):
-            parts.append(
-                ToolCallPart(
-                    tool_name=part.tool_name,
-                    tool_call_id=part.tool_call_id,
-                    args=part.args_as_dict(),
-                )
-            )
-        elif isinstance(part, PydanticThinkingPart):
-            parts.append(ThinkingPart(content=part.content))
-    return parts
-
-
-def _extract_tool_results(request: ModelRequest) -> list[ToolReturnPart]:
-    results: list[ToolReturnPart] = []
-    for part in request.parts:
-        if isinstance(part, PydanticToolReturnPart):
-            content = part.content
-            serialized = content if isinstance(content, str) else json.dumps(content, default=str)
-            results.append(
-                ToolReturnPart(
-                    tool_call_id=part.tool_call_id,
-                    tool_name=part.tool_name,
-                    content=serialized,
-                )
-            )
-    return results
-
-
-def _make_json_safe(obj: Any) -> Any:  # slopcop: ignore[no-typing-any]
-    # reason: avoid polluting module namespace with stdlib datetime
-    from datetime import datetime
-
-    if isinstance(obj, dict):
-        return {k: _make_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_make_json_safe(v) for v in obj]
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    if isinstance(obj, bytes):
-        return obj.decode("utf-8", errors="replace")
-    return obj

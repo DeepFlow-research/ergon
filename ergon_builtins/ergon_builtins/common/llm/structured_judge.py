@@ -1,7 +1,9 @@
+"""Structured LLM judge helper for built-in evaluators."""
+
 from collections.abc import Sequence
 from typing import Literal, TypeVar, cast
 
-from ergon_core.core.providers.generation.model_resolution import resolve_model_target
+from ergon_builtins.models.resolution import resolve_model_target
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
@@ -21,13 +23,7 @@ async def call_structured_judge(
     response_type: type[T],
     model: str | None,
 ) -> T:
-    """Call an LLM and parse a structured judge response.
-
-    This helper owns only provider mechanics: model resolution, pydantic-ai
-    invocation, and output parsing. Benchmark criteria own the judge prompts,
-    user-message formatting, and scoring policy.
-    """
-
+    """Call an LLM and parse a structured judge response."""
     resolved = resolve_model_target(model)
     instructions = "\n\n".join(message.content for message in messages if message.role == "system")
     prompt = "\n\n".join(

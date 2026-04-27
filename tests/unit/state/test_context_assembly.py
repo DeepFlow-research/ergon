@@ -1,12 +1,12 @@
 """State tests for context event assembly → PydanticAI message history.
 
-Tests the assemble_pydantic_ai_messages function using RunContextEvent
+Tests the PydanticAITranscriptAdapter assemble_replay method using RunContextEvent
 instances built directly (no DB round-trip needed for pure logic tests).
 """
 
 from uuid import uuid4
 
-from ergon_core.core.persistence.context.assembly import assemble_pydantic_ai_messages
+from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
 from ergon_core.core.persistence.context.event_payloads import (
     AssistantTextPayload,
     SystemPromptPayload,
@@ -38,6 +38,10 @@ from pydantic_ai.messages import (
 from pydantic_ai.messages import (
     UserPromptPart as PydanticUserPromptPart,
 )
+
+
+def assemble_pydantic_ai_messages(events: list[RunContextEvent]):
+    return PydanticAITranscriptAdapter().assemble_replay(events)
 
 
 def _make_event(event_type: str, payload, sequence: int) -> RunContextEvent:

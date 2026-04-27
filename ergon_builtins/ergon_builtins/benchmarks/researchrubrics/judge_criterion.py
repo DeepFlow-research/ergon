@@ -3,7 +3,7 @@ from typing import ClassVar
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
-from ergon_core.core.providers.generation.structured_judge import (
+from ergon_builtins.common.llm.structured_judge import (
     JudgeMessage,
     call_structured_judge,
 )

@@ -136,7 +136,7 @@ invalid-assignment = "warn"
 
 # pydantic-ai message formatting — complex generic dict unions ty can't resolve.
 [[tool.ty.overrides]]
-include = ["**/providers/generation/pydantic_ai_format.py"]
+include = ["**/common/llm_context/adapters/pydantic_ai.py"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"

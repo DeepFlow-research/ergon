@@ -1,7 +1,7 @@
 # tests/state/test_generation_turn_build.py
-"""Tests for the new _build_turns logic in react_worker."""
+"""Tests for building GenerationTurn values from PydanticAI transcripts."""
 
-from ergon_builtins.workers.baselines.react_worker import _build_turns
+from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
 from ergon_core.api.generation import (
     GenerationTurn,
 )
@@ -29,6 +29,10 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
+
+
+def _build_turns(messages):
+    return PydanticAITranscriptAdapter().build_turns(messages)
 
 
 def _make_messages_text_only():

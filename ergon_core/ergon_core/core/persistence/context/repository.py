@@ -171,25 +171,27 @@ class ContextEventRepository:
         turn: GenerationTurn,
         seq: int,
     ) -> tuple[list[RunContextEvent], int]:
-        """Produce tool_result events from ToolReturnParts in messages_in."""
+        """Produce tool_result events from GenerationTurn tool observations."""
         events: list[RunContextEvent] = []
-        for part in turn.messages_in:
-            if isinstance(part, ToolReturnPart):
-                events.append(
-                    self._make_event(
-                        run_id,
-                        execution_id,
-                        worker_binding_key,
-                        seq,
-                        ToolResultPayload(
-                            tool_call_id=part.tool_call_id,
-                            tool_name=part.tool_name,
-                            result=part.content,
-                            # Set is_error=True when ToolReturnPart gains an is_error field (currently always False)
-                        ),
-                    )
+        tool_result_parts = turn.tool_results or [
+            part for part in turn.messages_in if isinstance(part, ToolReturnPart)
+        ]
+        for part in tool_result_parts:
+            events.append(
+                self._make_event(
+                    run_id,
+                    execution_id,
+                    worker_binding_key,
+                    seq,
+                    ToolResultPayload(
+                        tool_call_id=part.tool_call_id,
+                        tool_name=part.tool_name,
+                        result=part.content,
+                        # TODO: Set is_error=True when ToolReturnPart gains an is_error field (currently always False)
+                    ),
                 )
-                seq += 1
+            )
+            seq += 1
         return events, seq
 
     async def persist_turn(
