@@ -7,7 +7,12 @@ not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
+from ergon_core.core.persistence.context.event_payloads import (
+    ContextEventPayload,
+    ContextEventType,
+)
 from ergon_core.core.persistence.telemetry.evaluation_summary import EvalCriterionStatus
 from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
 from pydantic import BaseModel, ConfigDict, Field
@@ -167,16 +172,17 @@ class RunCommunicationThreadDto(CamelModel):
 
 
 class RunContextEventDto(CamelModel):
-    id: str
-    task_execution_id: str
-    task_node_id: str
+    id: UUID
+    run_id: UUID
+    task_execution_id: UUID
+    task_node_id: UUID
     worker_binding_key: str
     sequence: int
-    event_type: str
-    payload: dict[str, Any]  # slopcop: ignore[no-typing-any]
-    created_at: str
-    started_at: str | None = None
-    completed_at: str | None = None
+    event_type: ContextEventType
+    payload: ContextEventPayload
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class RunSnapshotDto(CamelModel):

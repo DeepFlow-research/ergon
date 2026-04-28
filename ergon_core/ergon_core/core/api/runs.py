@@ -381,16 +381,17 @@ def _context_events_by_task(
             continue
         context_events_by_task[str(task_node_id)].append(
             RunContextEventDto(
-                id=str(event.id),
-                task_execution_id=str(event.task_execution_id),
-                task_node_id=str(task_node_id),
+                id=event.id,
+                run_id=event.run_id,
+                task_execution_id=event.task_execution_id,
+                task_node_id=task_node_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
                 event_type=event.event_type,
-                payload=event.payload,
-                created_at=event.created_at.isoformat(),
-                started_at=event.started_at.isoformat() if event.started_at else None,
-                completed_at=event.completed_at.isoformat() if event.completed_at else None,
+                payload=event.parsed_payload(),
+                created_at=event.created_at,
+                started_at=event.started_at,
+                completed_at=event.completed_at,
             )
         )
     return dict(context_events_by_task)

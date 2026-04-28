@@ -15,9 +15,6 @@ from ergon_core.core.api.schemas import (
     RunTaskEvaluationDto,
 )
 from ergon_core.core.persistence.context.event_payloads import ContextEventType
-from ergon_core.core.persistence.context.models import (
-    _PAYLOAD_ADAPTER,
-)
 from ergon_core.core.persistence.graph.models import (
     RunGraphMutation,
 )
@@ -412,7 +409,7 @@ class DashboardEmitter:
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
                 event_type=cast(ContextEventType, event.event_type),
-                payload=_PAYLOAD_ADAPTER.validate_python(event.payload),
+                payload=event.parsed_payload(),
                 created_at=event.created_at,
                 started_at=event.started_at,
                 completed_at=event.completed_at,
