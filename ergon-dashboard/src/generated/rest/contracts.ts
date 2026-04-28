@@ -19,7 +19,7 @@ const RunTaskDto = z.object({
   isLeaf: z.boolean(),
   level: z.number().int(),
   assignedWorkerId: z.union([z.string(), z.null()]).optional(),
-  assignedWorkerName: z.union([z.string(), z.null()]).optional(),
+  assignedWorkerSlug: z.union([z.string(), z.null()]).optional(),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
 });
@@ -55,6 +55,7 @@ const RunEvaluationCriterionDto = z.object({
   stageNum: z.number().int(),
   stageName: z.string(),
   criterionNum: z.number().int(),
+  criterionSlug: z.string(),
   criterionType: z.string(),
   criterionDescription: z.string(),
   criterionName: z.string(),
@@ -70,6 +71,9 @@ const RunEvaluationCriterionDto = z.object({
   skippedReason: z.union([z.string(), z.null()]).optional(),
   evaluatedActionIds: z.array(z.string()).optional(),
   evaluatedResourceIds: z.array(z.string()).optional(),
+  observation: z
+    .union([z.object({}).partial().passthrough(), z.null()])
+    .optional(),
   error: z.union([z.object({}).partial().passthrough(), z.null()]).optional(),
 });
 const RunTaskEvaluationDto = z.object({
@@ -106,15 +110,99 @@ const RunSandboxDto = z.object({
   closeReason: z.union([z.string(), z.null()]).optional(),
   commands: z.array(RunSandboxCommandDto).optional(),
 });
+const SystemPromptPayload = z
+  .object({
+    event_type: z.literal("system_prompt").default("system_prompt"),
+    text: z.string(),
+  })
+  .passthrough();
+const UserMessagePayload = z
+  .object({
+    event_type: z.literal("user_message").default("user_message"),
+    text: z.string(),
+    from_worker_key: z.union([z.string(), z.null()]).optional(),
+  })
+  .passthrough();
+const JsonScalar = z.union([
+  z.string(),
+  z.number(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+const JsonValue: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([JsonScalar, z.array(JsonValue), z.record(z.string(), JsonValue)])
+);
+const JsonObject = z.record(z.string(), JsonValue);
+const TokenLogprob = z
+  .object({
+    token: z.string(),
+    logprob: z.number(),
+    top_logprobs: z.array(JsonObject).optional(),
+  })
+  .passthrough();
+const AssistantTextPayload = z
+  .object({
+    event_type: z.literal("assistant_text").default("assistant_text"),
+    text: z.string(),
+    turn_id: z.string(),
+    turn_token_ids: z.union([z.array(z.number().int()), z.null()]).optional(),
+    turn_logprobs: z.union([z.array(TokenLogprob), z.null()]).optional(),
+  })
+  .passthrough();
+const ToolCallPayload = z
+  .object({
+    event_type: z.literal("tool_call").default("tool_call"),
+    tool_call_id: z.string(),
+    tool_name: z.string(),
+    args: z.object({}).partial().passthrough(),
+    turn_id: z.string(),
+    turn_token_ids: z.union([z.array(z.number().int()), z.null()]).optional(),
+    turn_logprobs: z.union([z.array(TokenLogprob), z.null()]).optional(),
+  })
+  .passthrough();
+const ToolResultPayload = z
+  .object({
+    event_type: z.literal("tool_result").default("tool_result"),
+    tool_call_id: z.string(),
+    tool_name: z.string(),
+    result: z.unknown(),
+    is_error: z.boolean().optional().default(false),
+  })
+  .passthrough();
+const ThinkingPayload = z
+  .object({
+    event_type: z.literal("thinking").default("thinking"),
+    text: z.string(),
+    turn_id: z.string(),
+    turn_token_ids: z.union([z.array(z.number().int()), z.null()]).optional(),
+    turn_logprobs: z.union([z.array(TokenLogprob), z.null()]).optional(),
+  })
+  .passthrough();
 const RunContextEventDto = z.object({
-  id: z.string(),
-  taskExecutionId: z.string(),
-  taskNodeId: z.string(),
+  id: z.string().uuid(),
+  runId: z.string().uuid(),
+  taskExecutionId: z.string().uuid(),
+  taskNodeId: z.string().uuid(),
   workerBindingKey: z.string(),
   sequence: z.number().int(),
-  eventType: z.string(),
-  payload: z.object({}).partial().passthrough(),
-  createdAt: z.string(),
+  eventType: z.enum([
+    "system_prompt",
+    "user_message",
+    "assistant_text",
+    "tool_call",
+    "tool_result",
+    "thinking",
+  ]),
+  payload: z.discriminatedUnion("event_type", [
+    SystemPromptPayload,
+    UserMessagePayload,
+    AssistantTextPayload,
+    ToolCallPayload,
+    ToolResultPayload,
+    ThinkingPayload,
+  ]),
+  createdAt: z.string().datetime({ offset: true }),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
 });
@@ -217,16 +305,16 @@ const NodeFieldChangedMutation = z
 const EdgeAddedMutation = z
   .object({
     mutation_type: z.string().optional().default("edge.added"),
-    source_node_id: z.string(),
-    target_node_id: z.string(),
+    source_node_id: z.string().uuid(),
+    target_node_id: z.string().uuid(),
     status: z.string(),
   })
   .passthrough();
 const EdgeRemovedMutation = z
   .object({
     mutation_type: z.string().optional().default("edge.removed"),
-    source_node_id: z.string(),
-    target_node_id: z.string(),
+    source_node_id: z.string().uuid(),
+    target_node_id: z.string().uuid(),
     status: z.string(),
   })
   .passthrough();
@@ -236,17 +324,6 @@ const EdgeStatusChangedMutation = z
     status: z.string(),
   })
   .passthrough();
-const JsonScalar = z.union([
-  z.string(),
-  z.number(),
-  z.number(),
-  z.boolean(),
-  z.null(),
-]);
-const JsonValue: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([JsonScalar, z.array(JsonValue), z.record(z.string(), JsonValue)])
-);
-const JsonObject = z.record(z.string(), JsonValue);
 const AnnotationSetMutation = z
   .object({
     mutation_type: z.string().optional().default("annotation.set"),
@@ -261,16 +338,40 @@ const AnnotationDeletedMutation = z
     payload: JsonObject,
   })
   .passthrough();
-const RunGraphMutationDto = z.object({
-  id: z.string(),
-  run_id: z.string(),
-  sequence: z.number().int(),
-  mutation_type: z.string(),
-  target_type: z.string(),
-  target_id: z.string(),
-  actor: z.string(),
-  old_value: z.union([
-    z.discriminatedUnion("mutation_type", [
+const GraphMutationRecordDto = z
+  .object({
+    id: z.string().uuid(),
+    run_id: z.string().uuid(),
+    sequence: z.number().int(),
+    mutation_type: z.enum([
+      "node.added",
+      "node.removed",
+      "node.status_changed",
+      "node.field_changed",
+      "edge.added",
+      "edge.removed",
+      "edge.status_changed",
+      "annotation.set",
+      "annotation.deleted",
+    ]),
+    target_type: z.enum(["node", "edge"]),
+    target_id: z.string().uuid(),
+    actor: z.string(),
+    old_value: z.union([
+      z.discriminatedUnion("mutation_type", [
+        NodeAddedMutation,
+        NodeRemovedMutation,
+        NodeStatusChangedMutation,
+        NodeFieldChangedMutation,
+        EdgeAddedMutation,
+        EdgeRemovedMutation,
+        EdgeStatusChangedMutation,
+        AnnotationSetMutation,
+        AnnotationDeletedMutation,
+      ]),
+      z.null(),
+    ]),
+    new_value: z.discriminatedUnion("mutation_type", [
       NodeAddedMutation,
       NodeRemovedMutation,
       NodeStatusChangedMutation,
@@ -281,22 +382,10 @@ const RunGraphMutationDto = z.object({
       AnnotationSetMutation,
       AnnotationDeletedMutation,
     ]),
-    z.null(),
-  ]),
-  new_value: z.discriminatedUnion("mutation_type", [
-    NodeAddedMutation,
-    NodeRemovedMutation,
-    NodeStatusChangedMutation,
-    NodeFieldChangedMutation,
-    EdgeAddedMutation,
-    EdgeRemovedMutation,
-    EdgeStatusChangedMutation,
-    AnnotationSetMutation,
-    AnnotationDeletedMutation,
-  ]),
-  reason: z.union([z.string(), z.null()]),
-  created_at: z.string(),
-});
+    reason: z.union([z.string(), z.null()]),
+    created_at: z.string().datetime({ offset: true }),
+  })
+  .passthrough();
 const definition_id = z.union([z.string(), z.null()]).optional();
 const TrainingCurvePointDto = z.object({
   runId: z.string(),
@@ -465,6 +554,16 @@ export const schemas = {
   RunTaskEvaluationDto,
   RunSandboxCommandDto,
   RunSandboxDto,
+  SystemPromptPayload,
+  UserMessagePayload,
+  JsonScalar,
+  JsonValue,
+  JsonObject,
+  TokenLogprob,
+  AssistantTextPayload,
+  ToolCallPayload,
+  ToolResultPayload,
+  ThinkingPayload,
   RunContextEventDto,
   RunCommunicationMessageDto,
   RunCommunicationThreadDto,
@@ -478,12 +577,9 @@ export const schemas = {
   EdgeAddedMutation,
   EdgeRemovedMutation,
   EdgeStatusChangedMutation,
-  JsonScalar,
-  JsonValue,
-  JsonObject,
   AnnotationSetMutation,
   AnnotationDeletedMutation,
-  RunGraphMutationDto,
+  GraphMutationRecordDto,
   definition_id,
   TrainingCurvePointDto,
   TrainingSessionDto,

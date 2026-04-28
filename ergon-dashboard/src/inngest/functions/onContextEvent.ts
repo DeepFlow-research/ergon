@@ -12,6 +12,7 @@ export const onContextEvent = inngest.createFunction(
 
     const contextEvent: ContextEventState = {
       id: payload.id,
+      runId: payload.run_id,
       taskExecutionId: payload.task_execution_id,
       taskNodeId: payload.task_node_id,
       workerBindingKey: payload.worker_binding_key,

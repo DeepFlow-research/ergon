@@ -13,9 +13,11 @@ export const FIXTURE_IDS = {
   cohortId: "11111111-1111-4111-8111-111111111111",
   runId: "22222222-2222-4222-8222-222222222222",
   experimentId: "33333333-3333-4333-8333-333333333333",
-  rootTaskId: "task-root",
-  exploreTaskId: "task-explore",
-  solveTaskId: "task-solve",
+  rootTaskId: "10000000-0000-4000-8000-000000000001",
+  exploreTaskId: "10000000-0000-4000-8000-000000000002",
+  solveTaskId: "10000000-0000-4000-8000-000000000003",
+  exploreExecutionId: "20000000-0000-4000-8000-000000000001",
+  solveExecutionId: "20000000-0000-4000-8000-000000000002",
   actionId: "44444444-4444-4444-8444-444444444444",
   workerId: "55555555-5555-4555-8555-555555555555",
   threadId: "66666666-6666-4666-8666-666666666666",
@@ -42,7 +44,7 @@ function taskState(task: Partial<TaskState> & Pick<TaskState, "id" | "name" | "d
     childIds: [],
     dependsOnIds: [],
     assignedWorkerId: FIXTURE_IDS.workerId,
-    assignedWorkerName: "react-worker",
+    assignedWorkerSlug: "react-worker",
     startedAt: "2026-03-18T12:00:00.000Z",
     completedAt: null,
     ...task,
@@ -58,7 +60,7 @@ function serializedRunState(): SerializedWorkflowRunState {
     isLeaf: false,
     level: 0,
     childIds: [FIXTURE_IDS.exploreTaskId, FIXTURE_IDS.solveTaskId],
-    assignedWorkerName: "planner",
+    assignedWorkerSlug: "planner",
   });
   const explore = taskState({
     id: FIXTURE_IDS.exploreTaskId,
@@ -83,7 +85,8 @@ function serializedRunState(): SerializedWorkflowRunState {
   const solveContextEvents: ContextEventState[] = [
     {
       id: FIXTURE_IDS.toolCallEventId,
-      taskExecutionId: "execution-solve-1",
+      runId: FIXTURE_IDS.runId,
+      taskExecutionId: FIXTURE_IDS.solveExecutionId,
       taskNodeId: FIXTURE_IDS.solveTaskId,
       workerBindingKey: "react-worker",
       sequence: 0,
@@ -103,7 +106,8 @@ function serializedRunState(): SerializedWorkflowRunState {
     },
     {
       id: FIXTURE_IDS.toolResultEventId,
-      taskExecutionId: "execution-solve-1",
+      runId: FIXTURE_IDS.runId,
+      taskExecutionId: FIXTURE_IDS.solveExecutionId,
       taskNodeId: FIXTURE_IDS.solveTaskId,
       workerBindingKey: "react-worker",
       sequence: 1,
@@ -140,7 +144,7 @@ function serializedRunState(): SerializedWorkflowRunState {
         {
           id: "resource-proof",
           taskId: FIXTURE_IDS.solveTaskId,
-          taskExecutionId: "execution-1",
+          taskExecutionId: FIXTURE_IDS.solveExecutionId,
           name: "proof.lean",
           mimeType: "text/plain",
           sizeBytes: 320,
@@ -152,7 +156,7 @@ function serializedRunState(): SerializedWorkflowRunState {
     executionsByTask: {
       [FIXTURE_IDS.exploreTaskId]: [
         {
-          id: "execution-explore-1",
+          id: FIXTURE_IDS.exploreExecutionId,
           taskId: FIXTURE_IDS.exploreTaskId,
           attemptNumber: 1,
           status: TaskStatus.COMPLETED,
@@ -169,7 +173,7 @@ function serializedRunState(): SerializedWorkflowRunState {
       ],
       [FIXTURE_IDS.solveTaskId]: [
         {
-          id: "execution-solve-1",
+          id: FIXTURE_IDS.solveExecutionId,
           taskId: FIXTURE_IDS.solveTaskId,
           attemptNumber: 1,
           status: TaskStatus.RUNNING,
@@ -265,6 +269,7 @@ function serializedRunState(): SerializedWorkflowRunState {
             stageNum: 0,
             stageName: "proof_validation",
             criterionNum: 0,
+            criterionSlug: "proof_compiles",
             criterionType: "code_rule",
             criterionDescription: "Proof compiles and closes all goals",
             criterionName: "proof compiles",
@@ -353,7 +358,8 @@ export function createDeltaThread(): CommunicationThreadState {
 export function createDeltaContextEvent(): ContextEventState {
   return {
     id: FIXTURE_IDS.deltaToolCallEventId,
-    taskExecutionId: "execution-solve-1",
+    runId: FIXTURE_IDS.runId,
+    taskExecutionId: FIXTURE_IDS.solveExecutionId,
     taskNodeId: FIXTURE_IDS.solveTaskId,
     workerBindingKey: "react-worker",
     sequence: 2,
@@ -393,6 +399,7 @@ export function createUpdatedEvaluation(): TaskEvaluationState {
         stageNum: 0,
         stageName: "proof_validation",
         criterionNum: 0,
+        criterionSlug: "proof_compiles",
         criterionType: "code_rule",
         criterionDescription: "Proof compiles and closes all goals",
         criterionName: "proof compiles",

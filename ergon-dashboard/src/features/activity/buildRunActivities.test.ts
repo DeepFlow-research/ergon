@@ -54,6 +54,7 @@ test("buildRunActivities surfaces semantic activity kinds without creating actor
   runState.contextEventsByTask.set(noisyTaskId, [
     {
       id: "context-noisy",
+      runId: runState.id,
       taskExecutionId: "execution-noisy",
       taskNodeId: noisyTaskId,
       workerBindingKey: "worker-1",

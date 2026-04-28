@@ -12,9 +12,19 @@ export type ContextEventType =
   | "tool_result"
   | "thinking";
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 export interface TokenLogprob {
+  [key: string]: JsonValue | undefined;
   token: string;
   logprob: number;
+  top_logprobs?: Record<string, JsonValue>[];
 }
 
 export type ContextEventPayload =
@@ -53,6 +63,7 @@ export type ContextEventPayload =
 
 export interface ContextEventState {
   id: string;
+  runId: string;
   taskExecutionId: string;
   taskNodeId: string;
   workerBindingKey: string;

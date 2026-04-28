@@ -33,7 +33,7 @@
         "isLeaf": false,
         "level": 0,
         "assignedWorkerId": null,
-        "assignedWorkerName": "planner",
+        "assignedWorkerSlug": "planner",
         "startedAt": "2026-04-26T12:00:00.000Z",
         "completedAt": null
       },
@@ -48,7 +48,7 @@
         "isLeaf": true,
         "level": 1,
         "assignedWorkerId": null,
-        "assignedWorkerName": "researcher-a",
+        "assignedWorkerSlug": "researcher-a",
         "startedAt": "2026-04-26T12:00:05.000Z",
         "completedAt": null
       },
@@ -63,7 +63,7 @@
         "isLeaf": true,
         "level": 1,
         "assignedWorkerId": null,
-        "assignedWorkerName": "researcher-b",
+        "assignedWorkerSlug": "researcher-b",
         "startedAt": "2026-04-26T12:00:08.000Z",
         "completedAt": null
       },
@@ -84,7 +84,7 @@
         "isLeaf": false,
         "level": 1,
         "assignedWorkerId": null,
-        "assignedWorkerName": "writer",
+        "assignedWorkerSlug": "writer",
         "startedAt": null,
         "completedAt": null
       },
@@ -99,7 +99,7 @@
         "isLeaf": true,
         "level": 2,
         "assignedWorkerId": null,
-        "assignedWorkerName": "writer-a",
+        "assignedWorkerSlug": "writer-a",
         "startedAt": null,
         "completedAt": null
       },
@@ -114,7 +114,7 @@
         "isLeaf": true,
         "level": 2,
         "assignedWorkerId": null,
-        "assignedWorkerName": "writer-b",
+        "assignedWorkerSlug": "writer-b",
         "startedAt": "2026-04-26T12:00:18.000Z",
         "completedAt": "2026-04-26T12:00:25.000Z"
       }
@@ -257,6 +257,7 @@
             "stageNum": 0,
             "stageName": "citation_validation",
             "criterionNum": 0,
+            "criterionSlug": "citations_validate",
             "criterionType": "code_rule",
             "criterionDescription": "Citations validate",
             "criterionName": "citations validate",
@@ -281,6 +282,7 @@
       "10000000-0000-4000-8000-000000000002": [
         {
           "id": "60000000-0000-4000-8000-000000000001",
+          "runId": "99999999-9999-4999-8999-999999999999",
           "taskExecutionId": "30000000-0000-4000-8000-000000000001",
           "taskNodeId": "10000000-0000-4000-8000-000000000002",
           "workerBindingKey": "researcher-a",
@@ -288,10 +290,14 @@
           "eventType": "tool_call",
           "payload": {
             "event_type": "tool_call",
+            "tool_call_id": "call-search-mas-layout",
             "tool_name": "search",
             "args": {
               "query": "MAS layout"
-            }
+            },
+            "turn_id": "turn-search",
+            "turn_token_ids": null,
+            "turn_logprobs": null
           },
           "createdAt": "2026-04-26T12:00:10.000Z",
           "startedAt": "2026-04-26T12:00:10.000Z",

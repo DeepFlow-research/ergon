@@ -9,7 +9,12 @@ const contractsPath = path.resolve(__dirname, "../src/generated/rest/contracts.t
 const source = readFileSync(contractsPath, "utf8")
   .replace('import { makeApi, Zodios, type ZodiosOptions } from "@zodios/core";\n', "")
   // openapi-zod-client generates z.record(V) but Zod requires z.record(K, V).
-  .replace(/z\.record\((?!z\.string\(\))/g, "z.record(z.string(), ");
+  .replace(/z\.record\((?!z\.string\(\))/g, "z.record(z.string(), ")
+  // Preserve literal discriminators for generated context-event payload unions.
+  .replace(
+    /event_type: z\.string\(\)\.optional\(\)\.default\("([^"]+)"\)/g,
+    'event_type: z.literal("$1").default("$1")',
+  );
 const endpointMarker = "\nconst endpoints = makeApi([";
 const markerIndex = source.indexOf(endpointMarker);
 
