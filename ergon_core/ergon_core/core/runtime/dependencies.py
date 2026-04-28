@@ -9,7 +9,7 @@ def check_packages(
 ) -> list[str]:
     """Check that required packages are importable.
 
-    Returns a list of human-readable error strings.  Empty list = all good.
+    Returns a list of human-readable error strings. Empty list = all good.
     """
     errors: list[str] = []
     for spec in required:

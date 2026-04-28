@@ -15,7 +15,7 @@ from typing import cast
 from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.api.generation import (
+from ergon_core.core.generation import (
     GenerationTurn,
     ModelRequestPart,
     ModelResponsePart,

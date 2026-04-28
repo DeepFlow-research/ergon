@@ -12,7 +12,7 @@ from typing import ClassVar
 from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.api.generation import GenerationTurn, TextPart
+from ergon_core.core.generation import GenerationTurn, TextPart
 from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
@@ -144,9 +144,7 @@ class RecursiveSmokeWorkerBase(Worker):
                 from_agent_id=f"leaf-{task_slug}",
                 to_agent_id="parent",
                 thread_topic="smoke-completion",
-                content=(
-                    f"{task_slug}: recursive done nested={sorted(self._last_child_statuses)}"
-                ),
+                content=(f"{task_slug}: recursive done nested={sorted(self._last_child_statuses)}"),
             ),
         )
 

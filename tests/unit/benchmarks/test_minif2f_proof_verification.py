@@ -9,14 +9,13 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
 from ergon_core.api import WorkerOutput
-from ergon_core.api.criterion_runtime import CommandResult
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
+from ergon_core.core.runtime.evaluation.protocols import CommandResult
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
     ResourceNotFoundError,
 )

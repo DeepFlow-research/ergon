@@ -4,11 +4,14 @@ from uuid import UUID, uuid4
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.shared.enums import (
+    RunResourceKind,
+    RunStatus,
+    TaskExecutionStatus,
+)
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
-    RunResourceKind,
     RunTaskExecution,
 )
 from ergon_core.core.runtime.services.workflow_service import WorkflowService

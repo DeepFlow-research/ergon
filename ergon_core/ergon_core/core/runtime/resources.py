@@ -1,17 +1,11 @@
-"""Public read-only DTO for a ``run_resources`` row.
-
-The ORM row lives at ``ergon_core.core.persistence.telemetry.models.RunResource``;
-this module is the API-layer shape callers should depend on.  ``RunResourceKind``
-is imported at the package level (``ergon_core.api``), so prefer that import
-site over reaching into the ORM module.
-"""
+"""Runtime resource DTOs and resource-log enums."""
 
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
-from ergon_core.core.persistence.telemetry.models import RunResourceKind
+from ergon_core.core.json_types import JsonObject
+from ergon_core.core.persistence.shared.enums import RunResourceKind
 from pydantic import BaseModel, ConfigDict, Field
 
 if TYPE_CHECKING:

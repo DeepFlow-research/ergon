@@ -1,7 +1,8 @@
 """PydanticAI transcript adapter."""
 
 import json
-from ergon_core.api.generation import (
+
+from ergon_core.core.generation import (
     GenerationTurn,
     ModelRequestPart as ErgonModelRequestPart,
     ModelResponsePart as ErgonModelResponsePart,
@@ -22,14 +23,14 @@ from ergon_core.core.persistence.context.event_payloads import (
     UserMessagePayload,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
-from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse
+from pydantic import BaseModel
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, ToolReturnContent
 from pydantic_ai.messages import ModelRequestPart as PydanticModelRequestPart
 from pydantic_ai.messages import ModelResponsePart as PydanticModelResponsePart
 from pydantic_ai.messages import SystemPromptPart as PydanticSystemPromptPart
 from pydantic_ai.messages import TextPart as PydanticTextPart
 from pydantic_ai.messages import ThinkingPart as PydanticThinkingPart
 from pydantic_ai.messages import ToolCallPart as PydanticToolCallPart
-from pydantic_ai.messages import ToolReturnContent
 from pydantic_ai.messages import ToolReturnPart as PydanticToolReturnPart
 from pydantic_ai.messages import UserPromptPart as PydanticUserPromptPart
 from pydantic_core import to_jsonable_python
@@ -37,35 +38,38 @@ from pydantic_core import to_jsonable_python
 from ergon_builtins.common.llm_context.adapters.base import TranscriptAdapter
 
 
+class TranscriptTurnCursor(BaseModel):
+    """Track how many turns have already been emitted from a growing transcript."""
+
+    model_config = {"validate_assignment": True}
+
+    emitted_turn_count: int = 0
+
+
 class PydanticAITranscriptAdapter(TranscriptAdapter[list[ModelMessage], list[ModelMessage]]):
     """Convert complete PydanticAI message histories into Ergon turns."""
 
-    def build_turns(self, transcript: list[ModelMessage]) -> list[GenerationTurn]:
+    def build_turns(
+        self,
+        transcript: list[ModelMessage],
+        *,
+        flush_pending: bool = True,
+    ) -> list[GenerationTurn]:
         """Build turns from a complete PydanticAI message list."""
-        turns: list[GenerationTurn] = []
-        pending_response: ModelResponse | None = None
-        pending_request_in: ModelRequest | None = None
+        return _build_turns_from_transcript(transcript, flush_pending=flush_pending)
 
-        for message in transcript:
-            if isinstance(message, ModelRequest):
-                if pending_response is not None:
-                    turns.append(
-                        _to_turn(
-                            pending_request_in,
-                            pending_response,
-                            tool_result_request=message,
-                        )
-                    )
-                    pending_response = None
-                    pending_request_in = None
-                pending_request_in = message
-            elif isinstance(message, ModelResponse):
-                pending_response = message
-
-        if pending_response is not None:
-            turns.append(_to_turn(pending_request_in, pending_response, tool_result_request=None))
-
-        return turns
+    def build_new_turns(
+        self,
+        transcript: list[ModelMessage],
+        cursor: TranscriptTurnCursor,
+        *,
+        flush_pending: bool = False,
+    ) -> list[GenerationTurn]:
+        """Return turns not previously emitted for a growing transcript."""
+        turns = _build_turns_from_transcript(transcript, flush_pending=flush_pending)
+        new_turns = turns[cursor.emitted_turn_count :]
+        cursor.emitted_turn_count = len(turns)
+        return new_turns
 
     def assemble_replay(self, events: list[RunContextEvent]) -> list[ModelMessage]:
         """Reconstruct PydanticAI messages from ordered context events."""
@@ -90,6 +94,37 @@ class PydanticAITranscriptAdapter(TranscriptAdapter[list[ModelMessage], list[Mod
             messages.append(ModelResponse(parts=current_response_parts))
 
         return messages
+
+
+def _build_turns_from_transcript(
+    transcript: list[ModelMessage],
+    *,
+    flush_pending: bool,
+) -> list[GenerationTurn]:
+    turns: list[GenerationTurn] = []
+    pending_response: ModelResponse | None = None
+    pending_request_in: ModelRequest | None = None
+
+    for message in transcript:
+        if isinstance(message, ModelRequest):
+            if pending_response is not None:
+                turns.append(
+                    _to_turn(
+                        pending_request_in,
+                        pending_response,
+                        tool_result_request=message,
+                    )
+                )
+                pending_response = None
+                pending_request_in = None
+            pending_request_in = message
+        elif isinstance(message, ModelResponse):
+            pending_response = message
+
+    if pending_response is not None and flush_pending:
+        turns.append(_to_turn(pending_request_in, pending_response, tool_result_request=None))
+
+    return turns
 
 
 def _to_turn(
@@ -120,7 +155,11 @@ def extract_logprobs(response: ModelResponse) -> list[TokenLogprob] | None:
         token = entry.get("token")
         logprob = entry.get("logprob")
         top_logprobs = entry.get("top_logprobs", [])
-        if isinstance(token, str) and isinstance(logprob, int | float) and isinstance(top_logprobs, list):
+        if (
+            isinstance(token, str)
+            and isinstance(logprob, int | float)
+            and isinstance(top_logprobs, list)
+        ):
             logprobs.append(
                 TokenLogprob(
                     token=token,

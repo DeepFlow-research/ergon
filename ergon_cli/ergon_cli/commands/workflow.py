@@ -5,15 +5,21 @@ import io
 import json
 import shlex
 import time
+from collections.abc import Callable
 from typing import cast
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
+from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.services.workflow_service import WorkflowService
 from pydantic import BaseModel
 from sqlmodel import Session
-from collections.abc import Callable
+
+_RESOURCE_SCOPES = ("visible", "own", "input", "upstream", "children", "descendants")
+_RESOURCE_KINDS = tuple(kind.value for kind in RunResourceKind)
+_OUTPUT_FORMATS = ("text", "json")
+_DEPENDENCY_DIRECTIONS = ("upstream", "downstream", "both")
 
 _FORBIDDEN_CONTEXT_FLAGS = {
     "--run-id",
@@ -50,32 +56,30 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     inspect = sub.add_parser("inspect")
     inspect_sub = inspect.add_subparsers(dest="action", required=True)
     resource_list = inspect_sub.add_parser("resource-list")
-    resource_list.add_argument("--scope", required=True)
-    resource_list.add_argument("--kind", default=None)
+    resource_list.add_argument("--scope", required=True, choices=_RESOURCE_SCOPES)
+    resource_list.add_argument("--kind", choices=_RESOURCE_KINDS, default=None)
     resource_list.add_argument("--limit", type=int, default=50)
     resource_list.add_argument("--max-depth", type=int, default=3)
-    resource_list.add_argument("--format", choices=["text", "json"], default="text")
+    resource_list.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
     resource_list.add_argument("--explain", action="store_true")
 
     resource_content = inspect_sub.add_parser("resource-content")
     resource_content.add_argument("--resource-id", required=True)
     resource_content.add_argument("--max-bytes", type=int, default=100_000)
-    resource_content.add_argument("--format", choices=["text", "json"], default="text")
+    resource_content.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     task_tree = inspect_sub.add_parser("task-tree")
-    task_tree.add_argument("--format", choices=["text", "json"], default="text")
+    task_tree.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
     task_tree.add_argument("--parent-node-id", default=None)
     task_tree.add_argument("--wait-seconds", type=float, default=0)
 
     dependencies = inspect_sub.add_parser("task-dependencies")
-    dependencies.add_argument(
-        "--direction", choices=["upstream", "downstream", "both"], default="both"
-    )
-    dependencies.add_argument("--format", choices=["text", "json"], default="text")
+    dependencies.add_argument("--direction", choices=_DEPENDENCY_DIRECTIONS, default="both")
+    dependencies.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     next_action = inspect_sub.add_parser("next-actions")
     next_action.add_argument("--manager-capable", action="store_true")
-    next_action.add_argument("--format", choices=["text", "json"], default="text")
+    next_action.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     manage = sub.add_parser("manage")
     manage_sub = manage.add_subparsers(dest="action", required=True)
@@ -83,12 +87,12 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--resource-id", required=True)
     materialize.add_argument("--destination", default=None)
     materialize.add_argument("--dry-run", action="store_true")
-    materialize.add_argument("--format", choices=["text", "json"], default="text")
+    materialize.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     for action in ("add-task", "add-edge", "restart-task", "abandon-task"):
         parser_for_action = manage_sub.add_parser(action)
         parser_for_action.add_argument("--dry-run", action="store_true")
-        parser_for_action.add_argument("--format", choices=["text", "json"], default="text")
+        parser_for_action.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
         parser_for_action.add_argument("--reason", default=None)
         if action == "add-task":
             parser_for_action.add_argument("--task-slug", required=True)
@@ -110,22 +114,32 @@ def execute_workflow_command(
         argv = shlex.split(command)
     except ValueError as exc:
         return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
-    _reject_context_flags(argv)
+    try:
+        _reject_context_flags(argv)
+    except ValueError as exc:
+        return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
     stderr = io.StringIO()
     try:
         with contextlib.redirect_stderr(stderr):
             args = build_workflow_parser().parse_args(argv)
     except SystemExit as exc:
         exit_code = exc.code if isinstance(exc.code, int) else 2
-        return WorkflowCommandOutput(stdout="", stderr=stderr.getvalue() or str(exc), exit_code=exit_code)
+        return WorkflowCommandOutput(
+            stdout="",
+            stderr=_parse_error_with_help_hint(stderr.getvalue() or str(exc), argv),
+            exit_code=exit_code,
+        )
     session = session_factory()
     try:
-        if args.group == "inspect":
-            return _handle_inspect(args, context=context, session=session, service=service)
-        if args.group == "manage":
-            return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI/tool sync bridge
-                _handle_manage(args, context=context, session=session, service=service)
-            )
+        try:
+            if args.group == "inspect":
+                return _handle_inspect(args, context=context, session=session, service=service)
+            if args.group == "manage":
+                return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI/tool sync bridge
+                    _handle_manage(args, context=context, session=session, service=service)
+                )
+        except ValueError as exc:
+            return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
     finally:
         _close_session(session)
     raise ValueError(f"unsupported workflow command group: {args.group}")
@@ -193,10 +207,11 @@ def _handle_inspect(
             output_format=args.format,
         )
     if args.action == "resource-content":
+        resource_id = UUID(args.resource_id)
         content = service.read_resource_bytes(
             session,
             run_id=context.run_id,
-            resource_id=UUID(args.resource_id),
+            resource_id=resource_id,
             max_bytes=args.max_bytes,
         )
         if args.format == "json":
@@ -208,7 +223,9 @@ def _handle_inspect(
         tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
         while args.wait_seconds > 0 and time.monotonic() < deadline:
             children = [task for task in tasks if task.parent_node_id == context.node_id]
-            if children and all(task.status in {"completed", "failed", "cancelled"} for task in children):
+            if children and all(
+                task.status in {"completed", "failed", "cancelled"} for task in children
+            ):
                 break
             time.sleep(2)
             tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
@@ -258,6 +275,7 @@ async def _handle_manage(
     service: WorkflowService,
 ) -> WorkflowCommandOutput:
     if args.action == "materialize-resource":
+        resource_id = UUID(args.resource_id)
         result = await service.materialize_resource(
             session,
             run_id=context.run_id,
@@ -265,7 +283,7 @@ async def _handle_manage(
             current_execution_id=context.execution_id,
             sandbox_task_key=context.sandbox_task_key,
             benchmark_type=context.benchmark_type,
-            resource_id=UUID(args.resource_id),
+            resource_id=resource_id,
             destination=args.destination,
             dry_run=args.dry_run,
         )
@@ -338,3 +356,21 @@ def _close_session(session: Session) -> None:
 def _reject_context_flags(argv: list[str]) -> None:
     if any(arg in _FORBIDDEN_CONTEXT_FLAGS for arg in argv):
         raise ValueError("scope/context flags are injected by the worker and cannot be supplied")
+
+
+def _parse_error_with_help_hint(stderr: str, argv: list[str]) -> str:
+    command_path = _help_command_path(argv)
+    hint = f"Run '{command_path} --help' for more info."
+    text = stderr.strip()
+    if hint in text:
+        return text
+    return f"{text}\n{hint}" if text else hint
+
+
+def _help_command_path(argv: list[str]) -> str:
+    path = ["workflow"]
+    for arg in argv:
+        if arg.startswith("-"):
+            break
+        path.append(arg)
+    return " ".join(path)

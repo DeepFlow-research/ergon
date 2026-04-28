@@ -1,4 +1,4 @@
-"""JSON-compatible public type aliases."""
+"""JSON-compatible core type aliases."""
 
 type JsonScalar = str | int | float | bool | None
 type JsonValue = JsonScalar | list[JsonValue] | dict[str, JsonValue]

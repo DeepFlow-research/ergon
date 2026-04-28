@@ -2,7 +2,7 @@
 
 from typing import Protocol, TypeVar
 
-from ergon_core.api.generation import GenerationTurn
+from ergon_core.core.generation import GenerationTurn
 from ergon_core.core.persistence.context.models import RunContextEvent
 
 TranscriptT = TypeVar("TranscriptT")

@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from ergon_core.api.criterion import Criterion
-from ergon_core.api.criterion_runtime import CriterionRuntime
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import CriterionResult
+from ergon_core.core.runtime.evaluation.protocols import CriterionRuntime
 
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import (
     payload_to_swebench_row as _payload_to_swebench_row,

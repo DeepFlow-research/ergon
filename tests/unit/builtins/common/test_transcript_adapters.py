@@ -3,8 +3,9 @@ from uuid import uuid4
 from ergon_builtins.common.llm_context.adapters.base import TranscriptAdapter
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
     PydanticAITranscriptAdapter,
+    TranscriptTurnCursor,
 )
-from ergon_core.api.generation import (
+from ergon_core.core.generation import (
     GenerationTurn,
     TextPart as ErgonTextPart,
     ThinkingPart as ErgonThinkingPart,
@@ -57,7 +58,9 @@ def _make_event(event_type: str, payload, sequence: int) -> RunContextEvent:
 
 
 def test_text_and_thinking_are_response_parts() -> None:
-    adapter: TranscriptAdapter[list[ModelRequest | ModelResponse], list[ModelRequest | ModelResponse]]
+    adapter: TranscriptAdapter[
+        list[ModelRequest | ModelResponse], list[ModelRequest | ModelResponse]
+    ]
     adapter = PydanticAITranscriptAdapter()
 
     turns = adapter.build_turns(
@@ -117,6 +120,61 @@ def test_tool_return_is_attached_to_generating_turn() -> None:
     assert result.tool_call_id == "call-1"
     assert result.tool_name == "search"
     assert result.content == '{"result": "found"}'
+
+
+def test_incremental_extraction_does_not_emit_pending_tool_call_response() -> None:
+    adapter = PydanticAITranscriptAdapter()
+    cursor = TranscriptTurnCursor()
+    transcript = [
+        ModelRequest(parts=[UserPromptPart(content="search")]),
+        ModelResponse(
+            parts=[
+                ToolCallPart(
+                    tool_name="search",
+                    tool_call_id="call-1",
+                    args={"query": "ergon"},
+                )
+            ]
+        ),
+    ]
+
+    assert adapter.build_new_turns(transcript, cursor, flush_pending=False) == []
+
+    flushed = adapter.build_new_turns(transcript, cursor, flush_pending=True)
+    assert len(flushed) == 1
+    assert any(isinstance(part, ErgonToolCallPart) for part in flushed[0].response_parts)
+
+
+def test_incremental_extraction_tracks_emitted_turns() -> None:
+    adapter = PydanticAITranscriptAdapter()
+    cursor = TranscriptTurnCursor()
+    transcript = [
+        ModelRequest(parts=[UserPromptPart(content="search")]),
+        ModelResponse(
+            parts=[
+                ToolCallPart(
+                    tool_name="search",
+                    tool_call_id="call-1",
+                    args={"query": "ergon"},
+                )
+            ]
+        ),
+        ModelRequest(
+            parts=[
+                ToolReturnPart(
+                    tool_name="search",
+                    tool_call_id="call-1",
+                    content={"result": "found"},
+                )
+            ]
+        ),
+    ]
+
+    first = adapter.build_new_turns(transcript, cursor, flush_pending=False)
+    second = adapter.build_new_turns(transcript, cursor, flush_pending=False)
+
+    assert len(first) == 1
+    assert second == []
 
 
 def test_assemble_replay_reconstructs_pydantic_ai_messages() -> None:

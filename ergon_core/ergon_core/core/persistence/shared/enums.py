@@ -33,3 +33,34 @@ class TrainingStatus(StrEnum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class RunResourceKind(StrEnum):
+    """Canonical kinds for ``run_resources.kind``.
+
+    Stored as VARCHAR; enforced at the model/API boundary, not in the DB
+    schema. Each kind documents the publisher that produces it so a new
+    reader can trace a row back to the code that wrote it.
+    """
+
+    OUTPUT = "output"
+    """Explicit text artifact published by a worker/toolkit.
+
+    Worker final assistant messages belong on
+    ``RunTaskExecution.final_assistant_message`` instead of this resource log.
+    """
+
+    REPORT = "report"
+    """Terminal report written by a worker into a sandbox publish directory."""
+
+    ARTIFACT = "artifact"
+    """Intermediate file a worker saved into a publish directory."""
+
+    SEARCH_CACHE = "search_cache"
+    """Raw JSON search payload cached by a search toolkit."""
+
+    NOTE = "note"
+    """Free-form scratch note written by an agent."""
+
+    IMPORT = "import"
+    """Copied snapshot materialized from another ``RunResource``."""

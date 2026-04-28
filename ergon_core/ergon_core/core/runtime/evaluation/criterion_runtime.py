@@ -1,9 +1,4 @@
-"""Default concrete implementation of ``CriterionRuntime``.
-
-The Protocol itself lives in ``ergon_core.api.criterion_runtime`` so that
-``EvaluationContext`` (also in ``api/``) can type it without importing
-from ``core``. This module is the real sandbox/resource implementation.
-"""
+"""Default concrete implementation of ``CriterionRuntime``."""
 
 import logging
 from pathlib import Path
@@ -11,12 +6,11 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from e2b import SandboxNotFoundException, TimeoutException
-from ergon_core.api.criterion_runtime import (
+from ergon_core.core.runtime.evaluation.protocols import (
     CommandResult,
     CriterionRuntime,
     SandboxResult,
 )
-from ergon_core.api.run_resource import RunResourceView
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
 from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
@@ -25,6 +19,7 @@ from ergon_core.core.providers.sandbox.event_sink import (
     SandboxEventSink,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
+from ergon_core.core.runtime.resources import RunResourceView
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, desc, select
 
@@ -264,14 +259,41 @@ class DefaultCriterionRuntime:
         )
         return result
 
-    async def list_resources(self) -> list[RunResourceView]:
-        """Return all ``RunResourceView`` DTOs for this run, newest first."""
+    async def read_resource_by_id(self, resource_id: UUID) -> bytes:
+        """Read one worker-published blob by its RunResource primary key."""
         with get_session() as session:
-            stmt = (
-                select(RunResource)
-                .where(RunResource.run_id == self._run_id)
-                .order_by(desc(RunResource.created_at))
-            )
+            row = session.get(RunResource, resource_id)
+
+        if row is None or row.run_id != self._run_id:
+            raise ResourceNotFoundError(f"No run_resource {resource_id!s} for run {self._run_id}")
+
+        result = Path(row.file_path).read_bytes()
+        logger.info(
+            "criterion read_resource_by_id run_id=%s resource_id=%s size_bytes=%d",
+            self._run_id,
+            resource_id,
+            len(result),
+        )
+        return result
+
+    async def list_resources(
+        self,
+        task_execution_id: UUID | None = None,
+    ) -> list[RunResourceView]:
+        """Return resource DTOs for this run, newest first.
+
+        Defaults to this runtime's evaluated task execution. Passing
+        ``task_execution_id`` lets a benchmark criterion inspect a related task
+        explicitly without core knowing benchmark semantics.
+        """
+        effective_execution_id = (
+            task_execution_id if task_execution_id is not None else self._task_id
+        )
+        with get_session() as session:
+            stmt = select(RunResource).where(RunResource.run_id == self._run_id)
+            if effective_execution_id is not None:
+                stmt = stmt.where(RunResource.task_execution_id == effective_execution_id)
+            stmt = stmt.order_by(desc(RunResource.created_at))
             rows = list(session.exec(stmt).all())
         return [RunResourceView.from_row(r) for r in rows]
 

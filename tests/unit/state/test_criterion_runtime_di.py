@@ -10,10 +10,8 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from sqlmodel import Session
-
-from ergon_core.api.criterion_runtime import CriterionRuntime
-from ergon_core.api.run_resource import RunResourceView
+from ergon_core.core.runtime.evaluation.protocols import CriterionRuntime
+from ergon_core.core.runtime.resources import RunResourceView
 from ergon_core.core.providers.sandbox.event_sink import (
     DashboardEmitterSandboxEventSink,
     NoopSandboxEventSink,
@@ -24,6 +22,7 @@ from ergon_core.core.runtime.evaluation.criterion_runtime import (
     ResourceNotFoundError,
 )
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
+from sqlmodel import Session
 
 
 def _criterion_context(run_id=None) -> CriterionContext:
@@ -98,6 +97,58 @@ class TestReadResource:
             with pytest.raises(ResourceNotFoundError, match="no_such_resource"):
                 await runtime.read_resource("no_such_resource")
 
+    @pytest.mark.asyncio
+    async def test_read_resource_by_id_reads_exact_blob(self, tmp_path: Path) -> None:
+        """read_resource_by_id returns bytes from the exact resource row."""
+        blob = tmp_path / "abc"
+        blob.write_bytes(b"exact-resource")
+
+        run_id = uuid4()
+        resource_id = uuid4()
+        row = MagicMock()
+        row.id = resource_id
+        row.run_id = run_id
+        row.file_path = str(blob)
+
+        runtime = _make_runtime(run_id=run_id)
+
+        mock_session = MagicMock()
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
+        mock_session.get.return_value = row
+
+        with patch(
+            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            return_value=mock_session,
+        ):
+            result = await runtime.read_resource_by_id(resource_id)
+
+        assert result == b"exact-resource"
+
+    @pytest.mark.asyncio
+    async def test_read_resource_by_id_rejects_other_run(self, tmp_path: Path) -> None:
+        """read_resource_by_id does not expose resources from another run."""
+        blob = tmp_path / "abc"
+        blob.write_bytes(b"wrong-run")
+
+        row = MagicMock()
+        row.run_id = uuid4()
+        row.file_path = str(blob)
+
+        runtime = _make_runtime(run_id=uuid4())
+
+        mock_session = MagicMock()
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
+        mock_session.get.return_value = row
+
+        with patch(
+            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            return_value=mock_session,
+        ):
+            with pytest.raises(ResourceNotFoundError, match="No run_resource"):
+                await runtime.read_resource_by_id(uuid4())
+
 
 class TestListResources:
     @pytest.mark.asyncio
@@ -140,6 +191,51 @@ class TestListResources:
             result = await runtime.list_resources()
 
         assert result == []
+
+    @pytest.mark.asyncio
+    async def test_defaults_to_runtime_task_execution(self) -> None:
+        """list_resources defaults to resources for the evaluated task execution."""
+        task_execution_id = uuid4()
+        runtime = _make_runtime(task_id=task_execution_id)
+        mock_row = MagicMock()
+
+        mock_session = MagicMock()
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
+        mock_session.exec.return_value.all.return_value = [mock_row]
+
+        with (
+            patch(
+                "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+                return_value=mock_session,
+            ),
+            patch.object(RunResourceView, "from_row", return_value=MagicMock()) as mock_from_row,
+        ):
+            result = await runtime.list_resources()
+
+        assert len(result) == 1
+        mock_from_row.assert_called_once_with(mock_row)
+        mock_session.exec.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_accepts_explicit_task_execution_id(self) -> None:
+        """list_resources can inspect a related task execution explicitly."""
+        runtime = _make_runtime(task_id=uuid4())
+        related_execution_id = uuid4()
+
+        mock_session = MagicMock()
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
+        mock_session.exec.return_value.all.return_value = []
+
+        with patch(
+            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            return_value=mock_session,
+        ):
+            result = await runtime.list_resources(task_execution_id=related_execution_id)
+
+        assert result == []
+        mock_session.exec.assert_called_once()
 
 
 class TestDbReadSession:
@@ -215,6 +311,7 @@ class TestCriterionRuntimeProtocolCompliance:
             "execute_code",
             "cleanup",
             "read_resource",
+            "read_resource_by_id",
             "list_resources",
             "get_all_files_for_task",
             "db_read_session",

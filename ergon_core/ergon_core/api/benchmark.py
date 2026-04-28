@@ -10,11 +10,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
-from pydantic import BaseModel
-
-from ergon_core.api.dependencies import check_packages
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
+from ergon_core.core.runtime.dependencies import check_packages
+from pydantic import BaseModel
 
 
 class Benchmark(ABC):

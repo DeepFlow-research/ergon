@@ -2,22 +2,12 @@
 """Tests for building GenerationTurn values from PydanticAI transcripts."""
 
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
-from ergon_core.api.generation import (
+from ergon_core.core.generation import (
     GenerationTurn,
-)
-from ergon_core.api.generation import (
     SystemPromptPart as ErgonSystemPromptPart,
-)
-from ergon_core.api.generation import (
     TextPart as ErgonTextPart,
-)
-from ergon_core.api.generation import (
     ToolCallPart as ErgonToolCallPart,
-)
-from ergon_core.api.generation import (
     ToolReturnPart as ErgonToolReturnPart,
-)
-from ergon_core.api.generation import (
     UserPromptPart as ErgonUserPromptPart,
 )
 from pydantic_ai.messages import (

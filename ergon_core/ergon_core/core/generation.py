@@ -1,20 +1,13 @@
-"""Public output types for model generation.
+"""Core model-generation turn types.
 
-Workers yield GenerationTurn objects from their execute() generator.
-The framework adapter (_build_turns in react_worker.py) populates all
-typed list fields — workers never set messages_in, response_parts, or
-tool_results directly.
-
-turn_token_ids and turn_logprobs are turn-level flat lists from vLLM's
-choice.logprobs.content. Both are stored on the FIRST model-output context
-event of each turn (group by turn_id to find them). Currently None until
-the vLLM provider is updated to extract token IDs from provider_details.
+These types are used by both public worker APIs and internal persistence. Keep
+them in core so persistence can import them without loading ``ergon_core.api``.
 """
 
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 
@@ -26,11 +19,6 @@ class TokenLogprob(BaseModel):
     token: str
     logprob: float
     top_logprobs: list[JsonObject] = Field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# Request parts (ModelRequest input — what went INTO the model)
-# ---------------------------------------------------------------------------
 
 
 class SystemPromptPart(BaseModel):
@@ -59,11 +47,6 @@ ModelRequestPart = Annotated[
 ]
 
 
-# ---------------------------------------------------------------------------
-# Response parts (ModelResponse output — what the model produced)
-# ---------------------------------------------------------------------------
-
-
 class TextPart(BaseModel):
     model_config = {"frozen": True}
     part_kind: Literal["text"] = "text"
@@ -90,30 +73,16 @@ ModelResponsePart = Annotated[
 ]
 
 
-# ---------------------------------------------------------------------------
-# GenerationTurn
-# ---------------------------------------------------------------------------
-
-
 class GenerationTurn(BaseModel):
-    """One model generation turn within a worker episode.
-
-    Populated by the framework adapter (_build_turns in react_worker.py).
-    Workers do not set any fields directly — they only yield the object.
-    """
+    """One model generation turn within a worker episode."""
 
     model_config = {"frozen": True}
 
     messages_in: list[ModelRequestPart] = Field(default_factory=list)
     response_parts: list[ModelResponsePart] = Field(default_factory=list)
     tool_results: list[ToolReturnPart] = Field(default_factory=list)
-
-    # turn_token_ids and turn_logprobs: turn-level flat lists from vLLM.
-    # Stored on the FIRST model-output context event only; group by turn_id.
-    # None until vLLM provider exposes token IDs (logprobs arrive first).
     turn_token_ids: list[int] | None = None
     turn_logprobs: list[TokenLogprob] | None = None
-
     policy_version: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None

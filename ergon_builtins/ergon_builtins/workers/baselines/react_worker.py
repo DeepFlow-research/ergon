@@ -7,17 +7,21 @@ from collections.abc import AsyncGenerator
 from typing import Any, Self
 from uuid import UUID
 
-from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
-from ergon_builtins.models.resolution import resolve_model_target
-from ergon_core.api import BenchmarkTask, Tool, Worker, WorkerContext, WorkerOutput
-from ergon_core.api.generation import GenerationTurn
+from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerOutput
+from ergon_core.core.generation import GenerationTurn
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.shared.db import get_session
-
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from sqlmodel import Session
+
+from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
+    PydanticAITranscriptAdapter,
+    TranscriptTurnCursor,
+)
+from ergon_builtins.models.resolution import resolve_model_target
+from ergon_builtins.observability.pydantic_ai_logfire import configure_pydantic_ai_logfire
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +54,12 @@ class ReActWorker(Worker):
         model: str | None,
         task_id: UUID,
         sandbox_id: str,
-        tools: list[Tool],
+        tools: list[Any],
         system_prompt: str | None,
         max_iterations: int,
     ) -> None:
         super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
-        self.tools: list[Tool] = tools
+        self.tools: list[Any] = tools
         self.system_prompt: str | None = system_prompt
         self.max_iterations: int = max_iterations
         self._seed_messages: list[ModelMessage] | None = None
@@ -66,49 +70,86 @@ class ReActWorker(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
-        async for turn in self._run_agent(task):
+        async for turn in self._run_agent(task, context):
             yield turn
+
+    def build_agent_deps(
+        self, context: WorkerContext
+    ) -> Any | None:  # slopcop: ignore[no-typing-any]
+        return None
 
     async def _run_agent(
         self,
         task: BenchmarkTask,
+        context: WorkerContext,
     ) -> AsyncGenerator[GenerationTurn, None]:
         """Run the underlying pydantic-ai agent and yield the turns it produced."""
         resolved = resolve_model_target(self.model)
+        configure_pydantic_ai_logfire()
+        agent_deps = self.build_agent_deps(context)
+        deps_type = type(agent_deps) if agent_deps is not None else None
 
-        agent: Agent[None, _AgentOutput] = Agent(
+        agent: Agent[Any, _AgentOutput] = Agent(
             model=resolved.model,
             instructions=self.system_prompt or None,
             tools=self.tools,
             output_type=_AgentOutput,
+            deps_type=deps_type,
         )
 
         task_prompt = _format_task(task)
         node_count = 0
+        adapter = PydanticAITranscriptAdapter()
+        cursor = TranscriptTurnCursor()
+        run = None
 
-        async with agent.iter(
-            task_prompt,
-            model_settings=resolved.capture_model_settings,
-            message_history=self._seed_messages,
-        ) as run:
-            async for _node in run:
-                node_count += 1
-                if node_count >= self.max_iterations:
-                    logger.warning(
-                        "ReActWorker hit max_iterations=%d; persisting partial turns",
-                        self.max_iterations,
-                    )
-                    break
+        try:
+            async with agent.iter(
+                task_prompt,
+                model_settings=resolved.capture_model_settings,
+                message_history=self._seed_messages,
+                deps=agent_deps,
+            ) as active_run:
+                run = active_run
+                async for _node in run:
+                    node_count += 1
+                    for turn in adapter.build_new_turns(
+                        run.ctx.state.message_history,
+                        cursor,
+                        flush_pending=False,
+                    ):
+                        yield turn
+                    if node_count >= self.max_iterations:
+                        logger.warning(
+                            "ReActWorker hit max_iterations=%d; persisting partial turns",
+                            self.max_iterations,
+                        )
+                        for turn in adapter.build_new_turns(
+                            run.ctx.state.message_history,
+                            cursor,
+                            flush_pending=True,
+                        ):
+                            yield turn
+                        raise RuntimeError(
+                            f"ReActWorker exceeded max_iterations={self.max_iterations}"
+                        )
+        except Exception:  # slopcop: ignore[no-broad-except]
+            if run is not None:
+                for turn in adapter.build_new_turns(
+                    run.ctx.state.message_history,
+                    cursor,
+                    flush_pending=True,
+                ):
+                    yield turn
+            raise
 
-        # Build all turns from the complete message history after the run.
-        # Using ctx.state.message_history (not incremental slices) ensures tool_results
-        # are correctly paired with their generating ModelResponse.
-        # Works for both complete and partial (max_iterations) runs —
-        # pydantic-ai 0.7.x moved all_messages() to AgentRunResult, but
-        # ctx.state.message_history is always populated incrementally.
-        turns = PydanticAITranscriptAdapter().build_turns(run.ctx.state.message_history)
-        for turn in turns:
-            yield turn
+        if run is not None:
+            for turn in adapter.build_new_turns(
+                run.ctx.state.message_history,
+                cursor,
+                flush_pending=True,
+            ):
+                yield turn
 
     def get_output(self, context: WorkerContext) -> WorkerOutput:
         """Extract the agent's text output from the last context event."""
@@ -126,6 +167,7 @@ class ReActWorker(Worker):
         with get_session() as session:
             repo = ContextEventRepository()
             events = repo.get_for_execution(session, context.execution_id)
+
         turn_ids: set[str] = set()
         for e in events:
             payload = e.parsed_payload()

@@ -3,9 +3,9 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from ergon_core.api.criterion_runtime import CriterionRuntime
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.core.runtime.evaluation.protocols import CriterionRuntime
 from pydantic import BaseModel, ConfigDict, Field, SkipValidation
 
 

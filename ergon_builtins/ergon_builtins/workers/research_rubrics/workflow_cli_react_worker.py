@@ -1,10 +1,10 @@
-from collections.abc import AsyncGenerator
 import time
+from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.api import RunResourceView
-from ergon_core.api.generation import GenerationTurn
+from ergon_core.core.generation import GenerationTurn
+from ergon_core.core.runtime.resources import RunResourceView
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.providers.sandbox.research_rubrics_manager import (
@@ -23,6 +23,10 @@ from ergon_builtins.tools.graph_toolkit import ResearchGraphToolkit
 from ergon_builtins.tools.research_rubrics_toolkit import ResearchRubricsToolkit
 from ergon_builtins.tools.workflow_cli_tool import make_workflow_cli_tool
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.workers.baselines.tool_budget import (
+    AgentToolBudgetDeps,
+    AgentToolBudgetState,
+)
 from ergon_builtins.workers.research_rubrics._run_skill import (
     ReportEditSkillRequest,
     ReportReadSkillRequest,
@@ -33,39 +37,53 @@ from ergon_builtins.workers.research_rubrics._run_skill import (
 )
 
 _WORKFLOW_PROMPT = (
-    "You are a research agent. Your job is to investigate a research question "
-    "using web search and produce a well-sourced report.\n\n"
-    "You have access to:\n"
-    "- exa_search: Search the web for relevant sources\n"
-    "- exa_qa: Ask Exa a direct question\n"
-    "- exa_get_content: Extract full text from a URL\n"
-    "- write_report_draft: Write a markdown report draft\n"
-    "- edit_report_draft: Edit an existing draft\n"
-    "- read_report_draft: Read a draft file\n"
-    "- workflow: Inspect current-run task topology/resources and manage subtasks\n\n"
-    "Write your final report to 'final_output/report.md' using write_report_draft. "
+    "Role: You are a recursive ResearchRubrics research agent with workflow access.\n\n"
+    "Goal: Produce `final_output/report.md` with a well-sourced answer to the task. "
     "Include a # Findings section and a ## Sources section with citations.\n\n"
-    "Use workflow(command) to inspect this run before "
-    "deciding what context is missing. Useful commands include: "
+    "Tools:\n"
+    "- `workflow(command)`: inspect task topology/resources and create subtasks. "
+    "Use it deliberately; workflow calls are limited. Useful commands include "
     "`inspect task-tree`, `inspect resource-list --scope input`, "
-    "`inspect resource-list --scope visible --limit 20`, "
-    "`inspect next-actions`, and "
-    "`manage materialize-resource --resource-id <id> --dry-run`. "
-    "For ResearchRubrics benchmark tasks, start by creating at least one real "
-    "child research subtask unless the request is truly trivial. First dry-run "
-    "the shape, then create focused children with commands like: "
-    "`manage add-task --task-slug source-scout --worker researchrubrics-researcher "
-    "--description 'Find high-quality sources for ...' --dry-run`, then repeat "
-    "without `--dry-run` once the command is correct. Use worker "
-    "`researchrubrics-researcher` for child research tasks, and use "
-    "`researchrubrics-workflow-cli-react` only when a child should itself be "
-    "manager-capable. After creating children, do not duplicate their research "
-    "yourself; use `inspect task-tree --wait-seconds 60` until children are terminal, then inspect "
-    "`resource-list --scope children` and use their reports as evidence before "
-    "composing the final report. "
-    "Use `--format json` when you need stable IDs. Resource copies are snapshots: "
-    "materialized files become resources owned by this task, not edits to the source."
+    "`inspect resource-list --scope visible --limit 20`, `inspect next-actions`, "
+    "and `manage materialize-resource --resource-id <id> --dry-run`.\n"
+    "- `exa_search`: broad web search for candidate sources.\n"
+    "- `exa_qa`: focused Q&A when one specific fact or synthesis is missing.\n"
+    "- `exa_get_content`: read a specific URL that looks important.\n"
+    "- `write_report_draft` / `edit_report_draft` / `read_report_draft`: create, "
+    "revise, and inspect markdown report files.\n"
+    "- Resource discovery tools: inspect resources produced by this task, children, "
+    "descendants, or the run.\n\n"
+    "Task graph policy: At the start of your task, use workflow context before "
+    "deep research: `inspect task-tree --format json` and "
+    "`inspect next-actions --manager-capable`. Use that context to decide whether "
+    "to solve directly or create subtasks. Create subtasks when the work can be "
+    "parallelized into independent evidence-gathering or checking efforts, such "
+    "as source scouting, rubric-cluster coverage, factual sections, or risk/negative "
+    "constraint checks. Do not create subtasks just to avoid writing; if the task "
+    "is already narrow, answer it directly. Good subtasks have clear deliverables "
+    "and produce evidence artifacts for synthesis. Prefer a small number of useful "
+    "subtasks over many tiny ones. Child subtasks should usually use worker "
+    "`researchrubrics-workflow-cli-react` too, so the same decision policy applies "
+    "recursively. Use `researchrubrics-researcher` only for a narrow leaf task that "
+    "should not create further subtasks. First dry-run commands like "
+    "`manage add-task --task-slug source-scout --worker "
+    "researchrubrics-workflow-cli-react --description 'Find high-quality sources "
+    "for ...' --dry-run`, then repeat without `--dry-run` once correct. If you "
+    "create subtasks, wait for them to finish before final synthesis, then inspect "
+    "their resources. If a subtask fails or is cancelled, inspect what is missing "
+    "and decide whether to proceed with available evidence or create one replacement "
+    "task with a narrower scope.\n\n"
+    "Stop rules: Use the fewest useful tool loops. Search again only if a required "
+    "fact/source is missing. Do not search to improve phrasing or collect "
+    "nonessential detail. If current evidence can answer the core task, write the "
+    "report. If any tool returns TOOL_BUDGET_EXHAUSTED, stop polling/searching and "
+    "produce the best possible final output from current context/resources."
 )
+
+_TOOL_BUDGET_LIMITS = {
+    "max_workflow_tool_calls": 12,
+    "max_other_tool_calls": 12,
+}
 
 
 def _workspace_path(relative_path: str) -> str:
@@ -95,6 +113,12 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             system_prompt=_WORKFLOW_PROMPT,
             max_iterations=60,
         )
+        self._agent_deps = AgentToolBudgetDeps(
+            tool_budget=AgentToolBudgetState(**_TOOL_BUDGET_LIMITS),
+        )
+
+    def build_agent_deps(self, context: WorkerContext) -> AgentToolBudgetDeps:
+        return self._agent_deps
 
     async def execute(
         self,
@@ -133,6 +157,10 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             worker_context=context,
             sandbox_task_key=self.task_id,
             benchmark_type="researchrubrics",
+            budgeted=True,
+        )
+        self._agent_deps = AgentToolBudgetDeps(
+            tool_budget=AgentToolBudgetState(**_TOOL_BUDGET_LIMITS),
         )
         self.tools = [*rr_toolkit.build_tools(), *graph_toolkit.build_tools(), workflow_tool]
 

@@ -4,16 +4,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-
-from ergon_core.api.criterion_runtime import CommandResult
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import WorkerOutput
-from ergon_core.api.task_types import BenchmarkTask
-
 from ergon_builtins.benchmarks.swebench_verified.criterion import (
     SWEBenchTestCriterion,
 )
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
+from ergon_core.api.evaluation_context import EvaluationContext
+from ergon_core.api.results import WorkerOutput
+from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.core.runtime.evaluation.protocols import CommandResult
 
 
 def _task() -> BenchmarkTask[SWEBenchTaskPayload]:

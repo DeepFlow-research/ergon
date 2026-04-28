@@ -18,7 +18,7 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar, final
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.api.generation import GenerationTurn, TextPart
+from ergon_core.core.generation import GenerationTurn, TextPart
 from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
@@ -38,7 +38,6 @@ from ergon_core.core.runtime.services.task_management_dto import (
 from ergon_core.core.runtime.services.task_management_service import (
     TaskManagementService,
 )
-
 from ergon_core.test_support.smoke_fixtures.smoke_base.constants import SUBTASK_GRAPH
 
 _CHILD_WAIT_TERMINAL_STATUSES = TERMINAL_STATUSES | {"blocked"}

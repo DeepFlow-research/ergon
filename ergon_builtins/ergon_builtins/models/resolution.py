@@ -3,13 +3,16 @@
 import logging
 from collections.abc import Callable
 
-from ergon_core.api.json_types import JsonObject
 import pydantic_ai.models
+from ergon_core.core.json_types import JsonObject
 from pydantic import BaseModel
+from pydantic_ai.models.openrouter import OpenRouterReasoning
 
 logger = logging.getLogger(__name__)
 
 _ANTHROPIC_THINKING_BUDGET_TOKENS = 1024
+_OPENROUTER_ANTHROPIC_SONNET_BUDGET_TOKENS = 4096
+_OPENROUTER_ANTHROPIC_OPUS_BUDGET_TOKENS = 8192
 _OPENAI_COMPAT_LOGPROB_SETTINGS: JsonObject = {
     "openai_logprobs": True,
     "openai_top_logprobs": 1,
@@ -52,6 +55,15 @@ def capture_model_settings_for(
         return dict(_OPENAI_COMPAT_LOGPROB_SETTINGS)
 
     if prefix == "anthropic":
+        anthropic_model_name = (model_target or "").split(":", 1)[-1].lower()
+        if anthropic_model_name.startswith("claude-opus-4.7"):
+            return {
+                "anthropic_thinking": {
+                    "type": "adaptive",
+                    "display": "summarized",
+                },
+                "anthropic_effort": "medium",
+            }
         return {
             "anthropic_thinking": {
                 "type": "enabled",
@@ -61,10 +73,13 @@ def capture_model_settings_for(
 
     if prefix == "openrouter":
         return {
-            "openrouter_reasoning": {
-                "enabled": True,
-                "exclude": False,
-            }
+            "openrouter_reasoning": _openrouter_reasoning_settings_for(model_target),
+        }
+
+    if prefix == "openai-responses":
+        return {
+            "openai_reasoning_effort": "medium",
+            "openai_reasoning_summary": "detailed",
         }
 
     if prefix == "google":
@@ -75,6 +90,25 @@ def capture_model_settings_for(
         }
 
     return None
+
+
+def _openrouter_reasoning_settings_for(model_target: str | None) -> OpenRouterReasoning:
+    model_name = (model_target or "").split(":", 1)[-1].lower()
+    if model_name.startswith("anthropic/claude-opus-4"):
+        return OpenRouterReasoning(
+            max_tokens=_OPENROUTER_ANTHROPIC_OPUS_BUDGET_TOKENS,
+            exclude=False,
+        )
+    if model_name.startswith("anthropic/claude-sonnet-4"):
+        return OpenRouterReasoning(
+            max_tokens=_OPENROUTER_ANTHROPIC_SONNET_BUDGET_TOKENS,
+            exclude=False,
+        )
+    if model_name.startswith("openai/gpt-5"):
+        return OpenRouterReasoning(effort="medium", exclude=False)
+    if model_name.startswith(("google/gemini-3", "moonshotai/kimi-k2")):
+        return OpenRouterReasoning(effort="medium", exclude=False)
+    return OpenRouterReasoning(enabled=True, exclude=False)
 
 
 def _with_capture_settings(target: str, resolved: ResolvedModel) -> ResolvedModel:

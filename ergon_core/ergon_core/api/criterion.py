@@ -4,10 +4,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from ergon_core.api.dependencies import check_packages
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult
+from ergon_core.api.results import CriterionResult, CriterionScoreSpec
+from ergon_core.core.runtime.dependencies import check_packages
 
 
 class Criterion(ABC):
@@ -23,13 +23,28 @@ class Criterion(ABC):
     def __init__(
         self,
         *,
-        name: str,
+        slug: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
         weight: float = 1.0,
+        score_spec: CriterionScoreSpec | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
-        self.name = name
+        resolved_slug = slug or name
+        if resolved_slug is None:
+            raise ValueError("Criterion requires a slug")
+        self.slug = resolved_slug
+        # Compatibility alias for older criteria/tests while callers migrate.
+        self.name = resolved_slug
+        self.description = description or resolved_slug
         self.weight = weight
+        self.score_spec = score_spec or CriterionScoreSpec()
         self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
+
+    @property
+    def max_score(self) -> float:
+        """Compatibility alias for the criterion-local score ceiling."""
+        return self.score_spec.max_score
 
     @abstractmethod
     async def evaluate(

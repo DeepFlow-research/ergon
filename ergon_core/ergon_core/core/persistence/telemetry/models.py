@@ -9,15 +9,16 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from ergon_core.api.json_types import JsonObject
+import sqlalchemy as sa
+from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import (
+    RunResourceKind as _RunResourceKind,
     RunStatus,
     TaskExecutionStatus,
     TrainingStatus,
 )
 from ergon_core.core.utils import utcnow as _utcnow
 from pydantic import model_validator
-import sqlalchemy as sa
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
 
@@ -175,49 +176,6 @@ class RunTaskExecution(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 
 
-class RunResourceKind(StrEnum):
-    """Canonical kinds for ``run_resources.kind``.
-
-    Stored as VARCHAR; enforced at the API boundary, not in the DB schema.
-    Each kind documents the publisher that produces it so a new reader can
-    trace a row back to the code that wrote it.
-    """
-
-    OUTPUT = "output"
-    """Explicit text artifact published by a worker/toolkit.
-
-    Worker final assistant messages belong on
-    ``RunTaskExecution.final_assistant_message`` instead of this resource log.
-    """
-
-    REPORT = "report"
-    """Terminal report written by a worker into a sandbox publish
-    directory (default: ``/workspace/final_output/``).  Produced by
-    ``SandboxResourcePublisher.sync()`` -- called from the
-    research-rubrics toolkit after every write and from
-    ``persist_outputs`` at task end."""
-
-    ARTIFACT = "artifact"
-    """Intermediate file a worker saved into a publish directory that
-    isn't a report (e.g. plots, derived datasets).  Same publisher path
-    as ``REPORT`` but with a different ``PUBLISH_DIRS`` mapping."""
-
-    SEARCH_CACHE = "search_cache"
-    """Raw JSON search payload cached by the research toolkit's Exa
-    search handler.  Produced by the toolkit calling
-    ``publisher.publish_value(kind=SEARCH_CACHE, ...)``."""
-
-    NOTE = "note"
-    """Free-form scratch note written by an agent via
-    ``publish_value(kind=NOTE, ...)`` -- used by the manager worker to
-    leave breadcrumbs for subsequent researchers."""
-
-    IMPORT = "import"
-    """Copied snapshot materialized from another ``RunResource`` into a task
-    workspace. The source resource remains immutable and owns its original
-    artifact; the import row belongs to the consuming task execution."""
-
-
 class RunResource(SQLModel, table=True):
     __tablename__ = "run_resources"
 
@@ -227,7 +185,10 @@ class RunResource(SQLModel, table=True):
         default=None,
         foreign_key="run_task_executions.id",
     )
-    kind: str = "output"  # Literal["output"] — str for SQLModel compat
+    kind: str = Field(
+        default="output",
+        description="RunResourceKind literal stored as a string for SQLModel compatibility.",
+    )
     name: str
     mime_type: str
     file_path: str
@@ -259,11 +220,11 @@ class RunResource(SQLModel, table=True):
     def _validate_fields(self) -> "RunResource":
         self.__class__._parse_metadata(self.metadata_json)
         try:
-            RunResourceKind(self.kind)
+            _RunResourceKind(self.kind)
         except ValueError:
             raise ValueError(
                 f"{self.kind!r} is not a valid RunResourceKind; "
-                f"valid values: {[e.value for e in RunResourceKind]}"
+                f"valid values: {[e.value for e in _RunResourceKind]}"
             )
         return self
 

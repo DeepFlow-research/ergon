@@ -5,10 +5,10 @@ from collections.abc import Iterable, Mapping
 from typing import Any, ClassVar
 
 from ergon_core.api.criterion import Criterion
-from ergon_core.api.dependencies import check_packages
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.results import CriterionResult, TaskEvaluationResult
 from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.core.runtime.dependencies import check_packages
 
 
 class Evaluator(ABC):
