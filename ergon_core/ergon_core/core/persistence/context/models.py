@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
-from ergon_core.core.persistence.context.event_payloads import ContextEventPayload
+from ergon_core.core.generation import ContextPartChunkLog
 from ergon_core.core.persistence.shared.ids import new_id
 from pydantic import TypeAdapter
 from sqlalchemy import JSON, Column, DateTime
@@ -19,7 +19,7 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-_PAYLOAD_ADAPTER: TypeAdapter[ContextEventPayload] = TypeAdapter(ContextEventPayload)
+_PAYLOAD_ADAPTER: TypeAdapter[ContextPartChunkLog] = TypeAdapter(ContextPartChunkLog)
 
 
 class RunContextEvent(SQLModel, table=True):
@@ -51,5 +51,5 @@ class RunContextEvent(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     policy_version: str | None = None
 
-    def parsed_payload(self) -> ContextEventPayload:
+    def parsed_payload(self) -> ContextPartChunkLog:
         return _PAYLOAD_ADAPTER.validate_python(self.payload)

@@ -1,7 +1,8 @@
-"""Core model-generation turn types.
+"""Core model context-stream types.
 
-These types are used by both public worker APIs and internal persistence. Keep
-them in core so persistence can import them without loading ``ergon_core.api``.
+These types are used by worker APIs, transcript adapters, persistence, replay,
+and RL extraction. Keep them in core so persistence can import them without
+loading ``ergon_core.api``.
 """
 
 from datetime import datetime
@@ -23,42 +24,37 @@ class TokenLogprob(BaseModel):
 
 class SystemPromptPart(BaseModel):
     model_config = {"frozen": True}
-    part_kind: Literal["system-prompt"] = "system-prompt"
+    part_kind: Literal["system_prompt"] = "system_prompt"
     content: str
 
 
-class UserPromptPart(BaseModel):
+class UserMessagePart(BaseModel):
     model_config = {"frozen": True}
-    part_kind: Literal["user-prompt"] = "user-prompt"
+    part_kind: Literal["user_message"] = "user_message"
     content: str
 
 
-class ToolReturnPart(BaseModel):
+class AssistantTextPart(BaseModel):
     model_config = {"frozen": True}
-    part_kind: Literal["tool-return"] = "tool-return"
-    tool_call_id: str
-    tool_name: str
-    content: str
-
-
-ModelRequestPart = Annotated[
-    SystemPromptPart | UserPromptPart | ToolReturnPart,
-    Field(discriminator="part_kind"),
-]
-
-
-class TextPart(BaseModel):
-    model_config = {"frozen": True}
-    part_kind: Literal["text"] = "text"
+    part_kind: Literal["assistant_text"] = "assistant_text"
     content: str
 
 
 class ToolCallPart(BaseModel):
     model_config = {"frozen": True}
-    part_kind: Literal["tool-call"] = "tool-call"
+    part_kind: Literal["tool_call"] = "tool_call"
     tool_name: str
     tool_call_id: str
     args: dict[str, Any]  # slopcop: ignore[no-typing-any]
+
+
+class ToolResultPart(BaseModel):
+    model_config = {"frozen": True}
+    part_kind: Literal["tool_result"] = "tool_result"
+    tool_call_id: str
+    tool_name: str
+    content: str
+    is_error: bool = False
 
 
 class ThinkingPart(BaseModel):
@@ -67,22 +63,39 @@ class ThinkingPart(BaseModel):
     content: str
 
 
-ModelResponsePart = Annotated[
-    TextPart | ToolCallPart | ThinkingPart,
+ContextPart = Annotated[
+    SystemPromptPart
+    | UserMessagePart
+    | AssistantTextPart
+    | ToolCallPart
+    | ToolResultPart
+    | ThinkingPart,
     Field(discriminator="part_kind"),
 ]
 
 
-class GenerationTurn(BaseModel):
-    """One model generation turn within a worker episode."""
+class ContextPartChunk(BaseModel):
+    """One worker-emitted context/action stream item.
+
+    Core adds run/execution/sequence/timing metadata before persistence.
+    """
 
     model_config = {"frozen": True}
 
-    messages_in: list[ModelRequestPart] = Field(default_factory=list)
-    response_parts: list[ModelResponsePart] = Field(default_factory=list)
-    tool_results: list[ToolReturnPart] = Field(default_factory=list)
-    turn_token_ids: list[int] | None = None
-    turn_logprobs: list[TokenLogprob] | None = None
-    policy_version: str | None = None
+    part: ContextPart
+    token_ids: list[int] | None = None
+    logprobs: list[TokenLogprob] | None = None
+
+
+class ContextPartChunkLog(ContextPartChunk):
+    """Core-enriched context stream item suitable for API/dashboard projection."""
+
+    sequence: int
+    worker_binding_key: str
+    turn_id: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    policy_version: str | None = None
+
+
+WorkerYield = ContextPartChunk

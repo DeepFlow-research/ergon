@@ -7,26 +7,18 @@ This is safe because each execution runs in a single Inngest invocation.
 
 import logging
 from collections.abc import Awaitable, Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from ergon_core.core.generation import (
-    GenerationTurn,
+    AssistantTextPart,
+    ContextPartChunk,
+    ContextPartChunkLog,
     SystemPromptPart,
-    TextPart,
     ThinkingPart,
     ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
-)
-from ergon_core.core.persistence.context.event_payloads import (
-    AssistantTextPayload,
-    ContextEventPayload,
-    SystemPromptPayload,
-    ThinkingPayload,
-    ToolCallPayload,
-    ToolResultPayload,
-    UserMessagePayload,
+    ToolResultPart,
+    UserMessagePart,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
 from sqlmodel import Session, select
@@ -40,6 +32,7 @@ class ContextEventRepository:
     def __init__(self) -> None:
         self._listeners: list[Callable[[RunContextEvent], Awaitable[None]]] = []
         self._sequence_counters: dict[UUID, int] = {}
+        self._active_turn_ids: dict[UUID, str] = {}
 
     def add_listener(self, listener: Callable[[RunContextEvent], Awaitable[None]]) -> None:
         self._listeners.append(listener)
@@ -53,7 +46,7 @@ class ContextEventRepository:
         execution_id: UUID,
         worker_binding_key: str,
         sequence: int,
-        payload: ContextEventPayload,
+        payload: ContextPartChunkLog,
         *,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
@@ -64,174 +57,76 @@ class ContextEventRepository:
             task_execution_id=execution_id,
             worker_binding_key=worker_binding_key,
             sequence=sequence,
-            event_type=payload.event_type,
+            event_type=payload.part.part_kind,
             payload=payload.model_dump(mode="json"),
             started_at=started_at,
             completed_at=completed_at,
             policy_version=policy_version,
         )
 
-    def _events_from_request_parts(
-        self,
-        run_id: UUID,
-        execution_id: UUID,
-        worker_binding_key: str,
-        turn: GenerationTurn,
-        seq: int,
-    ) -> tuple[list[RunContextEvent], int]:
-        """Produce context events from messages_in (excluding ToolReturnParts)."""
-        events: list[RunContextEvent] = []
-        for part in turn.messages_in:
-            if isinstance(part, SystemPromptPart):
-                events.append(
-                    self._make_event(
-                        run_id,
-                        execution_id,
-                        worker_binding_key,
-                        seq,
-                        SystemPromptPayload(text=part.content),
-                    )
-                )
-                seq += 1
-            elif isinstance(part, UserPromptPart):
-                events.append(
-                    self._make_event(
-                        run_id,
-                        execution_id,
-                        worker_binding_key,
-                        seq,
-                        UserMessagePayload(text=part.content),
-                    )
-                )
-                seq += 1
-        return events, seq
+    def _turn_id_for_chunk(self, execution_id: UUID, chunk: ContextPartChunk) -> str | None:
+        part = chunk.part
+        if isinstance(part, (AssistantTextPart, ThinkingPart, ToolCallPart)):
+            turn_id = self._active_turn_ids.get(execution_id)
+            if turn_id is None:
+                turn_id = str(uuid4())
+                self._active_turn_ids[execution_id] = turn_id
+            return turn_id
+        if isinstance(part, (SystemPromptPart, UserMessagePart, ToolResultPart)):
+            self._active_turn_ids.pop(execution_id, None)
+            return None
+        return None
 
-    def _events_from_response_parts(
-        self,
-        run_id: UUID,
-        execution_id: UUID,
-        worker_binding_key: str,
-        turn: GenerationTurn,
-        seq: int,
-        turn_id: str,
-    ) -> tuple[list[RunContextEvent], int]:
-        """Produce context events from response_parts (model-generated output)."""
-        events: list[RunContextEvent] = []
-        token_ids = turn.turn_token_ids
-        logprobs = turn.turn_logprobs
-        for part in turn.response_parts:
-            payload: ContextEventPayload
-            if isinstance(part, ThinkingPart):
-                payload = ThinkingPayload(
-                    text=part.content,
-                    turn_id=turn_id,
-                    turn_token_ids=token_ids,
-                    turn_logprobs=logprobs,
-                )
-            elif isinstance(part, TextPart):
-                payload = AssistantTextPayload(
-                    text=part.content,
-                    turn_id=turn_id,
-                    turn_token_ids=token_ids,
-                    turn_logprobs=logprobs,
-                )
-            elif isinstance(part, ToolCallPart):
-                payload = ToolCallPayload(
-                    tool_call_id=part.tool_call_id,
-                    tool_name=part.tool_name,
-                    args=part.args,
-                    turn_id=turn_id,
-                    turn_token_ids=token_ids,
-                    turn_logprobs=logprobs,
-                )
-            else:
-                continue
-            events.append(
-                self._make_event(
-                    run_id,
-                    execution_id,
-                    worker_binding_key,
-                    seq,
-                    payload,
-                    started_at=turn.started_at,
-                    completed_at=turn.completed_at,
-                    policy_version=turn.policy_version,
-                )
-            )
-            token_ids = None
-            logprobs = None
-            seq += 1
-        return events, seq
-
-    def _events_from_tool_results(
-        self,
-        run_id: UUID,
-        execution_id: UUID,
-        worker_binding_key: str,
-        turn: GenerationTurn,
-        seq: int,
-    ) -> tuple[list[RunContextEvent], int]:
-        """Produce tool_result events from GenerationTurn tool observations."""
-        events: list[RunContextEvent] = []
-        tool_result_parts = turn.tool_results or [
-            part for part in turn.messages_in if isinstance(part, ToolReturnPart)
-        ]
-        for part in tool_result_parts:
-            events.append(
-                self._make_event(
-                    run_id,
-                    execution_id,
-                    worker_binding_key,
-                    seq,
-                    ToolResultPayload(
-                        tool_call_id=part.tool_call_id,
-                        tool_name=part.tool_name,
-                        result=part.content,
-                        # TODO: Set is_error=True when ToolReturnPart gains an is_error field (currently always False)
-                    ),
-                )
-            )
-            seq += 1
-        return events, seq
-
-    async def persist_turn(
+    async def persist_chunk(
         self,
         session: Session,
         *,
         run_id: UUID,
         execution_id: UUID,
         worker_binding_key: str,
-        turn: GenerationTurn,
-    ) -> list[RunContextEvent]:
-        """Decompose one GenerationTurn into ordered context events and persist them."""
+        chunk: ContextPartChunk,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+        policy_version: str | None = None,
+    ) -> RunContextEvent:
+        """Enrich and persist one worker-emitted context stream chunk."""
         seq = self._next_sequence(execution_id)
-        turn_id = str(uuid4())
-
-        req_events, seq = self._events_from_request_parts(
-            run_id, execution_id, worker_binding_key, turn, seq
+        now = datetime.now(UTC)
+        event_started_at = started_at or now
+        event_completed_at = completed_at or now
+        payload = ContextPartChunkLog(
+            part=chunk.part,
+            token_ids=chunk.token_ids,
+            logprobs=chunk.logprobs,
+            sequence=seq,
+            worker_binding_key=worker_binding_key,
+            turn_id=self._turn_id_for_chunk(execution_id, chunk),
+            started_at=event_started_at,
+            completed_at=event_completed_at,
+            policy_version=policy_version,
         )
-        resp_events, seq = self._events_from_response_parts(
-            run_id, execution_id, worker_binding_key, turn, seq, turn_id
+        event = self._make_event(
+            run_id,
+            execution_id,
+            worker_binding_key,
+            seq,
+            payload,
+            started_at=payload.started_at,
+            completed_at=payload.completed_at,
+            policy_version=payload.policy_version,
         )
-        tool_events, seq = self._events_from_tool_results(
-            run_id, execution_id, worker_binding_key, turn, seq
-        )
+        self._sequence_counters[execution_id] = seq + 1
 
-        events = req_events + resp_events + tool_events
-        self._sequence_counters[execution_id] = seq
-
-        for event in events:
-            session.add(event)
+        session.add(event)
         session.commit()
 
-        for event in events:
-            for listener in self._listeners:
-                try:
-                    await listener(event)
-                except Exception:  # slopcop: ignore[no-broad-except]
-                    logger.warning("Context event listener failed", exc_info=True)
+        for listener in self._listeners:
+            try:
+                await listener(event)
+            except Exception:  # slopcop: ignore[no-broad-except]
+                logger.warning("Context event listener failed", exc_info=True)
 
-        return events
+        return event
 
     def get_for_execution(self, session: Session, execution_id: UUID) -> list[RunContextEvent]:
         stmt = (

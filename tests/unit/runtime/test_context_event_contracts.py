@@ -2,11 +2,16 @@ from uuid import uuid4
 
 from ergon_core.core.api.schemas import RunContextEventDto
 from ergon_core.core.dashboard.event_contracts import DashboardContextEventEvent
-from ergon_core.core.persistence.context.event_payloads import AssistantTextPayload
+from ergon_core.core.generation import AssistantTextPart, ContextPartChunkLog
 
 
 def test_rest_and_dashboard_context_events_share_typed_payload_shape() -> None:
-    payload = AssistantTextPayload(text="hello", turn_id="turn-1")
+    payload = ContextPartChunkLog(
+        part=AssistantTextPart(content="hello"),
+        sequence=1,
+        worker_binding_key="worker",
+        turn_id="turn-1",
+    )
     common = {
         "id": uuid4(),
         "run_id": uuid4(),

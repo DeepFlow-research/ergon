@@ -128,11 +128,10 @@ def _assert_run_resources(run_id: UUID) -> None:
 
 
 def _assert_run_turn_counts(run_id: UUID) -> None:
-    """Parent + recursive ``l_2`` + artifact leaves emit fixed turn counts.
+    """Parent + recursive ``l_2`` + artifact leaves emit fixed chunk counts.
 
-    Each smoke ``GenerationTurn`` has ``messages_in=[]`` and one ``TextPart``
-    in ``response_parts``, so ``persist_turn`` emits exactly 1 ``RunContextEvent``
-    per turn.
+    Each smoke context chunk contains one assistant text part, so persistence
+    emits exactly one ``RunContextEvent`` per chunk.
     """
     leaf_count = len(EXPECTED_SUBTASK_SLUGS) - 1 + len(NESTED_LINE_SLUGS)
     expected = (

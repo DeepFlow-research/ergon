@@ -2,7 +2,7 @@
 
 from typing import Protocol, TypeVar
 
-from ergon_core.core.generation import GenerationTurn
+from ergon_core.core.generation import ContextPartChunk
 from ergon_core.core.persistence.context.models import RunContextEvent
 
 TranscriptT = TypeVar("TranscriptT")
@@ -12,8 +12,8 @@ ReplayT = TypeVar("ReplayT")
 class TranscriptAdapter(Protocol[TranscriptT, ReplayT]):
     """Convert between framework-native transcripts and Ergon context events."""
 
-    def build_turns(self, transcript: TranscriptT) -> list[GenerationTurn]:
-        """Return ordered turns extracted from a complete transcript."""
+    def build_chunks(self, transcript: TranscriptT) -> list[ContextPartChunk]:
+        """Return ordered chunks extracted from a complete transcript."""
         ...
 
     def assemble_replay(self, events: list[RunContextEvent]) -> ReplayT:

@@ -168,7 +168,7 @@ def _minimal_context() -> WorkerContext:
 
 
 @pytest.mark.asyncio
-async def test_react_worker_yields_partial_turn_before_reraising_agent_iter_failure(
+async def test_react_worker_yields_partial_chunk_before_reraising_agent_iter_failure(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(react_worker_module, "Agent", _FailingAgent)
@@ -192,13 +192,13 @@ async def test_react_worker_yields_partial_turn_before_reraising_agent_iter_fail
         max_iterations=10,
     )
 
-    turns = []
+    chunks = []
     with pytest.raises(RuntimeError, match="tool validation failed"):
-        async for turn in worker.execute(_minimal_task(), context=_minimal_context()):
-            turns.append(turn)
+        async for chunk in worker.execute(_minimal_task(), context=_minimal_context()):
+            chunks.append(chunk)
 
-    assert len(turns) == 1
-    assert any(part.content == "partial answer" for part in turns[0].response_parts)
+    assert [chunk.part.part_kind for chunk in chunks] == ["user_message", "assistant_text"]
+    assert chunks[-1].part.content == "partial answer"
 
 
 @pytest.mark.asyncio
@@ -226,8 +226,8 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
         max_iterations=10,
     )
 
-    turns = [turn async for turn in worker.execute(_minimal_task(), context=_minimal_context())]
+    chunks = [chunk async for chunk in worker.execute(_minimal_task(), context=_minimal_context())]
 
-    assert len(turns) == 1
+    assert [chunk.part.part_kind for chunk in chunks] == ["user_message", "assistant_text"]
     assert _DepsAgent.init_kwargs["deps_type"] is dict
     assert _DepsAgent.iter_kwargs["deps"] == {"execution_id": str(UUID(int=5))}

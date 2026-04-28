@@ -2,13 +2,15 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.generation import (
-    GenerationTurn,
-    TextPart,
+    AssistantTextPart,
+    ContextPartChunk,
+    ContextPartChunkLog,
     ThinkingPart,
     ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
+    ToolResultPart,
+    UserMessagePart,
 )
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
@@ -52,56 +54,94 @@ def _execution_fixture(session: Session) -> tuple:
     return run_id, execution.id
 
 
+def test_run_context_event_parsed_payload_is_context_part_chunk_log() -> None:
+    log = ContextPartChunkLog(
+        part=AssistantTextPart(content="hello"),
+        sequence=3,
+        worker_binding_key="worker-a",
+        turn_id="turn-1",
+    )
+    event = RunContextEvent(
+        run_id=uuid4(),
+        task_execution_id=uuid4(),
+        worker_binding_key="worker-a",
+        sequence=3,
+        event_type="assistant_text",
+        payload=log.model_dump(mode="json"),
+    )
+
+    parsed = event.parsed_payload()
+
+    assert isinstance(parsed, ContextPartChunkLog)
+    assert parsed.part == AssistantTextPart(content="hello")
+
+
 @pytest.mark.asyncio
-async def test_persist_turn_records_tool_results_from_tool_results() -> None:
+async def test_persist_chunk_records_prompt_and_model_output_in_order() -> None:
     session = _session()
     run_id, execution_id = _execution_fixture(session)
+    repo = ContextEventRepository()
 
-    events = await ContextEventRepository().persist_turn(
+    await repo.persist_chunk(
         session,
         run_id=run_id,
         execution_id=execution_id,
         worker_binding_key="worker",
-        turn=GenerationTurn(
-            messages_in=[UserPromptPart(content="search")],
-            response_parts=[
-                ToolCallPart(tool_name="search", tool_call_id="call-1", args={"query": "ergon"})
-            ],
-            tool_results=[
-                ToolReturnPart(tool_name="search", tool_call_id="call-1", content="found")
-            ],
-        ),
+        chunk=ContextPartChunk(part=UserMessagePart(content="question")),
     )
-
-    assert [event.event_type for event in events] == ["user_message", "tool_call", "tool_result"]
-    tool_result = events[-1].parsed_payload()
-    assert tool_result.event_type == "tool_result"
-    assert tool_result.tool_name == "search"
-    assert tool_result.tool_call_id == "call-1"
-    assert tool_result.result == "found"
-
-
-@pytest.mark.asyncio
-async def test_persist_turn_records_thinking_before_assistant_text() -> None:
-    session = _session()
-    run_id, execution_id = _execution_fixture(session)
-
-    events = await ContextEventRepository().persist_turn(
+    await repo.persist_chunk(
         session,
         run_id=run_id,
         execution_id=execution_id,
         worker_binding_key="worker",
-        turn=GenerationTurn(
-            messages_in=[UserPromptPart(content="hard question")],
-            response_parts=[
-                ThinkingPart(content="let me think"),
-                TextPart(content="answer"),
-            ],
-        ),
+        chunk=ContextPartChunk(part=ThinkingPart(content="think")),
+    )
+    await repo.persist_chunk(
+        session,
+        run_id=run_id,
+        execution_id=execution_id,
+        worker_binding_key="worker",
+        chunk=ContextPartChunk(part=AssistantTextPart(content="answer")),
     )
 
+    events = repo.get_for_execution(session, execution_id)
+
+    assert [event.sequence for event in events] == [0, 1, 2]
     assert [event.event_type for event in events] == [
         "user_message",
         "thinking",
         "assistant_text",
     ]
+    assert events[1].parsed_payload().turn_id == events[2].parsed_payload().turn_id
+
+
+@pytest.mark.asyncio
+async def test_persist_chunk_tool_result_closes_current_turn() -> None:
+    session = _session()
+    run_id, execution_id = _execution_fixture(session)
+    repo = ContextEventRepository()
+
+    await repo.persist_chunk(
+        session,
+        run_id=run_id,
+        execution_id=execution_id,
+        worker_binding_key="worker",
+        chunk=ContextPartChunk(
+            part=ToolCallPart(tool_call_id="call-1", tool_name="search", args={"q": "x"})
+        ),
+    )
+    await repo.persist_chunk(
+        session,
+        run_id=run_id,
+        execution_id=execution_id,
+        worker_binding_key="worker",
+        chunk=ContextPartChunk(
+            part=ToolResultPart(tool_call_id="call-1", tool_name="search", content="ok")
+        ),
+    )
+
+    events = repo.get_for_execution(session, execution_id)
+
+    assert [event.event_type for event in events] == ["tool_call", "tool_result"]
+    assert events[0].parsed_payload().turn_id is not None
+    assert events[1].parsed_payload().turn_id is None

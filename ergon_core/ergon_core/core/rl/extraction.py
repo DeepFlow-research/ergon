@@ -14,13 +14,14 @@ import logging
 from collections import defaultdict
 from typing import Protocol, runtime_checkable
 
-from ergon_core.core.persistence.context.event_payloads import (
-    AssistantTextPayload,
-    SystemPromptPayload,
-    ThinkingPayload,
-    ToolCallPayload,
-    ToolResultPayload,
-    UserMessagePayload,
+from ergon_core.core.generation import (
+    AssistantTextPart,
+    ContextPartChunkLog,
+    SystemPromptPart,
+    ThinkingPart,
+    ToolCallPart,
+    ToolResultPart,
+    UserMessagePart,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.rl.rewards import IndependentTaskReward, RewardStrategy
@@ -78,24 +79,21 @@ def extract_agent_trajectories(
 
         for event in events:
             parsed = event.parsed_payload()
+            part = parsed.part
             execution_ids.add(str(event.task_execution_id))
 
-            if event.event_type in ("system_prompt", "user_message"):
+            if isinstance(part, (SystemPromptPart, UserMessagePart)):
                 continue  # prompt context — not in completion
 
-            if event.event_type in ("assistant_text", "tool_call", "thinking"):
+            if isinstance(part, (AssistantTextPart, ToolCallPart, ThinkingPart)):
                 token_ids = _get_token_ids(parsed, tokenizer)
                 token_logprobs = _get_logprobs(parsed, len(token_ids))
                 completion_ids.extend(token_ids)
                 logprobs.extend(token_logprobs)
                 env_mask.extend([1] * len(token_ids))
 
-            elif event.event_type == "tool_result":
-                if not isinstance(parsed, ToolResultPayload):
-                    raise ValueError(
-                        f"Expected ToolResultPayload for tool_result event, got {type(parsed)}"
-                    )
-                result_tokens = tokenizer.encode(str(parsed.result))
+            elif isinstance(part, ToolResultPart):
+                result_tokens = tokenizer.encode(part.content)
                 completion_ids.extend(result_tokens)
                 logprobs.extend([0.0] * len(result_tokens))
                 env_mask.extend([0] * len(result_tokens))
@@ -120,61 +118,37 @@ def extract_agent_trajectories(
 def _build_prompt_text(events: list[RunContextEvent]) -> str:
     parts: list[str] = []
     for event in events:
-        if event.event_type == "system_prompt":
-            p = event.parsed_payload()
-            if not isinstance(p, SystemPromptPayload):
-                raise ValueError(
-                    f"Expected SystemPromptPayload for system_prompt event, got {type(p)}"
-                )
-            parts.append(p.text)
-        elif event.event_type == "user_message":
-            p = event.parsed_payload()
-            if not isinstance(p, UserMessagePayload):
-                raise ValueError(
-                    f"Expected UserMessagePayload for user_message event, got {type(p)}"
-                )
-            parts.append(p.text)
-        elif event.event_type in ("assistant_text", "tool_call", "thinking", "tool_result"):
+        payload = event.parsed_payload()
+        part = payload.part
+        if isinstance(part, SystemPromptPart):
+            parts.append(part.content)
+        elif isinstance(part, UserMessagePart):
+            parts.append(part.content)
+        elif isinstance(part, (AssistantTextPart, ToolCallPart, ThinkingPart, ToolResultPart)):
             break
     return "\n\n".join(parts)
 
 
-def _get_token_ids(
-    parsed: AssistantTextPayload | ToolCallPayload | ThinkingPayload, tokenizer: Tokenizer
-) -> list[int]:
+def _get_token_ids(parsed: ContextPartChunkLog, tokenizer: Tokenizer) -> list[int]:
     """Return token IDs for a model-generated event.
 
-    Uses turn_token_ids if present (vLLM path). Falls back to tokenising text content.
-    NOTE: For multi-event turns, turn_token_ids covers ALL tokens in generation order.
-    Slicing per-event is only correct for single-event turns.
+    Uses token_ids if present. Falls back to tokenising the part content.
     """
-    if isinstance(parsed, AssistantTextPayload):
-        return (
-            parsed.turn_token_ids
-            if parsed.turn_token_ids is not None
-            else tokenizer.encode(parsed.text)
-        )
-    if isinstance(parsed, ToolCallPayload):
-        args_text = json.dumps(parsed.args)
-        return (
-            parsed.turn_token_ids
-            if parsed.turn_token_ids is not None
-            else tokenizer.encode(args_text)
-        )
-    if isinstance(parsed, ThinkingPayload):
-        return (
-            parsed.turn_token_ids
-            if parsed.turn_token_ids is not None
-            else tokenizer.encode(parsed.text)
-        )
+    if parsed.token_ids is not None:
+        return parsed.token_ids
+    part = parsed.part
+    if isinstance(part, AssistantTextPart):
+        return tokenizer.encode(part.content)
+    if isinstance(part, ToolCallPart):
+        return tokenizer.encode(json.dumps(part.args))
+    if isinstance(part, ThinkingPart):
+        return tokenizer.encode(part.content)
     raise ValueError(f"_get_token_ids called on non-model event: {type(parsed)}")
 
 
-def _get_logprobs(
-    parsed: AssistantTextPayload | ToolCallPayload | ThinkingPayload, n_tokens: int
-) -> list[float]:
+def _get_logprobs(parsed: ContextPartChunkLog, n_tokens: int) -> list[float]:
     """Return per-token logprob scalars, padding with 0.0 if unavailable."""
-    lps = parsed.turn_logprobs
+    lps = parsed.logprobs
     if lps is None:
         return [0.0] * n_tokens
     scalars = [lp.logprob for lp in lps]
@@ -186,8 +160,8 @@ def _get_logprobs(
 def _count_turns(events: list[RunContextEvent]) -> int:
     seen: set[str] = set()
     for event in events:
-        if event.event_type in ("assistant_text", "tool_call", "thinking"):
-            parsed = event.parsed_payload()
-            if isinstance(parsed, (AssistantTextPayload, ToolCallPayload, ThinkingPayload)):
+        parsed = event.parsed_payload()
+        if isinstance(parsed.part, (AssistantTextPart, ToolCallPart, ThinkingPart)):
+            if parsed.turn_id is not None:
                 seen.add(parsed.turn_id)
     return len(seen)

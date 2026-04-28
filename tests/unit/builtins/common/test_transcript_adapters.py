@@ -1,27 +1,19 @@
 from uuid import uuid4
 
-from ergon_builtins.common.llm_context.adapters.base import TranscriptAdapter
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
     PydanticAITranscriptAdapter,
     TranscriptTurnCursor,
 )
 from ergon_core.core.generation import (
-    GenerationTurn,
-    TextPart as ErgonTextPart,
+    AssistantTextPart,
+    ContextPartChunkLog,
+    SystemPromptPart as ErgonSystemPromptPart,
     ThinkingPart as ErgonThinkingPart,
     ToolCallPart as ErgonToolCallPart,
-    ToolReturnPart as ErgonToolReturnPart,
-    UserPromptPart as ErgonUserPromptPart,
+    ToolResultPart as ErgonToolResultPart,
+    UserMessagePart as ErgonUserMessagePart,
 )
-from ergon_core.core.persistence.context.event_payloads import (
-    AssistantTextPayload,
-    ContextEventType,
-    SystemPromptPayload,
-    ThinkingPayload,
-    ToolCallPayload,
-    ToolResultPayload,
-    UserMessagePayload,
-)
+from ergon_core.core.persistence.context.event_payloads import ContextEventType
 from ergon_core.core.persistence.context.models import RunContextEvent
 from pydantic_ai.messages import (
     ModelRequest,
@@ -33,38 +25,36 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
-from pydantic_ai.messages import (
-    TextPart as PydanticTextPart,
-)
-from pydantic_ai.messages import (
-    ThinkingPart as PydanticThinkingPart,
-)
-from pydantic_ai.messages import (
-    ToolCallPart as PydanticToolCallPart,
-)
-from pydantic_ai.messages import (
-    ToolReturnPart as PydanticToolReturnPart,
-)
+from pydantic_ai.messages import TextPart as PydanticTextPart
+from pydantic_ai.messages import ThinkingPart as PydanticThinkingPart
+from pydantic_ai.messages import ToolCallPart as PydanticToolCallPart
+from pydantic_ai.messages import ToolReturnPart as PydanticToolReturnPart
 
 
-def _make_event(event_type: str, payload, sequence: int) -> RunContextEvent:
+def _make_event(part, sequence: int, turn_id: str | None = None) -> RunContextEvent:
+    payload = ContextPartChunkLog(
+        part=part,
+        sequence=sequence,
+        worker_binding_key="test-worker",
+        turn_id=turn_id,
+    )
     return RunContextEvent(
         run_id=uuid4(),
         task_execution_id=uuid4(),
         worker_binding_key="test-worker",
         sequence=sequence,
-        event_type=event_type,
+        event_type=part.part_kind,
         payload=payload.model_dump(mode="json"),
     )
 
 
-def test_generation_part_kinds_have_context_event_counterparts() -> None:
-    assert ErgonTextPart(content="x").part_kind == "text"
+def test_context_part_kinds_are_context_event_types() -> None:
+    assert AssistantTextPart(content="x").part_kind == "assistant_text"
     assert ErgonThinkingPart(content="x").part_kind == "thinking"
-    assert ErgonToolCallPart(tool_name="t", tool_call_id="1", args={}).part_kind == "tool-call"
+    assert ErgonToolCallPart(tool_name="t", tool_call_id="1", args={}).part_kind == "tool_call"
     assert (
-        ErgonToolReturnPart(tool_call_id="1", tool_name="t", content="ok").part_kind
-        == "tool-return"
+        ErgonToolResultPart(tool_call_id="1", tool_name="t", content="ok").part_kind
+        == "tool_result"
     )
 
     assert "assistant_text" in ContextEventType.__args__
@@ -73,13 +63,10 @@ def test_generation_part_kinds_have_context_event_counterparts() -> None:
     assert "tool_result" in ContextEventType.__args__
 
 
-def test_text_and_thinking_are_response_parts() -> None:
-    adapter: TranscriptAdapter[
-        list[ModelRequest | ModelResponse], list[ModelRequest | ModelResponse]
-    ]
+def test_text_and_thinking_are_context_part_chunks() -> None:
     adapter = PydanticAITranscriptAdapter()
 
-    turns = adapter.build_turns(
+    chunks = adapter.build_chunks(
         [
             ModelRequest(parts=[UserPromptPart(content="hard question")]),
             ModelResponse(
@@ -91,18 +78,20 @@ def test_text_and_thinking_are_response_parts() -> None:
         ]
     )
 
-    assert len(turns) == 1
-    turn = turns[0]
-    assert isinstance(turn, GenerationTurn)
-    assert any(isinstance(part, ErgonUserPromptPart) for part in turn.messages_in)
-    assert any(isinstance(part, ErgonThinkingPart) for part in turn.response_parts)
-    assert any(isinstance(part, ErgonTextPart) for part in turn.response_parts)
+    assert [chunk.part.part_kind for chunk in chunks] == [
+        "user_message",
+        "thinking",
+        "assistant_text",
+    ]
+    assert isinstance(chunks[0].part, ErgonUserMessagePart)
+    assert isinstance(chunks[1].part, ErgonThinkingPart)
+    assert isinstance(chunks[2].part, AssistantTextPart)
 
 
-def test_tool_return_is_attached_to_generating_turn() -> None:
+def test_tool_call_and_return_become_context_part_chunks() -> None:
     adapter = PydanticAITranscriptAdapter()
 
-    turns = adapter.build_turns(
+    chunks = adapter.build_chunks(
         [
             ModelRequest(parts=[UserPromptPart(content="search")]),
             ModelResponse(
@@ -123,19 +112,17 @@ def test_tool_return_is_attached_to_generating_turn() -> None:
                     )
                 ]
             ),
-            ModelResponse(parts=[TextPart(content="done")]),
         ]
     )
 
-    assert len(turns) == 2
-    first = turns[0]
-    assert any(isinstance(part, ErgonToolCallPart) for part in first.response_parts)
-    assert len(first.tool_results) == 1
-    result = first.tool_results[0]
-    assert isinstance(result, ErgonToolReturnPart)
-    assert result.tool_call_id == "call-1"
-    assert result.tool_name == "search"
-    assert result.content == '{"result": "found"}'
+    assert [chunk.part.part_kind for chunk in chunks] == [
+        "user_message",
+        "tool_call",
+        "tool_result",
+    ]
+    tool_result = chunks[-1].part
+    assert isinstance(tool_result, ErgonToolResultPart)
+    assert tool_result.content == '{"result": "found"}'
 
 
 def test_incremental_extraction_does_not_emit_pending_tool_call_response() -> None:
@@ -154,14 +141,14 @@ def test_incremental_extraction_does_not_emit_pending_tool_call_response() -> No
         ),
     ]
 
-    assert adapter.build_new_turns(transcript, cursor, flush_pending=False) == []
+    first = adapter.build_new_chunks(transcript, cursor, flush_pending=False)
+    assert [chunk.part.part_kind for chunk in first] == ["user_message"]
 
-    flushed = adapter.build_new_turns(transcript, cursor, flush_pending=True)
-    assert len(flushed) == 1
-    assert any(isinstance(part, ErgonToolCallPart) for part in flushed[0].response_parts)
+    flushed = adapter.build_new_chunks(transcript, cursor, flush_pending=True)
+    assert [chunk.part.part_kind for chunk in flushed] == ["tool_call"]
 
 
-def test_incremental_extraction_tracks_emitted_turns() -> None:
+def test_incremental_extraction_tracks_emitted_chunks() -> None:
     adapter = PydanticAITranscriptAdapter()
     cursor = TranscriptTurnCursor()
     transcript = [
@@ -186,42 +173,36 @@ def test_incremental_extraction_tracks_emitted_turns() -> None:
         ),
     ]
 
-    first = adapter.build_new_turns(transcript, cursor, flush_pending=False)
-    second = adapter.build_new_turns(transcript, cursor, flush_pending=False)
+    first = adapter.build_new_chunks(transcript, cursor, flush_pending=False)
+    second = adapter.build_new_chunks(transcript, cursor, flush_pending=False)
 
-    assert len(first) == 1
+    assert [chunk.part.part_kind for chunk in first] == [
+        "user_message",
+        "tool_call",
+        "tool_result",
+    ]
     assert second == []
 
 
 def test_assemble_replay_reconstructs_pydantic_ai_messages() -> None:
     events = [
-        _make_event("system_prompt", SystemPromptPayload(text="sys"), 0),
-        _make_event("user_message", UserMessagePayload(text="use tool"), 1),
+        _make_event(ErgonSystemPromptPart(content="sys"), 0),
+        _make_event(ErgonUserMessagePart(content="use tool"), 1),
         _make_event(
-            "tool_call",
-            ToolCallPayload(
+            ErgonToolCallPart(
                 tool_call_id="call-1",
                 tool_name="my_tool",
                 args={"x": 1},
-                turn_id="t1",
             ),
             2,
+            turn_id="t1",
         ),
         _make_event(
-            "tool_result",
-            ToolResultPayload(tool_call_id="call-1", tool_name="my_tool", result="42"),
+            ErgonToolResultPart(tool_call_id="call-1", tool_name="my_tool", content="42"),
             3,
         ),
-        _make_event(
-            "thinking",
-            ThinkingPayload(text="considering", turn_id="t2"),
-            4,
-        ),
-        _make_event(
-            "assistant_text",
-            AssistantTextPayload(text="The answer is 42.", turn_id="t2"),
-            5,
-        ),
+        _make_event(ErgonThinkingPart(content="considering"), 4, turn_id="t2"),
+        _make_event(AssistantTextPart(content="The answer is 42."), 5, turn_id="t2"),
     ]
 
     messages = PydanticAITranscriptAdapter().assemble_replay(events)

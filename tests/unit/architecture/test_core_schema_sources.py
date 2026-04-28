@@ -98,3 +98,28 @@ def test_core_schema_source_imports_are_directional() -> None:
                 offenders.append(f"{path.relative_to(ROOT)} contains local source {snippet!r}")
 
     assert offenders == []
+
+
+def test_context_stream_has_single_discriminated_part_union() -> None:
+    generation = ROOT / "ergon_core/ergon_core/core/generation.py"
+    event_payloads = ROOT / "ergon_core/ergon_core/core/persistence/context/event_payloads.py"
+
+    generation_text = generation.read_text()
+    event_payloads_text = event_payloads.read_text()
+
+    assert "ContextPart = Annotated[" in generation_text
+    old_generation_names = (
+        "Generation" + "Turn",
+        "ModelRequest" + "Part",
+        "ModelResponse" + "Part",
+    )
+    old_payload_names = (
+        "SystemPrompt" + "Payload",
+        "AssistantText" + "Payload",
+        "ToolCall" + "Payload",
+    )
+
+    for name in old_generation_names:
+        assert name not in generation_text
+    for name in old_payload_names:
+        assert name not in event_payloads_text

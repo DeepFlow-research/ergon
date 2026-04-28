@@ -18,8 +18,8 @@ Target span hierarchy (one trace per run, keyed by run_id)::
     │   instance_key
     │   ├── sandbox.setup
     │   ├── worker.execute
-    │   │   └── tool.{tool_name} (per tool call in GenerationTurn)
-    │   │       turn_index, tool_name, tool_call_id, has_result
+    │   │   └── tool.{tool_name} (per tool call context part)
+    │   │       sequence, tool_name, tool_call_id, has_result
     │   ├── persist.outputs
     │   │   resource_ids
     │   └── evaluation.task (per evaluator)
