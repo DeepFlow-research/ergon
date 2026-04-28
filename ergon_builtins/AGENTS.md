@@ -100,11 +100,9 @@ EVALUATION is populated by whichever **evaluator** you pass with
 |---|---|---|
 | `gdpeval` | `benchmarks/gdpeval/sandbox.py` | GDPEval harness sandbox. |
 | `minif2f` | `benchmarks/minif2f/sandbox_manager.py` | Lean 4 sandbox with the compiler pre-installed. |
+| `researchrubrics` | `benchmarks/researchrubrics/sandbox_manager.py` | ResearchRubrics E2B sandbox with Exa tooling. |
+| `researchrubrics-vanilla` | `benchmarks/researchrubrics/sandbox_manager.py` | Same sandbox setup for the vanilla benchmark variant. |
 | `swebench-verified` | `benchmarks/swebench_verified/sandbox_manager.py` | SWE-Bench instance sandbox; installs repo+deps in `_install_dependencies`. |
-
-(`ResearchRubricsSandboxManager` lives in `ergon_core/core/providers/sandbox/`
-and is instantiated directly by `researchrubrics-researcher`; it is not in
-`SANDBOX_MANAGERS` because nothing else uses it.)
 
 ---
 

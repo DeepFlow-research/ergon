@@ -14,7 +14,7 @@ superseded_by: null
 ### Current state
 
 `BaseSandboxManager.create()` at
-`ergon_core/ergon_core/core/providers/sandbox/manager.py:226` accepts a single
+`ergon_core/ergon_core/core/sandbox/manager.py:226` accepts a single
 `timeout_minutes: int = 30` parameter. Every call site passes a literal or
 relies on the default:
 
@@ -145,7 +145,7 @@ reconnect path; `CriterionRuntime.ensure_sandbox()` will call it once RFC
 
 **Change 3 — Define `SandboxExpiredError`.**
 New exception class at
-`ergon_core/ergon_core/core/providers/sandbox/errors.py`. Subclasses the base
+`ergon_core/ergon_core/core/sandbox/errors.py`. Subclasses the base
 `Exception` (not `ErgonNonRetriableError` — sandbox expiry is not a
 definition-level error; it is a transient infrastructure condition). Criteria
 that catch it should surface a `"sandbox-expired"` evaluation outcome rather
@@ -225,7 +225,7 @@ SandboxSetupRequest (payload)
 ## Type / interface definitions
 
 ```python
-# ergon_core/ergon_core/core/providers/sandbox/errors.py
+# ergon_core/ergon_core/core/sandbox/errors.py
 
 """Sandbox-specific exception types."""
 
@@ -260,7 +260,7 @@ class SandboxExpiredError(SandboxError):
 ### `errors.py` (new file)
 
 ```python
-# ergon_core/ergon_core/core/providers/sandbox/errors.py
+# ergon_core/ergon_core/core/sandbox/errors.py
 
 """Sandbox-specific exception types."""
 
@@ -291,7 +291,7 @@ class SandboxExpiredError(SandboxError):
 ### `reconnect` method (added to `BaseSandboxManager`)
 
 ```python
-# Added to: ergon_core/ergon_core/core/providers/sandbox/manager.py
+# Added to: ergon_core/ergon_core/core/sandbox/manager.py
 # Location: after get_sandbox() at line 394, before get_sandbox_path()
 
 async def reconnect(self, sandbox_id: str) -> "AsyncSandbox":
@@ -308,7 +308,7 @@ async def reconnect(self, sandbox_id: str) -> "AsyncSandbox":
     This method does NOT register the sandbox in class-level state;
     callers should not assume it shows up in _sandboxes.
     """
-    from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
+    from ergon_core.core.sandbox.errors import SandboxExpiredError
 
     if AsyncSandbox is None:
         raise RuntimeError(
@@ -331,7 +331,7 @@ async def reconnect(self, sandbox_id: str) -> "AsyncSandbox":
 ### Updated `create()` signature — `BaseSandboxManager`
 
 ```python
-# ergon_core/ergon_core/core/providers/sandbox/manager.py
+# ergon_core/ergon_core/core/sandbox/manager.py
 # Replace lines 226-295 (existing create method)
 
 async def create(
@@ -423,7 +423,7 @@ async def create(
 ### Updated `DefaultSandboxManager.create()` override
 
 ```python
-# ergon_core/ergon_core/core/providers/sandbox/manager.py
+# ergon_core/ergon_core/core/sandbox/manager.py
 # Replace lines 503-526 (existing DefaultSandboxManager.create override)
 
 async def create(
@@ -457,21 +457,21 @@ async def create(
 ### Updated `__init__.py` (sandbox package)
 
 ```python
-# ergon_core/ergon_core/core/providers/sandbox/__init__.py
+# ergon_core/ergon_core/core/sandbox/__init__.py
 # Add SandboxExpiredError, SandboxError to exports
 
 """Sandbox management: provisioning, file I/O, lifecycle."""
 
-from ergon_core.core.providers.sandbox.errors import (
+from ergon_core.core.sandbox.errors import (
     SandboxError,
     SandboxExpiredError,
 )
-from ergon_core.core.providers.sandbox.event_sink import (
+from ergon_core.core.sandbox.event_sink import (
     DashboardEmitterSandboxEventSink,
     NoopSandboxEventSink,
     SandboxEventSink,
 )
-from ergon_core.core.providers.sandbox.manager import (
+from ergon_core.core.sandbox.manager import (
     BaseSandboxManager,
     DefaultSandboxManager,
     DownloadedFile,
@@ -495,7 +495,7 @@ __all__ = [
 
 ## Exact diffs for modified files
 
-### `ergon_core/ergon_core/core/providers/sandbox/manager.py`
+### `ergon_core/ergon_core/core/sandbox/manager.py`
 
 ```diff
 @@ -226,13 +226,16 @@ class BaseSandboxManager(ABC):
@@ -559,7 +559,7 @@ __all__ = [
 +        sandbox is not found or has already timed out. Idempotent.
 +        Does NOT register in class-level _sandboxes state.
 +        """
-+        from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
++        from ergon_core.core.sandbox.errors import SandboxExpiredError
 +
 +        if AsyncSandbox is None:
 +            raise RuntimeError(
@@ -640,22 +640,22 @@ __all__ = [
 
 Note: `reset_timeout` call changes from 30 to 40 to match the new provisioned total. The signature of `reset_timeout` at `manager.py:407` is unchanged (still accepts `timeout_minutes`).
 
-### `ergon_core/ergon_core/core/providers/sandbox/__init__.py`
+### `ergon_core/ergon_core/core/sandbox/__init__.py`
 
 ```diff
 @@ -1,6 +1,11 @@
  """Sandbox management: provisioning, file I/O, lifecycle."""
  
-+from ergon_core.core.providers.sandbox.errors import (
++from ergon_core.core.sandbox.errors import (
 +    SandboxError,
 +    SandboxExpiredError,
 +)
- from ergon_core.core.providers.sandbox.event_sink import (
+ from ergon_core.core.sandbox.event_sink import (
      DashboardEmitterSandboxEventSink,
      NoopSandboxEventSink,
      SandboxEventSink,
  )
- from ergon_core.core.providers.sandbox.manager import (
+ from ergon_core.core.sandbox.manager import (
      BaseSandboxManager,
      DefaultSandboxManager,
      DownloadedFile,
@@ -683,7 +683,7 @@ New file, no new package. The errors module sits alongside the existing sandbox
 package files:
 
 ```
-ergon_core/ergon_core/core/providers/sandbox/
+ergon_core/ergon_core/core/sandbox/
 ├── __init__.py          MODIFY  (add SandboxError, SandboxExpiredError exports)
 ├── errors.py            ADD     (SandboxError, SandboxExpiredError)
 ├── event_sink.py        no change
@@ -700,15 +700,15 @@ ergon_core/ergon_core/core/providers/sandbox/
 
 | Step | Phase | What | Files touched |
 |------|-------|------|---------------|
-| 1 | PR 1 | Create `errors.py` with `SandboxError` and `SandboxExpiredError` | ADD `ergon_core/ergon_core/core/providers/sandbox/errors.py` |
-| 2 | PR 1 | Add `errors` imports to sandbox `__init__.py` | MODIFY `ergon_core/ergon_core/core/providers/sandbox/__init__.py` |
-| 3 | PR 1 | Update `BaseSandboxManager.create()` signature: `timeout_minutes` → `task_timeout_minutes + max_criterion_timeout_minutes`; update WAL entry log | MODIFY `ergon_core/ergon_core/core/providers/sandbox/manager.py` |
-| 4 | PR 1 | Update `DefaultSandboxManager.create()` override with same signature change | MODIFY `ergon_core/ergon_core/core/providers/sandbox/manager.py` |
+| 1 | PR 1 | Create `errors.py` with `SandboxError` and `SandboxExpiredError` | ADD `ergon_core/ergon_core/core/sandbox/errors.py` |
+| 2 | PR 1 | Add `errors` imports to sandbox `__init__.py` | MODIFY `ergon_core/ergon_core/core/sandbox/__init__.py` |
+| 3 | PR 1 | Update `BaseSandboxManager.create()` signature: `timeout_minutes` → `task_timeout_minutes + max_criterion_timeout_minutes`; update WAL entry log | MODIFY `ergon_core/ergon_core/core/sandbox/manager.py` |
+| 4 | PR 1 | Update `DefaultSandboxManager.create()` override with same signature change | MODIFY `ergon_core/ergon_core/core/sandbox/manager.py` |
 | 5 | PR 1 | Migrate `sandbox_setup.py` call site: `timeout_minutes=30` → `task_timeout_minutes=30` | MODIFY `ergon_core/ergon_core/core/runtime/inngest/sandbox_setup.py` |
 | 6 | PR 1 | Migrate `criterion_runtime.py` call sites: same rename; `reset_timeout` 30 → 40 | MODIFY `ergon_core/ergon_core/core/runtime/evaluation/criterion_runtime.py` |
 | 7 | PR 1 | Migrate test call sites: `timeout_minutes=5` → `task_timeout_minutes=5` in `tests/swebench_verified/test_sandbox_manager.py` and `tests/minif2f/test_sandbox_manager.py` | MODIFY 2 test files |
 | 8 | PR 1 | Unit tests: `create()` passes correct total timeout to E2B; `task_timeout + max_criterion_timeout` arithmetic | ADD `tests/unit/test_sandbox_timeout.py` |
-| 9 | PR 2 | Add `BaseSandboxManager.reconnect(sandbox_id)` method | MODIFY `ergon_core/ergon_core/core/providers/sandbox/manager.py` |
+| 9 | PR 2 | Add `BaseSandboxManager.reconnect(sandbox_id)` method | MODIFY `ergon_core/ergon_core/core/sandbox/manager.py` |
 | 10 | PR 2 | Unit tests for `reconnect`: successful connect, E2B-not-found raises `SandboxExpiredError`, non-expired E2B error re-raises | ADD to `tests/unit/test_sandbox_reconnect.py` |
 | 11 | PR 2 | Canary e2e test: deliberately-slow criterion (sleep > task_timeout) still finds sandbox reachable | ADD `tests/e2e/test_sandbox_criterion_timeout_canary.py` |
 | 12 | PR 2 | (Deferred — depends on `2026-04-17-criterion-runtime-di-container`) Migrate `DefaultCriterionRuntime.ensure_sandbox()` to use `reconnect` when `get_sandbox` returns `None`, handling `SandboxExpiredError` | MODIFY `criterion_runtime.py` |
@@ -724,7 +724,7 @@ Steps 1–8 land as PR 1 ("sandbox-lifetime/split-timeout"). Steps 9–11 land a
 
 | File | Purpose |
 |------|---------|
-| `ergon_core/ergon_core/core/providers/sandbox/errors.py` | `SandboxError` base class; `SandboxExpiredError` raised by `reconnect()` on expired sandbox |
+| `ergon_core/ergon_core/core/sandbox/errors.py` | `SandboxError` base class; `SandboxExpiredError` raised by `reconnect()` on expired sandbox |
 | `tests/unit/test_sandbox_timeout.py` | Unit tests: `create()` arithmetic, `task_timeout + max_criterion_timeout` passed to E2B |
 | `tests/unit/test_sandbox_reconnect.py` | Unit tests: `reconnect()` success, not-found raises `SandboxExpiredError`, other errors re-raise |
 | `tests/e2e/test_sandbox_criterion_timeout_canary.py` | E2e canary: slow criterion still reaches sandbox when timeout is correctly provisioned |
@@ -733,8 +733,8 @@ Steps 1–8 land as PR 1 ("sandbox-lifetime/split-timeout"). Steps 9–11 land a
 
 | File | Changes |
 |------|---------|
-| `ergon_core/ergon_core/core/providers/sandbox/manager.py` | Split `timeout_minutes` into `task_timeout_minutes + max_criterion_timeout_minutes` in `BaseSandboxManager.create()` and `DefaultSandboxManager.create()`; add `reconnect()` method |
-| `ergon_core/ergon_core/core/providers/sandbox/__init__.py` | Export `SandboxError`, `SandboxExpiredError` |
+| `ergon_core/ergon_core/core/sandbox/manager.py` | Split `timeout_minutes` into `task_timeout_minutes + max_criterion_timeout_minutes` in `BaseSandboxManager.create()` and `DefaultSandboxManager.create()`; add `reconnect()` method |
+| `ergon_core/ergon_core/core/sandbox/__init__.py` | Export `SandboxError`, `SandboxExpiredError` |
 | `ergon_core/ergon_core/core/runtime/inngest/sandbox_setup.py` | Rename `timeout_minutes=30` → `task_timeout_minutes=30` at line 106 |
 | `ergon_core/ergon_core/core/runtime/evaluation/criterion_runtime.py` | Rename `timeout_minutes=30` → `task_timeout_minutes=30` at line 59; `reset_timeout(..., timeout_minutes=30)` → `timeout_minutes=40` at line 63 |
 | `tests/swebench_verified/test_sandbox_manager.py` | Rename `timeout_minutes=5` → `task_timeout_minutes=5`; update assertion `call_kwargs["timeout"] == 5 * 60` → `== (5 + 10) * 60` |
@@ -758,7 +758,7 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
 
 
 @pytest.fixture(autouse=True)
@@ -792,11 +792,11 @@ async def test_create_passes_total_timeout_to_e2b(monkeypatch: pytest.MonkeyPatc
     fake_sandbox.sandbox_id = "sbx-test"
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -819,11 +819,11 @@ async def test_create_default_max_criterion_timeout(monkeypatch: pytest.MonkeyPa
     fake_sandbox.sandbox_id = "sbx-default"
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -841,11 +841,11 @@ async def test_create_zero_criterion_timeout(monkeypatch: pytest.MonkeyPatch) ->
     fake_sandbox.sandbox_id = "sbx-zero"
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -875,8 +875,8 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.errors import SandboxExpiredError
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 
 @pytest.fixture(autouse=True)
@@ -902,11 +902,11 @@ async def test_reconnect_returns_sandbox_on_success(monkeypatch: pytest.MonkeyPa
     fake_sandbox = MagicMock()
     fake_connect = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -924,11 +924,11 @@ async def test_reconnect_raises_sandbox_expired_on_not_found(
     """reconnect() raises SandboxExpiredError when E2B returns 'not found'."""
     fake_connect = AsyncMock(side_effect=Exception("sandbox not found (404)"))
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -945,11 +945,11 @@ async def test_reconnect_reraises_non_expiry_errors(monkeypatch: pytest.MonkeyPa
     """reconnect() re-raises unexpected E2B errors unchanged."""
     fake_connect = AsyncMock(side_effect=ConnectionError("network blip"))
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -978,7 +978,7 @@ import asyncio
 import pytest
 from uuid import uuid4
 
-from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager, BaseSandboxManager
+from ergon_core.core.sandbox.manager import DefaultSandboxManager, BaseSandboxManager
 
 
 @pytest.fixture(autouse=True)

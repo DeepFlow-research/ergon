@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-The providers layer is Ergon's boundary between runtime code and external execution substrates. It owns four concerns: resolving `model_id` strings to `pydantic_ai.models.Model` instances, provisioning and tearing down E2B sandboxes via per-benchmark manager subclasses, surfacing sandbox state transitions as dashboard events, and publishing worker outputs as content-addressed blobs that evaluators can re-read. Everything that crosses the process boundary (LLM API, container runtime, blob storage) is routed through this layer so the runtime, workers, and evaluators stay substrate-agnostic.
+The provider-style boundaries are Ergon's adapters between runtime code and external execution substrates. Model resolution lives in the generation registry, while sandbox infrastructure now lives under `ergon_core.core.sandbox` because it owns lifecycle, instrumentation, event emission, and artifact publishing rather than just a third-party provider adapter.
 
 ## 2. Core abstractions
 
@@ -11,12 +11,12 @@ The providers layer is Ergon's boundary between runtime code and external execut
 | `_BACKEND_REGISTRY` | module-level dict | `ergon_core/core/providers/generation/model_resolution.py` | Frozen shape; entries grow via registration. | Providers layer. |
 | `resolve_model_target` | function | `ergon_core/core/providers/generation/model_resolution.py` | Public, frozen signature. Returns `ResolvedModel`. | Providers layer. |
 | `register_model_backend` | function | `ergon_core/core/providers/generation/model_resolution.py` | Public, frozen signature. | Providers layer; callers are backend modules executing at import time. |
-| `BaseSandboxManager` | abstract class + singleton | `ergon_core/core/providers/sandbox/manager.py` | Shape stable; `event_sink` activation path in flux. | Providers layer. |
-| `DefaultSandboxManager` | concrete class | `ergon_core/core/providers/sandbox/manager.py` | Frozen. | Providers layer. |
+| `BaseSandboxManager` | abstract class + singleton | `ergon_core/core/sandbox/manager.py` | Shape stable; `event_sink` activation path in flux. | Sandbox domain. |
+| `DefaultSandboxManager` | concrete class | `ergon_core/core/sandbox/manager.py` | Frozen. | Sandbox domain. |
 | `SWEBenchSandboxManager`, `MiniF2FSandboxManager`, `ResearchRubricsSandboxManager` | concrete subclasses | `ergon_builtins/` | Owned per benchmark; singletons. | Benchmark authors. |
-| `SandboxEventSink` | `typing.Protocol` | `ergon_core/core/providers/sandbox/event_sink.py` | Frozen protocol; activation path in flux. | Providers layer. |
-| `NoopSandboxEventSink`, `DashboardEmitterSandboxEventSink` | implementations | `ergon_core/core/providers/sandbox/event_sink.py` | Frozen. | Providers layer. |
-| `SandboxResourcePublisher` | class | `ergon_core/core/providers/sandbox/resource_publisher.py` | Frozen API; storage backend swappable via `ERGON_BLOB_ROOT`. | Providers layer. |
+| `SandboxEventSink` | `typing.Protocol` | `ergon_core/core/sandbox/event_sink.py` | Frozen protocol; activation path in flux. | Sandbox domain. |
+| `NoopSandboxEventSink`, `DashboardEmitterSandboxEventSink` | implementations | `ergon_core/core/sandbox/event_sink.py` | Frozen. | Sandbox domain. |
+| `SandboxResourcePublisher` | class | `ergon_core/core/sandbox/resource_publisher.py` | Frozen API; storage backend swappable via `ERGON_BLOB_ROOT`. | Sandbox domain. |
 | `TransformersModel` | `pydantic_ai.models.Model` subclass | `ergon_builtins/ergon_builtins/models/transformers_backend.py` | Frozen. | ML team (TRL training loop callers). |
 
 ### 2.1 Generation registry

@@ -271,7 +271,7 @@ Verification:
 
 Files:
 
-- Review: `ergon_core/ergon_core/core/providers/sandbox/manager.py`.
+- Review: `ergon_core/ergon_core/core/sandbox/manager.py`.
 - Review: `ergon_core/ergon_core/core/runtime/inngest/benchmark_run_start.py`.
 - Review: `ergon_core/ergon_core/core/rl/eval_runner.py`.
 - Review: `ergon_core/ergon_core/test_support/smoke_fixtures/`.

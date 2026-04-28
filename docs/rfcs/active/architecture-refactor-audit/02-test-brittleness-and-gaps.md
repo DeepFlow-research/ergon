@@ -364,7 +364,7 @@ Files:
   propagation.
 - Add fake provider helpers under `ergon_core/ergon_core/test_support/` only if
   they are reusable across test tiers.
-- Pair with code cleanup in `core/providers/sandbox/manager.py` only after
+- Pair with code cleanup in `core/sandbox/manager.py` only after
   characterization tests exist.
 
 Steps:

@@ -51,7 +51,7 @@ to a `type[BaseSandboxManager]` (not an instance). The cleanup function would
 need to resolve the class and call the static method
 `BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)`.
 `terminate_by_sandbox_id` is a `@staticmethod` at
-`ergon_core/ergon_core/core/providers/sandbox/manager.py:472-490` that calls
+`ergon_core/ergon_core/core/sandbox/manager.py:472-490` that calls
 `AsyncSandbox.kill(sandbox_id=..., api_key=...)` directly via E2B, so no
 instance is needed. However, `cleanup_cancelled_task_fn` currently has no
 import path to `SANDBOX_MANAGERS`.
@@ -278,7 +278,7 @@ import logging
 import inngest
 
 from ergon_builtins.registry import SANDBOX_MANAGERS
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.task_cleanup_dto import CleanupResult
@@ -712,13 +712,13 @@ class TestReleaseSandboxStep:
     async def test_releases_sandbox_when_fields_present(self) -> None:
         """terminate_by_sandbox_id called exactly once for valid payload."""
         with patch(
-            "ergon_core.core.providers.sandbox.manager.BaseSandboxManager"
+            "ergon_core.core.sandbox.manager.BaseSandboxManager"
             ".terminate_by_sandbox_id",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_terminate:
             from ergon_builtins.registry import SANDBOX_MANAGERS
-            from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+            from ergon_core.core.sandbox.manager import BaseSandboxManager
 
             # Any known slug from SANDBOX_MANAGERS
             slug = next(iter(SANDBOX_MANAGERS))
