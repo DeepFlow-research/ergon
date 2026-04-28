@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from ergon_core.core.persistence.telemetry.evaluation_summary import EvalCriterionStatus
-from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
+from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -237,28 +237,3 @@ class TrainingMetricDto(CamelModel):
     step_time_s: float | None = None
 
 
-# ---------------------------------------------------------------------------
-# Run graph mutation DTO (Timeline scrubber)
-# ---------------------------------------------------------------------------
-
-
-class RunGraphMutationDto(BaseModel):
-    """One entry in the append-only mutation log for a run.
-
-    Field names are snake_case to match the frontend GraphMutationDtoSchema.
-    CamelModel is intentionally not used here — the frontend contract uses snake_case.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    run_id: str
-    sequence: int
-    mutation_type: str
-    target_type: str
-    target_id: str
-    actor: str
-    old_value: GraphMutationValue | None
-    new_value: GraphMutationValue
-    reason: str | None
-    created_at: str

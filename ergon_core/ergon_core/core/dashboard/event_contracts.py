@@ -20,10 +20,9 @@ from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
     ContextEventType,
 )
-from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.runtime.events.base import InngestEventContract
 from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
-from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
+from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -218,16 +217,7 @@ class CohortUpdatedEvent(InngestEventContract):
 class DashboardGraphMutationEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/graph.mutation"
 
-    run_id: UUID
-    sequence: int
-    mutation_type: MutationType
-    target_type: GraphTargetType
-    target_id: UUID
-    actor: str
-    new_value: GraphMutationValue
-    old_value: GraphMutationValue | None = None
-    reason: str | None = None
-    timestamp: datetime
+    mutation: GraphMutationRecordDto
 
 
 class DashboardContextEventEvent(InngestEventContract):

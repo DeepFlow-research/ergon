@@ -7,7 +7,6 @@ from statistics import mean
 from uuid import UUID
 
 from ergon_core.core.api.schemas import (
-    RunGraphMutationDto,
     RunSnapshotDto,
     TrainingCurvePointDto,
     TrainingMetricDto,
@@ -30,6 +29,7 @@ from ergon_core.core.persistence.telemetry.models import (
     TrainingMetric,
     TrainingSession,
 )
+from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
 from pydantic import BaseModel
 from sqlmodel import select
 
@@ -182,7 +182,7 @@ class RunReadService:
             error=run.error_message,
         )
 
-    def list_mutations(self, run_id: UUID) -> list[RunGraphMutationDto] | None:
+    def list_mutations(self, run_id: UUID) -> list[GraphMutationRecordDto] | None:
         with get_session() as session:
             run = session.get(RunRecord, run_id)
             if run is None:
@@ -196,18 +196,18 @@ class RunReadService:
             )
 
         return [
-            RunGraphMutationDto(
-                id=str(m.id),
-                run_id=str(m.run_id),
+            GraphMutationRecordDto(
+                id=m.id,
+                run_id=m.run_id,
                 sequence=m.sequence,
                 mutation_type=m.mutation_type,
                 target_type=m.target_type,
-                target_id=str(m.target_id),
+                target_id=m.target_id,
                 actor=m.actor,
                 old_value=m.old_value,
                 new_value=m.new_value,
                 reason=m.reason,
-                created_at=m.created_at.isoformat(),
+                created_at=m.created_at,
             )
             for m in mutations
         ]

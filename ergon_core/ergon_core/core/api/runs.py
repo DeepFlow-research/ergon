@@ -11,7 +11,6 @@ from ergon_core.core.api.schemas import (
     RunContextEventDto,
     RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
-    RunGraphMutationDto,
     RunResourceDto,
     RunSandboxCommandDto,
     RunSandboxDto,
@@ -39,6 +38,7 @@ from ergon_core.core.persistence.telemetry.models import (
     TrainingMetric,
     TrainingSession,
 )
+from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
 from ergon_core.core.runtime.services.run_read_service import RunReadService
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -424,8 +424,8 @@ def get_run(run_id: UUID) -> RunSnapshotDto:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{run_id}/mutations", response_model=list[RunGraphMutationDto])
-def get_mutations(run_id: UUID) -> list[RunGraphMutationDto]:
+@router.get("/{run_id}/mutations", response_model=list[GraphMutationRecordDto])
+def get_mutations(run_id: UUID) -> list[GraphMutationRecordDto]:
     """Return the append-only mutation log for a run, ordered by sequence.
 
     Used by the Timeline scrubber to replay DAG state at any point in time.

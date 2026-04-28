@@ -8,6 +8,7 @@ run_id is expected. The aliases are erased at runtime (zero
 serialization cost).
 """
 
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -89,7 +90,9 @@ class GraphAnnotationDto(BaseModel):
     payload: JsonObject
 
 
-class GraphMutationDto(BaseModel):
+class GraphMutationRecordDto(BaseModel):
+    """Append-only graph mutation record with a typed mutation payload."""
+
     model_config = {"frozen": True}
 
     id: UUID = Field(description="Identifier of the mutation row itself, not a graph target id.")
@@ -107,6 +110,7 @@ class GraphMutationDto(BaseModel):
     old_value: "GraphMutationValue | None"
     new_value: "GraphMutationValue"
     reason: str | None
+    created_at: datetime
 
 
 class WorkflowGraphDto(BaseModel):
@@ -175,8 +179,8 @@ class EdgeAddedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["edge.added"] = "edge.added"
-    source_node_id: str
-    target_node_id: str
+    source_node_id: NodeId
+    target_node_id: NodeId
     status: str
 
 
@@ -186,8 +190,8 @@ class EdgeRemovedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["edge.removed"] = "edge.removed"
-    source_node_id: str
-    target_node_id: str
+    source_node_id: NodeId
+    target_node_id: NodeId
     status: str
 
 

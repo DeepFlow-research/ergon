@@ -42,7 +42,7 @@ from ergon_core.core.runtime.services.graph_dto import (
     EdgeStatusChangedMutation,
     GraphAnnotationDto,
     GraphEdgeDto,
-    GraphMutationDto,
+    GraphMutationRecordDto,
     GraphMutationValue,
     GraphNodeDto,
     MutationMeta,
@@ -200,7 +200,7 @@ class WorkflowGraphRepository:
                     target_id=node.id,
                     actor=meta.actor,
                     old_value=None,
-                    new_value=_node_snapshot(node).model_dump(),
+                    new_value=_node_snapshot(node).model_dump(mode="json"),
                     reason=meta.reason,
                     created_at=now,
                 )
@@ -232,7 +232,7 @@ class WorkflowGraphRepository:
                         new_value=AnnotationSetMutation(
                             namespace="payload",
                             payload=payload,
-                        ).model_dump(),
+                        ).model_dump(mode="json"),
                         reason=meta.reason,
                         created_at=now,
                     )
@@ -249,7 +249,7 @@ class WorkflowGraphRepository:
                     target_id=edge.id,
                     actor=meta.actor,
                     old_value=None,
-                    new_value=_edge_snapshot(edge).model_dump(),
+                    new_value=_edge_snapshot(edge).model_dump(mode="json"),
                     reason=meta.reason,
                     created_at=now,
                 )
@@ -782,7 +782,7 @@ class WorkflowGraphRepository:
         run_id: UUID,
         *,
         since_sequence: int = 0,
-    ) -> list[GraphMutationDto]:
+    ) -> list[GraphMutationRecordDto]:
         rows = list(
             session.exec(
                 select(RunGraphMutation)
@@ -884,8 +884,8 @@ class WorkflowGraphRepository:
             target_type=target_type,
             target_id=target_id,
             actor=meta.actor,
-            old_value=old_value.model_dump() if old_value is not None else None,
-            new_value=new_value.model_dump(),
+            old_value=old_value.model_dump(mode="json") if old_value is not None else None,
+            new_value=new_value.model_dump(mode="json"),
             reason=meta.reason,
             created_at=utcnow(),
         )
@@ -967,8 +967,8 @@ def _to_annotation_dto(row: RunGraphAnnotation) -> GraphAnnotationDto:
     )
 
 
-def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationDto:
-    return GraphMutationDto(
+def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationRecordDto:
+    return GraphMutationRecordDto(
         id=row.id,
         run_id=row.run_id,
         sequence=row.sequence,
@@ -979,6 +979,7 @@ def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationDto:
         old_value=dict(row.old_value) if row.old_value else None,
         new_value=dict(row.new_value),
         reason=row.reason,
+        created_at=row.created_at,
     )
 
 
@@ -994,8 +995,8 @@ def _node_removed_snapshot(node: RunGraphNode) -> NodeRemovedMutation:
 
 def _edge_removed_snapshot(edge: RunGraphEdge) -> EdgeRemovedMutation:
     return EdgeRemovedMutation(
-        source_node_id=str(edge.source_node_id),
-        target_node_id=str(edge.target_node_id),
+        source_node_id=edge.source_node_id,
+        target_node_id=edge.target_node_id,
         status=edge.status,
     )
 
@@ -1012,8 +1013,8 @@ def _node_snapshot(node: RunGraphNode) -> NodeAddedMutation:
 
 def _edge_snapshot(edge: RunGraphEdge) -> EdgeAddedMutation:
     return EdgeAddedMutation(
-        source_node_id=str(edge.source_node_id),
-        target_node_id=str(edge.target_node_id),
+        source_node_id=edge.source_node_id,
+        target_node_id=edge.target_node_id,
         status=edge.status,
     )
 

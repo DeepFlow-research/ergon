@@ -19,8 +19,6 @@ from ergon_core.core.persistence.context.models import (
     _PAYLOAD_ADAPTER,
 )
 from ergon_core.core.persistence.graph.models import (
-    GraphTargetType,
-    MutationType,
     RunGraphMutation,
 )
 from ergon_core.core.persistence.queries import queries
@@ -31,9 +29,8 @@ from ergon_core.core.runtime.services.cohort_service import experiment_cohort_se
 from ergon_core.core.runtime.services.cohort_stats_service import (
     experiment_cohort_stats_service,
 )
-from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
+from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
 from ergon_core.core.utils import utcnow
-from pydantic import TypeAdapter
 
 if TYPE_CHECKING:
     from ergon_core.core.persistence.context.models import RunContextEvent
@@ -53,8 +50,6 @@ from ergon_core.core.dashboard.event_contracts import (
     DashboardWorkflowStartedEvent,
     TaskTreeNode,
 )
-
-_MUTATION_VALUE_ADAPTER: TypeAdapter[GraphMutationValue] = TypeAdapter(GraphMutationValue)
 
 logger = logging.getLogger(__name__)
 
@@ -365,25 +360,21 @@ class DashboardEmitter:
         if not self._enabled:
             return
         try:
-            raw_new = {"mutation_type": row.mutation_type, **row.new_value}
-            new_value = _MUTATION_VALUE_ADAPTER.validate_python(raw_new)
-
-            old_value: GraphMutationValue | None = None
-            if row.old_value:
-                raw_old = {"mutation_type": row.mutation_type, **row.old_value}
-                old_value = _MUTATION_VALUE_ADAPTER.validate_python(raw_old)
-
-            evt = DashboardGraphMutationEvent(
+            record = GraphMutationRecordDto(
+                id=row.id,
                 run_id=row.run_id,
                 sequence=row.sequence,
-                mutation_type=cast(MutationType, row.mutation_type),
-                target_type=cast(GraphTargetType, row.target_type),
+                mutation_type=row.mutation_type,
+                target_type=row.target_type,
                 target_id=row.target_id,
                 actor=row.actor,
-                new_value=new_value,
-                old_value=old_value,
+                old_value=dict(row.old_value) if row.old_value else None,
+                new_value=dict(row.new_value),
                 reason=row.reason,
-                timestamp=row.created_at,
+                created_at=row.created_at,
+            )
+            evt = DashboardGraphMutationEvent(
+                mutation=record,
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
