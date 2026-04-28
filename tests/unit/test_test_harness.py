@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.api import test_harness
-from ergon_core.core.api.startup_plugins import run_startup_plugins
+from ergon_core.core.api.app import _run_startup_plugins
 from ergon_core.core.api.test_harness import get_session_dep, router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -112,4 +112,4 @@ def test_reset_requires_secret_header(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_startup_plugin_loader_rejects_invalid_specs() -> None:
     with pytest.raises(RuntimeError, match="expected 'module:function'"):
-        run_startup_plugins(("ergon_core.test_support.smoke_fixtures",))
+        _run_startup_plugins(("ergon_core.test_support.smoke_fixtures",))

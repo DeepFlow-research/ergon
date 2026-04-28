@@ -8,7 +8,7 @@ from ergon_core.test_support.smoke_fixtures.criteria.minif2f_smoke import MiniF2
 
 
 def _crit() -> MiniF2FSmokeCriterion:
-    return MiniF2FSmokeCriterion(name="unit-test")
+    return MiniF2FSmokeCriterion(slug="unit-test")
 
 
 @pytest.mark.asyncio

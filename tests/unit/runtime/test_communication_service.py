@@ -2,12 +2,21 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
+from ergon_core.core.dashboard.emitter import DashboardEmitter
+from ergon_core.core.dashboard.provider import reset_dashboard_emitter, set_dashboard_emitter
 from ergon_core.core.runtime.services import communication_service as module
 from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 Thread = module.Thread
+
+
+@pytest.fixture(autouse=True)
+def dashboard_emitter_provider() -> Iterator[None]:
+    reset_dashboard_emitter()
+    yield
+    reset_dashboard_emitter()
 
 
 @pytest.fixture()
@@ -36,7 +45,9 @@ async def test_save_message_persists_thread_summary_and_emits_it(
         emitted.append((thread, message))
 
     monkeypatch.setattr(module, "get_session", session_factory)
-    monkeypatch.setattr(module.dashboard_emitter, "thread_message_created", _record_thread_event)
+    emitter = DashboardEmitter(enabled=True)
+    monkeypatch.setattr(emitter, "thread_message_created", _record_thread_event)
+    set_dashboard_emitter(emitter)
 
     run_id = uuid4()
     execution_id = uuid4()
@@ -73,7 +84,9 @@ async def test_save_message_backfills_missing_summary_without_overwriting_existi
         return None
 
     monkeypatch.setattr(module, "get_session", session_factory)
-    monkeypatch.setattr(module.dashboard_emitter, "thread_message_created", _ignore_thread_event)
+    emitter = DashboardEmitter(enabled=True)
+    monkeypatch.setattr(emitter, "thread_message_created", _ignore_thread_event)
+    set_dashboard_emitter(emitter)
 
     service = module.CommunicationService()
     run_id = uuid4()

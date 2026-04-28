@@ -2,7 +2,6 @@
 
 from ergon_core.core.dashboard.emitter import (
     DashboardEmitter,
-    dashboard_emitter,
     emit_cohort_updated_for_run,
 )
 from ergon_core.core.dashboard.event_contracts import (
@@ -18,6 +17,12 @@ from ergon_core.core.dashboard.event_contracts import (
     DashboardWorkflowStartedEvent,
     TaskTreeNode,
 )
+from ergon_core.core.dashboard.provider import (
+    get_dashboard_emitter,
+    init_dashboard_emitter,
+    reset_dashboard_emitter,
+    set_dashboard_emitter,
+)
 
 __all__ = [
     "CohortUpdatedEvent",
@@ -32,6 +37,9 @@ __all__ = [
     "DashboardWorkflowCompletedEvent",
     "DashboardWorkflowStartedEvent",
     "TaskTreeNode",
-    "dashboard_emitter",
     "emit_cohort_updated_for_run",
+    "get_dashboard_emitter",
+    "init_dashboard_emitter",
+    "reset_dashboard_emitter",
+    "set_dashboard_emitter",
 ]

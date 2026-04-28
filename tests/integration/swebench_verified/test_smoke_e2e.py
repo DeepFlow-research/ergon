@@ -53,5 +53,5 @@ def test_build_instances_strips_gold_patch_and_honors_limit() -> None:
 def test_rubric_instantiates_with_one_criterion() -> None:
     rubric = SWEBenchRubric(name="swebench-rubric")
     assert len(rubric.criteria) == 1
-    assert rubric.criteria[0].name == "test-resolution"
+    assert rubric.criteria[0].slug == "test-resolution"
     assert rubric.criteria[0].weight == 1.0

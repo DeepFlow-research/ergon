@@ -7,7 +7,7 @@ from ergon_core.core.api.schemas import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
 )
-from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
 from ergon_core.core.runtime.services.communication_schemas import (
@@ -101,7 +101,7 @@ class CommunicationService:
             created_at=message.created_at,
         )
         try:
-            await dashboard_emitter.thread_message_created(
+            await get_dashboard_emitter().thread_message_created(
                 run_id=request.run_id,
                 thread=thread_dto,
                 message=message_dto,

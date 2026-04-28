@@ -23,28 +23,17 @@ class Criterion(ABC):
     def __init__(
         self,
         *,
-        slug: str | None = None,
-        name: str | None = None,
+        slug: str,
         description: str | None = None,
         weight: float = 1.0,
         score_spec: CriterionScoreSpec | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
-        resolved_slug = slug or name
-        if resolved_slug is None:
-            raise ValueError("Criterion requires a slug")
-        self.slug = resolved_slug
-        # Compatibility alias for older criteria/tests while callers migrate.
-        self.name = resolved_slug
-        self.description = description or resolved_slug
+        self.slug = slug
+        self.description = description or slug
         self.weight = weight
         self.score_spec = score_spec or CriterionScoreSpec()
         self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
-
-    @property
-    def max_score(self) -> float:
-        """Compatibility alias for the criterion-local score ceiling."""
-        return self.score_spec.max_score
 
     @abstractmethod
     async def evaluate(

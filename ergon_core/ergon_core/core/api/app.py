@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
+from importlib import import_module
 
 # Root-logger handler so ``logger.exception`` / ``logger.error`` from
 # anywhere in the app actually reach ``docker compose logs api``.
@@ -22,12 +23,10 @@ logging.basicConfig(
 import inngest.fast_api
 from ergon_core.core.api.cohorts import router as cohorts_router
 from ergon_core.core.api.experiments import router as experiments_router
-from ergon_core.core.api.rollouts import init_service as init_rollout_service
 from ergon_core.core.api.rollouts import router as rollouts_router
 from ergon_core.core.api.runs import router as runs_router
-from ergon_core.core.api.startup_plugins import run_startup_plugins
 from ergon_core.core.api.test_harness import router as _test_harness_router
-from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.dashboard.provider import init_dashboard_emitter, reset_dashboard_emitter
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.sandbox.event_sink import (
     CompoundSandboxEventSink,
@@ -44,19 +43,32 @@ from fastapi import FastAPI
 logger = logging.getLogger(__name__)
 
 
+def _run_startup_plugins(plugin_specs: tuple[str, ...]) -> None:
+    for spec in plugin_specs:
+        module_name, sep, attr_name = spec.partition(":")
+        if not sep or not module_name or not attr_name:
+            raise RuntimeError(
+                f"Invalid ERGON_STARTUP_PLUGINS entry {spec!r}; expected 'module:function'"
+            )
+        module = import_module(module_name)
+        plugin = getattr(module, attr_name)  # slopcop: ignore[no-hasattr-getattr]
+        plugin()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("starting ensure_db...")
     ensure_db()
     logger.info("ensure_db done, initializing RolloutService...")
     settings = Settings()
-    init_rollout_service(
-        RolloutService(
-            session_factory=get_session,
-            inngest_send=inngest_client.send_sync,
-            tokenizer_name=settings.default_tokenizer,
-        )
+    app.state.rollout_service = RolloutService(
+        session_factory=get_session,
+        inngest_send=inngest_client.send_sync,
+        tokenizer_name=settings.default_tokenizer,
     )
+    app.state.vllm_manager = None
+    dashboard_emitter = init_dashboard_emitter(enabled=True)
+    app.state.dashboard_emitter = dashboard_emitter
 
     # Wire the dashboard event sink on every sandbox manager subclass.
     # Import ergon_builtins here (deferred) to avoid a circular import at
@@ -74,9 +86,13 @@ async def lifespan(app: FastAPI):
         "sandbox event sink wired on %d manager subclass(es)",
         1 + len(SANDBOX_MANAGERS),
     )
+    _run_startup_plugins(settings.startup_plugins)
 
     logger.info("app startup complete — all subsystems initialised")
-    yield
+    try:
+        yield
+    finally:
+        reset_dashboard_emitter()
 
 
 app = FastAPI(
@@ -100,7 +116,5 @@ def health() -> dict[str, str]:
 # Test-only harness: mounted in CI + local-e2e only.
 if settings.enable_test_harness:
     app.include_router(_test_harness_router)
-
-run_startup_plugins(settings.startup_plugins)
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)

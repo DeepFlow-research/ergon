@@ -26,15 +26,15 @@ class CodeCheckCriterion(Criterion):
     def __init__(
         self,
         *,
-        name: str,
+        slug: str,
         code_template: str,
         description: str = "",  # slopcop: ignore[no-str-empty-default]
         weight: float = 1.0,
         max_score: float = 1.0,
     ) -> None:
         super().__init__(
-            name=name,
-            description=description or name,
+            slug=slug,
+            description=description or slug,
             weight=weight,
             score_spec=CriterionScoreSpec(max_score=max_score),
         )
@@ -46,10 +46,10 @@ class CodeCheckCriterion(Criterion):
         score = self.score_spec.max_score if passed else 0.0
         return CriterionResult(
             slug=self.slug,
-            name=self.name,
+            name=self.slug,
             score=score,
             passed=passed,
             weight=self.weight,
             max_score=self.score_spec.max_score,
-            feedback=f"Code check '{self.name}': {'passed' if passed else 'failed'}",
+            feedback=f"Code check '{self.slug}': {'passed' if passed else 'failed'}",
         )

@@ -12,10 +12,9 @@ from datetime import UTC, datetime
 
 import inngest
 from ergon_builtins.registry import BENCHMARKS, WORKERS
-from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.generation import ContextPartChunk
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.queries import queries
@@ -32,14 +31,6 @@ from ergon_core.core.runtime.tracing import (
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
-
-
-def _worker_execute_result_from_output(output: WorkerOutput) -> WorkerExecuteResult:
-    return WorkerExecuteResult(
-        success=output.success,
-        final_assistant_message=output.output,
-        error=None if output.success else output.output,
-    )
 
 
 @inngest_client.create_function(
@@ -102,6 +93,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     )
 
     context_event_repo = ContextEventRepository()
+    dashboard_emitter = get_dashboard_emitter()
     context_event_repo.add_listener(dashboard_emitter.on_context_event)
     dashboard_emitter.register_execution(
         execution_id=payload.execution_id,
@@ -166,7 +158,11 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         )
     )
 
-    return _worker_execute_result_from_output(output)
+    return WorkerExecuteResult(
+        success=output.success,
+        final_assistant_message=output.output,
+        error=None if output.success else output.output,
+    )
 
 
 async def _persist_context_events(

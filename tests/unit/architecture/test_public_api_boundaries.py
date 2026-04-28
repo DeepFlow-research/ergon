@@ -1,8 +1,18 @@
 """Architecture guards for the student-facing public API boundary."""
 
+import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
+
+REMOVED_PUBLIC_API_MODULES = (
+    "ergon_core.api.generation",
+    "ergon_core.api.json_types",
+    "ergon_core.api.run_resource",
+    "ergon_core.api.criterion_runtime",
+    "ergon_core.api.dependencies",
+    "ergon_core.api.types",
+)
 
 FORBIDDEN_IMPORT_SNIPPETS = (
     "from ergon_core.api.generation import",
@@ -30,3 +40,13 @@ def test_runtime_and_builtin_code_do_not_import_core_types_through_public_api() 
                     offenders.append(f"{path.relative_to(ROOT)} imports via {snippet!r}")
 
     assert offenders == []
+
+
+def test_deleted_public_api_facade_modules_stay_deleted() -> None:
+    restored = [
+        module_name
+        for module_name in REMOVED_PUBLIC_API_MODULES
+        if importlib.util.find_spec(module_name) is not None
+    ]
+
+    assert restored == []

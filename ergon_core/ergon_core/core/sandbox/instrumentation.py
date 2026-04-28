@@ -6,13 +6,6 @@ import time
 from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
-try:
-    from e2b.sandbox.commands.command_handle import (
-        CommandExitException,  # type: ignore[import-untyped]
-    )
-except ImportError:
-    CommandExitException = Exception  # type: ignore[assignment,misc]
-
 from ergon_core.core.sandbox.event_sink import SandboxEventSink
 from ergon_core.core.sandbox.utils import (
     _truncate,
@@ -25,7 +18,7 @@ if TYPE_CHECKING:
     from e2b.sandbox_async.commands.command import Commands  # type: ignore[import-untyped]
     from e2b.sandbox_async.filesystem.filesystem import Filesystem  # type: ignore[import-untyped]
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-
+    from e2b.sandbox.commands.command_handle import CommandExitException  # type: ignore[import-untyped]
 
 class SandboxCallResult(Protocol):
     """Opaque SDK return value forwarded by sandbox proxy methods."""

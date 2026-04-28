@@ -94,7 +94,7 @@ class SmokeCriterionBase(Criterion):
         except CriteriaCheckError as e:
             return CriterionResult(
                 slug=self.slug,
-                name=self.name,
+                name=self.slug,
                 score=0.0,
                 passed=False,
                 weight=self.weight,
@@ -102,7 +102,7 @@ class SmokeCriterionBase(Criterion):
             )
         return CriterionResult(
             slug=self.slug,
-            name=self.name,
+            name=self.slug,
             score=1.0,
             passed=True,
             weight=self.weight,

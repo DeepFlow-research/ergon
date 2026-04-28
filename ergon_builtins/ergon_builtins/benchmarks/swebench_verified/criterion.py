@@ -127,17 +127,17 @@ class SWEBenchTestCriterion(Criterion):
     def __init__(
         self,
         *,
-        name: str = "swebench-test-resolution",
+        slug: str = "swebench-test-resolution",
         weight: float = 1.0,
     ) -> None:
-        super().__init__(name=name, weight=weight)
+        super().__init__(slug=slug, weight=weight)
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
         patch_text = await _extract_patch_via_runtime(context)
         if not patch_text.strip():
             return CriterionResult(
                 slug=self.slug,
-                name=self.name,
+                name=self.slug,
                 score=0.0,
                 passed=False,
                 weight=self.weight,
@@ -179,7 +179,7 @@ class SWEBenchTestCriterion(Criterion):
         if r.exit_code != 0:
             detail = r.stdout if r.stdout is not None else r.stderr
             return _error_result(
-                self.name,
+                self.slug,
                 self.weight,
                 "install_repo failed",
                 # reason: both CommandResult fields are `str | None`, but
@@ -196,7 +196,7 @@ class SWEBenchTestCriterion(Criterion):
                 await _write_and_apply(runtime, "/tmp/test.patch", test_patch)
             await _write_and_apply(runtime, "/tmp/agent.patch", patch_text)
         except RuntimeError as exc:
-            return _error_result(self.name, self.weight, "git apply failed", str(exc))
+            return _error_result(self.slug, self.weight, "git apply failed", str(exc))
 
         # 3. Run eval script with stderr merged so the log has everything.
         r = await runtime.run_command(
@@ -216,7 +216,7 @@ class SWEBenchTestCriterion(Criterion):
         resolved = bool(entry.get("resolved"))
         return CriterionResult(
             slug=self.slug,
-            name=self.name,
+            name=self.slug,
             score=1.0 if resolved else 0.0,
             passed=resolved,
             weight=self.weight,
@@ -250,10 +250,10 @@ async def _write_and_apply(
         raise RuntimeError(f"git apply {path} failed: {stdout[-800:]}")
 
 
-def _error_result(name: str, weight: float, kind: str, detail: str) -> CriterionResult:
+def _error_result(slug: str, weight: float, kind: str, detail: str) -> CriterionResult:
     return CriterionResult(
-        slug=name,
-        name=name,
+        slug=slug,
+        name=slug,
         score=0.0,
         passed=False,
         weight=weight,

@@ -73,7 +73,7 @@ class TestLLMJudgeCriterionWithRuntime:
         )
 
         criterion = LLMJudgeCriterion(
-            name="test-criterion",
+            slug="test-criterion",
             prompt_template="Evaluate whether the report covers the topic.",
             weight=1.0,
             max_score=1.0,
@@ -101,14 +101,14 @@ class TestLegacyCriterionIgnoresRuntime:
 
             async def evaluate(self, context: EvaluationContext) -> CriterionResult:
                 return CriterionResult(
-                    name=self.name,
+                    name=self.slug,
                     score=1.0,
                     passed=True,
                     weight=self.weight,
                     feedback="Always passes",
                 )
 
-        criterion = _SimpleCriterion(name="simple")
+        criterion = _SimpleCriterion(slug="simple")
         fake_runtime = AsyncMock()
         ctx = _make_eval_context(runtime=fake_runtime)
         result = await criterion.evaluate(ctx)

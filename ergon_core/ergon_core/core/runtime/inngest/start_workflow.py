@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4, uuid5
 
 import inngest
-from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.dashboard.event_contracts import TaskTreeNode, WorkerRef
+from ergon_core.core.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionWorker
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
@@ -180,7 +180,7 @@ async def start_workflow_fn(ctx: inngest.Context) -> WorkflowStartResult:
 
     task_tree = _build_task_tree_for_run(payload.run_id, payload.definition_id)
 
-    await dashboard_emitter.workflow_started(
+    await get_dashboard_emitter().workflow_started(
         run_id=payload.run_id,
         experiment_id=payload.definition_id,
         workflow_name=initialized.benchmark_type,

@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -50,7 +50,7 @@ async def _emit_task_status(
     if node_id is None:
         return
     try:
-        await dashboard_emitter.task_status_changed(
+        await get_dashboard_emitter().task_status_changed(
             run_id=run_id,
             task_id=node_id,
             task_name=task_slug,

@@ -10,7 +10,8 @@ from collections import deque
 from uuid import UUID
 
 import inngest
-from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.dashboard.emitter import DashboardEmitter
+from ergon_core.core.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import (
     CANCELLED,
@@ -105,9 +106,14 @@ class TaskManagementService:
     the manager's ReAct loop.
     """
 
-    def __init__(self, graph_repo: WorkflowGraphRepository | None = None) -> None:
+    def __init__(
+        self,
+        graph_repo: WorkflowGraphRepository | None = None,
+        dashboard_emitter: DashboardEmitter | None = None,
+    ) -> None:
         self._graph_repo = graph_repo or WorkflowGraphRepository()
-        self._graph_repo.add_mutation_listener(dashboard_emitter.graph_mutation)
+        self._dashboard_emitter = dashboard_emitter or get_dashboard_emitter()
+        self._graph_repo.add_mutation_listener(self._dashboard_emitter.graph_mutation)
 
     # ── add_subtask ──────────────────────────────────────────
 

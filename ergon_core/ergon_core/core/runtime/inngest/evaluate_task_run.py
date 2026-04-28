@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 import inngest
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, SANDBOX_MANAGERS
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.runtime.errors import ContractViolationError, RegistryLookupError
@@ -161,7 +161,7 @@ async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
         evaluator_id=evaluator_id,
         service_result=service_result,
     )
-    await dashboard_emitter.task_evaluation_updated(
+    await get_dashboard_emitter().task_evaluation_updated(
         run_id=run_id,
         task_id=node_id,
         evaluation=persisted.dashboard_dto,

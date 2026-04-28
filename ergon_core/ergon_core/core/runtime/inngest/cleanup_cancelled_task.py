@@ -9,7 +9,7 @@ Two durable steps:
 import logging
 
 import inngest
-from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
@@ -59,6 +59,6 @@ async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> JsonObject:
 
     cleanup_result = await ctx.step.run("update-db-rows", _update_db_rows)
 
-    await dashboard_emitter.task_cancelled(payload)
+    await get_dashboard_emitter().task_cancelled(payload)
 
     return cleanup_result

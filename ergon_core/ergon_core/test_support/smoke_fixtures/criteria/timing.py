@@ -17,7 +17,7 @@ class SmokePostRootTimingCriterion(Criterion):
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
         return CriterionResult(
             slug=self.slug,
-            name=self.name,
+            name=self.slug,
             score=1.0,
             passed=True,
             weight=self.weight,
@@ -38,7 +38,7 @@ class SmokePostRootTimingRubric(Rubric):
     ) -> None:
         super().__init__(
             name=name,
-            criteria=[SmokePostRootTimingCriterion(name="smoke-post-root-timing")],
+            criteria=[SmokePostRootTimingCriterion(slug="smoke-post-root-timing")],
             metadata=metadata,
         )
 

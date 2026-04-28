@@ -38,7 +38,7 @@ class ResearchRubricsSmokeRubric(Rubric):
     ) -> None:
         super().__init__(
             name=name,
-            criteria=[ResearchRubricsSmokeCriterion(name="researchrubrics-smoke")],
+            criteria=[ResearchRubricsSmokeCriterion(slug="researchrubrics-smoke")],
             metadata=metadata,
         )
 
@@ -56,7 +56,7 @@ class MiniF2FSmokeRubric(Rubric):
     ) -> None:
         super().__init__(
             name=name,
-            criteria=[MiniF2FSmokeCriterion(name="minif2f-smoke")],
+            criteria=[MiniF2FSmokeCriterion(slug="minif2f-smoke")],
             metadata=metadata,
         )
 
@@ -74,7 +74,7 @@ class SweBenchSmokeRubric(Rubric):
     ) -> None:
         super().__init__(
             name=name,
-            criteria=[SweBenchSmokeCriterion(name="swebench-smoke")],
+            criteria=[SweBenchSmokeCriterion(slug="swebench-smoke")],
             metadata=metadata,
         )
 

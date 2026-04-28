@@ -8,7 +8,7 @@ from ergon_core.test_support.smoke_fixtures.criteria.swebench_smoke import SweBe
 
 
 def _crit() -> SweBenchSmokeCriterion:
-    return SweBenchSmokeCriterion(name="unit-test")
+    return SweBenchSmokeCriterion(slug="unit-test")
 
 
 @pytest.mark.asyncio

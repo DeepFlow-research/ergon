@@ -24,6 +24,13 @@ def test_public_api_root_stays_authoring_scoped() -> None:
     assert not hasattr(public_api, "Tool")
 
 
+def test_object_first_experiment_run_api_is_retired() -> None:
+    public_api = importlib.import_module("ergon_core.api")
+
+    assert not hasattr(public_api, "ExperimentRunHandle")
+    assert not hasattr(public_api.Experiment, "run")
+
+
 def test_core_api_app_imports_without_context_payload_cycle() -> None:
     proc = subprocess.run(
         [sys.executable, "-c", "import ergon_core.core.api.app; print('ok')"],

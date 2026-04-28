@@ -449,10 +449,6 @@ class DashboardEmitter:
         except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to emit dashboard/cohort.updated", exc_info=True)
 
-
-dashboard_emitter = DashboardEmitter(enabled=True)
-
-
 async def emit_cohort_updated_for_run(run_id: UUID) -> None:
     """Refresh and emit the current cohort summary for a run, if it has a cohort."""
     cohort_id = queries.runs.get_cohort_id(run_id)
@@ -463,7 +459,9 @@ async def emit_cohort_updated_for_run(run_id: UUID) -> None:
     summary = experiment_cohort_service.get_summary(cohort_id)
     if summary is None:
         return
-    await dashboard_emitter.cohort_updated(
+    from ergon_core.core.dashboard.provider import get_dashboard_emitter
+
+    await get_dashboard_emitter().cohort_updated(
         cohort_id=summary.cohort_id,
         summary=summary,
     )

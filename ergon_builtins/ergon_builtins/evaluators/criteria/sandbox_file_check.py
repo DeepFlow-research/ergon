@@ -16,12 +16,12 @@ class SandboxFileCheckCriterion(Criterion):
     def __init__(
         self,
         *,
-        name: str = "sandbox-file-check",
+        slug: str = "sandbox-file-check",
         weight: float = 1.0,
         expected_path: str = MARKER_PATH,
         expected_content: str = MARKER_CONTENT,
     ) -> None:
-        super().__init__(name=name, weight=weight)
+        super().__init__(slug=slug, weight=weight)
         self.expected_path = expected_path
         self.expected_content = expected_content
 
@@ -29,7 +29,7 @@ class SandboxFileCheckCriterion(Criterion):
         if not context.sandbox_id:
             return CriterionResult(
                 slug=self.slug,
-                name=self.name,
+                name=self.slug,
                 score=0.0,
                 passed=False,
                 weight=self.weight,
@@ -42,7 +42,7 @@ class SandboxFileCheckCriterion(Criterion):
         except ImportError:
             return CriterionResult(
                 slug=self.slug,
-                name=self.name,
+                name=self.slug,
                 score=0.0,
                 passed=False,
                 weight=self.weight,
@@ -59,7 +59,7 @@ class SandboxFileCheckCriterion(Criterion):
             found = self.expected_content in content
             return CriterionResult(
                 slug=self.slug,
-                name=self.name,
+                name=self.slug,
                 score=1.0 if found else 0.0,
                 passed=found,
                 weight=self.weight,
@@ -73,7 +73,7 @@ class SandboxFileCheckCriterion(Criterion):
         except Exception as exc:  # slopcop: ignore[no-broad-except]
             return CriterionResult(
                 slug=self.slug,
-                name=self.name,
+                name=self.slug,
                 score=0.0,
                 passed=False,
                 weight=self.weight,

@@ -38,7 +38,7 @@ class LLMJudgeCriterion(Criterion):
     def __init__(
         self,
         *,
-        name: str,
+        slug: str,
         prompt_template: str,
         description: str = "",  # slopcop: ignore[no-str-empty-default]
         weight: float = 1.0,
@@ -46,8 +46,8 @@ class LLMJudgeCriterion(Criterion):
         model: str = "gpt-4o",
     ) -> None:
         super().__init__(
-            name=name,
-            description=description or name,
+            slug=slug,
+            description=description or slug,
             weight=weight,
             score_spec=CriterionScoreSpec(max_score=max_score),
         )
@@ -75,7 +75,7 @@ class LLMJudgeCriterion(Criterion):
         score = self.score_spec.max_score if verdict.passed else 0.0
         return CriterionResult(
             slug=self.slug,
-            name=self.name,
+            name=self.slug,
             score=score,
             passed=verdict.passed,
             weight=self.weight,

@@ -113,7 +113,7 @@ async def test_fixture_proof_verifies_to_score_1() -> None:
         )
 
         criterion = ProofVerificationCriterion(
-            name="proof_verification",
+            slug="proof_verification",
             weight=1.0,
             max_score=1.0,
         )

@@ -14,7 +14,7 @@ from ergon_core.test_support.smoke_fixtures.criteria.researchrubrics_smoke impor
 
 
 def _crit() -> ResearchRubricsSmokeCriterion:
-    return ResearchRubricsSmokeCriterion(name="unit-test")
+    return ResearchRubricsSmokeCriterion(slug="unit-test")
 
 
 # =============================================================================

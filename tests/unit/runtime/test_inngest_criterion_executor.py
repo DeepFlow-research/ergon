@@ -33,12 +33,12 @@ class _Criterion(Criterion):
     type_slug = "test-criterion"
 
     def __init__(self) -> None:
-        super().__init__(name="criterion")
+        super().__init__(slug="criterion")
         self.runtime_task_scope = None
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
         self.runtime_task_scope = context.runtime.task_scope
-        return CriterionResult(name=self.name, score=1.0, passed=True)
+        return CriterionResult(name=self.slug, score=1.0, passed=True)
 
 
 @pytest.mark.asyncio

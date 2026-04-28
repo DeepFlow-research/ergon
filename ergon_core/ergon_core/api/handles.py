@@ -1,4 +1,4 @@
-"""Public lifecycle handle types returned by persist() and run()."""
+"""Public lifecycle handle types returned by Experiment.persist()."""
 
 from datetime import datetime
 from typing import Any

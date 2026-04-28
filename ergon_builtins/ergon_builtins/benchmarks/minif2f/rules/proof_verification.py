@@ -52,7 +52,7 @@ class ProofVerificationCriterion(Criterion):
     def __init__(
         self,
         *,
-        name: str = "proof_verification",
+        slug: str = "proof_verification",
         weight: float = 1.0,
         max_score: float = 1.0,
         problem_statement: str | None = None,
@@ -60,7 +60,7 @@ class ProofVerificationCriterion(Criterion):
         formal_system: str = "lean",
     ) -> None:
         super().__init__(
-            name=name,
+            slug=slug,
             weight=weight,
             score_spec=CriterionScoreSpec(max_score=max_score),
         )
@@ -73,7 +73,7 @@ class ProofVerificationCriterion(Criterion):
         if proof_data is None:
             return CriterionResult(
                 slug=self.slug,
-                name=self.name,
+                name=self.slug,
                 score=0.0,
                 passed=False,
                 weight=self.weight,
@@ -103,7 +103,7 @@ class ProofVerificationCriterion(Criterion):
 
         return CriterionResult(
             slug=self.slug,
-            name=self.name,
+            name=self.slug,
             score=score,
             passed=outcome.verified,
             weight=self.weight,
