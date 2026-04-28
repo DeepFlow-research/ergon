@@ -6,12 +6,11 @@ not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
 """
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
+from ergon_core.core.persistence.telemetry.evaluation_summary import EvalCriterionStatus
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
 from pydantic import BaseModel, ConfigDict, Field
-
-EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 
 
 def _to_camel(value: str) -> str:

@@ -24,3 +24,20 @@ def test_graph_status_literals_are_defined_only_in_status_conventions() -> None:
                 offenders.append(f"{path.relative_to(ROOT)} duplicates {snippet}")
 
     assert offenders == []
+
+
+def test_eval_criterion_status_literal_is_defined_only_in_evaluation_summary() -> None:
+    offenders: list[str] = []
+    snippet = 'EvalCriterionStatus=Literal["passed","failed","errored","skipped"]'
+    allowed = {
+        ROOT / "ergon_core/ergon_core/core/persistence/telemetry/evaluation_summary.py",
+    }
+
+    for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
+        if path in allowed:
+            continue
+        compact_text = "".join(path.read_text().split()).replace(",]", "]")
+        if snippet in compact_text:
+            offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
