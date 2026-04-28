@@ -1,4 +1,4 @@
-"""Track cumulative OpenRouter spend against a per-session budget.
+"""Track cumulative OpenRouter spend against a per-session test budget.
 
 Usage:
     budget = OpenRouterBudget(limit_usd=5.0, api_key=os.environ["OPENROUTER_API_KEY"])

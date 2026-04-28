@@ -45,7 +45,7 @@ Shipped (PR 1):
   flag, session fixtures wired.
 - `fixtures/stack.py` — docker-compose up/wait/down against the unified
   `docker-compose.yml`.
-- `fixtures/openrouter_budget.py` + `ergon_core/.../openrouter_budget.py`
+- `openrouter_budget.py` + `fixtures/openrouter_budget.py`
   — live spend check against `/api/v1/auth/key`.
 - `fixtures/harness_client.py` — polls
   `/api/test/read/run/{id}/state` for terminal status.
