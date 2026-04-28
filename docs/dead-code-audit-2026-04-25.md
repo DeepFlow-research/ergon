@@ -130,7 +130,7 @@ alternative control flow, not just unused helpers.
 | Area | File | Symbol / module | Current evidence | Decision | Why | Risk | Follow-up test/check |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Core utils | `core/utils.py` | `get_mime_type` | No repo-wide caller. | Delete | Small unused helper. | Low | Search after deletion. |
-| OpenRouter budget | `core/providers/generation/openrouter_budget.py` | `OpenRouterBudget` | Mostly referenced from tests/fixtures/benchmarks rather than active production modules. | Keep | Useful for real-LLM test budget gating. Not dead in the test harness context. | Low | None. |
+| OpenRouter budget | `tests/real_llm/openrouter_budget.py` | `OpenRouterBudget` | Referenced from real-LLM fixtures/benchmarks rather than active production modules. | Keep test-local | Useful for real-LLM test budget gating. Not part of core runtime. | Low | None. |
 | Dashboard emitter | `core/dashboard/emitter.py` | `_RunContextEvent` import | Vulture flags unused import. | Delete | Straight unused import cleanup. | Low | Run lint/type check. |
 | RL extraction | `core/rl/extraction.py` | `add_special_tokens` parameter on `Tokenizer.encode()` protocol | Vulture flags it, but it is part of a `Protocol` signature matching common tokenizer APIs. Callers intentionally use bare `tokenizer.encode(...)`. | Keep | Static-analysis false positive. The parameter documents compatibility with tokenizer implementations such as Hugging Face tokenizers. | Low | If vulture noise matters, suppress/allowlist instead of deleting the protocol parameter. |
 
