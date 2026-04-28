@@ -250,19 +250,15 @@ async def on_task_completed_or_failed(
     terminal_status: str,
     *,
     graph_repo: WorkflowGraphRepository,
-) -> tuple[list[UUID], list[UUID]]:
+) -> list[UUID]:
     """Handle a node reaching COMPLETED, FAILED, or CANCELLED.
 
-    Returns (newly_ready_node_ids, invalidated_target_node_ids).
+    Returns newly ready node IDs.
 
-    - COMPLETED: outgoing edges become SATISFIED; targets with all deps
-      satisfied become READY.
-    - FAILED / CANCELLED: outgoing edges become INVALIDATED.  For static
-      workflow nodes (parent_node_id is None), targets are auto-cancelled
-      and reported as invalidated.  For dynamic subtasks (parent_node_id
-      set), targets stay PENDING so the manager can adapt — the edge is
-      invalidated but the node is left for the manager to retry, cancel,
-      or re-plan via the subtask lifecycle tools.
+    - COMPLETED: outgoing edges become SATISFIED; targets with all dependencies
+      satisfied transition to PENDING for scheduling.
+    - FAILED / CANCELLED: outgoing edges become INVALIDATED; reachable successors
+      transition to BLOCKED unless they are RUNNING or terminal.
 
     Walks RunGraphEdge so it works for both static and dynamic tasks.
 
@@ -294,7 +290,6 @@ async def on_task_completed_or_failed(
     candidate_node_ids = {e.target_node_id for e in outgoing}
 
     newly_ready: list[UUID] = []
-    invalidated: list[UUID] = []
 
     if not is_success:
         await _block_successors_bfs(
@@ -306,7 +301,7 @@ async def on_task_completed_or_failed(
             graph_repo=graph_repo,
         )
         session.commit()
-        return newly_ready, invalidated
+        return newly_ready
 
     # SUCCESS PATH: source completed — check if candidates can become READY.
     for candidate_id in candidate_node_ids:
@@ -374,7 +369,7 @@ async def on_task_completed_or_failed(
             newly_ready.append(candidate_id)
 
     session.commit()
-    return newly_ready, invalidated
+    return newly_ready
 
 
 # ---------------------------------------------------------------------------

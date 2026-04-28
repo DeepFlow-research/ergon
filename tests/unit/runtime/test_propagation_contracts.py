@@ -2,6 +2,7 @@ from ergon_core.core.persistence.graph import status_conventions as graph_status
 from ergon_core.core.runtime.execution import propagation
 from ergon_core.core.runtime.services import task_execution_service, task_propagation_service
 from ergon_core.core.runtime.services import workflow_initialization_service
+from ergon_core.core.runtime.services.orchestration_dto import PropagationResult
 
 
 def _source(module: object) -> str:
@@ -32,3 +33,7 @@ def test_graph_writers_do_not_use_task_execution_status_for_node_status() -> Non
 
     assert offenders == []
     assert graph_status.READY == "ready"
+
+
+def test_propagation_result_does_not_expose_invalidated_targets() -> None:
+    assert "invalidated_targets" not in PropagationResult.model_fields

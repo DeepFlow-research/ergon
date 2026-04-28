@@ -30,11 +30,11 @@ class TaskPropagationService:
     """
 
     async def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
-        """Handle successful task completion: satisfy deps, cascade invalidations.
+        """Handle successful task completion: satisfy deps and schedule ready tasks.
 
-        Returns newly-ready tasks (for scheduling) and invalidated targets
-        (for emitting task/cancelled events). Uses the graph-native v2 path
-        which reads stored containment columns rather than edge traversal.
+        Returns newly-ready tasks for scheduling. Failure propagation blocks
+        downstream graph nodes in the database and does not emit cancellation
+        events from this contract.
         """
         with get_session() as session:
             graph_repo = WorkflowGraphRepository()
@@ -66,7 +66,7 @@ class TaskPropagationService:
                 only_if_not_terminal=True,
             )
 
-            newly_ready_node_ids, invalidated_node_ids = await on_task_completed_or_failed(
+            newly_ready_node_ids = await on_task_completed_or_failed(
                 session,
                 command.run_id,
                 node_id,
@@ -97,7 +97,6 @@ class TaskPropagationService:
                 definition_id=command.definition_id,
                 completed_task_id=command.task_id,
                 ready_tasks=ready_descriptors,
-                invalidated_targets=invalidated_node_ids,
                 workflow_terminal_state=terminal,
             )
 
@@ -137,10 +136,11 @@ class TaskPropagationService:
             session.commit()
 
     async def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
-        """Handle task failure: invalidate downstream deps, detect workflow terminal.
+        """Handle task failure: block downstream graph nodes, detect workflow terminal.
 
-        Unlike propagate(), never produces newly-ready tasks — a failed source
-        only invalidates outgoing edges and marks targets CANCELLED.
+        Unlike propagate(), never produces newly-ready tasks. A failed source
+        invalidates outgoing edges and transitions reachable successors to
+        BLOCKED unless they are RUNNING or terminal.
         """
         with get_session() as session:
             graph_repo = WorkflowGraphRepository()
@@ -150,7 +150,6 @@ class TaskPropagationService:
                 graph_lookup = GraphNodeLookup(session, command.run_id)
                 node_id = graph_lookup.node_id(command.task_id)
 
-            invalidated_node_ids: list[UUID] = []
             if node_id is not None:
                 # Mark the triggering node as FAILED before propagating edges.
                 await graph_repo.update_node_status(
@@ -165,7 +164,7 @@ class TaskPropagationService:
                     only_if_not_terminal=True,
                 )
 
-                _ready, invalidated_node_ids = await on_task_completed_or_failed(
+                await on_task_completed_or_failed(
                     session,
                     command.run_id,
                     node_id,
@@ -181,6 +180,5 @@ class TaskPropagationService:
                 run_id=command.run_id,
                 definition_id=command.definition_id,
                 completed_task_id=command.task_id,
-                invalidated_targets=invalidated_node_ids,
                 workflow_terminal_state=terminal,
             )
