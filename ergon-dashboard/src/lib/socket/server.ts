@@ -196,7 +196,7 @@ export function broadcastTaskStatus(
   status: TaskStatus,
   timestamp: string,
   assignedWorkerId: string | null,
-  assignedWorkerName: string | null
+  assignedWorkerSlug: string | null
 ): void {
   const io = getIO();
   io?.to(`run:${runId}`).emit("task:status", {
@@ -205,7 +205,7 @@ export function broadcastTaskStatus(
     status,
     timestamp,
     assignedWorkerId,
-    assignedWorkerName,
+    assignedWorkerSlug,
   });
 }
 

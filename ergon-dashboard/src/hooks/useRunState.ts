@@ -170,7 +170,7 @@ export function useRunState(
           ...task,
           status,
           assignedWorkerId: data.assignedWorkerId ?? task.assignedWorkerId,
-          assignedWorkerName: data.assignedWorkerName ?? task.assignedWorkerName,
+          assignedWorkerSlug: data.assignedWorkerSlug ?? task.assignedWorkerSlug,
           startedAt:
             status === TaskStatus.RUNNING && !task.startedAt
               ? data.timestamp
@@ -201,7 +201,7 @@ export function useRunState(
               attemptNumber: existingExecutions.length + 1,
               status: TaskStatus.RUNNING,
               agentId: data.assignedWorkerId,
-              agentName: data.assignedWorkerName,
+              agentName: data.assignedWorkerSlug,
               startedAt: data.timestamp,
               completedAt: null,
               finalAssistantMessage: null,
@@ -218,7 +218,7 @@ export function useRunState(
                     ...execution,
                     status: TaskStatus.RUNNING,
                     agentId: data.assignedWorkerId ?? execution.agentId,
-                    agentName: data.assignedWorkerName ?? execution.agentName,
+                    agentName: data.assignedWorkerSlug ?? execution.agentName,
                     startedAt: execution.startedAt ?? data.timestamp,
                   }
                 : execution,

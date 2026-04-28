@@ -193,7 +193,7 @@ const onTaskStatusChanged = inngest.createFunction(
       new_status,
       timestamp,
       assigned_worker_id,
-      assigned_worker_name,
+      assigned_worker_slug,
     } = payload;
 
     console.log("[Dashboard] Task status changed:", {
@@ -210,7 +210,7 @@ const onTaskStatusChanged = inngest.createFunction(
       new_status as TaskStatus,
       timestamp,
       assigned_worker_id ?? null,
-      assigned_worker_name ?? null
+      assigned_worker_slug ?? null
     );
 
     // Broadcast to run subscribers
@@ -220,7 +220,7 @@ const onTaskStatusChanged = inngest.createFunction(
       new_status as TaskStatus,
       timestamp,
       assigned_worker_id ?? null,
-      assigned_worker_name ?? null
+      assigned_worker_slug ?? null
     );
 
     return { success: true };

@@ -282,7 +282,7 @@ export function TaskWorkspace({
           )}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-[var(--muted)]">
-          <span>Worker: {task.assignedWorkerName ?? "—"}</span>
+          <span>Worker: {task.assignedWorkerSlug ?? "—"}</span>
           <span>Level: {task.level}</span>
           <span>Leaf task: {task.isLeaf ? "yes" : "no"}</span>
           <span>Attempts: {filteredEvidence.executions.length || 0}</span>
