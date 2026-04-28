@@ -7,8 +7,8 @@ nothing else.  ``execute`` is ``@final`` so subclasses cannot alter the
 override hook so the sad-path subclass can send one slug to a failing
 leaf without touching topology.
 
-Parent yields 3 ``GenerationTurn`` objects (planning → planned →
-awaiting) so every smoke run exercises the incremental turn persistence
+Parent yields 3 ``ContextPartChunk`` objects (planning → planned →
+awaiting) so every smoke run exercises the incremental chunk persistence
 path at realistic volume.  See
 ``docs/superpowers/plans/test-refactor/01-fixtures.md §2.3``.
 """
@@ -18,7 +18,7 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar, final
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.core.generation import GenerationTurn, TextPart
+from ergon_core.core.generation import AssistantTextPart, ContextPartChunk
 from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
@@ -57,7 +57,7 @@ class SmokeWorkerBase(Worker):
     # by default.
     leaf_slug: ClassVar[str]
 
-    # Driver asserts per-run GenerationTurn count against this constant
+    # Driver asserts per-run context chunk count against this constant
     # (see tests/e2e/_asserts.py ``_assert_run_turn_counts``).
     PARENT_TURN_COUNT: ClassVar[int] = 3
 
@@ -71,20 +71,18 @@ class SmokeWorkerBase(Worker):
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
+    ) -> AsyncGenerator[ContextPartChunk, None]:
         if context.node_id is None:
             raise ValueError(f"{type(self).__name__} requires context.node_id")
 
         # --- Turn 1: planning announcement (pre-service-call) -------------
-        yield GenerationTurn(
-            response_parts=[
-                TextPart(
-                    content=(
-                        f"{type(self).__name__}: planning 9 subtasks "
-                        f"(diamond+line+singletons) → leaf slug={self.leaf_slug}"
-                    ),
+        yield ContextPartChunk(
+            part=AssistantTextPart(
+                content=(
+                    f"{type(self).__name__}: planning 9 subtasks "
+                    f"(diamond+line+singletons) → leaf slug={self.leaf_slug}"
                 ),
-            ],
+            ),
         )
 
         # Per-slug spec construction goes through ``_spec_for`` so sad-path
@@ -106,27 +104,23 @@ class SmokeWorkerBase(Worker):
             f"{slug}: planned (node_id={result.nodes[TaskSlug(slug)]})"
             for slug, _deps, _desc in SUBTASK_GRAPH
         )
-        yield GenerationTurn(
-            response_parts=[
-                TextPart(
-                    content=(
-                        f"{type(self).__name__}: 9 subtasks planned "
-                        f"(roots={sorted(result.roots)}):\n{summary}"
-                    ),
+        yield ContextPartChunk(
+            part=AssistantTextPart(
+                content=(
+                    f"{type(self).__name__}: 9 subtasks planned "
+                    f"(roots={sorted(result.roots)}):\n{summary}"
                 ),
-            ],
+            ),
         )
 
         # --- Turn 3: awaiting children (terminal) -------------------------
-        yield GenerationTurn(
-            response_parts=[
-                TextPart(
-                    content=(
-                        f"{type(self).__name__}: awaiting 9 children — "
-                        "runtime will mark parent COMPLETED once wait_all resolves"
-                    ),
+        yield ContextPartChunk(
+            part=AssistantTextPart(
+                content=(
+                    f"{type(self).__name__}: awaiting 9 children — "
+                    "runtime will mark parent COMPLETED once wait_all resolves"
                 ),
-            ],
+            ),
         )
 
         # Poll until every direct child has reached a terminal status.

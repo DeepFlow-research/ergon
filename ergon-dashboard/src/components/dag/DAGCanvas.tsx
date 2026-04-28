@@ -305,7 +305,7 @@ function DAGCanvasInner({
       if (
         task.name.toLowerCase().includes(searchLower) ||
         task.description?.toLowerCase().includes(searchLower) ||
-        task.assignedWorkerName?.toLowerCase().includes(searchLower)
+        task.assignedWorkerSlug?.toLowerCase().includes(searchLower)
       ) {
         count++;
       }

@@ -8,9 +8,11 @@ run_id is expected. The aliases are erased at runtime (zero
 serialization cost).
 """
 
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
+from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.persistence.shared.types import (
@@ -56,6 +58,19 @@ class GraphNodeDto(BaseModel):
     level: int
 
 
+class GraphTaskRef(BaseModel):
+    """Lightweight task-node reference for workflow/tool projections."""
+
+    model_config = {"frozen": True}
+
+    node_id: NodeId
+    task_slug: str
+    status: NodeStatus
+    level: int
+    parent_node_id: NodeId | None = None
+    assigned_worker_slug: str | None = None
+
+
 class GraphEdgeDto(BaseModel):
     model_config = {"frozen": True}
 
@@ -89,7 +104,9 @@ class GraphAnnotationDto(BaseModel):
     payload: JsonObject
 
 
-class GraphMutationDto(BaseModel):
+class GraphMutationRecordDto(BaseModel):
+    """Append-only graph mutation record with a typed mutation payload."""
+
     model_config = {"frozen": True}
 
     id: UUID = Field(description="Identifier of the mutation row itself, not a graph target id.")
@@ -107,6 +124,7 @@ class GraphMutationDto(BaseModel):
     old_value: "GraphMutationValue | None"
     new_value: "GraphMutationValue"
     reason: str | None
+    created_at: datetime
 
 
 class WorkflowGraphDto(BaseModel):
@@ -175,8 +193,8 @@ class EdgeAddedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["edge.added"] = "edge.added"
-    source_node_id: str
-    target_node_id: str
+    source_node_id: NodeId
+    target_node_id: NodeId
     status: str
 
 
@@ -186,8 +204,8 @@ class EdgeRemovedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["edge.removed"] = "edge.removed"
-    source_node_id: str
-    target_node_id: str
+    source_node_id: NodeId
+    target_node_id: NodeId
     status: str
 
 

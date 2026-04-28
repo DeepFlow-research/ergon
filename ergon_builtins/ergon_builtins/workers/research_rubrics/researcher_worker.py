@@ -10,7 +10,7 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.generation import GenerationTurn
+from ergon_core.core.generation import ContextPartChunk
 from ergon_core.core.runtime.resources import RunResourceView
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
@@ -117,7 +117,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
+    ) -> AsyncGenerator[ContextPartChunk, None]:
         manager = ResearchRubricsSandboxManager()
 
         model_run_skill = make_run_skill(model=self.model)
@@ -158,8 +158,8 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         )
         self.tools = [*rr_tools, *graph_tools]
 
-        async for turn in super().execute(task, context=context):
-            yield turn
+        async for chunk in super().execute(task, context=context):
+            yield chunk
 
     async def _run_sandbox_report_skill(
         self,

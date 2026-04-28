@@ -8,7 +8,12 @@ from typing import Any, Self
 from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerOutput
-from ergon_core.core.generation import GenerationTurn
+from ergon_core.core.generation import (
+    AssistantTextPart,
+    ContextPartChunk,
+    ThinkingPart,
+    ToolCallPart,
+)
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.shared.db import get_session
 from pydantic import BaseModel
@@ -36,8 +41,8 @@ class _AgentOutput(BaseModel):
 class ReActWorker(Worker):
     """ReAct-style worker that delegates to a pydantic-ai Agent.
 
-    Yields ``GenerationTurn`` objects after the run completes. Each
-    yielded turn is persisted to PG by the runtime.
+    Yields ``ContextPartChunk`` objects as the PydanticAI transcript grows. Each
+    yielded chunk is enriched and persisted by the runtime.
 
     All wiring (tool list, system prompt, iteration budget) is supplied
     at construction time — the worker is framework-agnostic. Registry
@@ -69,9 +74,9 @@ class ReActWorker(Worker):
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
-        async for turn in self._run_agent(task, context):
-            yield turn
+    ) -> AsyncGenerator[ContextPartChunk, None]:
+        async for chunk in self._run_agent(task, context):
+            yield chunk
 
     def build_agent_deps(
         self, context: WorkerContext
@@ -82,8 +87,8 @@ class ReActWorker(Worker):
         self,
         task: BenchmarkTask,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
-        """Run the underlying pydantic-ai agent and yield the turns it produced."""
+    ) -> AsyncGenerator[ContextPartChunk, None]:
+        """Run the underlying pydantic-ai agent and yield the chunks it produced."""
         resolved = resolve_model_target(self.model)
         configure_pydantic_ai_logfire()
         agent_deps = self.build_agent_deps(context)
@@ -113,43 +118,43 @@ class ReActWorker(Worker):
                 run = active_run
                 async for _node in run:
                     node_count += 1
-                    for turn in adapter.build_new_turns(
+                    for chunk in adapter.build_new_chunks(
                         run.ctx.state.message_history,
                         cursor,
                         flush_pending=False,
                     ):
-                        yield turn
+                        yield chunk
                     if node_count >= self.max_iterations:
                         logger.warning(
                             "ReActWorker hit max_iterations=%d; persisting partial turns",
                             self.max_iterations,
                         )
-                        for turn in adapter.build_new_turns(
+                        for chunk in adapter.build_new_chunks(
                             run.ctx.state.message_history,
                             cursor,
                             flush_pending=True,
                         ):
-                            yield turn
+                            yield chunk
                         raise RuntimeError(
                             f"ReActWorker exceeded max_iterations={self.max_iterations}"
                         )
         except Exception:  # slopcop: ignore[no-broad-except]
             if run is not None:
-                for turn in adapter.build_new_turns(
+                for chunk in adapter.build_new_chunks(
                     run.ctx.state.message_history,
                     cursor,
                     flush_pending=True,
                 ):
-                    yield turn
+                    yield chunk
             raise
 
         if run is not None:
-            for turn in adapter.build_new_turns(
+            for chunk in adapter.build_new_chunks(
                 run.ctx.state.message_history,
                 cursor,
                 flush_pending=True,
             ):
-                yield turn
+                yield chunk
 
     def get_output(self, context: WorkerContext) -> WorkerOutput:
         """Extract the agent's text output from the last context event."""
@@ -157,13 +162,6 @@ class ReActWorker(Worker):
 
     def _base_output(self, context: WorkerContext) -> WorkerOutput:
         """Build the worker's output from persisted context events."""
-        # reason: avoid circular import at module level
-        from ergon_core.core.persistence.context.event_payloads import (
-            AssistantTextPayload,
-            ThinkingPayload,
-            ToolCallPayload,
-        )
-
         with get_session() as session:
             repo = ContextEventRepository()
             events = repo.get_for_execution(session, context.execution_id)
@@ -171,12 +169,14 @@ class ReActWorker(Worker):
         turn_ids: set[str] = set()
         for e in events:
             payload = e.parsed_payload()
-            if isinstance(payload, (AssistantTextPayload, ToolCallPayload, ThinkingPayload)):
+            if isinstance(payload.part, (AssistantTextPart, ToolCallPart, ThinkingPart)):
+                if payload.turn_id is None:
+                    continue
                 turn_ids.add(payload.turn_id)
 
         text_events = [e for e in events if e.event_type == "assistant_text"]
         if not text_events:
-            output = _latest_final_result_message(events, ToolCallPayload)
+            output = _latest_final_result_message(events)
             if not output:
                 return WorkerOutput(output="", success=False)
             return WorkerOutput(
@@ -185,10 +185,10 @@ class ReActWorker(Worker):
                 metadata={"turn_count": len(turn_ids)},
             )
         last = text_events[-1].parsed_payload()
-        if not isinstance(last, AssistantTextPayload):
-            raise ValueError(f"Expected AssistantTextPayload, got {type(last)}")
+        if not isinstance(last.part, AssistantTextPart):
+            raise ValueError(f"Expected AssistantTextPart, got {type(last.part)}")
         return WorkerOutput(
-            output=last.text,
+            output=last.part.content,
             success=True,
             metadata={"turn_count": len(turn_ids)},
         )
@@ -221,7 +221,6 @@ def _format_task(task: BenchmarkTask) -> str:
 
 def _latest_final_result_message(
     events: list[Any],  # slopcop: ignore[no-typing-any]
-    payload_type: type[Any],  # slopcop: ignore[no-typing-any]
 ) -> str:
     """Extract fallback text from the latest ``final_result`` tool call."""
     messages: list[str] = []
@@ -233,7 +232,8 @@ def _latest_final_result_message(
         if event_type != "tool_call":
             continue
         payload = event.parsed_payload()
-        if not isinstance(payload, payload_type) or payload.tool_name != "final_result":
+        part = payload.part
+        if not isinstance(part, ToolCallPart) or part.tool_name != "final_result":
             continue
-        messages.append(str(payload.args.get("final_assistant_message", "")))
+        messages.append(str(part.args.get("final_assistant_message", "")))
     return messages[-1] if messages else ""

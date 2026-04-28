@@ -1,58 +1,43 @@
-"""State tests for context event assembly → PydanticAI message history.
-
-Tests the PydanticAITranscriptAdapter assemble_replay method using RunContextEvent
-instances built directly (no DB round-trip needed for pure logic tests).
-"""
+"""State tests for context event assembly -> PydanticAI message history."""
 
 from uuid import uuid4
 
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
-from ergon_core.core.persistence.context.event_payloads import (
-    AssistantTextPayload,
-    SystemPromptPayload,
-    ThinkingPayload,
-    ToolCallPayload,
-    ToolResultPayload,
-    UserMessagePayload,
+from ergon_core.core.generation import (
+    AssistantTextPart,
+    ContextPartChunkLog,
+    SystemPromptPart,
+    ThinkingPart,
+    ToolCallPart,
+    ToolResultPart,
+    UserMessagePart,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
-from pydantic_ai.messages import (
-    ModelRequest,
-    ModelResponse,
-)
-from pydantic_ai.messages import (
-    SystemPromptPart as PydanticSystemPromptPart,
-)
-from pydantic_ai.messages import (
-    TextPart as PydanticTextPart,
-)
-from pydantic_ai.messages import (
-    ThinkingPart as PydanticThinkingPart,
-)
-from pydantic_ai.messages import (
-    ToolCallPart as PydanticToolCallPart,
-)
-from pydantic_ai.messages import (
-    ToolReturnPart as PydanticToolReturnPart,
-)
-from pydantic_ai.messages import (
-    UserPromptPart as PydanticUserPromptPart,
-)
+from pydantic_ai.messages import ModelRequest, ModelResponse
+from pydantic_ai.messages import SystemPromptPart as PydanticSystemPromptPart
+from pydantic_ai.messages import TextPart as PydanticTextPart
+from pydantic_ai.messages import ThinkingPart as PydanticThinkingPart
+from pydantic_ai.messages import ToolCallPart as PydanticToolCallPart
+from pydantic_ai.messages import ToolReturnPart as PydanticToolReturnPart
 
 
 def assemble_pydantic_ai_messages(events: list[RunContextEvent]):
     return PydanticAITranscriptAdapter().assemble_replay(events)
 
 
-def _make_event(event_type: str, payload, sequence: int) -> RunContextEvent:
-    run_id = uuid4()
-    exec_id = uuid4()
+def _make_event(part, sequence: int, turn_id: str | None = None) -> RunContextEvent:
+    payload = ContextPartChunkLog(
+        part=part,
+        sequence=sequence,
+        worker_binding_key="test-worker",
+        turn_id=turn_id,
+    )
     return RunContextEvent(
-        run_id=run_id,
-        task_execution_id=exec_id,
+        run_id=uuid4(),
+        task_execution_id=uuid4(),
         worker_binding_key="test-worker",
         sequence=sequence,
-        event_type=event_type,
+        event_type=part.part_kind,
         payload=payload.model_dump(mode="json"),
     )
 
@@ -60,13 +45,9 @@ def _make_event(event_type: str, payload, sequence: int) -> RunContextEvent:
 class TestAssembleSimpleConversation:
     def test_system_and_user_become_model_request(self):
         events = [
-            _make_event("system_prompt", SystemPromptPayload(text="You are helpful."), 0),
-            _make_event("user_message", UserMessagePayload(text="Hello"), 1),
-            _make_event(
-                "assistant_text",
-                AssistantTextPayload(text="Hi!", turn_id="t1"),
-                2,
-            ),
+            _make_event(SystemPromptPart(content="You are helpful."), 0),
+            _make_event(UserMessagePart(content="Hello"), 1),
+            _make_event(AssistantTextPart(content="Hi!"), 2, turn_id="t1"),
         ]
 
         messages = assemble_pydantic_ai_messages(events)
@@ -93,66 +74,44 @@ class TestAssembleSimpleConversation:
 
 class TestAssembleWithToolCall:
     def test_tool_call_in_response_and_tool_result_in_next_request(self):
-        tool_turn_id = "t1"
         events = [
-            _make_event("system_prompt", SystemPromptPayload(text="sys"), 0),
-            _make_event("user_message", UserMessagePayload(text="use tool"), 1),
+            _make_event(SystemPromptPart(content="sys"), 0),
+            _make_event(UserMessagePart(content="use tool"), 1),
             _make_event(
-                "tool_call",
-                ToolCallPayload(
+                ToolCallPart(
                     tool_call_id="call-1",
                     tool_name="my_tool",
                     args={"x": 1},
-                    turn_id=tool_turn_id,
                 ),
                 2,
+                turn_id="t1",
             ),
             _make_event(
-                "tool_result",
-                ToolResultPayload(
-                    tool_call_id="call-1",
-                    tool_name="my_tool",
-                    result="42",
-                ),
+                ToolResultPart(tool_call_id="call-1", tool_name="my_tool", content="42"),
                 3,
             ),
-            _make_event(
-                "assistant_text",
-                AssistantTextPayload(text="The answer is 42.", turn_id="t2"),
-                4,
-            ),
+            _make_event(AssistantTextPart(content="The answer is 42."), 4, turn_id="t2"),
         ]
 
         messages = assemble_pydantic_ai_messages(events)
 
-        # 3 messages: initial request, tool-call response, tool-result+continuation request
-        # But the last assistant_text has no following tool_result, so it's a trailing response
-        # Expected structure:
-        # [0] ModelRequest(system_prompt, user_message)
-        # [1] ModelResponse(tool_call)
-        # [2] ModelRequest(tool_return)  <- tool_result flushes response and opens request
-        # [3] ModelResponse(assistant_text)  <- trailing response flushed at end
         assert len(messages) == 4
-
         assert isinstance(messages[0], ModelRequest)
         assert isinstance(messages[1], ModelResponse)
         assert isinstance(messages[2], ModelRequest)
         assert isinstance(messages[3], ModelResponse)
 
-        # Check tool call part
         tool_call_parts = [p for p in messages[1].parts if isinstance(p, PydanticToolCallPart)]
         assert len(tool_call_parts) == 1
         assert tool_call_parts[0].tool_name == "my_tool"
         assert tool_call_parts[0].tool_call_id == "call-1"
 
-        # Check tool return part
         tool_return_parts = [p for p in messages[2].parts if isinstance(p, PydanticToolReturnPart)]
         assert len(tool_return_parts) == 1
         assert tool_return_parts[0].tool_call_id == "call-1"
         assert tool_return_parts[0].tool_name == "my_tool"
         assert tool_return_parts[0].content == "42"
 
-        # Check final text response
         text_parts = [p for p in messages[3].parts if isinstance(p, PydanticTextPart)]
         assert len(text_parts) == 1
         assert text_parts[0].content == "The answer is 42."
@@ -161,17 +120,9 @@ class TestAssembleWithToolCall:
 class TestAssembleWithThinking:
     def test_thinking_appears_in_model_response(self):
         events = [
-            _make_event("user_message", UserMessagePayload(text="hard question"), 0),
-            _make_event(
-                "thinking",
-                ThinkingPayload(text="let me think...", turn_id="t1"),
-                1,
-            ),
-            _make_event(
-                "assistant_text",
-                AssistantTextPayload(text="42", turn_id="t1"),
-                2,
-            ),
+            _make_event(UserMessagePart(content="hard question"), 0),
+            _make_event(ThinkingPart(content="let me think..."), 1, turn_id="t1"),
+            _make_event(AssistantTextPart(content="42"), 2, turn_id="t1"),
         ]
 
         messages = assemble_pydantic_ai_messages(events)
@@ -191,12 +142,8 @@ class TestAssembleWithThinking:
 class TestAssembleTrailingResponse:
     def test_trailing_response_without_tool_result_is_flushed(self):
         events = [
-            _make_event("user_message", UserMessagePayload(text="q"), 0),
-            _make_event(
-                "assistant_text",
-                AssistantTextPayload(text="a", turn_id="t1"),
-                1,
-            ),
+            _make_event(UserMessagePart(content="q"), 0),
+            _make_event(AssistantTextPart(content="a"), 1, turn_id="t1"),
         ]
 
         messages = assemble_pydantic_ai_messages(events)
@@ -207,11 +154,10 @@ class TestAssembleTrailingResponse:
 
     def test_request_only_produces_no_assembled_messages(self):
         events = [
-            _make_event("system_prompt", SystemPromptPayload(text="sys"), 0),
-            _make_event("user_message", UserMessagePayload(text="hi"), 1),
+            _make_event(SystemPromptPart(content="sys"), 0),
+            _make_event(UserMessagePart(content="hi"), 1),
         ]
 
-        # A request without a paired response event yields no assembled messages.
         messages = assemble_pydantic_ai_messages(events)
         assert messages == []
 
@@ -219,12 +165,8 @@ class TestAssembleTrailingResponse:
 class TestSystemPromptPartType:
     def test_system_prompt_is_pydantic_system_prompt_part(self):
         events = [
-            _make_event("system_prompt", SystemPromptPayload(text="Be helpful."), 0),
-            _make_event(
-                "assistant_text",
-                AssistantTextPayload(text="ok", turn_id="t1"),
-                1,
-            ),
+            _make_event(SystemPromptPart(content="Be helpful."), 0),
+            _make_event(AssistantTextPart(content="ok"), 1, turn_id="t1"),
         ]
 
         messages = assemble_pydantic_ai_messages(events)

@@ -10,8 +10,8 @@ from ergon_core.core.json_types import JsonObject
 class WorkerOutput(BaseModel):
     """Final output of a worker execution.
 
-    The worker's ``execute()`` async generator yields ``GenerationTurn``
-    objects (persisted individually to PG). After the generator exhausts,
+    The worker's ``execute()`` async generator yields ``ContextPartChunk``
+    objects (enriched and persisted individually). After the generator exhausts,
     ``Worker.get_output()`` returns this model with the execution summary.
     """
 

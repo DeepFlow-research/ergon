@@ -11,7 +11,6 @@ from ergon_core.core.api.schemas import (
     RunContextEventDto,
     RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
-    RunGraphMutationDto,
     RunResourceDto,
     RunSandboxCommandDto,
     RunSandboxDto,
@@ -39,6 +38,7 @@ from ergon_core.core.persistence.telemetry.models import (
     TrainingMetric,
     TrainingSession,
 )
+from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
 from ergon_core.core.runtime.services.run_read_service import RunReadService
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -89,7 +89,7 @@ def _build_task_map(
             is_leaf=True,
             level=node.level,
             assigned_worker_id=str(worker.id) if worker else None,
-            assigned_worker_name=node.assigned_worker_slug,
+            assigned_worker_slug=node.assigned_worker_slug,
             started_at=started_at,
             completed_at=completed_at,
         )
@@ -381,16 +381,17 @@ def _context_events_by_task(
             continue
         context_events_by_task[str(task_node_id)].append(
             RunContextEventDto(
-                id=str(event.id),
-                task_execution_id=str(event.task_execution_id),
-                task_node_id=str(task_node_id),
+                id=event.id,
+                run_id=event.run_id,
+                task_execution_id=event.task_execution_id,
+                task_node_id=task_node_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
                 event_type=event.event_type,
-                payload=event.payload,
-                created_at=event.created_at.isoformat(),
-                started_at=event.started_at.isoformat() if event.started_at else None,
-                completed_at=event.completed_at.isoformat() if event.completed_at else None,
+                payload=event.parsed_payload(),
+                created_at=event.created_at,
+                started_at=event.started_at,
+                completed_at=event.completed_at,
             )
         )
     return dict(context_events_by_task)
@@ -424,8 +425,8 @@ def get_run(run_id: UUID) -> RunSnapshotDto:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{run_id}/mutations", response_model=list[RunGraphMutationDto])
-def get_mutations(run_id: UUID) -> list[RunGraphMutationDto]:
+@router.get("/{run_id}/mutations", response_model=list[GraphMutationRecordDto])
+def get_mutations(run_id: UUID) -> list[GraphMutationRecordDto]:
     """Return the append-only mutation log for a run, ordered by sequence.
 
     Used by the Timeline scrubber to replay DAG state at any point in time.

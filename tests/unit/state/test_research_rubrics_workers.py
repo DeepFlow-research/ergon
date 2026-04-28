@@ -25,7 +25,7 @@ from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
     _WORKFLOW_PROMPT,
     ResearchRubricsWorkflowCliReActWorker,
 )
-from ergon_core.core.generation import GenerationTurn
+from ergon_core.core.generation import ContextPartChunk
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 
@@ -230,7 +230,7 @@ class TestResearcherWorker:
 # ---------------------------------------------------------------------------
 
 
-async def _empty_gen() -> AsyncGenerator[GenerationTurn, None]:
+async def _empty_gen() -> AsyncGenerator[ContextPartChunk, None]:
     return
     yield  # type: ignore[misc]  # makes this a generator
 

@@ -11,7 +11,7 @@ Leaf execution:
   3. Post a one-line completion message to the shared
      ``smoke-completion`` thread so the driver can assert on message
      ordering + thread-FK integrity.
-  4. Yield 2 ``GenerationTurn`` objects (attach → done).
+  4. Yield 2 ``ContextPartChunk`` objects (attach → done).
 
 Sad-path leaves (``AlwaysFailSubworker`` in Phase C) raise inside
 ``subworker.work()``, so they never reach ``_send_completion_message``
@@ -25,7 +25,7 @@ from typing import ClassVar
 from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.core.generation import GenerationTurn, TextPart
+from ergon_core.core.generation import AssistantTextPart, ContextPartChunk
 from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
@@ -49,7 +49,7 @@ class BaseSmokeLeafWorker(Worker):
     # leaf's ``execute`` instantiates ``subworker_cls()`` and delegates.
     subworker_cls: ClassVar[type[SmokeSubworker]]
 
-    # Driver asserts per-leaf GenerationTurn count against this constant.
+    # Driver asserts per-leaf context chunk count against this constant.
     # Sad-path leaves that raise inside subworker.work() emit fewer turns
     # (only the first 'attaching' turn) and are skipped from the strict
     # equality check on the sad run.
@@ -71,19 +71,17 @@ class BaseSmokeLeafWorker(Worker):
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
+    ) -> AsyncGenerator[ContextPartChunk, None]:
         node_hex = context.node_id.hex[:8] if context.node_id else "unknown"
 
         # --- Turn 1: attaching + starting ---------------------------------
-        yield GenerationTurn(
-            response_parts=[
-                TextPart(
-                    content=(
-                        f"{type(self).__name__}: attaching to sandbox "
-                        f"{context.sandbox_id} for node={node_hex}"
-                    ),
+        yield ContextPartChunk(
+            part=AssistantTextPart(
+                content=(
+                    f"{type(self).__name__}: attaching to sandbox "
+                    f"{context.sandbox_id} for node={node_hex}"
                 ),
-            ],
+            ),
         )
 
         raw_sandbox = await SmokeSandboxManager().reconnect(context.sandbox_id)
@@ -104,15 +102,13 @@ class BaseSmokeLeafWorker(Worker):
         await self._send_completion_message(context, result)
 
         # --- Turn 2: done + result summary --------------------------------
-        yield GenerationTurn(
-            response_parts=[
-                TextPart(
-                    content=(
-                        f"{type(self).__name__}: done node={node_hex} "
-                        f"file={result.file_path} probe_exit={result.probe_exit_code}"
-                    ),
+        yield ContextPartChunk(
+            part=AssistantTextPart(
+                content=(
+                    f"{type(self).__name__}: done node={node_hex} "
+                    f"file={result.file_path} probe_exit={result.probe_exit_code}"
                 ),
-            ],
+            ),
         )
 
     def get_output(self, context: WorkerContext) -> WorkerOutput:

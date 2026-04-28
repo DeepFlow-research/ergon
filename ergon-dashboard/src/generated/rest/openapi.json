@@ -78,7 +78,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/RunGraphMutationDto"
+                    "$ref": "#/components/schemas/GraphMutationRecordDto"
                   },
                   "title": "Response Get Mutations Runs  Run Id  Mutations Get"
                 }
@@ -727,6 +727,61 @@
         "title": "AnnotationSetMutation",
         "description": "annotation.set."
       },
+      "AssistantTextPayload": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "const": "assistant_text",
+            "title": "Event Type",
+            "default": "assistant_text"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "turn_id": {
+            "type": "string",
+            "title": "Turn Id",
+            "description": "Generation turn identifier that groups model-output events from the same single synchronous agent run."
+          },
+          "turn_token_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Token Ids",
+            "description": "Token ids for the generation turn. Present only on the first model-output event so sibling events can share the turn-level token stream."
+          },
+          "turn_logprobs": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TokenLogprob"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Logprobs",
+            "description": "Token logprobs for the generation turn. Present only on the first model-output event so sibling events can share the turn-level logprob stream."
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "turn_id"
+        ],
+        "title": "AssistantTextPayload"
+      },
       "BatchStatus": {
         "type": "string",
         "enum": [
@@ -1111,10 +1166,12 @@
           },
           "source_node_id": {
             "type": "string",
+            "format": "uuid",
             "title": "Source Node Id"
           },
           "target_node_id": {
             "type": "string",
+            "format": "uuid",
             "title": "Target Node Id"
           },
           "status": {
@@ -1141,10 +1198,12 @@
           },
           "source_node_id": {
             "type": "string",
+            "format": "uuid",
             "title": "Source Node Id"
           },
           "target_node_id": {
             "type": "string",
+            "format": "uuid",
             "title": "Target Node Id"
           },
           "status": {
@@ -1208,6 +1267,189 @@
           "archived"
         ],
         "title": "ExperimentCohortStatus"
+      },
+      "GraphMutationRecordDto": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id",
+            "description": "Identifier of the mutation row itself, not a graph target id."
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "mutation_type": {
+            "type": "string",
+            "enum": [
+              "node.added",
+              "node.removed",
+              "node.status_changed",
+              "node.field_changed",
+              "edge.added",
+              "edge.removed",
+              "edge.status_changed",
+              "annotation.set",
+              "annotation.deleted"
+            ],
+            "title": "Mutation Type"
+          },
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge"
+            ],
+            "title": "Target Type"
+          },
+          "target_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Id",
+            "description": "Polymorphic mutation target identifier. Interpreted as a NodeId, EdgeId, or annotation id based on target_type and mutation_type."
+          },
+          "actor": {
+            "type": "string",
+            "title": "Actor"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/NodeAddedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NodeRemovedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NodeStatusChangedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/NodeFieldChangedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EdgeAddedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EdgeRemovedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EdgeStatusChangedMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AnnotationSetMutation"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AnnotationDeletedMutation"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "mutation_type",
+                  "mapping": {
+                    "annotation.deleted": "#/components/schemas/AnnotationDeletedMutation",
+                    "annotation.set": "#/components/schemas/AnnotationSetMutation",
+                    "edge.added": "#/components/schemas/EdgeAddedMutation",
+                    "edge.removed": "#/components/schemas/EdgeRemovedMutation",
+                    "edge.status_changed": "#/components/schemas/EdgeStatusChangedMutation",
+                    "node.added": "#/components/schemas/NodeAddedMutation",
+                    "node.field_changed": "#/components/schemas/NodeFieldChangedMutation",
+                    "node.removed": "#/components/schemas/NodeRemovedMutation",
+                    "node.status_changed": "#/components/schemas/NodeStatusChangedMutation"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          },
+          "new_value": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NodeAddedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/NodeRemovedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/NodeStatusChangedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/NodeFieldChangedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/EdgeAddedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/EdgeRemovedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/EdgeStatusChangedMutation"
+              },
+              {
+                "$ref": "#/components/schemas/AnnotationSetMutation"
+              },
+              {
+                "$ref": "#/components/schemas/AnnotationDeletedMutation"
+              }
+            ],
+            "title": "New Value",
+            "discriminator": {
+              "propertyName": "mutation_type",
+              "mapping": {
+                "annotation.deleted": "#/components/schemas/AnnotationDeletedMutation",
+                "annotation.set": "#/components/schemas/AnnotationSetMutation",
+                "edge.added": "#/components/schemas/EdgeAddedMutation",
+                "edge.removed": "#/components/schemas/EdgeRemovedMutation",
+                "edge.status_changed": "#/components/schemas/EdgeStatusChangedMutation",
+                "node.added": "#/components/schemas/NodeAddedMutation",
+                "node.field_changed": "#/components/schemas/NodeFieldChangedMutation",
+                "node.removed": "#/components/schemas/NodeRemovedMutation",
+                "node.status_changed": "#/components/schemas/NodeStatusChangedMutation"
+              }
+            }
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "sequence",
+          "mutation_type",
+          "target_type",
+          "target_id",
+          "actor",
+          "old_value",
+          "new_value",
+          "reason",
+          "created_at"
+        ],
+        "title": "GraphMutationRecordDto",
+        "description": "Append-only graph mutation record with a typed mutation payload."
       },
       "HTTPValidationError": {
         "properties": {
@@ -1615,14 +1857,22 @@
         "properties": {
           "id": {
             "type": "string",
+            "format": "uuid",
             "title": "Id"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Runid"
           },
           "taskExecutionId": {
             "type": "string",
+            "format": "uuid",
             "title": "Taskexecutionid"
           },
           "taskNodeId": {
             "type": "string",
+            "format": "uuid",
             "title": "Tasknodeid"
           },
           "workerBindingKey": {
@@ -1635,21 +1885,60 @@
           },
           "eventType": {
             "type": "string",
+            "enum": [
+              "system_prompt",
+              "user_message",
+              "assistant_text",
+              "tool_call",
+              "tool_result",
+              "thinking"
+            ],
             "title": "Eventtype"
           },
           "payload": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Payload"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SystemPromptPayload"
+              },
+              {
+                "$ref": "#/components/schemas/UserMessagePayload"
+              },
+              {
+                "$ref": "#/components/schemas/AssistantTextPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ToolCallPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ToolResultPayload"
+              },
+              {
+                "$ref": "#/components/schemas/ThinkingPayload"
+              }
+            ],
+            "title": "Payload",
+            "discriminator": {
+              "propertyName": "event_type",
+              "mapping": {
+                "assistant_text": "#/components/schemas/AssistantTextPayload",
+                "system_prompt": "#/components/schemas/SystemPromptPayload",
+                "thinking": "#/components/schemas/ThinkingPayload",
+                "tool_call": "#/components/schemas/ToolCallPayload",
+                "tool_result": "#/components/schemas/ToolResultPayload",
+                "user_message": "#/components/schemas/UserMessagePayload"
+              }
+            }
           },
           "createdAt": {
             "type": "string",
+            "format": "date-time",
             "title": "Createdat"
           },
           "startedAt": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "date-time"
               },
               {
                 "type": "null"
@@ -1660,7 +1949,8 @@
           "completedAt": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "format": "date-time"
               },
               {
                 "type": "null"
@@ -1673,6 +1963,7 @@
         "type": "object",
         "required": [
           "id",
+          "runId",
           "taskExecutionId",
           "taskNodeId",
           "workerBindingKey",
@@ -1700,6 +1991,10 @@
           "criterionNum": {
             "type": "integer",
             "title": "Criterionnum"
+          },
+          "criterionSlug": {
+            "type": "string",
+            "title": "Criterionslug"
           },
           "criterionType": {
             "type": "string",
@@ -1801,6 +2096,18 @@
             "type": "array",
             "title": "Evaluatedresourceids"
           },
+          "observation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation"
+          },
           "error": {
             "anyOf": [
               {
@@ -1821,6 +2128,7 @@
           "stageNum",
           "stageName",
           "criterionNum",
+          "criterionSlug",
           "criterionType",
           "criterionDescription",
           "criterionName",
@@ -1959,169 +2267,6 @@
           "status"
         ],
         "title": "RunExecutionAttemptDto"
-      },
-      "RunGraphMutationDto": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "run_id": {
-            "type": "string",
-            "title": "Run Id"
-          },
-          "sequence": {
-            "type": "integer",
-            "title": "Sequence"
-          },
-          "mutation_type": {
-            "type": "string",
-            "title": "Mutation Type"
-          },
-          "target_type": {
-            "type": "string",
-            "title": "Target Type"
-          },
-          "target_id": {
-            "type": "string",
-            "title": "Target Id"
-          },
-          "actor": {
-            "type": "string",
-            "title": "Actor"
-          },
-          "old_value": {
-            "anyOf": [
-              {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/NodeAddedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/NodeRemovedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/NodeStatusChangedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/NodeFieldChangedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EdgeAddedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EdgeRemovedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/EdgeStatusChangedMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AnnotationSetMutation"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AnnotationDeletedMutation"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "mutation_type",
-                  "mapping": {
-                    "annotation.deleted": "#/components/schemas/AnnotationDeletedMutation",
-                    "annotation.set": "#/components/schemas/AnnotationSetMutation",
-                    "edge.added": "#/components/schemas/EdgeAddedMutation",
-                    "edge.removed": "#/components/schemas/EdgeRemovedMutation",
-                    "edge.status_changed": "#/components/schemas/EdgeStatusChangedMutation",
-                    "node.added": "#/components/schemas/NodeAddedMutation",
-                    "node.field_changed": "#/components/schemas/NodeFieldChangedMutation",
-                    "node.removed": "#/components/schemas/NodeRemovedMutation",
-                    "node.status_changed": "#/components/schemas/NodeStatusChangedMutation"
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Old Value"
-          },
-          "new_value": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/NodeAddedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/NodeRemovedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/NodeStatusChangedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/NodeFieldChangedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/EdgeAddedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/EdgeRemovedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/EdgeStatusChangedMutation"
-              },
-              {
-                "$ref": "#/components/schemas/AnnotationSetMutation"
-              },
-              {
-                "$ref": "#/components/schemas/AnnotationDeletedMutation"
-              }
-            ],
-            "title": "New Value",
-            "discriminator": {
-              "propertyName": "mutation_type",
-              "mapping": {
-                "annotation.deleted": "#/components/schemas/AnnotationDeletedMutation",
-                "annotation.set": "#/components/schemas/AnnotationSetMutation",
-                "edge.added": "#/components/schemas/EdgeAddedMutation",
-                "edge.removed": "#/components/schemas/EdgeRemovedMutation",
-                "edge.status_changed": "#/components/schemas/EdgeStatusChangedMutation",
-                "node.added": "#/components/schemas/NodeAddedMutation",
-                "node.field_changed": "#/components/schemas/NodeFieldChangedMutation",
-                "node.removed": "#/components/schemas/NodeRemovedMutation",
-                "node.status_changed": "#/components/schemas/NodeStatusChangedMutation"
-              }
-            }
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "run_id",
-          "sequence",
-          "mutation_type",
-          "target_type",
-          "target_id",
-          "actor",
-          "old_value",
-          "new_value",
-          "reason",
-          "created_at"
-        ],
-        "title": "RunGraphMutationDto",
-        "description": "One entry in the append-only mutation log for a run.\n\nField names are snake_case to match the frontend GraphMutationDtoSchema.\nCamelModel is intentionally not used here \u2014 the frontend contract uses snake_case."
       },
       "RunResourceDto": {
         "properties": {
@@ -2554,7 +2699,7 @@
             ],
             "title": "Assignedworkerid"
           },
-          "assignedWorkerName": {
+          "assignedWorkerSlug": {
             "anyOf": [
               {
                 "type": "string"
@@ -2563,7 +2708,7 @@
                 "type": "null"
               }
             ],
-            "title": "Assignedworkername"
+            "title": "Assignedworkerslug"
           },
           "startedAt": {
             "anyOf": [
@@ -2600,7 +2745,8 @@
           "isLeaf",
           "level"
         ],
-        "title": "RunTaskDto"
+        "title": "RunTaskDto",
+        "description": "REST projection of RunGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\nruntime/services/graph_dto.py and persistence/graph/status_conventions.py."
       },
       "RunTaskEvaluationDto": {
         "properties": {
@@ -2761,6 +2907,207 @@
         ],
         "title": "SubmitResponse",
         "description": "Ergon \u2192 Trainer: batch accepted."
+      },
+      "SystemPromptPayload": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "const": "system_prompt",
+            "title": "Event Type",
+            "default": "system_prompt"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SystemPromptPayload"
+      },
+      "ThinkingPayload": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "const": "thinking",
+            "title": "Event Type",
+            "default": "thinking"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "turn_id": {
+            "type": "string",
+            "title": "Turn Id",
+            "description": "Generation turn identifier that groups thinking text with other events from the same single synchronous agent run."
+          },
+          "turn_token_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Token Ids",
+            "description": "Token ids for the generation turn. Present only on the first model-output event so sibling events can share the turn-level token stream."
+          },
+          "turn_logprobs": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TokenLogprob"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Logprobs",
+            "description": "Token logprobs for the generation turn. Present only on the first model-output event so sibling events can share the turn-level logprob stream."
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "turn_id"
+        ],
+        "title": "ThinkingPayload"
+      },
+      "TokenLogprob": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "logprob": {
+            "type": "number",
+            "title": "Logprob"
+          },
+          "top_logprobs": {
+            "items": {
+              "$ref": "#/components/schemas/JsonObject"
+            },
+            "type": "array",
+            "title": "Top Logprobs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "logprob"
+        ],
+        "title": "TokenLogprob",
+        "description": "Per-token log probability from the serving backend."
+      },
+      "ToolCallPayload": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "const": "tool_call",
+            "title": "Event Type",
+            "default": "tool_call"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id"
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          },
+          "turn_id": {
+            "type": "string",
+            "title": "Turn Id",
+            "description": "Generation turn identifier that groups this tool call with other events emitted by the same single synchronous agent run."
+          },
+          "turn_token_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Token Ids",
+            "description": "Token ids for the generation turn, omitted when another event in this turn carries the shared token stream."
+          },
+          "turn_logprobs": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TokenLogprob"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turn Logprobs",
+            "description": "Token logprobs for the generation turn, omitted when another event in this turn carries the shared logprob stream."
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool_call_id",
+          "tool_name",
+          "args",
+          "turn_id"
+        ],
+        "title": "ToolCallPayload"
+      },
+      "ToolResultPayload": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "const": "tool_result",
+            "title": "Event Type",
+            "default": "tool_result"
+          },
+          "tool_call_id": {
+            "type": "string",
+            "title": "Tool Call Id",
+            "description": "Identifier linking this result back to the ToolCallPayload it answers."
+          },
+          "tool_name": {
+            "type": "string",
+            "title": "Tool Name"
+          },
+          "result": {
+            "title": "Result",
+            "description": "Open JSON-serializable value returned by the tool call; intentionally accepts any persisted result shape."
+          },
+          "is_error": {
+            "type": "boolean",
+            "title": "Is Error",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool_call_id",
+          "tool_name",
+          "result"
+        ],
+        "title": "ToolResultPayload"
       },
       "TrainingCurvePointDto": {
         "properties": {
@@ -3079,6 +3426,37 @@
         ],
         "title": "UpdateCohortRequest",
         "description": "Mutable cohort fields exposed through the operator API."
+      },
+      "UserMessagePayload": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "const": "user_message",
+            "title": "Event Type",
+            "default": "user_message"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "from_worker_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Worker Key",
+            "description": "Worker binding key when this message was sent by another agent instead of the external user."
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "UserMessagePayload"
       },
       "ValidationError": {
         "properties": {

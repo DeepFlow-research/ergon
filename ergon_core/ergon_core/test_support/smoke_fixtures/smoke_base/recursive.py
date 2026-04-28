@@ -12,7 +12,7 @@ from typing import ClassVar
 from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.core.generation import GenerationTurn, TextPart
+from ergon_core.core.generation import AssistantTextPart, ContextPartChunk
 from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
@@ -46,19 +46,17 @@ class RecursiveSmokeWorkerBase(Worker):
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
+    ) -> AsyncGenerator[ContextPartChunk, None]:
         if context.node_id is None:
             raise ValueError(f"{type(self).__name__} requires context.node_id")
 
-        yield GenerationTurn(
-            response_parts=[
-                TextPart(
-                    content=(
-                        f"{type(self).__name__}: planning nested "
-                        f"{' -> '.join(NESTED_LINE_SLUGS)} via leaf={self.leaf_slug}"
-                    ),
+        yield ContextPartChunk(
+            part=AssistantTextPart(
+                content=(
+                    f"{type(self).__name__}: planning nested "
+                    f"{' -> '.join(NESTED_LINE_SLUGS)} via leaf={self.leaf_slug}"
                 ),
-            ],
+            ),
         )
 
         specs = [
@@ -84,12 +82,10 @@ class RecursiveSmokeWorkerBase(Worker):
             f"{slug}: planned (node_id={result.nodes[TaskSlug(slug)]})"
             for slug, _deps, _desc in NESTED_SUBTASK_GRAPH
         )
-        yield GenerationTurn(
-            response_parts=[
-                TextPart(
-                    content=f"{type(self).__name__}: nested subtasks planned:\n{summary}",
-                ),
-            ],
+        yield ContextPartChunk(
+            part=AssistantTextPart(
+                content=f"{type(self).__name__}: nested subtasks planned:\n{summary}",
+            ),
         )
 
         inspection = TaskInspectionService()
@@ -106,15 +102,13 @@ class RecursiveSmokeWorkerBase(Worker):
             await asyncio.sleep(2)
 
         await self._send_recursive_completion_message(context)
-        yield GenerationTurn(
-            response_parts=[
-                TextPart(
-                    content=(
-                        f"{type(self).__name__}: nested children terminal "
-                        f"{self._last_child_statuses}"
-                    ),
+        yield ContextPartChunk(
+            part=AssistantTextPart(
+                content=(
+                    f"{type(self).__name__}: nested children terminal "
+                    f"{self._last_child_statuses}"
                 ),
-            ],
+            ),
         )
 
     def get_output(self, context: WorkerContext) -> WorkerOutput:

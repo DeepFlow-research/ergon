@@ -122,7 +122,7 @@ function LeafNodeComponent(props: LeafNodeProps) {
 
   const statusLabel =
     task.status === ("running" as TaskStatus)
-      ? `running${task.assignedWorkerName ? ` · ${task.assignedWorkerName}` : ""}`
+      ? `running${task.assignedWorkerSlug ? ` · ${task.assignedWorkerSlug}` : ""}`
       : task.status;
 
   return (

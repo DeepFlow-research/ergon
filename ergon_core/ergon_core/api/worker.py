@@ -9,7 +9,7 @@ from ergon_core.api.errors import DependencyError
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.generation import GenerationTurn
+from ergon_core.core.generation import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.dependencies import check_packages
@@ -20,7 +20,7 @@ class Worker(ABC):
     """Base class for all workers.
 
     Subclasses must set ``type_slug`` and implement ``execute`` as an
-    async generator that yields ``GenerationTurn`` objects.
+    async generator that yields ``ContextPartChunk`` objects.
     """
 
     type_slug: ClassVar[str]
@@ -54,12 +54,10 @@ class Worker(ABC):
         task: BenchmarkTask,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
-        """Run the worker's task behavior, yielding turns as they complete.
+    ) -> AsyncGenerator[ContextPartChunk, None]:
+        """Run the worker's task behavior, yielding context chunks as they occur.
 
-        Each yielded GenerationTurn is persisted to PG immediately by the
-        runtime. Workers that can detect turn boundaries mid-execution
-        yield incrementally. Workers that can't yield all turns at the end.
+        Each yielded ContextPartChunk is enriched and persisted by the runtime.
         """
         ...
         yield  # type: ignore[misc]
@@ -80,7 +78,7 @@ class Worker(ABC):
         return None
 
     def get_output(self, context: WorkerContext) -> WorkerOutput:
-        """Build output from persisted turns. Override for custom output.
+        """Build output from persisted context chunks. Override for custom output.
 
         Called by the runtime after the async generator is fully consumed.
         Default reads context events from PG via ``self._context_repo`` and returns
@@ -89,11 +87,13 @@ class Worker(ABC):
         """
         with get_session() as session:
             events = self._context_repo.get_for_execution(session, context.execution_id)
-        text_events = [
-            event.payload.get("text")
-            for event in events
-            if event.event_type == "assistant_text" and isinstance(event.payload.get("text"), str)
-        ]
+        text_events = []
+        for event in events:
+            if event.event_type != "assistant_text":
+                continue
+            payload = event.parsed_payload()
+            if isinstance(payload.part, AssistantTextPart):
+                text_events.append(payload.part.content)
         return WorkerOutput(
             output=text_events[-1] if text_events else "",
             success=True,

@@ -14,17 +14,8 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
 )
+from ergon_core.core.persistence.graph import status_conventions as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import (
-    BLOCKED,
-    CANCELLED,
-    EDGE_INVALIDATED,
-    EDGE_SATISFIED,
-    FAILED,
-    RUNNING,
-    TERMINAL_STATUSES,
-)
-from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
@@ -75,7 +66,7 @@ async def mark_task_ready(
         session,
         run_id,
         task_id,
-        TaskExecutionStatus.PENDING,
+        graph_status.PENDING,
         graph_repo=graph_repo,
         graph_lookup=graph_lookup,
     )
@@ -94,7 +85,7 @@ async def mark_task_running(
         session,
         run_id,
         task_id,
-        TaskExecutionStatus.RUNNING,
+        graph_status.RUNNING,
         graph_repo=graph_repo,
         graph_lookup=graph_lookup,
     )
@@ -114,7 +105,7 @@ async def mark_task_failed(
         session,
         run_id,
         task_id,
-        TaskExecutionStatus.FAILED,
+        graph_status.FAILED,
         graph_repo=graph_repo,
         graph_lookup=graph_lookup,
         event_metadata={"error": error},
@@ -178,7 +169,7 @@ async def mark_task_failed_by_node(
         session,
         run_id=run_id,
         node_id=node_id,
-        new_status=TaskExecutionStatus.FAILED,
+        new_status=graph_status.FAILED,
         meta=MutationMeta(
             actor="system:propagation",
             reason=error,
@@ -215,16 +206,16 @@ async def _block_successors_bfs(
         target_node = session.get(RunGraphNode, target_id)
         if target_node is None:
             continue
-        if target_node.status == RUNNING:
+        if target_node.status == graph_status.RUNNING:
             continue
-        if target_node.status in TERMINAL_STATUSES:
+        if target_node.status in graph_status.TERMINAL_STATUSES:
             continue
 
         applied = await graph_repo.update_node_status(
             session,
             run_id=run_id,
             node_id=target_id,
-            new_status=BLOCKED,
+            new_status=graph_status.BLOCKED,
             meta=MutationMeta(
                 actor="system:propagation",
                 reason=f"dependency {failed_node_id} {terminal_status}",
@@ -246,7 +237,7 @@ async def _block_successors_bfs(
                     session,
                     run_id=run_id,
                     edge_id=edge.id,
-                    new_status=EDGE_INVALIDATED,
+                    new_status=graph_status.EDGE_INVALIDATED,
                     meta=_PROPAGATION_META,
                 )
                 queue.append(edge.target_node_id)
@@ -259,19 +250,15 @@ async def on_task_completed_or_failed(
     terminal_status: str,
     *,
     graph_repo: WorkflowGraphRepository,
-) -> tuple[list[UUID], list[UUID]]:
+) -> list[UUID]:
     """Handle a node reaching COMPLETED, FAILED, or CANCELLED.
 
-    Returns (newly_ready_node_ids, invalidated_target_node_ids).
+    Returns newly ready node IDs.
 
-    - COMPLETED: outgoing edges become SATISFIED; targets with all deps
-      satisfied become READY.
-    - FAILED / CANCELLED: outgoing edges become INVALIDATED.  For static
-      workflow nodes (parent_node_id is None), targets are auto-cancelled
-      and reported as invalidated.  For dynamic subtasks (parent_node_id
-      set), targets stay PENDING so the manager can adapt — the edge is
-      invalidated but the node is left for the manager to retry, cancel,
-      or re-plan via the subtask lifecycle tools.
+    - COMPLETED: outgoing edges become SATISFIED; targets with all dependencies
+      satisfied transition to PENDING for scheduling.
+    - FAILED / CANCELLED: outgoing edges become INVALIDATED; reachable successors
+      transition to BLOCKED unless they are RUNNING or terminal.
 
     Walks RunGraphEdge so it works for both static and dynamic tasks.
 
@@ -279,7 +266,7 @@ async def on_task_completed_or_failed(
     before calling this function. The node's own status is NOT written here —
     only edge statuses and downstream candidate statuses are updated.
     """
-    is_success = terminal_status == TaskExecutionStatus.COMPLETED
+    is_success = terminal_status == graph_status.COMPLETED
 
     outgoing = list(
         session.exec(
@@ -290,7 +277,7 @@ async def on_task_completed_or_failed(
         ).all()
     )
 
-    edge_status = EDGE_SATISFIED if is_success else EDGE_INVALIDATED
+    edge_status = graph_status.EDGE_SATISFIED if is_success else graph_status.EDGE_INVALIDATED
     for edge in outgoing:
         await graph_repo.update_edge_status(
             session,
@@ -303,7 +290,6 @@ async def on_task_completed_or_failed(
     candidate_node_ids = {e.target_node_id for e in outgoing}
 
     newly_ready: list[UUID] = []
-    invalidated: list[UUID] = []
 
     if not is_success:
         await _block_successors_bfs(
@@ -315,14 +301,17 @@ async def on_task_completed_or_failed(
             graph_repo=graph_repo,
         )
         session.commit()
-        return newly_ready, invalidated
+        return newly_ready
 
     # SUCCESS PATH: source completed — check if candidates can become READY.
     for candidate_id in candidate_node_ids:
         candidate_node = session.get(RunGraphNode, candidate_id)
         if candidate_node is None:
             continue
-        if candidate_node.status in TERMINAL_STATUSES and candidate_node.status != CANCELLED:
+        if (
+            candidate_node.status in graph_status.TERMINAL_STATUSES
+            and candidate_node.status != graph_status.CANCELLED
+        ):
             continue
 
         # Eligibility:
@@ -341,8 +330,8 @@ async def on_task_completed_or_failed(
         # Everything else (COMPLETED, FAILED, RUNNING, BLOCKED) is skipped.
         status = candidate_node.status
         is_managed_subtask = candidate_node.parent_node_id is not None
-        is_pending = status == TaskExecutionStatus.PENDING
-        is_reactivatable_cancelled = status == CANCELLED and is_managed_subtask
+        is_pending = status == graph_status.PENDING
+        is_reactivatable_cancelled = status == graph_status.CANCELLED and is_managed_subtask
 
         if not (is_pending or is_reactivatable_cancelled):
             continue
@@ -357,7 +346,7 @@ async def on_task_completed_or_failed(
         )
 
         source_nodes = [session.get(RunGraphNode, e.source_node_id) for e in incoming]
-        if all(n is not None and n.status == TaskExecutionStatus.COMPLETED for n in source_nodes):
+        if all(n is not None and n.status == graph_status.COMPLETED for n in source_nodes):
             reason = (
                 f"all dependencies satisfied after {node_id}"
                 if is_pending
@@ -367,7 +356,7 @@ async def on_task_completed_or_failed(
                 session,
                 run_id=run_id,
                 node_id=candidate_id,
-                new_status=TaskExecutionStatus.PENDING,
+                new_status=graph_status.PENDING,
                 meta=MutationMeta(
                     actor="system:propagation",
                     reason=reason,
@@ -380,7 +369,7 @@ async def on_task_completed_or_failed(
             newly_ready.append(candidate_id)
 
     session.commit()
-    return newly_ready, invalidated
+    return newly_ready
 
 
 # ---------------------------------------------------------------------------
@@ -395,10 +384,12 @@ def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
     )
     if not statuses:
         return True
-    return all(s in TERMINAL_STATUSES for s in statuses) and not any(s == FAILED for s in statuses)
+    return all(s in graph_status.TERMINAL_STATUSES for s in statuses) and not any(
+        s == graph_status.FAILED for s in statuses
+    )
 
 
-_SETTLED_STATUSES = TERMINAL_STATUSES | frozenset({BLOCKED})
+_SETTLED_STATUSES = graph_status.TERMINAL_STATUSES | frozenset({graph_status.BLOCKED})
 
 
 def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
@@ -419,4 +410,4 @@ def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
     if not statuses:
         return False
     all_settled = all(s in _SETTLED_STATUSES for s in statuses)
-    return all_settled and any(s == FAILED for s in statuses)
+    return all_settled and any(s == graph_status.FAILED for s in statuses)

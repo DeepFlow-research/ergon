@@ -5,8 +5,9 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
 )
+from ergon_core.core.persistence.graph import status_conventions as graph_status
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.execution.propagation import get_initial_ready_tasks
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
@@ -52,8 +53,8 @@ class WorkflowInitializationService:
                 session,
                 command.run_id,
                 command.definition_id,
-                initial_node_status=TaskExecutionStatus.PENDING,
-                initial_edge_status="pending",
+                initial_node_status=graph_status.PENDING,
+                initial_edge_status=graph_status.EDGE_PENDING,
                 task_payload_model=benchmark_cls.task_payload_model,
                 meta=MutationMeta(actor="system:workflow_init"),
             )

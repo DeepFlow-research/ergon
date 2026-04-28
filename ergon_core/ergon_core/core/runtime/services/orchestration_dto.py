@@ -133,7 +133,6 @@ class PropagationResult(BaseModel):
     definition_id: UUID
     completed_task_id: UUID | None
     ready_tasks: list[TaskDescriptor] = Field(default_factory=list)
-    invalidated_targets: list[UUID] = Field(default_factory=list)
     workflow_terminal_state: WorkflowTerminalState = WorkflowTerminalState.NONE
 
 

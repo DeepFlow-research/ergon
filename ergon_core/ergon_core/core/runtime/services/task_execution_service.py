@@ -10,6 +10,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionWorker,
 )
+from ergon_core.core.persistence.graph import status_conventions as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
@@ -43,7 +44,7 @@ async def _emit_task_status(
     new_status: str,
     old_status: str | None = None,
     worker_id: UUID | None = None,
-    worker_name: str | None = None,
+    worker_slug: str | None = None,
 ) -> None:
     """Emit dashboard/task.status_changed. All arguments are plain primitives."""
     if node_id is None:
@@ -56,7 +57,7 @@ async def _emit_task_status(
             new_status=new_status,
             old_status=old_status,
             assigned_worker_id=worker_id,
-            assigned_worker_name=worker_name,
+            assigned_worker_slug=worker_slug,
         )
     except Exception:  # slopcop: ignore[no-broad-except]
         logger.warning("Failed to emit task_status_changed", exc_info=True)
@@ -140,7 +141,7 @@ class TaskExecutionService:
                 session,
                 run_id=command.run_id,
                 node_id=node_id,
-                new_status=TaskExecutionStatus.RUNNING,
+                new_status=graph_status.RUNNING,
                 meta=MutationMeta(
                     actor="task-execution-service",
                     reason=f"prepare: execution {execution.id}",
@@ -152,10 +153,10 @@ class TaskExecutionService:
                 run_id=command.run_id,
                 node_id=node_id,
                 task_slug=node.task_slug,
-                new_status=TaskExecutionStatus.RUNNING,
+                new_status=graph_status.RUNNING,
                 old_status=None,
                 worker_id=worker_row.id,
-                worker_name=assigned_worker_slug,
+                worker_slug=assigned_worker_slug,
             )
 
             # Graph-native path: ``command.node_id`` is guaranteed non-null
@@ -272,10 +273,10 @@ class TaskExecutionService:
                 run_id=command.run_id,
                 node_id=resolved_node_id,
                 task_slug=task.task_slug,
-                new_status=TaskExecutionStatus.RUNNING,
+                new_status=graph_status.RUNNING,
                 old_status=None,
                 worker_id=definition_worker_id,
-                worker_name=assigned_worker_slug,
+                worker_slug=assigned_worker_slug,
             )
 
             # Definition path: ``command.task_id`` is the static FK (known
@@ -318,8 +319,8 @@ class TaskExecutionService:
                 run_id=execution.run_id,
                 node_id=execution.node_id,
                 task_slug=str(execution.definition_task_id or execution.node_id or ""),
-                new_status=TaskExecutionStatus.COMPLETED,
-                old_status=TaskExecutionStatus.RUNNING,
+                new_status=graph_status.COMPLETED,
+                old_status=graph_status.RUNNING,
             )
 
     async def finalize_failure(self, command: FailTaskExecutionCommand) -> None:
@@ -360,8 +361,8 @@ class TaskExecutionService:
                 run_id=command.run_id,
                 node_id=execution.node_id,
                 task_slug=str(execution.definition_task_id or execution.node_id or ""),
-                new_status=TaskExecutionStatus.FAILED,
-                old_status=TaskExecutionStatus.RUNNING,
+                new_status=graph_status.FAILED,
+                old_status=graph_status.RUNNING,
             )
 
     # -- Helpers ---

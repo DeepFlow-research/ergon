@@ -66,6 +66,7 @@ export type TaskTreeNode = {
   id: string;
   name: string;
   description: string;
+  assigned_worker_slug?: string | null;
   assigned_to: WorkerRef;
   full_team?: WorkerRef[] | null;
   children: TaskTreeNode[];
@@ -81,6 +82,7 @@ export const TaskTreeNodeSchema: z.ZodType<{
   id: string;
   name: string;
   description: string;
+  assigned_worker_slug?: string | null;
   assigned_to: WorkerRef;
   full_team?: WorkerRef[] | null;
   children: TaskTreeNode[];
@@ -95,6 +97,7 @@ export const TaskTreeNodeSchema: z.ZodType<{
     id: z.string().uuid(),
     name: z.string(),
     description: z.string(),
+    assigned_worker_slug: z.string().nullable().optional(),
     assigned_to: WorkerRefSchema,
     full_team: z.array(WorkerRefSchema).nullable().optional(),
     children: z.array(TaskTreeNodeSchema),
@@ -160,7 +163,7 @@ export const TaskStatusSocketDataSchema = z.object({
   status: TaskStatusSchema,
   timestamp: z.string(),
   assignedWorkerId: z.string().nullable(),
-  assignedWorkerName: z.string().nullable(),
+  assignedWorkerSlug: z.string().nullable(),
 });
 export const ResourceSocketDataSchema = z.object({
   runId: z.string(),

@@ -78,6 +78,7 @@ function deserializeContextEvents(data: RunSnapshot): Map<string, ContextEventSt
       events
         .map((event) => ({
           id: String(event.id ?? ""),
+          runId: String(event.runId ?? data.id),
           taskExecutionId: String(event.taskExecutionId ?? ""),
           taskNodeId: String(event.taskNodeId ?? taskId),
           workerBindingKey: String(event.workerBindingKey ?? ""),

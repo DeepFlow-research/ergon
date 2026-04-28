@@ -1,19 +1,8 @@
 """DTOs for TaskInspectionService — read-only subtask queries."""
 
-from typing import Literal
-
+from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.persistence.shared.types import NodeId
 from pydantic import BaseModel
-
-SubtaskStatus = Literal[
-    "pending",
-    "ready",
-    "running",
-    "completed",
-    "failed",
-    "blocked",
-    "cancelled",
-]
 
 
 class SubtaskInfo(BaseModel):
@@ -22,7 +11,7 @@ class SubtaskInfo(BaseModel):
     node_id: NodeId
     task_slug: str
     description: str
-    status: SubtaskStatus
+    status: NodeStatus
     depends_on: list[NodeId]
     output: str | None
     error: str | None

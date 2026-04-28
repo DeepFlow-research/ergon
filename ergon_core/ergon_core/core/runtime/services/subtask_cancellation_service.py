@@ -9,7 +9,6 @@ row update) via Inngest.
 
 import logging
 from collections import deque
-from typing import Literal
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphNode
@@ -18,7 +17,7 @@ from ergon_core.core.persistence.graph.status_conventions import (
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
+from ergon_core.core.runtime.events.task_events import PropagationCancelCause, TaskCancelledEvent
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.subtask_cancellation_dto import CancelOrphansResult
@@ -54,7 +53,7 @@ class SubtaskCancellationService:
         run_id: UUID,
         definition_id: UUID,
         parent_node_id: UUID,
-        cause: Literal["parent_terminal", "dep_invalidated"],
+        cause: PropagationCancelCause,
     ) -> CancelOrphansResult:
         """Recursively cancel every non-terminal descendant of parent_node_id.
 

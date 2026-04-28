@@ -206,7 +206,7 @@ export function emitHarnessTaskStatus(data: {
   taskId: string;
   status: TaskStatus;
   assignedWorkerId?: string | null;
-  assignedWorkerName?: string | null;
+  assignedWorkerSlug?: string | null;
 }): void {
   requireHarnessEnabled();
   store.updateTaskStatus(
@@ -215,7 +215,7 @@ export function emitHarnessTaskStatus(data: {
     data.status,
     new Date().toISOString(),
     data.assignedWorkerId,
-    data.assignedWorkerName,
+    data.assignedWorkerSlug,
   );
   broadcastTaskStatus(
     data.runId,
@@ -223,7 +223,7 @@ export function emitHarnessTaskStatus(data: {
     data.status,
     new Date().toISOString(),
     data.assignedWorkerId ?? null,
-    data.assignedWorkerName ?? null,
+    data.assignedWorkerSlug ?? null,
   );
 }
 

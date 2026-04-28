@@ -174,7 +174,7 @@ class DashboardStore {
     newStatus: TaskStatus,
     timestamp: string,
     assignedWorkerId?: string | null,
-    assignedWorkerName?: string | null
+    assignedWorkerSlug?: string | null
   ): void {
     const run = this.runs.get(runId);
     const task = run?.tasks.get(taskId);
@@ -197,7 +197,7 @@ class DashboardStore {
           attemptNumber: executions.length + 1,
           status: TaskStatus.RUNNING,
           agentId: assignedWorkerId ?? task.assignedWorkerId,
-          agentName: assignedWorkerName ?? task.assignedWorkerName,
+          agentName: assignedWorkerSlug ?? task.assignedWorkerSlug,
           startedAt: timestamp,
           completedAt: null,
           finalAssistantMessage: null,
@@ -211,7 +211,7 @@ class DashboardStore {
         latestExecution.status = TaskStatus.RUNNING;
         latestExecution.startedAt = latestExecution.startedAt ?? timestamp;
         latestExecution.agentId = assignedWorkerId ?? latestExecution.agentId;
-        latestExecution.agentName = assignedWorkerName ?? latestExecution.agentName;
+        latestExecution.agentName = assignedWorkerSlug ?? latestExecution.agentName;
       }
     } else if (latestExecution) {
       latestExecution.status = nextExecutionStatus;
@@ -234,7 +234,7 @@ class DashboardStore {
         trigger,
         at: timestamp,
         sequence: null,
-        actor: assignedWorkerName ?? task.assignedWorkerName ?? null,
+        actor: assignedWorkerSlug ?? task.assignedWorkerSlug ?? null,
         reason: null,
       };
       task.history = [...(task.history ?? []), record];
@@ -244,8 +244,8 @@ class DashboardStore {
     if (assignedWorkerId !== undefined) {
       task.assignedWorkerId = assignedWorkerId;
     }
-    if (assignedWorkerName !== undefined) {
-      task.assignedWorkerName = assignedWorkerName;
+    if (assignedWorkerSlug !== undefined) {
+      task.assignedWorkerSlug = assignedWorkerSlug;
     }
 
     // Update timestamps
@@ -439,7 +439,7 @@ class DashboardStore {
       childIds: tree.children.map((c) => c.id),
       dependsOnIds: tree.depends_on,
       assignedWorkerId: tree.assigned_to?.id ?? null,
-      assignedWorkerName: tree.assigned_to?.name ?? null,
+      assignedWorkerSlug: tree.assigned_worker_slug ?? null,
       startedAt: null,
       completedAt: null,
       isLeaf: tree.is_leaf,

@@ -6,12 +6,16 @@ not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
 """
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
+from uuid import UUID
 
-from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
+from ergon_core.core.persistence.context.event_payloads import (
+    ContextEventPayload,
+    ContextEventType,
+)
+from ergon_core.core.persistence.telemetry.evaluation_summary import EvalCriterionStatus
+from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
 from pydantic import BaseModel, ConfigDict, Field
-
-EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 
 
 def _to_camel(value: str) -> str:
@@ -30,6 +34,12 @@ class CamelModel(BaseModel):
 
 
 class RunTaskDto(CamelModel):
+    """REST projection of RunGraphNode for run detail pages.
+
+    This is not the canonical graph schema; graph semantics live in
+    runtime/services/graph_dto.py and persistence/graph/status_conventions.py.
+    """
+
     id: str
     name: str
     description: str
@@ -40,7 +50,7 @@ class RunTaskDto(CamelModel):
     is_leaf: bool
     level: int
     assigned_worker_id: str | None = None
-    assigned_worker_name: str | None = None
+    assigned_worker_slug: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
@@ -162,16 +172,17 @@ class RunCommunicationThreadDto(CamelModel):
 
 
 class RunContextEventDto(CamelModel):
-    id: str
-    task_execution_id: str
-    task_node_id: str
+    id: UUID
+    run_id: UUID
+    task_execution_id: UUID
+    task_node_id: UUID
     worker_binding_key: str
     sequence: int
-    event_type: str
-    payload: dict[str, Any]  # slopcop: ignore[no-typing-any]
-    created_at: str
-    started_at: str | None = None
-    completed_at: str | None = None
+    event_type: ContextEventType
+    payload: ContextEventPayload
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class RunSnapshotDto(CamelModel):
@@ -238,28 +249,3 @@ class TrainingMetricDto(CamelModel):
     step_time_s: float | None = None
 
 
-# ---------------------------------------------------------------------------
-# Run graph mutation DTO (Timeline scrubber)
-# ---------------------------------------------------------------------------
-
-
-class RunGraphMutationDto(BaseModel):
-    """One entry in the append-only mutation log for a run.
-
-    Field names are snake_case to match the frontend GraphMutationDtoSchema.
-    CamelModel is intentionally not used here — the frontend contract uses snake_case.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    run_id: str
-    sequence: int
-    mutation_type: str
-    target_type: str
-    target_id: str
-    actor: str
-    old_value: GraphMutationValue | None
-    new_value: GraphMutationValue
-    reason: str | None
-    created_at: str

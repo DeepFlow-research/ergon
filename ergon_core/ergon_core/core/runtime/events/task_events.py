@@ -103,6 +103,7 @@ CancelCause = Literal[
     "downstream_invalidation",
     "run_cancelled",
 ]
+PropagationCancelCause = Literal["parent_terminal", "dep_invalidated"]
 
 
 class TaskCancelledEvent(InngestEventContract):

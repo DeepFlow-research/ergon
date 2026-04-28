@@ -2,7 +2,7 @@
 
 Looks up the registered worker, constructs a BenchmarkTask, and runs execute().
 Consumes the async generator, persisting context events to PG via the
-ContextEventRepository. Dashboard events are emitted per-turn via the
+ContextEventRepository. Dashboard events are emitted per chunk via the
 repository listener pattern.
 """
 
@@ -15,7 +15,7 @@ from ergon_builtins.registry import BENCHMARKS, WORKERS
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
-from ergon_core.core.generation import GenerationTurn
+from ergon_core.core.generation import ContextPartChunk
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import get_session
@@ -99,34 +99,25 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         task_node_id=payload.node_id,
     )
 
-    turn_count = 0
+    chunk_count = 0
     try:
-        turn_start = datetime.now(UTC)
-        async for turn in worker.execute(task, context=worker_context):
-            turn_end = datetime.now(UTC)
-            turn = turn.model_copy(
-                update={
-                    "started_at": turn.started_at or turn_start,
-                    "completed_at": turn.completed_at or turn_end,
-                }
-            )
+        async for chunk in worker.execute(task, context=worker_context):
             await _persist_context_events(
                 context_event_repo,
                 payload,
-                turn,
-                turn_count,
+                chunk,
+                chunk_count,
             )
-            turn_count += 1
-            turn_start = datetime.now(UTC)
+            chunk_count += 1
 
         output = worker.get_output(worker_context)
 
     except Exception as exc:  # slopcop: ignore[no-broad-except]
         error_msg = str(exc)
         logger.exception(
-            "worker-execute failed task_id=%s after %d turns: %s",
+            "worker-execute failed task_id=%s after %d chunks: %s",
             payload.task_id,
-            turn_count,
+            chunk_count,
             error_msg,
         )
         return WorkerExecuteResult(
@@ -163,7 +154,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
                 "model_target": payload.model_target,
                 "success": output.success,
                 "output_length": len(output.output),
-                "turn_count": turn_count,
+                "chunk_count": chunk_count,
             },
         )
     )
@@ -178,24 +169,23 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
 async def _persist_context_events(
     context_event_repo: ContextEventRepository,
     payload: WorkerExecuteRequest,
-    turn: GenerationTurn,
-    turn_count: int,
+    chunk: ContextPartChunk,
+    chunk_count: int,
 ) -> None:
-    """Persist context events for a single turn, swallowing failures so they
-    never interrupt the primary generation turn write."""
+    """Persist one context chunk, swallowing failures so worker execution continues."""
     try:
         with get_session() as session:
-            await context_event_repo.persist_turn(
+            await context_event_repo.persist_chunk(
                 session,
                 run_id=payload.run_id,
                 execution_id=payload.execution_id,
                 worker_binding_key=payload.assigned_worker_slug,
-                turn=turn,
+                chunk=chunk,
             )
     except Exception:  # slopcop: ignore[no-broad-except]
         logger.warning(
-            "context event persist failed for execution %s turn %d",
+            "context event persist failed for execution %s chunk %d",
             payload.execution_id,
-            turn_count,
+            chunk_count,
             exc_info=True,
         )

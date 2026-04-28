@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 import inngest
 from ergon_core.core.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.runtime.events.task_events import (
-    TaskCancelledEvent,
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,
@@ -69,20 +68,6 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
         )
         for td in propagation.ready_tasks
     ]
-
-    for inv_node_id in propagation.invalidated_targets:
-        events.append(
-            inngest.Event(
-                name=TaskCancelledEvent.name,
-                data=TaskCancelledEvent(
-                    run_id=payload.run_id,
-                    definition_id=payload.definition_id,
-                    node_id=inv_node_id,
-                    execution_id=None,
-                    cause="dep_invalidated",
-                ).model_dump(mode="json"),
-            )
-        )
 
     if propagation.workflow_terminal_state == WorkflowTerminalState.COMPLETED:
         events.append(
@@ -164,7 +149,6 @@ async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult
     await _terminate_failed_task_sandbox(payload.sandbox_id)
 
     # BLOCKED successors are a DB write only — no task/cancelled events.
-    # propagation.invalidated_targets is always empty from the failure path.
     failure_events: list[inngest.Event] = []
 
     if propagation.workflow_terminal_state == WorkflowTerminalState.FAILED:

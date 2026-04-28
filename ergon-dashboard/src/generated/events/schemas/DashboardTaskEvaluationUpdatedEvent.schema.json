@@ -19,6 +19,10 @@
           "title": "Criterionnum",
           "type": "integer"
         },
+        "criterionSlug": {
+          "title": "Criterionslug",
+          "type": "string"
+        },
         "criterionType": {
           "title": "Criteriontype",
           "type": "string"
@@ -123,6 +127,19 @@
           "title": "Evaluatedresourceids",
           "type": "array"
         },
+        "observation": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation"
+        },
         "error": {
           "anyOf": [
             {
@@ -142,6 +159,7 @@
         "stageNum",
         "stageName",
         "criterionNum",
+        "criterionSlug",
         "criterionType",
         "criterionDescription",
         "criterionName",
