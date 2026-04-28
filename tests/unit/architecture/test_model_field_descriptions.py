@@ -1,12 +1,13 @@
 """Guards for model field docs that must survive schema export."""
 
 from ergon_core.core.dashboard.event_contracts import DashboardContextEventEvent
-from ergon_core.core.persistence.context.event_payloads import (
-    AssistantTextPayload,
-    ThinkingPayload,
-    ToolCallPayload,
-    ToolResultPayload,
-    UserMessagePayload,
+from ergon_core.core.generation import (
+    AssistantTextPart,
+    ContextPartChunkLog,
+    ThinkingPart,
+    ToolCallPart,
+    ToolResultPart,
+    UserMessagePart,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.graph.models import (
@@ -18,7 +19,7 @@ from ergon_core.core.persistence.telemetry.models import RunResource
 from ergon_core.core.runtime.services.graph_dto import (
     GraphAnnotationDto,
     GraphEdgeDto,
-    GraphMutationDto,
+    GraphMutationRecordDto,
     GraphNodeDto,
 )
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
@@ -33,18 +34,17 @@ def _description(model: type[BaseModel], field_name: str) -> str | None:
 
 
 def test_context_event_payload_field_docs_are_schema_metadata() -> None:
-    assert _description(UserMessagePayload, "from_worker_key")
-    assert _description(AssistantTextPayload, "turn_id")
-    assert _description(AssistantTextPayload, "turn_token_ids")
-    assert _description(AssistantTextPayload, "turn_logprobs")
-    assert _description(ToolCallPayload, "turn_id")
-    assert _description(ToolCallPayload, "turn_token_ids")
-    assert _description(ToolCallPayload, "turn_logprobs")
-    assert _description(ToolResultPayload, "tool_call_id")
-    assert _description(ToolResultPayload, "result")
-    assert _description(ThinkingPayload, "turn_id")
-    assert _description(ThinkingPayload, "turn_token_ids")
-    assert _description(ThinkingPayload, "turn_logprobs")
+    assert _description(UserMessagePart, "content")
+    assert _description(AssistantTextPart, "content")
+    assert _description(ToolCallPart, "tool_call_id")
+    assert _description(ToolCallPart, "args")
+    assert _description(ToolResultPart, "tool_call_id")
+    assert _description(ToolResultPart, "content")
+    assert _description(ThinkingPart, "content")
+    assert _description(ContextPartChunkLog, "worker_binding_key")
+    assert _description(ContextPartChunkLog, "turn_id")
+    assert _description(ContextPartChunkLog, "token_ids")
+    assert _description(ContextPartChunkLog, "logprobs")
 
 
 def test_dashboard_context_event_field_docs_are_schema_metadata() -> None:
@@ -58,8 +58,8 @@ def test_graph_dto_field_docs_are_schema_metadata() -> None:
     assert _description(GraphEdgeDto, "status")
     assert _description(GraphAnnotationDto, "id")
     assert _description(GraphAnnotationDto, "target_id")
-    assert _description(GraphMutationDto, "id")
-    assert _description(GraphMutationDto, "target_id")
+    assert _description(GraphMutationRecordDto, "id")
+    assert _description(GraphMutationRecordDto, "target_id")
 
 
 def test_sqlmodel_field_docs_are_schema_metadata() -> None:
