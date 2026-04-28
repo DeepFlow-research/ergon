@@ -2,9 +2,8 @@
 
 from typing import Literal
 
-from pydantic import BaseModel
-
 from ergon_core.core.persistence.shared.types import NodeId
+from pydantic import BaseModel
 
 SubtaskStatus = Literal[
     "pending",

@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.core.runtime.services.orchestration_dto import FailTaskExecutionCommand
 
 

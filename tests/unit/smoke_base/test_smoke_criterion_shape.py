@@ -5,11 +5,10 @@ is read) and asserts error behaviour.
 """
 
 import pytest
-from pydantic import BaseModel
-
 from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
 from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from pydantic import BaseModel
 
 
 class _FakeNode(BaseModel):

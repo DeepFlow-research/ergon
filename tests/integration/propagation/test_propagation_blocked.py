@@ -1,8 +1,6 @@
 """Tests for BLOCKED propagation semantics."""
 
 import pytest
-from sqlmodel import select
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import BLOCKED, CANCELLED
@@ -13,13 +11,14 @@ from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.orchestration_dto import PropagateTaskCompletionCommand
 from ergon_core.core.runtime.services.task_propagation_service import TaskPropagationService
+from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
-    assert_wal_has_status,
     assert_cross_cutting_invariants,
+    assert_wal_has_status,
     get_node_status,
-    make_experiment_definition,
     make_edge,
+    make_experiment_definition,
     make_node,
     make_run,
     seed_linear_chain,

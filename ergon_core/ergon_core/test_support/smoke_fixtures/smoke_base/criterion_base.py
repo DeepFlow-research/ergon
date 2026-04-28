@@ -33,10 +33,9 @@ from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
+from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
 from pydantic import BaseModel
 from sqlmodel import col, desc, select
-
-from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +154,9 @@ class SmokeCriterionBase(Criterion):
                 ).all(),
             )
         nested_parent_ids = {node.parent_node_id for node in nested}
-        direct_artifact_children = [child for child in children if child.id not in nested_parent_ids]
+        direct_artifact_children = [
+            child for child in children if child.id not in nested_parent_ids
+        ]
         return [*direct_artifact_children, *nested]
 
     async def _pull_probe_results(

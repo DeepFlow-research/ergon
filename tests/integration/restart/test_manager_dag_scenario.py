@@ -18,9 +18,9 @@ This validates that restart + invalidation + re-activation compose correctly
 across the full service stack.
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from ergon_core.core.persistence.graph.status_conventions import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus

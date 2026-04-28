@@ -3,13 +3,12 @@
 from uuid import UUID, uuid4
 
 import pytest
-from pydantic import BaseModel
-
 from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import (
     ProbeResult,
     SmokeCriterionBase,
 )
+from pydantic import BaseModel
 
 
 class _FakeNode(BaseModel):

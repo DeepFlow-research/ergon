@@ -9,8 +9,6 @@ it would need xfail; but the simple node-level cancel works today.
 """
 
 import pytest
-from sqlmodel import select
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import CANCELLED
@@ -19,6 +17,7 @@ from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
+from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
     assert_cross_cutting_invariants,

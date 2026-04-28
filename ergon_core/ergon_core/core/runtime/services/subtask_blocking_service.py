@@ -11,12 +11,11 @@ stop). BLOCKED is never written by operator actions — only by propagation.
 from collections import deque
 from uuid import UUID
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import BLOCKED, RUNNING, TERMINAL_STATUSES
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
+from sqlmodel import Session, select
 
 
 class SubtaskBlockingService:

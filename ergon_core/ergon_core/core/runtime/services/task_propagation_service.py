@@ -10,8 +10,8 @@ from ergon_core.core.runtime.execution.propagation import (
     is_workflow_failed_v2,
     on_task_completed_or_failed,
 )
-from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
+from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.orchestration_dto import (
     PropagateTaskCompletionCommand,

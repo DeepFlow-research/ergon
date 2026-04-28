@@ -1,5 +1,4 @@
 import pytest
-
 from ergon_cli.main import build_parser
 
 

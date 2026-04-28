@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
-import pytest
 from ergon_cli.commands.workflow import WorkflowCommandContext, execute_workflow_command
 from ergon_core.core.runtime.services.task_management_dto import AddSubtaskResult
 from ergon_core.core.runtime.services.workflow_dto import WorkflowResourceRef
@@ -61,6 +60,21 @@ class _ManagingService:
         )
 
 
+class _FailingService:
+    def list_resources(self, *args, **kwargs):
+        raise ValueError("unsupported resource scope: all")
+
+
+def _context() -> WorkflowCommandContext:
+    return WorkflowCommandContext(
+        run_id=uuid4(),
+        node_id=uuid4(),
+        execution_id=uuid4(),
+        sandbox_task_key=uuid4(),
+        benchmark_type="researchrubrics",
+    )
+
+
 def test_resource_list_json_uses_injected_context() -> None:
     run_id = uuid4()
     node_id = uuid4()
@@ -100,31 +114,22 @@ def test_resource_list_json_uses_injected_context() -> None:
 
 
 def test_agent_command_rejects_user_supplied_context_flags() -> None:
-    with pytest.raises(ValueError, match="scope/context flags are injected"):
-        execute_workflow_command(
-            f"inspect resource-list --scope visible --run-id {uuid4()}",
-            context=WorkflowCommandContext(
-                run_id=uuid4(),
-                node_id=uuid4(),
-                execution_id=uuid4(),
-                sandbox_task_key=uuid4(),
-                benchmark_type="researchrubrics",
-            ),
-            session_factory=_Session,
-            service=_Service(resource=None),  # type: ignore[arg-type]
-        )
+    output = execute_workflow_command(
+        f"inspect resource-list --scope visible --run-id {uuid4()}",
+        context=_context(),
+        session_factory=_Session,
+        service=_Service(resource=None),  # type: ignore[arg-type]
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "scope/context flags are injected" in output.stderr
 
 
 def test_parse_error_returns_nonzero_output_instead_of_system_exit() -> None:
     output = execute_workflow_command(
         "manage materialize-resource",
-        context=WorkflowCommandContext(
-            run_id=uuid4(),
-            node_id=uuid4(),
-            execution_id=uuid4(),
-            sandbox_task_key=uuid4(),
-            benchmark_type="researchrubrics",
-        ),
+        context=_context(),
         session_factory=_Session,
         service=_Service(resource=None),  # type: ignore[arg-type]
     )
@@ -132,6 +137,63 @@ def test_parse_error_returns_nonzero_output_instead_of_system_exit() -> None:
     assert output.exit_code == 2
     assert output.stderr is not None
     assert "--resource-id" in output.stderr
+
+
+def test_invalid_resource_scope_returns_choices_without_service_call() -> None:
+    output = execute_workflow_command(
+        "inspect resource-list --scope all",
+        context=_context(),
+        session_factory=_Session,
+        service=_Service(resource=None),  # type: ignore[arg-type]
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "invalid choice: 'all'" in output.stderr
+    assert "visible" in output.stderr
+    assert "descendants" in output.stderr
+    assert "workflow inspect resource-list --help" in output.stderr
+
+
+def test_invalid_resource_kind_returns_choices_without_service_call() -> None:
+    output = execute_workflow_command(
+        "inspect resource-list --scope visible --kind everything",
+        context=_context(),
+        session_factory=_Session,
+        service=_Service(resource=None),  # type: ignore[arg-type]
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "invalid choice: 'everything'" in output.stderr
+    assert "report" in output.stderr
+    assert "search_cache" in output.stderr
+    assert "workflow inspect resource-list --help" in output.stderr
+
+
+def test_malformed_resource_uuid_returns_nonzero_output() -> None:
+    output = execute_workflow_command(
+        "inspect resource-content --resource-id not-a-uuid",
+        context=_context(),
+        session_factory=_Session,
+        service=_Service(resource=None),  # type: ignore[arg-type]
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "badly formed hexadecimal UUID string" in output.stderr
+
+
+def test_service_validation_error_returns_nonzero_output() -> None:
+    output = execute_workflow_command(
+        "inspect resource-list --scope visible",
+        context=_context(),
+        session_factory=_Session,
+        service=_FailingService(),  # type: ignore[arg-type]
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr == "unsupported resource scope: all"
 
 
 def test_manage_add_task_creates_subtask_with_injected_parent_context() -> None:

@@ -2,12 +2,11 @@
 
 from uuid import UUID
 
-from sqlmodel import select
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from sqlmodel import select
 
 
 def cleanup_run(run_id: UUID, defn_id: UUID) -> None:

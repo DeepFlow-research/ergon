@@ -4,7 +4,6 @@ from pathlib import Path
 
 from ergon_cli.onboarding.profile import OnboardProfile
 
-
 # Infra defaults that every .env should have — safe to set if missing.
 _INFRA_DEFAULTS: dict[str, str] = {
     "INNGEST_EVENT_KEY": "dev",

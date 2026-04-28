@@ -6,7 +6,6 @@ from ergon_core.test_support.smoke_fixtures.workers.researchrubrics_smoke import
     ResearchRubricsSadPathSmokeWorker,
 )
 
-
 __all__ = [
     "AlwaysFailSubworker",
     "ResearchRubricsFailingLeafWorker",

@@ -14,10 +14,9 @@ import subprocess
 from datetime import datetime, timezone
 
 import pytest
-from sqlmodel import select
-
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from sqlmodel import select
 
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 

@@ -1,9 +1,8 @@
 """DTOs for SubtaskCancellationService."""
 
-from pydantic import BaseModel
-
 from ergon_core.core.persistence.shared.types import NodeId
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
+from pydantic import BaseModel
 
 
 class CancelOrphansResult(BaseModel):

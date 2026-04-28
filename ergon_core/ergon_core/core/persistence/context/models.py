@@ -35,10 +35,17 @@ class RunContextEvent(SQLModel, table=True):
     task_execution_id: UUID = Field(foreign_key="run_task_executions.id", index=True)
     worker_binding_key: str = Field(index=True)
     sequence: int
-    event_type: str = Field(index=True)  # ContextEventType Literal — str for SQLModel compat
-    payload: dict[str, Any] = Field(sa_column=Column(JSON))  # slopcop: ignore[no-typing-any]
-    # Note: Uses JSON (not JSONB) for SQLite test compatibility.
-    # The migration uses JSONB for PostgreSQL production.
+    event_type: str = Field(
+        index=True,
+        description="ContextEventType literal stored as a string for SQLModel compatibility.",
+    )
+    payload: dict[str, Any] = Field(  # slopcop: ignore[no-typing-any]
+        sa_column=Column(JSON),
+        description=(
+            "Typed ContextEventPayload persisted as JSON. The SQLModel column uses JSON "
+            "for SQLite test compatibility; the PostgreSQL migration uses JSONB."
+        ),
+    )
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 import pytest
-from ergon_core.api.generation import (
+from ergon_core.core.generation import (
     GenerationTurn,
     TextPart,
     ThinkingPart,
@@ -9,8 +9,8 @@ from ergon_core.api.generation import (
     ToolReturnPart,
     UserPromptPart,
 )
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.context.repository import ContextEventRepository
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution

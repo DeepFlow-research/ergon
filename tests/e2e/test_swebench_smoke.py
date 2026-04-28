@@ -26,8 +26,8 @@ from tests.e2e._asserts import (
     _assert_sandbox_command_wal,
     _assert_sandbox_lifecycle_events,
     _assert_swebench_artifacts,
-    _assert_thread_messages_ordered,
     _assert_temporal_ordering,
+    _assert_thread_messages_ordered,
     wait_for_terminal_status,
 )
 from tests.e2e._submit import submit_cohort

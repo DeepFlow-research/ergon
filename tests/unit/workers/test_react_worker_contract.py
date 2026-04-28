@@ -3,9 +3,12 @@
 import inspect
 from uuid import UUID
 
+import ergon_builtins.workers.baselines.react_worker as react_worker_module
 import pytest
-
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
+from ergon_core.api.worker_context import WorkerContext
+from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 
 def test_no_adapter_kwarg() -> None:
@@ -54,9 +57,177 @@ def test_construct_with_minimal_explicit_kwargs() -> None:
 
 
 def test_pydantic_ai_transcript_adapter_lives_outside_worker() -> None:
-    import ergon_builtins.workers.baselines.react_worker as react_worker
+    module_symbols = vars(react_worker_module)
+    assert "_build_turns" not in module_symbols
+    assert "_extract_request_parts" not in module_symbols
+    assert "_extract_response_parts" not in module_symbols
+    assert "_extract_tool_results" not in module_symbols
 
-    assert not hasattr(react_worker, "_build_turns")
-    assert not hasattr(react_worker, "_extract_request_parts")
-    assert not hasattr(react_worker, "_extract_response_parts")
-    assert not hasattr(react_worker, "_extract_tool_results")
+
+class _FakeRunState:
+    def __init__(self) -> None:
+        self.message_history = [
+            ModelRequest(parts=[UserPromptPart(content="question")]),
+            ModelResponse(parts=[TextPart(content="partial answer")]),
+        ]
+
+
+class _FakeRunContext:
+    def __init__(self) -> None:
+        self.state = _FakeRunState()
+
+
+class _FailingAgentRun:
+    def __init__(self) -> None:
+        self.ctx = _FakeRunContext()
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        raise RuntimeError("tool validation failed")
+
+
+class _FailingAgentIter:
+    async def __aenter__(self):
+        return _FailingAgentRun()
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _FailingAgent:
+    def __init__(self, **kwargs) -> None:
+        pass
+
+    def iter(self, *args, **kwargs):
+        return _FailingAgentIter()
+
+
+class _DepsAgentRun:
+    def __init__(self) -> None:
+        self.ctx = _FakeRunContext()
+        self._yielded = False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._yielded:
+            raise StopAsyncIteration
+        self._yielded = True
+        return object()
+
+
+class _DepsAgentIter:
+    def __init__(self, **kwargs) -> None:
+        self.kwargs = kwargs
+
+    async def __aenter__(self):
+        return _DepsAgentRun()
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+
+class _DepsAgent:
+    init_kwargs = None
+    iter_kwargs = None
+
+    def __init__(self, **kwargs) -> None:
+        type(self).init_kwargs = kwargs
+
+    def iter(self, *args, **kwargs):
+        type(self).iter_kwargs = kwargs
+        return _DepsAgentIter(**kwargs)
+
+
+class _DepsWorker(ReActWorker):
+    def build_agent_deps(self, context: WorkerContext):
+        return {"execution_id": str(context.execution_id)}
+
+
+def _minimal_task() -> BenchmarkTask:
+    return BenchmarkTask(
+        task_slug="unit-task",
+        instance_key="unit-instance",
+        description="Unit task",
+        task_payload=EmptyTaskPayload(),
+    )
+
+
+def _minimal_context() -> WorkerContext:
+    return WorkerContext(
+        run_id=UUID(int=3),
+        definition_id=UUID(int=4),
+        task_id=UUID(int=2),
+        execution_id=UUID(int=5),
+        sandbox_id="test-sandbox",
+        node_id=UUID(int=6),
+    )
+
+
+@pytest.mark.asyncio
+async def test_react_worker_yields_partial_turn_before_reraising_agent_iter_failure(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(react_worker_module, "Agent", _FailingAgent)
+    monkeypatch.setattr(
+        react_worker_module,
+        "resolve_model_target",
+        lambda model: type(
+            "Resolved",
+            (),
+            {"model": "stub:constant", "capture_model_settings": None},
+        )(),
+    )
+
+    worker = ReActWorker(
+        name="unit",
+        model=None,
+        task_id=UUID(int=1),
+        sandbox_id="test-sandbox",
+        tools=[],
+        system_prompt=None,
+        max_iterations=10,
+    )
+
+    turns = []
+    with pytest.raises(RuntimeError, match="tool validation failed"):
+        async for turn in worker.execute(_minimal_task(), context=_minimal_context()):
+            turns.append(turn)
+
+    assert len(turns) == 1
+    assert any(part.content == "partial answer" for part in turns[0].response_parts)
+
+
+@pytest.mark.asyncio
+async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> None:
+    _DepsAgent.init_kwargs = None
+    _DepsAgent.iter_kwargs = None
+    monkeypatch.setattr(react_worker_module, "Agent", _DepsAgent)
+    monkeypatch.setattr(
+        react_worker_module,
+        "resolve_model_target",
+        lambda model: type(
+            "Resolved",
+            (),
+            {"model": "stub:constant", "capture_model_settings": None},
+        )(),
+    )
+
+    worker = _DepsWorker(
+        name="unit",
+        model=None,
+        task_id=UUID(int=1),
+        sandbox_id="test-sandbox",
+        tools=[],
+        system_prompt=None,
+        max_iterations=10,
+    )
+
+    turns = [turn async for turn in worker.execute(_minimal_task(), context=_minimal_context())]
+
+    assert len(turns) == 1
+    assert _DepsAgent.init_kwargs["deps_type"] is dict
+    assert _DepsAgent.iter_kwargs["deps"] == {"execution_id": str(UUID(int=5))}

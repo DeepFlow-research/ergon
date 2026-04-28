@@ -1,13 +1,11 @@
 """Contract: every registered benchmark declares onboarding_deps."""
 
 import pytest
-from pydantic import BaseModel
-from pydantic import ValidationError
-
 from ergon_builtins.registry_core import BENCHMARKS as CORE_BENCHMARKS
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
+from pydantic import BaseModel, ValidationError
 
 
 def _require_onboarding_deps(slug: str, cls: type[Benchmark]) -> BenchmarkDeps:

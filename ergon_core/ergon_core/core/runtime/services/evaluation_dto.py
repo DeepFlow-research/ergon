@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 

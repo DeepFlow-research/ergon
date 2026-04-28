@@ -12,11 +12,10 @@ Idempotent: every mutating call checks current state before writing.
 import logging
 from uuid import UUID
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 from ergon_core.core.runtime.services.task_cleanup_dto import CleanupResult
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 

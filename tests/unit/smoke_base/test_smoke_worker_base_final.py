@@ -11,7 +11,6 @@ drift.
 """
 
 import pytest
-
 from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 
 

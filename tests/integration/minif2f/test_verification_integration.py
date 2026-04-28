@@ -15,12 +15,11 @@ import os
 from uuid import uuid4
 
 import pytest
-
 from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
-from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_builtins.benchmarks.minif2f.sandbox.utils import REGISTRY_PATH
+from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload

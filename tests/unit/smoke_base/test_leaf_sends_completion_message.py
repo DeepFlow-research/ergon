@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.api import BenchmarkTask
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug
 from ergon_core.core.providers.sandbox.manager import AsyncSandbox

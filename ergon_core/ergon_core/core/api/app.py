@@ -36,9 +36,8 @@ from ergon_core.core.providers.sandbox.event_sink import (
 from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.runtime.inngest_client import inngest_client
-from ergon_core.core.settings import settings
 from ergon_core.core.runtime.inngest_registry import ALL_FUNCTIONS
-from ergon_core.core.settings import Settings
+from ergon_core.core.settings import Settings, settings
 from fastapi import FastAPI
 
 logger = logging.getLogger(__name__)

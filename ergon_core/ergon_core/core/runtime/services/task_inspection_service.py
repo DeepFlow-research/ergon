@@ -7,12 +7,11 @@ The toolkit can inject it without granting write access.
 import logging
 from uuid import UUID
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED, FAILED
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 from ergon_core.core.runtime.services.task_inspection_dto import SubtaskInfo
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 

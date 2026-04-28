@@ -15,7 +15,6 @@ import logging
 from uuid import UUID
 
 import inngest
-
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.events.task_events import (
     CancelCause,

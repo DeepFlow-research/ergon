@@ -9,7 +9,7 @@ transaction management is needed at this layer.
 from typing import Any, Generic, Type, TypeVar
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,

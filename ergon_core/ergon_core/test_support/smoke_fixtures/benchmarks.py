@@ -10,16 +10,14 @@ task, so these fixtures replace the production benchmark loaders only when
 from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
-from pydantic import BaseModel
-
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark_deps import BenchmarkDeps
-from ergon_core.api.json_types import JsonObject
-from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import ResearchRubricsTaskPayload
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.benchmark_deps import BenchmarkDeps
+from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
+from ergon_core.core.json_types import JsonObject
+from pydantic import BaseModel
 
 
 class _SingleTaskSmokeBenchmark(Benchmark):

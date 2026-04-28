@@ -6,9 +6,8 @@ Asserts only the override behaviour — the parent ``execute`` is
 
 from uuid import uuid4
 
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 import pytest
-
+from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.test_support.smoke_fixtures.workers.minif2f_smoke import (
     MiniF2FSadPathSmokeWorker,
 )

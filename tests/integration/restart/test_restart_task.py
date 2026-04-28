@@ -7,11 +7,9 @@ Covers:
 - refine_task: RUNNING raises TaskRunningError; non-running (COMPLETED) accepted
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from sqlmodel import select
-
+import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import (
@@ -28,6 +26,7 @@ from ergon_core.core.runtime.services.task_management_dto import (
     RestartTaskCommand,
 )
 from ergon_core.core.runtime.services.task_management_service import TaskManagementService
+from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
     assert_wal_has_status,

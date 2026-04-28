@@ -15,8 +15,6 @@ from collections.abc import Awaitable, Callable
 from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel
-
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
@@ -55,6 +53,7 @@ from ergon_core.core.runtime.services.graph_dto import (
     WorkflowGraphDto,
 )
 from ergon_core.core.utils import utcnow
+from pydantic import BaseModel
 from sqlmodel import Session, col, select
 
 logger = logging.getLogger(__name__)

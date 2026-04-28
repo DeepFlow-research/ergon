@@ -6,7 +6,7 @@ Each Inngest function has an output_type for structured returns.
 from typing import Literal
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 

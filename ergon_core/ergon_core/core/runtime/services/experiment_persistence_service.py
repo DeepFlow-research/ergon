@@ -9,8 +9,7 @@ from uuid import uuid4
 
 from ergon_core.api.evaluator import Rubric
 from ergon_core.api.handles import PersistedExperimentDefinition
-from ergon_core.api.json_types import JsonObject
-from sqlalchemy.exc import SQLAlchemyError
+from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,
@@ -23,6 +22,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.utils import utcnow
+from sqlalchemy.exc import SQLAlchemyError
 
 if TYPE_CHECKING:
     from ergon_core.api.experiment import Experiment

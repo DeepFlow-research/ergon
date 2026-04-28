@@ -25,9 +25,35 @@ def test_anthropic_enables_thinking() -> None:
     }
 
 
+def test_anthropic_opus_47_uses_adaptive_summarized_thinking() -> None:
+    assert capture_model_settings_for("anthropic:claude-opus-4.7") == {
+        "anthropic_thinking": {"type": "adaptive", "display": "summarized"},
+        "anthropic_effort": "medium",
+    }
+
+
 def test_openrouter_includes_reasoning() -> None:
     assert capture_model_settings_for("openrouter:anthropic/claude-sonnet-4.6") == {
-        "openrouter_reasoning": {"enabled": True, "exclude": False},
+        "openrouter_reasoning": {"max_tokens": 4096, "exclude": False},
+    }
+
+
+def test_openrouter_opus_uses_larger_reasoning_budget() -> None:
+    assert capture_model_settings_for("openrouter:anthropic/claude-opus-4.7") == {
+        "openrouter_reasoning": {"max_tokens": 8192, "exclude": False},
+    }
+
+
+def test_openrouter_openai_uses_reasoning_effort() -> None:
+    assert capture_model_settings_for("openrouter:openai/gpt-5.1") == {
+        "openrouter_reasoning": {"effort": "medium", "exclude": False},
+    }
+
+
+def test_openai_responses_uses_detailed_reasoning_summary() -> None:
+    assert capture_model_settings_for("openai-responses:gpt-5.5-pro") == {
+        "openai_reasoning_effort": "medium",
+        "openai_reasoning_summary": "detailed",
     }
 
 

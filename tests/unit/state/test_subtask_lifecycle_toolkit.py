@@ -3,7 +3,6 @@
 from uuid import uuid4
 
 import pytest
-
 from ergon_builtins.tools.subtask_lifecycle_toolkit import (
     SubtaskLifecycleToolkit,
     ToolFailure,

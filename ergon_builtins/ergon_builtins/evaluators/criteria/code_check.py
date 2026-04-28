@@ -9,7 +9,7 @@ from typing import ClassVar
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult
+from ergon_core.api.results import CriterionResult, CriterionScoreSpec
 
 
 class CodeCheckCriterion(Criterion):
@@ -32,19 +32,23 @@ class CodeCheckCriterion(Criterion):
         weight: float = 1.0,
         max_score: float = 1.0,
     ) -> None:
-        super().__init__(name=name, weight=weight)
+        super().__init__(
+            name=name,
+            description=description or name,
+            weight=weight,
+            score_spec=CriterionScoreSpec(max_score=max_score),
+        )
         self.code_template = code_template
-        self.description = description
-        self.max_score = max_score
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
         output = context.worker_result.output
         passed = bool(output and len(output.strip()) > 0)
-        score = self.max_score if passed else 0.0
+        score = self.score_spec.max_score if passed else 0.0
         return CriterionResult(
-            name=self.name,
+            slug=self.slug,
             score=score,
             passed=passed,
             weight=self.weight,
+            max_score=self.score_spec.max_score,
             feedback=f"Code check '{self.name}': {'passed' if passed else 'failed'}",
         )

@@ -31,7 +31,6 @@ from ergon_core.core.runtime.tracing import (
     task_propagate_context,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -2,9 +2,8 @@
 
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from ergon_core.core.persistence.shared.types import NodeId, RunId
+from pydantic import BaseModel
 
 
 class CleanupResult(BaseModel):

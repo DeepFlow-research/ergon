@@ -4,15 +4,13 @@ UUID fields use NewType aliases so type checkers catch cross-field
 swaps at the call boundary.
 """
 
-from pydantic import BaseModel, Field
-
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
     NodeId,
     RunId,
     TaskSlug,
 )
-
+from pydantic import BaseModel, Field
 
 # ── add_subtask ────────────────────────────────────────────────────────────
 

@@ -11,8 +11,6 @@ from datetime import datetime
 from typing import ClassVar
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from ergon_core.core.api.schemas import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
@@ -26,6 +24,7 @@ from ergon_core.core.persistence.graph.models import GraphTargetType, MutationTy
 from ergon_core.core.runtime.events.base import InngestEventContract
 from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
 from ergon_core.core.runtime.services.graph_dto import GraphMutationValue
+from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # Nested models used inside workflow.started
@@ -234,14 +233,26 @@ class DashboardGraphMutationEvent(InngestEventContract):
 class DashboardContextEventEvent(InngestEventContract):
     name: ClassVar[str] = "dashboard/context.event"
 
-    id: UUID  # RunContextEvent.id — dedup key on frontend
+    id: UUID = Field(
+        description="RunContextEvent.id used by the frontend as a stable deduplication key."
+    )
     run_id: UUID
     task_execution_id: UUID
-    task_node_id: UUID  # resolved from _execution_task_map at emit time
+    task_node_id: UUID = Field(
+        description=(
+            "Graph task node resolved from the task execution by the dashboard emitter at "
+            "event emission time."
+        )
+    )
     worker_binding_key: str
     sequence: int
     event_type: ContextEventType
-    payload: ContextEventPayload  # serialised via model_dump(mode="json")
+    payload: ContextEventPayload = Field(
+        description=(
+            "Typed context event payload serialized with model_dump(mode='json') before "
+            "being sent through Inngest."
+        )
+    )
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None

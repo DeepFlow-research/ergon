@@ -10,7 +10,6 @@ from typing import Any
 from uuid import UUID
 
 from ergon_core.api import Benchmark, Evaluator, Worker
-from ergon_builtins.models.resolution import ResolvedModel
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
@@ -27,6 +26,8 @@ from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 from ergon_builtins.evaluators.rubrics.swebench_rubric import SWEBenchRubric
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.openrouter_backend import resolve_openrouter
+from ergon_builtins.models.openrouter_responses_backend import resolve_openrouter_responses
+from ergon_builtins.models.resolution import ResolvedModel
 from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.workers.baselines.react_prompts import (
     MINIF2F_SYSTEM_PROMPT,
@@ -34,7 +35,6 @@ from ergon_builtins.workers.baselines.react_prompts import (
 )
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 from ergon_builtins.workers.baselines.training_stub_worker import TrainingStubWorker
-
 
 # reason: Worker factory signature — every registry entry accepts the same
 # four keyword-only args. Plain ``Worker`` subclasses get them via
@@ -186,4 +186,5 @@ MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
     "anthropic": resolve_cloud,
     "google": resolve_cloud,
     "openrouter": resolve_openrouter,
+    "openai-responses": resolve_openrouter_responses,
 }

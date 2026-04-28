@@ -2,11 +2,13 @@
 
 from argparse import Namespace
 from uuid import UUID
-from sqlmodel import select
-from ergon_cli.rendering import render_table
+
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.runtime.services.run_service import cancel_run as do_cancel
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.runtime.services.run_service import cancel_run as do_cancel
+from sqlmodel import select
+
+from ergon_cli.rendering import render_table
 
 
 def handle_run(args: Namespace) -> int:

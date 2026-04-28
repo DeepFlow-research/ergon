@@ -9,7 +9,6 @@ Usage:
 """
 
 import httpx
-
 from ergon_core.core.settings import settings
 
 

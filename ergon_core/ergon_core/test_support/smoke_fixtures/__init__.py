@@ -16,7 +16,6 @@ See docs/superpowers/plans/test-refactor/01-fixtures.md §2.7.
 import os
 
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, SANDBOX_MANAGERS, WORKERS
-
 from ergon_core.test_support.smoke_fixtures.benchmarks import (
     MiniF2FSmokeBenchmark,
     ResearchRubricsSmokeBenchmark,

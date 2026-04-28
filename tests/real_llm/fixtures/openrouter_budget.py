@@ -4,7 +4,6 @@ import os
 from collections.abc import AsyncGenerator
 
 import pytest
-
 from ergon_core.core.providers.generation.openrouter_budget import OpenRouterBudget
 from ergon_core.core.settings import settings
 

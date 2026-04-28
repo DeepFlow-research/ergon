@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import re
+from pathlib import Path
 
 from ergon_core.test_support.smoke_fixtures.smoke_base.constants import (
     EXPECTED_SUBTASK_SLUGS,

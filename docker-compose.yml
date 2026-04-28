@@ -81,11 +81,16 @@ services:
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
       - ERGON_API_BASE_URL=http://api:9000
       - ENABLE_TEST_HARNESS=${ENABLE_TEST_HARNESS:-0}
+      - ENABLE_SMOKE_FIXTURES=${ENABLE_SMOKE_FIXTURES:-0}
       - ERGON_STARTUP_PLUGINS=${ERGON_STARTUP_PLUGINS:-}
       - TEST_HARNESS_SECRET=${TEST_HARNESS_SECRET:-local-dev}
       - ERGON_BLOB_ROOT=/tmp/ergon-blob
       - OTEL_TRACES_ENABLED=false
       - OTEL_SERVICE_NAME=ergon-core
+      - ERGON_LOGFIRE_PYDANTIC_AI=${ERGON_LOGFIRE_PYDANTIC_AI:-0}
+      - ERGON_LOGFIRE_CONFIG_DIR=${ERGON_LOGFIRE_CONFIG_DIR:-/app/.logfire}
+      - ERGON_LOGFIRE_SERVICE_NAME=${ERGON_LOGFIRE_SERVICE_NAME:-ergon-builtins}
+      - ERGON_LOGFIRE_ENVIRONMENT=${ERGON_LOGFIRE_ENVIRONMENT:-local}
       - E2B_API_KEY=${E2B_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       # Put /app on sys.path so editable source mounts resolve in the API
@@ -104,6 +109,7 @@ services:
       - ./ergon_builtins:/app/ergon_builtins
       - ./ergon_cli:/app/ergon_cli
       - ./data:/app/data
+      - ./.logfire:/app/.logfire:ro
       # Blob store bind mount so host-side pytest can read files the
       # SandboxResourcePublisher writes from inside the container.  The
       # mount uses the same path on both sides so the DB-stored

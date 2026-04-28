@@ -10,8 +10,8 @@ import pytest
 
 
 def test_researchrubrics_slugs_registered() -> None:
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
     from ergon_builtins.registry import EVALUATORS, WORKERS
+    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
 
     register_smoke_fixtures()
 
@@ -30,8 +30,8 @@ def test_researchrubrics_slugs_registered() -> None:
 
 
 def test_no_retired_slugs_present() -> None:
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
     from ergon_builtins.registry import WORKERS
+    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
 
     register_smoke_fixtures()
 
@@ -49,8 +49,8 @@ def test_register_is_idempotent() -> None:
 
 
 def test_minif2f_slugs_registered() -> None:
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
     from ergon_builtins.registry import EVALUATORS, WORKERS
+    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
 
     register_smoke_fixtures()
 
@@ -63,8 +63,8 @@ def test_minif2f_slugs_registered() -> None:
 
 
 def test_swebench_slugs_registered() -> None:
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
     from ergon_builtins.registry import EVALUATORS, WORKERS
+    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
 
     register_smoke_fixtures()
 
@@ -79,8 +79,8 @@ def test_swebench_slugs_registered() -> None:
 def test_smoke_benchmarks_are_test_owned_when_harness_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
     from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
+    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
     from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
 
     slugs = ("researchrubrics", "minif2f", "swebench-verified")

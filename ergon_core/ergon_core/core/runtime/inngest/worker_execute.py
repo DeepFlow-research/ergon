@@ -10,13 +10,12 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from pydantic import BaseModel
 from ergon_builtins.registry import BENCHMARKS, WORKERS
-from ergon_core.api.generation import GenerationTurn
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.generation import GenerationTurn
 from ergon_core.core.persistence.context.repository import ContextEventRepository
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.persistence.shared.db import get_session
@@ -30,6 +29,7 @@ from ergon_core.core.runtime.tracing import (
     get_trace_sink,
     worker_execute_context,
 )
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

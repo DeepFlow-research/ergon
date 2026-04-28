@@ -11,7 +11,7 @@ serialization cost).
 from typing import Annotated, Literal
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.persistence.shared.types import (
     DefinitionId,
@@ -45,7 +45,12 @@ class GraphNodeDto(BaseModel):
     instance_key: str
     task_slug: str
     description: str
-    status: str  # not NodeStatus — DB allows domain-specific statuses (§4.7 in status_conventions)
+    status: str = Field(
+        description=(
+            "Domain-specific node lifecycle status stored as a string because the database "
+            "allows experiment-specific statuses; see status_conventions."
+        )
+    )
     assigned_worker_slug: str | None
     parent_node_id: NodeId | None
     level: int
@@ -59,16 +64,26 @@ class GraphEdgeDto(BaseModel):
     definition_dependency_id: DefinitionId | None
     source_node_id: NodeId
     target_node_id: NodeId
-    status: str  # not EdgeStatus — DB allows domain-specific statuses
+    status: str = Field(
+        description=(
+            "Domain-specific edge lifecycle status stored as a string because the database "
+            "allows experiment-specific dependency statuses."
+        )
+    )
 
 
 class GraphAnnotationDto(BaseModel):
     model_config = {"frozen": True}
 
-    id: UUID  # annotation's own id
+    id: UUID = Field(description="Identifier of the annotation row itself.")
     run_id: RunId
     target_type: GraphTargetType
-    target_id: UUID  # polymorphic: NodeId or EdgeId depending on target_type
+    target_id: UUID = Field(
+        description=(
+            "Polymorphic graph target identifier. Interpreted as a NodeId or EdgeId based "
+            "on target_type."
+        )
+    )
     namespace: str
     sequence: int
     payload: JsonObject
@@ -77,12 +92,17 @@ class GraphAnnotationDto(BaseModel):
 class GraphMutationDto(BaseModel):
     model_config = {"frozen": True}
 
-    id: UUID  # mutation's own id — not a node/edge/run id
+    id: UUID = Field(description="Identifier of the mutation row itself, not a graph target id.")
     run_id: RunId
     sequence: int
     mutation_type: MutationType
     target_type: GraphTargetType
-    target_id: UUID  # polymorphic: could be NodeId, EdgeId, or annotation id
+    target_id: UUID = Field(
+        description=(
+            "Polymorphic mutation target identifier. Interpreted as a NodeId, EdgeId, or "
+            "annotation id based on target_type and mutation_type."
+        )
+    )
     actor: str
     old_value: "GraphMutationValue | None"
     new_value: "GraphMutationValue"

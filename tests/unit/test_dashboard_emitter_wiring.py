@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-
 from ergon_core.core.dashboard.emitter import DashboardEmitter
 
 # ---------------------------------------------------------------------------

@@ -1,11 +1,10 @@
 """``SmokeCriterionBase._check_children_completed`` rejects non-terminal children."""
 
 import pytest
-from pydantic import BaseModel
-
 from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
 from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from pydantic import BaseModel
 
 
 class _FakeNode(BaseModel):

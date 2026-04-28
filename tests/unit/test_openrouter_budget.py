@@ -3,8 +3,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
-from ergon_core.core.providers.generation.openrouter_budget import OpenRouterBudget
+from tests.real_llm.openrouter_budget import OpenRouterBudget
 
 
 def _make_mock_response(

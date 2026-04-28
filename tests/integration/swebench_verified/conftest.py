@@ -5,8 +5,6 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-from sqlmodel import select
-
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -15,6 +13,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
+from sqlmodel import select
 
 _MINIMAL_SWEBENCH_PAYLOAD: dict[str, object] = {
     "instance_id": "django__django-1",

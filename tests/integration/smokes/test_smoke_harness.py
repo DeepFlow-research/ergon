@@ -15,11 +15,10 @@ import os
 
 import httpx
 import pytest
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import get_engine, get_session
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 pytestmark = pytest.mark.integration
 

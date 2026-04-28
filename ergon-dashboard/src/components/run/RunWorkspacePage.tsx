@@ -27,7 +27,6 @@ const VERTICAL_LAYOUT_STORAGE_KEY = "ergon-run-debugger-vertical-layout:v1";
 const HORIZONTAL_LAYOUT_STORAGE_KEY = "ergon-run-debugger-horizontal-layout:v1";
 const DEFAULT_VERTICAL_LAYOUT: Layout = { "graph-workspace": 62, timeline: 38 };
 const DEFAULT_HORIZONTAL_LAYOUT: Layout = { graph: 58, workspace: 42 };
-const FULL_GRAPH_LAYOUT: Layout = { graph: 100, "graph-workspace": 100 };
 
 function loadPanelLayout(storageKey: string, fallback: Layout): Layout {
   if (typeof window === "undefined") return fallback;

@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,

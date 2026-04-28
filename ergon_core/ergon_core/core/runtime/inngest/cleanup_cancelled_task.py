@@ -9,9 +9,8 @@ Two durable steps:
 import logging
 
 import inngest
-
-from ergon_core.api.json_types import JsonObject
 from ergon_core.core.dashboard.emitter import dashboard_emitter
+from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client

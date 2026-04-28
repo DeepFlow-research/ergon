@@ -12,9 +12,6 @@ Covered here:
 """
 
 import pytest
-
-from sqlmodel import select
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import CANCELLED, EDGE_PENDING
@@ -23,6 +20,7 @@ from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.services.orchestration_dto import PropagateTaskCompletionCommand
 from ergon_core.core.runtime.services.task_propagation_service import TaskPropagationService
+from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
     get_node_status,

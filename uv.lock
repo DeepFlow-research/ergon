@@ -1096,6 +1096,7 @@ version = "0.1.0"
 source = { editable = "ergon_builtins" }
 dependencies = [
     { name = "ergon-core" },
+    { name = "logfire" },
 ]
 
 [package.optional-dependencies]
@@ -1128,6 +1129,7 @@ requires-dist = [
     { name = "ergon-builtins", extras = ["local-models", "data"], marker = "extra == 'all'", editable = "ergon_builtins" },
     { name = "ergon-core", editable = "ergon_core" },
     { name = "huggingface-hub", marker = "extra == 'data'" },
+    { name = "logfire", specifier = ">=4.32.1" },
     { name = "outlines", marker = "extra == 'local-models'" },
     { name = "pandas", marker = "extra == 'data'" },
     { name = "swebench", marker = "extra == 'data'", specifier = ">=3.0,<5" },

@@ -4,7 +4,6 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.core.runtime.errors.delegation_errors import RunRecordMissingError
 from ergon_core.core.runtime.services.task_management_service import TaskManagementService
 

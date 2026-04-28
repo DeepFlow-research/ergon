@@ -4,7 +4,6 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
 from ergon_builtins.registry_core import WORKERS
 from ergon_core.api import Worker
 
@@ -34,11 +33,11 @@ def test_minif2f_factory_builds_toolkit(monkeypatch: pytest.MonkeyPatch) -> None
     """The minif2f factory must construct a live toolkit bound to the sandbox."""
     # reason: imports deferred to avoid pulling registry_core + sandbox_manager
     # eagerly into test collection. Every test pulls its own patch target.
-    from ergon_builtins import registry_core
-
     # reason: only needed for MagicMock spec= below; eager import would pull
     # the benchmark sandbox module into all registry tests.
     from ergon_builtins.benchmarks.minif2f import sandbox_manager as sm_mod
+
+    from ergon_builtins import registry_core
 
     fake_sandbox = MagicMock(name="fake-sandbox")
     fake_manager = MagicMock(spec=sm_mod.MiniF2FSandboxManager)

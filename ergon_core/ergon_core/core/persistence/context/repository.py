@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from ergon_core.api.generation import (
+from ergon_core.core.generation import (
     GenerationTurn,
     SystemPromptPart,
     TextPart,

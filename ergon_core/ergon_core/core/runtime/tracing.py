@@ -52,6 +52,7 @@ try:
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 except ImportError:
     OTLPSpanExporter = None  # type: ignore[assignment,misc]
+from ergon_core.core.json_types import JsonObject, JsonValue
 from ergon_core.core.settings import settings
 from opentelemetry.trace import (
     NonRecordingSpan,
@@ -63,8 +64,6 @@ from opentelemetry.trace import (
 from opentelemetry.trace.propagation import set_span_in_context
 from opentelemetry.trace.span import TraceState
 from pydantic import BaseModel, Field
-
-from ergon_core.api.json_types import JsonObject, JsonValue
 
 TRACE_FLAGS_SAMPLED = 0x01
 _MAX_TRACE_ID = (1 << 128) - 1

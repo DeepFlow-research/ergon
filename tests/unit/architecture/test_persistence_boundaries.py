@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 FORBIDDEN_PATTERNS = (
     "get_session(",
     "session.exec(",

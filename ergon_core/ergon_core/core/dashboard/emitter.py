@@ -26,8 +26,8 @@ from ergon_core.core.persistence.graph.models import (
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.inngest_client import inngest_client
-from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
 from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
+from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
 from ergon_core.core.runtime.services.cohort_stats_service import (
     experiment_cohort_stats_service,
 )
@@ -50,8 +50,8 @@ from ergon_core.core.dashboard.event_contracts import (
     DashboardTaskStatusChangedEvent,
     DashboardThreadMessageCreatedEvent,
     DashboardWorkflowCompletedEvent,
-    TaskTreeNode,
     DashboardWorkflowStartedEvent,
+    TaskTreeNode,
 )
 
 _MUTATION_VALUE_ADAPTER: TypeAdapter[GraphMutationValue] = TypeAdapter(GraphMutationValue)

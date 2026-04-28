@@ -8,12 +8,12 @@ from collections.abc import Callable
 
 import structlog
 from ergon_core.api import Benchmark, Evaluator, Worker
+from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+
 from ergon_builtins.models.resolution import (
     ResolvedModel,
     register_model_backend,
 )
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-
 from ergon_builtins.registry_core import (
     BENCHMARKS as _core_benchmarks,
 )

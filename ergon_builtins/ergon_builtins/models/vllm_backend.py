@@ -5,9 +5,10 @@ import logging
 import urllib.error
 import urllib.request
 
-from ergon_builtins.models.resolution import ResolvedModel
 from pydantic_ai.models.openai import OpenAIModel as OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+
+from ergon_builtins.models.resolution import ResolvedModel
 
 logger = logging.getLogger(__name__)
 

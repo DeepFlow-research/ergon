@@ -18,9 +18,8 @@ from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
-from sqlmodel import col, desc, select
-
 from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from sqlmodel import col, desc, select
 
 HEALTH_PY = """\
 import sys

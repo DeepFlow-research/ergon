@@ -2,11 +2,10 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
-
 from ergon_core.core.runtime.services import communication_service as module
 from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine, select
 
 Thread = module.Thread
 

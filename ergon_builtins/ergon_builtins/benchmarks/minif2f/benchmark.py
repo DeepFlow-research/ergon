@@ -11,11 +11,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from huggingface_hub import hf_hub_download
-
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
+from huggingface_hub import hf_hub_download
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
 

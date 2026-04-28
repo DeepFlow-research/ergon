@@ -12,8 +12,6 @@ from collections import deque
 from typing import Literal
 from uuid import UUID
 
-from sqlmodel import Session, select
-
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import (
     CANCELLED,
@@ -24,6 +22,7 @@ from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.subtask_cancellation_dto import CancelOrphansResult
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 

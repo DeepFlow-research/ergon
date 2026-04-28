@@ -13,7 +13,6 @@ import tokenize
 from pathlib import Path
 from typing import NamedTuple
 
-
 DEFAULT_PATHS = (
     "ergon_core",
     "ergon_builtins",

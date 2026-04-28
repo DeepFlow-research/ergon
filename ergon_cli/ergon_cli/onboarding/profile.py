@@ -2,9 +2,8 @@
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
-
 from ergon_core.api.benchmark_deps import BenchmarkDeps
+from pydantic import BaseModel, Field
 
 
 class LLMProvider(str, Enum):

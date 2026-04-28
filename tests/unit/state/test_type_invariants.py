@@ -7,10 +7,9 @@ accepts any string without raising ValidationError.  The rejection test table
 is empty as a result; see the inline comment for details.
 """
 
-import pytest
-from pydantic import ValidationError
 from uuid import uuid4
 
+import pytest
 from ergon_core.core.persistence.graph.models import (
     RunGraphAnnotation,
     RunGraphMutation,
@@ -29,7 +28,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
     TrainingSession,
 )
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Happy path — field accepts valid value and stores it

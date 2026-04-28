@@ -10,8 +10,6 @@ from collections.abc import Awaitable, Callable
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
@@ -19,6 +17,8 @@ from ergon_core.core.persistence.shared.types import (
     RunId,
     TaskSlug,
 )
+from ergon_core.core.runtime.services.task_inspection_dto import SubtaskInfo
+from ergon_core.core.runtime.services.task_inspection_service import TaskInspectionService
 from ergon_core.core.runtime.services.task_management_dto import (
     AddSubtaskCommand,
     CancelTaskCommand,
@@ -27,9 +27,8 @@ from ergon_core.core.runtime.services.task_management_dto import (
     RestartTaskCommand,
     SubtaskSpec,
 )
-from ergon_core.core.runtime.services.task_inspection_dto import SubtaskInfo
 from ergon_core.core.runtime.services.task_management_service import TaskManagementService
-from ergon_core.core.runtime.services.task_inspection_service import TaskInspectionService
+from pydantic import BaseModel
 
 from ergon_builtins.tools.bash_sandbox_tool import make_sandbox_bash_tool
 

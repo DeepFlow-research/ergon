@@ -25,8 +25,6 @@ from pathlib import Path
 from uuid import UUID
 
 import httpx
-from sqlmodel import select
-
 from ergon_core.core.api.schemas import RunTaskDto
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import BLOCKED, COMPLETED, FAILED
@@ -38,7 +36,6 @@ from ergon_core.core.persistence.telemetry.models import (
     SandboxCommandWalEntry,
     SandboxEvent,
 )
-
 from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
 from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
 from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
@@ -46,6 +43,8 @@ from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
     RecursiveSmokeWorkerBase,
 )
 from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
+from sqlmodel import select
+
 from tests.e2e._read_contracts import require_run_snapshot
 
 TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -118,9 +117,7 @@ def _assert_run_resources(run_id: UUID) -> None:
         for resource in resources
         if resource.name.startswith("probe_") and resource.name.endswith(".json")
     ]
-    assert len(probes) == 10, (
-        f"expected 10 probe_*.json (kind=report) resources, got {len(probes)}"
-    )
+    assert len(probes) == 10, f"expected 10 probe_*.json (kind=report) resources, got {len(probes)}"
     worker_outputs = [resource for resource in resources if resource.name == "worker_output"]
     assert not worker_outputs, (
         "worker final assistant messages must stay on executions, not resources"

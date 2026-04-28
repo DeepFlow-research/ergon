@@ -11,8 +11,8 @@ from ergon_cli.commands.evaluator import handle_evaluator
 from ergon_cli.commands.onboard import handle_onboard
 from ergon_cli.commands.run import handle_run
 from ergon_cli.commands.train import handle_train
-from ergon_cli.commands.workflow import handle_workflow
 from ergon_cli.commands.worker import handle_worker
+from ergon_cli.commands.workflow import handle_workflow
 
 
 def build_parser() -> argparse.ArgumentParser:

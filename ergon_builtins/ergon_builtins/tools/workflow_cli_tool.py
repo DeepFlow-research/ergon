@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from ergon_cli.commands.workflow import (
@@ -11,7 +11,13 @@ from ergon_cli.commands.workflow import (
 from ergon_core.api.worker_context import WorkerContext
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.runtime.services.workflow_service import WorkflowService
+from pydantic_ai import RunContext
 from sqlmodel import Session
+
+from ergon_builtins.workers.baselines.tool_budget import (
+    AgentToolBudgetDeps,
+    AgentToolBudgetExhaustedResult,
+)
 
 
 class WorkflowCommandExecutor(Protocol):
@@ -33,7 +39,8 @@ def make_workflow_cli_tool(
     execute_command: WorkflowCommandExecutor = execute_workflow_command,
     session_factory: Callable[[], Session] = get_session,
     service_factory: Callable[[], WorkflowService] = WorkflowService,
-) -> Callable[[str], Awaitable[str]]:
+    budgeted: bool = False,
+) -> Callable[..., Awaitable[Any]]:  # slopcop: ignore[no-typing-any]
     """Build an agent-facing ``workflow(command)`` callable.
 
     The model supplies only the command string. Run, task, execution, and
@@ -41,8 +48,7 @@ def make_workflow_cli_tool(
     run by passing alternate IDs.
     """
 
-    async def workflow(command: str) -> str:
-        """Inspect workflow topology/resources or dry-run workflow management commands."""
+    async def run_command(command: str) -> str:
         if worker_context.node_id is None:
             raise ValueError("workflow tool requires WorkerContext.node_id")
 
@@ -65,5 +71,23 @@ def make_workflow_cli_tool(
         if output.stderr:
             return f"{output.stdout}\n\nstderr:\n{output.stderr}".strip()
         return output.stdout
+
+    if budgeted:
+
+        async def workflow(
+            ctx: RunContext[AgentToolBudgetDeps],
+            command: str,
+        ) -> str | AgentToolBudgetExhaustedResult:
+            """Inspect workflow topology/resources or dry-run workflow management commands."""
+            tool_budget = ctx.deps.tool_budget
+            if tool_budget.increment("workflow", "workflow") > tool_budget.max_workflow_tool_calls:
+                return tool_budget.exhausted_result("workflow tool budget reached")
+            return await run_command(command)
+
+        return workflow
+
+    async def workflow(command: str) -> str:
+        """Inspect workflow topology/resources or dry-run workflow management commands."""
+        return await run_command(command)
 
     return workflow

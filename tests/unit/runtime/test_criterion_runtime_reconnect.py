@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
     CriterionRuntimeOptions,

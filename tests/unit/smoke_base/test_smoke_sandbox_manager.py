@@ -2,7 +2,6 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-
 from ergon_core.core.providers.sandbox.event_sink import SandboxEventSink
 
 
@@ -121,6 +120,7 @@ async def test_static_teardown_closes_registered_smoke_sandbox() -> None:
 def test_smoke_benchmarks_use_smoke_sandbox_manager(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
     from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
     from ergon_core.test_support.smoke_fixtures.benchmarks import (
         MiniF2FSmokeBenchmark,
@@ -128,7 +128,6 @@ def test_smoke_benchmarks_use_smoke_sandbox_manager(
         SweBenchSmokeBenchmark,
     )
     from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
-    from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
 
     slugs = (
         ResearchRubricsSmokeBenchmark.type_slug,

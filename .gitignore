@@ -13,6 +13,7 @@ build/
 
 # Environment
 .env
+.logfire/
 
 # Databases
 *.db

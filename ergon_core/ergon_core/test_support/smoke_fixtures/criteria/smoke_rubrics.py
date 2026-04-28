@@ -18,7 +18,6 @@ from collections.abc import Mapping
 from typing import Any, ClassVar
 
 from ergon_core.api.evaluator import Rubric
-
 from ergon_core.test_support.smoke_fixtures.criteria.minif2f_smoke import MiniF2FSmokeCriterion
 from ergon_core.test_support.smoke_fixtures.criteria.researchrubrics_smoke import (
     ResearchRubricsSmokeCriterion,

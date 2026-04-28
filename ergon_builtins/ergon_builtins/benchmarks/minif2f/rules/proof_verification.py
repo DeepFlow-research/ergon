@@ -11,7 +11,7 @@ from typing import ClassVar
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult
+from ergon_core.api.results import CriterionResult, CriterionScoreSpec
 from ergon_core.core.runtime.evaluation.criterion_runtime import ResourceNotFoundError
 from pydantic import BaseModel
 
@@ -59,8 +59,11 @@ class ProofVerificationCriterion(Criterion):
         ground_truth_proof: str | None = None,
         formal_system: str = "lean",
     ) -> None:
-        super().__init__(name=name, weight=weight)
-        self.max_score = max_score
+        super().__init__(
+            name=name,
+            weight=weight,
+            score_spec=CriterionScoreSpec(max_score=max_score),
+        )
         self.problem_statement = problem_statement
         self.ground_truth_proof = ground_truth_proof
         self.formal_system = formal_system
@@ -90,7 +93,7 @@ class ProofVerificationCriterion(Criterion):
         )
 
         outcome = await self._verify_proof(context, proof_code)
-        score = self.max_score if outcome.verified else 0.0
+        score = self.score_spec.max_score if outcome.verified else 0.0
         feedback = (
             "Proof successfully verified by Lean compiler."
             if outcome.verified
@@ -102,6 +105,7 @@ class ProofVerificationCriterion(Criterion):
             score=score,
             passed=outcome.verified,
             weight=self.weight,
+            max_score=self.score_spec.max_score,
             feedback=feedback,
             evaluation_input=evaluation_log,
             evaluated_resource_ids=proof_data.evaluated_resource_ids,

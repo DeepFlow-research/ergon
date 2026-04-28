@@ -4,14 +4,13 @@ Invoked by check_evaluators per evaluator. Creates the criterion executor,
 runs all criteria, aggregates results, persists RunTaskEvaluation.
 """
 
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
 
 import inngest
-from pydantic import BaseModel
 from ergon_builtins.registry import BENCHMARKS, EVALUATORS, SANDBOX_MANAGERS
-from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
+from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.runtime.errors import ContractViolationError, RegistryLookupError
@@ -21,11 +20,11 @@ from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import (
     EvaluateTaskRunRequest,
 )
-from ergon_core.core.runtime.services.inngest_function_results import (
-    EvaluateTaskRunResult,
-)
 from ergon_core.core.runtime.services.evaluation_persistence_service import (
     EvaluationPersistenceService,
+)
+from ergon_core.core.runtime.services.inngest_function_results import (
+    EvaluateTaskRunResult,
 )
 from ergon_core.core.runtime.services.rubric_evaluation_service import (
     RubricEvaluationService,
@@ -35,6 +34,7 @@ from ergon_core.core.runtime.tracing import (
     evaluation_task_context,
     get_trace_sink,
 )
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 evaluation_persistence = EvaluationPersistenceService()

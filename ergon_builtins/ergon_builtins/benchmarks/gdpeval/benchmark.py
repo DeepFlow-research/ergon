@@ -12,13 +12,13 @@ from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.benchmark_deps import BenchmarkDeps
 from ergon_core.api.task_types import BenchmarkTask
 
-from ergon_builtins.benchmarks.gdpeval.task_schemas import GDPTaskConfig
 from ergon_builtins.benchmarks.gdpeval.loader import (
     HF_REPO_ID,
     extract_task_description,
     find_reference_files,
     load_task_ids,
 )
+from ergon_builtins.benchmarks.gdpeval.task_schemas import GDPTaskConfig
 
 
 class GDPEvalBenchmark(Benchmark):

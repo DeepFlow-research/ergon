@@ -79,7 +79,7 @@ class InngestCriterionExecutor:
                     sandbox_manager=self.sandbox_manager,
                     options=CriterionRuntimeOptions(
                         run_id=task_context.run_id,
-                        task_id=self.task_id,
+                        task_id=self.execution_id,
                         # Per RFC ``sandbox-lifetime-covers-criteria``: pass
                         # the task's sandbox_id so ensure_sandbox prefers
                         # ``manager.reconnect(sandbox_id)`` over constructing

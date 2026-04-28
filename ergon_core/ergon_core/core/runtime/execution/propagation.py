@@ -9,7 +9,7 @@ RunTaskStateEvent is no longer written or read by this module.
 
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,

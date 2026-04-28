@@ -8,11 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-
-from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_builtins.benchmarks.minif2f.sandbox.utils import resolve_template
+from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-
 
 # ---------------------------------------------------------------------------
 # Reset the singleton between tests — BaseSandboxManager stores _instance and

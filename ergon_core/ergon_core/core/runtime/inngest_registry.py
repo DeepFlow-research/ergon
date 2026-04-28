@@ -8,8 +8,8 @@ from ergon_core.core.runtime.inngest.cancel_orphan_subtasks import (
     block_descendants_on_failed_fn,
     cancel_orphans_on_cancelled_fn,
 )
-from ergon_core.core.runtime.inngest.cleanup_cancelled_task import cleanup_cancelled_task_fn
 from ergon_core.core.runtime.inngest.check_evaluators import check_and_run_evaluators
+from ergon_core.core.runtime.inngest.cleanup_cancelled_task import cleanup_cancelled_task_fn
 from ergon_core.core.runtime.inngest.complete_workflow import complete_workflow_fn
 from ergon_core.core.runtime.inngest.evaluate_task_run import evaluate_task_run
 from ergon_core.core.runtime.inngest.execute_task import execute_task_fn

@@ -3,6 +3,7 @@
 from collections import Counter, defaultdict
 from uuid import UUID
 
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.evaluation_summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import (
@@ -12,7 +13,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunTaskEvaluation,
 )
-from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.runtime.services.cohort_schemas import (
     CohortDetailDto,
     CohortRubricStatusSummaryDto,
@@ -139,7 +139,9 @@ class ExperimentCohortService:
             evaluations_by_run: defaultdict[UUID, list[EvaluationSummary]] = defaultdict(list)
             if runs:
                 evaluations = session.exec(
-                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id.in_([run.id for run in runs]))
+                    select(RunTaskEvaluation).where(
+                        RunTaskEvaluation.run_id.in_([run.id for run in runs])
+                    )
                 ).all()
                 for evaluation in evaluations:
                     evaluations_by_run[evaluation.run_id].append(evaluation.parsed_summary())

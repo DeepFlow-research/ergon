@@ -5,9 +5,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import e2b
-import pytest
-
 import ergon_cli.commands.benchmark as _bench_mod
+import pytest
 from ergon_cli.commands.benchmark import setup_benchmark
 from ergon_core.core.settings import settings
 

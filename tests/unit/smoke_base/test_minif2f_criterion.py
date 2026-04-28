@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from ergon_core.api.errors import CriteriaCheckError
 from ergon_core.test_support.smoke_fixtures.criteria.minif2f_smoke import MiniF2FSmokeCriterion
 

@@ -8,9 +8,9 @@ tests/integration/restart/; these tests anchor the propagation-level
 perspective on the same feature.
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from ergon_core.core.persistence.graph.status_conventions import BLOCKED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
@@ -20,8 +20,8 @@ from ergon_core.core.runtime.services.task_management_service import TaskManagem
 
 from tests.integration.propagation._helpers import (
     get_node_status,
-    make_experiment_definition,
     make_edge,
+    make_experiment_definition,
     make_node,
     make_run,
 )

@@ -220,6 +220,7 @@ def _task_keyed_evaluations(
                 stage_num=cr.stage_num,
                 stage_name=cr.stage_name,
                 criterion_num=cr.criterion_num,
+                criterion_slug=cr.criterion_slug,
                 criterion_type=cr.criterion_type,
                 criterion_description=cr.criterion_description,
                 criterion_name=cr.criterion_name,
@@ -235,6 +236,7 @@ def _task_keyed_evaluations(
                 skipped_reason=cr.skipped_reason,
                 evaluated_action_ids=cr.evaluated_action_ids,
                 evaluated_resource_ids=cr.evaluated_resource_ids,
+                observation=cr.observation.model_dump(mode="json") if cr.observation else None,
                 error=cr.error,
             )
             for i, cr in enumerate(summary.criterion_results)

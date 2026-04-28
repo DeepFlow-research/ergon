@@ -8,7 +8,6 @@ probe run exercises compile + execute + assertion pass.
 import json
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-
 from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
 from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
     RecursiveSmokeWorkerBase,

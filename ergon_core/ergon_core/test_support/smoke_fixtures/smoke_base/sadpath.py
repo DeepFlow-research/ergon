@@ -8,7 +8,6 @@ started while independent branches continue normally.
 from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-
 from ergon_core.api import WorkerContext
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.core.runtime.services.task_management_dto import SubtaskSpec

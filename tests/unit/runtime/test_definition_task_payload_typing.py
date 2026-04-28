@@ -1,8 +1,7 @@
 from uuid import uuid4
 
-from pydantic import BaseModel
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
+from pydantic import BaseModel
 
 
 class ExampleTaskPayload(BaseModel):

@@ -7,13 +7,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
+from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
-from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
 from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-
 
 # ---------------------------------------------------------------------------
 # Reset the singleton between tests — BaseSandboxManager stores _instance and

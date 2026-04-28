@@ -10,12 +10,13 @@ from typing import ClassVar
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult
+from ergon_core.api.results import CriterionResult, CriterionScoreSpec
+from pydantic import BaseModel
+
 from ergon_builtins.common.llm.structured_judge import (
     JudgeMessage,
     call_structured_judge,
 )
-from pydantic import BaseModel
 
 
 class _JudgeVerdict(BaseModel):
@@ -44,10 +45,13 @@ class LLMJudgeCriterion(Criterion):
         max_score: float = 1.0,
         model: str = "gpt-4o",
     ) -> None:
-        super().__init__(name=name, weight=weight)
+        super().__init__(
+            name=name,
+            description=description or name,
+            weight=weight,
+            score_spec=CriterionScoreSpec(max_score=max_score),
+        )
         self.prompt_template = prompt_template
-        self.description = description
-        self.max_score = max_score
         self.model = model
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
@@ -68,11 +72,12 @@ class LLMJudgeCriterion(Criterion):
             model=self.model,
         )
 
-        score = self.max_score if verdict.passed else 0.0
+        score = self.score_spec.max_score if verdict.passed else 0.0
         return CriterionResult(
-            name=self.name,
+            slug=self.slug,
             score=score,
             passed=verdict.passed,
             weight=self.weight,
+            max_score=self.score_spec.max_score,
             feedback=verdict.reasoning,
         )

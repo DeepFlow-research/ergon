@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 CORE = ROOT / "ergon_core" / "ergon_core" / "core"
 

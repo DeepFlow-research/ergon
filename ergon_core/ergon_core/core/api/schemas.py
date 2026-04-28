@@ -77,6 +77,7 @@ class RunEvaluationCriterionDto(CamelModel):
     stage_num: int
     stage_name: str
     criterion_num: int
+    criterion_slug: str
     criterion_type: str
     criterion_description: str
     criterion_name: str
@@ -92,6 +93,7 @@ class RunEvaluationCriterionDto(CamelModel):
     skipped_reason: str | None = None
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
+    observation: dict[str, Any] | None = None  # slopcop: ignore[no-typing-any]
     error: dict[str, Any] | None = None  # slopcop: ignore[no-typing-any]
 
 

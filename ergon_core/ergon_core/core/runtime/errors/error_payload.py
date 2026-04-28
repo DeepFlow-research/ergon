@@ -4,7 +4,7 @@ import traceback
 from collections.abc import Mapping
 from typing import Any
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 

@@ -20,9 +20,13 @@ class SWEBenchInstance(BaseModel):
     repo: str
     base_commit: str
     problem_statement: str
-    # HF dataset schema guarantees hints_text is a str; `.strip()` depends
-    # on it never being None.
-    hints_text: str = ""  # slopcop: ignore[no-str-empty-default]
+    hints_text: str = Field(  # slopcop: ignore[no-str-empty-default]
+        default="",
+        description=(
+            "Hint text normalized from the HuggingFace dataset as a non-null string "
+            "because downstream prompt rendering calls .strip()."
+        ),
+    )
     version: str
     fail_to_pass: list[str]
     pass_to_pass: list[str]
@@ -61,9 +65,13 @@ class SWEBenchTaskPayload(BaseModel):
     base_commit: str
     version: str
     problem_statement: str
-    # Mirrors SWEBenchInstance.hints_text; empty string is the documented
-    # dataset default when hints are absent.
-    hints_text: str = ""  # slopcop: ignore[no-str-empty-default]
+    hints_text: str = Field(  # slopcop: ignore[no-str-empty-default]
+        default="",
+        description=(
+            "Hint text mirrored from SWEBenchInstance. Empty string is the dataset default "
+            "when hints are absent."
+        ),
+    )
     fail_to_pass: list[str]
     pass_to_pass: list[str]
     environment_setup_commit: str

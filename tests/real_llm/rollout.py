@@ -68,7 +68,9 @@ def _write_json_model(path: Path, row: Any) -> None:  # slopcop: ignore[no-typin
     path.write_text(row.model_dump_json(indent=2))
 
 
-def _write_mapping_jsonl(path: Path, rows: list[dict[str, Any]]) -> int:  # slopcop: ignore[no-typing-any]
+def _write_mapping_jsonl(
+    path: Path, rows: list[dict[str, Any]]
+) -> int:  # slopcop: ignore[no-typing-any]
     """Write plain DB mapping rows as JSONL. Returns row count."""
     with path.open("w") as f:
         for row in rows:
@@ -92,9 +94,6 @@ def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
     # context event payload <-> worker API cycle when unit tests import the
     # pure report helpers from this module. The DB models are only needed for
     # live rollout dumping, so keep this import scoped to that operation.
-    from sqlalchemy import text
-    from sqlmodel import select
-
     from ergon_core.core.persistence.graph.models import (
         RunGraphEdge,
         RunGraphMutation,
@@ -108,6 +107,8 @@ def dump_rollout(run_id: UUID, out_dir: Path) -> dict[str, int]:
         RunTaskExecution,
         SandboxEvent,
     )
+    from sqlalchemy import text
+    from sqlmodel import select
 
     db_dir = out_dir / "db"
     counts: dict[str, int] = {}
@@ -320,6 +321,10 @@ def write_report(out_dir: Path, manifest_path: Path) -> Path:
             f"- resources: {health.resource_count}",
             f"- graph nodes: {health.graph_node_count}",
             f"- criterion results: {health.criterion_count}",
+            f"- workflow tool calls: {health.workflow_tool_calls}",
+            f"- other tool calls: {health.other_tool_calls}",
+            f"- budget exhausted: {health.budget_exhausted}",
+            f"- missing final report: {health.missing_final_report}",
         ]
     )
     if health.normalized_scores:

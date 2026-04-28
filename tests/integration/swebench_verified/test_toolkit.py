@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 
 

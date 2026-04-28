@@ -4,12 +4,11 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from ergon_core.core.api import test_harness
 from ergon_core.core.api.startup_plugins import run_startup_plugins
 from ergon_core.core.api.test_harness import get_session_dep, router
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 
 class _NullSession:

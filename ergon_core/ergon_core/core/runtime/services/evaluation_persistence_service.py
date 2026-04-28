@@ -128,6 +128,12 @@ def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str |
     return "passed" if passed else "failed"
 
 
+def _summary_max_score(result, specs) -> float:
+    if result.metadata.get("score_scale") == "normalized_0_1":
+        return 1.0
+    return sum(s.max_score for s in specs) if specs else 1.0
+
+
 def build_evaluation_summary(
     service_result: EvaluationServiceResult,
     evaluation_input: str | None,
@@ -137,21 +143,22 @@ def build_evaluation_summary(
     specs = service_result.specs
 
     spec_by_idx = {s.criterion_idx: s for s in specs}
-    max_score_total = sum(s.max_score for s in specs) if specs else 1.0
+    max_score_total = _summary_max_score(result, specs)
 
     entries: list[CriterionResultEntry] = []
     for i, cr in enumerate(result.criterion_results):
         spec = spec_by_idx.get(i)
         if spec is None:
             raise ContractViolationError(
-                f"Criterion result at index {i} ({cr.name!r}) has no matching "
+                f"Criterion result at index {i} ({cr.slug!r}) has no matching "
                 f"CriterionSpec - specs and results are out of sync",
             )
         entries.append(
             CriterionResultEntry(
+                criterion_slug=cr.slug,
                 criterion_name=cr.name,
                 criterion_type=spec.criterion.type_slug,
-                criterion_description=spec.criterion.name,
+                criterion_description=spec.criterion.description,
                 stage_num=spec.stage_idx,
                 stage_name=spec.stage_name,
                 criterion_num=spec.criterion_idx,
@@ -171,12 +178,12 @@ def build_evaluation_summary(
                 evaluation_input=cr.evaluation_input or evaluation_input,
                 evaluated_action_ids=cr.evaluated_action_ids,
                 evaluated_resource_ids=cr.evaluated_resource_ids,
+                observation=cr.observation,
                 error=cr.error,
             )
         )
 
     total_score = result.score
-    normalized = total_score / max_score_total if max_score_total > 0 else 0.0
 
     stage_names = {s.stage_name for s in specs}
     stages_passed = sum(
@@ -188,9 +195,10 @@ def build_evaluation_summary(
     return EvaluationSummary(
         evaluator_name=result.evaluator_name,
         max_score=max_score_total,
-        normalized_score=normalized,
+        normalized_score=total_score,
         stages_evaluated=len(stage_names),
         stages_passed=stages_passed,
+        metadata=result.metadata,
         criterion_results=entries,
     )
 
@@ -210,6 +218,7 @@ def build_dashboard_evaluation_dto(
             stage_num=cr.stage_num,
             stage_name=cr.stage_name,
             criterion_num=cr.criterion_num,
+            criterion_slug=cr.criterion_slug,
             criterion_type=cr.criterion_type,
             criterion_description=cr.criterion_description,
             criterion_name=cr.criterion_name,
@@ -225,6 +234,7 @@ def build_dashboard_evaluation_dto(
             skipped_reason=cr.skipped_reason,
             evaluated_action_ids=cr.evaluated_action_ids,
             evaluated_resource_ids=cr.evaluated_resource_ids,
+            observation=cr.observation.model_dump(mode="json") if cr.observation else None,
             error=cr.error,
         )
         for i, cr in enumerate(summary.criterion_results)
