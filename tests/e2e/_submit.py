@@ -18,12 +18,22 @@ Empty slots list is valid (returns ``[]``) but unlikely in practice.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from uuid import UUID
 
 import httpx
 import pytest
 
 _DEFAULT_API = "http://127.0.0.1:9000"
+
+
+def smoke_cohort_key(env: str) -> str:
+    """Return a shared QA cohort key when provided, otherwise an env-scoped one."""
+    override = os.environ.get("E2E_COHORT_KEY")
+    if override is not None and override:
+        return override
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    return f"ci-smoke-{env}-{timestamp}"
 
 
 def _api_base() -> str:
@@ -67,4 +77,4 @@ async def submit_cohort(
     return [UUID(rid) for rid in body["run_ids"]]
 
 
-__all__ = ["submit_cohort"]
+__all__ = ["smoke_cohort_key", "submit_cohort"]

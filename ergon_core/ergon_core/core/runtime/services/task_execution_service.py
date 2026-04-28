@@ -14,7 +14,7 @@ from ergon_core.core.persistence.graph import status_conventions as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
 from ergon_core.core.runtime.errors.inngest_errors import ConfigurationError
 from ergon_core.core.runtime.execution.propagation import (
     mark_task_failed,
@@ -113,13 +113,21 @@ class TaskExecutionService:
                     ExperimentDefinitionWorker.binding_key == assigned_worker_slug,
                 )
             ).first()
+            run = session.get(RunRecord, command.run_id)
             if worker_row is None:
-                raise ConfigurationError(
-                    f"No ExperimentDefinitionWorker with binding_key="
-                    f"'{assigned_worker_slug}' for definition {command.definition_id}",
-                    run_id=command.run_id,
-                    task_id=command.task_id,
-                )
+                if run is None:
+                    raise ConfigurationError(
+                        f"RunRecord {command.run_id} not found",
+                        run_id=command.run_id,
+                        task_id=command.task_id,
+                    )
+                definition_worker_id = None
+                worker_type = assigned_worker_slug
+                model_target = run.model_target
+            else:
+                definition_worker_id = worker_row.id
+                worker_type = worker_row.worker_type
+                model_target = worker_row.model_target
 
             definition = require_not_none(
                 session.get(ExperimentDefinition, command.definition_id),
@@ -129,7 +137,7 @@ class TaskExecutionService:
             execution = RunTaskExecution(
                 run_id=command.run_id,
                 node_id=node_id,
-                definition_worker_id=worker_row.id,
+                definition_worker_id=definition_worker_id,
                 attempt_number=self._next_attempt_number(session, command.run_id, node_id),
                 status=TaskExecutionStatus.RUNNING,
                 started_at=utcnow(),
@@ -155,7 +163,7 @@ class TaskExecutionService:
                 task_slug=node.task_slug,
                 new_status=graph_status.RUNNING,
                 old_status=None,
-                worker_id=worker_row.id,
+                worker_id=definition_worker_id,
                 worker_slug=assigned_worker_slug,
             )
 
@@ -172,8 +180,8 @@ class TaskExecutionService:
                 task_description=node.description,
                 benchmark_type=definition.benchmark_type,
                 assigned_worker_slug=assigned_worker_slug,
-                worker_type=worker_row.worker_type,
-                model_target=worker_row.model_target,
+                worker_type=worker_type,
+                model_target=model_target,
                 execution_id=execution.id,
             )
 

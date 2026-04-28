@@ -7,6 +7,7 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohortStats,
+    ExperimentRecord,
     RunRecord,
 )
 from ergon_core.core.utils import utcnow
@@ -20,7 +21,11 @@ class ExperimentCohortStatsService:
         """Recompute and persist aggregate stats for one cohort."""
         with get_session() as session:
             runs = list(
-                session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort_id)).all()
+                session.exec(
+                    select(RunRecord)
+                    .join(ExperimentRecord)
+                    .where(ExperimentRecord.cohort_id == cohort_id)
+                ).all()
             )
             status_counts = Counter(run.status for run in runs)
 

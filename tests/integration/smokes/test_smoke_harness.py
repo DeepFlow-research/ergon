@@ -113,6 +113,7 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
             seed_resp = client.post(
                 f"{API}/api/test/write/run/seed",
                 json={
+                    "workflow_definition_id": str(defn_id),
                     "experiment_definition_id": str(defn_id),
                     "cohort": _COHORT,
                     "status": "completed",

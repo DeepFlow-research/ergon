@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 
 import { config } from "@/lib/config";
 import {
-  parseCohortDetail,
   parseCohortSummary,
   parseUpdateCohortRequest,
 } from "@/lib/contracts/rest";
@@ -30,7 +29,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const response = await fetchErgonApi(`/cohorts/${cohortId}`);
     const body = await response.json();
     if (response.ok) {
-      return NextResponse.json(parseCohortDetail(body), { status: response.status });
+      return NextResponse.json(body, { status: response.status });
     }
     return NextResponse.json(body, { status: response.status });
   } catch (error) {

@@ -1,12 +1,15 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 import { z } from "zod";
 
-type JsonValue =
-  | (JsonScalar | Array<JsonValue> | {})
-  | Array<JsonScalar | Array<JsonValue> | {}>;
+type JsonValue_Input =
+  | (JsonScalar | Array<JsonValue_Input> | {})
+  | Array<JsonScalar | Array<JsonValue_Input> | {}>;
 type JsonScalar =
   | (string | number | number | boolean | null)
   | Array<string | number | number | boolean | null>;
+type JsonValue_Output =
+  | (JsonScalar | Array<JsonValue_Output> | {})
+  | Array<JsonScalar | Array<JsonValue_Output> | {}>;
 
 const RunTaskDto = z.object({
   id: z.string(),
@@ -110,17 +113,45 @@ const RunSandboxDto = z.object({
   closeReason: z.union([z.string(), z.null()]).optional(),
   commands: z.array(RunSandboxCommandDto).optional(),
 });
-const SystemPromptPayload = z
+const SystemPromptPart = z
   .object({
-    event_type: z.literal("system_prompt").default("system_prompt"),
-    text: z.string(),
+    part_kind: z.literal("system_prompt").default("system_prompt"),
+    content: z.string(),
   })
   .passthrough();
-const UserMessagePayload = z
+const UserMessagePart = z
   .object({
-    event_type: z.literal("user_message").default("user_message"),
-    text: z.string(),
-    from_worker_key: z.union([z.string(), z.null()]).optional(),
+    part_kind: z.literal("user_message").default("user_message"),
+    content: z.string(),
+  })
+  .passthrough();
+const AssistantTextPart = z
+  .object({
+    part_kind: z.literal("assistant_text").default("assistant_text"),
+    content: z.string(),
+  })
+  .passthrough();
+const ToolCallPart = z
+  .object({
+    part_kind: z.literal("tool_call").default("tool_call"),
+    tool_name: z.string(),
+    tool_call_id: z.string(),
+    args: z.object({}).partial().passthrough(),
+  })
+  .passthrough();
+const ToolResultPart = z
+  .object({
+    part_kind: z.literal("tool_result").default("tool_result"),
+    tool_call_id: z.string(),
+    tool_name: z.string(),
+    content: z.string(),
+    is_error: z.boolean().optional().default(false),
+  })
+  .passthrough();
+const ThinkingPart = z
+  .object({
+    part_kind: z.literal("thinking").default("thinking"),
+    content: z.string(),
   })
   .passthrough();
 const JsonScalar = z.union([
@@ -130,53 +161,37 @@ const JsonScalar = z.union([
   z.boolean(),
   z.null(),
 ]);
-const JsonValue: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([JsonScalar, z.array(JsonValue), z.record(z.string(), JsonValue)])
-);
-const JsonObject = z.record(z.string(), JsonValue);
+const JsonValue_Output: z.ZodType<JsonValue_Output> = z.lazy(() => z.union([
+  JsonScalar,
+  z.array(JsonValue_Output),
+  z.record(z.string(), JsonValue_Output),
+]));
+const JsonObject_Output = z.record(z.string(), JsonValue_Output);
 const TokenLogprob = z
   .object({
     token: z.string(),
     logprob: z.number(),
-    top_logprobs: z.array(JsonObject).optional(),
+    top_logprobs: z.array(JsonObject_Output).optional(),
   })
   .passthrough();
-const AssistantTextPayload = z
+const ContextPartChunkLog = z
   .object({
-    event_type: z.literal("assistant_text").default("assistant_text"),
-    text: z.string(),
-    turn_id: z.string(),
-    turn_token_ids: z.union([z.array(z.number().int()), z.null()]).optional(),
-    turn_logprobs: z.union([z.array(TokenLogprob), z.null()]).optional(),
-  })
-  .passthrough();
-const ToolCallPayload = z
-  .object({
-    event_type: z.literal("tool_call").default("tool_call"),
-    tool_call_id: z.string(),
-    tool_name: z.string(),
-    args: z.object({}).partial().passthrough(),
-    turn_id: z.string(),
-    turn_token_ids: z.union([z.array(z.number().int()), z.null()]).optional(),
-    turn_logprobs: z.union([z.array(TokenLogprob), z.null()]).optional(),
-  })
-  .passthrough();
-const ToolResultPayload = z
-  .object({
-    event_type: z.literal("tool_result").default("tool_result"),
-    tool_call_id: z.string(),
-    tool_name: z.string(),
-    result: z.unknown(),
-    is_error: z.boolean().optional().default(false),
-  })
-  .passthrough();
-const ThinkingPayload = z
-  .object({
-    event_type: z.literal("thinking").default("thinking"),
-    text: z.string(),
-    turn_id: z.string(),
-    turn_token_ids: z.union([z.array(z.number().int()), z.null()]).optional(),
-    turn_logprobs: z.union([z.array(TokenLogprob), z.null()]).optional(),
+    part: z.discriminatedUnion("part_kind", [
+      SystemPromptPart,
+      UserMessagePart,
+      AssistantTextPart,
+      ToolCallPart,
+      ToolResultPart,
+      ThinkingPart,
+    ]),
+    token_ids: z.union([z.array(z.number().int()), z.null()]).optional(),
+    logprobs: z.union([z.array(TokenLogprob), z.null()]).optional(),
+    sequence: z.number().int(),
+    worker_binding_key: z.string(),
+    turn_id: z.union([z.string(), z.null()]).optional(),
+    started_at: z.union([z.string(), z.null()]).optional(),
+    completed_at: z.union([z.string(), z.null()]).optional(),
+    policy_version: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
 const RunContextEventDto = z.object({
@@ -194,14 +209,7 @@ const RunContextEventDto = z.object({
     "tool_result",
     "thinking",
   ]),
-  payload: z.discriminatedUnion("event_type", [
-    SystemPromptPayload,
-    UserMessagePayload,
-    AssistantTextPayload,
-    ToolCallPayload,
-    ToolResultPayload,
-    ThinkingPayload,
-  ]),
+  payload: ContextPartChunkLog,
   createdAt: z.string().datetime({ offset: true }),
   startedAt: z.union([z.string(), z.null()]).optional(),
   completedAt: z.union([z.string(), z.null()]).optional(),
@@ -328,14 +336,14 @@ const AnnotationSetMutation = z
   .object({
     mutation_type: z.string().optional().default("annotation.set"),
     namespace: z.string(),
-    payload: JsonObject,
+    payload: JsonObject_Output,
   })
   .passthrough();
 const AnnotationDeletedMutation = z
   .object({
     mutation_type: z.string().optional().default("annotation.deleted"),
     namespace: z.string(),
-    payload: JsonObject,
+    payload: JsonObject_Output,
   })
   .passthrough();
 const GraphMutationRecordDto = z
@@ -445,52 +453,152 @@ const CohortSummaryDto = z
     stats_updated_at: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
-const CohortRubricStatusSummaryDto = z
+const CohortExperimentRowDto = z
   .object({
-    status: z.enum([
-      "passing",
-      "failing",
-      "errored",
-      "skipped",
-      "mixed",
-      "none",
-    ]),
-    total_criteria: z.number().int(),
-    passed: z.number().int(),
-    failed: z.number().int(),
-    errored: z.number().int(),
-    skipped: z.number().int(),
-    criterion_statuses: z.array(z.string()),
-    evaluator_names: z.array(z.string()),
-  })
-  .passthrough();
-const CohortRunRowDto = z
-  .object({
-    run_id: z.string().uuid(),
-    definition_id: z.string().uuid(),
-    cohort_id: z.string().uuid(),
-    cohort_name: z.string(),
+    experiment_id: z.string().uuid(),
+    name: z.string(),
+    benchmark_type: z.string(),
+    sample_count: z.number().int(),
+    total_runs: z.number().int().optional().default(0),
+    status_counts: CohortStatusCountsDto.optional(),
     status: z.string(),
     created_at: z.string().datetime({ offset: true }),
-    started_at: z.union([z.string(), z.null()]).optional(),
-    completed_at: z.union([z.string(), z.null()]).optional(),
-    running_time_ms: z.union([z.number(), z.null()]).optional(),
+    default_model_target: z.union([z.string(), z.null()]).optional(),
+    default_evaluator_slug: z.union([z.string(), z.null()]).optional(),
     final_score: z.union([z.number(), z.null()]).optional(),
-    total_tasks: z.union([z.number(), z.null()]).optional(),
     total_cost_usd: z.union([z.number(), z.null()]).optional(),
     error_message: z.union([z.string(), z.null()]).optional(),
-    rubric_status_summary: CohortRubricStatusSummaryDto,
   })
   .passthrough();
 const CohortDetailDto = z
   .object({
     summary: CohortSummaryDto,
-    runs: z.array(CohortRunRowDto).optional(),
+    experiments: z.array(CohortExperimentRowDto).optional(),
   })
   .passthrough();
 const ExperimentCohortStatus = z.enum(["active", "archived"]);
 const UpdateCohortRequest = z
   .object({ status: ExperimentCohortStatus })
+  .passthrough();
+const ExperimentSummaryDto = z
+  .object({
+    experiment_id: z.string().uuid(),
+    cohort_id: z.union([z.string(), z.null()]).optional(),
+    name: z.string(),
+    benchmark_type: z.string(),
+    sample_count: z.number().int(),
+    status: z.string(),
+    default_worker_team: z.object({}).partial().passthrough().optional(),
+    default_evaluator_slug: z.union([z.string(), z.null()]).optional(),
+    default_model_target: z.union([z.string(), z.null()]).optional(),
+    created_at: z.string().datetime({ offset: true }),
+    started_at: z.union([z.string(), z.null()]).optional(),
+    completed_at: z.union([z.string(), z.null()]).optional(),
+    run_count: z.number().int().optional().default(0),
+  })
+  .passthrough();
+const ExperimentRunRowDto = z
+  .object({
+    run_id: z.string().uuid(),
+    workflow_definition_id: z.string().uuid(),
+    benchmark_type: z.string(),
+    instance_key: z.string(),
+    status: z.string(),
+    created_at: z.string().datetime({ offset: true }),
+    started_at: z.union([z.string(), z.null()]).optional(),
+    completed_at: z.union([z.string(), z.null()]).optional(),
+    evaluator_slug: z.union([z.string(), z.null()]).optional(),
+    model_target: z.union([z.string(), z.null()]).optional(),
+    worker_team: z.object({}).partial().passthrough().optional(),
+    seed: z.union([z.number(), z.null()]).optional(),
+    running_time_ms: z.union([z.number(), z.null()]).optional(),
+    final_score: z.union([z.number(), z.null()]).optional(),
+    total_tasks: z.union([z.number(), z.null()]).optional(),
+    total_cost_usd: z.union([z.number(), z.null()]).optional(),
+    error_message: z.union([z.string(), z.null()]).optional(),
+  })
+  .passthrough();
+const ExperimentStatusCountsDto = z
+  .object({
+    pending: z.number().int().default(0),
+    executing: z.number().int().default(0),
+    evaluating: z.number().int().default(0),
+    completed: z.number().int().default(0),
+    failed: z.number().int().default(0),
+    cancelled: z.number().int().default(0),
+  })
+  .partial()
+  .passthrough();
+const ExperimentAnalyticsDto = z
+  .object({
+    total_runs: z.number().int().default(0),
+    status_counts: ExperimentStatusCountsDto,
+    average_score: z.union([z.number(), z.null()]),
+    average_duration_ms: z.union([z.number(), z.null()]),
+    average_tasks: z.union([z.number(), z.null()]),
+    total_cost_usd: z.union([z.number(), z.null()]),
+    latest_activity_at: z.union([z.string(), z.null()]),
+    error_count: z.number().int().default(0),
+  })
+  .partial()
+  .passthrough();
+const ExperimentDetailDto = z
+  .object({
+    experiment: ExperimentSummaryDto,
+    runs: z.array(ExperimentRunRowDto).optional(),
+    analytics: ExperimentAnalyticsDto.optional(),
+    sample_selection: z.object({}).partial().passthrough().optional(),
+    design: z.object({}).partial().passthrough().optional(),
+    metadata: z.object({}).partial().passthrough().optional(),
+  })
+  .passthrough();
+const JsonValue_Input: z.ZodType<JsonValue_Input> = z.lazy(() => z.union([
+  JsonScalar,
+  z.array(JsonValue_Input),
+  z.record(z.string(), JsonValue_Input),
+]));
+const JsonObject_Input = z.record(z.string(), JsonValue_Input);
+const ExperimentDefineRequest = z
+  .object({
+    benchmark_slug: z.string(),
+    name: z.union([z.string(), z.null()]).optional(),
+    cohort_id: z.union([z.string(), z.null()]).optional(),
+    limit: z.union([z.number(), z.null()]).optional(),
+    sample_ids: z.union([z.array(z.string()), z.null()]).optional(),
+    default_model_target: z.union([z.string(), z.null()]).optional(),
+    default_worker_team: JsonObject_Input.optional(),
+    default_evaluator_slug: z.union([z.string(), z.null()]).optional(),
+    design: JsonObject_Input.optional(),
+    seed: z.union([z.number(), z.null()]).optional(),
+    metadata: JsonObject_Input.optional(),
+  })
+  .passthrough();
+const ExperimentDefineResult = z
+  .object({
+    experiment_id: z.string().uuid(),
+    cohort_id: z.union([z.string(), z.null()]),
+    benchmark_type: z.string(),
+    sample_count: z.number().int(),
+    selected_samples: z.array(z.string()),
+  })
+  .passthrough();
+const ExperimentRunRequest = z
+  .object({
+    experiment_id: z.string().uuid(),
+    timeout_seconds: z.union([z.number(), z.null()]).optional(),
+    wait: z.boolean().optional().default(true),
+  })
+  .passthrough();
+const run_experiment_experiments__experiment_id__run_post_Body = z.union([
+  ExperimentRunRequest,
+  z.null(),
+]);
+const ExperimentRunResult = z
+  .object({
+    experiment_id: z.string().uuid(),
+    run_ids: z.array(z.string().uuid()),
+    workflow_definition_ids: z.array(z.string().uuid()).optional(),
+  })
   .passthrough();
 const SubmitRequest = z
   .object({
@@ -554,16 +662,17 @@ export const schemas = {
   RunTaskEvaluationDto,
   RunSandboxCommandDto,
   RunSandboxDto,
-  SystemPromptPayload,
-  UserMessagePayload,
+  SystemPromptPart,
+  UserMessagePart,
+  AssistantTextPart,
+  ToolCallPart,
+  ToolResultPart,
+  ThinkingPart,
   JsonScalar,
-  JsonValue,
-  JsonObject,
+  JsonValue_Output,
+  JsonObject_Output,
   TokenLogprob,
-  AssistantTextPayload,
-  ToolCallPayload,
-  ToolResultPayload,
-  ThinkingPayload,
+  ContextPartChunkLog,
   RunContextEventDto,
   RunCommunicationMessageDto,
   RunCommunicationThreadDto,
@@ -586,11 +695,22 @@ export const schemas = {
   TrainingMetricDto,
   CohortStatusCountsDto,
   CohortSummaryDto,
-  CohortRubricStatusSummaryDto,
-  CohortRunRowDto,
+  CohortExperimentRowDto,
   CohortDetailDto,
   ExperimentCohortStatus,
   UpdateCohortRequest,
+  ExperimentSummaryDto,
+  ExperimentRunRowDto,
+  ExperimentStatusCountsDto,
+  ExperimentAnalyticsDto,
+  ExperimentDetailDto,
+  JsonValue_Input,
+  JsonObject_Input,
+  ExperimentDefineRequest,
+  ExperimentDefineResult,
+  ExperimentRunRequest,
+  run_experiment_experiments__experiment_id__run_post_Body,
+  ExperimentRunResult,
   SubmitRequest,
   BatchStatus,
   SubmitResponse,

@@ -69,6 +69,7 @@ class GraphTaskRef(BaseModel):
     level: int
     parent_node_id: NodeId | None = None
     assigned_worker_slug: str | None = None
+    description: str | None = None
 
 
 class GraphEdgeDto(BaseModel):

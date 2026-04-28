@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 import inngest
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
 from ergon_core.core.runtime.errors import DataIntegrityError
 from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
 from ergon_core.core.runtime.events.task_events import WorkflowFailedEvent
@@ -82,6 +82,7 @@ async def fail_workflow_fn(ctx: inngest.Context) -> WorkflowFailedResult:
 
     with get_session() as session:
         run = session.get(RunRecord, payload.run_id)
+        experiment = session.get(ExperimentRecord, run.experiment_id) if run else None
         if run and run.started_at and run.completed_at:
             sink.emit_span(
                 CompletedSpan(
@@ -94,7 +95,9 @@ async def fail_workflow_fn(ctx: inngest.Context) -> WorkflowFailedResult:
                     attributes={
                         "run_id": str(payload.run_id),
                         "definition_id": str(payload.definition_id),
-                        "cohort_id": str(run.cohort_id) if run.cohort_id else "",
+                        "cohort_id": str(experiment.cohort_id)
+                        if experiment and experiment.cohort_id
+                        else "",
                         "status": run.status,
                         "error": truncate_text(payload.error),
                     },

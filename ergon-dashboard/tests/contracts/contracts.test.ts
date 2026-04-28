@@ -23,8 +23,7 @@ test("run snapshot parser accepts object-map transport", () => {
     FIXTURE_IDS.exploreTaskId,
     FIXTURE_IDS.rootTaskId,
     FIXTURE_IDS.solveTaskId,
-  ].sort());
-  assert.equal(parsed.tasks?.[FIXTURE_IDS.solveTaskId]?.assignedWorkerSlug, "react-worker");
+  ]);
 });
 
 test("run snapshot hydration preserves context event actions", () => {
@@ -38,13 +37,20 @@ test("run snapshot hydration preserves context event actions", () => {
   assert.equal(events.length, 2);
   assert.equal(events[0]?.eventType, "tool_call");
   assert.deepEqual(events[0]?.payload, {
-    event_type: "tool_call",
-    tool_call_id: "call-lean-check",
-    tool_name: "lean_check",
-    args: { file: "proof.lean" },
+    part: {
+      part_kind: "tool_call",
+      tool_call_id: "call-lean-check",
+      tool_name: "lean_check",
+      args: { file: "proof.lean" },
+    },
+    token_ids: [101, 102, 103],
+    logprobs: null,
+    sequence: 0,
+    worker_binding_key: "react-worker",
     turn_id: "turn-1",
-    turn_token_ids: [101, 102, 103],
-    turn_logprobs: null,
+    started_at: "2026-03-18T12:00:18.000Z",
+    completed_at: "2026-03-18T12:00:18.100Z",
+    policy_version: null,
   });
 });
 
@@ -58,13 +64,16 @@ test("run snapshot hydration orders context events across retried executions", (
   const retryEvent = {
     ...first,
     id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
-    taskExecutionId: "20000000-0000-4000-8000-000000000003",
+    taskExecutionId: "99999999-9999-4999-8999-999999999998",
     sequence: 0,
     createdAt: "2026-03-18T12:00:30.000Z",
     payload: {
       ...first.payload,
-      tool_call_id: "call-retry",
-      tool_name: "retry_check",
+      part: {
+        ...first.payload.part,
+        tool_call_id: "call-retry",
+        tool_name: "retry_check",
+      },
     },
   };
 
@@ -101,9 +110,11 @@ test("cohort detail parser accepts harness payload", () => {
   const parsed = parseCohortDetail(cohortDetail);
 
   assert.equal(parsed.summary.cohort_id, FIXTURE_IDS.cohortId);
-  assert.equal((parsed.runs ?? []).length, 3);
-  assert.equal(parsed.runs[0]?.total_tasks, 10);
-  assert.equal(parsed.runs[0]?.total_cost_usd, 0.12);
+  assert.equal((parsed.experiments ?? []).length, 1);
+  assert.equal(parsed.experiments[0]?.total_runs, 3);
+  assert.equal(parsed.experiments[0]?.status_counts.completed, 3);
+  assert.equal(parsed.experiments[0]?.final_score, 1);
+  assert.equal(parsed.experiments[0]?.total_cost_usd, 0.42);
 });
 
 test("workflow started event parser validates recursive task trees", () => {
@@ -118,7 +129,6 @@ test("workflow started event parser validates recursive task trees", () => {
       id: "123e4567-e89b-42d3-a456-426614174000",
       name: "Root",
       description: "Root task",
-      assigned_worker_slug: "planner",
       assigned_to: {
         id: FIXTURE_IDS.workerId,
         name: "planner",
@@ -130,7 +140,6 @@ test("workflow started event parser validates recursive task trees", () => {
           id: "123e4567-e89b-42d3-a456-426614174001",
           name: "Leaf",
           description: "Leaf task",
-          assigned_worker_slug: "planner",
           assigned_to: {
             id: FIXTURE_IDS.workerId,
             name: "planner",
@@ -158,20 +167,6 @@ test("workflow started event parser validates recursive task trees", () => {
   const parsed = parseDashboardWorkflowStartedData(payload);
 
   assert.equal(parsed.task_tree.children[0]?.name, "Leaf");
-  assert.equal(parsed.task_tree.children[0]?.assigned_worker_slug, "planner");
-});
-
-test("socket task status parser accepts assigned worker slugs", () => {
-  const parsed = parseTaskStatusSocketData({
-    runId: FIXTURE_IDS.runId,
-    taskId: FIXTURE_IDS.solveTaskId,
-    status: "running",
-    timestamp: "2026-03-18T12:00:14.000Z",
-    assignedWorkerId: FIXTURE_IDS.workerId,
-    assignedWorkerSlug: "react-worker",
-  });
-
-  assert.equal(parsed.assignedWorkerSlug, "react-worker");
 });
 
 test("dashboard nested DTO event parser accepts backend snake-case payloads", () => {

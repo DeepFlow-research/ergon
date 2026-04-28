@@ -18,10 +18,9 @@ import {
   type GraphMutationDto,
 } from "@/features/graph/contracts/graphMutations";
 import { createReplayInitialState, replayToSequence } from "@/features/graph/state/graphMutationReducer";
-import { useCohortDetail } from "@/hooks/useCohortDetail";
 import { useRunState } from "@/hooks/useRunState";
 import { buildRunEvents } from "@/lib/runEvents";
-import { CohortDetail, RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus } from "@/lib/types";
+import { RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus } from "@/lib/types";
 
 const VERTICAL_LAYOUT_STORAGE_KEY = "ergon-run-debugger-vertical-layout:v1";
 const HORIZONTAL_LAYOUT_STORAGE_KEY = "ergon-run-debugger-horizontal-layout:v1";
@@ -86,13 +85,11 @@ export function RunWorkspacePage({
   runId,
   cohortId,
   initialRunState = null,
-  initialCohortDetail = null,
   ssrError = null,
 }: {
   runId: string;
   cohortId?: string;
   initialRunState?: SerializedWorkflowRunState | null;
-  initialCohortDetail?: CohortDetail | null;
   ssrError?: string | null;
 }) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -108,7 +105,6 @@ export function RunWorkspacePage({
   );
   const [hasLoadedPanelLayouts, setHasLoadedPanelLayouts] = useState(false);
   const { runState, isLoading, error, isSubscribed } = useRunState(runId, initialRunState);
-  const { detail } = useCohortDetail(cohortId ?? "", initialCohortDetail);
 
   // A null snapshot means the graph follows live state; a sequence replays
   // mutations to that point.
@@ -182,11 +178,6 @@ export function RunWorkspacePage({
       replayBaseState,
     );
   }, [runState, mutations, snapshotSequence]);
-
-  const runRow = useMemo(() => {
-    if (!cohortId || !detail) return null;
-    return detail.runs.find((run) => run.run_id === runId) ?? null;
-  }, [cohortId, detail, runId]);
 
   const selectedTask = useMemo(() => {
     if (!displayState || !selectedTaskId) return null;
@@ -315,7 +306,7 @@ export function RunWorkspacePage({
     }
   }, [displayState, selectedTaskId]);
 
-  const status = runState?.status ?? runRow?.status ?? "pending";
+  const status = runState?.status ?? "pending";
   const isInspectorOpen = selectedTaskId !== null;
 
   const handleTaskClick = (taskId: string) => {
@@ -358,7 +349,7 @@ export function RunWorkspacePage({
       >
         <div className="min-w-0">
           <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
-            <Link href="/" className="hover:text-[var(--ink)]">Cohorts</Link>
+            <Link href="/cohorts" className="hover:text-[var(--ink)]">Cohorts</Link>
             <span>›</span>
             {cohortId && (
               <>
@@ -367,7 +358,7 @@ export function RunWorkspacePage({
                   className="max-w-[180px] truncate hover:text-[var(--ink)]"
                   data-testid="run-breadcrumb-cohort"
                 >
-                  {detail?.summary.name ?? "Cohort"}
+                  Cohort
                 </Link>
                 <span>›</span>
               </>
@@ -376,7 +367,7 @@ export function RunWorkspacePage({
           </div>
           <div className="mt-1.5 flex items-center gap-3">
             <h1 className="max-w-[340px] truncate font-mono text-xl font-semibold tracking-[-0.02em]">
-              {runState?.name ?? runRow?.run_id ?? "Run"}
+              {runState?.name ?? runId}
             </h1>
             <StatusBadge status={status as RunLifecycleStatus} />
             <span className="rounded bg-[var(--paper-2)] px-2 py-0.5 font-mono text-xs text-[var(--muted)]">
@@ -405,7 +396,7 @@ export function RunWorkspacePage({
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--faint)]">Score</div>
               <span className="font-mono text-sm text-[var(--ink)]" data-testid="stat-score">
-                {formatPercent(runState?.finalScore ?? runRow?.final_score ?? null)}
+                {formatPercent(runState?.finalScore ?? null)}
               </span>
             </div>
           </div>

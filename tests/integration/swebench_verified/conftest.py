@@ -12,7 +12,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord, RunTaskExecution
 from sqlmodel import select
 
 _MINIMAL_SWEBENCH_PAYLOAD: dict[str, object] = {
@@ -34,7 +34,8 @@ def swebench_execution() -> tuple[UUID, UUID]:
     """Seed the minimal FK chain needed by SWEBenchSandboxManager._install_dependencies.
 
     Seeds: ExperimentDefinition → ExperimentDefinitionInstance →
-    ExperimentDefinitionTask + RunRecord → RunTaskExecution(id=execution_id).
+    ExperimentDefinitionTask + ExperimentRecord + RunRecord →
+    RunTaskExecution(id=execution_id).
 
     Yields (execution_id, run_id) so tests can pass execution_id as
     sandbox_key and run_id as run_id to mgr.create().
@@ -68,8 +69,20 @@ def swebench_execution() -> tuple[UUID, UUID]:
         session.flush()
         session.refresh(task)
 
+        experiment = ExperimentRecord(
+            name="swebench sandbox manager test",
+            benchmark_type="swebench-verified",
+            sample_count=1,
+        )
+        session.add(experiment)
+        session.flush()
+        session.refresh(experiment)
+
         run = RunRecord(
-            experiment_definition_id=defn.id,
+            experiment_id=experiment.id,
+            workflow_definition_id=defn.id,
+            benchmark_type="swebench-verified",
+            instance_key="django__django-1",
             status=RunStatus.EXECUTING,
         )
         session.add(run)
@@ -87,6 +100,7 @@ def swebench_execution() -> tuple[UUID, UUID]:
 
         run_id: UUID = run.id
         defn_id: UUID = defn.id
+        experiment_id: UUID = experiment.id
 
     yield execution_id, run_id
 
@@ -97,6 +111,9 @@ def swebench_execution() -> tuple[UUID, UUID]:
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
             session.delete(run_row)
+        experiment_row = session.get(ExperimentRecord, experiment_id)
+        if experiment_row is not None:
+            session.delete(experiment_row)
         for t in session.exec(
             select(ExperimentDefinitionTask).where(
                 ExperimentDefinitionTask.experiment_definition_id == defn_id

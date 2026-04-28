@@ -99,7 +99,7 @@ class ReActWorker(Worker):
         deps_type = type(agent_deps) if agent_deps is not None else NoneType
 
         agent = cast(
-            Agent[Any, _AgentOutput],
+            "Agent[Any, _AgentOutput]",
             Agent(
                 model=resolved.model,
                 instructions=self.system_prompt or None,

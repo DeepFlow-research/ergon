@@ -1,17 +1,10 @@
 """Cohort row rubric status summaries."""
 
-from uuid import uuid4
-
-import ergon_core.api as _ergon_api
 from ergon_core.core.persistence.telemetry.evaluation_summary import (
     CriterionResultEntry,
     EvaluationSummary,
 )
-from ergon_core.core.persistence.telemetry.models import ExperimentCohort, RunRecord
-from ergon_core.core.runtime.services.cohort_service import (
-    ExperimentCohortService,
-    _rubric_status_summary,
-)
+from ergon_core.core.runtime.services.cohort_service import _rubric_status_summary
 
 
 def _summary(
@@ -71,23 +64,9 @@ def test_rubric_status_summary_reports_none_for_no_criteria() -> None:
     assert summary.evaluator_names == []
 
 
-def test_cohort_run_row_requires_rubric_status_summary() -> None:
-    cohort = ExperimentCohort(name="cohort")
-    run = RunRecord(
-        id=uuid4(),
-        experiment_definition_id=uuid4(),
-        cohort_id=cohort.id,
-        status="completed",
-    )
+def test_rubric_status_summary_reports_failing_for_failures() -> None:
     summary = _rubric_status_summary([_summary("default", ["failed"])])
 
-    row = ExperimentCohortService._build_run_row(
-        cohort,
-        run,
-        total_tasks=1,
-        rubric_status_summary=summary,
-    )
-
-    assert row.rubric_status_summary.status == "failing"
-    assert row.rubric_status_summary.total_criteria == 1
-    assert row.rubric_status_summary.failed == 1
+    assert summary.status == "failing"
+    assert summary.total_criteria == 1
+    assert summary.failed == 1

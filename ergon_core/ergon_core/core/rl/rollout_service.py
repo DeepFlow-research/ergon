@@ -13,12 +13,14 @@ from uuid import UUID, uuid4
 
 import inngest
 from ergon_core.core.persistence.context.models import RunContextEvent
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.enums import (
     TERMINAL_RUN_STATUSES,
     RunStatus,
 )
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
+    ExperimentRecord,
     RolloutBatch,
     RolloutBatchRun,
     RunRecord,
@@ -82,6 +84,26 @@ class RolloutService:
         run_ids: list[UUID] = []
 
         with self._session_factory() as session:
+            definition = session.get(ExperimentDefinition, request.definition_id)
+            benchmark_type = definition.benchmark_type if definition else "rl-rollout"
+            experiment = ExperimentRecord(
+                name=f"RL rollout batch {batch_id}",
+                benchmark_type=benchmark_type,
+                sample_count=request.num_episodes,
+                sample_selection_json={
+                    "instance_keys": [f"episode-{index}" for index in range(request.num_episodes)]
+                },
+                default_worker_team_json={"primary": "rl-rollout"},
+                default_model_target=request.model_target_override,
+                design_json={},
+                metadata_json={
+                    "source": "rollout_service",
+                    "batch_id": str(batch_id),
+                    "definition_id": str(request.definition_id),
+                },
+                status="running",
+            )
+            session.add(experiment)
             session.add(
                 RolloutBatch(
                     id=batch_id,
@@ -90,12 +112,17 @@ class RolloutService:
                 )
             )
 
-            for _ in range(request.num_episodes):
+            for index in range(request.num_episodes):
                 run_id = new_id()
                 session.add(
                     RunRecord(
                         id=run_id,
-                        experiment_definition_id=request.definition_id,
+                        experiment_id=experiment.id,
+                        workflow_definition_id=request.definition_id,
+                        benchmark_type=benchmark_type,
+                        instance_key=f"episode-{index}",
+                        worker_team_json={"primary": "rl-rollout"},
+                        model_target=request.model_target_override,
                         status=RunStatus.PENDING,
                     )
                 )

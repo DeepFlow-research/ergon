@@ -14,6 +14,17 @@ const source = readFileSync(contractsPath, "utf8")
   .replace(
     /event_type: z\.string\(\)\.optional\(\)\.default\("([^"]+)"\)/g,
     'event_type: z.literal("$1").default("$1")',
+  )
+  // Preserve literal discriminators for generated context-part unions.
+  .replace(
+    /part_kind: z\.string\(\)\.optional\(\)\.default\("([^"]+)"\)/g,
+    'part_kind: z.literal("$1").default("$1")',
+  )
+  // Recursive JSON schemas must be lazy or the generated module dereferences
+  // JsonValue_Input before it has been initialized.
+  .replace(
+    /const JsonValue_(Input|Output): z\.ZodType<JsonValue_\1> = z\.union\(\[\n([\s\S]*?)\n\]\);/g,
+    "const JsonValue_$1: z.ZodType<JsonValue_$1> = z.lazy(() => z.union([\n$2\n]));",
   );
 const endpointMarker = "\nconst endpoints = makeApi([";
 const markerIndex = source.indexOf(endpointMarker);

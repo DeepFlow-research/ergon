@@ -87,7 +87,7 @@ def test_seed_requires_secret_header(monkeypatch: pytest.MonkeyPatch) -> None:
     client = TestClient(app)
     resp = client.post(
         "/api/test/write/run/seed",
-        json={"experiment_definition_id": "00000000-0000-0000-0000-000000000001"},
+        json={"workflow_definition_id": "00000000-0000-0000-0000-000000000001"},
     )
     assert resp.status_code == 401
 
@@ -97,7 +97,7 @@ def test_seed_returns_500_when_secret_env_missing(monkeypatch: pytest.MonkeyPatc
     client = TestClient(app)
     resp = client.post(
         "/api/test/write/run/seed",
-        json={"experiment_definition_id": "00000000-0000-0000-0000-000000000001"},
+        json={"workflow_definition_id": "00000000-0000-0000-0000-000000000001"},
         headers={"X-Test-Secret": "anything"},
     )
     assert resp.status_code == 500

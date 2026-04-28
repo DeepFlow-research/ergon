@@ -1,68 +1,38 @@
 """Application service for experiment cohort queries and resolution."""
 
-from collections import Counter, defaultdict
+from dataclasses import dataclass, field
 from uuid import UUID
 
-from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.evaluation_summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStats,
     ExperimentCohortStatus,
+    ExperimentRecord,
     RunRecord,
-    RunTaskEvaluation,
 )
 from ergon_core.core.runtime.services.cohort_schemas import (
     CohortDetailDto,
-    CohortRubricStatusSummaryDto,
-    CohortRunRowDto,
+    CohortExperimentRowDto,
     CohortStatusCountsDto,
     CohortSummaryDto,
     UpdateCohortRequest,
 )
 from ergon_core.core.utils import utcnow
-from sqlmodel import func, select
+from sqlmodel import select
 
 
-def _rubric_status_summary(
-    summaries: list[EvaluationSummary],
-) -> CohortRubricStatusSummaryDto:
-    """Build a compact rubric status summary for a cohort run row."""
-    counts: Counter[str] = Counter()
-    evaluator_names: set[str] = set()
-    statuses: list[str] = []
-
-    for summary in summaries:
-        evaluator_names.add(summary.evaluator_name)
-        for criterion in summary.criterion_results:
-            counts[criterion.status] += 1
-            statuses.append(criterion.status)
-
-    total = len(statuses)
-    if total == 0:
-        status = "none"
-    elif counts["errored"] > 0:
-        status = "errored"
-    elif counts["failed"] > 0:
-        status = "failing"
-    elif counts["passed"] > 0 and counts["skipped"] > 0:
-        status = "mixed"
-    elif counts["skipped"] == total:
-        status = "skipped"
-    else:
-        status = "passing"
-
-    return CohortRubricStatusSummaryDto(
-        status=status,
-        total_criteria=total,
-        passed=counts["passed"],
-        failed=counts["failed"],
-        errored=counts["errored"],
-        skipped=counts["skipped"],
-        criterion_statuses=statuses,
-        evaluator_names=sorted(evaluator_names),
-    )
+@dataclass(frozen=True)
+class RubricStatusSummary:
+    status: str
+    total_criteria: int
+    passed: int = 0
+    failed: int = 0
+    errored: int = 0
+    skipped: int = 0
+    criterion_statuses: list[str] = field(default_factory=list)
+    evaluator_names: list[str] = field(default_factory=list)
 
 
 class ExperimentCohortService:
@@ -110,7 +80,7 @@ class ExperimentCohortService:
             return results
 
     def get_detail(self, cohort_id: UUID) -> CohortDetailDto | None:
-        """Get a cohort detail DTO with all current run rows."""
+        """Get a cohort detail DTO with all experiments in the project folder."""
         with get_session() as session:
             cohort = session.get(ExperimentCohort, cohort_id)
             if cohort is None:
@@ -121,40 +91,23 @@ class ExperimentCohortService:
             ).first()
             summary = self._build_summary(cohort, stats)
 
-            runs = list(
-                session.exec(select(RunRecord).where(RunRecord.cohort_id == cohort_id)).all()
-            )
-            task_counts = (
-                {
-                    run_id: count
-                    for run_id, count in session.exec(
-                        select(RunGraphNode.run_id, func.count(RunGraphNode.id))
-                        .where(RunGraphNode.run_id.in_([run.id for run in runs]))
-                        .group_by(RunGraphNode.run_id)
-                    ).all()
-                }
-                if runs
-                else {}
-            )
-            evaluations_by_run: defaultdict[UUID, list[EvaluationSummary]] = defaultdict(list)
-            if runs:
-                evaluations = session.exec(
-                    select(RunTaskEvaluation).where(
-                        RunTaskEvaluation.run_id.in_([run.id for run in runs])
-                    )
+            experiments = list(
+                session.exec(
+                    select(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort_id)
                 ).all()
-                for evaluation in evaluations:
-                    evaluations_by_run[evaluation.run_id].append(evaluation.parsed_summary())
-            run_rows = [
-                self._build_run_row(
-                    cohort,
-                    run,
-                    int(task_counts.get(run.id, 0)) or None,
-                    rubric_status_summary=_rubric_status_summary(evaluations_by_run[run.id]),
+            )
+            experiment_rows = [
+                self._build_experiment_row(
+                    experiment,
+                    list(
+                        session.exec(
+                            select(RunRecord).where(RunRecord.experiment_id == experiment.id)
+                        ).all()
+                    ),
                 )
-                for run in runs
+                for experiment in experiments
             ]
-            return CohortDetailDto(summary=summary, runs=run_rows)
+            return CohortDetailDto(summary=summary, experiments=experiment_rows)
 
     def get_summary(self, cohort_id: UUID) -> CohortSummaryDto | None:
         """Get a single cohort summary DTO."""
@@ -217,45 +170,106 @@ class ExperimentCohortService:
         )
 
     @staticmethod
-    def _build_run_row(
-        cohort: ExperimentCohort,
-        run: RunRecord,
-        total_tasks: int | None = None,
-        *,
-        rubric_status_summary: CohortRubricStatusSummaryDto,
-    ) -> CohortRunRowDto:
-        running_time_ms: int | None = None
-        if run.started_at is not None:
-            end_time = run.completed_at or utcnow()
-            running_time_ms = max(int((end_time - run.started_at).total_seconds() * 1000), 0)
-
+    def _build_experiment_row(
+        experiment: ExperimentRecord,
+        runs: list[RunRecord],
+    ) -> CohortExperimentRowDto:
         score: float | None = None
-        summary = run.parsed_summary()
-        if summary:
+        total_cost_usd: float | None = None
+        for run in runs:
+            summary = run.parsed_summary()
             raw_score = summary.get("normalized_score")
             if raw_score is None:
                 raw_score = summary.get("final_score")
-            score = float(raw_score) if isinstance(raw_score, int | float) else None
-        total_cost_usd = summary.get("total_cost_usd") if summary else None
+            if isinstance(raw_score, int | float):
+                score = float(raw_score)
+            raw_cost = summary.get("total_cost_usd")
+            if isinstance(raw_cost, int | float):
+                total_cost_usd = (total_cost_usd or 0.0) + float(raw_cost)
 
-        return CohortRunRowDto(
-            run_id=run.id,
-            definition_id=run.experiment_definition_id,
-            cohort_id=cohort.id,
-            cohort_name=cohort.name,
-            status=run.status,
-            created_at=run.created_at,
-            started_at=run.started_at,
-            completed_at=run.completed_at,
-            running_time_ms=running_time_ms,
+        status_counts = CohortStatusCountsDto()
+        for run in runs:
+            _increment_status_count(status_counts, str(run.status))
+
+        return CohortExperimentRowDto(
+            experiment_id=experiment.id,
+            name=experiment.name,
+            benchmark_type=experiment.benchmark_type,
+            sample_count=experiment.sample_count,
+            total_runs=len(runs),
+            status_counts=status_counts,
+            status=_experiment_row_status(experiment.status, status_counts, len(runs)),
+            created_at=experiment.created_at,
+            default_model_target=experiment.default_model_target,
+            default_evaluator_slug=experiment.default_evaluator_slug,
             final_score=score,
-            total_tasks=total_tasks,
-            total_cost_usd=(
-                float(total_cost_usd) if isinstance(total_cost_usd, int | float) else None
-            ),
-            error_message=run.error_message,
-            rubric_status_summary=rubric_status_summary,
+            total_cost_usd=total_cost_usd,
+            error_message=None,
         )
+
+
+def _increment_status_count(counts: CohortStatusCountsDto, status: str) -> None:
+    match status:
+        case "pending":
+            counts.pending += 1
+        case "executing":
+            counts.executing += 1
+        case "evaluating":
+            counts.evaluating += 1
+        case "completed":
+            counts.completed += 1
+        case "failed":
+            counts.failed += 1
+
+
+def _rubric_status_summary(summaries: list[EvaluationSummary]) -> RubricStatusSummary:
+    statuses: list[str] = []
+    evaluator_names: list[str] = []
+    for summary in summaries:
+        evaluator_names.append(summary.evaluator_name)
+        statuses.extend(result.status for result in summary.criterion_results)
+
+    passed = statuses.count("passed")
+    failed = statuses.count("failed")
+    errored = statuses.count("errored")
+    skipped = statuses.count("skipped")
+    status = "none"
+    if errored:
+        status = "errored"
+    elif failed:
+        status = "failing"
+    elif passed:
+        status = "passing"
+
+    return RubricStatusSummary(
+        status=status,
+        total_criteria=len(statuses),
+        passed=passed,
+        failed=failed,
+        errored=errored,
+        skipped=skipped,
+        criterion_statuses=statuses,
+        evaluator_names=evaluator_names,
+    )
+
+
+def _experiment_row_status(
+    experiment_status: str,
+    counts: CohortStatusCountsDto,
+    total_runs: int,
+) -> str:
+    if total_runs == 0:
+        return experiment_status
+    active_runs = counts.pending + counts.executing + counts.evaluating
+    if active_runs > 0:
+        return experiment_status
+    if counts.failed == total_runs:
+        return "failed"
+    if counts.completed == total_runs:
+        return "completed"
+    if counts.failed > 0 and counts.completed > 0:
+        return "completed_with_failures"
+    return experiment_status
 
 
 experiment_cohort_service = ExperimentCohortService()

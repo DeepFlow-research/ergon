@@ -21,6 +21,7 @@ logging.basicConfig(
 
 import inngest.fast_api
 from ergon_core.core.api.cohorts import router as cohorts_router
+from ergon_core.core.api.experiments import router as experiments_router
 from ergon_core.core.api.rollouts import init_service as init_rollout_service
 from ergon_core.core.api.rollouts import router as rollouts_router
 from ergon_core.core.api.runs import router as runs_router
@@ -87,7 +88,14 @@ app = FastAPI(
 
 app.include_router(runs_router)
 app.include_router(cohorts_router)
+app.include_router(experiments_router)
 app.include_router(rollouts_router)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
 
 # Test-only harness: mounted in CI + local-e2e only.
 if settings.enable_test_harness:

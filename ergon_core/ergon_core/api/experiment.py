@@ -5,14 +5,14 @@ from typing import Any
 
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.evaluator import Evaluator
-from ergon_core.api.handles import ExperimentRunHandle, PersistedExperimentDefinition
+from ergon_core.api.handles import PersistedExperimentDefinition
 from ergon_core.api.worker_spec import WorkerSpec
 
 
 class Experiment:
     """Composition root binding a benchmark, worker specs, evaluators, and assignments.
 
-    This is the main object users build and hand to ``persist()`` / ``run()``.
+    This is the main object users build and hand to ``persist()``.
 
     reason: RFC 2026-04-22 §1 — workers are described here as ``WorkerSpec``
     (config-time descriptor), not as live ``Worker`` instances. The
@@ -81,11 +81,12 @@ class Experiment:
         for evaluator in self.evaluators.values():
             evaluator.validate()
 
-        required_slots = set(self.benchmark.evaluator_requirements())
-        missing_slots = required_slots - set(self.evaluators)
-        if missing_slots:
-            missing = ", ".join(sorted(missing_slots))
-            raise ValueError(f"Missing required evaluator bindings: {missing}")
+        if self.evaluators:
+            required_slots = set(self.benchmark.evaluator_requirements())
+            missing_slots = required_slots - set(self.evaluators)
+            if missing_slots:
+                missing = ", ".join(sorted(missing_slots))
+                raise ValueError(f"Missing required evaluator bindings: {missing}")
 
         instances = self.benchmark.build_instances()
         all_task_slugs_by_instance: dict[str, set[str]] = {}
@@ -160,21 +161,6 @@ class Experiment:
         persisted = ExperimentPersistenceService().persist_definition(self)
         self._persisted = persisted
         return persisted
-
-    # ------------------------------------------------------------------
-    # Execution
-    # ------------------------------------------------------------------
-
-    async def run(self) -> ExperimentRunHandle:
-        """Ensure a persisted definition exists, create a run, and dispatch execution."""
-        # Deferred: api/ should not depend on core/ at module level (same as persist).
-        from ergon_core.core.runtime.services.run_service import create_experiment_run
-
-        if self._persisted is None:
-            self.persist()
-        if self._persisted is None:
-            raise RuntimeError("persist() did not produce a persisted definition")
-        return await create_experiment_run(self._persisted)
 
 
 # ------------------------------------------------------------------

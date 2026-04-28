@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import tomllib
+from dataclasses import dataclass
 from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,7 +14,6 @@ from typing import Protocol
 
 import inngest
 from e2b import Template
-from ergon_core.api.handles import ExperimentRunHandle
 from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
@@ -27,6 +27,14 @@ from ergon_core.core.settings import settings
 from ergon_cli.composition import build_experiment
 from ergon_cli.discovery import list_benchmarks
 from ergon_cli.rendering import render_run_result, render_table
+
+
+@dataclass(frozen=True)
+class ExperimentRunHandle:
+    run_id: object
+    definition_id: object
+    benchmark_type: str
+    status: str
 
 
 class BuildLog(Protocol):

@@ -39,7 +39,9 @@ run: |
     sleep 1
   done
 
-  ergon benchmark run "$BENCHMARK" \
+  EXPERIMENT_ID="$(ergon experiment define "$BENCHMARK" \
     --model "vllm:http://localhost:8000" \
+    --worker "training-stub" \
     --evaluator "$EVALUATOR" \
-    --limit "$EVAL_LIMIT"
+    --limit "$EVAL_LIMIT" 2>&1 | sed -n 's/^EXPERIMENT_ID=//p')"
+  ergon experiment run "$EXPERIMENT_ID"

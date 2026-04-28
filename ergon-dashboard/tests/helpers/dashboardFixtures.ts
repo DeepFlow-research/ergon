@@ -13,11 +13,9 @@ export const FIXTURE_IDS = {
   cohortId: "11111111-1111-4111-8111-111111111111",
   runId: "22222222-2222-4222-8222-222222222222",
   experimentId: "33333333-3333-4333-8333-333333333333",
-  rootTaskId: "10000000-0000-4000-8000-000000000001",
-  exploreTaskId: "10000000-0000-4000-8000-000000000002",
-  solveTaskId: "10000000-0000-4000-8000-000000000003",
-  exploreExecutionId: "20000000-0000-4000-8000-000000000001",
-  solveExecutionId: "20000000-0000-4000-8000-000000000002",
+  rootTaskId: "task-root",
+  exploreTaskId: "task-explore",
+  solveTaskId: "task-solve",
   actionId: "44444444-4444-4444-8444-444444444444",
   workerId: "55555555-5555-4555-8555-555555555555",
   threadId: "66666666-6666-4666-8666-666666666666",
@@ -28,6 +26,8 @@ export const FIXTURE_IDS = {
   toolCallEventId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   toolResultEventId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
   deltaToolCallEventId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  solveExecutionId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  solveTaskNodeUuid: "ffffffff-ffff-4fff-8fff-ffffffffffff",
 } as const;
 
 export const CONCURRENT_MAS_FIXTURE_IDS = {
@@ -82,23 +82,30 @@ function serializedRunState(): SerializedWorkflowRunState {
     parentId: FIXTURE_IDS.rootTaskId,
     dependsOnIds: [FIXTURE_IDS.exploreTaskId],
   });
-  const solveContextEvents: ContextEventState[] = [
+  const solveContextEvents = [
     {
       id: FIXTURE_IDS.toolCallEventId,
       runId: FIXTURE_IDS.runId,
       taskExecutionId: FIXTURE_IDS.solveExecutionId,
-      taskNodeId: FIXTURE_IDS.solveTaskId,
+      taskNodeId: FIXTURE_IDS.solveTaskNodeUuid,
       workerBindingKey: "react-worker",
       sequence: 0,
       eventType: "tool_call",
       payload: {
-        event_type: "tool_call",
-        tool_call_id: "call-lean-check",
-        tool_name: "lean_check",
-        args: { file: "proof.lean" },
+        part: {
+          part_kind: "tool_call",
+          tool_call_id: "call-lean-check",
+          tool_name: "lean_check",
+          args: { file: "proof.lean" },
+        },
+        token_ids: [101, 102, 103],
+        logprobs: null,
+        sequence: 0,
+        worker_binding_key: "react-worker",
         turn_id: "turn-1",
-        turn_token_ids: [101, 102, 103],
-        turn_logprobs: null,
+        started_at: "2026-03-18T12:00:18.000Z",
+        completed_at: "2026-03-18T12:00:18.100Z",
+        policy_version: null,
       },
       createdAt: "2026-03-18T12:00:18.000Z",
       startedAt: "2026-03-18T12:00:18.000Z",
@@ -108,16 +115,26 @@ function serializedRunState(): SerializedWorkflowRunState {
       id: FIXTURE_IDS.toolResultEventId,
       runId: FIXTURE_IDS.runId,
       taskExecutionId: FIXTURE_IDS.solveExecutionId,
-      taskNodeId: FIXTURE_IDS.solveTaskId,
+      taskNodeId: FIXTURE_IDS.solveTaskNodeUuid,
       workerBindingKey: "react-worker",
       sequence: 1,
       eventType: "tool_result",
       payload: {
-        event_type: "tool_result",
-        tool_call_id: "call-lean-check",
-        tool_name: "lean_check",
-        result: "checking proof...",
-        is_error: false,
+        part: {
+          part_kind: "tool_result",
+          tool_call_id: "call-lean-check",
+          tool_name: "lean_check",
+          content: "checking proof...",
+          is_error: false,
+        },
+        token_ids: null,
+        logprobs: null,
+        sequence: 1,
+        worker_binding_key: "react-worker",
+        turn_id: null,
+        started_at: null,
+        completed_at: null,
+        policy_version: null,
       },
       createdAt: "2026-03-18T12:00:19.000Z",
       startedAt: null,
@@ -144,7 +161,7 @@ function serializedRunState(): SerializedWorkflowRunState {
         {
           id: "resource-proof",
           taskId: FIXTURE_IDS.solveTaskId,
-          taskExecutionId: FIXTURE_IDS.solveExecutionId,
+          taskExecutionId: "execution-1",
           name: "proof.lean",
           mimeType: "text/plain",
           sizeBytes: 320,
@@ -156,7 +173,7 @@ function serializedRunState(): SerializedWorkflowRunState {
     executionsByTask: {
       [FIXTURE_IDS.exploreTaskId]: [
         {
-          id: FIXTURE_IDS.exploreExecutionId,
+          id: "execution-explore-1",
           taskId: FIXTURE_IDS.exploreTaskId,
           attemptNumber: 1,
           status: TaskStatus.COMPLETED,
@@ -173,7 +190,7 @@ function serializedRunState(): SerializedWorkflowRunState {
       ],
       [FIXTURE_IDS.solveTaskId]: [
         {
-          id: FIXTURE_IDS.solveExecutionId,
+          id: "execution-solve-1",
           taskId: FIXTURE_IDS.solveTaskId,
           attemptNumber: 1,
           status: TaskStatus.RUNNING,
@@ -281,7 +298,7 @@ function serializedRunState(): SerializedWorkflowRunState {
             maxScore: 1,
             feedback: "Compilation succeeds, but the proof uses a slightly verbose intermediate lemma.",
             evaluationInput: "lake env lean proof.lean",
-            modelReasoning: "Compilation succeeds with a verbose intermediate lemma.",
+            modelReasoning: "The proof compiles with a verbose intermediate lemma.",
             skippedReason: null,
             error: null,
             evaluatedActionIds: [FIXTURE_IDS.actionId],
@@ -301,7 +318,7 @@ function serializedRunState(): SerializedWorkflowRunState {
     cancelledTasks: 0,
     finalScore: null,
     error: null,
-  };
+  } as unknown as SerializedWorkflowRunState;
 }
 
 export function createDeltaThread(): CommunicationThreadState {
@@ -359,7 +376,7 @@ export function createDeltaContextEvent(): ContextEventState {
   return {
     id: FIXTURE_IDS.deltaToolCallEventId,
     runId: FIXTURE_IDS.runId,
-    taskExecutionId: FIXTURE_IDS.solveExecutionId,
+    taskExecutionId: "execution-solve-1",
     taskNodeId: FIXTURE_IDS.solveTaskId,
     workerBindingKey: "react-worker",
     sequence: 2,
@@ -441,16 +458,6 @@ export function createEmptyCriteriaEvaluation(): TaskEvaluationState {
 
 export function createDashboardSeed(): DashboardHarnessSeedPayload {
   const runState = serializedRunState();
-  const passingRubricStatus = {
-    status: "passing" as const,
-    total_criteria: 1,
-    passed: 1,
-    failed: 0,
-    errored: 0,
-    skipped: 0,
-    criterion_statuses: ["passed"],
-    evaluator_names: ["rubric"],
-  };
   const summary = {
     cohort_id: FIXTURE_IDS.cohortId,
     name: "minif2f-react-worker-gpt5v3",
@@ -498,56 +505,88 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
 
   const detail = {
     summary,
+    experiments: [
+      {
+        experiment_id: FIXTURE_IDS.experimentId,
+        name: "minif2f smoke n=3",
+        benchmark_type: "minif2f",
+        sample_count: 3,
+        total_runs: 3,
+        status_counts: {
+          pending: 0,
+          executing: 0,
+          evaluating: 0,
+          completed: 3,
+          failed: 0,
+        },
+        status: "completed",
+        created_at: "2026-03-18T11:59:30.000Z",
+        default_model_target: "openai:gpt-5",
+        default_evaluator_slug: "lean-evaluator",
+        final_score: 1,
+        total_cost_usd: 0.42,
+        error_message: null,
+      },
+    ],
+  };
+
+  const experimentDetail = {
+    experiment: {
+      experiment_id: FIXTURE_IDS.experimentId,
+      cohort_id: FIXTURE_IDS.cohortId,
+      name: "minif2f smoke n=3",
+      benchmark_type: "minif2f",
+      sample_count: 3,
+      status: "completed",
+      default_worker_team: { primary: "minif2f-react" },
+      default_evaluator_slug: "lean-evaluator",
+      default_model_target: "openai:gpt-5",
+      created_at: "2026-03-18T11:59:30.000Z",
+      started_at: "2026-03-18T12:00:00.000Z",
+      completed_at: "2026-03-18T12:02:26.000Z",
+      run_count: 3,
+    },
     runs: [
       {
         run_id: FIXTURE_IDS.runId,
-        definition_id: FIXTURE_IDS.experimentId,
-        cohort_id: FIXTURE_IDS.cohortId,
-        cohort_name: summary.name,
+        workflow_definition_id: FIXTURE_IDS.experimentId,
+        benchmark_type: "minif2f",
+        instance_key: "algebra_sample",
         status: "completed",
         created_at: "2026-03-18T11:59:30.000Z",
         started_at: "2026-03-18T12:00:00.000Z",
         completed_at: "2026-03-18T12:00:24.000Z",
+        evaluator_slug: "lean-evaluator",
+        model_target: "openai:gpt-5",
+        worker_team: { primary: "minif2f-react" },
+        seed: null,
         running_time_ms: 24_000,
         final_score: 1,
         total_tasks: 10,
         total_cost_usd: 0.12,
         error_message: null,
-        rubric_status_summary: passingRubricStatus,
-      },
-      {
-        run_id: "22222222-2222-4222-8222-222222222223",
-        definition_id: FIXTURE_IDS.experimentId,
-        cohort_id: FIXTURE_IDS.cohortId,
-        cohort_name: summary.name,
-        status: "completed",
-        created_at: "2026-03-18T12:00:30.000Z",
-        started_at: "2026-03-18T12:01:00.000Z",
-        completed_at: "2026-03-18T12:01:22.000Z",
-        running_time_ms: 22_000,
-        final_score: 1,
-        total_tasks: 10,
-        total_cost_usd: 0.14,
-        error_message: null,
-        rubric_status_summary: passingRubricStatus,
-      },
-      {
-        run_id: "22222222-2222-4222-8222-222222222224",
-        definition_id: FIXTURE_IDS.experimentId,
-        cohort_id: FIXTURE_IDS.cohortId,
-        cohort_name: summary.name,
-        status: "completed",
-        created_at: "2026-03-18T12:01:30.000Z",
-        started_at: "2026-03-18T12:02:00.000Z",
-        completed_at: "2026-03-18T12:02:26.000Z",
-        running_time_ms: 26_000,
-        final_score: 1,
-        total_tasks: 10,
-        total_cost_usd: 0.16,
-        error_message: null,
-        rubric_status_summary: passingRubricStatus,
       },
     ],
+    analytics: {
+      total_runs: 3,
+      status_counts: {
+        pending: 0,
+        executing: 0,
+        evaluating: 0,
+        completed: 3,
+        failed: 0,
+        cancelled: 0,
+      },
+      average_score: 1,
+      average_duration_ms: 24_000,
+      average_tasks: 10,
+      total_cost_usd: 0.42,
+      latest_activity_at: "2026-03-18T12:02:26.000Z",
+      error_count: 0,
+    },
+    sample_selection: { instance_keys: ["algebra_sample", "number_theory_sample", "geometry_sample"] },
+    design: {},
+    metadata: {},
   };
 
   const concurrent = createConcurrentMasSeedOnly();
@@ -557,22 +596,16 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
       [FIXTURE_IDS.cohortId]: detail,
       ...(concurrent.cohortDetails ?? {}),
     },
+    experimentDetails: {
+      [FIXTURE_IDS.experimentId]: experimentDetail,
+      ...(concurrent.experimentDetails ?? {}),
+    },
     runs: [runState, ...(concurrent.runs ?? [])],
     mutations: concurrent.mutations,
   };
 }
 
 function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
-  const noRubricStatus = {
-    status: "none" as const,
-    total_criteria: 0,
-    passed: 0,
-    failed: 0,
-    errored: 0,
-    skipped: 0,
-    criterion_statuses: [],
-    evaluator_names: [],
-  };
   const summary = {
     cohort_id: CONCURRENT_MAS_FIXTURE_IDS.cohortId,
     name: "concurrent-mas-visual-debugger",
@@ -619,22 +652,27 @@ function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
 
   const detail = {
     summary,
-    runs: [
+    experiments: [
       {
-        run_id: CONCURRENT_MAS_FIXTURE_IDS.runId,
-        definition_id: CONCURRENT_MAS_FIXTURE_IDS.experimentId,
-        cohort_id: CONCURRENT_MAS_FIXTURE_IDS.cohortId,
-        cohort_name: summary.name,
+        experiment_id: CONCURRENT_MAS_FIXTURE_IDS.experimentId,
+        name: "visual debugger n=1",
+        benchmark_type: "visual_debugger",
+        sample_count: 1,
+        total_runs: 1,
+        status_counts: {
+          pending: 0,
+          executing: 1,
+          evaluating: 0,
+          completed: 0,
+          failed: 0,
+        },
         status: "executing",
         created_at: "2026-04-26T11:59:30.000Z",
-        started_at: "2026-04-26T12:00:00.000Z",
-        completed_at: null,
-        running_time_ms: 30_000,
+        default_model_target: "fixture",
+        default_evaluator_slug: null,
         final_score: null,
-        total_tasks: null,
         total_cost_usd: null,
         error_message: null,
-        rubric_status_summary: noRubricStatus,
       },
     ],
   };
@@ -644,7 +682,8 @@ function createConcurrentMasSeedOnly(): DashboardHarnessSeedPayload {
     cohortDetails: {
       [CONCURRENT_MAS_FIXTURE_IDS.cohortId]: detail,
     },
-    runs: [concurrentMasFixture.runState as SerializedWorkflowRunState],
+    experimentDetails: {},
+    runs: [concurrentMasFixture.runState as unknown as SerializedWorkflowRunState],
     mutations: {
       [CONCURRENT_MAS_FIXTURE_IDS.runId]: concurrentMasFixture.mutations,
     },

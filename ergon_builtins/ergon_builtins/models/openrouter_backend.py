@@ -19,7 +19,7 @@ def resolve_openrouter(
 ) -> ResolvedModel:
     """Resolve ``openrouter:model-id`` to an OpenRouter-backed chat model."""
     resolved_name = model_name or target.removeprefix("openrouter:")
-    provider = OpenRouterProvider(api_key=api_key or settings.openrouter_api_key)
+    provider = OpenRouterProvider(api_key=api_key or settings.openrouter_api_key or "unused")
     model = OpenRouterModel(model_name=resolved_name, provider=provider)
     logger.info("Resolved OpenRouter model: model_name=%s", resolved_name)
     return ResolvedModel(model=model, policy_version=policy_version, supports_logprobs=False)

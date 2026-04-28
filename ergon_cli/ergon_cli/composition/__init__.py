@@ -14,12 +14,19 @@ def build_experiment(
     workflow: str = "single",
     limit: int | None = None,
 ) -> Experiment:
+    benchmark_registry_restore: tuple[dict[str, object], dict[str, object | None]] | None = None
     if os.environ.get("ENABLE_SMOKE_FIXTURES", os.environ.get("ENABLE_TEST_HARNESS")) == "1":
         # Host-side real-LLM canaries use the same test-support smoke fixtures as the
         # API container, but production CLI paths do not load them unless the
         # flag is explicitly enabled.
+        from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
         from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
 
+        slugs = ("researchrubrics", "minif2f", "swebench-verified")
+        benchmark_registry_restore = (
+            {slug: BENCHMARKS[slug] for slug in slugs if slug in BENCHMARKS},
+            {slug: SANDBOX_MANAGERS.get(slug) for slug in slugs},
+        )
         register_smoke_fixtures()
 
     # Deferred: CLI startup cost
@@ -32,6 +39,8 @@ def build_experiment(
 
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
     evaluator = evaluator_cls(name="evaluator")
+    if benchmark_registry_restore is not None:
+        _restore_benchmark_registry(*benchmark_registry_restore)
 
     # Smoke-worker composition: the parent worker spawns 9 subtasks via
     # ``add_subtask(assigned_worker_slug="{env}-smoke-leaf")``, so the
@@ -210,3 +219,17 @@ def _construct_benchmark(cls, workflow: str, limit: int | None):
 
     # Bare constructor
     return cls()
+
+
+def _restore_benchmark_registry(
+    benchmarks: dict[str, object],
+    sandbox_managers: dict[str, object | None],
+) -> None:
+    from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
+
+    BENCHMARKS.update(benchmarks)
+    for slug, manager_cls in sandbox_managers.items():
+        if manager_cls is None:
+            SANDBOX_MANAGERS.pop(slug, None)
+        else:
+            SANDBOX_MANAGERS[slug] = manager_cls

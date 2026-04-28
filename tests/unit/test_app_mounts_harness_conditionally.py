@@ -38,3 +38,13 @@ def test_harness_mounted_when_env_set(monkeypatch: pytest.MonkeyPatch) -> None:
     # if Postgres is unreachable from the unit-test env. Either proves the route
     # is mounted.
     assert resp.status_code in (404, 500)
+
+
+def test_health_route_is_available_without_test_harness(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _reload_app_with(monkeypatch, None)
+    client = TestClient(app)
+
+    resp = client.get("/health")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}

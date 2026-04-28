@@ -3,7 +3,6 @@
 Pass ALL_FUNCTIONS to inngest.serve() or the framework integration.
 """
 
-from ergon_core.core.runtime.inngest.benchmark_run_start import benchmark_run_start_fn
 from ergon_core.core.runtime.inngest.cancel_orphan_subtasks import (
     block_descendants_on_failed_fn,
     cancel_orphans_on_cancelled_fn,
@@ -25,8 +24,6 @@ from ergon_core.core.runtime.inngest.start_workflow import start_workflow_fn
 from ergon_core.core.runtime.inngest.worker_execute import worker_execute_fn
 
 ALL_FUNCTIONS = [
-    # Benchmark entry point
-    benchmark_run_start_fn,
     # Task orchestration
     start_workflow_fn,
     execute_task_fn,
