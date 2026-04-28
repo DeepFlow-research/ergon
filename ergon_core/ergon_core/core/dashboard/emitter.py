@@ -139,7 +139,7 @@ class DashboardEmitter:
         parent_task_id: UUID | None = None,
         triggered_by: str | None = None,
         assigned_worker_id: UUID | None = None,
-        assigned_worker_name: str | None = None,
+        assigned_worker_slug: str | None = None,
     ) -> None:
         if not self._enabled:
             return
@@ -154,7 +154,7 @@ class DashboardEmitter:
                 triggered_by=triggered_by,
                 timestamp=utcnow(),
                 assigned_worker_id=assigned_worker_id,
-                assigned_worker_name=assigned_worker_name,
+                assigned_worker_slug=assigned_worker_slug,
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))
@@ -202,7 +202,7 @@ class DashboardEmitter:
                 triggered_by=f"cancel:{event.cause}",
                 timestamp=utcnow(),
                 assigned_worker_id=None,
-                assigned_worker_name=None,
+                assigned_worker_slug=None,
             )
             await inngest_client.send(
                 inngest.Event(name=evt.name, data=evt.model_dump(mode="json"))

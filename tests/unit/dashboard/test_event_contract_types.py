@@ -1,5 +1,10 @@
 """Guards for typed dashboard event payload contracts."""
 
+from uuid import uuid4
+
+import pytest
+from ergon_core.core.dashboard import emitter as dashboard_emitter_module
+from ergon_core.core.dashboard.emitter import DashboardEmitter
 from ergon_core.core.api.schemas import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
@@ -32,3 +37,27 @@ def test_thread_dto_exposes_summary_and_task_identity() -> None:
 
 def test_cohort_updated_event_uses_cohort_summary_dto() -> None:
     assert CohortUpdatedEvent.model_fields["summary"].annotation is CohortSummaryDto
+
+
+@pytest.mark.asyncio
+async def test_task_status_emitter_uses_assigned_worker_slug(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent_events = []
+
+    async def send(event) -> None:
+        sent_events.append(event)
+
+    monkeypatch.setattr(dashboard_emitter_module.inngest_client, "send", send)
+
+    emitter = DashboardEmitter(enabled=True)
+    await emitter.task_status_changed(
+        run_id=uuid4(),
+        task_id=uuid4(),
+        task_name="task",
+        new_status="running",
+        assigned_worker_slug="react-worker",
+    )
+
+    assert len(sent_events) == 1
+    data = sent_events[0].data
+    assert data["assigned_worker_slug"] == "react-worker"
+    assert "assigned_worker_name" not in data

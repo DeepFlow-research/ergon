@@ -44,7 +44,7 @@ async def _emit_task_status(
     new_status: str,
     old_status: str | None = None,
     worker_id: UUID | None = None,
-    worker_name: str | None = None,
+    worker_slug: str | None = None,
 ) -> None:
     """Emit dashboard/task.status_changed. All arguments are plain primitives."""
     if node_id is None:
@@ -57,7 +57,7 @@ async def _emit_task_status(
             new_status=new_status,
             old_status=old_status,
             assigned_worker_id=worker_id,
-            assigned_worker_name=worker_name,
+            assigned_worker_slug=worker_slug,
         )
     except Exception:  # slopcop: ignore[no-broad-except]
         logger.warning("Failed to emit task_status_changed", exc_info=True)
@@ -156,7 +156,7 @@ class TaskExecutionService:
                 new_status=graph_status.RUNNING,
                 old_status=None,
                 worker_id=worker_row.id,
-                worker_name=assigned_worker_slug,
+                worker_slug=assigned_worker_slug,
             )
 
             # Graph-native path: ``command.node_id`` is guaranteed non-null
@@ -276,7 +276,7 @@ class TaskExecutionService:
                 new_status=graph_status.RUNNING,
                 old_status=None,
                 worker_id=definition_worker_id,
-                worker_name=assigned_worker_slug,
+                worker_slug=assigned_worker_slug,
             )
 
             # Definition path: ``command.task_id`` is the static FK (known
