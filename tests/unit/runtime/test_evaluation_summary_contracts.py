@@ -7,7 +7,12 @@ from uuid import uuid4
 import pytest
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, TaskEvaluationResult
+from ergon_core.api.results import (
+    CriterionObservation,
+    CriterionObservationMessage,
+    CriterionResult,
+    TaskEvaluationResult,
+)
 from ergon_core.core.persistence.telemetry.evaluation_summary import CriterionResultEntry
 from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionSpec
 from ergon_core.core.runtime.services.evaluation_persistence_service import (
@@ -30,6 +35,7 @@ def _service_result(
     feedback: str | None,
     criterion_score: float = 1.0,
     criterion_weight: float = 1.0,
+    spec_max_score: float = 1.0,
     passed: bool = True,
     model_reasoning: str | None = None,
     skipped_reason: str | None = None,
@@ -37,8 +43,14 @@ def _service_result(
     evaluated_action_ids: list[str] | None = None,
     evaluated_resource_ids: list[str] | None = None,
     criterion_evaluation_input: str | None = None,
+    criterion_description: str = "Criterion description",
+    criterion_observation: CriterionObservation | None = None,
+    task_metadata: dict | None = None,
 ) -> EvaluationServiceResult:
-    criterion = _Criterion(name="Criterion description")
+    criterion = _Criterion(
+        slug="criterion-slug",
+        description=criterion_description,
+    )
     return EvaluationServiceResult(
         result=TaskEvaluationResult(
             task_slug="task",
@@ -58,14 +70,16 @@ def _service_result(
                     evaluated_action_ids=evaluated_action_ids or [],
                     evaluated_resource_ids=evaluated_resource_ids or [],
                     evaluation_input=criterion_evaluation_input,
+                    observation=criterion_observation,
                 )
             ],
+            metadata=task_metadata or {},
         ),
         specs=[
             CriterionSpec(
                 criterion=criterion,
                 criterion_idx=0,
-                max_score=1.0,
+                max_score=spec_max_score,
             )
         ],
     )
@@ -74,6 +88,7 @@ def _service_result(
 def test_criterion_result_entry_requires_criterion_description() -> None:
     with pytest.raises(ValidationError):
         CriterionResultEntry(
+            criterion_slug="criterion",
             criterion_name="criterion",
             criterion_type="test-criterion",
             score=1.0,
@@ -131,6 +146,64 @@ def test_build_evaluation_summary_includes_required_criterion_status_fields() ->
     assert entry.skipped_reason is None
 
 
+def test_build_evaluation_summary_preserves_evaluator_normalized_score() -> None:
+    summary = build_evaluation_summary(
+        _service_result(
+            feedback="criterion ran",
+            criterion_score=0.5,
+            criterion_weight=2.0,
+            spec_max_score=2.0,
+            passed=True,
+            task_metadata={"score_scale": "normalized_0_1"},
+        ),
+        evaluation_input=None,
+    )
+
+    assert summary.normalized_score == 0.5
+    assert summary.max_score == 1.0
+    assert summary.metadata == {"score_scale": "normalized_0_1"}
+
+
+def test_build_evaluation_summary_uses_full_criterion_description_field() -> None:
+    summary = build_evaluation_summary(
+        _service_result(
+            feedback="criterion ran",
+            criterion_description="The response cites official fireworks guidance.",
+        ),
+        evaluation_input=None,
+    )
+
+    entry = summary.criterion_results[0]
+    assert entry.criterion_description == "The response cites official fireworks guidance."
+    assert entry.criterion_slug == "criterion result"
+
+
+def test_build_evaluation_summary_preserves_structured_observation() -> None:
+    observation = CriterionObservation(
+        prompt_messages=[
+            CriterionObservationMessage(role="system", content="Judge this rubric."),
+            CriterionObservationMessage(role="user", content="Evidence payload."),
+        ],
+        evidence_resource_ids=["resource-1"],
+        output={"passed": True, "reasoning": "sufficient"},
+        model="openai:gpt-4o",
+        details={"axis": "quality"},
+    )
+    summary = build_evaluation_summary(
+        _service_result(
+            feedback="criterion ran",
+            criterion_observation=observation,
+            evaluated_resource_ids=["resource-1"],
+        ),
+        evaluation_input=None,
+    )
+
+    entry = summary.criterion_results[0]
+    assert entry.observation == observation
+    assert entry.observation is not None
+    assert entry.observation.prompt_messages[1].content == "Evidence payload."
+
+
 def test_dashboard_evaluation_dto_allows_nullable_feedback_and_input() -> None:
     summary = build_evaluation_summary(
         _service_result(feedback=None),
@@ -172,6 +245,7 @@ def test_dashboard_evaluation_dto_exposes_required_rubric_metadata() -> None:
     criterion = dto.criterion_results[0]
     assert dto.evaluator_name == "rubric"
     assert dto.aggregation_rule == "weighted_sum"
+    assert criterion.criterion_slug == "criterion result"
     assert criterion.criterion_name == "criterion result"
     assert criterion.status == "passed"
     assert criterion.passed is True

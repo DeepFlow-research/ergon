@@ -17,8 +17,21 @@ def _write_minimal_rollout(
     *,
     task_count: int = 1,
     evaluation_rows: list[dict] | None = None,
-    resource_count: int = 1,
+    resource_rows: list[dict] | None = None,
+    task_execution_ids: list[str] | None = None,
 ) -> None:
+    execution_ids = task_execution_ids or [str(uuid4()) for _ in range(task_count)]
+    resources = resource_rows
+    if resources is None:
+        resources = [
+            {
+                "id": str(uuid4()),
+                "task_execution_id": execution_ids[0],
+                "kind": "report",
+                "name": "report.md",
+                "file_path": "/durable/blob",
+            }
+        ]
     db = root / "db"
     db.mkdir()
     (root / "manifest.json").write_text(
@@ -36,7 +49,7 @@ def _write_minimal_rollout(
                 "db_row_counts": {
                     "run_task_executions": task_count,
                     "run_task_evaluations": len(evaluation_rows or []),
-                    "run_resources": resource_count,
+                    "run_resources": len(resources),
                     "run_graph_nodes": task_count,
                 },
             }
@@ -46,7 +59,7 @@ def _write_minimal_rollout(
         db / "run_task_executions.jsonl",
         [
             {
-                "id": str(uuid4()),
+                "id": execution_ids[idx],
                 "task_slug": f"task-{idx}",
                 "status": "completed",
             }
@@ -66,7 +79,7 @@ def _write_minimal_rollout(
             for idx in range(task_count)
         ],
     )
-    _write_jsonl(db / "run_resources.jsonl", [{"id": str(uuid4())} for _ in range(resource_count)])
+    _write_jsonl(db / "run_resources.jsonl", resources)
     _write_jsonl(db / "run_task_evaluations.jsonl", evaluation_rows or [])
 
 
@@ -149,6 +162,104 @@ def test_artifact_health_summarizes_scores_and_workers(tmp_path: Path) -> None:
     assert health.criterion_count == 1
     assert health.normalized_scores == [0.75]
     assert health.worker_slugs == ["researchrubrics-researcher"]
+
+
+def test_artifact_health_uses_task_scoped_report_resources(tmp_path: Path) -> None:
+    task_execution_id = str(uuid4())
+    _write_minimal_rollout(
+        tmp_path,
+        task_count=1,
+        evaluation_rows=[
+            {
+                "id": str(uuid4()),
+                "task_execution_id": task_execution_id,
+                "score": 0.75,
+                "summary_json": {
+                    "evaluator_name": "research-rubric",
+                    "normalized_score": 0.75,
+                    "criterion_results": [
+                        {
+                            "criterion_name": "criterion_0",
+                            "criterion_type": "researchrubrics-llm-judge",
+                            "score": 1.0,
+                            "max_score": 1.0,
+                            "passed": True,
+                            "weight": 1.0,
+                            "status": "passed",
+                            "criterion_description": "Includes citations.",
+                            "feedback": "The report cited source material.",
+                            "model_reasoning": "The report cited source material.",
+                        }
+                    ],
+                },
+            }
+        ],
+        resource_rows=[
+            {
+                "id": str(uuid4()),
+                "task_execution_id": task_execution_id,
+                "kind": "report",
+                "name": "report.md",
+                "file_path": "/durable/blob/not/final_output",
+                "metadata_json": {"sandbox_origin": "/workspace/final_output/report.md"},
+            }
+        ],
+        task_execution_ids=[task_execution_id],
+    )
+
+    health = analyze_rollout_artifacts(tmp_path, expected_task_count=1)
+
+    assert health.missing_final_report is False
+    assert not any(issue.code == "missing_final_report" for issue in health.issues)
+
+
+def test_artifact_health_flags_completed_task_without_report_resource(tmp_path: Path) -> None:
+    task_execution_id = str(uuid4())
+    _write_minimal_rollout(
+        tmp_path,
+        task_count=1,
+        evaluation_rows=[
+            {
+                "id": str(uuid4()),
+                "task_execution_id": task_execution_id,
+                "score": 0.75,
+                "summary_json": {
+                    "evaluator_name": "research-rubric",
+                    "normalized_score": 0.75,
+                    "criterion_results": [
+                        {
+                            "criterion_name": "criterion_0",
+                            "criterion_type": "researchrubrics-llm-judge",
+                            "score": 1.0,
+                            "max_score": 1.0,
+                            "passed": True,
+                            "weight": 1.0,
+                            "status": "passed",
+                            "criterion_description": "Includes citations.",
+                            "feedback": "The report cited source material.",
+                            "model_reasoning": "The report cited source material.",
+                        }
+                    ],
+                },
+            }
+        ],
+        resource_rows=[
+            {
+                "id": str(uuid4()),
+                "task_execution_id": task_execution_id,
+                "kind": "note",
+                "name": "notes.md",
+                "file_path": "/durable/blob",
+            }
+        ],
+        task_execution_ids=[task_execution_id],
+    )
+
+    health = analyze_rollout_artifacts(tmp_path, expected_task_count=1)
+
+    assert health.ok is False
+    assert health.missing_final_report is True
+    assert any(issue.code == "missing_final_report" for issue in health.issues)
 
 
 def test_rollout_report_includes_artifact_health_section(tmp_path: Path) -> None:

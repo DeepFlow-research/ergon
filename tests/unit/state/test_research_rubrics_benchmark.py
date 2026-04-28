@@ -1,14 +1,68 @@
 """Tests for ResearchRubrics benchmark registration and vanilla variant."""
 
+from datetime import UTC, datetime
+from uuid import uuid4
+
 import pytest
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
+from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
+    ResearchRubricsJudgeCriterion,
+)
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
-from ergon_builtins.benchmarks.researchrubrics.task_schemas import ResearchRubricsTaskPayload
+from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
+    ResearchRubricsTaskPayload,
+    RubricCriterion,
+)
 from ergon_builtins.benchmarks.researchrubrics.vanilla import ResearchRubricsVanillaBenchmark
 from ergon_builtins.registry_data import BENCHMARKS, EVALUATORS, WORKERS
 from ergon_core.api import Benchmark
-from ergon_core.api.results import CriterionResult
+from ergon_core.api.evaluation_context import EvaluationContext
+from ergon_core.api.results import CriterionResult, WorkerOutput
+from ergon_core.core.runtime.resources import RunResourceKind, RunResourceView
 from ergon_core.api.task_types import BenchmarkTask
+
+
+class _FakeJudgeRuntime:
+    def __init__(self, resources: list[RunResourceView], blobs: dict[str, bytes]) -> None:
+        self._resources = resources
+        self._blobs = blobs
+        self.listed_task_execution_ids: list[object] = []
+        self.read_resource_ids: list[str] = []
+
+    async def list_resources(self, task_execution_id=None):
+        self.listed_task_execution_ids.append(task_execution_id)
+        return self._resources
+
+    async def read_resource_by_id(self, resource_id):
+        self.read_resource_ids.append(str(resource_id))
+        return self._blobs[str(resource_id)]
+
+
+def _resource_view(
+    *,
+    kind: RunResourceKind,
+    name: str,
+    sandbox_origin: str,
+    text: str,
+) -> tuple[RunResourceView, bytes]:
+    resource_id = uuid4()
+    return (
+        RunResourceView(
+            id=resource_id,
+            run_id=uuid4(),
+            task_execution_id=uuid4(),
+            kind=kind,
+            name=name,
+            mime_type="text/markdown",
+            file_path=f"/durable/{resource_id}",
+            size_bytes=len(text.encode()),
+            content_hash=None,
+            error=None,
+            metadata={"sandbox_origin": sandbox_origin},
+            created_at=datetime.now(UTC),
+        ),
+        text.encode(),
+    )
 
 
 class TestResearchRubricsBenchmarkRegistration:
@@ -159,6 +213,11 @@ class TestResearchRubricsRubric:
         criteria = list(rubric.criteria_for(task))
 
         assert [criterion.weight for criterion in criteria] == [2.0, -1.0]
+        assert [criterion.score_spec.max_score for criterion in criteria] == [2.0, 1.0]
+        assert [criterion.description for criterion in criteria] == [
+            "Includes citations.",
+            "No unsupported claims.",
+        ]
         assert [type(criterion).__name__ for criterion in criteria] == [
             "ResearchRubricsJudgeCriterion",
             "ResearchRubricsJudgeCriterion",
@@ -186,6 +245,91 @@ class TestResearchRubricsRubric:
         assert result.score == 1.0
         assert result.metadata == {
             "total_score": 2.0,
+            "score_scale": "normalized_0_1",
+            "raw_score": 2.0,
             "max_possible": 2.0,
             "min_possible": -1.0,
         }
+
+
+class TestResearchRubricsJudgeCriterion:
+    @pytest.mark.asyncio
+    async def test_judge_prioritizes_final_resources_over_final_message(self) -> None:
+        final_resource, final_blob = _resource_view(
+            kind=RunResourceKind.REPORT,
+            name="report.md",
+            sandbox_origin="/workspace/final_output/report.md",
+            text="# Final report\nThis is the primary answer artifact.",
+        )
+        scratch_resource, scratch_blob = _resource_view(
+            kind=RunResourceKind.NOTE,
+            name="notes.md",
+            sandbox_origin="/workspace/notes.md",
+            text="scratch notes",
+        )
+        runtime = _FakeJudgeRuntime(
+            resources=[scratch_resource, final_resource],
+            blobs={
+                str(final_resource.id): final_blob,
+                str(scratch_resource.id): scratch_blob,
+            },
+        )
+        context = EvaluationContext(
+            run_id=uuid4(),
+            task_id=uuid4(),
+            execution_id=uuid4(),
+            task=BenchmarkTask(
+                task_slug="sample",
+                instance_key="default",
+                description="Write a report.",
+                evaluator_binding_keys=("default",),
+            ),
+            worker_result=WorkerOutput(output="assistant summary only"),
+            runtime=runtime,
+        )
+
+        class Criterion(ResearchRubricsJudgeCriterion):
+            async def _call_judge(self, *, system_prompt: str, user_prompt: str):
+                self.captured_user_prompt = user_prompt
+                from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
+                    ResearchRubricsVerdict,
+                )
+
+                return ResearchRubricsVerdict(
+                    passed=True,
+                    reasoning="The final report satisfies the criterion.",
+                )
+
+        criterion = Criterion(
+            slug="includes_findings",
+            rubric=RubricCriterion(
+                criterion="Includes findings",
+                axis="quality",
+                weight=1.0,
+            ),
+        )
+
+        result = await criterion.evaluate(context)
+
+        assert runtime.listed_task_execution_ids == [None]
+        assert set(runtime.read_resource_ids) == {
+            str(final_resource.id),
+            str(scratch_resource.id),
+        }
+        assert result.evaluated_resource_ids == [
+            str(final_resource.id),
+            str(scratch_resource.id),
+        ]
+        assert result.slug == "includes_findings"
+        assert result.observation is not None
+        assert result.observation.evidence_resource_ids == result.evaluated_resource_ids
+        assert result.observation.output == {
+            "passed": True,
+            "reasoning": "The final report satisfies the criterion.",
+        }
+        assert result.evaluation_input is not None
+        assert "Final output resources" in result.evaluation_input
+        assert "Scratch / supporting resources" in result.evaluation_input
+        assert "Final assistant message" in result.evaluation_input
+        assert "This is the primary answer artifact." in criterion.captured_user_prompt
+        assert "assistant summary only" in criterion.captured_user_prompt

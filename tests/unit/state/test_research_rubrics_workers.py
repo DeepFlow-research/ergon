@@ -10,13 +10,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from ergon_builtins.workers.research_rubrics.researcher_worker import (
-    ResearchRubricsResearcherWorker,
-)
-from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
-    _WORKFLOW_PROMPT,
-    ResearchRubricsWorkflowCliReActWorker,
-)
 from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportReadSuccess,
     ReportWriteSuccess,
@@ -25,7 +18,14 @@ from ergon_builtins.workers.research_rubrics._run_skill import (
     ReportReadSkillRequest,
     ReportWriteSkillRequest,
 )
-from ergon_core.api.generation import GenerationTurn
+from ergon_builtins.workers.research_rubrics.researcher_worker import (
+    ResearchRubricsResearcherWorker,
+)
+from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
+    _WORKFLOW_PROMPT,
+    ResearchRubricsWorkflowCliReActWorker,
+)
+from ergon_core.core.generation import GenerationTurn
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
 
@@ -160,8 +160,18 @@ class TestResearcherWorker:
 
     def test_workflow_cli_prompt_exposes_real_subtask_creation(self):
         assert "manage add-task" in _WORKFLOW_PROMPT
-        assert "researchrubrics-researcher" in _WORKFLOW_PROMPT
+        assert "--worker researchrubrics-workflow-cli-react" in _WORKFLOW_PROMPT
+        assert "same decision policy applies recursively" in _WORKFLOW_PROMPT
         assert "--dry-run" in _WORKFLOW_PROMPT
+
+    def test_workflow_cli_prompt_guides_recursive_task_graph_decision(self):
+        assert "At the start of your task" in _WORKFLOW_PROMPT
+        assert "inspect task-tree --format json" in _WORKFLOW_PROMPT
+        assert "inspect next-actions --manager-capable" in _WORKFLOW_PROMPT
+        assert "decide whether to solve directly or create subtasks" in _WORKFLOW_PROMPT
+        assert "independent evidence-gathering or checking efforts" in _WORKFLOW_PROMPT
+        assert "wait for them to finish before final synthesis" in _WORKFLOW_PROMPT
+        assert "replacement task with a narrower scope" in _WORKFLOW_PROMPT
 
     @pytest.mark.asyncio
     async def test_report_write_uses_manager_public_file_api(self):

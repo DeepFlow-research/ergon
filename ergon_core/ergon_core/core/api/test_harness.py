@@ -21,10 +21,10 @@ from uuid import UUID
 
 import inngest
 from ergon_cli.composition import build_experiment
+from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     RunRecord,

@@ -95,6 +95,8 @@ class ResearchRubricsRubric(Rubric):
             criterion_results=results,
             metadata={
                 "total_score": total_score,
+                "score_scale": "normalized_0_1",
+                "raw_score": total_score,
                 "max_possible": max_possible,
                 "min_possible": min_possible,
             },

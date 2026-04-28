@@ -2,9 +2,10 @@
 
 import logging
 
-from ergon_builtins.models.resolution import ResolvedModel
 from ergon_core.core.settings import settings
 from pydantic_ai.models.openrouter import OpenRouterModel, OpenRouterProvider
+
+from ergon_builtins.models.resolution import ResolvedModel
 
 logger = logging.getLogger(__name__)
 

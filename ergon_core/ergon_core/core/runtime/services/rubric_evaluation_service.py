@@ -44,7 +44,7 @@ class RubricEvaluationService:
             CriterionSpec(
                 criterion=c,
                 criterion_idx=i,
-                max_score=c.weight,
+                max_score=c.score_spec.max_score,
                 stage_idx=0,
                 stage_name="default",
                 aggregation_weight=c.weight,

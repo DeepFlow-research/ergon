@@ -22,7 +22,7 @@ def build_criteria_from_rubrics(
     """
     return [
         ResearchRubricsJudgeCriterion(
-            name=f"criterion_{idx}",
+            slug=f"criterion_{idx}",
             rubric=criterion,
         )
         for idx, criterion in enumerate(rubric_criteria)

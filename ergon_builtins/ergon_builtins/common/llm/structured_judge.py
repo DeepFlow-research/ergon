@@ -3,9 +3,10 @@
 from collections.abc import Sequence
 from typing import Literal, TypeVar, cast
 
-from ergon_builtins.models.resolution import resolve_model_target
 from pydantic import BaseModel
 from pydantic_ai import Agent
+
+from ergon_builtins.models.resolution import resolve_model_target
 
 T = TypeVar("T", bound=BaseModel)
 

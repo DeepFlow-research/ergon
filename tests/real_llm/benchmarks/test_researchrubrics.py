@@ -30,8 +30,6 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
-from sqlmodel import select
-
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
@@ -40,7 +38,9 @@ from ergon_core.core.persistence.telemetry.models import (
 )
 from ergon_core.core.providers.generation.openrouter_budget import OpenRouterBudget
 from ergon_core.core.settings import settings
+from sqlmodel import select
 
+from tests.real_llm.rollout import _fingerprint as fingerprint
 from tests.real_llm.rollout import (
     capture_dashboard,
     dump_rollout,
@@ -48,7 +48,6 @@ from tests.real_llm.rollout import (
     write_manifest,
     write_report,
 )
-from tests.real_llm.rollout import _fingerprint as fingerprint
 
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 

@@ -7,7 +7,9 @@ use this model — no untyped dict access.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from ergon_core.api.results import CriterionObservation
 
 EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 
@@ -15,6 +17,7 @@ EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 class CriterionResultEntry(BaseModel):
     """One criterion result as stored in the evaluation summary."""
 
+    criterion_slug: str
     criterion_name: str
     criterion_type: str
     stage_num: int = 0
@@ -33,7 +36,17 @@ class CriterionResultEntry(BaseModel):
     evaluation_input: str | None = None
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
+    observation: CriterionObservation | None = None
     error: dict | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _populate_criterion_slug(cls, data):
+        if isinstance(data, dict) and "criterion_slug" not in data:
+            name = data.get("criterion_name")
+            if isinstance(name, str):
+                data["criterion_slug"] = name
+        return data
 
 
 class EvaluationSummary(BaseModel):
@@ -45,4 +58,5 @@ class EvaluationSummary(BaseModel):
     stages_evaluated: int = 0
     stages_passed: int = 0
     failed_gate: str | None = None
+    metadata: dict = Field(default_factory=dict)
     criterion_results: list[CriterionResultEntry] = Field(default_factory=list)

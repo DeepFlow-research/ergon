@@ -82,17 +82,22 @@ class ResearchRubricsJudgeCriterion(Criterion):
                 verdict=verdict,
                 evaluated_resource_ids=evaluated_resource_ids,
                 final_outputs=final_outputs,
+                rubric=self.rubric,
+                model=self.model,
             ),
         )
 
+    @classmethod
     def _build_observation(
-        self,
+        cls,
         *,
         system_prompt: str,
         user_prompt: str,
         verdict: ResearchRubricsVerdict,
         evaluated_resource_ids: list[str],
         final_outputs: list[_ResourceEvidence],
+        rubric: RubricCriterion,
+        model: str,
     ) -> CriterionObservation:
         return CriterionObservation(
             prompt_messages=[
@@ -101,10 +106,10 @@ class ResearchRubricsJudgeCriterion(Criterion):
             ],
             evidence_resource_ids=evaluated_resource_ids,
             output=verdict.model_dump(mode="json"),
-            model=self.model,
+            model=model,
             details={
-                "axis": self.rubric.axis,
-                "rubric_weight": self.rubric.weight,
+                "axis": rubric.axis,
+                "rubric_weight": rubric.weight,
                 "primary_evidence": (
                     f"run_resource:{final_outputs[0].resource.name}"
                     if final_outputs

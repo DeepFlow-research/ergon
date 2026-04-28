@@ -25,6 +25,10 @@ class ArtifactHealthSummary(BaseModel):
     resource_count: int
     graph_node_count: int
     criterion_count: int
+    workflow_tool_calls: int = 0
+    other_tool_calls: int = 0
+    budget_exhausted: bool = False
+    missing_final_report: bool = False
     normalized_scores: list[float] = Field(default_factory=list)
     worker_slugs: list[str] = Field(default_factory=list)
     issues: list[ArtifactHealthIssue] = Field(default_factory=list)
@@ -55,7 +59,71 @@ def _criterion_has_reasoning(criterion: dict[str, Any]) -> bool:  # slopcop: ign
     return bool(criterion.get("feedback") or criterion.get("model_reasoning"))
 
 
-def analyze_rollout_artifacts(
+def _payload(row: dict[str, Any]) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    payload = row.get("payload") or {}
+    if isinstance(payload, str):
+        return json.loads(payload)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _contains_budget_exhaustion(value: Any) -> bool:  # slopcop: ignore[no-typing-any]
+    if isinstance(value, dict):
+        if value.get("status") == "TOOL_BUDGET_EXHAUSTED":
+            return True
+        return any(_contains_budget_exhaustion(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_contains_budget_exhaustion(v) for v in value)
+    return False
+
+
+def _tool_budget_signals(
+    context_events: list[dict[str, Any]],  # slopcop: ignore[no-typing-any]
+) -> tuple[int, int, bool]:
+    workflow_tool_calls = 0
+    other_tool_calls = 0
+    budget_exhausted = False
+    for event in context_events:
+        payload = _payload(event)
+        budget_exhausted = budget_exhausted or _contains_budget_exhaustion(payload)
+        if event.get("event_type") != "tool_call":
+            continue
+        tool_name = payload.get("tool_name")
+        if tool_name == "workflow":
+            workflow_tool_calls += 1
+        elif tool_name:
+            other_tool_calls += 1
+    return workflow_tool_calls, other_tool_calls, budget_exhausted
+
+
+def _is_completed_execution(row: dict[str, Any]) -> bool:  # slopcop: ignore[no-typing-any]
+    return row.get("status") == "completed"
+
+
+def _is_report_resource(row: dict[str, Any]) -> bool:  # slopcop: ignore[no-typing-any]
+    return row.get("kind") == "report"
+
+
+def _missing_task_report(
+    executions: list[dict[str, Any]],  # slopcop: ignore[no-typing-any]
+    resources: list[dict[str, Any]],  # slopcop: ignore[no-typing-any]
+) -> bool:
+    completed_execution_ids = {
+        str(row["id"])
+        for row in executions
+        if row.get("id") is not None and _is_completed_execution(row)
+    }
+    if not completed_execution_ids:
+        return False
+
+    report_execution_ids = {
+        str(resource["task_execution_id"])
+        for resource in resources
+        if resource.get("task_execution_id") is not None and _is_report_resource(resource)
+    }
+    return not completed_execution_ids.issubset(report_execution_ids)
+
+
+def analyze_rollout_artifacts(  # noqa: C901
     out_dir: Path,
     *,
     expected_task_count: int | None = None,
@@ -69,6 +137,7 @@ def analyze_rollout_artifacts(
     evaluations = _read_jsonl(db_dir / "run_task_evaluations.jsonl")
     resources = _read_jsonl(db_dir / "run_resources.jsonl")
     graph_nodes = _read_jsonl(db_dir / "run_graph_nodes.jsonl")
+    context_events = _read_jsonl(db_dir / "run_context_events.jsonl")
 
     task_count = len(executions)
     evaluation_count = len(evaluations)
@@ -81,6 +150,10 @@ def analyze_rollout_artifacts(
             if (slug := node.get("assigned_worker_slug") or node.get("assignedWorkerSlug"))
         }
     )
+    workflow_tool_calls, other_tool_calls, budget_exhausted = _tool_budget_signals(
+        context_events,
+    )
+    missing_final_report = _missing_task_report(executions, resources)
 
     issues: list[ArtifactHealthIssue] = []
     if expected_task_count is not None and task_count != expected_task_count:
@@ -90,10 +163,7 @@ def analyze_rollout_artifacts(
                 message=f"Expected {expected_task_count} task executions, found {task_count}.",
             )
         )
-    if (
-        expected_evaluation_count is not None
-        and evaluation_count < expected_evaluation_count
-    ):
+    if expected_evaluation_count is not None and evaluation_count < expected_evaluation_count:
         issues.append(
             ArtifactHealthIssue(
                 code="missing_evaluations",
@@ -108,6 +178,13 @@ def analyze_rollout_artifacts(
             ArtifactHealthIssue(
                 code="missing_resources",
                 message="No resources were dumped for a completed rollout.",
+            )
+        )
+    if missing_final_report:
+        issues.append(
+            ArtifactHealthIssue(
+                code="missing_final_report",
+                message="A completed task execution has no task-scoped report resource.",
             )
         )
     if expected_task_count is not None and graph_node_count < expected_task_count:
@@ -165,6 +242,10 @@ def analyze_rollout_artifacts(
         resource_count=resource_count,
         graph_node_count=graph_node_count,
         criterion_count=criterion_count,
+        workflow_tool_calls=workflow_tool_calls,
+        other_tool_calls=other_tool_calls,
+        budget_exhausted=budget_exhausted,
+        missing_final_report=missing_final_report,
         normalized_scores=normalized_scores,
         worker_slugs=worker_slugs,
         issues=issues,
