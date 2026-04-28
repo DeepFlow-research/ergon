@@ -75,3 +75,26 @@ def test_cancel_cause_literals_live_in_task_events() -> None:
                 offenders.append(f"{path.relative_to(ROOT)} duplicates cancel cause subset")
 
     assert offenders == []
+
+
+def test_core_schema_source_imports_are_directional() -> None:
+    forbidden_pairs = {
+        "ergon_core.core.api.schemas": (
+            "EvalCriterionStatus = Literal",
+            "GraphMutationValue =",
+        ),
+        "ergon_core.core.dashboard.event_contracts": (
+            "GraphMutationValue =",
+            "CancelCause = Literal",
+        ),
+    }
+
+    offenders: list[str] = []
+    for module_path, snippets in forbidden_pairs.items():
+        path = ROOT / ("ergon_core/" + module_path.replace(".", "/") + ".py")
+        text = path.read_text()
+        for snippet in snippets:
+            if snippet in text:
+                offenders.append(f"{path.relative_to(ROOT)} contains local source {snippet!r}")
+
+    assert offenders == []
