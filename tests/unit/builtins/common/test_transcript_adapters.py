@@ -15,6 +15,7 @@ from ergon_core.core.generation import (
 )
 from ergon_core.core.persistence.context.event_payloads import (
     AssistantTextPayload,
+    ContextEventType,
     SystemPromptPayload,
     ThinkingPayload,
     ToolCallPayload,
@@ -55,6 +56,21 @@ def _make_event(event_type: str, payload, sequence: int) -> RunContextEvent:
         event_type=event_type,
         payload=payload.model_dump(mode="json"),
     )
+
+
+def test_generation_part_kinds_have_context_event_counterparts() -> None:
+    assert ErgonTextPart(content="x").part_kind == "text"
+    assert ErgonThinkingPart(content="x").part_kind == "thinking"
+    assert ErgonToolCallPart(tool_name="t", tool_call_id="1", args={}).part_kind == "tool-call"
+    assert (
+        ErgonToolReturnPart(tool_call_id="1", tool_name="t", content="ok").part_kind
+        == "tool-return"
+    )
+
+    assert "assistant_text" in ContextEventType.__args__
+    assert "thinking" in ContextEventType.__args__
+    assert "tool_call" in ContextEventType.__args__
+    assert "tool_result" in ContextEventType.__args__
 
 
 def test_text_and_thinking_are_response_parts() -> None:
