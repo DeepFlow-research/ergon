@@ -46,6 +46,7 @@ class CodeCheckCriterion(Criterion):
         score = self.score_spec.max_score if passed else 0.0
         return CriterionResult(
             slug=self.slug,
+            name=self.name,
             score=score,
             passed=passed,
             weight=self.weight,

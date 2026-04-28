@@ -105,8 +105,7 @@ class RecursiveSmokeWorkerBase(Worker):
         yield ContextPartChunk(
             part=AssistantTextPart(
                 content=(
-                    f"{type(self).__name__}: nested children terminal "
-                    f"{self._last_child_statuses}"
+                    f"{type(self).__name__}: nested children terminal {self._last_child_statuses}"
                 ),
             ),
         )

@@ -21,6 +21,68 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _normalize_description(entry: dict) -> None:
+    criterion_description = entry.get("criterion_description")
+    if isinstance(criterion_description, str) and criterion_description != "":
+        return
+
+    criterion_name = entry.get("criterion_name")
+    entry["criterion_description"] = (
+        criterion_name
+        if isinstance(criterion_name, str) and criterion_name
+        else "unknown criterion"
+    )
+
+
+def _normalize_nullable_text(entry: dict, field_name: str) -> None:
+    if entry.get(field_name) == "":
+        entry[field_name] = None
+    else:
+        entry.setdefault(field_name, None)
+
+
+def _normalize_error(entry: dict) -> None:
+    error = entry.get("error")
+    if error == "":
+        entry["error"] = None
+    elif isinstance(error, str):
+        entry["error"] = {"kind": error}
+    else:
+        entry.setdefault("error", None)
+
+
+def _normalize_status(entry: dict) -> None:
+    if entry.get("status") in {"passed", "failed", "errored", "skipped"}:
+        return
+
+    if entry.get("error") is not None:
+        entry["status"] = "errored"
+    elif entry.get("skipped_reason") is not None:
+        entry["status"] = "skipped"
+    else:
+        entry["status"] = "passed" if entry.get("passed") is True else "failed"
+
+
+def _normalize_scoring(entry: dict) -> None:
+    entry.setdefault("weight", 1.0)
+    if "contribution" in entry:
+        return
+
+    score = entry.get("score")
+    entry["contribution"] = score if isinstance(score, int | float) else 0.0
+
+
+def _normalize_criterion_result(entry: dict) -> None:
+    _normalize_description(entry)
+    _normalize_nullable_text(entry, "feedback")
+    _normalize_nullable_text(entry, "evaluation_input")
+    _normalize_error(entry)
+    _normalize_nullable_text(entry, "skipped_reason")
+    entry.setdefault("model_reasoning", None)
+    _normalize_status(entry)
+    _normalize_scoring(entry)
+
+
 def _normalize_summary_json(summary_json: dict) -> dict:
     normalized = deepcopy(summary_json)
     criterion_results = normalized.get("criterion_results")
@@ -28,57 +90,8 @@ def _normalize_summary_json(summary_json: dict) -> dict:
         return normalized
 
     for entry in criterion_results:
-        if not isinstance(entry, dict):
-            continue
-
-        criterion_description = entry.get("criterion_description")
-        if not isinstance(criterion_description, str) or criterion_description == "":
-            criterion_name = entry.get("criterion_name")
-            entry["criterion_description"] = (
-                criterion_name
-                if isinstance(criterion_name, str) and criterion_name
-                else "unknown criterion"
-            )
-
-        if entry.get("feedback") == "":
-            entry["feedback"] = None
-        else:
-            entry.setdefault("feedback", None)
-
-        if entry.get("evaluation_input") == "":
-            entry["evaluation_input"] = None
-        else:
-            entry.setdefault("evaluation_input", None)
-
-        if entry.get("error") == "":
-            entry["error"] = None
-        elif isinstance(entry.get("error"), str):
-            entry["error"] = {"kind": entry["error"]}
-        else:
-            entry.setdefault("error", None)
-
-        skipped_reason = entry.get("skipped_reason")
-        if skipped_reason == "":
-            entry["skipped_reason"] = None
-        else:
-            entry.setdefault("skipped_reason", None)
-
-        entry.setdefault("model_reasoning", None)
-
-        passed = entry.get("passed")
-        if entry.get("status") not in {"passed", "failed", "errored", "skipped"}:
-            if entry.get("error") is not None:
-                entry["status"] = "errored"
-            elif entry.get("skipped_reason") is not None:
-                entry["status"] = "skipped"
-            else:
-                entry["status"] = "passed" if passed is True else "failed"
-
-        if "weight" not in entry:
-            entry["weight"] = 1.0
-        if "contribution" not in entry:
-            score = entry.get("score")
-            entry["contribution"] = score if isinstance(score, int | float) else 0.0
+        if isinstance(entry, dict):
+            _normalize_criterion_result(entry)
 
     return normalized
 

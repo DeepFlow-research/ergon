@@ -127,9 +127,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
                 "message": error_msg,
                 "exception_type": type(exc).__name__,
                 "phase": "worker_execute",
-                "stack": "".join(
-                    traceback.format_exception(type(exc), exc, exc.__traceback__)
-                ),
+                "stack": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
                 "context": {},
             },
         )

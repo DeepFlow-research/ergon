@@ -16,6 +16,7 @@ class SmokePostRootTimingCriterion(Criterion):
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
         return CriterionResult(
+            slug=self.slug,
             name=self.name,
             score=1.0,
             passed=True,

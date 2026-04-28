@@ -21,14 +21,14 @@ class SandboxFileCheckCriterion(Criterion):
         expected_path: str = MARKER_PATH,
         expected_content: str = MARKER_CONTENT,
     ) -> None:
-        self.name = name
-        self.weight = weight
+        super().__init__(name=name, weight=weight)
         self.expected_path = expected_path
         self.expected_content = expected_content
 
     async def evaluate(self, context: EvaluationContext) -> CriterionResult:
         if not context.sandbox_id:
             return CriterionResult(
+                slug=self.slug,
                 name=self.name,
                 score=0.0,
                 passed=False,
@@ -41,6 +41,7 @@ class SandboxFileCheckCriterion(Criterion):
             from e2b_code_interpreter import AsyncSandbox
         except ImportError:
             return CriterionResult(
+                slug=self.slug,
                 name=self.name,
                 score=0.0,
                 passed=False,
@@ -57,6 +58,7 @@ class SandboxFileCheckCriterion(Criterion):
 
             found = self.expected_content in content
             return CriterionResult(
+                slug=self.slug,
                 name=self.name,
                 score=1.0 if found else 0.0,
                 passed=found,
@@ -70,6 +72,7 @@ class SandboxFileCheckCriterion(Criterion):
             )
         except Exception as exc:  # slopcop: ignore[no-broad-except]
             return CriterionResult(
+                slug=self.slug,
                 name=self.name,
                 score=0.0,
                 passed=False,

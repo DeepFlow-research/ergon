@@ -34,6 +34,7 @@ def is_terminal_node_status(status: str) -> bool:
 def is_blockable_node_status(status: str) -> bool:
     return status != RUNNING and status not in TERMINAL_STATUSES
 
+
 # ── Edge status ───────────────────────────────────────────────────
 # Edges are pure dependency relations (containment lives on the node).
 # "active" is removed — delegation edges no longer exist.

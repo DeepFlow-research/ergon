@@ -136,6 +136,7 @@ class SWEBenchTestCriterion(Criterion):
         patch_text = await _extract_patch_via_runtime(context)
         if not patch_text.strip():
             return CriterionResult(
+                slug=self.slug,
                 name=self.name,
                 score=0.0,
                 passed=False,
@@ -214,6 +215,7 @@ class SWEBenchTestCriterion(Criterion):
         entry = report.get(payload.instance_id, {}) if isinstance(report, dict) else {}
         resolved = bool(entry.get("resolved"))
         return CriterionResult(
+            slug=self.slug,
             name=self.name,
             score=1.0 if resolved else 0.0,
             passed=resolved,
@@ -250,6 +252,7 @@ async def _write_and_apply(
 
 def _error_result(name: str, weight: float, kind: str, detail: str) -> CriterionResult:
     return CriterionResult(
+        slug=name,
         name=name,
         score=0.0,
         passed=False,

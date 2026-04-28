@@ -40,7 +40,9 @@ def test_cohort_updated_event_uses_cohort_summary_dto() -> None:
 
 
 @pytest.mark.asyncio
-async def test_task_status_emitter_uses_assigned_worker_slug(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_task_status_emitter_uses_assigned_worker_slug(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     sent_events = []
 
     async def send(event) -> None:

@@ -16,8 +16,12 @@ from ergon_core.core.api.schemas import (
 )
 from ergon_core.core.persistence.context.event_payloads import ContextEventType
 from ergon_core.core.persistence.graph.models import (
+    GraphTargetType,
+    MutationType,
     RunGraphMutation,
 )
+from ergon_core.core.persistence.shared.types import RunId
+from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.persistence.queries import queries
 from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
 from ergon_core.core.runtime.inngest.client import inngest_client
@@ -26,7 +30,7 @@ from ergon_core.core.runtime.services.cohort_service import experiment_cohort_se
 from ergon_core.core.runtime.services.cohort_stats_service import (
     experiment_cohort_stats_service,
 )
-from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
+from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto, GraphMutationValue
 from ergon_core.core.utils import utcnow
 
 if TYPE_CHECKING:
@@ -131,8 +135,8 @@ class DashboardEmitter:
         run_id: UUID,
         task_id: UUID,
         task_name: str,
-        new_status: str,
-        old_status: str | None = None,
+        new_status: NodeStatus,
+        old_status: NodeStatus | None = None,
         parent_task_id: UUID | None = None,
         triggered_by: str | None = None,
         assigned_worker_id: UUID | None = None,
@@ -359,14 +363,16 @@ class DashboardEmitter:
         try:
             record = GraphMutationRecordDto(
                 id=row.id,
-                run_id=row.run_id,
+                run_id=cast(RunId, row.run_id),
                 sequence=row.sequence,
-                mutation_type=row.mutation_type,
-                target_type=row.target_type,
+                mutation_type=cast(MutationType, row.mutation_type),
+                target_type=cast(GraphTargetType, row.target_type),
                 target_id=row.target_id,
                 actor=row.actor,
-                old_value=dict(row.old_value) if row.old_value else None,
-                new_value=dict(row.new_value),
+                old_value=cast(GraphMutationValue | None, dict(row.old_value))
+                if row.old_value
+                else None,
+                new_value=cast(GraphMutationValue, dict(row.new_value)),
                 reason=row.reason,
                 created_at=row.created_at,
             )

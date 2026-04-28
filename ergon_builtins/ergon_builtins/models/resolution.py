@@ -73,7 +73,7 @@ def capture_model_settings_for(
 
     if prefix == "openrouter":
         return {
-            "openrouter_reasoning": _openrouter_reasoning_settings_for(model_target),
+            "openrouter_reasoning": dict(_openrouter_reasoning_settings_for(model_target)),
         }
 
     if prefix == "openai-responses":

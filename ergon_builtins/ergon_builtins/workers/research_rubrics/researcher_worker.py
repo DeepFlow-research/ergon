@@ -106,7 +106,10 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             max_iterations=60,
         )
         self._agent_deps = AgentToolBudgetDeps(
-            tool_budget=AgentToolBudgetState(**_TOOL_BUDGET_LIMITS),
+            tool_budget=AgentToolBudgetState(
+                max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
+                max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
+            ),
         )
 
     def build_agent_deps(self, context: WorkerContext) -> AgentToolBudgetDeps:
@@ -154,7 +157,10 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         graph_tools = graph_toolkit.build_tools()
 
         self._agent_deps = AgentToolBudgetDeps(
-            tool_budget=AgentToolBudgetState(**_TOOL_BUDGET_LIMITS),
+            tool_budget=AgentToolBudgetState(
+                max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
+                max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
+            ),
         )
         self.tools = [*rr_tools, *graph_tools]
 

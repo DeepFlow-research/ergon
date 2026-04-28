@@ -75,6 +75,7 @@ class LLMJudgeCriterion(Criterion):
         score = self.score_spec.max_score if verdict.passed else 0.0
         return CriterionResult(
             slug=self.slug,
+            name=self.name,
             score=score,
             passed=verdict.passed,
             weight=self.weight,

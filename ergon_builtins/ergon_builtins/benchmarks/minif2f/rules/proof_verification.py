@@ -72,6 +72,7 @@ class ProofVerificationCriterion(Criterion):
         proof_data = await self._extract_proof(context)
         if proof_data is None:
             return CriterionResult(
+                slug=self.slug,
                 name=self.name,
                 score=0.0,
                 passed=False,
@@ -101,6 +102,7 @@ class ProofVerificationCriterion(Criterion):
         )
 
         return CriterionResult(
+            slug=self.slug,
             name=self.name,
             score=score,
             passed=outcome.verified,

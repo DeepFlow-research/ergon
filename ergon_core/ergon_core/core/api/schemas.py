@@ -247,4 +247,3 @@ class TrainingMetricDto(CamelModel):
     entropy: float | None = None
     completion_mean_length: float | None = None
     step_time_s: float | None = None
-

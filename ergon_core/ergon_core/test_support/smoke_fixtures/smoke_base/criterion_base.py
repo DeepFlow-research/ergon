@@ -93,6 +93,7 @@ class SmokeCriterionBase(Criterion):
             await self._verify_sandbox_setup(context)
         except CriteriaCheckError as e:
             return CriterionResult(
+                slug=self.slug,
                 name=self.name,
                 score=0.0,
                 passed=False,
@@ -100,6 +101,7 @@ class SmokeCriterionBase(Criterion):
                 feedback=f"smoke criterion failed: {e}",
             )
         return CriterionResult(
+            slug=self.slug,
             name=self.name,
             score=1.0,
             passed=True,

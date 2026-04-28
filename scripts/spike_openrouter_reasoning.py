@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib
 import os
 from collections import Counter
 from typing import Any
 
 # Register production model backends before resolving OpenRouter targets.
-import ergon_builtins.registry  # noqa: F401
+importlib.import_module("ergon_builtins.registry")
 from ergon_builtins.models.resolution import resolve_model_target
 from pydantic_ai import Agent
 from pydantic_ai.messages import (

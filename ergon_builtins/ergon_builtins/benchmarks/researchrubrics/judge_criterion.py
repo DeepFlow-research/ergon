@@ -68,6 +68,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
         ]
         return CriterionResult(
             slug=self.slug,
+            name=self.name,
             score=self.score_spec.max_score if verdict.passed else 0.0,
             passed=verdict.passed,
             weight=self.weight,

@@ -88,9 +88,10 @@ def _build_smoke_experiment(
     at runtime via ``ExperimentDefinitionWorker`` lookup in
     ``task_execution_service._prepare_graph_native``.
     """
-    # reason: deferred import keeps CLI startup cost on the hot path low
-    # (matches the pattern at the top of ``build_experiment``).
+    # reason: optional heavy dependency; imported only while building smoke compositions.
     from ergon_builtins.registry import WORKERS
+
+    # reason: optional test-support smoke fixtures; imported only for smoke compositions.
     from ergon_core.test_support.smoke_fixtures.criteria.timing import (
         SmokePostRootTimingRubric,
     )
@@ -174,6 +175,7 @@ def _build_researchrubrics_workflow_experiment(
     all_task_slugs = [task.task_slug for tasks in instances.values() for task in tasks]
     evaluators = {"default": evaluator}
     if "post-root" in benchmark.evaluator_requirements():
+        # reason: optional test-support smoke fixtures; imported only when requested.
         from ergon_core.test_support.smoke_fixtures.criteria.timing import (
             SmokePostRootTimingRubric,
         )

@@ -1,6 +1,9 @@
-# Importing the builtins registry registers production model backends.
-import ergon_builtins.registry  # noqa: F401
+import importlib
+
 from ergon_builtins.models.resolution import resolve_model_target
+
+# Importing the builtins registry registers production model backends.
+importlib.import_module("ergon_builtins.registry")
 
 
 def test_openrouter_target_resolves_to_openrouter_provider_model() -> None:

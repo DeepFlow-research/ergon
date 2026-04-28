@@ -1,6 +1,7 @@
 """OpenTelemetry tracing sink."""
 
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID
 
 from opentelemetry import trace as otel_trace
@@ -18,9 +19,11 @@ from opentelemetry.trace.propagation import set_span_in_context
 from opentelemetry.trace.span import TraceState
 
 try:
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+        OTLPSpanExporter as _OTLPSpanExporter,
+    )
 except ImportError:
-    OTLPSpanExporter = None  # type: ignore[assignment,misc]
+    _OTLPSpanExporter = None
 
 from ergon_core.core.json_types import JsonObject
 from ergon_core.core.runtime.tracing.attributes import datetime_to_nanos, normalize_attributes
@@ -41,9 +44,11 @@ class OtelTraceSink:
     def __init__(self) -> None:
         provider = TracerProvider(
             resource=Resource.create({"service.name": settings.otel_service_name}),
-            id_generator=DeterministicIdGenerator(),
+            id_generator=cast(Any, DeterministicIdGenerator()),
         )
-        exporter = OTLPSpanExporter(
+        if _OTLPSpanExporter is None:
+            raise RuntimeError("opentelemetry OTLP exporter is not installed")
+        exporter = _OTLPSpanExporter(
             endpoint=settings.otel_exporter_otlp_endpoint,
             insecure=settings.otel_exporter_otlp_insecure,
         )
@@ -116,7 +121,7 @@ class OtelTraceSink:
             sdk_span = self._tracer.start_span(
                 span.name,
                 context=parent_ctx,
-                attributes=attrs,
+                attributes=cast(Any, attrs),
                 start_time=start_time,
             )
 
@@ -128,7 +133,7 @@ class OtelTraceSink:
         for event in span.events:
             sdk_span.add_event(
                 event.name,
-                attributes=normalize_attributes(event.attributes),
+                attributes=cast(Any, normalize_attributes(event.attributes)),
                 timestamp=datetime_to_nanos(event.timestamp),
             )
 

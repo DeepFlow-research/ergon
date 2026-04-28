@@ -103,6 +103,22 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _dispatch_workflow_command(
+    args: argparse.Namespace,
+    *,
+    context: WorkflowCommandContext,
+    session: Session,
+    service: WorkflowService,
+) -> WorkflowCommandOutput:
+    if args.group == "inspect":
+        return _handle_inspect(args, context=context, session=session, service=service)
+    if args.group == "manage":
+        return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI/tool sync bridge
+            _handle_manage(args, context=context, session=session, service=service)
+        )
+    raise ValueError(f"unsupported workflow command group: {args.group}")
+
+
 def execute_workflow_command(
     command: str,
     *,
@@ -131,18 +147,16 @@ def execute_workflow_command(
         )
     session = session_factory()
     try:
-        try:
-            if args.group == "inspect":
-                return _handle_inspect(args, context=context, session=session, service=service)
-            if args.group == "manage":
-                return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI/tool sync bridge
-                    _handle_manage(args, context=context, session=session, service=service)
-                )
-        except ValueError as exc:
-            return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
+        return _dispatch_workflow_command(
+            args,
+            context=context,
+            session=session,
+            service=service,
+        )
+    except ValueError as exc:
+        return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
     finally:
         _close_session(session)
-    raise ValueError(f"unsupported workflow command group: {args.group}")
 
 
 async def handle_workflow(args: argparse.Namespace) -> int:

@@ -3,8 +3,9 @@
 
 import json
 import logging
-from collections.abc import AsyncGenerator
-from typing import Any, Self
+from collections.abc import AsyncGenerator, Callable
+from types import NoneType
+from typing import Any, Self, cast
 from uuid import UUID
 
 from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerOutput
@@ -19,6 +20,7 @@ from ergon_core.core.persistence.shared.db import get_session
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
+from pydantic_ai.tools import Tool
 from sqlmodel import Session
 
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
@@ -29,6 +31,8 @@ from ergon_builtins.models.resolution import resolve_model_target
 from ergon_builtins.observability.pydantic_ai_logfire import configure_pydantic_ai_logfire
 
 logger = logging.getLogger(__name__)
+
+AgentTool = Tool[object] | Callable[..., object]
 
 
 class _AgentOutput(BaseModel):
@@ -59,12 +63,12 @@ class ReActWorker(Worker):
         model: str | None,
         task_id: UUID,
         sandbox_id: str,
-        tools: list[Any],
+        tools: list[AgentTool],
         system_prompt: str | None,
         max_iterations: int,
     ) -> None:
         super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
-        self.tools: list[Any] = tools
+        self.tools: list[AgentTool] = tools
         self.system_prompt: str | None = system_prompt
         self.max_iterations: int = max_iterations
         self._seed_messages: list[ModelMessage] | None = None
@@ -92,14 +96,17 @@ class ReActWorker(Worker):
         resolved = resolve_model_target(self.model)
         configure_pydantic_ai_logfire()
         agent_deps = self.build_agent_deps(context)
-        deps_type = type(agent_deps) if agent_deps is not None else None
+        deps_type = type(agent_deps) if agent_deps is not None else NoneType
 
-        agent: Agent[Any, _AgentOutput] = Agent(
-            model=resolved.model,
-            instructions=self.system_prompt or None,
-            tools=self.tools,
-            output_type=_AgentOutput,
-            deps_type=deps_type,
+        agent = cast(
+            Agent[Any, _AgentOutput],
+            Agent(
+                model=resolved.model,
+                instructions=self.system_prompt or None,
+                tools=self.tools,
+                output_type=_AgentOutput,
+                deps_type=cast(type[Any], deps_type),
+            ),
         )
 
         task_prompt = _format_task(task)
