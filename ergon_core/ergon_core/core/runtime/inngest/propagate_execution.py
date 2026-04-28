@@ -7,7 +7,7 @@ import logging
 from datetime import UTC, datetime
 
 import inngest
-from ergon_core.core.providers.sandbox.lifecycle import terminate_sandbox_by_id
+from ergon_core.core.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.runtime.events.task_events import (
     TaskCancelledEvent,
     TaskCompletedEvent,
@@ -16,7 +16,7 @@ from ergon_core.core.runtime.events.task_events import (
     WorkflowCompletedEvent,
     WorkflowFailedEvent,
 )
-from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.inngest_function_results import TaskPropagateResult
 from ergon_core.core.runtime.services.orchestration_dto import (
     PropagateTaskCompletionCommand,

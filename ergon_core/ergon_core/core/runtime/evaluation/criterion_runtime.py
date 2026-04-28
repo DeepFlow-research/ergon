@@ -13,8 +13,8 @@ from ergon_core.core.runtime.evaluation.protocols import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
-from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
-from ergon_core.core.providers.sandbox.event_sink import (
+from ergon_core.core.sandbox.errors import SandboxExpiredError
+from ergon_core.core.sandbox.event_sink import (
     NoopSandboxEventSink,
     SandboxEventSink,
 )
@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, desc, select
 
 if TYPE_CHECKING:
-    from ergon_core.core.providers.sandbox.manager import AsyncSandbox, BaseSandboxManager
+    from ergon_core.core.sandbox.manager import AsyncSandbox, BaseSandboxManager
 
 logger = logging.getLogger(__name__)
 

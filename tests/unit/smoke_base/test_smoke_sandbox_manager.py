@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.providers.sandbox.event_sink import SandboxEventSink
+from ergon_core.core.sandbox.event_sink import SandboxEventSink
 
 
 class _RecordingSink(SandboxEventSink):
@@ -82,8 +82,8 @@ async def test_smoke_sandbox_health_command_matches_swebench_probe() -> None:
 
 @pytest.mark.asyncio
 async def test_static_teardown_closes_registered_smoke_sandbox() -> None:
-    from ergon_core.core.providers.sandbox.event_sink import NoopSandboxEventSink
-    from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+    from ergon_core.core.sandbox.event_sink import NoopSandboxEventSink
+    from ergon_core.core.sandbox.manager import BaseSandboxManager
     from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
 
     sink = _RecordingSink()

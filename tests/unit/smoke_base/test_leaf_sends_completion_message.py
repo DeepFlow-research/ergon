@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 from ergon_core.api import BenchmarkTask
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug
-from ergon_core.core.providers.sandbox.manager import AsyncSandbox
+from ergon_core.core.sandbox.manager import AsyncSandbox
 from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
 from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
 from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult

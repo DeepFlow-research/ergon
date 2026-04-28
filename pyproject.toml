@@ -112,7 +112,7 @@ invalid-assignment = "warn"
 # invalid-assignment: try/except ImportError fallbacks (AsyncSandbox = None,
 #   CommandExitException = Exception) when e2b SDK is unavailable.
 [[tool.ty.overrides]]
-include = ["**/providers/sandbox/**"]
+include = ["ergon_core/ergon_core/core/sandbox/**"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"

@@ -12,7 +12,7 @@ from uuid import uuid4
 import pytest
 from ergon_core.core.runtime.evaluation.protocols import CriterionRuntime
 from ergon_core.core.runtime.resources import RunResourceView
-from ergon_core.core.providers.sandbox.event_sink import (
+from ergon_core.core.sandbox.event_sink import (
     DashboardEmitterSandboxEventSink,
     NoopSandboxEventSink,
 )

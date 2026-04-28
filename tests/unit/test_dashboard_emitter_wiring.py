@@ -32,7 +32,7 @@ _DEFINITION_FILES: Final[frozenset[str]] = frozenset(
     {
         "ergon_core/ergon_core/core/dashboard/emitter.py",
         "ergon_core/ergon_core/core/dashboard/event_contracts.py",
-        "ergon_core/ergon_core/core/providers/sandbox/event_sink.py",
+        "ergon_core/ergon_core/core/sandbox/event_sink.py",
     }
 )
 

@@ -5,11 +5,11 @@ finalizes. Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
 """
 
 import logging
+import traceback
 from datetime import UTC, datetime
 
 import inngest
 from ergon_core.core.runtime.errors import ContractViolationError
-from ergon_core.core.runtime.errors.error_payload import build_error_json
 from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -18,7 +18,7 @@ from ergon_core.core.runtime.events.task_events import (
 from ergon_core.core.runtime.inngest.persist_outputs import persist_outputs_fn
 from ergon_core.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
 from ergon_core.core.runtime.inngest.worker_execute import worker_execute_fn
-from ergon_core.core.runtime.inngest_client import RUN_CANCEL, TASK_CANCEL, inngest_client
+from ergon_core.core.runtime.inngest.client import RUN_CANCEL, TASK_CANCEL, inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import (
     PersistOutputsRequest,
     SandboxSetupRequest,
@@ -309,18 +309,22 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                     run_id=payload.run_id,
                     task_id=payload.task_id,
                     error_message=error_msg,
-                    error_json=build_error_json(
-                        exc,
-                        phase="task_execute",
-                        context={
-                            "task_slug": prepared.task_slug,
-                            "assigned_worker_slug": prepared.assigned_worker_slug,
-                            "worker_type": prepared.worker_type,
-                            "model_target": prepared.model_target,
-                            "node_id": prepared.node_id,
-                            "execution_id": prepared.execution_id,
+                    error_json={
+                        "message": error_msg,
+                        "exception_type": type(exc).__name__,
+                        "phase": "task_execute",
+                        "stack": "".join(
+                            traceback.format_exception(type(exc), exc, exc.__traceback__)
+                        ),
+                        "context": {
+                            "task_slug": str(prepared.task_slug),
+                            "assigned_worker_slug": str(prepared.assigned_worker_slug),
+                            "worker_type": str(prepared.worker_type),
+                            "model_target": str(prepared.model_target),
+                            "node_id": str(prepared.node_id),
+                            "execution_id": str(prepared.execution_id),
                         },
-                    ),
+                    },
                 )
             )
 

@@ -27,7 +27,7 @@ from ergon_core.core.runtime.tracing import (
 )
 
 if TYPE_CHECKING:
-    from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+    from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 
 class InngestCriterionExecutor:

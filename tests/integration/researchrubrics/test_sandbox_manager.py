@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-from ergon_core.core.providers.sandbox.research_rubrics_manager import (
+from ergon_core.core.sandbox.manager import BaseSandboxManager
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
     ResearchRubricsSandboxManager,
 )
 
@@ -68,15 +68,15 @@ async def test_create_injects_exa_api_key_into_sandbox_envs(
     fake_sandbox = _make_fake_sandbox()
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-e2b-key",
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.exa_api_key",
+        "ergon_core.core.sandbox.manager.settings.exa_api_key",
         "test-exa-key-xyz",
     )
 
@@ -107,15 +107,15 @@ async def test_create_fails_fast_when_required_key_missing_from_settings(
     fake_sandbox = _make_fake_sandbox()
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-e2b-key",
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.exa_api_key",
+        "ergon_core.core.sandbox.manager.settings.exa_api_key",
         "",
     )
 

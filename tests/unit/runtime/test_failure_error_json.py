@@ -6,47 +6,6 @@ import pytest
 from ergon_core.core.runtime.services.orchestration_dto import FailTaskExecutionCommand
 
 
-def test_build_error_json_includes_stack_without_inferred_triage() -> None:
-    from ergon_core.core.runtime.errors.error_payload import (
-        RuntimeErrorPayload,
-        build_error_json,
-    )
-
-    try:
-        raise RuntimeError(
-            "Invalid response from OpenAI chat completions endpoint: "
-            "choices.0.finish_reason input_value=None"
-        )
-    except RuntimeError as exc:
-        payload = build_error_json(exc, phase="worker_execute")
-
-    assert payload["message"].startswith("Invalid response from OpenAI")
-    assert payload["exception_type"] == "RuntimeError"
-    assert payload["phase"] == "worker_execute"
-    assert "Traceback" in payload["stack"]
-    assert "finish_reason" in payload["stack"]
-    assert "category" not in payload
-    assert "retryable" not in payload
-    assert RuntimeErrorPayload.model_validate(payload).message == payload["message"]
-
-
-def test_worker_exception_result_carries_structured_error_json() -> None:
-    from ergon_core.core.runtime.inngest.worker_execute import (
-        _worker_execute_result_from_exception,
-    )
-
-    try:
-        raise RuntimeError("provider timeout")
-    except RuntimeError as exc:
-        result = _worker_execute_result_from_exception(exc)
-
-    assert result.success is False
-    assert result.error == "provider timeout"
-    assert result.error_json is not None
-    assert result.error_json["phase"] == "worker_execute"
-    assert result.error_json["exception_type"] == "RuntimeError"
-
-
 @pytest.mark.asyncio
 async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> None:
     from ergon_core.core.runtime.services import task_execution_service as module

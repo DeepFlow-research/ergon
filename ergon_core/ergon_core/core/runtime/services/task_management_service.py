@@ -35,7 +35,7 @@ from ergon_core.core.runtime.events.task_events import (
     TaskCancelledEvent,
     TaskReadyEvent,
 )
-from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.runtime.services.graph_dto import MutationMeta
 from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
 from ergon_core.core.runtime.services.task_management_dto import (

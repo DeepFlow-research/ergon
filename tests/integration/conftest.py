@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 import pytest
 import pytest_asyncio
 from ergon_core.core.persistence.shared.db import ensure_db
-from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.settings import settings
 from inngest._internal import net as inngest_net
 

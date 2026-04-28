@@ -14,7 +14,7 @@ from ergon_core.api.worker_spec import WorkerSpec
 from ergon_core.core.runtime.errors import RegistryLookupError
 from ergon_core.core.runtime.events.base import InngestEventContract
 from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
-from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.runtime.services.inngest_function_results import (
     BenchmarkRunStartResult,
 )

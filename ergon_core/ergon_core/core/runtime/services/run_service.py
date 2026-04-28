@@ -15,7 +15,7 @@ from ergon_core.core.runtime.events.infrastructure_events import (
     RunCleanupEvent,
 )
 from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
-from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.settings import settings
 from ergon_core.core.utils import utcnow
 

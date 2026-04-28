@@ -10,7 +10,7 @@ from uuid import uuid4
 import pytest
 from ergon_builtins.benchmarks.minif2f.sandbox.utils import resolve_template
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 # ---------------------------------------------------------------------------
 # Reset the singleton between tests — BaseSandboxManager stores _instance and
@@ -104,12 +104,12 @@ async def test_create_threads_template_kwarg_to_e2b_sdk(
 
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     # settings.e2b_api_key must be truthy for create() to proceed.
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -157,11 +157,11 @@ async def test_verify_setup_raises_when_lean_missing(
 
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -188,11 +188,11 @@ async def test_base_class_omits_template_when_unset(monkeypatch: pytest.MonkeyPa
     )
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 

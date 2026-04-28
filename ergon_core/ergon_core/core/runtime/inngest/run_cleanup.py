@@ -11,10 +11,10 @@ import inngest
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.providers.sandbox.lifecycle import terminate_sandbox_by_id
+from ergon_core.core.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.runtime.errors import ConfigurationError, DataIntegrityError
 from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
-from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.runtime.services.inngest_function_results import RunCleanupResult
 
 logger = logging.getLogger(__name__)

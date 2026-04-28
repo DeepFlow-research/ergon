@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 if TYPE_CHECKING:
     from sqlmodel import Session
 
-    from ergon_core.core.providers.sandbox.event_sink import SandboxEventSink
+    from ergon_core.core.sandbox.event_sink import SandboxEventSink
     from ergon_core.core.runtime.resources import RunResourceView
 
 __all__ = ["CommandResult", "CriterionRuntime", "SandboxResult"]

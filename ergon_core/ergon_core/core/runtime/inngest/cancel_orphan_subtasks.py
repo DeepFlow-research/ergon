@@ -21,7 +21,7 @@ from ergon_core.core.runtime.events.task_events import (
     TaskCancelledEvent,
     TaskFailedEvent,
 )
-from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.subtask_blocking_service import SubtaskBlockingService
 from ergon_core.core.runtime.services.subtask_cancellation_service import (
     SubtaskCancellationService,

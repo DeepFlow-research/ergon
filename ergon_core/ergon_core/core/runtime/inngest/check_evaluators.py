@@ -9,12 +9,12 @@ all evaluations complete.
 import logging
 
 import inngest
-from ergon_core.core.providers.sandbox.lifecycle import terminate_sandbox_by_id
+from ergon_core.core.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.runtime.events.task_events import (
     TaskCompletedEvent,
 )
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.runtime.inngest.evaluate_task_run import evaluate_task_run
-from ergon_core.core.runtime.inngest_client import inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import (
     EvaluateTaskRunRequest,
 )

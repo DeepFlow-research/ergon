@@ -7,7 +7,7 @@ from ergon_core.core.generation import GenerationTurn
 from ergon_core.core.runtime.resources import RunResourceView
 from ergon_core.api.task_types import BenchmarkTask
 from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.providers.sandbox.research_rubrics_manager import (
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
     ResearchRubricsSandboxManager,
 )
 

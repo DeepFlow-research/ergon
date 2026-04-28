@@ -15,7 +15,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunResource,
     RunTaskExecution,
 )
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
 from ergon_core.core.runtime.services.task_management_dto import (
     AddSubtaskCommand,
     AddSubtaskResult,

@@ -55,7 +55,7 @@ async def test_install_runs_setup_and_install_scripts(monkeypatch: pytest.Monkey
 @pytest.mark.asyncio
 async def test_install_raises_when_payload_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     from ergon_core.core.persistence import queries as q_mod
-    from ergon_core.core.providers.sandbox.errors import SandboxSetupError
+    from ergon_core.core.sandbox.errors import SandboxSetupError
 
     monkeypatch.setattr(
         q_mod.queries.task_executions,
@@ -90,7 +90,7 @@ async def test_install_raises_on_nonzero_exit(
     """
     from ergon_builtins.benchmarks.swebench_verified import sandbox_manager as sm
     from ergon_core.core.persistence import queries as q_mod
-    from ergon_core.core.providers.sandbox.errors import SandboxSetupError
+    from ergon_core.core.sandbox.errors import SandboxSetupError
 
     monkeypatch.setattr(
         q_mod.queries.task_executions,

@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 from typing import cast
 from uuid import UUID
 
-from ergon_core.core.providers.sandbox.manager import AsyncSandbox, BaseSandboxManager
+from ergon_core.core.sandbox.manager import AsyncSandbox, BaseSandboxManager
 from ergon_core.core.settings import settings
 from pydantic import BaseModel
 

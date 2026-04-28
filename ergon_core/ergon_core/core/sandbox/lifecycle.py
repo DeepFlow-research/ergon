@@ -32,7 +32,7 @@ async def terminate_sandbox_by_id(sandbox_id: str | None) -> SandboxTerminationR
 
     try:
         # reason: avoid import cycle between sandbox manager/event sink and telemetry models.
-        from ergon_core.core.providers.sandbox.manager import (
+        from ergon_core.core.sandbox.manager import (
             BaseSandboxManager,
         )
 

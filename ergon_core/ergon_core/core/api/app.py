@@ -28,15 +28,15 @@ from ergon_core.core.api.startup_plugins import run_startup_plugins
 from ergon_core.core.api.test_harness import router as _test_harness_router
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.providers.sandbox.event_sink import (
+from ergon_core.core.sandbox.event_sink import (
     CompoundSandboxEventSink,
     DashboardEmitterSandboxEventSink,
     PostgresSandboxEventSink,
 )
-from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
+from ergon_core.core.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
-from ergon_core.core.runtime.inngest_client import inngest_client
-from ergon_core.core.runtime.inngest_registry import ALL_FUNCTIONS
+from ergon_core.core.runtime.inngest.client import inngest_client
+from ergon_core.core.runtime.inngest.registry import ALL_FUNCTIONS
 from ergon_core.core.settings import Settings, settings
 from fastapi import FastAPI
 

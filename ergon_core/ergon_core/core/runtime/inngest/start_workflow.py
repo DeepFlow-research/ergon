@@ -14,7 +14,7 @@ from ergon_core.core.runtime.events.task_events import (
     TaskReadyEvent,
     WorkflowStartedEvent,
 )
-from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.inngest_function_results import WorkflowStartResult
 from ergon_core.core.runtime.services.orchestration_dto import InitializeWorkflowCommand
 from ergon_core.core.runtime.services.workflow_initialization_service import (

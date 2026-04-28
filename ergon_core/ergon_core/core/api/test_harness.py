@@ -34,7 +34,7 @@ from ergon_core.core.persistence.telemetry.models import (
     Thread,
 )
 from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
-from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
 from ergon_core.core.runtime.services.run_service import create_run
 from fastapi import APIRouter, Depends, Header, HTTPException, status

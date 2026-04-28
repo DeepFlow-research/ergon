@@ -8,8 +8,8 @@ attach to a still-live task sandbox. See
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from ergon_core.core.providers.sandbox.errors import SandboxExpiredError
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.errors import SandboxExpiredError
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 
 class _MinimalManager(BaseSandboxManager):
@@ -51,11 +51,11 @@ async def test_reconnect_returns_sandbox_on_success(
     fake_sandbox = MagicMock()
     fake_connect = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -82,11 +82,11 @@ async def test_reconnect_does_not_register_in_sandboxes_dict(
     fake_sandbox = MagicMock()
     fake_connect = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -112,11 +112,11 @@ async def test_reconnect_idempotent_returns_equivalent_handles(
     fake_sandbox_b = MagicMock()
     fake_connect = AsyncMock(side_effect=[fake_sandbox_a, fake_sandbox_b])
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -134,7 +134,7 @@ async def test_reconnect_raises_sandbox_expired_on_not_found_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """SandboxNotFoundException → SandboxExpiredError with sandbox_id preserved."""
-    import ergon_core.core.providers.sandbox.manager as mgr_mod
+    import ergon_core.core.sandbox.manager as mgr_mod
 
     class _FakeSandboxNotFound(Exception):
         pass
@@ -165,7 +165,7 @@ async def test_reconnect_raises_sandbox_expired_on_timeout_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """TimeoutException → SandboxExpiredError."""
-    import ergon_core.core.providers.sandbox.manager as mgr_mod
+    import ergon_core.core.sandbox.manager as mgr_mod
 
     class _FakeTimeout(Exception):
         pass
@@ -198,11 +198,11 @@ async def test_reconnect_classifies_by_message_when_sdk_raises_generic_error(
         side_effect=Exception("HTTP 404: sandbox not found"),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -225,11 +225,11 @@ async def test_reconnect_reraises_unrelated_errors_unchanged(
     """
     fake_connect = AsyncMock(side_effect=ConnectionError("TLS handshake failed"))
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(connect=fake_connect),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 

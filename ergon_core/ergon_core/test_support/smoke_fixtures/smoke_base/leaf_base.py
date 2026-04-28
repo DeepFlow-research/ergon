@@ -29,7 +29,7 @@ from ergon_core.core.generation import GenerationTurn, TextPart
 from ergon_core.api.results import WorkerOutput
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.providers.sandbox.instrumentation import InstrumentedSandbox
+from ergon_core.core.sandbox.instrumentation import InstrumentedSandbox
 from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
 from ergon_core.core.runtime.services.communication_service import (
     communication_service,

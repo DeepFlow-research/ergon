@@ -12,11 +12,11 @@ from ergon_builtins.registry import BENCHMARKS, EVALUATORS, SANDBOX_MANAGERS
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
 from ergon_core.core.dashboard.emitter import dashboard_emitter
 from ergon_core.core.persistence.queries import queries
-from ergon_core.core.providers.sandbox.manager import DefaultSandboxManager
+from ergon_core.core.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.runtime.errors import ContractViolationError, RegistryLookupError
 from ergon_core.core.runtime.evaluation.evaluation_schemas import TaskEvaluationContext
 from ergon_core.core.runtime.evaluation.inngest_executor import InngestCriterionExecutor
-from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import (
     EvaluateTaskRunRequest,
 )

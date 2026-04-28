@@ -13,8 +13,8 @@ import shlex
 from uuid import UUID
 
 from ergon_core.core.persistence.queries import queries
-from ergon_core.core.providers.sandbox.errors import SandboxSetupError
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.errors import SandboxSetupError
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.swebench_verified.criterion import make_test_spec
 from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template

@@ -10,7 +10,7 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
 from ergon_core.core.runtime.events.task_events import WorkflowCompletedEvent
-from ergon_core.core.runtime.inngest_client import RUN_CANCEL, inngest_client
+from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
 from ergon_core.core.runtime.services.inngest_function_results import WorkflowCompleteResult
 from ergon_core.core.runtime.services.orchestration_dto import FinalizeWorkflowCommand
 from ergon_core.core.runtime.services.workflow_finalization_service import (

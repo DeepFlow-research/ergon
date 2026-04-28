@@ -6,14 +6,14 @@ Eager, fully-typed imports.
 from collections.abc import Callable
 
 from ergon_core.api import Benchmark, Evaluator, Worker
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-from ergon_core.core.providers.sandbox.research_rubrics_manager import (
-    ResearchRubricsSandboxManager,
-)
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
+    ResearchRubricsSandboxManager,
+)
 from ergon_builtins.benchmarks.researchrubrics.vanilla import (
     ResearchRubricsVanillaBenchmark,
 )

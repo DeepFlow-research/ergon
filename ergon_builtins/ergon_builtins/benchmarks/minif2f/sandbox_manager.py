@@ -10,7 +10,7 @@ smoke-tests that ``lake env lean --version`` returns cleanly.
 import logging
 from uuid import UUID
 
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.minif2f.sandbox.utils import (
     REGISTRY_PATH,

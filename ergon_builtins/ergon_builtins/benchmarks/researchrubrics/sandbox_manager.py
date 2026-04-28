@@ -2,7 +2,7 @@
 
 Subclasses ``BaseSandboxManager`` to pre-install research tooling (``exa-py``)
 and scaffold the workspace directory layout used by the research toolkit's
-skill handlers.  Provides a ``publisher_for`` factory so toolkit methods can
+skill handlers. Provides a ``publisher_for`` factory so toolkit methods can
 trigger ``SandboxResourcePublisher.sync()`` after write operations.
 """
 
@@ -10,8 +10,8 @@ import logging
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-from ergon_core.core.providers.sandbox.resource_publisher import (
+from ergon_core.core.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.resource_publisher import (
     SandboxResourcePublisher,
 )
 
@@ -36,9 +36,9 @@ _INSTALL_PACKAGES: tuple[str, ...] = ("exa-py>=1.0.0",)
 class ResearchRubricsSandboxManager(BaseSandboxManager):
     """Singleton sandbox manager for researchrubrics benchmarks.
 
-    One ``AsyncSandbox`` per root task.  ``exa-py`` is installed and the
+    One ``AsyncSandbox`` per root task. ``exa-py`` is installed and the
     workspace directory tree is scaffolded at ``create`` time via the
-    ``_install_dependencies`` override.  ``EXA_API_KEY`` from ``settings``
+    ``_install_dependencies`` override. ``EXA_API_KEY`` from ``settings``
     is injected into the sandbox process env so the in-sandbox Exa
     skill calls (``exa_search``, ``exa_qa``, ``exa_get_content``) can
     authenticate.
@@ -49,7 +49,7 @@ class ResearchRubricsSandboxManager(BaseSandboxManager):
 
     type_slug: ClassVar[str] = "researchrubrics"
 
-    # In-sandbox tool keys sourced from ``settings``.  The base class's
+    # In-sandbox tool keys sourced from ``settings``. The base class's
     # ``_compose_envs`` helper reads ``settings.exa_api_key`` and merges
     # it into the ``envs`` dict threaded to ``AsyncSandbox.create``.
     required_env_keys: ClassVar[tuple[str, ...]] = ("EXA_API_KEY",)
@@ -67,7 +67,7 @@ class ResearchRubricsSandboxManager(BaseSandboxManager):
         if AsyncSandbox is None:
             # The class-level ``try: from e2b_code_interpreter ...`` lets us
             # import this module when e2b isn't installed (documentation builds,
-            # type-only contexts).  Reaching this method with no e2b means
+            # type-only contexts). Reaching this method with no e2b means
             # somebody constructed the manager without the optional dep --
             # fail fast with a clear message instead of a confusing
             # ``NoneType is not callable`` deeper down.

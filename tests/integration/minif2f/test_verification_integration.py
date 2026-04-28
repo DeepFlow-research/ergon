@@ -23,7 +23,7 @@ from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxMana
 from ergon_core.api.evaluation_context import EvaluationContext
 from ergon_core.api.results import WorkerOutput
 from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 from ergon_core.core.runtime.evaluation.criterion_runtime import (
     DefaultCriterionRuntime,
 )

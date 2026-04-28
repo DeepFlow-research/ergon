@@ -13,13 +13,13 @@ from datetime import UTC, datetime
 
 import inngest
 from ergon_builtins.registry import SANDBOX_MANAGERS
-from ergon_core.core.providers.sandbox.manager import (
+from ergon_core.core.sandbox.manager import (
     BaseSandboxManager,
     DefaultSandboxManager,
 )
-from ergon_core.core.providers.sandbox.resource_publisher import SandboxResourcePublisher
+from ergon_core.core.sandbox.resource_publisher import SandboxResourcePublisher
 from ergon_core.core.runtime.errors import ContractViolationError
-from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import PersistOutputsRequest
 from ergon_core.core.runtime.services.inngest_function_results import PersistOutputsResult
 from ergon_core.core.runtime.tracing import (

@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 
 class _ProbeManager(BaseSandboxManager):
@@ -83,11 +83,11 @@ async def test_install_dependencies_runs_exactly_once_on_repeated_create(
     # `AsyncSandbox` binding in `manager.py` to return our fake sandbox.
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 

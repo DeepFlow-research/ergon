@@ -14,9 +14,9 @@ import inngest
 from ergon_builtins.registry import SANDBOX_MANAGERS
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
 from ergon_core.core.runtime.errors import DataIntegrityError
-from ergon_core.core.runtime.inngest_client import inngest_client
+from ergon_core.core.runtime.inngest.client import inngest_client
 from ergon_core.core.runtime.services.child_function_payloads import SandboxSetupRequest
 from ergon_core.core.runtime.services.inngest_function_results import SandboxReadyResult
 from ergon_core.core.runtime.tracing import (

@@ -10,7 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from ergon_core.api import Benchmark, Evaluator, Worker
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
 from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
