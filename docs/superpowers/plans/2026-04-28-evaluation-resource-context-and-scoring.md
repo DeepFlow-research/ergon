@@ -906,4 +906,3 @@ Expected rollout properties:
 - Do not include full agent conversation in ResearchRubrics judge prompts by default.
 - Do not introduce a new persisted table for evidence bundles.
 - Do not preserve compatibility with double-normalized summary scores; new runs should use the normalized score invariant.
-
