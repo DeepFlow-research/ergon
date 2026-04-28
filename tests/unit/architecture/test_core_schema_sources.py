@@ -53,3 +53,25 @@ def test_run_task_dto_does_not_label_worker_slug_as_name() -> None:
 def test_workflow_task_ref_does_not_duplicate_graph_task_ref() -> None:
     path = ROOT / "ergon_core/ergon_core/core/runtime/services/workflow_dto.py"
     assert "class WorkflowTaskRef" not in path.read_text()
+
+
+def test_cancel_cause_literals_live_in_task_events() -> None:
+    offenders: list[str] = []
+    snippets = (
+        'Literal["parent_terminal", "dep_invalidated"]',
+        'Literal["dep_invalidated", "parent_terminal"]',
+    )
+    allowed = {
+        ROOT / "ergon_core/ergon_core/core/runtime/events/task_events.py",
+    }
+
+    for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
+        if path in allowed:
+            continue
+        text = path.read_text()
+        compact_text = "".join(text.split()).replace(",]", "]")
+        for snippet in snippets:
+            if snippet in text or "".join(snippet.split()) in compact_text:
+                offenders.append(f"{path.relative_to(ROOT)} duplicates cancel cause subset")
+
+    assert offenders == []
