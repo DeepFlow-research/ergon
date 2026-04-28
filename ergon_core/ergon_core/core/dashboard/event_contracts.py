@@ -20,6 +20,7 @@ from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
     ContextEventType,
 )
+from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.runtime.events.base import InngestEventContract
 from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
 from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
@@ -54,6 +55,9 @@ class TaskTreeNode(BaseModel):
     id: str
     name: str
     description: str
+    status: NodeStatus
+    level: int
+    assigned_worker_slug: str | None = None
     assigned_to: WorkerRef
     children: list["TaskTreeNode"] = []
     depends_on: list[str] = []
@@ -104,12 +108,12 @@ class DashboardTaskStatusChangedEvent(InngestEventContract):
     task_id: UUID
     task_name: str
     parent_task_id: UUID | None = None
-    old_status: str | None = None
-    new_status: str
+    old_status: NodeStatus | None = None
+    new_status: NodeStatus
     triggered_by: str | None = None
     timestamp: datetime
     assigned_worker_id: UUID | None = None
-    assigned_worker_name: str | None = None
+    assigned_worker_slug: str | None = None
 
 
 class DashboardTaskEvaluationUpdatedEvent(InngestEventContract):

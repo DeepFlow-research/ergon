@@ -89,7 +89,7 @@ def _build_task_map(
             is_leaf=True,
             level=node.level,
             assigned_worker_id=str(worker.id) if worker else None,
-            assigned_worker_name=node.assigned_worker_slug,
+            assigned_worker_slug=node.assigned_worker_slug,
             started_at=started_at,
             completed_at=completed_at,
         )

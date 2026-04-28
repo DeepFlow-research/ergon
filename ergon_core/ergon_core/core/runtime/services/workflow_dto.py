@@ -1,18 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
+from ergon_core.core.runtime.services.graph_dto import GraphTaskRef
 from pydantic import BaseModel, Field
-
-
-class WorkflowTaskRef(BaseModel):
-    model_config = {"frozen": True}
-
-    node_id: UUID
-    task_slug: str
-    status: str
-    level: int
-    parent_node_id: UUID | None = None
-    assigned_worker_slug: str | None = None
 
 
 class WorkflowExecutionRef(BaseModel):
@@ -47,14 +37,14 @@ class WorkflowDependencyRef(BaseModel):
 
     edge_id: UUID
     edge_status: str
-    source: WorkflowTaskRef
-    target: WorkflowTaskRef
+    source: GraphTaskRef
+    target: GraphTaskRef
 
 
 class WorkflowBlockerRef(BaseModel):
     model_config = {"frozen": True}
 
-    task: WorkflowTaskRef
+    task: GraphTaskRef
     reason: str
     details: list[str] = Field(default_factory=list)
     suggested_commands: list[str] = Field(default_factory=list)
@@ -64,7 +54,7 @@ class WorkflowNextActionRef(BaseModel):
     model_config = {"frozen": True}
 
     priority: str
-    task: WorkflowTaskRef | None = None
+    task: GraphTaskRef | None = None
     summary: str
     suggested_commands: list[str] = Field(default_factory=list)
 

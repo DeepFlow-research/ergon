@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
+from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.persistence.shared.types import (
@@ -55,6 +56,19 @@ class GraphNodeDto(BaseModel):
     assigned_worker_slug: str | None
     parent_node_id: NodeId | None
     level: int
+
+
+class GraphTaskRef(BaseModel):
+    """Lightweight task-node reference for workflow/tool projections."""
+
+    model_config = {"frozen": True}
+
+    node_id: NodeId
+    task_slug: str
+    status: NodeStatus
+    level: int
+    parent_node_id: NodeId | None = None
+    assigned_worker_slug: str | None = None
 
 
 class GraphEdgeDto(BaseModel):

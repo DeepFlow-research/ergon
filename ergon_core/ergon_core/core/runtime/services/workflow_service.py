@@ -21,13 +21,13 @@ from ergon_core.core.runtime.services.task_management_dto import (
     AddSubtaskResult,
 )
 from ergon_core.core.runtime.services.task_management_service import TaskManagementService
+from ergon_core.core.runtime.services.graph_dto import GraphTaskRef
 from ergon_core.core.runtime.services.workflow_dto import (
     WorkflowBlockerRef,
     WorkflowDependencyRef,
     WorkflowMaterializedResourceRef,
     WorkflowNextActionRef,
     WorkflowResourceRef,
-    WorkflowTaskRef,
 )
 from sqlmodel import Session, col, select
 
@@ -56,7 +56,7 @@ class WorkflowService:
         *,
         run_id: UUID,
         parent_node_id: UUID | None = None,
-    ) -> list[WorkflowTaskRef]:
+    ) -> list[GraphTaskRef]:
         stmt = select(RunGraphNode).where(RunGraphNode.run_id == run_id)
         if parent_node_id is not None:
             stmt = stmt.where(RunGraphNode.parent_node_id == parent_node_id)
@@ -71,7 +71,7 @@ class WorkflowService:
         run_id: UUID,
         node_id: UUID | None = None,
         task_slug: str | None = None,
-    ) -> WorkflowTaskRef:
+    ) -> GraphTaskRef:
         node = self._resolve_node(session, run_id=run_id, node_id=node_id, task_slug=task_slug)
         return self._task_ref(node)
 
@@ -314,8 +314,8 @@ class WorkflowService:
         return DefaultSandboxManager()
 
     @staticmethod
-    def _task_ref(node: RunGraphNode) -> WorkflowTaskRef:
-        return WorkflowTaskRef(
+    def _task_ref(node: RunGraphNode) -> GraphTaskRef:
+        return GraphTaskRef(
             node_id=node.id,
             task_slug=node.task_slug,
             status=node.status,

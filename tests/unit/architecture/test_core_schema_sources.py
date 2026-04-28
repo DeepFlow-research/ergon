@@ -41,3 +41,15 @@ def test_eval_criterion_status_literal_is_defined_only_in_evaluation_summary() -
             offenders.append(str(path.relative_to(ROOT)))
 
     assert offenders == []
+
+
+def test_run_task_dto_does_not_label_worker_slug_as_name() -> None:
+    path = ROOT / "ergon_core/ergon_core/core/api/schemas.py"
+    text = path.read_text()
+    assert "assigned_worker_name" not in text
+    assert "assigned_worker_slug" in text
+
+
+def test_workflow_task_ref_does_not_duplicate_graph_task_ref() -> None:
+    path = ROOT / "ergon_core/ergon_core/core/runtime/services/workflow_dto.py"
+    assert "class WorkflowTaskRef" not in path.read_text()

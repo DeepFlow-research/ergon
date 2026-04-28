@@ -29,6 +29,12 @@ class CamelModel(BaseModel):
 
 
 class RunTaskDto(CamelModel):
+    """REST projection of RunGraphNode for run detail pages.
+
+    This is not the canonical graph schema; graph semantics live in
+    runtime/services/graph_dto.py and persistence/graph/status_conventions.py.
+    """
+
     id: str
     name: str
     description: str
@@ -39,7 +45,7 @@ class RunTaskDto(CamelModel):
     is_leaf: bool
     level: int
     assigned_worker_id: str | None = None
-    assigned_worker_name: str | None = None
+    assigned_worker_slug: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
