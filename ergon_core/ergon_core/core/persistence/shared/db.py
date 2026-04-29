@@ -10,7 +10,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from ergon_core.core.settings import Settings
+from ergon_core.core.shared.settings import Settings
 from sqlalchemy import Engine
 from sqlmodel import Session, create_engine
 

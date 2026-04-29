@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
-from ergon_core.core.generation import ContextPartChunkLog
+from ergon_core.core.domain.generation.context_parts import ContextPartChunkLog
 from ergon_core.core.persistence.shared.ids import new_id
 from pydantic import TypeAdapter
 from sqlalchemy import JSON, Column, DateTime

@@ -14,7 +14,7 @@ import logging
 from collections import defaultdict
 from typing import Protocol, runtime_checkable
 
-from ergon_core.core.generation import (
+from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunkLog,
     SystemPromptPart,

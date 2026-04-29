@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
     TaskExecutionStatus,
     TrainingStatus,
 )
-from ergon_core.core.utils import utcnow as _utcnow
+from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
@@ -65,6 +65,8 @@ class ExperimentRecord(SQLModel, table=True):
     default_worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     default_evaluator_slug: str | None = Field(default=None, index=True)
     default_model_target: str | None = None
+    sandbox_slug: str | None = Field(default=None, index=True)
+    dependency_extras_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     design_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     seed: int | None = None
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
@@ -86,6 +88,11 @@ class ExperimentRecord(SQLModel, table=True):
     def parsed_design(self) -> JsonObject:
         return self.__class__._parse_json_object(self.design_json, "design_json")
 
+    def parsed_dependency_extras(self) -> JsonObject:
+        return self.__class__._parse_json_object(
+            self.dependency_extras_json, "dependency_extras_json"
+        )
+
     def parsed_metadata(self) -> JsonObject:
         return self.__class__._parse_json_object(self.metadata_json, "metadata_json")
 
@@ -99,6 +106,7 @@ class ExperimentRecord(SQLModel, table=True):
     def _validate_fields(self) -> "ExperimentRecord":
         self.__class__._parse_json_object(self.sample_selection_json, "sample_selection_json")
         self.__class__._parse_json_object(self.default_worker_team_json, "default_worker_team_json")
+        self.__class__._parse_json_object(self.dependency_extras_json, "dependency_extras_json")
         self.__class__._parse_json_object(self.design_json, "design_json")
         self.__class__._parse_json_object(self.metadata_json, "metadata_json")
         return self
@@ -124,6 +132,8 @@ class RunRecord(SQLModel, table=True):
     worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     evaluator_slug: str | None = Field(default=None, index=True)
     model_target: str | None = None
+    sandbox_slug: str | None = Field(default=None, index=True)
+    dependency_extras_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     assignment_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     seed: int | None = None
     status: RunStatus = Field(index=True)
@@ -139,6 +149,11 @@ class RunRecord(SQLModel, table=True):
     def parsed_assignment(self) -> JsonObject:
         return self.__class__._parse_json_object(self.assignment_json, "assignment_json")
 
+    def parsed_dependency_extras(self) -> JsonObject:
+        return self.__class__._parse_json_object(
+            self.dependency_extras_json, "dependency_extras_json"
+        )
+
     def parsed_summary(self) -> JsonObject:
         return self.__class__._parse_json_object(self.summary_json, "summary_json")
 
@@ -151,6 +166,7 @@ class RunRecord(SQLModel, table=True):
     @model_validator(mode="after")
     def _validate_fields(self) -> "RunRecord":
         self.__class__._parse_json_object(self.worker_team_json, "worker_team_json")
+        self.__class__._parse_json_object(self.dependency_extras_json, "dependency_extras_json")
         self.__class__._parse_json_object(self.assignment_json, "assignment_json")
         self.__class__._parse_json_object(self.summary_json, "summary_json")
         try:

@@ -9,12 +9,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from ergon_core.api.results import CriterionObservation
+from ergon_core.api.criterion import CriterionEvidence
 
 EvalCriterionStatus = Literal["passed", "failed", "errored", "skipped"]
 
 
-class CriterionResultEntry(BaseModel):
+class CriterionOutcomeEntry(BaseModel):
     """One criterion result as stored in the evaluation summary."""
 
     criterion_slug: str
@@ -36,7 +36,7 @@ class CriterionResultEntry(BaseModel):
     evaluation_input: str | None = None
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
-    observation: CriterionObservation | None = None
+    observation: CriterionEvidence | None = None
     error: dict | None = None
 
     @model_validator(mode="before")
@@ -59,4 +59,4 @@ class EvaluationSummary(BaseModel):
     stages_passed: int = 0
     failed_gate: str | None = None
     metadata: dict = Field(default_factory=dict)
-    criterion_results: list[CriterionResultEntry] = Field(default_factory=list)
+    criterion_results: list[CriterionOutcomeEntry] = Field(default_factory=list)

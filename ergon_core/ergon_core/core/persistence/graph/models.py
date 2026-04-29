@@ -14,8 +14,8 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
-from ergon_core.core.json_types import JsonObject
-from ergon_core.core.utils import utcnow as _utcnow
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime, Index
 from sqlmodel import Field, SQLModel
@@ -77,7 +77,7 @@ class RunGraphNode(SQLModel, table=True):
     assigned_worker_slug: str | None = Field(
         default=None,
         description=(
-            "WORKERS registry slug assigned to execute this node, for example "
+            "Worker registry slug assigned to execute this node, for example "
             "'researchrubrics-researcher' or 'canonical-smoke'."
         ),
     )

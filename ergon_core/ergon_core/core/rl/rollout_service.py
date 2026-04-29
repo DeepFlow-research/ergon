@@ -40,7 +40,7 @@ from ergon_core.core.rl.rollout_types import (
     SubmitResponse,
     Trajectory,
 )
-from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
+from ergon_core.core.application.events.task_events import WorkflowStartedEvent
 from sqlmodel import Session, select
 from transformers import AutoTokenizer
 
