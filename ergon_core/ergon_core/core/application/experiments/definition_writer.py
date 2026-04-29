@@ -7,9 +7,9 @@ BoundExperiment intermediate, no constructor_state() serialisation.
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from ergon_core.api.evaluator import Rubric
-from ergon_core.api.handles import PersistedExperimentDefinition
-from ergon_core.core.json_types import JsonObject
+from ergon_core.api.rubric import Rubric
+from ergon_core.core.domain.experiments import DefinitionHandle
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionEvaluator,
@@ -21,14 +21,14 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.utils import utcnow
+from ergon_core.core.shared.utils import utcnow
 from sqlalchemy.exc import SQLAlchemyError
 
 if TYPE_CHECKING:
-    from ergon_core.api.experiment import Experiment
+    from ergon_core.core.domain.experiments import Experiment
 
 
-class ExperimentPersistenceService:
+class _ExperimentDefinitionWriter:
     """Writes immutable definition rows directly from an Experiment.
 
     Identity-not-serialization: rows store type slugs + model_target,
@@ -37,10 +37,10 @@ class ExperimentPersistenceService:
     data -- nothing reconstructs from it.
     """
 
-    def persist_definition(
+    def persist_definition(  # noqa: C901
         self,
         experiment: "Experiment",
-    ) -> PersistedExperimentDefinition:
+    ) -> DefinitionHandle:
         # ---- 1. Validate ------------------------------------------------
         experiment.validate()
 
@@ -64,7 +64,7 @@ class ExperimentPersistenceService:
         # reason: RFC 2026-04-22 §1 — ``Experiment.workers`` now holds
         # ``WorkerSpec`` descriptors. ``worker_slug`` maps 1:1 to
         # ``ExperimentDefinitionWorker.worker_type`` (registry key persisted
-        # verbatim; worker_execute looks it up back through ``WORKERS``).
+        # verbatim; worker_execute looks it up through the core registry).
         worker_rows: list[ExperimentDefinitionWorker] = []
         worker_bindings: dict[str, str] = {}
 
@@ -252,7 +252,7 @@ class ExperimentPersistenceService:
             session.close()
 
         # ---- 6. Return handle --------------------------------------------
-        return PersistedExperimentDefinition(
+        return DefinitionHandle(
             definition_id=definition_id,
             benchmark_type=benchmark_type,
             worker_bindings=worker_bindings,

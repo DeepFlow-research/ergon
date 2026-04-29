@@ -3,7 +3,7 @@
 from typing import Self
 from uuid import UUID
 
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -16,6 +16,8 @@ class ExperimentDefineRequest(BaseModel):
     default_model_target: str | None = None
     default_worker_team: JsonObject = Field(default_factory=dict)
     default_evaluator_slug: str | None = None
+    sandbox_slug: str | None = None
+    dependency_extras: tuple[str, ...] = ()
     design: JsonObject = Field(default_factory=dict)
     seed: int | None = None
     metadata: JsonObject = Field(default_factory=dict)
@@ -35,6 +37,12 @@ class ExperimentDefineRequest(BaseModel):
             raise ValueError(
                 "Experiment definition requires default_worker_team + default_model_target"
             )
+        if not self.default_evaluator_slug:
+            raise ValueError("Experiment definition requires default_evaluator_slug")
+        if not self.sandbox_slug:
+            raise ValueError("Experiment definition requires sandbox_slug")
+        if not self.dependency_extras:
+            raise ValueError("Experiment definition requires dependency_extras")
         return self
 
 
@@ -64,6 +72,8 @@ class RunAssignment(BaseModel):
     worker_team: JsonObject
     evaluator_slug: str | None = None
     model_target: str | None = None
+    sandbox_slug: str | None = None
+    dependency_extras: tuple[str, ...] = ()
     arm_key: str | None = None
     seed: int | None = None
     metadata: JsonObject = Field(default_factory=dict)

@@ -5,32 +5,33 @@ from uuid import UUID
 
 import inngest
 from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.evaluator import Evaluator
-from ergon_core.api.experiment import Experiment
-from ergon_core.api.handles import PersistedExperimentDefinition
-from ergon_core.core.json_types import JsonObject
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.api.worker_spec import WorkerSpec
+from ergon_core.api.registry import registry
+from ergon_core.api.rubric import Evaluator
+from ergon_core.core.domain.experiments import Experiment
+from ergon_core.core.domain.experiments import DefinitionHandle
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.api.benchmark import Task
+from ergon_core.core.domain.experiments import WorkerSpec
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import ExperimentRecord
-from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.experiment_schemas import (
+from ergon_core.core.application.events.task_events import WorkflowStartedEvent
+from ergon_core.core.infrastructure.inngest.client import inngest_client
+from ergon_core.core.application.experiments.models import (
     ExperimentRunRequest,
     ExperimentRunResult,
     RunAssignment,
 )
-from ergon_core.core.runtime.services.run_service import create_run
+from ergon_core.core.application.workflows.runs import create_run
 from pydantic import BaseModel
 
 WorkflowDefinitionFactory = Callable[
     [ExperimentRecord, RunAssignment],
-    PersistedExperimentDefinition,
+    DefinitionHandle,
 ]
 WorkflowStartedEmitter = Callable[[UUID, UUID], Awaitable[None]]
 
 
-class ExperimentLaunchService:
+class _ExperimentRunLauncher:
     """Materialize runs for a previously defined experiment."""
 
     def __init__(
@@ -67,6 +68,8 @@ class ExperimentLaunchService:
                 worker_team_json=assignment.worker_team,
                 evaluator_slug=assignment.evaluator_slug,
                 model_target=assignment.model_target,
+                sandbox_slug=assignment.sandbox_slug,
+                dependency_extras_json={"extras": list(assignment.dependency_extras)},
                 assignment_json=assignment.metadata,
                 seed=assignment.seed,
             )
@@ -96,6 +99,8 @@ def _assign_runs(experiment: ExperimentRecord) -> list[RunAssignment]:
             worker_team=experiment.parsed_default_worker_team(),
             evaluator_slug=experiment.default_evaluator_slug,
             model_target=experiment.default_model_target,
+            sandbox_slug=experiment.sandbox_slug,
+            dependency_extras=tuple(experiment.parsed_dependency_extras().get("extras", ())),
             arm_key="default",
             seed=experiment.seed,
             metadata={"arm_key": "default"},
@@ -107,7 +112,11 @@ def _assign_runs(experiment: ExperimentRecord) -> list[RunAssignment]:
 def _persist_single_sample_workflow_definition(
     experiment: ExperimentRecord,
     assignment: RunAssignment,
-) -> PersistedExperimentDefinition:
+) -> DefinitionHandle:
+    from ergon_core.core.application.experiments.definition_writer import (  # slopcop: ignore[guarded-function-import] -- reason: keep definition writing behind application launch plumbing
+        _ExperimentDefinitionWriter,
+    )
+
     benchmark_slug = _metadata_str(experiment, "benchmark_slug") or experiment.benchmark_type
     benchmark = _single_sample_benchmark(benchmark_slug, assignment.instance_key)
     worker_slug = _primary_worker_slug(assignment.worker_team)
@@ -122,7 +131,8 @@ def _persist_single_sample_workflow_definition(
         worker=worker,
         evaluators=evaluators,
     )
-    return workflow.persist()
+    workflow.validate()
+    return _ExperimentDefinitionWriter().persist_definition(workflow)
 
 
 def _metadata_str(experiment: ExperimentRecord, key: str) -> str | None:
@@ -140,20 +150,12 @@ def _primary_worker_slug(worker_team: JsonObject) -> str:
 def _evaluator_bindings(evaluator_slug: str | None) -> dict[str, Evaluator]:
     if evaluator_slug is None:
         return {}
-    from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: optional plugin registry; load only when launching experiment runs
-        EVALUATORS,
-    )
-
-    evaluator_cls = EVALUATORS[evaluator_slug]
+    evaluator_cls = registry.require_evaluator(evaluator_slug)
     return {"default": evaluator_cls(name="evaluator")}
 
 
 def _single_sample_benchmark(benchmark_slug: str, instance_key: str) -> Benchmark:
-    from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: optional plugin registry; load only when launching experiment runs
-        BENCHMARKS,
-    )
-
-    source = BENCHMARKS[benchmark_slug]()
+    source = registry.require_benchmark(benchmark_slug)()
     instances = source.build_instances()
     if instance_key not in instances:
         raise ValueError(
@@ -170,7 +172,7 @@ class _SingleSampleBenchmark(Benchmark):
         self,
         source: Benchmark,
         instance_key: str,
-        tasks: Sequence[BenchmarkTask[BaseModel]],
+        tasks: Sequence[Task[BaseModel]],
     ) -> None:
         super().__init__(
             name=source.name,
@@ -181,7 +183,7 @@ class _SingleSampleBenchmark(Benchmark):
         self._instance_key = instance_key
         self._tasks = list(tasks)
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
         return {self._instance_key: self._tasks}
 
     def evaluator_requirements(self) -> Sequence[str]:
