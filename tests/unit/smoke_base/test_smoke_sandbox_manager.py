@@ -2,7 +2,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.core.sandbox.event_sink import SandboxEventSink
+from ergon_core.core.infrastructure.sandbox.event_sink import SandboxEventSink
 
 
 class _RecordingSink(SandboxEventSink):
@@ -45,7 +45,7 @@ class _RecordingSink(SandboxEventSink):
 
 @pytest.mark.asyncio
 async def test_smoke_sandbox_manager_ignores_e2b_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
+    from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
 
     monkeypatch.setenv("E2B_API_KEY", "present-but-smoke-uses-local-fake")
     run_id = uuid4()
@@ -60,7 +60,7 @@ async def test_smoke_sandbox_manager_ignores_e2b_key(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.asyncio
 async def test_smoke_sandbox_health_command_matches_swebench_probe() -> None:
-    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
+    from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
 
     run_id = uuid4()
     task_id = uuid4()
@@ -82,9 +82,9 @@ async def test_smoke_sandbox_health_command_matches_swebench_probe() -> None:
 
 @pytest.mark.asyncio
 async def test_static_teardown_closes_registered_smoke_sandbox() -> None:
-    from ergon_core.core.sandbox.event_sink import NoopSandboxEventSink
-    from ergon_core.core.sandbox.manager import BaseSandboxManager
-    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
+    from ergon_core.core.infrastructure.sandbox.event_sink import NoopSandboxEventSink
+    from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
+    from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
 
     sink = _RecordingSink()
     SmokeSandboxManager.set_event_sink(sink)
@@ -120,40 +120,42 @@ async def test_static_teardown_closes_registered_smoke_sandbox() -> None:
 def test_smoke_benchmarks_use_smoke_sandbox_manager(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
-    from ergon_core.test_support.smoke_fixtures.benchmarks import (
+    from ergon_builtins.registry import register_builtins
+    from ergon_core.api.registry import registry
+    from tests.fixtures.smoke_components import register_smoke_fixtures
+    from tests.fixtures.smoke_components.benchmarks import (
         MiniF2FSmokeBenchmark,
         ResearchRubricsSmokeBenchmark,
         SweBenchSmokeBenchmark,
     )
-    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
+    from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
 
+    register_builtins(registry)
     slugs = (
         ResearchRubricsSmokeBenchmark.type_slug,
         MiniF2FSmokeBenchmark.type_slug,
         SweBenchSmokeBenchmark.type_slug,
     )
-    original_benchmarks = {slug: BENCHMARKS[slug] for slug in slugs}
-    original_managers = {slug: SANDBOX_MANAGERS.get(slug) for slug in slugs}
+    original_benchmarks = {slug: registry.benchmarks[slug] for slug in slugs}
+    original_managers = {slug: registry.sandbox_managers.get(slug) for slug in slugs}
     monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
 
     try:
         register_smoke_fixtures()
         for slug in slugs:
-            assert SANDBOX_MANAGERS[slug] is SmokeSandboxManager
+            assert registry.sandbox_managers[slug] is SmokeSandboxManager
     finally:
-        BENCHMARKS.update(original_benchmarks)
+        registry.benchmarks.update(original_benchmarks)
         for slug, manager_cls in original_managers.items():
             if manager_cls is None:
-                SANDBOX_MANAGERS.pop(slug, None)
+                registry.sandbox_managers.pop(slug, None)
             else:
-                SANDBOX_MANAGERS[slug] = manager_cls
+                registry.sandbox_managers[slug] = manager_cls
 
 
 def test_smoke_parent_treats_blocked_children_as_terminal() -> None:
     from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
-    from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import (
+    from tests.fixtures.smoke_components.smoke_base.worker_base import (
         _CHILD_WAIT_TERMINAL_STATUSES,
     )
 

@@ -12,8 +12,8 @@ from tempfile import TemporaryDirectory
 from typing import cast
 from uuid import UUID
 
-from ergon_core.core.sandbox.manager import AsyncSandbox, BaseSandboxManager
-from ergon_core.core.settings import settings
+from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox, BaseSandboxManager
+from ergon_core.core.shared.settings import settings
 from pydantic import BaseModel
 
 _SMOKE_SANDBOX_PREFIX = "smoke-sandbox-"
@@ -208,6 +208,3 @@ class SmokeSandboxManager(BaseSandboxManager):
 
 def smoke_uses_local_sandbox() -> bool:
     return os.environ.get("ENABLE_TEST_HARNESS") == "1" and settings.e2b_api_key is not None
-
-
-__all__ = ["SmokeSandbox", "SmokeSandboxManager", "smoke_uses_local_sandbox"]

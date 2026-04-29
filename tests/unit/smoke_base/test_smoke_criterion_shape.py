@@ -5,9 +5,9 @@ is read) and asserts error behaviour.
 """
 
 import pytest
-from ergon_core.api.errors import CriteriaCheckError
-from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
-from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from ergon_core.api.errors import CriterionCheckError
+from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
+from tests.fixtures.smoke_components.smoke_base.criterion_base import SmokeCriterionBase
 from pydantic import BaseModel
 
 
@@ -28,7 +28,7 @@ class _Crit(SmokeCriterionBase):
 
 
 def _crit() -> _Crit:
-    return _Crit(name="unit-test")
+    return _Crit(slug="unit-test")
 
 
 def test_correct_slug_set_passes() -> None:
@@ -62,5 +62,5 @@ def _nodes_renamed_slug() -> list[_FakeNode]:
     ],
 )
 def test_bad_slug_set_raises(children: list[_FakeNode]) -> None:
-    with pytest.raises(CriteriaCheckError, match="graph shape mismatch"):
+    with pytest.raises(CriterionCheckError, match="graph shape mismatch"):
         _crit()._check_graph_shape(children)

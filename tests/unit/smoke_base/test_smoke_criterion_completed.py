@@ -1,9 +1,9 @@
 """``SmokeCriterionBase._check_children_completed`` rejects non-terminal children."""
 
 import pytest
-from ergon_core.api.errors import CriteriaCheckError
+from ergon_core.api.errors import CriterionCheckError
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
-from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from tests.fixtures.smoke_components.smoke_base.criterion_base import SmokeCriterionBase
 from pydantic import BaseModel
 
 
@@ -25,7 +25,7 @@ class _Crit(SmokeCriterionBase):
 
 
 def _crit() -> _Crit:
-    return _Crit(name="unit-test")
+    return _Crit(slug="unit-test")
 
 
 def test_all_completed_passes() -> None:
@@ -39,7 +39,7 @@ def test_any_non_completed_raises() -> None:
         _FakeNode(task_slug="d_left", status=COMPLETED),
         _FakeNode(task_slug="d_right", status="in_progress"),
     ]
-    with pytest.raises(CriteriaCheckError, match="d_right not completed"):
+    with pytest.raises(CriterionCheckError, match="d_right not completed"):
         _crit()._check_children_completed(children)
 
 
@@ -50,7 +50,7 @@ def test_failed_child_raises_with_slug() -> None:
         _FakeNode(task_slug="l_2", status="failed"),
         _FakeNode(task_slug="l_3", status="blocked"),
     ]
-    with pytest.raises(CriteriaCheckError, match="l_2 not completed"):
+    with pytest.raises(CriterionCheckError, match="l_2 not completed"):
         _crit()._check_children_completed(children)
 
 

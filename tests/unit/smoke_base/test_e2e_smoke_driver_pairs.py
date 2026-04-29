@@ -42,3 +42,27 @@ def test_e2e_smoke_driver_builds_happy_sad_pairs(
         ("happy", happy_worker, criterion),
         ("sad", sad_worker, criterion),
     ]
+
+
+def test_build_cohort_payload_includes_explicit_runtime_choices() -> None:
+    submit = importlib.import_module("tests.e2e._submit")
+
+    payload = submit.build_cohort_payload(
+        benchmark_slug="minif2f",
+        slots=[("minif2f-smoke-worker", "minif2f-smoke-criterion")],
+        cohort_key="ci-smoke-minif2f",
+        sandbox_slug="minif2f",
+        dependency_extras=("none",),
+        model="openai:gpt-4o",
+    )
+
+    assert payload["benchmark_slug"] == "minif2f"
+    assert payload["sandbox_slug"] == "minif2f"
+    assert payload["dependency_extras"] == ["none"]
+    assert payload["model"] == "openai:gpt-4o"
+    assert payload["slots"] == [
+        {
+            "worker_slug": "minif2f-smoke-worker",
+            "evaluator_slug": "minif2f-smoke-criterion",
+        }
+    ]

@@ -17,9 +17,9 @@ import asyncio
 from collections.abc import AsyncGenerator
 from typing import ClassVar, final
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.core.generation import AssistantTextPart, ContextPartChunk
-from ergon_core.api.results import WorkerOutput
+from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
@@ -28,17 +28,17 @@ from ergon_core.core.persistence.shared.types import (
     RunId,
     TaskSlug,
 )
-from ergon_core.core.runtime.services.task_inspection_service import (
+from ergon_core.core.application.tasks.inspection import (
     TaskInspectionService,
 )
-from ergon_core.core.runtime.services.task_management_dto import (
+from ergon_core.core.application.tasks.models import (
     PlanSubtasksCommand,
     SubtaskSpec,
 )
-from ergon_core.core.runtime.services.task_management_service import (
+from ergon_core.core.application.tasks.management import (
     TaskManagementService,
 )
-from ergon_core.test_support.smoke_fixtures.smoke_base.constants import SUBTASK_GRAPH
+from tests.fixtures.smoke_components.smoke_base.constants import SUBTASK_GRAPH
 
 _CHILD_WAIT_TERMINAL_STATUSES = TERMINAL_STATUSES | {"blocked"}
 
@@ -68,10 +68,10 @@ class SmokeWorkerBase(Worker):
     @final
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[ContextPartChunk, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
         if context.node_id is None:
             raise ValueError(f"{type(self).__name__} requires context.node_id")
 
@@ -114,12 +114,13 @@ class SmokeWorkerBase(Worker):
         )
 
         # --- Turn 3: awaiting children (terminal) -------------------------
+        waiting_message = (
+            f"{type(self).__name__}: awaiting 9 children -- "
+            "runtime will mark parent COMPLETED once wait_all resolves"
+        )
         yield ContextPartChunk(
             part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: awaiting 9 children — "
-                    "runtime will mark parent COMPLETED once wait_all resolves"
-                ),
+                content=waiting_message,
             ),
         )
 
@@ -140,19 +141,24 @@ class SmokeWorkerBase(Worker):
                 break
             await asyncio.sleep(2)
 
-    def get_output(self, context: WorkerContext) -> WorkerOutput:
         non_completed = {
             slug: status
             for slug, status in self._last_child_statuses.items()
             if status != "completed"
         }
         if non_completed:
-            return WorkerOutput(
+            yield WorkerOutput(
                 output=f"child tasks did not all complete: {non_completed}",
                 success=False,
                 metadata={"child_statuses": self._last_child_statuses},
             )
-        return super().get_output(context)
+            return
+
+        yield WorkerOutput(
+            output=waiting_message,
+            success=True,
+            metadata={"child_statuses": self._last_child_statuses},
+        )
 
     def _spec_for(
         self,
@@ -174,6 +180,3 @@ class SmokeWorkerBase(Worker):
             assigned_worker_slug=AssignedWorkerSlug(self.leaf_slug),
             depends_on=[TaskSlug(d) for d in deps],
         )
-
-
-__all__ = ["SmokeWorkerBase"]

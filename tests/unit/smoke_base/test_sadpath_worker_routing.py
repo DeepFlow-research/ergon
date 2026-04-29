@@ -8,13 +8,13 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
-from ergon_core.test_support.smoke_fixtures.workers.minif2f_smoke import (
+from tests.fixtures.smoke_components.workers.minif2f_smoke import (
     MiniF2FSadPathSmokeWorker,
 )
-from ergon_core.test_support.smoke_fixtures.workers.researchrubrics_smoke import (
+from tests.fixtures.smoke_components.workers.researchrubrics_smoke import (
     ResearchRubricsSadPathSmokeWorker,
 )
-from ergon_core.test_support.smoke_fixtures.workers.swebench_smoke import (
+from tests.fixtures.smoke_components.workers.swebench_smoke import (
     SweBenchSadPathSmokeWorker,
 )
 

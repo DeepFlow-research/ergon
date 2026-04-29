@@ -14,11 +14,11 @@ Env-specific hooks:
 import ast
 from pathlib import Path
 
-from ergon_core.api.errors import CriteriaCheckError
-from ergon_core.api.evaluation_context import EvaluationContext
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.errors import CriterionCheckError
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
-from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from tests.fixtures.smoke_components.smoke_base.criterion_base import SmokeCriterionBase
 from sqlmodel import col, desc, select
 
 HEALTH_PY = """\
@@ -41,7 +41,7 @@ class SweBenchSmokeCriterion(SmokeCriterionBase):
                     ).all()
                 ]
                 if not exec_ids:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: no RunTaskExecution rows",
                     )
                 resource = session.exec(
@@ -58,46 +58,43 @@ class SweBenchSmokeCriterion(SmokeCriterionBase):
                     .limit(1),
                 ).first()
                 if resource is None:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: no patch_*.py RunResource",
                     )
                 source = Path(resource.file_path).read_bytes().decode("utf-8")
                 try:
                     tree = ast.parse(source)
                 except SyntaxError as err:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: python AST parse failed: {err}",
                     ) from err
                 func_names = {
                     node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
                 }
                 if "add" not in func_names:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: expected function `add`, got {sorted(func_names)}",
                     )
 
-    async def _verify_sandbox_setup(self, context: EvaluationContext) -> None:
+    async def _verify_sandbox_setup(self, context: CriterionContext) -> None:
         """Python 3.10+ present + pytest importable."""
-        if context.runtime is None:
-            raise CriteriaCheckError(
+        if not context.has_runtime:
+            raise CriterionCheckError(
                 "swebench sandbox health: CriterionRuntime not injected",
             )
-        await context.runtime.ensure_sandbox()
-        await context.runtime.write_file(
+        await context.ensure_sandbox()
+        await context.write_file(
             "/tmp/smoke_health.py",
             HEALTH_PY.encode("utf-8"),
         )
-        result = await context.runtime.run_command(
+        result = await context.run_command(
             "python /tmp/smoke_health.py && python -c 'import pytest; print(pytest.__version__)'",
             timeout=15,
         )
         stdout = "" if result.stdout is None else result.stdout
         if result.exit_code != 0 or "HEALTH_OK" not in stdout:
             stderr = ("" if result.stderr is None else result.stderr)[:300]
-            raise CriteriaCheckError(
+            raise CriterionCheckError(
                 f"swebench sandbox health failed: exit={result.exit_code} "
                 f"stdout={stdout[:300]!r} stderr={stderr!r}",
             )
-
-
-__all__ = ["SweBenchSmokeCriterion"]

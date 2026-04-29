@@ -3,10 +3,8 @@
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from ergon_core.api.criterion import Criterion
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.evaluator import Rubric
-from ergon_core.api.results import CriterionResult
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
+from ergon_core.api.rubric import Rubric
 
 
 class SmokePostRootTimingCriterion(Criterion):
@@ -14,8 +12,8 @@ class SmokePostRootTimingCriterion(Criterion):
 
     type_slug: ClassVar[str] = "smoke-post-root-timing-criterion"
 
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
-        return CriterionResult(
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
+        return CriterionOutcome(
             slug=self.slug,
             name=self.slug,
             score=1.0,
@@ -41,6 +39,3 @@ class SmokePostRootTimingRubric(Rubric):
             criteria=[SmokePostRootTimingCriterion(slug="smoke-post-root-timing")],
             metadata=metadata,
         )
-
-
-__all__ = ["SmokePostRootTimingCriterion", "SmokePostRootTimingRubric"]

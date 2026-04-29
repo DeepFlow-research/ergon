@@ -3,8 +3,8 @@
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.api.errors import CriteriaCheckError
-from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import (
+from ergon_core.api.errors import CriterionCheckError
+from tests.fixtures.smoke_components.smoke_base.criterion_base import (
     ProbeResult,
     SmokeCriterionBase,
 )
@@ -29,7 +29,7 @@ class _Crit(SmokeCriterionBase):
 
 
 def _crit() -> _Crit:
-    return _Crit(name="unit-test")
+    return _Crit(slug="unit-test")
 
 
 def test_all_zero_exits_passes() -> None:
@@ -49,14 +49,14 @@ def test_non_zero_exit_raises_with_slug() -> None:
         c1.id: ProbeResult(exit_code=1, stdout="boom"),
         c2.id: ProbeResult(exit_code=0, stdout="ok"),
     }
-    with pytest.raises(CriteriaCheckError, match=r"l_2.*exited 1.*boom"):
+    with pytest.raises(CriterionCheckError, match=r"l_2.*exited 1.*boom"):
         _crit()._check_probes_succeeded(probes, [c1, c2])
 
 
 def test_missing_exit_code_raises() -> None:
     c1 = _FakeNode(id=uuid4(), task_slug="d_root")
     probes = {c1.id: ProbeResult(stdout="no exit_code")}
-    with pytest.raises(CriteriaCheckError, match="d_root.*exited None"):
+    with pytest.raises(CriterionCheckError, match="d_root.*exited None"):
         _crit()._check_probes_succeeded(probes, [c1])
 
 
@@ -65,5 +65,5 @@ def test_unknown_child_id_uses_uuid_string() -> None:
     practice, but defensive formatting keeps the error legible)."""
     orphan_id = uuid4()
     probes = {orphan_id: ProbeResult(exit_code=2, stdout="x")}
-    with pytest.raises(CriteriaCheckError, match=r"exited 2"):
+    with pytest.raises(CriterionCheckError, match=r"exited 2"):
         _crit()._check_probes_succeeded(probes, [])

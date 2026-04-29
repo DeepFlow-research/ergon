@@ -24,19 +24,19 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.core.generation import AssistantTextPart, ContextPartChunk
-from ergon_core.api.results import WorkerOutput
+from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.sandbox.instrumentation import InstrumentedSandbox
-from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
-from ergon_core.core.runtime.services.communication_service import (
+from ergon_core.core.infrastructure.sandbox.instrumentation import InstrumentedSandbox
+from ergon_core.core.application.communication.models import CreateMessageRequest
+from ergon_core.core.application.communication.service import (
     communication_service,
 )
-from ergon_core.core.settings import settings
-from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
-from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import (
+from ergon_core.core.shared.settings import settings
+from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
+from tests.fixtures.smoke_components.smoke_base.subworker import (
     SmokeSubworker,
     SubworkerResult,
 )
@@ -68,10 +68,10 @@ class BaseSmokeLeafWorker(Worker):
 
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[ContextPartChunk, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
         node_hex = context.node_id.hex[:8] if context.node_id else "unknown"
 
         # --- Turn 1: attaching + starting ---------------------------------
@@ -111,16 +111,12 @@ class BaseSmokeLeafWorker(Worker):
             ),
         )
 
-    def get_output(self, context: WorkerContext) -> WorkerOutput:
-        r = self._last_result
-        if r is None:
-            return WorkerOutput(output="", success=False, metadata={"error": "no_result"})
-        return WorkerOutput(
-            output=r.probe_stdout,
-            success=r.probe_exit_code == 0,
+        yield WorkerOutput(
+            output=result.probe_stdout,
+            success=result.probe_exit_code == 0,
             metadata={
-                "probe_exit_code": r.probe_exit_code,
-                "file_path": r.file_path,
+                "probe_exit_code": result.probe_exit_code,
+                "file_path": result.file_path,
             },
         )
 
@@ -170,6 +166,3 @@ class BaseSmokeLeafWorker(Worker):
         with get_session() as session:
             node = session.get(RunGraphNode, node_id)
         return node.task_slug if node is not None else f"node-{node_id.hex[:8]}"
-
-
-__all__ = ["BaseSmokeLeafWorker"]

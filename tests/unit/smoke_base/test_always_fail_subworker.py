@@ -10,7 +10,7 @@ lands in blob storage and the sad-path driver's
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from ergon_core.test_support.smoke_fixtures.workers.researchrubrics_smoke_sadpath import (
+from tests.fixtures.smoke_components.workers.researchrubrics_smoke_sadpath import (
     AlwaysFailSubworker,
 )
 

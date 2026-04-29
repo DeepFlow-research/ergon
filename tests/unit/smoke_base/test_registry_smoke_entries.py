@@ -1,4 +1,4 @@
-"""Registering ``ergon_core.test_support.smoke_fixtures`` populates smoke slugs.
+"""Registering ``tests.fixtures.smoke_components`` populates smoke slugs.
 
 Phase C registers the researchrubrics happy + sad-path rows.  Phase D
 adds minif2f and swebench-verified.  This test expects exactly what's
@@ -9,11 +9,17 @@ adding env fixtures.
 import pytest
 
 
+def _registry_maps():
+    from ergon_core.api.registry import registry
+
+    return registry.workers, registry.evaluators, registry.benchmarks, registry.sandbox_managers
+
+
 def test_researchrubrics_slugs_registered() -> None:
-    from ergon_builtins.registry import EVALUATORS, WORKERS
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+    from tests.fixtures.smoke_components import register_smoke_fixtures
 
     register_smoke_fixtures()
+    workers, evaluators, _, _ = _registry_maps()
 
     expected_workers = {
         "researchrubrics-smoke-worker",
@@ -23,80 +29,82 @@ def test_researchrubrics_slugs_registered() -> None:
         "researchrubrics-smoke-leaf-failing",
     }
     for slug in expected_workers:
-        assert slug in WORKERS, f"worker slug missing from registry: {slug}"
+        assert slug in workers, f"worker slug missing from registry: {slug}"
 
-    assert "researchrubrics-smoke-criterion" in EVALUATORS
-    assert "smoke-post-root-timing-criterion" in EVALUATORS
+    assert "researchrubrics-smoke-criterion" in evaluators
+    assert "smoke-post-root-timing-criterion" in evaluators
 
 
 def test_no_retired_slugs_present() -> None:
-    from ergon_builtins.registry import WORKERS
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+    from tests.fixtures.smoke_components import register_smoke_fixtures
 
     register_smoke_fixtures()
+    workers, _, _, _ = _registry_maps()
 
     retired = {"canonical-smoke"}
-    still_present = retired & set(WORKERS.keys())
+    still_present = retired & set(workers.keys())
     assert not still_present, f"Retired worker slugs still in registry: {still_present}"
 
 
 def test_register_is_idempotent() -> None:
     """Calling register_smoke_fixtures twice doesn't raise / duplicate."""
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+    from tests.fixtures.smoke_components import register_smoke_fixtures
 
     register_smoke_fixtures()
     register_smoke_fixtures()
 
 
 def test_minif2f_slugs_registered() -> None:
-    from ergon_builtins.registry import EVALUATORS, WORKERS
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+    from tests.fixtures.smoke_components import register_smoke_fixtures
 
     register_smoke_fixtures()
+    workers, evaluators, _, _ = _registry_maps()
 
-    assert "minif2f-smoke-worker" in WORKERS
-    assert "minif2f-smoke-leaf" in WORKERS
-    assert "minif2f-smoke-recursive-worker" in WORKERS
-    assert "minif2f-sadpath-smoke-worker" in WORKERS
-    assert "minif2f-smoke-leaf-failing" in WORKERS
-    assert "minif2f-smoke-criterion" in EVALUATORS
+    assert "minif2f-smoke-worker" in workers
+    assert "minif2f-smoke-leaf" in workers
+    assert "minif2f-smoke-recursive-worker" in workers
+    assert "minif2f-sadpath-smoke-worker" in workers
+    assert "minif2f-smoke-leaf-failing" in workers
+    assert "minif2f-smoke-criterion" in evaluators
 
 
 def test_swebench_slugs_registered() -> None:
-    from ergon_builtins.registry import EVALUATORS, WORKERS
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+    from tests.fixtures.smoke_components import register_smoke_fixtures
 
     register_smoke_fixtures()
+    workers, evaluators, _, _ = _registry_maps()
 
-    assert "swebench-smoke-worker" in WORKERS
-    assert "swebench-smoke-leaf" in WORKERS
-    assert "swebench-smoke-recursive-worker" in WORKERS
-    assert "swebench-sadpath-smoke-worker" in WORKERS
-    assert "swebench-smoke-leaf-failing" in WORKERS
-    assert "swebench-smoke-criterion" in EVALUATORS
+    assert "swebench-smoke-worker" in workers
+    assert "swebench-smoke-leaf" in workers
+    assert "swebench-smoke-recursive-worker" in workers
+    assert "swebench-sadpath-smoke-worker" in workers
+    assert "swebench-smoke-leaf-failing" in workers
+    assert "swebench-smoke-criterion" in evaluators
 
 
 def test_smoke_benchmarks_are_test_owned_when_harness_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
-    from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
-    from ergon_core.test_support.smoke_fixtures.sandbox import SmokeSandboxManager
+    from ergon_builtins.registry import register_builtins
+    from ergon_core.api.registry import registry
+    from tests.fixtures.smoke_components import register_smoke_fixtures
+    from tests.fixtures.smoke_components.sandbox import SmokeSandboxManager
 
+    register_builtins(registry)
     slugs = ("researchrubrics", "minif2f", "swebench-verified")
-    original_benchmarks = {slug: BENCHMARKS[slug] for slug in slugs}
-    original_managers = {slug: SANDBOX_MANAGERS.get(slug) for slug in slugs}
+    original_benchmarks = {slug: registry.benchmarks[slug] for slug in slugs}
+    original_managers = {slug: registry.sandbox_managers.get(slug) for slug in slugs}
     monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
 
     try:
         register_smoke_fixtures()
         for slug in slugs:
-            assert BENCHMARKS[slug].__module__.startswith("ergon_core.test_support.smoke_fixtures")
-            assert SANDBOX_MANAGERS[slug] is SmokeSandboxManager
+            assert registry.benchmarks[slug].__module__.startswith("tests.fixtures.smoke_components")
+            assert registry.sandbox_managers[slug] is SmokeSandboxManager
     finally:
-        BENCHMARKS.update(original_benchmarks)
+        registry.benchmarks.update(original_benchmarks)
         for slug, manager_cls in original_managers.items():
             if manager_cls is None:
-                SANDBOX_MANAGERS.pop(slug, None)
+                registry.sandbox_managers.pop(slug, None)
             else:
-                SANDBOX_MANAGERS[slug] = manager_cls
+                registry.sandbox_managers[slug] = manager_cls

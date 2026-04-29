@@ -11,7 +11,7 @@ drift.
 """
 
 import pytest
-from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
+from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBase
 
 
 def test_execute_is_marked_final() -> None:

@@ -8,18 +8,18 @@ probe run exercises compile + execute + assertion pass.
 import json
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
+from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
+from tests.fixtures.smoke_components.smoke_base.recursive import (
     RecursiveSmokeWorkerBase,
     RecursiveSmokeWorkerMixin,
 )
-from ergon_core.test_support.smoke_fixtures.smoke_base.sadpath import (
+from tests.fixtures.smoke_components.smoke_base.sadpath import (
     AlwaysFailSubworker,
     FailingSmokeLeafMixin,
     SadPathSmokeWorkerMixin,
 )
-from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
-from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
+from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
+from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBase
 
 PY_SOURCE = """\
 def add(a, b):
@@ -90,13 +90,3 @@ class SweBenchSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
     type_slug = "swebench-sadpath-smoke-worker"
     leaf_slug = "swebench-smoke-leaf"
     FAILING_LEAF_SLUG = "swebench-smoke-leaf-failing"
-
-
-__all__ = [
-    "SweBenchFailingLeafWorker",
-    "SweBenchRecursiveSmokeWorker",
-    "SweBenchSadPathSmokeWorker",
-    "SweBenchSmokeLeafWorker",
-    "SweBenchSmokeWorker",
-    "SweBenchSubworker",
-]

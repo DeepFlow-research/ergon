@@ -17,18 +17,18 @@ SWE-Bench fixtures in Phase D follow the same shape.
 import json
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
+from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
+from tests.fixtures.smoke_components.smoke_base.recursive import (
     RecursiveSmokeWorkerBase,
     RecursiveSmokeWorkerMixin,
 )
-from ergon_core.test_support.smoke_fixtures.smoke_base.sadpath import (
+from tests.fixtures.smoke_components.smoke_base.sadpath import (
     AlwaysFailSubworker,
     FailingSmokeLeafMixin,
     SadPathSmokeWorkerMixin,
 )
-from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
-from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
+from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
+from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBase
 
 
 class ResearchRubricsSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
@@ -98,13 +98,3 @@ class ResearchRubricsSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase
     type_slug = "researchrubrics-sadpath-smoke-worker"
     leaf_slug = "researchrubrics-smoke-leaf"
     FAILING_LEAF_SLUG = "researchrubrics-smoke-leaf-failing"
-
-
-__all__ = [
-    "ResearchRubricsFailingLeafWorker",
-    "ResearchRubricsRecursiveSmokeWorker",
-    "ResearchRubricsSadPathSmokeWorker",
-    "ResearchRubricsSmokeLeafWorker",
-    "ResearchRubricsSmokeWorker",
-    "ResearchRubricsSubworker",
-]

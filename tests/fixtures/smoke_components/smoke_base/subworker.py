@@ -21,7 +21,7 @@ complete in under 20 seconds under normal sandbox conditions.
 
 from typing import Protocol, runtime_checkable
 
-from ergon_core.core.sandbox.manager import AsyncSandbox
+from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox
 from pydantic import BaseModel
 
 

@@ -11,11 +11,11 @@ Env-specific hooks:
 
 from pathlib import Path
 
-from ergon_core.api.errors import CriteriaCheckError
-from ergon_core.api.evaluation_context import EvaluationContext
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.errors import CriterionCheckError
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
-from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from tests.fixtures.smoke_components.smoke_base.criterion_base import SmokeCriterionBase
 from sqlmodel import col, desc, select
 
 HEALTH_THEOREM = """\
@@ -36,7 +36,7 @@ class MiniF2FSmokeCriterion(SmokeCriterionBase):
                     ).all()
                 ]
                 if not exec_ids:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: no RunTaskExecution rows",
                     )
                 resource = session.exec(
@@ -53,43 +53,40 @@ class MiniF2FSmokeCriterion(SmokeCriterionBase):
                     .limit(1),
                 ).first()
                 if resource is None:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: no proof_*.lean RunResource",
                     )
                 text = Path(resource.file_path).read_bytes().decode("utf-8")
                 if "theorem smoke_trivial" not in text:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: lean source missing theorem marker",
                     )
                 if ":=" not in text:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: lean source missing proof term `:=`",
                     )
 
-    async def _verify_sandbox_setup(self, context: EvaluationContext) -> None:
+    async def _verify_sandbox_setup(self, context: CriterionContext) -> None:
         """Compile a trivial theorem.  Proves Lean + elan wrapper are
         wired up.  ``trivial`` proof term avoids Mathlib dependency so
         this runs fast even on a cold toolchain."""
-        if context.runtime is None:
-            raise CriteriaCheckError(
+        if not context.has_runtime:
+            raise CriterionCheckError(
                 "minif2f sandbox health: CriterionRuntime not injected",
             )
-        await context.runtime.ensure_sandbox()
-        await context.runtime.write_file(
+        await context.ensure_sandbox()
+        await context.write_file(
             "/tmp/smoke_health.lean",
             HEALTH_THEOREM.encode("utf-8"),
         )
-        result = await context.runtime.run_command(
+        result = await context.run_command(
             "lean --check /tmp/smoke_health.lean",
             timeout=60,
         )
         if result.exit_code != 0:
             stdout = ("" if result.stdout is None else result.stdout)[:300]
             stderr = ("" if result.stderr is None else result.stderr)[:300]
-            raise CriteriaCheckError(
+            raise CriterionCheckError(
                 f"minif2f sandbox health failed: lean --check "
                 f"exit={result.exit_code} stdout={stdout!r} stderr={stderr!r}",
             )
-
-
-__all__ = ["MiniF2FSmokeCriterion"]

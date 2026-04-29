@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from ergon_core.api import BenchmarkTask
+from ergon_core.api import Task
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug
-from ergon_core.core.sandbox.manager import AsyncSandbox
-from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
-from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
+from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox
+from ergon_core.core.application.communication.models import CreateMessageRequest
+from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
+from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
 
 
 class _IdleSubworker:
@@ -60,7 +60,7 @@ def _patch_session_with_task_slug(monkeypatch, slug: str) -> None:
     cm.__enter__ = MagicMock(return_value=session)
     cm.__exit__ = MagicMock(return_value=False)
     monkeypatch.setattr(
-        "ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base.get_session",
+        "tests.fixtures.smoke_components.smoke_base.leaf_base.get_session",
         lambda: cm,
     )
 
@@ -79,7 +79,7 @@ async def test_send_completion_message_posts_request(
         return MagicMock()
 
     monkeypatch.setattr(
-        "ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base.communication_service.save_message",
+        "tests.fixtures.smoke_components.smoke_base.leaf_base.communication_service.save_message",
         AsyncMock(side_effect=_record),
     )
     _patch_session_with_task_slug(monkeypatch, "l_2")
@@ -113,12 +113,12 @@ async def test_send_completion_message_not_called_when_subworker_raises(
     """_send_completion_message must not be called when subworker.work() raises."""
     save_mock = AsyncMock()
     monkeypatch.setattr(
-        "ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base.communication_service.save_message",
+        "tests.fixtures.smoke_components.smoke_base.leaf_base.communication_service.save_message",
         save_mock,
     )
     # Mock sandbox reconnect so execute() doesn't need a real sandbox.
     monkeypatch.setattr(
-        "ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base.SmokeSandboxManager.reconnect",
+        "tests.fixtures.smoke_components.smoke_base.leaf_base.SmokeSandboxManager.reconnect",
         AsyncMock(return_value=MagicMock(sandbox_id="smoke-sandbox-unit")),
     )
 
@@ -131,7 +131,7 @@ async def test_send_completion_message_not_called_when_subworker_raises(
         subworker_cls = _FailingSubworker
 
     leaf = _FailingLeaf(name="unit-test", model=None, task_id=uuid4(), sandbox_id="sbx-unit")
-    task = BenchmarkTask(task_slug="l_fail", instance_key="default", description="x")
+    task = Task(task_slug="l_fail", instance_key="default", description="x")
 
     with pytest.raises(RuntimeError, match="sad-path"):
         async for _ in leaf.execute(task, context=_context()):

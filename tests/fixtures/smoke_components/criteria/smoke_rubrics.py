@@ -17,12 +17,12 @@ reuse the ``{env}-smoke-criterion`` slug on the rubric so the CLI arg
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from ergon_core.api.evaluator import Rubric
-from ergon_core.test_support.smoke_fixtures.criteria.minif2f_smoke import MiniF2FSmokeCriterion
-from ergon_core.test_support.smoke_fixtures.criteria.researchrubrics_smoke import (
+from ergon_core.api.rubric import Rubric
+from tests.fixtures.smoke_components.criteria.minif2f_smoke import MiniF2FSmokeCriterion
+from tests.fixtures.smoke_components.criteria.researchrubrics_smoke import (
     ResearchRubricsSmokeCriterion,
 )
-from ergon_core.test_support.smoke_fixtures.criteria.swebench_smoke import SweBenchSmokeCriterion
+from tests.fixtures.smoke_components.criteria.swebench_smoke import SweBenchSmokeCriterion
 
 
 class ResearchRubricsSmokeRubric(Rubric):
@@ -77,10 +77,3 @@ class SweBenchSmokeRubric(Rubric):
             criteria=[SweBenchSmokeCriterion(slug="swebench-smoke")],
             metadata=metadata,
         )
-
-
-__all__ = [
-    "MiniF2FSmokeRubric",
-    "ResearchRubricsSmokeRubric",
-    "SweBenchSmokeRubric",
-]

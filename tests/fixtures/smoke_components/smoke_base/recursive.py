@@ -11,18 +11,18 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.core.generation import AssistantTextPart, ContextPartChunk
-from ergon_core.api.results import WorkerOutput
+from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, NodeId, RunId, TaskSlug
-from ergon_core.core.runtime.services.communication_schemas import CreateMessageRequest
-from ergon_core.core.runtime.services.communication_service import communication_service
-from ergon_core.core.runtime.services.task_inspection_service import TaskInspectionService
-from ergon_core.core.runtime.services.task_management_dto import PlanSubtasksCommand, SubtaskSpec
-from ergon_core.core.runtime.services.task_management_service import TaskManagementService
+from ergon_core.core.application.communication.models import CreateMessageRequest
+from ergon_core.core.application.communication.service import communication_service
+from ergon_core.core.application.tasks.inspection import TaskInspectionService
+from ergon_core.core.application.tasks.models import PlanSubtasksCommand, SubtaskSpec
+from ergon_core.core.application.tasks.management import TaskManagementService
 
 NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
 NESTED_SUBTASK_GRAPH: tuple[tuple[str, tuple[str, ...], str], ...] = (
@@ -43,10 +43,10 @@ class RecursiveSmokeWorkerBase(Worker):
 
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[ContextPartChunk, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
         if context.node_id is None:
             raise ValueError(f"{type(self).__name__} requires context.node_id")
 
@@ -110,19 +110,20 @@ class RecursiveSmokeWorkerBase(Worker):
             ),
         )
 
-    def get_output(self, context: WorkerContext) -> WorkerOutput:
         non_completed = {
             slug: status
             for slug, status in self._last_child_statuses.items()
             if status != "completed"
         }
         if non_completed:
-            return WorkerOutput(
+            yield WorkerOutput(
                 output=f"nested children did not all complete: {non_completed}",
                 success=False,
                 metadata={"child_statuses": self._last_child_statuses},
             )
-        return WorkerOutput(
+            return
+
+        yield WorkerOutput(
             output="nested smoke recursion completed",
             success=True,
             metadata={"child_statuses": self._last_child_statuses},
@@ -165,11 +166,3 @@ class RecursiveSmokeWorkerMixin:
             assigned_worker_slug=AssignedWorkerSlug(worker_slug),
             depends_on=[TaskSlug(d) for d in deps],
         )
-
-
-__all__ = [
-    "NESTED_LINE_SLUGS",
-    "NESTED_SUBTASK_GRAPH",
-    "RecursiveSmokeWorkerBase",
-    "RecursiveSmokeWorkerMixin",
-]

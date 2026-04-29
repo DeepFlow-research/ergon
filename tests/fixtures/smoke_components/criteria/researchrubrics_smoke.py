@@ -19,11 +19,11 @@ criteria; smoke criterion code does not change at that point.
 
 from pathlib import Path
 
-from ergon_core.api.errors import CriteriaCheckError
-from ergon_core.api.evaluation_context import EvaluationContext
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.errors import CriterionCheckError
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
-from ergon_core.test_support.smoke_fixtures.smoke_base.criterion_base import SmokeCriterionBase
+from tests.fixtures.smoke_components.smoke_base.criterion_base import SmokeCriterionBase
 from sqlmodel import col, desc, select
 
 
@@ -43,7 +43,7 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
                     ).all()
                 ]
                 if not exec_ids:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: no RunTaskExecution rows",
                     )
                 resource = session.exec(
@@ -60,27 +60,27 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
                     .limit(1),
                 ).first()
                 if resource is None:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: no report_*.md RunResource",
                     )
                 body = Path(resource.file_path).read_bytes()
                 if not body.startswith(b"# Research report"):
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: report missing `# Research report` header",
                     )
                 if len(body.strip()) < 20:
-                    raise CriteriaCheckError(
+                    raise CriterionCheckError(
                         f"{child.task_slug}: report body too short ({len(body)} bytes)",
                     )
 
-    async def _verify_sandbox_setup(self, context: EvaluationContext) -> None:
+    async def _verify_sandbox_setup(self, context: CriterionContext) -> None:
         """Trivial env probe: bash + coreutils + /tmp writable."""
-        if context.runtime is None:
-            raise CriteriaCheckError(
+        if not context.has_runtime:
+            raise CriterionCheckError(
                 "researchrubrics sandbox health: CriterionRuntime not injected",
             )
-        await context.runtime.ensure_sandbox()
-        result = await context.runtime.run_command(
+        await context.ensure_sandbox()
+        result = await context.run_command(
             "set -e; "
             "echo '# hello world' > /tmp/smoke_health.md && "
             "test \"$(wc -l < /tmp/smoke_health.md)\" = '1' && "
@@ -89,10 +89,7 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
         )
         stdout = "" if result.stdout is None else result.stdout
         if result.exit_code != 0 or "OK" not in stdout:
-            raise CriteriaCheckError(
+            raise CriterionCheckError(
                 f"researchrubrics sandbox health failed: "
                 f"exit={result.exit_code} stdout={stdout[:200]!r}",
             )
-
-
-__all__ = ["ResearchRubricsSmokeCriterion"]

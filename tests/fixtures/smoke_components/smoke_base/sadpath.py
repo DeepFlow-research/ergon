@@ -10,8 +10,8 @@ from typing import ClassVar
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from ergon_core.api import WorkerContext
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
-from ergon_core.core.runtime.services.task_management_dto import SubtaskSpec
-from ergon_core.test_support.smoke_fixtures.smoke_base.subworker import SubworkerResult
+from ergon_core.core.application.tasks.models import SubtaskSpec
+from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
 
 
 class AlwaysFailSubworker:
@@ -77,6 +77,3 @@ class FailingSmokeLeafMixin:
         result: SubworkerResult,
     ) -> None:
         return None
-
-
-__all__ = ["AlwaysFailSubworker", "FailingSmokeLeafMixin", "SadPathSmokeWorkerMixin"]

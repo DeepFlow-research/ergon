@@ -4,34 +4,56 @@ The smoke matrix validates Ergon runtime topology, sandbox resource
 publication, evaluation, and dashboard rendering. It should not depend on
 network access or private Hugging Face credentials to materialize the root
 task, so these fixtures replace the production benchmark loaders only when
-``ergon_core.test_support.smoke_fixtures`` is imported by the test harness.
+``tests.fixtures.smoke_components`` is imported by the test harness.
 """
 
 from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
-from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
-from ergon_builtins.benchmarks.researchrubrics.task_schemas import ResearchRubricsTaskPayload
-from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark_deps import BenchmarkDeps
-from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-from ergon_core.core.json_types import JsonObject
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, Task
+from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
+
+
+class ResearchRubricsTaskPayload(BaseModel):
+    sample_id: str
+    domain: str
+    prompt: str
+    rubrics: list[JsonObject]
+
+
+class MiniF2FTaskPayload(BaseModel):
+    name: str
+    informal_statement: str
+    formal_statement: str
+    header: str
+
+
+class SWEBenchTaskPayload(BaseModel):
+    instance_id: str
+    repo: str
+    base_commit: str
+    version: str
+    problem_statement: str
+    hints_text: str
+    fail_to_pass: list[str]
+    pass_to_pass: list[str]
+    environment_setup_commit: str
+    test_patch: str
 
 
 class _SingleTaskSmokeBenchmark(Benchmark):
     """Base class for smoke benchmarks that expose one deterministic task."""
 
-    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(e2b=True)
+    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(e2b=True)
     task_slug: ClassVar[str]
     task_description: ClassVar[str]
     task_payload: ClassVar[JsonObject] = {}
     task_payload_model = EmptyTaskPayload
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
         payload = self.task_payload_model.model_validate(self.task_payload)
-        task = BenchmarkTask[BaseModel](
+        task = Task[BaseModel](
             task_slug=self.task_slug,
             instance_key="default",
             description=self.task_description,
