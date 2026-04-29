@@ -28,7 +28,7 @@ def test_service_raises_when_run_record_missing():
     # exec().first() returns None → no RunRecord found
     session.exec.return_value.first.return_value = None
 
-    svc = TaskManagementService()
+    svc = TaskManagementService(dashboard_emitter=MagicMock())
     run_id = uuid4()
 
     with pytest.raises(RunRecordMissingError, match=str(run_id)):
