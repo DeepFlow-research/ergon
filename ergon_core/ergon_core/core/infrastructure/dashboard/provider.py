@@ -4,7 +4,7 @@ FastAPI lifespan owns construction. Runtime code that is not running inside a
 request can retrieve the initialized process instance from here.
 """
 
-from ergon_core.core.dashboard.emitter import DashboardEmitter
+from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
 
 _dashboard_emitter: DashboardEmitter | None = None
 

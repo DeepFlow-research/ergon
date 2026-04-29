@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 
 
 class TraceContext(BaseModel):

@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 import inngest
-from ergon_core.core.api.schemas import (
+from ergon_core.core.application.communication.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
+)
+from ergon_core.core.application.read_models.models import (
     RunTaskEvaluationDto,
 )
 from ergon_core.core.persistence.context.event_payloads import ContextEventType
@@ -22,21 +24,17 @@ from ergon_core.core.persistence.graph.models import (
 )
 from ergon_core.core.persistence.shared.types import RunId
 from ergon_core.core.persistence.graph.status_conventions import NodeStatus
-from ergon_core.core.persistence.queries import queries
-from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
-from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
-from ergon_core.core.runtime.services.cohort_stats_service import (
-    experiment_cohort_stats_service,
-)
-from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto, GraphMutationValue
-from ergon_core.core.utils import utcnow
+from ergon_core.core.application.events.task_events import TaskCancelledEvent
+from ergon_core.core.infrastructure.inngest.client import inngest_client
+from ergon_core.core.application.read_models.models import CohortSummaryDto
+from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
+from ergon_core.core.application.graph.models import GraphMutationRecordDto, GraphMutationValue
+from ergon_core.core.shared.utils import utcnow
 
 if TYPE_CHECKING:
     from ergon_core.core.persistence.context.models import RunContextEvent
 
-from ergon_core.core.dashboard.event_contracts import (
+from ergon_core.core.infrastructure.dashboard.event_contracts import (
     CohortUpdatedEvent,
     DashboardContextEventEvent,
     DashboardGraphMutationEvent,
@@ -396,7 +394,7 @@ class DashboardEmitter:
         self._execution_task_map[execution_id] = task_node_id
 
     async def on_context_event(self, event: "RunContextEvent") -> None:
-        """Called by ContextEventRepository after each event is committed."""
+        """Called by ContextEventService after each event is committed."""
         if not self._enabled:
             return
         try:
@@ -451,15 +449,15 @@ class DashboardEmitter:
 
 async def emit_cohort_updated_for_run(run_id: UUID) -> None:
     """Refresh and emit the current cohort summary for a run, if it has a cohort."""
-    cohort_id = queries.runs.get_cohort_id(run_id)
+    cohort_id = experiment_cohort_service.cohort_id_for_run(run_id)
     if cohort_id is None:
         return
 
-    experiment_cohort_stats_service.recompute(cohort_id)
+    experiment_cohort_service.recompute(cohort_id)
     summary = experiment_cohort_service.get_summary(cohort_id)
     if summary is None:
         return
-    from ergon_core.core.dashboard.provider import get_dashboard_emitter
+    from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 
     await get_dashboard_emitter().cohort_updated(
         cohort_id=summary.cohort_id,

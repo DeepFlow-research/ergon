@@ -11,9 +11,11 @@ from datetime import datetime
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.api.schemas import (
+from ergon_core.core.application.communication.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
+)
+from ergon_core.core.application.read_models.models import (
     RunTaskEvaluationDto,
 )
 from ergon_core.core.persistence.context.event_payloads import (
@@ -21,9 +23,9 @@ from ergon_core.core.persistence.context.event_payloads import (
     ContextEventType,
 )
 from ergon_core.core.persistence.graph.status_conventions import NodeStatus
-from ergon_core.core.runtime.events.base import InngestEventContract
-from ergon_core.core.runtime.services.cohort_schemas import CohortSummaryDto
-from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
+from ergon_core.core.application.events.base import InngestEventContract
+from ergon_core.core.application.read_models.models import CohortSummaryDto
+from ergon_core.core.application.graph.models import GraphMutationRecordDto
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------

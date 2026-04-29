@@ -1,9 +1,9 @@
 """Process-wide trace sink factory."""
 
-from ergon_core.core.runtime.tracing.noop import NoopTraceSink
-from ergon_core.core.runtime.tracing.otel import OtelTraceSink
-from ergon_core.core.runtime.tracing.types import TraceSink
-from ergon_core.core.settings import settings
+from ergon_core.core.infrastructure.tracing.noop import NoopTraceSink
+from ergon_core.core.infrastructure.tracing.otel import OtelTraceSink
+from ergon_core.core.infrastructure.tracing.types import TraceSink
+from ergon_core.core.shared.settings import settings
 
 
 def _create_sink() -> TraceSink:

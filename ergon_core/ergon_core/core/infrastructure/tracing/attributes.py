@@ -3,8 +3,8 @@
 import json
 from datetime import UTC, datetime
 
-from ergon_core.core.json_types import JsonObject, JsonValue
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.json_types import JsonObject, JsonValue
+from ergon_core.core.shared.settings import settings
 
 
 def truncate_text(value: str | None, max_length: int | None = None) -> str | None:

@@ -3,9 +3,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from ergon_core.core.json_types import JsonObject
-from ergon_core.core.runtime.tracing.ids import span_id_from_key
-from ergon_core.core.runtime.tracing.types import CompletedSpan, TraceContext
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.infrastructure.tracing.ids import span_id_from_key
+from ergon_core.core.infrastructure.tracing.types import CompletedSpan, TraceContext
 
 
 class NoopTraceSink:

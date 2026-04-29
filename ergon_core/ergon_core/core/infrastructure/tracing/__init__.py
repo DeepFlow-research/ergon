@@ -3,7 +3,7 @@
 The runtime emits structured spans through this package while keeping the
 existing public import path stable:
 
-    from ergon_core.core.runtime.tracing import get_trace_sink
+    from ergon_core.core.infrastructure.tracing import get_trace_sink
 
 Target span hierarchy (one trace per run, keyed by run_id)::
 
@@ -27,13 +27,13 @@ for PG lookup, not payload copies. See otel_tracing_v2.md for full attribute
 schemas per span.
 """
 
-from ergon_core.core.runtime.tracing.attributes import (
+from ergon_core.core.infrastructure.tracing.attributes import (
     datetime_to_nanos,
     normalize_attributes,
     safe_json_attribute,
     truncate_text,
 )
-from ergon_core.core.runtime.tracing.contexts import (
+from ergon_core.core.infrastructure.tracing.contexts import (
     evaluation_criterion_context,
     evaluation_task_context,
     persist_outputs_context,
@@ -46,15 +46,15 @@ from ergon_core.core.runtime.tracing.contexts import (
     workflow_start_context,
     worker_execute_context,
 )
-from ergon_core.core.runtime.tracing.ids import (
+from ergon_core.core.infrastructure.tracing.ids import (
     DeterministicIdGenerator,
     span_id_from_key,
     trace_id_from_run_id,
 )
-from ergon_core.core.runtime.tracing.noop import NoopTraceSink
-from ergon_core.core.runtime.tracing.otel import OtelTraceSink
-from ergon_core.core.runtime.tracing.sinks import get_trace_sink
-from ergon_core.core.runtime.tracing.types import CompletedSpan, SpanEvent, TraceContext, TraceSink
+from ergon_core.core.infrastructure.tracing.noop import NoopTraceSink
+from ergon_core.core.infrastructure.tracing.otel import OtelTraceSink
+from ergon_core.core.infrastructure.tracing.sinks import get_trace_sink
+from ergon_core.core.infrastructure.tracing.types import CompletedSpan, SpanEvent, TraceContext, TraceSink
 
 __all__ = [
     "CompletedSpan",

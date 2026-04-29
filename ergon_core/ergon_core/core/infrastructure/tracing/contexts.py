@@ -7,8 +7,8 @@ replays.
 
 from uuid import UUID
 
-from ergon_core.core.runtime.tracing.ids import span_id_from_key, trace_id_from_run_id
-from ergon_core.core.runtime.tracing.types import TraceContext
+from ergon_core.core.infrastructure.tracing.ids import span_id_from_key, trace_id_from_run_id
+from ergon_core.core.infrastructure.tracing.types import TraceContext
 
 
 def workflow_root_context(run_id: UUID) -> TraceContext:

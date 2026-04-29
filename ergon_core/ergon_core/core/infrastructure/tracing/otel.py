@@ -25,17 +25,17 @@ try:
 except ImportError:
     _OTLPSpanExporter = None
 
-from ergon_core.core.json_types import JsonObject
-from ergon_core.core.runtime.tracing.attributes import datetime_to_nanos, normalize_attributes
-from ergon_core.core.runtime.tracing.ids import (
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.infrastructure.tracing.attributes import datetime_to_nanos, normalize_attributes
+from ergon_core.core.infrastructure.tracing.ids import (
     EMPTY_SPAN_ID,
     TRACE_FLAGS_SAMPLED,
     DeterministicIdGenerator,
     id_override,
     span_id_from_key,
 )
-from ergon_core.core.runtime.tracing.types import CompletedSpan, SpanEvent, TraceContext
-from ergon_core.core.settings import settings
+from ergon_core.core.infrastructure.tracing.types import CompletedSpan, SpanEvent, TraceContext
+from ergon_core.core.shared.settings import settings
 
 
 class OtelTraceSink:
