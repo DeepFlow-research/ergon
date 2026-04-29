@@ -151,12 +151,14 @@ class SubtaskLifecycleToolkit:
         run_id: UUID,
         parent_node_id: UUID,
         sandbox_id: str,
+        task_management_service: TaskManagementService | None = None,
+        task_inspection_service: TaskInspectionService | None = None,
     ) -> None:
         self._run_id = RunId(run_id)
         self._parent_node_id = NodeId(parent_node_id)
         self._sandbox_id = sandbox_id
-        self._mgmt = TaskManagementService()
-        self._inspect = TaskInspectionService()
+        self._mgmt = task_management_service or TaskManagementService()
+        self._inspect = task_inspection_service or TaskInspectionService()
 
     def get_tools(self) -> list[Callable[..., Awaitable[BaseModel]]]:
         """Return the eight subtask lifecycle tools for Agent(tools=[...])."""
