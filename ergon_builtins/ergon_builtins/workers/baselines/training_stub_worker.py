@@ -13,8 +13,8 @@ import random
 from collections.abc import AsyncGenerator
 from uuid import UUID
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.core.generation import (
+from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     TokenLogprob,
@@ -39,12 +39,16 @@ class TrainingStubWorker(Worker):
 
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[ContextPartChunk, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        output = ""
         for chunk in _build_synthetic_chunks(task.task_slug):
+            if isinstance(chunk.part, AssistantTextPart):
+                output = chunk.part.content
             yield chunk
+        yield WorkerOutput(output=output, success=True)
 
 
 def _build_synthetic_chunks(task_slug: str) -> list[ContextPartChunk]:
