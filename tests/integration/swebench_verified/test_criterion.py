@@ -8,14 +8,14 @@ from ergon_builtins.benchmarks.swebench_verified.criterion import (
     SWEBenchTestCriterion,
 )
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import WorkerOutput
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.core.runtime.evaluation.protocols import CommandResult
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.api.benchmark import Task
+from ergon_core.core.application.evaluation.protocols import CommandResult
 
 
-def _task() -> BenchmarkTask[SWEBenchTaskPayload]:
-    return BenchmarkTask[SWEBenchTaskPayload](
+def _task() -> Task[SWEBenchTaskPayload]:
+    return Task[SWEBenchTaskPayload](
         task_slug="django__django-1",
         instance_key="default",
         description="Fix the thing",
@@ -71,9 +71,9 @@ def _ctx(
     *,
     output: str = "PATCH",
     runtime: object | None = None,
-) -> EvaluationContext:
+) -> CriterionContext:
     run_id = uuid4()
-    return EvaluationContext(
+    return CriterionContext(
         run_id=run_id,
         task_id=uuid4(),
         execution_id=uuid4(),

@@ -69,7 +69,7 @@ EXPECTED_SUBTASK_SLUGS = (
 
 ### 3.2 Fixture residency — test-only, out of `ergon_builtins`
 
-`ergon_builtins/` contains only production baselines (ReActWorker, TrainingStubWorker). All smoke workers, leaves, and criteria live under [`ergon_core/test_support/smoke_fixtures/`](../../ergon_core/ergon_core/test_support/smoke_fixtures/) and register into the process-level `WORKERS` / `EVALUATORS` dicts through `register_smoke_fixtures()`.
+`ergon_builtins/` contains only production baselines (ReActWorker, TrainingStubWorker). All smoke workers, leaves, and criteria live under [`tests/fixtures/smoke_components/`](../../tests/fixtures/smoke_components/) and register into the process-level core component registry through `register_smoke_fixtures()`.
 
 19 registry rows total — none production:
 

@@ -24,20 +24,17 @@ SAMPLE_PAYLOAD = {
 
 @pytest.mark.asyncio
 async def test_install_runs_setup_and_install_scripts(monkeypatch: pytest.MonkeyPatch) -> None:
-    from ergon_core.core.persistence import queries as q_mod
-
-    monkeypatch.setattr(
-        q_mod.queries.task_executions,
-        "get_task_payload",
-        lambda _tid, _payload_model=None: SAMPLE_PAYLOAD,
-    )
-
     fake_spec = MagicMock(
         setup_env_script="echo setup",
         install_repo_script="echo install",
     )
     from ergon_builtins.benchmarks.swebench_verified import sandbox_manager as sm
 
+    monkeypatch.setattr(
+        sm.TaskExecutionRepository,
+        "task_payload_for_execution",
+        lambda self, _session, _tid, _payload_model=None: SAMPLE_PAYLOAD,
+    )
     monkeypatch.setattr(sm, "make_test_spec", lambda _row: fake_spec)
 
     sandbox = MagicMock()
@@ -54,13 +51,13 @@ async def test_install_runs_setup_and_install_scripts(monkeypatch: pytest.Monkey
 
 @pytest.mark.asyncio
 async def test_install_raises_when_payload_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    from ergon_core.core.persistence import queries as q_mod
-    from ergon_core.core.sandbox.errors import SandboxSetupError
+    from ergon_core.core.infrastructure.sandbox.errors import SandboxSetupError
+    from ergon_builtins.benchmarks.swebench_verified import sandbox_manager as sm
 
     monkeypatch.setattr(
-        q_mod.queries.task_executions,
-        "get_task_payload",
-        lambda _tid, _payload_model=None: None,
+        sm.TaskExecutionRepository,
+        "task_payload_for_execution",
+        lambda self, _session, _tid, _payload_model=None: None,
     )
 
     manager = SWEBenchSandboxManager()
@@ -89,13 +86,12 @@ async def test_install_raises_on_nonzero_exit(
     second script.
     """
     from ergon_builtins.benchmarks.swebench_verified import sandbox_manager as sm
-    from ergon_core.core.persistence import queries as q_mod
-    from ergon_core.core.sandbox.errors import SandboxSetupError
+    from ergon_core.core.infrastructure.sandbox.errors import SandboxSetupError
 
     monkeypatch.setattr(
-        q_mod.queries.task_executions,
-        "get_task_payload",
-        lambda _tid, _payload_model=None: SAMPLE_PAYLOAD,
+        sm.TaskExecutionRepository,
+        "task_payload_for_execution",
+        lambda self, _session, _tid, _payload_model=None: SAMPLE_PAYLOAD,
     )
     monkeypatch.setattr(
         sm,

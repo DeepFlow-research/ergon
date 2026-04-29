@@ -7,7 +7,7 @@ from ergon_builtins.workers.baselines.tool_budget import (
     AgentToolBudgetState,
 )
 from ergon_cli.commands.workflow import WorkflowCommandOutput, execute_workflow_command
-from ergon_core.api.worker_context import WorkerContext
+from ergon_core.api.worker import WorkerContext
 
 
 @pytest.mark.asyncio

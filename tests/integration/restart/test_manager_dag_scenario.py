@@ -24,10 +24,10 @@ import pytest
 from ergon_core.core.persistence.graph.status_conventions import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
-from ergon_core.core.runtime.services.orchestration_dto import PropagateTaskCompletionCommand
-from ergon_core.core.runtime.services.task_management_dto import RestartTaskCommand
-from ergon_core.core.runtime.services.task_management_service import TaskManagementService
-from ergon_core.core.runtime.services.task_propagation_service import TaskPropagationService
+from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
+from ergon_core.core.application.tasks.models import RestartTaskCommand
+from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.workflows.service import WorkflowService
 
 from tests.integration.propagation._helpers import (
     get_node_status,
@@ -40,8 +40,8 @@ from tests.integration.restart._helpers import cleanup_run, get_edge_status
 
 pytestmark = pytest.mark.integration
 
-_TMS_INNGEST = "ergon_core.core.runtime.services.task_management_service.inngest_client"
-_EMITTER_INNGEST = "ergon_core.core.dashboard.emitter.inngest_client"
+_TMS_INNGEST = "ergon_core.core.application.tasks.management.inngest_client"
+_EMITTER_INNGEST = "ergon_core.core.infrastructure.dashboard.emitter.inngest_client"
 
 
 @pytest.mark.asyncio
@@ -144,10 +144,10 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             )
 
         # ── Phase 3: task_a completes again ──────────────────────────────
-        # Use TaskPropagationService to simulate the normal completion path.
+        # Use WorkflowService to simulate the normal completion path.
         # task_b is COMPLETED; task_a completing → all of task_c's deps are
         # COMPLETED → task_c re-activates from CANCELLED to PENDING.
-        prop_svc = TaskPropagationService()
+        prop_svc = WorkflowService()
         await prop_svc.propagate(
             PropagateTaskCompletionCommand(
                 run_id=run_id,

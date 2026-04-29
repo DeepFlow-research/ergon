@@ -7,10 +7,10 @@ from ergon_core.core.persistence.graph.status_conventions import BLOCKED, CANCEL
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.runtime.services.graph_dto import MutationMeta
-from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
-from ergon_core.core.runtime.services.orchestration_dto import PropagateTaskCompletionCommand
-from ergon_core.core.runtime.services.task_propagation_service import TaskPropagationService
+from ergon_core.core.application.graph.models import MutationMeta
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
+from ergon_core.core.application.workflows.service import WorkflowService
 from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
@@ -104,7 +104,7 @@ async def test_3_failure_cascade_successor_blocked() -> None:
             session.commit()
 
         # Propagate failure from B
-        svc = TaskPropagationService()
+        svc = WorkflowService()
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 run_id=run_id,
@@ -202,7 +202,7 @@ async def test_7_parent_failure_children_blocked() -> None:
             )
             session.commit()
 
-        svc = TaskPropagationService()
+        svc = WorkflowService()
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 run_id=run_id,
@@ -292,7 +292,7 @@ async def test_10_blocked_propagates_transitively() -> None:
             )
             session.commit()
 
-        svc = TaskPropagationService()
+        svc = WorkflowService()
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 run_id=run_id,
@@ -375,7 +375,7 @@ async def test_12_running_successor_not_interrupted() -> None:
             )
             session.commit()
 
-        svc = TaskPropagationService()
+        svc = WorkflowService()
         await svc.propagate_failure(
             PropagateTaskCompletionCommand(
                 run_id=run_id,

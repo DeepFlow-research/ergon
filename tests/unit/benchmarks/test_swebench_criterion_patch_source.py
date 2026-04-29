@@ -13,9 +13,9 @@ import pytest
 from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 from ergon_core.api import WorkerOutput
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.core.runtime.evaluation.protocols import CommandResult
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.benchmark import Task
+from ergon_core.core.application.evaluation.protocols import CommandResult
 
 
 def _fake_run(cmd: str, timeout: int = 30) -> CommandResult:
@@ -58,11 +58,11 @@ async def test_criterion_computes_patch_via_run_command(
     # Worker produces empty output; criterion must still derive the patch
     # from the sandbox.
     run_id = uuid4()
-    context = EvaluationContext(
+    context = CriterionContext(
         run_id=run_id,
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=BenchmarkTask[SWEBenchTaskPayload](
+        task=Task[SWEBenchTaskPayload](
             task_slug="django-1",
             instance_key="default",
             description="d",
@@ -124,11 +124,11 @@ async def test_criterion_short_circuits_on_empty_patch(
         hints_text="",
     )
 
-    context = EvaluationContext(
+    context = CriterionContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=BenchmarkTask[SWEBenchTaskPayload](
+        task=Task[SWEBenchTaskPayload](
             task_slug="django-1",
             instance_key="default",
             description="d",

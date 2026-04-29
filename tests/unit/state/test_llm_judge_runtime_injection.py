@@ -1,7 +1,7 @@
 """Tests for LLM-judge criteria using provider-owned structured judge calls.
 
 Verifies:
-- EvaluationContext accepts an optional runtime field
+- CriterionContext accepts an optional runtime field
 - LLMJudgeCriterion.evaluate() does not rely on CriterionRuntime LLM policy
 - Legacy criteria that ignore context.runtime keep working
 """
@@ -10,20 +10,21 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, WorkerOutput
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.api.benchmark import Task
 
 
 def _make_eval_context(
     *,
     runtime: object = None,
-) -> EvaluationContext:
-    return EvaluationContext(
+) -> CriterionContext:
+    return CriterionContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=BenchmarkTask(
+        task=Task(
             task_slug="test",
             instance_key="default",
             description="What is quantum computing?",
@@ -35,7 +36,7 @@ def _make_eval_context(
     )
 
 
-class TestEvaluationContextRuntime:
+class TestCriterionContextRuntime:
     def test_runtime_defaults_to_none(self):
         ctx = _make_eval_context()
         assert ctx.runtime is None
@@ -99,8 +100,8 @@ class TestLegacyCriterionIgnoresRuntime:
         class _SimpleCriterion(Criterion):
             type_slug = "simple-test"
 
-            async def evaluate(self, context: EvaluationContext) -> CriterionResult:
-                return CriterionResult(
+            async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
+                return CriterionOutcome(
                     name=self.slug,
                     score=1.0,
                     passed=True,

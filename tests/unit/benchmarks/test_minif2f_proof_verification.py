@@ -13,16 +13,16 @@ from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
 from ergon_core.api import WorkerOutput
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-from ergon_core.core.runtime.evaluation.protocols import CommandResult
-from ergon_core.core.runtime.evaluation.criterion_runtime import (
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.benchmark import EmptyTaskPayload, Task
+from ergon_core.core.application.evaluation.protocols import CommandResult
+from ergon_core.core.application.evaluation.criterion_runtime import (
     ResourceNotFoundError,
 )
 
 
-def _make_task() -> BenchmarkTask:
-    return BenchmarkTask(
+def _make_task() -> Task:
+    return Task(
         task_slug="t1",
         instance_key="default",
         description="theorem t : True := by trivial",
@@ -45,7 +45,7 @@ async def test_reads_proof_via_runtime_read_resource() -> None:
     # `metadata`; if the production path were still reaching into metadata,
     # `_verify_proof` would short-circuit on "No criterion runtime" and
     # `read_resource` would never be awaited.
-    context = EvaluationContext(
+    context = CriterionContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
@@ -71,7 +71,7 @@ async def test_scores_zero_when_proof_missing() -> None:
     runtime = MagicMock()
     runtime.read_resource = AsyncMock(side_effect=ResourceNotFoundError("missing"))
 
-    context = EvaluationContext(
+    context = CriterionContext(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),

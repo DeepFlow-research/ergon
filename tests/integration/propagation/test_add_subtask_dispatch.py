@@ -10,17 +10,17 @@ from ergon_core.core.persistence.shared.types import (
     RunId,
     TaskSlug,
 )
-from ergon_core.core.runtime.events.task_events import TaskReadyEvent
-from ergon_core.core.runtime.services.task_management_dto import AddSubtaskCommand
-from ergon_core.core.runtime.services.task_management_service import TaskManagementService
+from ergon_core.core.application.events.task_events import TaskReadyEvent
+from ergon_core.core.application.tasks.models import AddSubtaskCommand
+from ergon_core.core.application.tasks.management import TaskManagementService
 
 from tests.integration.propagation._helpers import make_experiment_definition, make_node, make_run
 from tests.integration.restart._helpers import cleanup_run
 
 pytestmark = pytest.mark.integration
 
-_TMS_INNGEST = "ergon_core.core.runtime.services.task_management_service.inngest_client"
-_EMITTER_INNGEST = "ergon_core.core.dashboard.emitter.inngest_client"
+_TMS_INNGEST = "ergon_core.core.application.tasks.management.inngest_client"
+_EMITTER_INNGEST = "ergon_core.core.infrastructure.dashboard.emitter.inngest_client"
 
 
 @pytest.mark.asyncio

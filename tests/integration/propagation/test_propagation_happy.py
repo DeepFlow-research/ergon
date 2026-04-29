@@ -12,10 +12,10 @@ from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutat
 from ergon_core.core.persistence.shared.db import get_engine, get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.runtime.services.graph_dto import MutationMeta
-from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
-from ergon_core.core.runtime.services.orchestration_dto import PropagateTaskCompletionCommand
-from ergon_core.core.runtime.services.task_propagation_service import TaskPropagationService
+from ergon_core.core.application.graph.models import MutationMeta
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
+from ergon_core.core.application.workflows.service import WorkflowService
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlmodel import select
@@ -88,7 +88,7 @@ async def test_1_single_task_happy_path() -> None:
     """A single completed task node transitions to COMPLETED and WAL is written.
 
     This exercises the graph-native v2 propagation path through
-    TaskPropagationService.propagate(). Expected to pass with current code.
+    WorkflowService.propagate(). Expected to pass with current code.
     """
     with get_session() as session:
         defn = make_experiment_definition(session)
@@ -113,7 +113,7 @@ async def test_1_single_task_happy_path() -> None:
             session.commit()
 
         # Propagate completion directly through the service.
-        svc = TaskPropagationService()
+        svc = WorkflowService()
         await svc.propagate(
             PropagateTaskCompletionCommand(
                 run_id=run_id,

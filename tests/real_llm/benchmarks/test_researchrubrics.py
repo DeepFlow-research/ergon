@@ -36,7 +36,7 @@ from ergon_core.core.persistence.telemetry.models import (
     RunResource,
     RunTaskEvaluation,
 )
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.settings import settings
 from sqlmodel import select
 
 from tests.real_llm.openrouter_budget import OpenRouterBudget

@@ -68,6 +68,8 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
         benchmark_slug=ENV,
         slots=[(worker, criterion) for _, worker, criterion in smoke_slots],
         cohort_key=cohort_key,
+        sandbox_slug=ENV,
+        dependency_extras=("none",),
         timeout=PER_RUN_TIMEOUT,
     )
     assert len(run_ids) == len(smoke_slots)

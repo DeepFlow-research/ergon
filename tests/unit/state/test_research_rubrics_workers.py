@@ -25,9 +25,8 @@ from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
     _WORKFLOW_PROMPT,
     ResearchRubricsWorkflowCliReActWorker,
 )
-from ergon_core.core.generation import ContextPartChunk
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.api.worker_context import WorkerContext
+from ergon_core.api.benchmark import Task
+from ergon_core.api.worker import WorkerContext, WorkerStreamItem
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -45,8 +44,8 @@ def _make_context(*, with_node_id: bool = True) -> WorkerContext:
     )
 
 
-def _make_task() -> BenchmarkTask:
-    return BenchmarkTask(
+def _make_task() -> Task:
+    return Task(
         task_slug="test-task",
         instance_key="default",
         description="Test research question",
@@ -230,7 +229,7 @@ class TestResearcherWorker:
 # ---------------------------------------------------------------------------
 
 
-async def _empty_gen() -> AsyncGenerator[ContextPartChunk, None]:
+async def _empty_gen() -> AsyncGenerator[WorkerStreamItem, None]:
     return
     yield  # type: ignore[misc]  # makes this a generator
 

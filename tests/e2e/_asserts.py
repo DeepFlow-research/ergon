@@ -8,10 +8,8 @@ pass every check independently.  Cohort-level helpers (e.g.
 See docs/superpowers/plans/test-refactor/02-drivers-and-asserts.md §2
 and §10 for the full catalogue.
 
-Schema paths are best-effort sketches against the current
-``ergon_core.core.persistence.*`` models; if a table name moves, fix
-the import + query inline rather than pushing complexity into this
-module.
+Persistence-specific reads live behind ``ergon_core.test_support`` so
+these e2e assertions stay stable while private core modules move.
 """
 
 from __future__ import annotations
@@ -21,33 +19,34 @@ import asyncio
 import json
 import os
 import time
-from pathlib import Path
 from uuid import UUID
 
 import httpx
-from ergon_core.core.api.schemas import RunTaskDto
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import BLOCKED, COMPLETED, FAILED
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import (
-    RunResource,
-    RunTaskEvaluation,
-    RunTaskExecution,
-    SandboxCommandWalEntry,
-    SandboxEvent,
+from ergon_core.core.application.read_models.models import RunTaskDto
+from ergon_core.test_support.e2e_read_helpers import (
+    ResourceSnapshot,
+    first_probe_resource,
+    leaf_execution_timings_by_slug,
+    list_named_resources,
+    list_root_execution_and_evaluations,
+    list_sandbox_command_wal,
+    list_sandbox_events,
+    read_resource_bytes,
 )
-from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
-from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from ergon_core.test_support.smoke_fixtures.smoke_base.recursive import (
+from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
+from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
+from tests.fixtures.smoke_components.smoke_base.recursive import (
     NESTED_LINE_SLUGS,
     RecursiveSmokeWorkerBase,
 )
-from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
-from sqlmodel import select
+from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBase
 
 from tests.e2e._read_contracts import require_run_snapshot
 
 TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
+BLOCKED = "blocked"
+COMPLETED = "completed"
+FAILED = "failed"
 
 
 # =============================================================================
@@ -160,25 +159,10 @@ def _assert_run_evaluation(run_id: UUID) -> None:
     execution completed.
     """
     deadline = time.monotonic() + 30
-    evaluations: list[RunTaskEvaluation] = []
-    root_execution: RunTaskExecution | None = None
+    evaluations = []
+    root_execution = None
     while time.monotonic() < deadline:
-        with get_session() as s:
-            root = s.exec(
-                select(RunGraphNode)
-                .where(RunGraphNode.run_id == run_id)
-                .where(RunGraphNode.level == 0),
-            ).one()
-            root_execution = s.exec(
-                select(RunTaskExecution).where(RunTaskExecution.node_id == root.id),
-            ).first()
-            evaluations = list(
-                s.exec(
-                    select(RunTaskEvaluation)
-                    .where(RunTaskEvaluation.run_id == run_id)
-                    .where(RunTaskEvaluation.node_id == root.id),
-                ).all(),
-            )
+        root_execution, evaluations = list_root_execution_and_evaluations(run_id)
         if len(evaluations) == 2:
             break
         time.sleep(2)
@@ -217,12 +201,7 @@ def _assert_run_evaluation(run_id: UUID) -> None:
 
 def _assert_sandbox_command_wal(run_id: UUID) -> None:
     """Bash commands land as WAL rows via ``PostgresSandboxEventSink``."""
-    with get_session() as s:
-        entries = list(
-            s.exec(
-                select(SandboxCommandWalEntry).where(SandboxCommandWalEntry.run_id == run_id),
-            ).all(),
-        )
+    entries = list_sandbox_command_wal(run_id)
     probes = [e for e in entries if "wc" in e.command or "probe" in e.command]
     # Canonical sad-path smokes block l_3 before it starts, so the eight
     # executed leaves should emit probe commands while l_3 emits none.
@@ -232,10 +211,9 @@ def _assert_sandbox_command_wal(run_id: UUID) -> None:
 def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
     """``sandbox_created`` + ``sandbox_closed`` symmetric per sandbox."""
     deadline = time.monotonic() + 30
-    events: list[SandboxEvent] = []
+    events = []
     while time.monotonic() < deadline:
-        with get_session() as s:
-            events = list(s.exec(select(SandboxEvent).where(SandboxEvent.run_id == run_id)).all())
+        events = list_sandbox_events(run_id)
         created = {e.sandbox_id for e in events if e.kind == "sandbox_created"}
         closed = {e.sandbox_id for e in events if e.kind == "sandbox_closed"}
         if created == closed:
@@ -276,23 +254,11 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
     legacy ``kind='output'`` rows store container-internal download paths
     that are not directly accessible from the host-side test process.
     """
-    with get_session() as s:
-        row = s.exec(
-            select(RunResource)
-            .where(RunResource.run_id == run_id)
-            .where(
-                RunResource.name.like("probe_%.json"),  # ty: ignore[unresolved-attribute]
-            )
-            .where(RunResource.kind == "report")
-            .order_by(
-                RunResource.created_at,  # ty: ignore[unresolved-attribute]
-            )
-            .limit(1),
-        ).first()
+    row = first_probe_resource(run_id)
     assert row is not None, "no probe_*.json (kind=report) to round-trip"
     assert row.content_hash
-    bytes_a = Path(row.file_path).read_bytes()
-    bytes_b = Path(row.file_path).read_bytes()
+    bytes_a = read_resource_bytes(row)
+    bytes_b = read_resource_bytes(row)
     assert bytes_a == bytes_b, "blob read non-deterministic"
     parsed = json.loads(bytes_a)
     assert "exit_code" in parsed, f"probe JSON missing exit_code: {parsed!r}"
@@ -302,7 +268,7 @@ def _assert_minif2f_artifacts(run_id: UUID) -> None:
     """Every MiniF2F leaf persists a Lean proof artifact with the smoke theorem."""
     resources = _require_named_resources(run_id, prefix="proof_", suffix=".lean", expected_count=10)
     for resource in resources:
-        text = Path(resource.file_path).read_bytes().decode("utf-8")
+        text = read_resource_bytes(resource).decode("utf-8")
         assert "theorem smoke_trivial" in text, f"{resource.name} missing theorem marker"
         assert ":=" in text, f"{resource.name} missing Lean proof term"
 
@@ -311,7 +277,7 @@ def _assert_swebench_artifacts(run_id: UUID) -> None:
     """Every SWE-Bench leaf persists a parseable Python patch with add()."""
     resources = _require_named_resources(run_id, prefix="patch_", suffix=".py", expected_count=10)
     for resource in resources:
-        source = Path(resource.file_path).read_bytes().decode("utf-8")
+        source = read_resource_bytes(resource).decode("utf-8")
         module = ast.parse(source, filename=resource.name)
         function_names = {
             node.name for node in ast.walk(module) if isinstance(node, ast.FunctionDef)
@@ -325,17 +291,8 @@ def _require_named_resources(
     prefix: str,
     suffix: str,
     expected_count: int,
-) -> list[RunResource]:
-    with get_session() as s:
-        resources = list(
-            s.exec(
-                select(RunResource)
-                .where(RunResource.run_id == run_id)
-                .where(
-                    RunResource.name.like(f"{prefix}%{suffix}"),  # ty: ignore[unresolved-attribute]
-                ),
-            ).all(),
-        )
+) -> list[ResourceSnapshot]:
+    resources = list_named_resources(run_id, prefix=prefix, suffix=suffix)
     assert len(resources) == expected_count, (
         f"expected {expected_count} {prefix}*{suffix} resources, got {len(resources)}"
     )
@@ -352,25 +309,7 @@ def _assert_temporal_ordering(run_id: UUID) -> None:
     at least ``started`` state. Blocked descendants are skipped because
     they should never have execution timestamps.
     """
-    with get_session() as s:
-        leaves = list(
-            s.exec(
-                select(RunGraphNode)
-                .where(RunGraphNode.run_id == run_id)
-                .where(RunGraphNode.level > 0),
-            ).all(),
-        )
-        executions = list(
-            s.exec(
-                select(RunTaskExecution)
-                .where(RunTaskExecution.run_id == run_id)
-                .where(
-                    RunTaskExecution.node_id.in_([leaf.id for leaf in leaves]),  # ty: ignore[unresolved-attribute]
-                ),
-            ).all(),
-        )
-    by_node = {e.node_id: e for e in executions if e.node_id is not None}
-    slug_exec = {leaf.task_slug: by_node.get(leaf.id) for leaf in leaves}
+    slug_exec = leaf_execution_timings_by_slug(run_id)
 
     def _after(child: str, parents: list[str]) -> None:
         c_exec = slug_exec.get(child)
@@ -445,18 +384,9 @@ def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
     """``AlwaysFailSubworker`` writes ``partial_<node>.md`` before raising.
     The runtime's persist step must still serialize it as a RunResource."""
     deadline = time.monotonic() + 30
-    partials: list[RunResource] = []
+    partials: list[ResourceSnapshot] = []
     while time.monotonic() < deadline:
-        with get_session() as s:
-            partials = list(
-                s.exec(
-                    select(RunResource)
-                    .where(RunResource.run_id == run_id)
-                    .where(
-                        RunResource.name.like("partial_%.md"),  # ty: ignore[unresolved-attribute]
-                    ),
-                ).all(),
-            )
+        partials = list_named_resources(run_id, prefix="partial_", suffix=".md")
         if partials:
             break
         time.sleep(2)
@@ -466,21 +396,16 @@ def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
     )
     r = partials[0]
     assert r.content_hash, "partial resource missing content_hash"
-    body = Path(r.file_path).read_bytes().decode("utf-8")
+    body = read_resource_bytes(r).decode("utf-8")
     assert body.startswith("# Partial work"), f"partial artifact body unexpected: {body[:80]!r}"
 
 
 def _assert_sadpath_partial_wal(run_id: UUID) -> None:
     """Pre-failure ``wc -l partial_*`` command persists as WAL row."""
     deadline = time.monotonic() + 30
-    wc: list[SandboxCommandWalEntry] = []
+    wc = []
     while time.monotonic() < deadline:
-        with get_session() as s:
-            entries = list(
-                s.exec(
-                    select(SandboxCommandWalEntry).where(SandboxCommandWalEntry.run_id == run_id),
-                ).all(),
-            )
+        entries = list_sandbox_command_wal(run_id)
         wc = [e for e in entries if "wc -l" in e.command and "partial_" in e.command]
         if wc:
             break

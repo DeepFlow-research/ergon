@@ -10,18 +10,18 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.runtime.evaluation.protocols import CriterionRuntime
-from ergon_core.core.runtime.resources import RunResourceView
-from ergon_core.core.sandbox.event_sink import (
+from ergon_core.core.application.evaluation.protocols import CriterionRuntime
+from ergon_core.core.application.resources import RunResourceView
+from ergon_core.core.infrastructure.sandbox.event_sink import (
     DashboardEmitterSandboxEventSink,
     NoopSandboxEventSink,
 )
-from ergon_core.core.runtime.evaluation.criterion_runtime import (
+from ergon_core.core.application.evaluation.criterion_runtime import (
     CriterionRuntimeOptions,
     DefaultCriterionRuntime,
     ResourceNotFoundError,
 )
-from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
+from ergon_core.core.application.evaluation.models import CriterionContext
 from sqlmodel import Session
 
 
@@ -73,7 +73,7 @@ class TestReadResource:
         mock_session.exec.return_value.first.return_value = row
 
         with patch(
-            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            "ergon_core.core.application.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
             result = await runtime.read_resource("patch")
@@ -91,7 +91,7 @@ class TestReadResource:
         mock_session.exec.return_value.first.return_value = None
 
         with patch(
-            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            "ergon_core.core.application.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
             with pytest.raises(ResourceNotFoundError, match="no_such_resource"):
@@ -118,7 +118,7 @@ class TestReadResource:
         mock_session.get.return_value = row
 
         with patch(
-            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            "ergon_core.core.application.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
             result = await runtime.read_resource_by_id(resource_id)
@@ -143,7 +143,7 @@ class TestReadResource:
         mock_session.get.return_value = row
 
         with patch(
-            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            "ergon_core.core.application.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
             with pytest.raises(ResourceNotFoundError, match="No run_resource"):
@@ -164,7 +164,7 @@ class TestListResources:
 
         with (
             patch(
-                "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+                "ergon_core.core.application.evaluation.criterion_runtime.get_session",
                 return_value=mock_session,
             ),
             patch.object(RunResourceView, "from_row", return_value=MagicMock()) as mock_from_row,
@@ -185,7 +185,7 @@ class TestListResources:
         mock_session.exec.return_value.all.return_value = []
 
         with patch(
-            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            "ergon_core.core.application.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
             result = await runtime.list_resources()
@@ -206,7 +206,7 @@ class TestListResources:
 
         with (
             patch(
-                "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+                "ergon_core.core.application.evaluation.criterion_runtime.get_session",
                 return_value=mock_session,
             ),
             patch.object(RunResourceView, "from_row", return_value=MagicMock()) as mock_from_row,
@@ -229,7 +229,7 @@ class TestListResources:
         mock_session.exec.return_value.all.return_value = []
 
         with patch(
-            "ergon_core.core.runtime.evaluation.criterion_runtime.get_session",
+            "ergon_core.core.application.evaluation.criterion_runtime.get_session",
             return_value=mock_session,
         ):
             result = await runtime.list_resources(task_execution_id=related_execution_id)
@@ -242,7 +242,7 @@ class TestDbReadSession:
     def test_returns_session(self) -> None:
         """db_read_session returns the session from get_session()."""
         runtime = _make_runtime()
-        with patch("ergon_core.core.runtime.evaluation.criterion_runtime.get_session") as mock_get:
+        with patch("ergon_core.core.application.evaluation.criterion_runtime.get_session") as mock_get:
             mock_get.return_value = MagicMock(spec=Session)
             sess = runtime.db_read_session()
         assert sess is mock_get.return_value

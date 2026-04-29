@@ -48,7 +48,7 @@ async def test_harness_canary_smoke_stub(
     env = {
         **os.environ,
         "ENABLE_TEST_HARNESS": "1",
-        "ERGON_STARTUP_PLUGINS": "ergon_core.test_support.smoke_fixtures:register_smoke_fixtures",
+        "ERGON_STARTUP_PLUGINS": "ergon_builtins.registry:register_builtins,tests.fixtures.smoke_components:register_smoke_fixtures",
         "ERGON_DATABASE_URL": os.environ.get(
             "ERGON_DATABASE_URL",
             "postgresql://ergon:ergon_dev@127.0.0.1:5433/ergon",

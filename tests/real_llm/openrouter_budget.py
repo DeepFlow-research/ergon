@@ -9,7 +9,7 @@ Usage:
 """
 
 import httpx
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.settings import settings
 
 
 class OpenRouterBudget:

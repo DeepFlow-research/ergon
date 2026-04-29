@@ -11,10 +11,10 @@ from ergon_core.core.persistence.graph.status_conventions import BLOCKED, CANCEL
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.runtime.services.graph_dto import MutationMeta
-from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
-from ergon_core.core.runtime.services.orchestration_dto import PropagateTaskCompletionCommand
-from ergon_core.core.runtime.services.task_propagation_service import TaskPropagationService
+from ergon_core.core.application.graph.models import MutationMeta
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
+from ergon_core.core.application.workflows.service import WorkflowService
 from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
@@ -109,7 +109,7 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
             )
             session.commit()
 
-        svc = TaskPropagationService()
+        svc = WorkflowService()
 
         # Propagate A's failure first
         await svc.propagate_failure(
@@ -194,7 +194,7 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
             )
             session.commit()
 
-        svc = TaskPropagationService()
+        svc = WorkflowService()
 
         command = PropagateTaskCompletionCommand(
             run_id=run_id,

@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from ergon_cli.commands.workflow import WorkflowCommandContext, execute_workflow_command
-from ergon_core.core.runtime.services.task_management_dto import AddSubtaskResult
-from ergon_core.core.runtime.services.workflow_dto import WorkflowResourceRef
+from ergon_core.core.application.tasks.models import AddSubtaskResult
+from ergon_core.core.application.workflows.models import WorkflowResourceRef
 
 
 class _Session:

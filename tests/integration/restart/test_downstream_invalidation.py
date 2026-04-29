@@ -20,8 +20,8 @@ from ergon_core.core.persistence.graph.status_conventions import (
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.runtime.services.task_management_dto import RestartTaskCommand
-from ergon_core.core.runtime.services.task_management_service import TaskManagementService
+from ergon_core.core.application.tasks.models import RestartTaskCommand
+from ergon_core.core.application.tasks.management import TaskManagementService
 from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
@@ -35,8 +35,8 @@ from tests.integration.restart._helpers import cleanup_run, get_edge_status
 
 pytestmark = pytest.mark.integration
 
-_TMS_INNGEST = "ergon_core.core.runtime.services.task_management_service.inngest_client"
-_EMITTER_INNGEST = "ergon_core.core.dashboard.emitter.inngest_client"
+_TMS_INNGEST = "ergon_core.core.application.tasks.management.inngest_client"
+_EMITTER_INNGEST = "ergon_core.core.infrastructure.dashboard.emitter.inngest_client"
 
 
 @pytest.mark.asyncio

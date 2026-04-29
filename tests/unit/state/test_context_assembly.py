@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import PydanticAITranscriptAdapter
-from ergon_core.core.generation import (
+from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunkLog,
     SystemPromptPart,

@@ -5,12 +5,12 @@ from uuid import uuid4
 import pytest
 from ergon_cli.commands import experiment as experiment_cmd
 from ergon_cli.main import build_parser
-from ergon_core.core.runtime.services.experiment_read_service import (
+from ergon_core.core.application.read_models.experiments import (
     ExperimentDetailDto,
     ExperimentRunRowDto,
     ExperimentSummaryDto,
 )
-from ergon_core.core.runtime.services.experiment_schemas import (
+from ergon_core.core.application.experiments.models import (
     ExperimentDefineResult,
     ExperimentRunResult,
 )
@@ -45,6 +45,12 @@ def test_experiment_subcommands_are_registered_in_main_parser() -> None:
             "test-worker",
             "--model",
             "stub:constant",
+            "--evaluator",
+            "test-rubric",
+            "--sandbox",
+            "test-sandbox",
+            "--extras",
+            "test-extra",
         ]
     )
     run_args = parser.parse_args(["experiment", "run", str(uuid4())])
@@ -58,11 +64,104 @@ def test_experiment_subcommands_are_registered_in_main_parser() -> None:
     assert list_args.limit == 3
 
 
-def test_benchmark_run_is_not_registered_as_launch_command() -> None:
+@pytest.mark.parametrize("missing_flag", ["--worker", "--model", "--evaluator", "--sandbox", "--extras"])
+def test_experiment_define_requires_explicit_runtime_choices(missing_flag: str) -> None:
     parser = build_parser()
+    argv = [
+        "experiment",
+        "define",
+        "ci-benchmark",
+        "--limit",
+        "1",
+        "--worker",
+        "test-worker",
+        "--model",
+        "stub:constant",
+        "--evaluator",
+        "test-rubric",
+        "--sandbox",
+        "test-sandbox",
+        "--extras",
+        "test-extra",
+    ]
+    flag_index = argv.index(missing_flag)
+    del argv[flag_index : flag_index + 2]
 
     with pytest.raises(SystemExit):
-        parser.parse_args(["benchmark", "run", "ci-benchmark"])
+        parser.parse_args(argv)
+
+
+def test_experiment_define_validates_explicit_registry_choices(monkeypatch) -> None:
+    class BenchmarkWithNoExtras:
+        onboarding_deps = type(
+            "Deps",
+            (),
+            {"extras": (), "optional_keys": (), "e2b": False},
+        )()
+
+    monkeypatch.setattr(
+        experiment_cmd,
+        "_load_registry",
+        lambda: (
+            {"ci-benchmark": BenchmarkWithNoExtras},
+            {"test-worker": object()},
+            {"test-rubric": object()},
+            {"test-sandbox": object()},
+            {"openai": object()},
+        ),
+    )
+
+    valid_args = Namespace(
+        benchmark_slug="ci-benchmark",
+        worker="test-worker",
+        evaluator="test-rubric",
+        sandbox="test-sandbox",
+        model="openai:gpt-4o",
+        extras=["none"],
+    )
+    assert experiment_cmd.validate_explicit_runtime_choices(valid_args) == ("none",)
+
+    invalid_args = Namespace(
+        benchmark_slug="ci-benchmark",
+        worker="missing-worker",
+        evaluator="test-rubric",
+        sandbox="test-sandbox",
+        model="openai:gpt-4o",
+        extras=["none"],
+    )
+    with pytest.raises(ValueError, match="Unknown worker slug"):
+        experiment_cmd.validate_explicit_runtime_choices(invalid_args)
+
+
+def test_benchmark_run_is_registered_as_experiment_wrapper() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "benchmark",
+            "run",
+            "ci-benchmark",
+            "--limit",
+            "1",
+            "--worker",
+            "test-worker",
+            "--model",
+            "stub:constant",
+            "--evaluator",
+            "test-rubric",
+            "--sandbox",
+            "test-sandbox",
+            "--extras",
+            "test-extra",
+        ]
+    )
+
+    assert args.bench_action == "run"
+    assert args.slug == "ci-benchmark"
+    assert args.worker == "test-worker"
+    assert args.evaluator == "test-rubric"
+    assert args.sandbox == "test-sandbox"
+    assert args.extras == ["test-extra"]
 
 
 def test_experiment_list_logs_rows_without_printing(monkeypatch, caplog, capsys):
@@ -122,9 +221,12 @@ async def test_experiment_define_and_run_log_machine_ids_without_printing(
 ):
     experiment_id = uuid4()
     run_id = uuid4()
+    captured_request = None
 
-    class FakeDefinitionService:
+    class FakeExperimentService:
         def define_benchmark_experiment(self, request):
+            nonlocal captured_request
+            captured_request = request
             return ExperimentDefineResult(
                 experiment_id=experiment_id,
                 cohort_id=None,
@@ -133,7 +235,6 @@ async def test_experiment_define_and_run_log_machine_ids_without_printing(
                 selected_samples=["sample-a"],
             )
 
-    class FakeLaunchService:
         async def run_experiment(self, request):
             return ExperimentRunResult(
                 experiment_id=request.experiment_id,
@@ -142,8 +243,30 @@ async def test_experiment_define_and_run_log_machine_ids_without_printing(
             )
 
     monkeypatch.setattr(experiment_cmd, "ensure_db", lambda: None)
-    monkeypatch.setattr(experiment_cmd, "ExperimentDefinitionService", FakeDefinitionService)
-    monkeypatch.setattr(experiment_cmd, "ExperimentLaunchService", FakeLaunchService)
+    monkeypatch.setattr(experiment_cmd, "ExperimentService", FakeExperimentService)
+    monkeypatch.setattr(
+        experiment_cmd,
+        "_load_registry",
+        lambda: (
+            {
+                "ci-benchmark": type(
+                    "BenchmarkWithTestExtra",
+                    (),
+                    {
+                        "onboarding_deps": type(
+                            "Deps",
+                            (),
+                            {"extras": ("test-extra",), "optional_keys": (), "e2b": False},
+                        )()
+                    },
+                )
+            },
+            {"test-worker": object()},
+            {"test-rubric": object()},
+            {"test-sandbox": object()},
+            {"openai": object()},
+        ),
+    )
     caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
 
     define_rc = experiment_cmd.handle_experiment_define(
@@ -155,13 +278,18 @@ async def test_experiment_define_and_run_log_machine_ids_without_printing(
             name=None,
             model="openai:gpt-4o",
             worker="test-worker",
-            evaluator=None,
+            evaluator="test-rubric",
+            sandbox="test-sandbox",
+            extras=["test-extra"],
             workflow="single",
             max_questions=10,
         )
     )
 
     assert define_rc == 0
+    assert captured_request is not None
+    assert captured_request.sandbox_slug == "test-sandbox"
+    assert captured_request.dependency_extras == ("test-extra",)
 
     run_rc = await experiment_cmd.handle_experiment_run(
         Namespace(experiment_id=str(experiment_id), timeout=60, no_wait=False)

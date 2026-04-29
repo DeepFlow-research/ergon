@@ -20,14 +20,14 @@ from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
 )
 from ergon_builtins.benchmarks.minif2f.sandbox.utils import REGISTRY_PATH
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import WorkerOutput
-from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-from ergon_core.core.sandbox.manager import BaseSandboxManager
-from ergon_core.core.runtime.evaluation.criterion_runtime import (
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.api.benchmark import EmptyTaskPayload, Task
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
+from ergon_core.core.application.evaluation.criterion_runtime import (
     DefaultCriterionRuntime,
 )
-from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
+from ergon_core.core.application.evaluation.models import CriterionContext
 
 
 def _require_setup() -> None:
@@ -55,8 +55,8 @@ def _reset_sandbox_singleton():
     BaseSandboxManager._sandboxes = {}
 
 
-def _make_task() -> BenchmarkTask:
-    return BenchmarkTask(
+def _make_task() -> Task:
+    return Task(
         task_slug="mathd_algebra_176",
         instance_key="default",
         description=("theorem mathd_algebra_176 (x : ℝ) : (x + 1) ^ 2 * x = x ^ 3 + 2 * x ^ 2 + x"),
@@ -101,7 +101,7 @@ async def test_fixture_proof_verifies_to_score_1() -> None:
             output="",
             success=True,
         )
-        eval_ctx = EvaluationContext(
+        eval_ctx = CriterionContext(
             run_id=run_id,
             task_id=uuid4(),
             execution_id=uuid4(),

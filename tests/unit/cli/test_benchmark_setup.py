@@ -8,7 +8,7 @@ import e2b
 import ergon_cli.commands.benchmark as _bench_mod
 import pytest
 from ergon_cli.commands.benchmark import setup_benchmark
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.settings import settings
 
 
 def _make_args(slug: str = "minif2f", *, force: bool = False):
@@ -146,6 +146,28 @@ def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert data["minif2f"]["template_name"] == "ergon-minif2f-v1"
     assert data["minif2f"]["build_id"] == "build_test"
     assert "built_at" in data["minif2f"]
+
+
+def test_success_hint_uses_explicit_runtime_choices(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("E2B_API_KEY", "test-key")
+    monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(settings, "e2b_api_key", "test-key")
+    _patch_sdk(monkeypatch)
+
+    rc = setup_benchmark(_make_args())
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ergon benchmark run minif2f" in out
+    assert "--worker" in out
+    assert "--model" in out
+    assert "--evaluator" in out
+    assert "--sandbox" in out
+    assert "--extras" in out
 
 
 def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

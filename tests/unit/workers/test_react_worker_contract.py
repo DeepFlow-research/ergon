@@ -5,9 +5,10 @@ from uuid import UUID
 
 import ergon_builtins.workers.baselines.react_worker as react_worker_module
 import pytest
-from ergon_builtins.workers.baselines.react_worker import ReActWorker
-from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-from ergon_core.api.worker_context import WorkerContext
+from ergon_builtins.workers.baselines.react_worker import ReActWorker, _worker_output_from_chunks
+from ergon_core.api.benchmark import EmptyTaskPayload, Task
+from ergon_core.api.worker import WorkerContext, WorkerOutput
+from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk, ToolCallPart
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 
@@ -62,6 +63,23 @@ def test_pydantic_ai_transcript_adapter_lives_outside_worker() -> None:
     assert "_extract_request_parts" not in module_symbols
     assert "_extract_response_parts" not in module_symbols
     assert "_extract_tool_results" not in module_symbols
+
+
+def test_worker_output_prefers_structured_final_result_over_prior_assistant_text() -> None:
+    output = _worker_output_from_chunks(
+        [
+            ContextPartChunk(part=AssistantTextPart(content="intermediate answer")),
+            ContextPartChunk(
+                part=ToolCallPart(
+                    tool_name="final_result",
+                    tool_call_id="final-1",
+                    args={"final_assistant_message": "structured final answer"},
+                )
+            ),
+        ]
+    )
+
+    assert output == WorkerOutput(output="structured final answer", success=True)
 
 
 class _FakeRunState:
@@ -147,8 +165,8 @@ class _DepsWorker(ReActWorker):
         return {"execution_id": str(context.execution_id)}
 
 
-def _minimal_task() -> BenchmarkTask:
-    return BenchmarkTask(
+def _minimal_task() -> Task:
+    return Task(
         task_slug="unit-task",
         instance_key="unit-instance",
         description="Unit task",
@@ -226,8 +244,10 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
         max_iterations=10,
     )
 
-    chunks = [chunk async for chunk in worker.execute(_minimal_task(), context=_minimal_context())]
+    items = [item async for item in worker.execute(_minimal_task(), context=_minimal_context())]
 
+    chunks = items[:-1]
     assert [chunk.part.part_kind for chunk in chunks] == ["user_message", "assistant_text"]
+    assert items[-1] == WorkerOutput(output="partial answer", success=True)
     assert _DepsAgent.init_kwargs["deps_type"] is dict
     assert _DepsAgent.iter_kwargs["deps"] == {"execution_id": str(UUID(int=5))}

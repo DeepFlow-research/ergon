@@ -2,25 +2,23 @@
 
 import pytest
 from ergon_builtins.registry_core import BENCHMARKS as CORE_BENCHMARKS
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark_deps import BenchmarkDeps
-from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, Task
 from pydantic import BaseModel, ValidationError
 
 
-def _require_onboarding_deps(slug: str, cls: type[Benchmark]) -> BenchmarkDeps:
+def _require_onboarding_deps(slug: str, cls: type[Benchmark]) -> BenchmarkRequirements:
     try:
         deps = cls.onboarding_deps
     except AttributeError as exc:
         pytest.fail(
             f"Benchmark '{slug}' ({cls.__qualname__}) is missing 'onboarding_deps'. "
-            "Add 'onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(...)' "
+            "Add 'onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(...)' "
             "to the class body.",
         )
         raise AssertionError from exc
-    assert isinstance(deps, BenchmarkDeps), (
+    assert isinstance(deps, BenchmarkRequirements), (
         f"Benchmark '{slug}' ({cls.__qualname__}).onboarding_deps is not a "
-        f"BenchmarkDeps instance; got {type(deps)!r}."
+        f"BenchmarkRequirements instance; got {type(deps)!r}."
     )
     return deps
 
@@ -59,7 +57,7 @@ class TestBenchmarkOnboardingDepsContract:
             )
 
     def test_onboarding_deps_is_frozen(self) -> None:
-        """BenchmarkDeps instances must be immutable (frozen=True via attribute access)."""
+        """BenchmarkRequirements instances must be immutable (frozen=True via attribute access)."""
         for slug, cls in CORE_BENCHMARKS.items():
             deps = cls.onboarding_deps
             with pytest.raises(ValidationError):
@@ -77,17 +75,17 @@ class TestBenchmarkSubclassEnforcement:
         class LocalBenchmark(Benchmark):
             type_slug = "local-test"
 
-            def build_instances(self) -> dict[str, list[BenchmarkTask[BaseModel]]]:
+            def build_instances(self) -> dict[str, list[Task[BaseModel]]]:
                 return {}
 
         assert LocalBenchmark.type_slug == "local-test"
         assert LocalBenchmark.task_payload_model is EmptyTaskPayload
 
 
-class TestBenchmarkTaskPayloadContract:
+class TestTaskPayloadContract:
     def test_task_payload_is_a_pydantic_model(self) -> None:
         payload = EmptyTaskPayload()
-        task = BenchmarkTask(
+        task = Task(
             task_slug="task",
             instance_key="default",
             description="desc",
@@ -98,7 +96,7 @@ class TestBenchmarkTaskPayloadContract:
 
     def test_plain_dict_payload_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            BenchmarkTask(
+            Task(
                 task_slug="task",
                 instance_key="default",
                 description="desc",

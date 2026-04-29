@@ -3,13 +3,13 @@
 from uuid import uuid4
 
 import pytest
-from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.runtime.events.task_events import (
+from ergon_core.api.worker import WorkerContext
+from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,
 )
-from ergon_core.core.runtime.services.orchestration_dto import (
+from ergon_core.core.application.workflows.orchestration import (
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
     PropagateTaskCompletionCommand,
