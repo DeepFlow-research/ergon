@@ -46,7 +46,6 @@ class Worker(ABC):
     ) -> AsyncGenerator[WorkerStreamItem, None]:
         """Run the worker, yielding context chunks and a terminal WorkerOutput."""
         raise NotImplementedError
-        yield cast(WorkerStreamItem, None)
 
     @classmethod
     def from_buffer(
