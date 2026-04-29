@@ -8,11 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from huggingface_hub import HfApi
-
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark_deps import BenchmarkDeps
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, Task
 
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
@@ -23,15 +19,16 @@ from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
 class ResearchRubricsBenchmark(Benchmark):
     """Benchmark backed by the ResearchRubrics HuggingFace dataset.
 
-    ``build_instances`` loads samples from the (ablated) HuggingFace dataset
-    and returns one task per sample.  Each task's ``task_payload`` carries the
-    full ``ResearchRubricsTaskPayload`` so the rubric and worker can
-    reconstruct criteria and prompts.
+    ``build_instances`` loads official ScaleAI ResearchRubrics samples and
+    returns one task per sample. Each task's ``task_payload`` carries the full
+    ``ResearchRubricsTaskPayload`` so the rubric and worker can reconstruct
+    criteria and prompts.
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
+    dataset_name: ClassVar[str] = "ScaleAI/researchrubrics"
     task_payload_model: ClassVar[type[ResearchRubricsTaskPayload]] = ResearchRubricsTaskPayload
-    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
+    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(
         extras=("ergon-builtins[data]",),
         optional_keys=("EXA_API_KEY",),
     )
@@ -41,7 +38,6 @@ class ResearchRubricsBenchmark(Benchmark):
     def __init__(
         self,
         *,
-        dataset_name: str | None = None,
         limit: int | None = None,
         name: str | None = None,
         description: str | None = None,
@@ -52,20 +48,19 @@ class ResearchRubricsBenchmark(Benchmark):
             description=description or "ResearchRubrics deep-research benchmark",
             metadata=metadata,
         )
-        self.dataset_name = dataset_name
         self.limit = limit
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[ResearchRubricsTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[ResearchRubricsTaskPayload]]]:
         payloads = self._load_rows()
-        tasks: list[BenchmarkTask[ResearchRubricsTaskPayload]] = []
+        tasks: list[Task[ResearchRubricsTaskPayload]] = []
         for payload in payloads:
             tasks.append(
-                BenchmarkTask[ResearchRubricsTaskPayload](
+                Task[ResearchRubricsTaskPayload](
                     task_slug=payload.sample_id,
                     instance_key="default",
-                    description=payload.ablated_prompt,
+                    description=payload.prompt,
                     evaluator_binding_keys=("default",),
                     task_payload=payload,
                 )
@@ -82,19 +77,11 @@ class ResearchRubricsBenchmark(Benchmark):
 
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
-        dataset_name = self.dataset_name
         # reason: avoids circular import at module level
-        from ergon_core.core.settings import settings
+        from ergon_core.core.shared.settings import settings
 
         token = settings.hf_api_key
-        if dataset_name is None:
-            if token is None:
-                raise RuntimeError("HF_API_KEY must be set when dataset_name is not provided")
-            api = HfApi(token=token)
-            user_info = api.whoami()
-            dataset_name = f"{user_info['name']}/researchrubrics-ablated"
-
-        ds = load_dataset(dataset_name, token=token)
+        ds = load_dataset(self.dataset_name, token=token)
         train_ds = ds["train"]
 
         if self.limit:
@@ -107,11 +94,10 @@ def _payload_from_row(
     row: Mapping[str, Any],  # slopcop: ignore[no-typing-any]
 ) -> ResearchRubricsTaskPayload:
     """Convert one raw HuggingFace row into the benchmark payload schema."""
-    ablated_prompt = row.get("ablated_prompt") or row["prompt"]
     return ResearchRubricsTaskPayload(
         sample_id=row["sample_id"],
         domain=str(row.get("domain", "")),
-        ablated_prompt=ablated_prompt,
+        prompt=row["prompt"],
         rubrics=[
             RubricCriterion(
                 criterion=r["criterion"],
@@ -120,6 +106,4 @@ def _payload_from_row(
             )
             for r in row["rubrics"]
         ],
-        removed_elements=row.get("removed_elements"),
-        ablation_type=row.get("ablation_type"),
     )

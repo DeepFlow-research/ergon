@@ -18,10 +18,8 @@ Worker subclasses are responsible for wiring the callables from
 from collections.abc import Awaitable, Callable
 from typing import cast
 
-try:
-    from pydantic_ai.tools import Tool
-except ImportError:  # pragma: no cover -- defensive
-    Tool = None  # type: ignore[misc,assignment]
+from pydantic_ai import RunContext
+from pydantic_ai.tools import Tool
 
 from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     DocumentResponse,
@@ -29,6 +27,10 @@ from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportReadResponse,
     ReportWriteResponse,
     SearchResponse,
+)
+from ergon_builtins.workers.baselines.tool_budget import (
+    AgentToolBudgetDeps,
+    AgentToolBudgetExhaustedResult,
 )
 from ergon_builtins.workers.research_rubrics._run_skill import (
     ExaGetContentSkillRequest,
@@ -83,53 +85,60 @@ class ResearchRubricsToolkit:
 
     def _exa_search(self) -> "Tool":
         async def exa_search(
+            ctx: "RunContext[AgentToolBudgetDeps]",
             query: str,
             num_results: int = 5,
-        ) -> SearchResponse:
+        ) -> SearchResponse | AgentToolBudgetExhaustedResult:
             """Search the web via Exa.
 
             Returns up to ``num_results`` hits with text excerpts (up to
             ~25 000 chars each).  An empty ``results`` list is legitimate
             and distinct from a transport failure.
             """
-            return cast(
-                SearchResponse,
-                await self._run_skill(
-                    ExaSearchSkillRequest(query=query, num_results=num_results),
-                ),
+            tool_budget = ctx.deps.tool_budget
+            if tool_budget.increment("exa_search", "other") > tool_budget.max_other_tool_calls:
+                return tool_budget.exhausted_result("non-workflow tool budget reached")
+            resp = cast(
+                SearchResponse | AgentToolBudgetExhaustedResult,
+                await self._run_skill(ExaSearchSkillRequest(query=query, num_results=num_results)),
             )
+            return cast(SearchResponse, resp)
 
-        return Tool(function=exa_search, takes_ctx=False)
+        return Tool(function=exa_search, takes_ctx=True)
 
     def _exa_qa(self) -> "Tool":
-        async def exa_qa(question: str) -> QAResponse:
+        async def exa_qa(
+            ctx: "RunContext[AgentToolBudgetDeps]",
+            question: str,
+        ) -> QAResponse | AgentToolBudgetExhaustedResult:
             """Ask Exa a direct question and get a synthesised answer with
             source citations.
             """
-            return cast(
-                QAResponse,
-                await self._run_skill(
-                    ExaQASkillRequest(question=question),
-                ),
-            )
+            tool_budget = ctx.deps.tool_budget
+            if tool_budget.increment("exa_qa", "other") > tool_budget.max_other_tool_calls:
+                return tool_budget.exhausted_result("non-workflow tool budget reached")
+            resp = cast(QAResponse, await self._run_skill(ExaQASkillRequest(question=question)))
+            return resp
 
-        return Tool(function=exa_qa, takes_ctx=False)
+        return Tool(function=exa_qa, takes_ctx=True)
 
     def _exa_get_content(self) -> "Tool":
-        async def exa_get_content(url: str) -> DocumentResponse:
+        async def exa_get_content(
+            ctx: "RunContext[AgentToolBudgetDeps]",
+            url: str,
+        ) -> DocumentResponse | AgentToolBudgetExhaustedResult:
             """Fetch and extract readable text from a URL via Exa.
 
             Returns the full document text, word count, and publication
             date when available.
             """
-            return cast(
-                DocumentResponse,
-                await self._run_skill(
-                    ExaGetContentSkillRequest(url=url),
-                ),
-            )
+            tool_budget = ctx.deps.tool_budget
+            if tool_budget.increment("exa_get_content", "other") > tool_budget.max_other_tool_calls:
+                return tool_budget.exhausted_result("non-workflow tool budget reached")
+            resp = cast(DocumentResponse, await self._run_skill(ExaGetContentSkillRequest(url=url)))
+            return resp
 
-        return Tool(function=exa_get_content, takes_ctx=False)
+        return Tool(function=exa_get_content, takes_ctx=True)
 
     # ------------------------------------------------------------------
     # Report drafting tools
@@ -137,6 +146,7 @@ class ResearchRubricsToolkit:
 
     def _write_report_draft(self) -> "Tool":
         async def write_report_draft(
+            ctx: "RunContext[AgentToolBudgetDeps]",
             relative_path: str,
             content: str,
         ) -> ReportWriteResponse:
@@ -146,6 +156,7 @@ class ResearchRubricsToolkit:
             ``run_resources`` log so the manager can observe it via the
             graph toolkit.  Paths that escape ``/workspace/`` are rejected.
             """
+            ctx.deps.tool_budget.increment("write_report_draft", "finalization")
             resp = cast(
                 ReportWriteResponse,
                 await self._run_skill(
@@ -156,10 +167,11 @@ class ResearchRubricsToolkit:
                 await self._publisher_sync()
             return resp
 
-        return Tool(function=write_report_draft, takes_ctx=False)
+        return Tool(function=write_report_draft, takes_ctx=True)
 
     def _edit_report_draft(self) -> "Tool":
         async def edit_report_draft(
+            ctx: "RunContext[AgentToolBudgetDeps]",
             relative_path: str,
             patch: str,
         ) -> ReportWriteResponse:
@@ -170,6 +182,7 @@ class ResearchRubricsToolkit:
             the ``run_resources`` log.  Paths that escape ``/workspace/``
             are rejected.
             """
+            ctx.deps.tool_budget.increment("edit_report_draft", "finalization")
             resp = cast(
                 ReportWriteResponse,
                 await self._run_skill(
@@ -180,21 +193,27 @@ class ResearchRubricsToolkit:
                 await self._publisher_sync()
             return resp
 
-        return Tool(function=edit_report_draft, takes_ctx=False)
+        return Tool(function=edit_report_draft, takes_ctx=True)
 
     def _read_report_draft(self) -> "Tool":
         async def read_report_draft(
+            ctx: "RunContext[AgentToolBudgetDeps]",
             relative_path: str,
-        ) -> ReportReadResponse:
+        ) -> ReportReadResponse | AgentToolBudgetExhaustedResult:
             """Read a draft from ``/workspace/<relative_path>``.
 
             Read-only -- does not trigger a publish.
             """
-            return cast(
+            tool_budget = ctx.deps.tool_budget
+            if (
+                tool_budget.increment("read_report_draft", "other")
+                > tool_budget.max_other_tool_calls
+            ):
+                return tool_budget.exhausted_result("non-workflow tool budget reached")
+            resp = cast(
                 ReportReadResponse,
-                await self._run_skill(
-                    ReportReadSkillRequest(relative_path=relative_path),
-                ),
+                await self._run_skill(ReportReadSkillRequest(relative_path=relative_path)),
             )
+            return resp
 
-        return Tool(function=read_report_draft, takes_ctx=False)
+        return Tool(function=read_report_draft, takes_ctx=True)

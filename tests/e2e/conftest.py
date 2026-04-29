@@ -11,9 +11,7 @@ import subprocess
 from urllib.parse import urlparse
 
 import pytest
-from ergon_core.core.persistence.shared.db import get_engine
-from ergon_core.core.settings import settings
-from sqlmodel import Session
+from ergon_core.core.shared.settings import settings
 
 _UUID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -83,20 +81,13 @@ def _require_infra():
     pytest.fail("\n".join(lines))
 
 
-@pytest.fixture(scope="session")
-def db_session():
-    """Provide a raw SQLModel session for assertion queries."""
-    engine = get_engine()
-    session = Session(engine)
-    yield session
-    session.close()
-
-
 def run_benchmark(
     slug: str,
     *,
     worker: str,
     evaluator: str,
+    sandbox: str,
+    extras: str = "none",
     model: str = "stub:constant",
     limit: int = 1,
     cohort: str = "ci",
@@ -114,6 +105,10 @@ def run_benchmark(
         model,
         "--evaluator",
         evaluator,
+        "--sandbox",
+        sandbox,
+        "--extras",
+        extras,
         "--limit",
         str(limit),
         "--cohort",
@@ -152,30 +147,34 @@ def _parse_uuid_line(prefix: str, output: str) -> str:
 
 @pytest.fixture(scope="session")
 def benchmarked():
-    """Memoize `run_benchmark` calls by (slug, worker, evaluator, cohort).
+    """Memoize `run_benchmark` calls by explicit runtime configuration.
 
     The stubbed E2E tests each assert against the *latest* RunRecord; re-running
     the same benchmark per-test burned ~4× subprocess launches with identical
     outcomes. This fixture runs each unique config exactly once per session and
     returns the cached `CompletedProcess`.
     """
-    cache: dict[tuple[str, str, str, str], subprocess.CompletedProcess] = {}
+    cache: dict[tuple[str, str, str, str, str, str], subprocess.CompletedProcess] = {}
 
     def _run(
         slug: str,
         *,
         worker: str,
         evaluator: str,
+        sandbox: str,
+        extras: str = "none",
         limit: int = 1,
         cohort: str = "ci",
         timeout: int = 120,
     ) -> subprocess.CompletedProcess:
-        key = (slug, worker, evaluator, cohort)
+        key = (slug, worker, evaluator, sandbox, extras, cohort)
         if key not in cache:
             cache[key] = run_benchmark(
                 slug,
                 worker=worker,
                 evaluator=evaluator,
+                sandbox=sandbox,
+                extras=extras,
                 limit=limit,
                 cohort=cohort,
                 timeout=timeout,

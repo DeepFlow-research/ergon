@@ -4,7 +4,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api.benchmark_deps import BenchmarkDeps
+from ergon_builtins.registry import register_builtins
+from ergon_core.api.registry import registry
 
 
 class LLMProvider(str, Enum):
@@ -47,9 +48,8 @@ class OnboardProfile(BaseModel):
 
     def required_keys(self) -> dict[str, str]:
         """Return {env_var: human_reason} derived purely from user choices."""
-        # reason: deferred import avoids circular dep at CLI startup; registry
-        # depends on ergon_builtins which depends on ergon_core.
-        from ergon_builtins.registry import BENCHMARKS
+        register_builtins(registry)
+        benchmarks = registry.benchmarks
 
         result: dict[str, str] = {}
 
@@ -57,12 +57,12 @@ class OnboardProfile(BaseModel):
             env_var = PROVIDER_KEY_MAP[provider]
             result[env_var] = f"{provider.value} API access"
 
-        if any(BENCHMARKS[b].onboarding_deps.e2b for b in self.benchmarks if b in BENCHMARKS):
+        if any(benchmarks[b].onboarding_deps.e2b for b in self.benchmarks if b in benchmarks):
             result["E2B_API_KEY"] = "Sandboxed code execution for selected benchmarks"
 
         for b in self.benchmarks:
-            if b in BENCHMARKS:
-                for k in BENCHMARKS[b].onboarding_deps.optional_keys:
+            if b in benchmarks:
+                for k in benchmarks[b].onboarding_deps.optional_keys:
                     result.setdefault(k, f"Optional for {b}")
 
         if self.gpu_provider and self.gpu_provider != GPUProvider.LOCAL:
@@ -73,14 +73,13 @@ class OnboardProfile(BaseModel):
 
     def required_extras(self) -> list[str]:
         """Pip extras to install based on choices."""
-        # reason: deferred import avoids circular dep at CLI startup; registry
-        # depends on ergon_builtins which depends on ergon_core.
-        from ergon_builtins.registry import BENCHMARKS
+        register_builtins(registry)
+        benchmarks = registry.benchmarks
 
         extras: set[str] = set()
         for b in self.benchmarks:
-            if b in BENCHMARKS:
-                for e in BENCHMARKS[b].onboarding_deps.extras:
+            if b in benchmarks:
+                for e in benchmarks[b].onboarding_deps.extras:
                     extras.add(e)
         if self.training:
             extras.add("ergon-infra[training]")

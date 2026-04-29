@@ -37,13 +37,20 @@ test("run snapshot hydration preserves context event actions", () => {
   assert.equal(events.length, 2);
   assert.equal(events[0]?.eventType, "tool_call");
   assert.deepEqual(events[0]?.payload, {
-    event_type: "tool_call",
-    tool_call_id: "call-lean-check",
-    tool_name: "lean_check",
-    args: { file: "proof.lean" },
+    part: {
+      part_kind: "tool_call",
+      tool_call_id: "call-lean-check",
+      tool_name: "lean_check",
+      args: { file: "proof.lean" },
+    },
+    token_ids: [101, 102, 103],
+    logprobs: null,
+    sequence: 0,
+    worker_binding_key: "react-worker",
     turn_id: "turn-1",
-    turn_token_ids: [101, 102, 103],
-    turn_logprobs: null,
+    started_at: "2026-03-18T12:00:18.000Z",
+    completed_at: "2026-03-18T12:00:18.100Z",
+    policy_version: null,
   });
 });
 
@@ -57,13 +64,16 @@ test("run snapshot hydration orders context events across retried executions", (
   const retryEvent = {
     ...first,
     id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
-    taskExecutionId: "execution-solve-2",
+    taskExecutionId: "99999999-9999-4999-8999-999999999998",
     sequence: 0,
     createdAt: "2026-03-18T12:00:30.000Z",
     payload: {
       ...first.payload,
-      tool_call_id: "call-retry",
-      tool_name: "retry_check",
+      part: {
+        ...first.payload.part,
+        tool_call_id: "call-retry",
+        tool_name: "retry_check",
+      },
     },
   };
 
@@ -210,6 +220,8 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
       id: evaluation.id,
       run_id: evaluation.runId,
       task_id: evaluation.taskId,
+      evaluator_name: evaluation.evaluatorName,
+      aggregation_rule: evaluation.aggregationRule,
       total_score: evaluation.totalScore,
       max_score: evaluation.maxScore,
       normalized_score: evaluation.normalizedScore,
@@ -232,7 +244,7 @@ test("socket task status parser rejects malformed payloads", () => {
       taskId: FIXTURE_IDS.solveTaskId,
       timestamp: "2026-03-18T12:00:14.000Z",
       assignedWorkerId: FIXTURE_IDS.workerId,
-      assignedWorkerName: "react-worker",
+      assignedWorkerSlug: "react-worker",
     }),
   );
 });

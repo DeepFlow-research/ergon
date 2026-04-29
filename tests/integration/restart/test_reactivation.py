@@ -12,17 +12,15 @@ Covered here:
 """
 
 import pytest
-
-from sqlmodel import select
-
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.runtime.services.orchestration_dto import PropagateTaskCompletionCommand
-from ergon_core.core.runtime.services.task_propagation_service import TaskPropagationService
+from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
+from ergon_core.core.application.workflows.service import WorkflowService
+from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
     get_node_status,
@@ -66,7 +64,7 @@ async def test_cancelled_managed_subtask_reactivates_when_dep_completes() -> Non
         session.commit()
 
     try:
-        svc = TaskPropagationService()
+        svc = WorkflowService()
         await svc.propagate(
             PropagateTaskCompletionCommand(
                 run_id=run_id,
@@ -108,7 +106,7 @@ async def test_cancelled_static_node_does_not_reactivate() -> None:
         session.commit()
 
     try:
-        svc = TaskPropagationService()
+        svc = WorkflowService()
         await svc.propagate(
             PropagateTaskCompletionCommand(
                 run_id=run_id,
@@ -162,7 +160,7 @@ async def test_fan_in_managed_subtask_reactivates_only_when_all_deps_complete() 
         session.commit()
 
     try:
-        svc = TaskPropagationService()
+        svc = WorkflowService()
 
         # Propagate A completing — B is still PENDING, so C must NOT re-activate
         await svc.propagate(

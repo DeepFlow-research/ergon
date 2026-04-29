@@ -1,4 +1,4 @@
-"""Stub worker that produces synthetic GenerationTurn data for RL testing.
+"""Stub worker that produces synthetic context chunk data for RL testing.
 
 Unlike stub-worker (which returns a plain string with no turns), this
 worker generates fake token-level data that exercises the full trajectory
@@ -11,21 +11,17 @@ the RL training loop.
 
 import random
 from collections.abc import AsyncGenerator
-from typing import cast
 from uuid import UUID
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext
-from ergon_core.api.generation import (
-    GenerationTurn,
-    ModelRequestPart,
-    ModelResponsePart,
-    TextPart,
-    ThinkingPart,
+from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.core.domain.generation.context_parts import (
+    AssistantTextPart,
+    ContextPartChunk,
+    TokenLogprob,
     ToolCallPart,
-    ToolReturnPart,
-    UserPromptPart,
+    ToolResultPart,
+    UserMessagePart,
 )
-from ergon_core.core.providers.generation.types import TokenLogprob
 
 
 class TrainingStubWorker(Worker):
@@ -43,18 +39,24 @@ class TrainingStubWorker(Worker):
 
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
-        for turn in _build_synthetic_turns(task.task_slug):
-            yield turn
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        output = ""
+        for chunk in _build_synthetic_chunks(task.task_slug):
+            if isinstance(chunk.part, AssistantTextPart):
+                output = chunk.part.content
+            yield chunk
+        yield WorkerOutput(output=output, success=True)
 
 
-def _build_synthetic_turns(task_slug: str) -> list[GenerationTurn]:
-    """Generate 2-3 fake turns with synthetic logprobs."""
+def _build_synthetic_chunks(task_slug: str) -> list[ContextPartChunk]:
+    """Generate 2-3 fake turns worth of chunks with synthetic logprobs."""
     num_turns = random.randint(2, 3)
-    turns: list[GenerationTurn] = []
+    chunks: list[ContextPartChunk] = [
+        ContextPartChunk(part=UserMessagePart(content=f"Task: Synthetic task {task_slug}"))
+    ]
 
     for i in range(num_turns):
         num_tokens = random.randint(8, 16)
@@ -68,42 +70,31 @@ def _build_synthetic_turns(task_slug: str) -> list[GenerationTurn]:
 
         is_last = i == num_turns - 1
         if not is_last:
-            response_parts = cast(
-                list[ModelResponsePart],
-                [
-                    ToolCallPart(
+            chunks.append(
+                ContextPartChunk(
+                    part=ToolCallPart(
                         tool_name="stub_tool",
                         tool_call_id=f"call_{i}",
                         args={"turn": i, "task": task_slug},
-                    )
-                ],
-            )
-            tool_results = [
-                ToolReturnPart(
-                    tool_call_id=f"call_{i}",
-                    tool_name="stub_tool",
-                    content=f"Tool result for turn {i} of {task_slug}",
+                    ),
+                    logprobs=logprobs,
                 )
-            ]
+            )
+            chunks.append(
+                ContextPartChunk(
+                    part=ToolResultPart(
+                        tool_call_id=f"call_{i}",
+                        tool_name="stub_tool",
+                        content=f"Tool result for turn {i} of {task_slug}",
+                    )
+                )
+            )
         else:
-            response_parts = cast(
-                list[ModelResponsePart],
-                [TextPart(content=f"Synthetic response turn {i}")],
+            chunks.append(
+                ContextPartChunk(
+                    part=AssistantTextPart(content=f"Synthetic response turn {i}"),
+                    logprobs=logprobs,
+                )
             )
-            tool_results = []
 
-        messages_in: list[ModelRequestPart] = (
-            [UserPromptPart(content=f"Task: Synthetic task {task_slug}")] if i == 0 else []
-        )
-
-        turns.append(
-            GenerationTurn(
-                messages_in=messages_in,
-                response_parts=response_parts,
-                tool_results=tool_results,
-                turn_logprobs=logprobs,
-                policy_version="synthetic-v0",
-            )
-        )
-
-    return turns
+    return chunks

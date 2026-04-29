@@ -5,13 +5,12 @@ import logging
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import ensure_db
-from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
-from ergon_core.core.runtime.services.experiment_definition_service import (
-    ExperimentDefinitionService,
+from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
+from ergon_core.core.application.experiments.service import (
+    ExperimentService,
 )
-from ergon_core.core.runtime.services.experiment_launch_service import ExperimentLaunchService
-from ergon_core.core.runtime.services.experiment_read_service import ExperimentReadService
-from ergon_core.core.runtime.services.experiment_schemas import (
+from ergon_core.core.application.read_models.experiments import ExperimentReadService
+from ergon_core.core.application.experiments.models import (
     ExperimentDefineRequest,
     ExperimentRunRequest,
 )
@@ -36,6 +35,7 @@ async def handle_experiment(args: Namespace) -> int:
 def handle_experiment_define(args: Namespace) -> int:
     _ensure_cli_logging()
     ensure_db()
+    dependency_extras = validate_explicit_runtime_choices(args)
     cohort_id = None
     if args.cohort:
         cohort = experiment_cohort_service.resolve_or_create(
@@ -55,9 +55,14 @@ def handle_experiment_define(args: Namespace) -> int:
         default_model_target=args.model,
         default_worker_team={"primary": args.worker},
         default_evaluator_slug=args.evaluator,
-        metadata={"workflow": args.workflow, "max_questions": args.max_questions},
+        sandbox_slug=args.sandbox,
+        dependency_extras=dependency_extras,
+        metadata={
+            "workflow": args.workflow,
+            "max_questions": args.max_questions,
+        },
     )
-    result = ExperimentDefinitionService().define_benchmark_experiment(request)
+    result = ExperimentService().define_benchmark_experiment(request)
     logger.info("EXPERIMENT_ID=%s", result.experiment_id)
     if result.cohort_id is not None:
         logger.info("COHORT_ID=%s", result.cohort_id)
@@ -69,7 +74,7 @@ def handle_experiment_define(args: Namespace) -> int:
 async def handle_experiment_run(args: Namespace) -> int:
     _ensure_cli_logging()
     ensure_db()
-    result = await ExperimentLaunchService().run_experiment(
+    result = await ExperimentService().run_experiment(
         ExperimentRunRequest(
             experiment_id=UUID(args.experiment_id),
             timeout_seconds=args.timeout,
@@ -143,3 +148,49 @@ def handle_experiment_list(args: Namespace) -> int:
 def _ensure_cli_logging() -> None:
     if not logging.getLogger().handlers:
         logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+
+def validate_explicit_runtime_choices(args: Namespace) -> tuple[str, ...]:
+    """Validate all explicit runtime choices before defining an experiment."""
+    benchmarks, workers, evaluators, sandbox_managers, model_backends = _load_registry()
+
+    if args.benchmark_slug not in benchmarks:
+        raise ValueError(f"Unknown benchmark slug: {args.benchmark_slug}")
+    if args.worker not in workers:
+        raise ValueError(f"Unknown worker slug: {args.worker}")
+    if args.evaluator not in evaluators:
+        raise ValueError(f"Unknown evaluator slug: {args.evaluator}")
+    if args.sandbox not in sandbox_managers:
+        raise ValueError(f"Unknown sandbox slug: {args.sandbox}")
+
+    model_prefix = str(args.model).split(":", 1)[0]
+    if model_prefix not in model_backends:
+        raise ValueError(f"Unknown model backend prefix: {model_prefix}")
+
+    extras = tuple(args.extras)
+    if extras == ("none",):
+        return extras
+
+    benchmark_cls = benchmarks[args.benchmark_slug]
+    allowed_extras = set(getattr(benchmark_cls.onboarding_deps, "extras", ()))
+    unknown_extras = [extra for extra in extras if extra not in allowed_extras]
+    if unknown_extras:
+        raise ValueError(
+            f"Unknown extras for benchmark {args.benchmark_slug!r}: {unknown_extras}; "
+            f"allowed extras: {sorted(allowed_extras) or ['none']}"
+        )
+    return extras
+
+
+def _load_registry():
+    from ergon_builtins.registry import MODEL_BACKENDS, register_builtins
+    from ergon_core.api.registry import registry
+
+    register_builtins(registry)
+    return (
+        registry.benchmarks,
+        registry.workers,
+        registry.evaluators,
+        registry.sandbox_managers,
+        MODEL_BACKENDS,
+    )

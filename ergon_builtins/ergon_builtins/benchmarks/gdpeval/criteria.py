@@ -21,7 +21,7 @@ def make_code_check(
 ) -> CodeCheckCriterion:
     """Create a GDP code-check criterion."""
     return CodeCheckCriterion(
-        name=name,
+        slug=name,
         code_template=code_template,
         description=description,
         weight=weight,
@@ -40,7 +40,7 @@ def make_llm_judge(
 ) -> LLMJudgeCriterion:
     """Create a GDP LLM-judge criterion."""
     return LLMJudgeCriterion(
-        name=name,
+        slug=name,
         prompt_template=prompt_template,
         description=description,
         weight=weight,

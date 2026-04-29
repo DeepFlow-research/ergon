@@ -208,7 +208,7 @@ function applyNodeAdded(
     childIds: [],
     dependsOnIds: [],
     assignedWorkerId: null,
-    assignedWorkerName: value.assigned_worker_slug,
+    assignedWorkerSlug: value.assigned_worker_slug,
     startedAt: null,
     completedAt: null,
     isLeaf: true,
@@ -277,7 +277,7 @@ function applyNodeFieldChange(
       updated.description = value.value ?? "";
       break;
     case "assigned_worker_slug":
-      updated.assignedWorkerName = value.value;
+      updated.assignedWorkerSlug = value.value;
       break;
   }
 
@@ -524,7 +524,7 @@ export function createReplayInitialState(
       description: initialValue?.description ?? task.description,
       status: (initialValue?.status as TaskStatus | undefined) ?? task.status,
       assignedWorkerId: null,
-      assignedWorkerName: initialValue?.assigned_worker_slug ?? null,
+      assignedWorkerSlug: initialValue?.assigned_worker_slug ?? null,
       parentId,
       childIds,
       dependsOnIds: [],

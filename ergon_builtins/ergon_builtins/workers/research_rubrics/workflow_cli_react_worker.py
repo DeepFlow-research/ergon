@@ -1,13 +1,11 @@
-from collections.abc import AsyncGenerator
 import time
+from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.api import RunResourceView
-from ergon_core.api.generation import GenerationTurn
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.providers.sandbox.research_rubrics_manager import (
+from ergon_core.api import Task, WorkerContext, WorkerStreamItem
+from ergon_core.core.application.resources import RunResourceView
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
     ResearchRubricsSandboxManager,
 )
 
@@ -23,6 +21,10 @@ from ergon_builtins.tools.graph_toolkit import ResearchGraphToolkit
 from ergon_builtins.tools.research_rubrics_toolkit import ResearchRubricsToolkit
 from ergon_builtins.tools.workflow_cli_tool import make_workflow_cli_tool
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.workers.baselines.tool_budget import (
+    AgentToolBudgetDeps,
+    AgentToolBudgetState,
+)
 from ergon_builtins.workers.research_rubrics._run_skill import (
     ReportEditSkillRequest,
     ReportReadSkillRequest,
@@ -33,52 +35,53 @@ from ergon_builtins.workers.research_rubrics._run_skill import (
 )
 
 _WORKFLOW_PROMPT = (
-    "You are a research agent. Your job is to investigate a research question "
-    "using web search and produce a well-sourced report.\n\n"
-    "You have access to:\n"
-    "- exa_search: Search the web for relevant sources\n"
-    "- exa_qa: Ask Exa a direct question\n"
-    "- exa_get_content: Extract full text from a URL\n"
-    "- write_report_draft: Write a markdown report draft\n"
-    "- edit_report_draft: Edit an existing draft\n"
-    "- read_report_draft: Read a draft file\n"
-    "- workflow: Inspect current-run task topology and resources\n\n"
-    "Write your final report to 'final_output/report.md' using write_report_draft. "
+    "Role: You are a recursive ResearchRubrics research agent with workflow access.\n\n"
+    "Goal: Produce `final_output/report.md` with a well-sourced answer to the task. "
     "Include a # Findings section and a ## Sources section with citations.\n\n"
-    "Hard operating budget: use at most 6 exa_search calls for your own work. "
-    "After that, write the report from the evidence you have. Prefer targeted "
-    "queries over broad exploration.\n\n"
-    "Use workflow(command) to inspect this run before "
-    "deciding what context is missing. Useful commands include: "
-    "`inspect task-workspace --format json`, `inspect task-tree`, "
-    "`inspect resource-list --scope input`, "
-    "`inspect resource-list --scope visible --limit 20`, "
-    "`inspect resource-location --resource-id <id>`, "
-    "`inspect next-actions`, and "
-    "`manage materialize-resource --resource-id <id> --dry-run`. "
-    "Use `--format json` when you need stable IDs. Resource copies are snapshots: "
-    "materialized files become resources owned by this task, not edits to the source.\n\n"
-    'First call `workflow("inspect task-workspace --format json")`. Use only '
-    "`task_workspace.task.level` from that response to decide whether this current "
-    "task may delegate. Ignore level-0 tasks shown elsewhere in task-tree. If "
-    "`task_workspace.task.level is exactly 0`, create exactly three specialist "
-    "child tasks before researching: "
-    "(1) a source scout for finding citations, "
-    "(2) a rubric compliance checker for mapping requirements to an outline, and "
-    "(3) a synthesis reviewer for risks, gaps, and counterclaims. "
-    'Use `workflow("manage add-task --task-slug <short_unique_slug> --worker worker '
-    "--description '<specialist task description>'\")` for each child. "
-    "Give each child a role-specific description that includes the original task "
-    "goal and asks for a concise markdown report in `final_output/report.md`. "
-    "Then continue your own report; do not wait for child results unless visible "
-    "resources are already available.\n\n"
-    "If your current `task_workspace.task.level` is not 0, you are already a "
-    "specialist child. You must do only your assigned specialist work; do not call "
-    '`workflow("manage add-task` under any '
-    "circumstances. Do not inspect the workflow repeatedly. Use at most 2 "
-    "workflow inspections and at most 3 exa_search calls, then write your "
-    "specialist markdown report to `final_output/report.md`."
+    "Tools:\n"
+    "- `workflow(command)`: inspect task topology/resources and create subtasks. "
+    "Use it deliberately; workflow calls are limited. Useful commands include "
+    "`inspect task-tree`, `inspect resource-list --scope input`, "
+    "`inspect resource-list --scope visible --limit 20`, `inspect next-actions`, "
+    "and `manage materialize-resource --resource-id <id> --dry-run`.\n"
+    "- `exa_search`: broad web search for candidate sources.\n"
+    "- `exa_qa`: focused Q&A when one specific fact or synthesis is missing.\n"
+    "- `exa_get_content`: read a specific URL that looks important.\n"
+    "- `write_report_draft` / `edit_report_draft` / `read_report_draft`: create, "
+    "revise, and inspect markdown report files.\n"
+    "- Resource discovery tools: inspect resources produced by this task, children, "
+    "descendants, or the run.\n\n"
+    "Task graph policy: At the start of your task, use workflow context before "
+    "deep research: `inspect task-tree --format json` and "
+    "`inspect next-actions --manager-capable`. Use that context to decide whether "
+    "to solve directly or create subtasks. Create subtasks when the work can be "
+    "parallelized into independent evidence-gathering or checking efforts, such "
+    "as source scouting, rubric-cluster coverage, factual sections, or risk/negative "
+    "constraint checks. Do not create subtasks just to avoid writing; if the task "
+    "is already narrow, answer it directly. Good subtasks have clear deliverables "
+    "and produce evidence artifacts for synthesis. Prefer a small number of useful "
+    "subtasks over many tiny ones. Child subtasks should usually use worker "
+    "`researchrubrics-workflow-cli-react` too, so the same decision policy applies "
+    "recursively. Use `researchrubrics-researcher` only for a narrow leaf task that "
+    "should not create further subtasks. First dry-run commands like "
+    "`manage add-task --task-slug source-scout --worker "
+    "researchrubrics-workflow-cli-react --description 'Find high-quality sources "
+    "for ...' --dry-run`, then repeat without `--dry-run` once correct. If you "
+    "create subtasks, wait for them to finish before final synthesis, then inspect "
+    "their resources. If a subtask fails or is cancelled, inspect what is missing "
+    "and decide whether to proceed with available evidence or create one replacement "
+    "task with a narrower scope.\n\n"
+    "Stop rules: Use the fewest useful tool loops. Search again only if a required "
+    "fact/source is missing. Do not search to improve phrasing or collect "
+    "nonessential detail. If current evidence can answer the core task, write the "
+    "report. If any tool returns TOOL_BUDGET_EXHAUSTED, stop polling/searching and "
+    "produce the best possible final output from current context/resources."
 )
+
+_TOOL_BUDGET_LIMITS = {
+    "max_workflow_tool_calls": 12,
+    "max_other_tool_calls": 12,
+}
 
 
 def _workspace_path(relative_path: str) -> str:
@@ -106,15 +109,24 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             sandbox_id=sandbox_id,
             tools=[],
             system_prompt=_WORKFLOW_PROMPT,
-            max_iterations=25,
+            max_iterations=60,
         )
+        self._agent_deps = AgentToolBudgetDeps(
+            tool_budget=AgentToolBudgetState(
+                max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
+                max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
+            ),
+        )
+
+    def build_agent_deps(self, context: WorkerContext) -> AgentToolBudgetDeps:
+        return self._agent_deps
 
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
         manager = ResearchRubricsSandboxManager()
         model_run_skill = make_run_skill(model=self.model)
 
@@ -146,12 +158,18 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             worker_context=context,
             sandbox_task_key=self.task_id,
             benchmark_type="researchrubrics",
-            manager_capable=True,
+            budgeted=True,
+        )
+        self._agent_deps = AgentToolBudgetDeps(
+            tool_budget=AgentToolBudgetState(
+                max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
+                max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
+            ),
         )
         self.tools = [*rr_toolkit.build_tools(), *graph_toolkit.build_tools(), workflow_tool]
 
-        async for turn in super().execute(task, context=context):
-            yield turn
+        async for chunk in super().execute(task, context=context):
+            yield chunk
 
     async def _run_sandbox_report_skill(
         self,

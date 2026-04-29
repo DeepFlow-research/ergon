@@ -1,17 +1,25 @@
 import argparse
 import asyncio
+import contextlib
+import io
 import json
 import shlex
+import time
+from collections.abc import Callable
 from typing import cast
 from uuid import UUID
 
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.runtime.services.workflow_service import WorkflowService
-from ergon_core.core.runtime.services.workflow_dto import WorkflowMutationRef
+from ergon_core.core.application.workflows.service import WorkflowService
 from pydantic import BaseModel
 from sqlmodel import Session
-from collections.abc import Callable
+
+_RESOURCE_SCOPES = ("visible", "own", "input", "upstream", "children", "descendants")
+_RESOURCE_KINDS = tuple(kind.value for kind in RunResourceKind)
+_OUTPUT_FORMATS = ("text", "json")
+_DEPENDENCY_DIRECTIONS = ("upstream", "downstream", "both")
 
 _FORBIDDEN_CONTEXT_FLAGS = {
     "--run-id",
@@ -48,38 +56,30 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     inspect = sub.add_parser("inspect")
     inspect_sub = inspect.add_subparsers(dest="action", required=True)
     resource_list = inspect_sub.add_parser("resource-list")
-    resource_list.add_argument("--scope", required=True)
-    resource_list.add_argument("--kind", default=None)
+    resource_list.add_argument("--scope", required=True, choices=_RESOURCE_SCOPES)
+    resource_list.add_argument("--kind", choices=_RESOURCE_KINDS, default=None)
     resource_list.add_argument("--limit", type=int, default=50)
     resource_list.add_argument("--max-depth", type=int, default=3)
-    resource_list.add_argument("--format", choices=["text", "json"], default="text")
+    resource_list.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
     resource_list.add_argument("--explain", action="store_true")
 
     resource_content = inspect_sub.add_parser("resource-content")
     resource_content.add_argument("--resource-id", required=True)
     resource_content.add_argument("--max-bytes", type=int, default=100_000)
-    resource_content.add_argument("--format", choices=["text", "json"], default="text")
-
-    resource_location = inspect_sub.add_parser("resource-location")
-    resource_location.add_argument("--resource-id", required=True)
-    resource_location.add_argument("--format", choices=["text", "json"], default="text")
+    resource_content.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     task_tree = inspect_sub.add_parser("task-tree")
-    task_tree.add_argument("--format", choices=["text", "json"], default="text")
+    task_tree.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
     task_tree.add_argument("--parent-node-id", default=None)
-
-    task_workspace = inspect_sub.add_parser("task-workspace")
-    task_workspace.add_argument("--format", choices=["text", "json"], default="text")
+    task_tree.add_argument("--wait-seconds", type=float, default=0)
 
     dependencies = inspect_sub.add_parser("task-dependencies")
-    dependencies.add_argument(
-        "--direction", choices=["upstream", "downstream", "both"], default="both"
-    )
-    dependencies.add_argument("--format", choices=["text", "json"], default="text")
+    dependencies.add_argument("--direction", choices=_DEPENDENCY_DIRECTIONS, default="both")
+    dependencies.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     next_action = inspect_sub.add_parser("next-actions")
     next_action.add_argument("--manager-capable", action="store_true")
-    next_action.add_argument("--format", choices=["text", "json"], default="text")
+    next_action.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     manage = sub.add_parser("manage")
     manage_sub = manage.add_subparsers(dest="action", required=True)
@@ -87,39 +87,36 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--resource-id", required=True)
     materialize.add_argument("--destination", default=None)
     materialize.add_argument("--dry-run", action="store_true")
-    materialize.add_argument("--format", choices=["text", "json"], default="text")
+    materialize.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
-    add_task = manage_sub.add_parser("add-task")
-    add_task.add_argument("--task-slug", required=True)
-    add_task.add_argument("--description", required=True)
-    add_task.add_argument("--worker", required=True)
-    add_task.add_argument("--parent-node-id", default=None)
-    add_task.add_argument("--dry-run", action="store_true")
-    add_task.add_argument("--format", choices=["text", "json"], default="text")
-    add_task.add_argument("--reason", default=None)
-
-    add_edge = manage_sub.add_parser("add-edge")
-    add_edge.add_argument("--source-task-slug", required=True)
-    add_edge.add_argument("--target-task-slug", required=True)
-    add_edge.add_argument("--dry-run", action="store_true")
-    add_edge.add_argument("--format", choices=["text", "json"], default="text")
-    add_edge.add_argument("--reason", default=None)
-
-    update_description = manage_sub.add_parser("update-task-description")
-    update_description.add_argument("--task-slug", required=True)
-    update_description.add_argument("--description", required=True)
-    update_description.add_argument("--dry-run", action="store_true")
-    update_description.add_argument("--format", choices=["text", "json"], default="text")
-    update_description.add_argument("--reason", default=None)
-
-    for action in ("restart-task", "abandon-task"):
+    for action in ("add-task", "add-edge", "restart-task", "abandon-task"):
         parser_for_action = manage_sub.add_parser(action)
-        parser_for_action.add_argument("--task-slug", required=True)
         parser_for_action.add_argument("--dry-run", action="store_true")
-        parser_for_action.add_argument("--format", choices=["text", "json"], default="text")
+        parser_for_action.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
         parser_for_action.add_argument("--reason", default=None)
+        if action == "add-task":
+            parser_for_action.add_argument("--task-slug", required=True)
+            parser_for_action.add_argument("--description", required=True)
+            parser_for_action.add_argument("--worker", required=True)
+            parser_for_action.add_argument("--depends-on-task-slug", action="append", default=[])
 
     return parser
+
+
+def _dispatch_workflow_command(
+    args: argparse.Namespace,
+    *,
+    context: WorkflowCommandContext,
+    session: Session,
+    service: WorkflowService,
+) -> WorkflowCommandOutput:
+    if args.group == "inspect":
+        return _handle_inspect(args, context=context, session=session, service=service)
+    if args.group == "manage":
+        return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI/tool sync bridge
+            _handle_manage(args, context=context, session=session, service=service)
+        )
+    raise ValueError(f"unsupported workflow command group: {args.group}")
 
 
 def execute_workflow_command(
@@ -129,35 +126,37 @@ def execute_workflow_command(
     session_factory: Callable[[], Session],
     service: WorkflowService,
 ) -> WorkflowCommandOutput:
-    return asyncio.run(  # slopcop: ignore[no-async-from-sync] -- CLI sync bridge
-        execute_workflow_command_async(
-            command,
-            context=context,
-            session_factory=session_factory,
-            service=service,
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
+    try:
+        _reject_context_flags(argv)
+    except ValueError as exc:
+        return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
+    stderr = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(stderr):
+            args = build_workflow_parser().parse_args(argv)
+    except SystemExit as exc:
+        exit_code = exc.code if isinstance(exc.code, int) else 2
+        return WorkflowCommandOutput(
+            stdout="",
+            stderr=_parse_error_with_help_hint(stderr.getvalue() or str(exc), argv),
+            exit_code=exit_code,
         )
-    )
-
-
-async def execute_workflow_command_async(
-    command: str,
-    *,
-    context: WorkflowCommandContext,
-    session_factory: Callable[[], Session],
-    service: WorkflowService,
-) -> WorkflowCommandOutput:
-    argv = shlex.split(command)
-    _reject_context_flags(argv)
-    args = build_workflow_parser().parse_args(argv)
     session = session_factory()
     try:
-        if args.group == "inspect":
-            return _handle_inspect(args, context=context, session=session, service=service)
-        if args.group == "manage":
-            return await _handle_manage(args, context=context, session=session, service=service)
+        return _dispatch_workflow_command(
+            args,
+            context=context,
+            session=session,
+            service=service,
+        )
+    except ValueError as exc:
+        return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
     finally:
         _close_session(session)
-    raise ValueError(f"unsupported workflow command group: {args.group}")
 
 
 async def handle_workflow(args: argparse.Namespace) -> int:
@@ -222,62 +221,34 @@ def _handle_inspect(
             output_format=args.format,
         )
     if args.action == "resource-content":
+        resource_id = UUID(args.resource_id)
         content = service.read_resource_bytes(
             session,
             run_id=context.run_id,
-            resource_id=UUID(args.resource_id),
+            resource_id=resource_id,
             max_bytes=args.max_bytes,
         )
         if args.format == "json":
             return _format_output({"content": content.decode(errors="replace")}, [], "json")
         return WorkflowCommandOutput(stdout=content.decode(errors="replace"))
-    if args.action == "resource-location":
-        location = service.get_resource_location(
-            session,
-            run_id=context.run_id,
-            resource_id=UUID(args.resource_id),
-        )
-        return _format_output(
-            {"resource_location": _dump(location)},
-            text_lines=[
-                f"resource {location.resource.name}",
-                f"producer={location.producer_task_slug or '-'}",
-                f"local={location.local_file_path}",
-                f"default_sandbox_path={location.default_sandbox_path}",
-            ],
-            output_format=args.format,
-        )
     if args.action == "task-tree":
         parent = UUID(args.parent_node_id) if args.parent_node_id else None
+        deadline = time.monotonic() + max(args.wait_seconds, 0)
         tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
+        while args.wait_seconds > 0 and time.monotonic() < deadline:
+            children = [task for task in tasks if task.parent_node_id == context.node_id]
+            if children and all(
+                task.status in {"completed", "failed", "cancelled"} for task in children
+            ):
+                break
+            time.sleep(2)
+            tasks = service.list_tasks(session, run_id=context.run_id, parent_node_id=parent)
         return _format_output(
             {"tasks": [_dump(task) for task in tasks]},
             text_lines=[
                 f"{'  ' * task.level}{task.task_slug} {task.status} {task.node_id}"
                 for task in tasks
             ],
-            output_format=args.format,
-        )
-    if args.action == "task-workspace":
-        workspace = service.get_task_workspace(
-            session,
-            run_id=context.run_id,
-            node_id=context.node_id,
-        )
-        lines = [
-            f"task {workspace.task.task_slug} status={workspace.task.status}",
-        ]
-        if workspace.latest_execution is not None:
-            lines.append(
-                "execution "
-                f"{workspace.latest_execution.execution_id} "
-                f"status={workspace.latest_execution.status}"
-            )
-        lines.extend(f"own: {resource.name}" for resource in workspace.own_resources)
-        lines.extend(f"input: {resource.name}" for resource in workspace.input_resources)
-        return _format_output(
-            {"task_workspace": _dump(workspace)},
-            text_lines=lines,
             output_format=args.format,
         )
     if args.action == "task-dependencies":
@@ -318,6 +289,7 @@ async def _handle_manage(
     service: WorkflowService,
 ) -> WorkflowCommandOutput:
     if args.action == "materialize-resource":
+        resource_id = UUID(args.resource_id)
         result = await service.materialize_resource(
             session,
             run_id=context.run_id,
@@ -325,7 +297,7 @@ async def _handle_manage(
             current_execution_id=context.execution_id,
             sandbox_task_key=context.sandbox_task_key,
             benchmark_type=context.benchmark_type,
-            resource_id=UUID(args.resource_id),
+            resource_id=resource_id,
             destination=args.destination,
             dry_run=args.dry_run,
         )
@@ -335,51 +307,42 @@ async def _handle_manage(
             output_format=args.format,
         )
     if args.action == "add-task":
+        if args.dry_run:
+            payload: JsonObject = {
+                "action": args.action,
+                "dry_run": True,
+                "task_slug": args.task_slug,
+                "assigned_worker_slug": args.worker,
+                "depends_on_task_slugs": args.depends_on_task_slug,
+                "message": "Graph lifecycle command validated; no changes applied.",
+            }
+            return _format_output(payload, [str(payload["message"])], args.format)
         result = await service.add_task(
             session,
             run_id=context.run_id,
-            parent_node_id=UUID(args.parent_node_id) if args.parent_node_id else context.node_id,
+            parent_node_id=context.node_id,
             task_slug=args.task_slug,
             description=args.description,
             assigned_worker_slug=args.worker,
-            dry_run=args.dry_run,
+            depends_on_task_slugs=args.depends_on_task_slug,
         )
-        return _mutation_output(result, args.format)
-    if args.action == "add-edge":
-        result = await service.add_edge(
-            session,
-            run_id=context.run_id,
-            source_task_slug=args.source_task_slug,
-            target_task_slug=args.target_task_slug,
-            dry_run=args.dry_run,
+        return _format_output(
+            {"task": _dump(result)},
+            text_lines=[f"{result.task_slug} {result.status} {result.node_id}"],
+            output_format=args.format,
         )
-        return _mutation_output(result, args.format)
-    if args.action == "update-task-description":
-        result = await service.update_task_description(
-            session,
-            run_id=context.run_id,
-            task_slug=args.task_slug,
-            description=args.description,
-            dry_run=args.dry_run,
-        )
-        return _mutation_output(result, args.format)
-    if args.action == "restart-task":
-        result = await service.restart_task(
-            session,
-            run_id=context.run_id,
-            task_slug=args.task_slug,
-            dry_run=args.dry_run,
-        )
-        return _mutation_output(result, args.format)
-    if args.action == "abandon-task":
-        result = await service.abandon_task(
-            session,
-            run_id=context.run_id,
-            task_slug=args.task_slug,
-            dry_run=args.dry_run,
-        )
-        return _mutation_output(result, args.format)
-    raise ValueError(f"unsupported manage action: {args.action}")
+    try:
+        dry_run = args.dry_run
+    except AttributeError:
+        dry_run = False
+    if dry_run:
+        payload: JsonObject = {
+            "action": args.action,
+            "dry_run": True,
+            "message": "Graph lifecycle command validated; no changes applied.",
+        }
+        return _format_output(payload, [str(payload["message"])], args.format)
+    raise ValueError(f"{args.action} requires --dry-run in workflow CLI v1")
 
 
 def _format_output(
@@ -390,11 +353,6 @@ def _format_output(
     if output_format == "json":
         return WorkflowCommandOutput(stdout=json.dumps(payload, indent=2, sort_keys=True))
     return WorkflowCommandOutput(stdout="\n".join(text_lines))
-
-
-def _mutation_output(result: WorkflowMutationRef, output_format: str) -> WorkflowCommandOutput:
-    payload: JsonObject = {"mutation": _dump(result)}
-    return _format_output(payload, [result.message], output_format)
 
 
 def _dump(value: BaseModel | JsonObject) -> JsonObject:
@@ -412,3 +370,21 @@ def _close_session(session: Session) -> None:
 def _reject_context_flags(argv: list[str]) -> None:
     if any(arg in _FORBIDDEN_CONTEXT_FLAGS for arg in argv):
         raise ValueError("scope/context flags are injected by the worker and cannot be supplied")
+
+
+def _parse_error_with_help_hint(stderr: str, argv: list[str]) -> str:
+    command_path = _help_command_path(argv)
+    hint = f"Run '{command_path} --help' for more info."
+    text = stderr.strip()
+    if hint in text:
+        return text
+    return f"{text}\n{hint}" if text else hint
+
+
+def _help_command_path(argv: list[str]) -> str:
+    path = ["workflow"]
+    for arg in argv:
+        if arg.startswith("-"):
+            break
+        path.append(arg)
+    return " ".join(path)

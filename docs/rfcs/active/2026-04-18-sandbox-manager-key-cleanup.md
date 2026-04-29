@@ -25,7 +25,7 @@ reduces the diff size for that RFC.
 ## Problem
 
 `BaseSandboxManager.create()`
-(`ergon_core/ergon_core/core/providers/sandbox/manager.py:226-233`) takes three
+(`ergon_core/ergon_core/core/sandbox/manager.py:226-233`) takes three
 conceptual task-keys as positional/keyword arguments:
 
 ```python
@@ -177,7 +177,7 @@ production cases — which is exactly what `task_id` is after the rename.
 
 ## Full implementation
 
-### Modified file: `ergon_core/ergon_core/core/providers/sandbox/manager.py`
+### Modified file: `ergon_core/ergon_core/core/sandbox/manager.py`
 
 #### 1. Remove `_display_task_ids` class attribute
 
@@ -575,7 +575,7 @@ None.
 
 | File | Changes |
 |---|---|
-| `ergon_core/ergon_core/core/providers/sandbox/manager.py` | Delete `_display_task_ids` attr (line 70); delete `_get_display_task_id()` (lines 96-97); rename `sandbox_key`→`task_id` + remove `display_task_id` in `BaseSandboxManager.create()` (lines 226-295); rename `sandbox_key`→`task_id` + rename `task_id`→`override_task_id` in `_emit_wal_entry()` (lines 99-131); simplify `terminate()` (lines 429-469); rename + remove `display_task_id` in `DefaultSandboxManager.create()` (lines 503-526) |
+| `ergon_core/ergon_core/core/sandbox/manager.py` | Delete `_display_task_ids` attr (line 70); delete `_get_display_task_id()` (lines 96-97); rename `sandbox_key`→`task_id` + remove `display_task_id` in `BaseSandboxManager.create()` (lines 226-295); rename `sandbox_key`→`task_id` + rename `task_id`→`override_task_id` in `_emit_wal_entry()` (lines 99-131); simplify `terminate()` (lines 429-469); rename + remove `display_task_id` in `DefaultSandboxManager.create()` (lines 503-526) |
 | `ergon_core/ergon_core/core/runtime/inngest/sandbox_setup.py` | Drop `display_task_id=task_id` kwarg at line 108 |
 | `ergon_builtins/ergon_builtins/benchmarks/swebench_verified/criterion.py` | Rename `sandbox_key=` → `task_id=` at line 74 |
 | `tests/minif2f/test_sandbox_manager.py` | Remove `BaseSandboxManager._display_task_ids = {}` at line 30; rename `sandbox_key=` → `task_id=` at lines 121, 172, 206 |

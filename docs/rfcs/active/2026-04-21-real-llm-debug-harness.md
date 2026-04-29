@@ -89,7 +89,7 @@ tests/real_llm/
     └── results_writer.py       # per-run .results.md + PR body emission
 
 ergon_builtins/ergon_builtins/tools/benchmark_toolkit_composer.py  # NEW
-ergon_core/ergon_core/core/providers/generation/openrouter_budget.py  # NEW
+tests/real_llm/openrouter_budget.py                                # NEW
 docker-compose.real-llm.yml                                       # NEW
 ```
 
@@ -136,7 +136,7 @@ in `ergon_cli/composition/__init__.py` wires this into
 ### OpenRouter budget gate
 
 ```python
-# ergon_core/core/providers/generation/openrouter_budget.py
+# tests/real_llm/openrouter_budget.py
 
 class OpenRouterBudget:
     def __init__(self, limit_usd: float) -> None:

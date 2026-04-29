@@ -1,0 +1,41 @@
+"""Structured LLM judge helper for built-in evaluators."""
+
+from collections.abc import Sequence
+from typing import Literal, TypeVar, cast
+
+from pydantic import BaseModel
+from pydantic_ai import Agent
+
+from ergon_builtins.models.resolution import resolve_model_target
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class JudgeMessage(BaseModel):
+    model_config = {"frozen": True}
+
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
+async def call_structured_judge(
+    *,
+    messages: Sequence[JudgeMessage],
+    response_type: type[T],
+    model: str | None,
+) -> T:
+    """Call an LLM and parse a structured judge response."""
+    resolved = resolve_model_target(model)
+    instructions = "\n\n".join(message.content for message in messages if message.role == "system")
+    prompt = "\n\n".join(
+        f"{message.role.upper()}:\n{message.content}"
+        for message in messages
+        if message.role != "system"
+    )
+    agent = Agent(
+        model=resolved.model,
+        instructions=instructions or None,
+        output_type=response_type,
+    )
+    result = await agent.run(prompt)
+    return cast(T, result.output)

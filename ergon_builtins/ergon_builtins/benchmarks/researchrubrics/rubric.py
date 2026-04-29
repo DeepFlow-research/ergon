@@ -12,9 +12,9 @@ negative weights.
 from collections.abc import Iterable, Sequence
 from typing import ClassVar
 
-from ergon_core.api.evaluator import Rubric
-from ergon_core.api.results import CriterionResult, TaskEvaluationResult
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Task
+from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.rubric import Rubric, TaskEvaluationResult
 
 from ergon_builtins.benchmarks.researchrubrics.criteria import build_criteria_from_rubrics
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
@@ -43,7 +43,7 @@ class ResearchRubricsRubric(Rubric):
         super().__init__(name=name, criteria=criteria)
         self._rubric_criteria = tuple(rubric_criteria)
 
-    def criteria_for(self, task: BenchmarkTask):
+    def criteria_for(self, task: Task):
         """Build task-specific LLM-judge criteria from the task payload."""
         if self._rubric_criteria:
             return self.criteria
@@ -54,8 +54,8 @@ class ResearchRubricsRubric(Rubric):
 
     def aggregate_task(
         self,
-        task: BenchmarkTask,
-        criterion_results: Iterable[CriterionResult],
+        task: Task,
+        criterion_results: Iterable[CriterionOutcome],
     ) -> TaskEvaluationResult:
         results = list(criterion_results)
         if not results:
@@ -95,6 +95,8 @@ class ResearchRubricsRubric(Rubric):
             criterion_results=results,
             metadata={
                 "total_score": total_score,
+                "score_scale": "normalized_0_1",
+                "raw_score": total_score,
                 "max_possible": max_possible,
                 "min_possible": min_possible,
             },

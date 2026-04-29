@@ -8,11 +8,10 @@ import logging
 from typing import Callable
 from uuid import UUID
 
+from ergon_core.core.persistence.telemetry.models import TrainingMetric, TrainingSession
+from ergon_core.core.shared.utils import utcnow
 from sqlmodel import Session
 from transformers import TrainerCallback, TrainerControl, TrainerState, TrainingArguments
-
-from ergon_core.core.persistence.telemetry.models import TrainingMetric, TrainingSession
-from ergon_core.core.utils import utcnow
 
 logger = logging.getLogger(__name__)
 

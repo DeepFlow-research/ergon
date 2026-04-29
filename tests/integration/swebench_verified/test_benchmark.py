@@ -5,8 +5,8 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from ergon_builtins.benchmarks.swebench_verified.benchmark import (
-    _load_rows,
     SweBenchVerifiedBenchmark,
+    _load_rows,
 )
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchInstance
 

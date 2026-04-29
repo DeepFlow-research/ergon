@@ -1,13 +1,11 @@
 """Tests for SWE-Bench task schemas."""
 
 import pytest
-
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
     _parse_test_list,
 )
-
 
 RAW_ROW = {
     "instance_id": "django__django-11999",

@@ -15,6 +15,35 @@
           "title": "Description",
           "type": "string"
         },
+        "status": {
+          "enum": [
+            "pending",
+            "ready",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "integer"
+        },
+        "assigned_worker_slug": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assigned Worker Slug"
+        },
         "assigned_to": {
           "$ref": "#/$defs/WorkerRef"
         },
@@ -63,6 +92,8 @@
         "id",
         "name",
         "description",
+        "status",
+        "level",
         "assigned_to",
         "is_leaf"
       ],

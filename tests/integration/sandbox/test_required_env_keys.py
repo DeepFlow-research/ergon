@@ -24,16 +24,15 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
+    ResearchRubricsSandboxManager,
+)
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-from ergon_core.core.providers.sandbox.research_rubrics_manager import (
-    ResearchRubricsSandboxManager,
-)
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 # Every concrete ``BaseSandboxManager`` subclass ergon ships. Add new
 # managers here so the env-injection contract is enforced for them too.
@@ -85,11 +84,11 @@ def _install_async_sandbox_and_e2b_key(monkeypatch: pytest.MonkeyPatch) -> Async
     fake_sandbox = _make_fake_sandbox()
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.infrastructure.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.infrastructure.sandbox.manager.settings.e2b_api_key",
         "test-e2b-key",
     )
     return fake_create
@@ -129,7 +128,7 @@ async def test_required_env_keys_round_trip_into_sandbox(
         dummy = f"dummy-{key}-{idx}"
         expected_envs[key] = dummy
         monkeypatch.setattr(
-            f"ergon_core.core.providers.sandbox.manager.settings.{key.lower()}",
+            f"ergon_core.core.infrastructure.sandbox.manager.settings.{key.lower()}",
             dummy,
         )
 

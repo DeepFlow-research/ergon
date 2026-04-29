@@ -4,9 +4,9 @@ import os
 from collections.abc import AsyncGenerator
 
 import pytest
+from ergon_core.core.shared.settings import settings
 
-from ergon_core.core.providers.generation.openrouter_budget import OpenRouterBudget
-from ergon_core.core.settings import settings
+from tests.real_llm.openrouter_budget import OpenRouterBudget
 
 
 @pytest.fixture(scope="session")

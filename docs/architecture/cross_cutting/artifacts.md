@@ -15,7 +15,7 @@ produces computed artifacts through `CriterionRuntime.run_command(...)`.
 
 | Type | Location | Freeze | Owner |
 |------|----------|--------|-------|
-| `SandboxResourcePublisher` | `ergon_core/core/providers/sandbox/resource_publisher.py` | Stable | Sandbox provider |
+| `SandboxResourcePublisher` | `ergon_core/core/sandbox/resource_publisher.py` | Stable | Sandbox domain |
 | `RunResource` | ORM row; table `run_resources` | Stable wire shape | Persistence layer |
 | `dashboard/resource.published` | Inngest event | Stable | Dashboard lane |
 | `CriterionRuntime.read_resource(name)` | Proposed per RFC | Pending | Evaluator layer |

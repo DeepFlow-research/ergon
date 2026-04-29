@@ -9,10 +9,8 @@ proof.
 
 from typing import ClassVar
 
-from ergon_core.api.criterion import Criterion
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult
-from ergon_core.core.runtime.evaluation.criterion_runtime import ResourceNotFoundError
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
+from ergon_core.core.application.evaluation.criterion_runtime import ResourceNotFoundError
 from pydantic import BaseModel
 
 from ergon_builtins.benchmarks.minif2f.constants import LEAN_CMD, LEAN_CMD_PREFIX
@@ -52,24 +50,28 @@ class ProofVerificationCriterion(Criterion):
     def __init__(
         self,
         *,
-        name: str = "proof_verification",
+        slug: str = "proof_verification",
         weight: float = 1.0,
         max_score: float = 1.0,
         problem_statement: str | None = None,
         ground_truth_proof: str | None = None,
         formal_system: str = "lean",
     ) -> None:
-        super().__init__(name=name, weight=weight)
-        self.max_score = max_score
+        super().__init__(
+            slug=slug,
+            weight=weight,
+            score_spec=ScoreScale(max_score=max_score),
+        )
         self.problem_statement = problem_statement
         self.ground_truth_proof = ground_truth_proof
         self.formal_system = formal_system
 
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         proof_data = await self._extract_proof(context)
         if proof_data is None:
-            return CriterionResult(
-                name=self.name,
+            return CriterionOutcome(
+                slug=self.slug,
+                name=self.slug,
                 score=0.0,
                 passed=False,
                 weight=self.weight,
@@ -78,7 +80,7 @@ class ProofVerificationCriterion(Criterion):
                     "The worker must write to /workspace/final_output/final_solution.lean "
                     "so SandboxResourcePublisher.sync picks it up."
                 ),
-                metadata={"evaluated_resource_ids": []},
+                evaluated_resource_ids=[],
             )
         proof_code = proof_data.proof_code
         problem_stmt = self.problem_statement or context.task.description
@@ -90,28 +92,28 @@ class ProofVerificationCriterion(Criterion):
         )
 
         outcome = await self._verify_proof(context, proof_code)
-        score = self.max_score if outcome.verified else 0.0
+        score = self.score_spec.max_score if outcome.verified else 0.0
         feedback = (
             "Proof successfully verified by Lean compiler."
             if outcome.verified
             else f"Proof verification failed:\n{outcome.errors or 'Unknown error'}"
         )
 
-        return CriterionResult(
-            name=self.name,
+        return CriterionOutcome(
+            slug=self.slug,
+            name=self.slug,
             score=score,
             passed=outcome.verified,
             weight=self.weight,
+            max_score=self.score_spec.max_score,
             feedback=feedback,
-            metadata={
-                "evaluation_input": evaluation_log,
-                "evaluated_resource_ids": proof_data.evaluated_resource_ids,
-            },
+            evaluation_input=evaluation_log,
+            evaluated_resource_ids=proof_data.evaluated_resource_ids,
         )
 
     # ------------------------------------------------------------------
 
-    async def _extract_proof(self, context: EvaluationContext) -> ExtractedProof | None:
+    async def _extract_proof(self, context: CriterionContext) -> ExtractedProof | None:
         """Read the Lean source the agent wrote, or ``None`` if missing.
 
         Reads from the task-scoped run-resource named
@@ -119,10 +121,10 @@ class ProofVerificationCriterion(Criterion):
         ``SandboxResourcePublisher.sync()`` after the worker writes to
         ``/workspace/final_output/final_solution.lean``.
         """
-        if context.runtime is None:
+        if not context.has_runtime:
             return None
         try:
-            raw = await context.runtime.read_resource("final_solution.lean")
+            raw = await context.read_resource("final_solution.lean")
         except ResourceNotFoundError:
             return None
         return ExtractedProof(
@@ -133,7 +135,7 @@ class ProofVerificationCriterion(Criterion):
 
     async def _verify_proof(
         self,
-        context: EvaluationContext,
+        context: CriterionContext,
         proof_code: str,
     ) -> ProofVerificationOutcome:
         """Write proof into sandbox and run Lean verification.
@@ -161,19 +163,18 @@ class ProofVerificationCriterion(Criterion):
         # back-door. `_extract_proof` above already reads via
         # `context.runtime.read_resource`; this keeps `_verify_proof`
         # consistent and unblocks deletion of the metadata shim.
-        runtime = context.runtime
-        if runtime is None:
+        if not context.has_runtime:
             return ProofVerificationOutcome(
                 verified=False,
                 errors="No criterion runtime in evaluation context.",
             )
 
-        await runtime.write_file(
+        await context.write_file(
             "/tools/mathlib_project/src/verify.lean",
             proof_code.encode("utf-8"),
         )
 
-        result = await runtime.run_command(VERIFY_LEAN_CMD, timeout=120)
+        result = await context.run_command(VERIFY_LEAN_CMD, timeout=120)
 
         stdout = "" if result.stdout is None else result.stdout
         stderr = "" if result.stderr is None else result.stderr

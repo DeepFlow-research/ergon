@@ -7,9 +7,7 @@ InngestCriterionExecutor + DefaultCriterionRuntime.
 
 from typing import ClassVar
 
-from ergon_core.api.criterion import Criterion
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
 
 
 class CodeCheckCriterion(Criterion):
@@ -26,25 +24,30 @@ class CodeCheckCriterion(Criterion):
     def __init__(
         self,
         *,
-        name: str,
+        slug: str,
         code_template: str,
         description: str = "",  # slopcop: ignore[no-str-empty-default]
         weight: float = 1.0,
         max_score: float = 1.0,
     ) -> None:
-        super().__init__(name=name, weight=weight)
+        super().__init__(
+            slug=slug,
+            description=description or slug,
+            weight=weight,
+            score_spec=ScoreScale(max_score=max_score),
+        )
         self.code_template = code_template
-        self.description = description
-        self.max_score = max_score
 
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         output = context.worker_result.output
         passed = bool(output and len(output.strip()) > 0)
-        score = self.max_score if passed else 0.0
-        return CriterionResult(
-            name=self.name,
+        score = self.score_spec.max_score if passed else 0.0
+        return CriterionOutcome(
+            slug=self.slug,
+            name=self.slug,
             score=score,
             passed=passed,
             weight=self.weight,
-            feedback=f"Code check '{self.name}': {'passed' if passed else 'failed'}",
+            max_score=self.score_spec.max_score,
+            feedback=f"Code check '{self.slug}': {'passed' if passed else 'failed'}",
         )

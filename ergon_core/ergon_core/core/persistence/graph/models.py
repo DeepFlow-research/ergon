@@ -14,8 +14,8 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
-from ergon_core.api.json_types import JsonObject
-from ergon_core.core.utils import utcnow as _utcnow
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime, Index
 from sqlmodel import Field, SQLModel
@@ -51,39 +51,54 @@ class RunGraphNode(SQLModel, table=True):
         default=None,
         foreign_key="experiment_definition_tasks.id",
     )
-    # Identifies which benchmark instance this node belongs to (e.g.
-    # which dataset row or environment variant). Maps to
-    # ExperimentDefinitionInstance.instance_key.
-    instance_key: str
-
-    # Identifies the task slot in the experiment template (e.g.
-    # 'research-av-safety') OR the caller-chosen slug for a
-    # dynamically-spawned subtask. Required at creation, persisted verbatim.
-    task_slug: str = Field(index=True)
+    instance_key: str = Field(
+        description=(
+            "Benchmark instance identifier for this node, such as a dataset row or "
+            "environment variant; maps to ExperimentDefinitionInstance.instance_key."
+        )
+    )
+    task_slug: str = Field(
+        index=True,
+        description=(
+            "Task slot in the experiment template, or the caller-chosen slug for a "
+            "dynamically spawned subtask. Required at creation and persisted verbatim."
+        ),
+    )
     description: str
 
-    # Free-form string, not an enum. The experiment layer owns domain-specific
-    # status values (e.g. "proposed", "negotiating", "completed") so different
-    # experiments can define different lifecycles without core schema changes.
-    status: str = Field(index=True)
+    status: str = Field(
+        index=True,
+        description=(
+            "Free-form node status owned by the experiment layer so different "
+            "experiments can define lifecycles without core schema changes."
+        ),
+    )
 
-    # WORKERS-registry slug, e.g. "researchrubrics-researcher", "canonical-smoke".
-    assigned_worker_slug: str | None = None
+    assigned_worker_slug: str | None = Field(
+        default=None,
+        description=(
+            "Worker registry slug assigned to execute this node, for example "
+            "'researchrubrics-researcher' or 'canonical-smoke'."
+        ),
+    )
 
-    # Containment: self-referential FK to the spawning node.
-    # NULL for definition-seeded roots; set for every dynamic subtask.
-    # Stored (not derived) so a single SELECT on run_graph_nodes gives
-    # a fully legible hierarchy without joins or edge traversal.
     parent_node_id: UUID | None = Field(
         default=None,
         foreign_key="run_graph_nodes.id",
         index=True,
+        description=(
+            "Self-referential containment parent. Null for definition-seeded roots and set "
+            "for dynamic subtasks so hierarchy can be read without joins or edge traversal."
+        ),
     )
 
-    # Depth in the containment tree. 0 for roots, parent.level + 1
-    # for dynamic subtasks. Stored for debuggability and to avoid
-    # N+1 level computation at query/rendering time.
-    level: int = Field(default=0)
+    level: int = Field(
+        default=0,
+        description=(
+            "Depth in the containment tree: 0 for roots and parent.level + 1 for dynamic "
+            "subtasks. Stored for debugging and to avoid N+1 level computation."
+        ),
+    )
 
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
@@ -143,7 +158,12 @@ class RunGraphAnnotation(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    target_type: str  # GraphTargetType ("node" | "edge") — str for SQLModel compat
+    target_type: str = Field(
+        description=(
+            "GraphTargetType literal ('node' or 'edge') stored as a string for SQLModel "
+            "compatibility."
+        )
+    )
     target_id: UUID
     namespace: str
     sequence: int = Field(index=True)
@@ -176,8 +196,16 @@ class RunGraphMutation(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
     sequence: int = Field(index=True)
-    mutation_type: str = Field(index=True)  # MutationType Literal — str for SQLModel compat
-    target_type: str  # GraphTargetType ("node" | "edge") — str for SQLModel compat
+    mutation_type: str = Field(
+        index=True,
+        description="MutationType literal stored as a string for SQLModel compatibility.",
+    )
+    target_type: str = Field(
+        description=(
+            "GraphTargetType literal ('node' or 'edge') stored as a string for SQLModel "
+            "compatibility."
+        )
+    )
     target_id: UUID = Field(index=True)
     actor: str
     old_value: dict | None = Field(default=None, sa_column=Column(JSON))

@@ -31,6 +31,15 @@
     "old_status": {
       "anyOf": [
         {
+          "enum": [
+            "pending",
+            "ready",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "blocked"
+          ],
           "type": "string"
         },
         {
@@ -41,6 +50,15 @@
       "title": "Old Status"
     },
     "new_status": {
+      "enum": [
+        "pending",
+        "ready",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        "blocked"
+      ],
       "title": "New Status",
       "type": "string"
     },
@@ -74,7 +92,7 @@
       "default": null,
       "title": "Assigned Worker Id"
     },
-    "assigned_worker_name": {
+    "assigned_worker_slug": {
       "anyOf": [
         {
           "type": "string"
@@ -84,7 +102,7 @@
         }
       ],
       "default": null,
-      "title": "Assigned Worker Name"
+      "title": "Assigned Worker Slug"
     }
   },
   "required": [

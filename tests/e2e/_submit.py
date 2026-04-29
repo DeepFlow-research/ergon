@@ -40,11 +40,36 @@ def _api_base() -> str:
     return os.environ.get("ERGON_API_BASE_URL", _DEFAULT_API)
 
 
+def build_cohort_payload(
+    *,
+    benchmark_slug: str,
+    slots: list[tuple[str, str]],
+    cohort_key: str,
+    sandbox_slug: str,
+    dependency_extras: tuple[str, ...],
+    model: str = "openai:gpt-4o",
+) -> dict:
+    return {
+        "benchmark_slug": benchmark_slug,
+        "slots": [
+            {"worker_slug": worker, "evaluator_slug": criterion}
+            for worker, criterion in slots
+        ],
+        "cohort_key": cohort_key,
+        "sandbox_slug": sandbox_slug,
+        "dependency_extras": list(dependency_extras),
+        "model": model,
+    }
+
+
 async def submit_cohort(
     *,
     benchmark_slug: str,
     slots: list[tuple[str, str]],
     cohort_key: str,
+    sandbox_slug: str,
+    dependency_extras: tuple[str, ...],
+    model: str = "openai:gpt-4o",
     timeout: int = 300,  # reserved — server-side per-run timeout
 ) -> list[UUID]:
     """Submit one run per slot under ``cohort_key``; return run_ids in order.
@@ -53,17 +78,21 @@ async def submit_cohort(
         benchmark_slug:  e.g. ``"researchrubrics"``
         slots:           list of ``(worker_slug, criterion_slug)`` tuples
         cohort_key:      shared cohort name (all runs group under this)
+        sandbox_slug:    explicit sandbox manager slug for the run
+        dependency_extras: explicit dependency intent; smoke uses ``("none",)``
+        model:           explicit model target used by the test harness
         timeout:         reserved for future use; the api endpoint does
                          not block on run completion, so there is no
                          client-side timeout to propagate.
     """
-    payload = {
-        "benchmark_slug": benchmark_slug,
-        "slots": [
-            {"worker_slug": worker, "evaluator_slug": criterion} for worker, criterion in slots
-        ],
-        "cohort_key": cohort_key,
-    }
+    payload = build_cohort_payload(
+        benchmark_slug=benchmark_slug,
+        slots=slots,
+        cohort_key=cohort_key,
+        sandbox_slug=sandbox_slug,
+        dependency_extras=dependency_extras,
+        model=model,
+    )
     async with httpx.AsyncClient(base_url=_api_base(), timeout=30.0) as client:
         response = await client.post("/api/test/write/cohort", json=payload)
         if response.status_code >= 400:
@@ -77,4 +106,4 @@ async def submit_cohort(
     return [UUID(rid) for rid in body["run_ids"]]
 
 
-__all__ = ["smoke_cohort_key", "submit_cohort"]
+__all__ = ["build_cohort_payload", "smoke_cohort_key", "submit_cohort"]

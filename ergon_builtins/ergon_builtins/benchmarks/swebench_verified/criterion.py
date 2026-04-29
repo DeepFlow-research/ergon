@@ -20,9 +20,8 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from ergon_core.api.criterion import Criterion
-from ergon_core.api.criterion_runtime import CriterionRuntime
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult
+from ergon_core.api.criterion import CriterionContext, CriterionOutcome
+from ergon_core.core.application.evaluation.protocols import CriterionRuntime
 
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import (
     payload_to_swebench_row as _payload_to_swebench_row,
@@ -37,20 +36,15 @@ APPLY_TIMEOUT_SEC = 120
 PATCH_EXTRACT_TIMEOUT_SEC = 120
 
 
-async def _extract_patch_via_runtime(context: EvaluationContext) -> str:
+async def _extract_patch_via_runtime(context: CriterionContext) -> str:
     """Compute ``git add -A && git diff HEAD`` via the criterion runtime.
 
     The criterion owns patch extraction; the sandbox working tree is the
     only reliable source of truth (nothing crosses the durable Inngest
     ``worker_execute`` boundary).
     """
-    if context.runtime is None:
-        raise RuntimeError(
-            "SWEBenchTestCriterion requires a CriterionRuntime for patch "
-            "extraction; none was injected into EvaluationContext."
-        )
-    await context.runtime.ensure_sandbox()
-    result = await context.runtime.run_command(
+    await context.ensure_sandbox()
+    result = await context.run_command(
         f"cd {WORKDIR} && git add -A && git diff HEAD",
         timeout=PATCH_EXTRACT_TIMEOUT_SEC,
     )
@@ -127,16 +121,17 @@ class SWEBenchTestCriterion(Criterion):
     def __init__(
         self,
         *,
-        name: str = "swebench-test-resolution",
+        slug: str = "swebench-test-resolution",
         weight: float = 1.0,
     ) -> None:
-        super().__init__(name=name, weight=weight)
+        super().__init__(slug=slug, weight=weight)
 
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         patch_text = await _extract_patch_via_runtime(context)
         if not patch_text.strip():
-            return CriterionResult(
-                name=self.name,
+            return CriterionOutcome(
+                slug=self.slug,
+                name=self.slug,
                 score=0.0,
                 passed=False,
                 weight=self.weight,
@@ -154,31 +149,27 @@ class SWEBenchTestCriterion(Criterion):
         # `sandbox_manager` attribute. `_extract_patch_via_runtime` above
         # already called `ensure_sandbox`, so subsequent `run_command` /
         # `write_file` calls are guaranteed to hit a live sandbox.
-        runtime = context.runtime
-        if runtime is None:  # pragma: no cover — guarded above
-            raise RuntimeError("runtime disappeared after patch extraction")
-
         return await self._run_and_grade(
-            runtime=runtime, spec=spec, payload=payload, patch_text=patch_text
+            context=context, spec=spec, payload=payload, patch_text=patch_text
         )
 
     async def _run_and_grade(
         self,
         *,
-        runtime: CriterionRuntime,
+        context: CriterionContext,
         spec: Any,  # slopcop: ignore[no-typing-any]
         payload: SWEBenchTaskPayload,
         patch_text: str,
-    ) -> CriterionResult:
+    ) -> CriterionOutcome:
         # 1. install_repo_script: clone + checkout base_commit + install deps.
-        r = await runtime.run_command(
+        r = await context.run_command(
             f"bash -c {shlex.quote(spec.install_repo_script)}",
             timeout=EVAL_TIMEOUT_SEC,
         )
         if r.exit_code != 0:
             detail = r.stdout if r.stdout is not None else r.stderr
             return _error_result(
-                self.name,
+                self.slug,
                 self.weight,
                 "install_repo failed",
                 # reason: both CommandResult fields are `str | None`, but
@@ -192,13 +183,13 @@ class SWEBenchTestCriterion(Criterion):
         test_patch = payload.test_patch
         try:
             if test_patch.strip():
-                await _write_and_apply(runtime, "/tmp/test.patch", test_patch)
-            await _write_and_apply(runtime, "/tmp/agent.patch", patch_text)
+                await _write_and_apply(context, "/tmp/test.patch", test_patch)
+            await _write_and_apply(context, "/tmp/agent.patch", patch_text)
         except RuntimeError as exc:
-            return _error_result(self.name, self.weight, "git apply failed", str(exc))
+            return _error_result(self.slug, self.weight, "git apply failed", str(exc))
 
         # 3. Run eval script with stderr merged so the log has everything.
-        r = await runtime.run_command(
+        r = await context.run_command(
             f"bash -c {shlex.quote(spec.eval_script)} 2>&1",
             timeout=EVAL_TIMEOUT_SEC,
         )
@@ -213,8 +204,9 @@ class SWEBenchTestCriterion(Criterion):
         )
         entry = report.get(payload.instance_id, {}) if isinstance(report, dict) else {}
         resolved = bool(entry.get("resolved"))
-        return CriterionResult(
-            name=self.name,
+        return CriterionOutcome(
+            slug=self.slug,
+            name=self.slug,
             score=1.0 if resolved else 0.0,
             passed=resolved,
             weight=self.weight,
@@ -224,7 +216,7 @@ class SWEBenchTestCriterion(Criterion):
 
 
 async def _write_and_apply(
-    runtime: CriterionRuntime,
+    context: CriterionContext,
     path: str,
     content: str,
 ) -> None:
@@ -233,13 +225,13 @@ async def _write_and_apply(
     Falls back to ``--3way`` if the straight apply fails. Raises
     ``RuntimeError`` with tail of stdout when both attempts fail.
     """
-    await runtime.write_file(path, content.encode())
-    r = await runtime.run_command(
+    await context.write_file(path, content.encode())
+    r = await context.run_command(
         f"cd {WORKDIR} && git apply --allow-empty --verbose {path}",
         timeout=APPLY_TIMEOUT_SEC,
     )
     if r.exit_code != 0:
-        r = await runtime.run_command(
+        r = await context.run_command(
             f"cd {WORKDIR} && git apply --3way --verbose {path}",
             timeout=APPLY_TIMEOUT_SEC,
         )
@@ -248,14 +240,15 @@ async def _write_and_apply(
         raise RuntimeError(f"git apply {path} failed: {stdout[-800:]}")
 
 
-def _error_result(name: str, weight: float, kind: str, detail: str) -> CriterionResult:
-    return CriterionResult(
-        name=name,
+def _error_result(slug: str, weight: float, kind: str, detail: str) -> CriterionOutcome:
+    return CriterionOutcome(
+        slug=slug,
+        name=slug,
         score=0.0,
         passed=False,
         weight=weight,
         feedback=f"{kind}: {detail[-400:]}",
-        metadata={"error": kind},
+        error={"kind": kind},
     )
 
 

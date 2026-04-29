@@ -19,6 +19,7 @@ function toTaskStatus(status: string): TaskStatus {
 function deserializeTask(task: RunSnapshot["tasks"][string]): TaskState {
   return {
     ...task,
+    assignedWorkerSlug: task.assignedWorkerSlug ?? null,
     status: toTaskStatus(task.status),
     history: [],
     lastTrigger: null,
@@ -78,6 +79,7 @@ function deserializeContextEvents(data: RunSnapshot): Map<string, ContextEventSt
       events
         .map((event) => ({
           id: String(event.id ?? ""),
+          runId: String(event.runId ?? data.id),
           taskExecutionId: String(event.taskExecutionId ?? ""),
           taskNodeId: String(event.taskNodeId ?? taskId),
           workerBindingKey: String(event.workerBindingKey ?? ""),
@@ -169,5 +171,5 @@ export function serializeRunState(run: WorkflowRunState): SerializedWorkflowRunS
     sandboxesByTask: Object.fromEntries(run.sandboxesByTask.entries()),
     evaluationsByTask: Object.fromEntries(run.evaluationsByTask.entries()),
     contextEventsByTask: Object.fromEntries(run.contextEventsByTask.entries()),
-  };
+  } as unknown as SerializedWorkflowRunState;
 }

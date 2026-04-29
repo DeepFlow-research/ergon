@@ -1,7 +1,7 @@
 """Real-LLM rollout harness for the ``researchrubrics`` benchmark.
 
 This test is a **trigger**, not an assertion suite.  It runs a real
-``ergon experiment define`` + ``ergon experiment run`` end-to-end against a real LLM
+``ergon benchmark run researchrubrics`` end-to-end against a real LLM
 (Sonnet 4.6 via OpenRouter by default) and dumps an exhaustive
 rollout artifact — every persistence table, dashboard screenshots,
 and a stitched ``report.md`` — to
@@ -24,24 +24,22 @@ Gated by:
 """
 
 import os
-import re
 import subprocess
 import time
 from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
-from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
     RunTaskEvaluation,
-    RunTaskExecution,
 )
-from ergon_core.core.providers.generation.openrouter_budget import OpenRouterBudget
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.settings import settings
 from sqlmodel import select
 
+from tests.real_llm.openrouter_budget import OpenRouterBudget
 from tests.real_llm.rollout import _fingerprint as fingerprint
 from tests.real_llm.rollout import (
     capture_dashboard,
@@ -53,9 +51,9 @@ from tests.real_llm.rollout import (
 
 pytestmark = [pytest.mark.real_llm, pytest.mark.asyncio]
 
-# Cloud provider prefixes resolve through OpenRouter. Override with
-# ERGON_REAL_LLM_MODEL to roll out against a different model.
-_DEFAULT_MODEL = "anthropic:claude-sonnet-4.6"
+# Default to Sonnet 4.6 via OpenRouter.  Override with ERGON_REAL_LLM_MODEL
+# to roll out against a different model without editing the test.
+_DEFAULT_MODEL = "openrouter:anthropic/claude-sonnet-4.6"
 
 # Wall-clock caps.  Real-LLM + real-sandbox rollouts are slow; keep
 # these generous enough to absorb E2B startup + Exa retries but bounded
@@ -76,12 +74,30 @@ def _require_keys() -> None:
         )
 
 
+def _latest_run_id_since(since: datetime) -> UUID:
+    """Return the most recent RunRecord.id created at or after ``since``."""
+    ensure_db()
+    with get_session() as session:
+        stmt = (
+            select(RunRecord)
+            .where(RunRecord.created_at >= since)
+            .order_by(RunRecord.created_at.desc())
+            .limit(1)
+        )
+        row = session.exec(stmt).first()
+        if row is None:
+            raise RuntimeError(
+                "no RunRecord created since the harness started — "
+                "did the CLI subprocess actually dispatch a run?"
+            )
+        return row.id
+
+
 def _wait_for_post_terminal_artifacts(run_id: UUID) -> None:
     """Let async resource/evaluation rows land before dumping artifacts."""
     deadline = time.monotonic() + _POST_TERMINAL_ARTIFACT_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         with get_session() as session:
-            run = session.get(RunRecord, run_id)
             resources = len(
                 list(session.exec(select(RunResource).where(RunResource.run_id == run_id)).all())
             )
@@ -92,23 +108,7 @@ def _wait_for_post_terminal_artifacts(run_id: UUID) -> None:
                     ).all()
                 )
             )
-            executions = list(
-                session.exec(
-                    select(RunTaskExecution).where(RunTaskExecution.run_id == run_id)
-                ).all()
-            )
         if resources > 0 and evaluations > 0:
-            return
-        run_status = str(getattr(run.status, "value", run.status)).lower() if run else ""
-        running_executions = {
-            "pending",
-            "running",
-            "executing",
-        }
-        if run_status in {"failed", "cancelled"} and not any(
-            str(getattr(execution.status, "value", execution.status)).lower() in running_executions
-            for execution in executions
-        ):
             return
         time.sleep(2)
 
@@ -127,7 +127,7 @@ async def test_researchrubrics_rollout(
     state inside the time budget.
     """
     model = os.environ.get("ERGON_REAL_LLM_MODEL", _DEFAULT_MODEL)
-    benchmark = os.environ.get("ERGON_REAL_LLM_BENCHMARK", "researchrubrics")
+    benchmark = "researchrubrics"
     worker = os.environ.get("ERGON_REAL_LLM_WORKER", "researchrubrics-researcher")
     evaluator = "research-rubric"
     limit = os.environ.get("ERGON_REAL_LLM_LIMIT", "1")
@@ -137,13 +137,13 @@ async def test_researchrubrics_rollout(
     )
     started_at = datetime.now(timezone.utc)
 
-    define_proc = subprocess.run(
+    cli_proc = subprocess.run(
         [
             "uv",
             "run",
             "ergon",
-            "experiment",
-            "define",
+            "benchmark",
+            "run",
             benchmark,
             "--worker",
             worker,
@@ -159,48 +159,20 @@ async def test_researchrubrics_rollout(
         text=True,
         check=False,
     )
-    experiment_id = _parse_single_uuid("EXPERIMENT_ID", define_proc.stdout)
 
-    run_proc = subprocess.run(
-        [
-            "uv",
-            "run",
-            "ergon",
-            "experiment",
-            "run",
-            str(experiment_id),
-        ],
-        timeout=_CLI_TIMEOUT_SECONDS,
-        capture_output=True,
-        text=True,
-        check=False,
+    run_id = _latest_run_id_since(started_at)
+    terminal_state = harness_client.wait_for_terminal(
+        run_id,
+        timeout_s=_HARNESS_POLL_TIMEOUT_SECONDS,
     )
-    run_ids = _parse_uuid_lines("RUN_ID", run_proc.stdout)
-    if not run_ids:
-        raise RuntimeError(
-            f"experiment run produced no RUN_ID lines:\n{run_proc.stdout}\n{run_proc.stderr}"
-        )
-
-    terminal_states = [
-        harness_client.wait_for_terminal(
-            run_id,
-            timeout_s=_HARNESS_POLL_TIMEOUT_SECONDS,
-        )
-        for run_id in run_ids
-    ]
-    for run_id in run_ids:
-        _wait_for_post_terminal_artifacts(run_id)
-    run_id = run_ids[0]
-    terminal_state = terminal_states[0]
+    _wait_for_post_terminal_artifacts(run_id)
 
     out_dir = rollout_dir(run_id)
 
     # Persist CLI stdout/stderr up front so a crashed DB dump still
     # leaves breadcrumbs for the reviewing agent.
-    (out_dir / "cli_define_stdout.txt").write_text(define_proc.stdout or "")
-    (out_dir / "cli_define_stderr.txt").write_text(define_proc.stderr or "")
-    (out_dir / "cli_run_stdout.txt").write_text(run_proc.stdout or "")
-    (out_dir / "cli_run_stderr.txt").write_text(run_proc.stderr or "")
+    (out_dir / "cli_stdout.txt").write_text(cli_proc.stdout or "")
+    (out_dir / "cli_stderr.txt").write_text(cli_proc.stderr or "")
 
     table_counts = dump_rollout(run_id, out_dir)
     screenshots = await capture_dashboard(run_id, playwright_context, out_dir)
@@ -217,7 +189,7 @@ async def test_researchrubrics_rollout(
         worker=worker,
         evaluator=evaluator,
         model=model,
-        cli_returncode=run_proc.returncode,
+        cli_returncode=cli_proc.returncode,
         terminal_state=terminal_state,
         started_at=started_at,
         finished_at=finished_at,
@@ -246,15 +218,3 @@ async def test_researchrubrics_rollout(
         f"run {run_id} did not reach a terminal status within "
         f"{_HARNESS_POLL_TIMEOUT_SECONDS}s — see {out_dir}"
     )
-
-
-def _parse_single_uuid(name: str, output: str) -> UUID:
-    values = _parse_uuid_lines(name, output)
-    if len(values) != 1:
-        raise RuntimeError(f"expected exactly one {name}=... line, got {len(values)}:\n{output}")
-    return values[0]
-
-
-def _parse_uuid_lines(name: str, output: str) -> list[UUID]:
-    pattern = re.compile(rf"^{re.escape(name)}=([0-9a-fA-F-]{{36}})$", re.MULTILINE)
-    return [UUID(match.group(1)) for match in pattern.finditer(output or "")]

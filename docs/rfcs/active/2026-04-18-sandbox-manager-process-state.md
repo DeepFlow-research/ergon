@@ -14,7 +14,7 @@ superseded_by: null
 ## 1. Problem
 
 `BaseSandboxManager`
-(`ergon_core/ergon_core/core/providers/sandbox/manager.py`) is wired as a
+(`ergon_core/ergon_core/core/sandbox/manager.py`) is wired as a
 singleton-per-subclass via `__new__` at `manager.py:78-81`:
 
 ```python
@@ -71,7 +71,7 @@ The same pattern appears in:
 - `ergon_builtins/ergon_builtins/benchmarks/swebench_verified/criterion.py:72`
 
 `ResearchRubricsSandboxManager` (in
-`ergon_core/ergon_core/core/providers/sandbox/research_rubrics_manager.py`) also
+`ergon_builtins/ergon_builtins/benchmarks/researchrubrics/sandbox_manager.py`) also
 calls `self._sandboxes[task_id]` directly at `research_rubrics_manager.py:105`
 in `publisher_for()`, relying on the class-level dict.
 
@@ -237,7 +237,7 @@ DefaultCriterionRuntime.ensure_sandbox() (any process)
 ### 4.1 Updated `BaseSandboxManager.__init__`
 
 ```python
-# ergon_core/ergon_core/core/providers/sandbox/manager.py
+# ergon_core/ergon_core/core/sandbox/manager.py
 
 class BaseSandboxManager(ABC):
     """Abstract base class for E2B sandbox lifecycle management.
@@ -267,7 +267,7 @@ class BaseSandboxManager(ABC):
 ### 4.2 `reconnect` method signature
 
 ```python
-# ergon_core/ergon_core/core/providers/sandbox/manager.py
+# ergon_core/ergon_core/core/sandbox/manager.py
 
     async def reconnect(self, sandbox_id: str) -> "AsyncSandbox":
         """Rehydrate a running sandbox by its E2B sandbox_id.
@@ -538,7 +538,7 @@ Behavior unchanged. Stage 1 is a pure refactor.
 
 | File | Changes |
 |---|---|
-| `ergon/ergon_core/ergon_core/core/providers/sandbox/manager.py` | Stage 1: move six dicts to `__init__`, fix `_event_sink` init; Stage 2: remove `__new__` + `_instance`, add `reconnect()` |
+| `ergon/ergon_core/ergon_core/core/sandbox/manager.py` | Stage 1: move six dicts to `__init__`, fix `_event_sink` init; Stage 2: remove `__new__` + `_instance`, add `reconnect()` |
 | `ergon/ergon_core/ergon_core/core/runtime/evaluation/criterion_runtime.py` | Stage 3: update `ensure_sandbox()` to use `reconnect()` on cross-process miss |
 | `ergon/ergon_core/ergon_core/core/runtime/evaluation/evaluation_schemas.py` | Stage 3: add `sandbox_id: str \| None = None` to `CriterionContext` if absent |
 | `ergon/ergon_builtins/ergon_builtins/workers/baselines/minif2f_react_worker.py` | Stage 3: replace `manager.get_sandbox(context.task_id)` with `reconnect` or DI |
@@ -567,7 +567,7 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.sandbox.manager import BaseSandboxManager
 
 
 class _MinimalManager(BaseSandboxManager):
@@ -610,12 +610,12 @@ class TestInstanceIsolation:
         )
 
     def test_event_sink_initialized_in_init(self) -> None:
-        from ergon_core.core.providers.sandbox.event_sink import NoopSandboxEventSink
+        from ergon_core.core.sandbox.event_sink import NoopSandboxEventSink
         m = _MinimalManager()
         assert isinstance(m._event_sink, NoopSandboxEventSink)
 
     def test_custom_event_sink_set_without_stomp(self) -> None:
-        from ergon_core.core.providers.sandbox.event_sink import NoopSandboxEventSink
+        from ergon_core.core.sandbox.event_sink import NoopSandboxEventSink
         sink_a = NoopSandboxEventSink()
         sink_b = NoopSandboxEventSink()
         m1 = _MinimalManager(event_sink=sink_a)
@@ -648,7 +648,7 @@ class TestReconnect:
 
     @pytest.mark.asyncio
     async def test_reconnect_calls_connect(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from ergon_core.core.providers.sandbox import manager as mgr_module
+        from ergon_core.core.sandbox import manager as mgr_module
 
         fake_sandbox = MagicMock()
         fake_connect = AsyncMock(return_value=fake_sandbox)
@@ -667,7 +667,7 @@ class TestReconnect:
     async def test_reconnect_raises_when_e2b_not_installed(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from ergon_core.core.providers.sandbox import manager as mgr_module
+        from ergon_core.core.sandbox import manager as mgr_module
 
         monkeypatch.setattr(mgr_module, "AsyncSandbox", None)
 
@@ -680,7 +680,7 @@ class TestReconnect:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """reconnect() must not populate self._sandboxes (stateless by design)."""
-        from ergon_core.core.providers.sandbox import manager as mgr_module
+        from ergon_core.core.sandbox import manager as mgr_module
 
         fake_sandbox = MagicMock()
         fake_connect = AsyncMock(return_value=fake_sandbox)

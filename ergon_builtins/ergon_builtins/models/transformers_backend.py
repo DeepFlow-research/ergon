@@ -15,9 +15,10 @@ import outlines
 import pydantic_ai.messages as _messages
 import pydantic_ai.models as _models
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from ergon_core.core.providers.generation.model_resolution import ResolvedModel
 from pydantic_ai.settings import ModelSettings
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from ergon_builtins.models.resolution import ResolvedModel
 
 logger = logging.getLogger(__name__)
 

@@ -54,9 +54,7 @@ max-complexity = 10
 # main (13): spike script, not library code
 "scripts/**" = ["C901"]
 # persist_definition (28): orchestrates full experiment graph persistence in one method
-"ergon_core/ergon_core/core/runtime/services/experiment_persistence_service.py" = ["C901"]
-# validate (19): validates multi-level experiment object graph
-"ergon_core/ergon_core/api/experiment.py" = ["C901"]
+"ergon_core/ergon_core/core/application/experiments/definition_writer.py" = ["C901"]
 # extract_agent_trajectories (13), _extract_trajectories (11)
 "ergon_core/ergon_core/core/rl/extraction.py" = ["C901"]
 "ergon_core/ergon_core/core/rl/rollout_service.py" = ["C901"]
@@ -84,10 +82,10 @@ include = ["**/persistence/**/models.py", "**/persistence/graph/**"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 
-# Inngest step functions: ctx.event.data is typed as JSON, not the unpacked model;
+# Inngest handlers: ctx.event.data is typed as JSON, not the unpacked model;
 # ctx.step.run accepts sync or async but stubs only declare async.
 [[tool.ty.overrides]]
-include = ["**/runtime/inngest/**"]
+include = ["**/infrastructure/inngest/**"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 
@@ -112,7 +110,7 @@ invalid-assignment = "warn"
 # invalid-assignment: try/except ImportError fallbacks (AsyncSandbox = None,
 #   CommandExitException = Exception) when e2b SDK is unavailable.
 [[tool.ty.overrides]]
-include = ["**/providers/sandbox/**"]
+include = ["ergon_core/ergon_core/core/infrastructure/sandbox/**"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"
@@ -136,7 +134,7 @@ invalid-assignment = "warn"
 
 # pydantic-ai message formatting — complex generic dict unions ty can't resolve.
 [[tool.ty.overrides]]
-include = ["**/providers/generation/pydantic_ai_format.py"]
+include = ["**/common/llm_context/adapters/pydantic_ai.py"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"
@@ -157,9 +155,7 @@ invalid-return-type = "warn"
 # invalid-assignment: str passed to TaskExecutionStatus field — SQLModel coerces at runtime.
 [[tool.ty.overrides]]
 include = [
-    "**/persistence/queries.py",
     "**/persistence/telemetry/repositories.py",
-    "**/persistence/context/repository.py",
     "**/core/rl/rollout_service.py",
 ]
 [tool.ty.overrides.rules]
@@ -176,16 +172,13 @@ invalid-assignment = "warn"
 
 # Remaining files with isolated third-party type issues (inngest JSON, pydantic-ai, SQLModel select).
 # invalid-assignment covers:
-#   - tracing.py: OTLPSpanExporter = None try/except ImportError fallback
-#   - runtime/services/: SQLModel str→enum coercion (status fields)
+#   - infrastructure tracing: OTLPSpanExporter = None try/except ImportError fallback
 #   - ergon_infra/: tokenizer.pad_token assignment + TrainingStatus str coercion
 [[tool.ty.overrides]]
 include = [
-    "**/core/api/runs.py",
-    "**/core/api/test_harness.py",
-    "**/runtime/tracing.py",
-    "**/runtime/services/**",
-    "**/runtime/execution/**",
+    "**/core/rest_api/runs.py",
+    "**/core/rest_api/test_harness.py",
+    "**/core/infrastructure/tracing/**",
     "**/providers/judges/**",
     "**/benchmarks/smoke_test/**",
     "ergon_cli/**",
@@ -201,14 +194,14 @@ invalid-assignment = "warn"
 
 # Worker ABC: abstract async generator yield + Unknown response_text.
 [[tool.ty.overrides]]
-include = ["ergon_core/ergon_core/api/worker.py"]
+include = ["ergon_core/ergon_core/api/worker/worker.py"]
 [tool.ty.overrides.rules]
 invalid-yield = "warn"
 invalid-argument-type = "warn"
 
 # inngest_client.send_sync signature vs Callable[[Event], None] — harmless mismatch.
 [[tool.ty.overrides]]
-include = ["**/core/api/app.py"]
+include = ["**/core/rest_api/app.py"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 
@@ -253,7 +246,8 @@ allowed-unresolved-imports = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+pythonpath = ["."]
+testpaths = ["ergon_core/tests", "ergon_builtins/tests", "ergon_cli/tests", "tests"]
 timeout = 600
 markers = [
     "slow: marks tests as slow (deselect with '-m not slow')",

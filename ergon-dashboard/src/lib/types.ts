@@ -186,7 +186,7 @@ export interface TaskState {
   childIds: string[];
   dependsOnIds: string[];
   assignedWorkerId: string | null;
-  assignedWorkerName: string | null;
+  assignedWorkerSlug: string | null;
   /** From run snapshot `startedAt`: null only before the task has actually started. */
   startedAt: string | null;
   /** From run snapshot `completedAt`: null until the task finishes (or never started). */

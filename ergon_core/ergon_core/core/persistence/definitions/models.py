@@ -9,8 +9,8 @@ from datetime import datetime
 from typing import TypeVar
 from uuid import UUID, uuid4
 
-from ergon_core.api.json_types import JsonObject
-from ergon_core.core.utils import utcnow as _utcnow
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import BaseModel, model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel

@@ -80,7 +80,7 @@ def _check_tcp(host: str, port: int, label: str) -> bool:
 def _check_database() -> bool:
     try:
         # Deferred: avoid heavy import at CLI startup
-        from ergon_core.core.settings import settings  # type: ignore[import-untyped]
+        from ergon_core.core.shared.settings import settings  # type: ignore[import-untyped]
 
         url = settings.database_url
         if url.startswith("sqlite"):
@@ -104,7 +104,7 @@ def _check_database() -> bool:
 def _check_inngest() -> bool:
     try:
         # Deferred: avoid heavy import at CLI startup
-        from ergon_core.core.settings import settings  # type: ignore[import-untyped]
+        from ergon_core.core.shared.settings import settings  # type: ignore[import-untyped]
 
         base = settings.inngest_api_base_url
         parsed = urlparse(base)

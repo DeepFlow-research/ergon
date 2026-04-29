@@ -7,11 +7,12 @@ the full schema, then delegates to Alembic for migration execution.
 from logging.config import fileConfig
 
 import ergon_core.core.persistence.definitions.models
+import ergon_core.core.persistence.components.models
 import ergon_core.core.persistence.graph.models
 import ergon_core.core.persistence.saved_specs.models
 import ergon_core.core.persistence.telemetry.models
 from alembic import context
-from ergon_core.core.settings import Settings
+from ergon_core.core.shared.settings import Settings
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 

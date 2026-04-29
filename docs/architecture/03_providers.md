@@ -2,26 +2,28 @@
 
 ## 1. Purpose
 
-The providers layer is Ergon's boundary between runtime code and external execution substrates. It owns four concerns: resolving `model_id` strings to `pydantic_ai.models.Model` instances, provisioning and tearing down E2B sandboxes via per-benchmark manager subclasses, surfacing sandbox state transitions as dashboard events, and publishing worker outputs as content-addressed blobs that evaluators can re-read. Everything that crosses the process boundary (LLM API, container runtime, blob storage) is routed through this layer so the runtime, workers, and evaluators stay substrate-agnostic.
+The provider-style boundaries are Ergon's adapters between runtime code and external execution substrates. Model resolution lives in the generation registry, while sandbox infrastructure now lives under `ergon_core.core.sandbox` because it owns lifecycle, instrumentation, event emission, and artifact publishing rather than just a third-party provider adapter.
 
 ## 2. Core abstractions
 
 | Name | Kind | Location | Freeze status | Owner |
 | --- | --- | --- | --- | --- |
+| `_BACKEND_REGISTRY` | module-level dict | `ergon_core/core/providers/generation/model_resolution.py` | Frozen shape; entries grow via registration. | Providers layer. |
 | `resolve_model_target` | function | `ergon_core/core/providers/generation/model_resolution.py` | Public, frozen signature. Returns `ResolvedModel`. | Providers layer. |
-| `BaseSandboxManager` | abstract class + singleton | `ergon_core/core/providers/sandbox/manager.py` | Shape stable; `event_sink` activation path in flux. | Providers layer. |
-| `DefaultSandboxManager` | concrete class | `ergon_core/core/providers/sandbox/manager.py` | Frozen. | Providers layer. |
+| `register_model_backend` | function | `ergon_core/core/providers/generation/model_resolution.py` | Public, frozen signature. | Providers layer; callers are backend modules executing at import time. |
+| `BaseSandboxManager` | abstract class + singleton | `ergon_core/core/sandbox/manager.py` | Shape stable; `event_sink` activation path in flux. | Sandbox domain. |
+| `DefaultSandboxManager` | concrete class | `ergon_core/core/sandbox/manager.py` | Frozen. | Sandbox domain. |
 | `SWEBenchSandboxManager`, `MiniF2FSandboxManager`, `ResearchRubricsSandboxManager` | concrete subclasses | `ergon_builtins/` | Owned per benchmark; singletons. | Benchmark authors. |
-| `SandboxEventSink` | `typing.Protocol` | `ergon_core/core/providers/sandbox/event_sink.py` | Frozen protocol; activation path in flux. | Providers layer. |
-| `NoopSandboxEventSink`, `DashboardEmitterSandboxEventSink` | implementations | `ergon_core/core/providers/sandbox/event_sink.py` | Frozen. | Providers layer. |
-| `SandboxResourcePublisher` | class | `ergon_core/core/providers/sandbox/resource_publisher.py` | Frozen API; storage backend swappable via `ERGON_BLOB_ROOT`. | Providers layer. |
+| `SandboxEventSink` | `typing.Protocol` | `ergon_core/core/sandbox/event_sink.py` | Frozen protocol; activation path in flux. | Sandbox domain. |
+| `NoopSandboxEventSink`, `DashboardEmitterSandboxEventSink` | implementations | `ergon_core/core/sandbox/event_sink.py` | Frozen. | Sandbox domain. |
+| `SandboxResourcePublisher` | class | `ergon_core/core/sandbox/resource_publisher.py` | Frozen API; storage backend swappable via `ERGON_BLOB_ROOT`. | Sandbox domain. |
 | `TransformersModel` | `pydantic_ai.models.Model` subclass | `ergon_builtins/ergon_builtins/models/transformers_backend.py` | Frozen. | ML team (TRL training loop callers). |
 
-### 2.1 Model target resolution
+### 2.1 Generation registry
 
-`resolve_model_target` is the single dispatch point for model target strings. It splits the target on its first colon and returns a `ResolvedModel` wrapping a concrete `pydantic_ai.models.Model` instance. Unknown prefixes raise immediately instead of falling through to PydanticAI inference.
+`_BACKEND_REGISTRY` is a prefix-keyed dispatch table of resolver callables. `resolve_model_target` splits the target on its first colon, dispatches to the resolver, and returns a `ResolvedModel` wrapping either a `pydantic_ai.models.Model` instance or a passthrough string. Unknown prefixes fall through to a passthrough `ResolvedModel` — PydanticAI's own `infer_model` is invoked on use. Backends mutate the registry at import time; the builtins pack registers all four in a single loop at `ergon_builtins/ergon_builtins/registry.py:81`.
 
-The supported prefixes are `vllm:<base-url>[#<model>]`, `openai-compatible:<base-url>#<model>`, and cloud provider prefixes `openai:*` / `anthropic:*` / `google:*`. Cloud provider prefixes always route through OpenRouter via PydanticAI's OpenRouter provider; they do not call direct OpenAI, Anthropic, or Google APIs.
+The four prefixes registered today are `vllm:*` (local vLLM server via PydanticAI's `OpenAIChatModel`), `openai:*` / `anthropic:*` / `google:*` (passthrough to `infer_model`), and `transformers:*` (custom `TransformersModel` for TRL-trained checkpoints not served over vLLM).
 
 Workers are expected to hold no hardcoded SDK client constructions (`AsyncOpenAI`, `anthropic.Client`, `genai.Client`). This is an invariant (Section 4), not a coincidence, and is currently honored — enforcement is grep discipline.
 
@@ -85,7 +87,7 @@ The decentralized shape means `ergon benchmark setup` iterates over whatever sub
 Worker.execute()
     |
     +-> resolve_model_target(self.model)  -->  ResolvedModel
-    |       (explicit prefix dispatch; cloud targets route via OpenRouter)
+    |       (prefix dispatch; 4 backends + fallthrough to infer_model)
     |
     +-> ManagerClass()                    (singleton; returns cached instance)
     |   ManagerClass().create(sandbox_key=task_id, run_id=run_id, ...)
@@ -124,7 +126,7 @@ Movement of data across this diagram:
 ## 4. Invariants
 
 1. **One entry point to LLM resolution.** Every model reference goes through `resolve_model_target`. Enforced by grep discipline and review; no runtime check.
-2. **Cloud provider prefixes use OpenRouter.** `openai:*`, `anthropic:*`, and `google:*` model targets are OpenRouter-hosted targets. Direct cloud SDK model routing is intentionally outside the grammar.
+2. **Backends register at import time.** `register_model_backend` must be called before any caller hits `resolve_model_target`. Enforced by the builtins pack running its registration loop at import, before any worker module imports.
 3. **Singleton managers hold authoritative sandbox state.** A subclass's class-level state is the only source of truth for in-process reconnect. Enforced by `__new__` caching the instance and `get_sandbox` reading the class dict. Applies only within a single Python process; cross-process actors must use `terminate_by_sandbox_id` or provision their own sandbox.
 4. **Sandbox lifecycle is per-task.** Enforced by `create` accepting `sandbox_key` and by the worker runtime persisting `sandbox_id` on the execution row.
 5. **Sandbox lives across evaluator fan-out.** Teardown runs at the end of `check_evaluators`, not at worker completion, not in `finalize_success`. Enforced by the evaluator harness, not by the manager itself.
@@ -144,9 +146,10 @@ Movement of data across this diagram:
 
 ### 5.1 Add a new LLM backend
 
-1. Add an explicit prefix branch in `resolve_model_target` and keep the constructor logic in a sibling module under `ergon_core/core/providers/generation/`.
-2. Return a concrete `pydantic_ai.models.Model` instance wrapped in `ResolvedModel`.
-3. Add an entry to `LLMProvider` and `PROVIDER_KEY_MAP` in `ergon_cli/onboarding/profile.py` so onboarding prompts for the key or server URL.
+1. Write a resolver that maps `"myprefix:foo"` to a `pydantic_ai.models.Model` instance wrapped in `ResolvedModel`.
+2. Register it in the builtins-pack registration loop so `register_model_backend` is called at import time.
+3. Ensure the builtins pack is imported before any worker that references `myprefix:*` model ids.
+4. Add an entry to `LLMProvider` and `PROVIDER_KEY_MAP` in `ergon_cli/onboarding/profile.py` so onboarding prompts for the key or server URL.
 
 ### 5.2 Add a new sandbox manager
 

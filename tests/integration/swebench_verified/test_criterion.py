@@ -4,20 +4,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-
-from ergon_core.api.criterion_runtime import CommandResult
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import WorkerOutput
-from ergon_core.api.task_types import BenchmarkTask
-
 from ergon_builtins.benchmarks.swebench_verified.criterion import (
     SWEBenchTestCriterion,
 )
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
+from ergon_core.api.criterion import CriterionContext
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.api.benchmark import Task
+from ergon_core.core.application.evaluation.protocols import CommandResult
 
 
-def _task() -> BenchmarkTask[SWEBenchTaskPayload]:
-    return BenchmarkTask[SWEBenchTaskPayload](
+def _task() -> Task[SWEBenchTaskPayload]:
+    return Task[SWEBenchTaskPayload](
         task_slug="django__django-1",
         instance_key="default",
         description="Fix the thing",
@@ -73,9 +71,9 @@ def _ctx(
     *,
     output: str = "PATCH",
     runtime: object | None = None,
-) -> EvaluationContext:
+) -> CriterionContext:
     run_id = uuid4()
-    return EvaluationContext(
+    return CriterionContext(
         run_id=run_id,
         task_id=uuid4(),
         execution_id=uuid4(),
@@ -89,7 +87,7 @@ def _ctx(
 async def test_criterion_returns_score_0_for_empty_patch() -> None:
     """When ``git diff HEAD`` returns an empty tree, score is 0."""
     runtime = _mock_runtime(patch_text="")
-    crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
+    crit = SWEBenchTestCriterion(slug="test-resolution", weight=1.0)
     ctx = _ctx(output="", runtime=runtime)
     result = await crit.evaluate(ctx)
     assert result.score == 0.0
@@ -122,7 +120,7 @@ async def test_criterion_scores_1_when_report_resolved() -> None:
             },
         ),
     ):
-        crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
+        crit = SWEBenchTestCriterion(slug="test-resolution", weight=1.0)
         result = await crit.evaluate(_ctx(runtime=runtime))
 
     assert result.score == 1.0
@@ -155,7 +153,7 @@ async def test_criterion_scores_0_when_report_unresolved() -> None:
             },
         ),
     ):
-        crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
+        crit = SWEBenchTestCriterion(slug="test-resolution", weight=1.0)
         result = await crit.evaluate(_ctx(runtime=runtime))
 
     assert result.score == 0.0
@@ -179,7 +177,7 @@ async def test_criterion_applies_test_patch_then_agent_patch() -> None:
             return_value={"django__django-1": {"resolved": True, "tests_status": {}}},
         ),
     ):
-        crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
+        crit = SWEBenchTestCriterion(slug="test-resolution", weight=1.0)
         await crit.evaluate(_ctx(runtime=runtime))
 
     # reason: RFC 2026-04-22 §3 — post-refactor the criterion writes files via
@@ -199,7 +197,7 @@ async def test_criterion_applies_test_patch_then_agent_patch() -> None:
 @pytest.mark.asyncio
 async def test_criterion_raises_when_no_runtime_injected() -> None:
     """Without a runtime, evaluate raises RuntimeError (not AttributeError)."""
-    crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
+    crit = SWEBenchTestCriterion(slug="test-resolution", weight=1.0)
     ctx = _ctx(output="some patch text", runtime=None)
     with (
         patch(
@@ -226,9 +224,9 @@ async def test_criterion_returns_error_when_install_repo_fails() -> None:
         "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
         return_value=MagicMock(install_repo_script="echo INSTALL", eval_script="echo EVAL"),
     ):
-        crit = SWEBenchTestCriterion(name="test-resolution", weight=1.0)
+        crit = SWEBenchTestCriterion(slug="test-resolution", weight=1.0)
         result = await crit.evaluate(_ctx(runtime=runtime))
 
     assert result.score == 0.0
     assert result.passed is False
-    assert "install_repo" in str(result.metadata)
+    assert result.error == {"kind": "install_repo failed"}

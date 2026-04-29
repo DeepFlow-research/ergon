@@ -219,10 +219,10 @@ export interface RunSandbox
 export interface RunTask
   extends Omit<
     RawRunTask,
-    "assignedWorkerId" | "assignedWorkerName" | "childIds" | "completedAt" | "dependsOnIds" | "parentId" | "startedAt"
+    "assignedWorkerId" | "assignedWorkerSlug" | "childIds" | "completedAt" | "dependsOnIds" | "parentId" | "startedAt"
   > {
   assignedWorkerId: string | null;
-  assignedWorkerName: string | null;
+  assignedWorkerSlug: string | null;
   childIds: string[];
   /** Terminal wall time when set; null until finished or if the task never started. */
   completedAt: string | null;
@@ -360,7 +360,7 @@ function normalizeRunTask(task: RawRunTask): RunTask {
   return {
     ...task,
     assignedWorkerId: task.assignedWorkerId ?? null,
-    assignedWorkerName: task.assignedWorkerName ?? null,
+    assignedWorkerSlug: task.assignedWorkerSlug ?? null,
     childIds: task.childIds ?? [],
     completedAt: task.completedAt ?? null,
     dependsOnIds: task.dependsOnIds ?? [],

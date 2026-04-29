@@ -1,0 +1,253 @@
+"""DTOs for WorkflowGraphRepository return types.
+
+Frozen Pydantic models. Callers never receive raw SQLModel rows.
+
+UUID fields use NewType aliases (RunId, NodeId, etc.) so that type
+checkers catch cross-field swaps — e.g. passing a node_id where a
+run_id is expected. The aliases are erased at runtime (zero
+serialization cost).
+"""
+
+from datetime import datetime
+from typing import Annotated, Literal
+from uuid import UUID
+
+from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
+from ergon_core.core.persistence.shared.types import (
+    DefinitionId,
+    EdgeId,
+    NodeId,
+    RunId,
+)
+from pydantic import BaseModel, Field
+
+
+class MutationMeta(BaseModel):
+    """Audit context for every graph mutation.
+
+    ``actor`` is for audit logging (who did this), not authorization
+    (were they allowed to). The experiment layer enforces permissions
+    before calling the repository; the repository just records the actor.
+    """
+
+    model_config = {"frozen": True}
+
+    actor: str
+    reason: str | None = None
+
+
+class GraphNodeDto(BaseModel):
+    model_config = {"frozen": True}
+
+    id: NodeId
+    run_id: RunId
+    definition_task_id: DefinitionId | None
+    instance_key: str
+    task_slug: str
+    description: str
+    status: str = Field(
+        description=(
+            "Domain-specific node lifecycle status stored as a string because the database "
+            "allows experiment-specific statuses; see status_conventions."
+        )
+    )
+    assigned_worker_slug: str | None
+    parent_node_id: NodeId | None
+    level: int
+
+
+class GraphTaskRef(BaseModel):
+    """Lightweight task-node reference for workflow/tool projections."""
+
+    model_config = {"frozen": True}
+
+    node_id: NodeId
+    task_slug: str
+    status: NodeStatus
+    level: int
+    parent_node_id: NodeId | None = None
+    assigned_worker_slug: str | None = None
+    description: str | None = None
+
+
+class GraphEdgeDto(BaseModel):
+    model_config = {"frozen": True}
+
+    id: EdgeId
+    run_id: RunId
+    definition_dependency_id: DefinitionId | None
+    source_node_id: NodeId
+    target_node_id: NodeId
+    status: str = Field(
+        description=(
+            "Domain-specific edge lifecycle status stored as a string because the database "
+            "allows experiment-specific dependency statuses."
+        )
+    )
+
+
+class GraphAnnotationDto(BaseModel):
+    model_config = {"frozen": True}
+
+    id: UUID = Field(description="Identifier of the annotation row itself.")
+    run_id: RunId
+    target_type: GraphTargetType
+    target_id: UUID = Field(
+        description=(
+            "Polymorphic graph target identifier. Interpreted as a NodeId or EdgeId based "
+            "on target_type."
+        )
+    )
+    namespace: str
+    sequence: int
+    payload: JsonObject
+
+
+class GraphMutationRecordDto(BaseModel):
+    """Append-only graph mutation record with a typed mutation payload."""
+
+    model_config = {"frozen": True}
+
+    id: UUID = Field(description="Identifier of the mutation row itself, not a graph target id.")
+    run_id: RunId
+    sequence: int
+    mutation_type: MutationType
+    target_type: GraphTargetType
+    target_id: UUID = Field(
+        description=(
+            "Polymorphic mutation target identifier. Interpreted as a NodeId, EdgeId, or "
+            "annotation id based on target_type and mutation_type."
+        )
+    )
+    actor: str
+    old_value: "GraphMutationValue | None"
+    new_value: "GraphMutationValue"
+    reason: str | None
+    created_at: datetime
+
+
+class WorkflowGraphDto(BaseModel):
+    """Full graph snapshot returned by get_graph()."""
+
+    model_config = {"frozen": True}
+
+    run_id: RunId
+    nodes: list[GraphNodeDto] = Field(default_factory=list)
+    edges: list[GraphEdgeDto] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Typed mutation value models (discriminated union on mutation_type)
+# ---------------------------------------------------------------------------
+
+
+class NodeAddedMutation(BaseModel):
+    """node.added — full node snapshot."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["node.added"] = "node.added"
+    task_slug: str
+    instance_key: str
+    description: str
+    status: str
+    assigned_worker_slug: str | None
+
+
+class NodeRemovedMutation(BaseModel):
+    """node.removed — node snapshot at removal time."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["node.removed"] = "node.removed"
+    task_slug: str
+    instance_key: str
+    description: str
+    status: str
+    assigned_worker_slug: str | None
+
+
+class NodeStatusChangedMutation(BaseModel):
+    """node.status_changed."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["node.status_changed"] = "node.status_changed"
+    status: str
+
+
+class NodeFieldChangedMutation(BaseModel):
+    """node.field_changed."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["node.field_changed"] = "node.field_changed"
+    field: Literal["description", "assigned_worker_slug"]
+    value: str | None
+
+
+class EdgeAddedMutation(BaseModel):
+    """edge.added — full edge snapshot."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["edge.added"] = "edge.added"
+    source_node_id: NodeId
+    target_node_id: NodeId
+    status: str
+
+
+class EdgeRemovedMutation(BaseModel):
+    """edge.removed."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["edge.removed"] = "edge.removed"
+    source_node_id: NodeId
+    target_node_id: NodeId
+    status: str
+
+
+class EdgeStatusChangedMutation(BaseModel):
+    """edge.status_changed."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["edge.status_changed"] = "edge.status_changed"
+    status: str
+
+
+class AnnotationSetMutation(BaseModel):
+    """annotation.set."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["annotation.set"] = "annotation.set"
+    namespace: str
+    payload: JsonObject
+
+
+class AnnotationDeletedMutation(BaseModel):
+    """annotation.deleted — tombstone."""
+
+    model_config = {"frozen": True}
+
+    mutation_type: Literal["annotation.deleted"] = "annotation.deleted"
+    namespace: str
+    payload: JsonObject
+
+
+GraphMutationValue = Annotated[
+    NodeAddedMutation
+    | NodeRemovedMutation
+    | NodeStatusChangedMutation
+    | NodeFieldChangedMutation
+    | EdgeAddedMutation
+    | EdgeRemovedMutation
+    | EdgeStatusChangedMutation
+    | AnnotationSetMutation
+    | AnnotationDeletedMutation,
+    Field(discriminator="mutation_type"),
+]

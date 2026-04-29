@@ -12,9 +12,9 @@ from collections.abc import Iterable
 from typing import ClassVar, Literal
 
 from ergon_core.api.criterion import Criterion
-from ergon_core.api.evaluator import Rubric
-from ergon_core.api.results import CriterionResult, TaskEvaluationResult
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Task
+from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.rubric import Rubric, TaskEvaluationResult
 from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger(__name__)
@@ -146,8 +146,8 @@ class StagedRubric(Rubric):
 
     def aggregate_task(
         self,
-        task: BenchmarkTask,
-        criterion_results: Iterable[CriterionResult],
+        task: Task,
+        criterion_results: Iterable[CriterionOutcome],
     ) -> TaskEvaluationResult:
         results = list(criterion_results)
         stage_results = self._rebuild_stage_results(results)
@@ -212,7 +212,7 @@ class StagedRubric(Rubric):
 
     # -- internal helpers ---------------------------------------------------
 
-    def _rebuild_stage_results(self, criterion_results: list[CriterionResult]) -> list[dict]:
+    def _rebuild_stage_results(self, criterion_results: list[CriterionOutcome]) -> list[dict]:
         stage_results: list[dict] = []
         for stage_idx, stage in enumerate(self.stages):
             stage_criteria = [

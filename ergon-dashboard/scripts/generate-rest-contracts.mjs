@@ -10,6 +10,16 @@ const source = readFileSync(contractsPath, "utf8")
   .replace('import { makeApi, Zodios, type ZodiosOptions } from "@zodios/core";\n', "")
   // openapi-zod-client generates z.record(V) but Zod requires z.record(K, V).
   .replace(/z\.record\((?!z\.string\(\))/g, "z.record(z.string(), ")
+  // Preserve literal discriminators for generated context-event payload unions.
+  .replace(
+    /event_type: z\.string\(\)\.optional\(\)\.default\("([^"]+)"\)/g,
+    'event_type: z.literal("$1").default("$1")',
+  )
+  // Preserve literal discriminators for generated context-part unions.
+  .replace(
+    /part_kind: z\.string\(\)\.optional\(\)\.default\("([^"]+)"\)/g,
+    'part_kind: z.literal("$1").default("$1")',
+  )
   // Recursive JSON schemas must be lazy or the generated module dereferences
   // JsonValue_Input before it has been initialized.
   .replace(

@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from ergon_core.api.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
     TaskExecutionStatus,
     TrainingStatus,
 )
-from ergon_core.core.utils import utcnow as _utcnow
+from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
@@ -65,6 +65,8 @@ class ExperimentRecord(SQLModel, table=True):
     default_worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     default_evaluator_slug: str | None = Field(default=None, index=True)
     default_model_target: str | None = None
+    sandbox_slug: str | None = Field(default=None, index=True)
+    dependency_extras_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     design_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     seed: int | None = None
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
@@ -86,6 +88,11 @@ class ExperimentRecord(SQLModel, table=True):
     def parsed_design(self) -> JsonObject:
         return self.__class__._parse_json_object(self.design_json, "design_json")
 
+    def parsed_dependency_extras(self) -> JsonObject:
+        return self.__class__._parse_json_object(
+            self.dependency_extras_json, "dependency_extras_json"
+        )
+
     def parsed_metadata(self) -> JsonObject:
         return self.__class__._parse_json_object(self.metadata_json, "metadata_json")
 
@@ -99,6 +106,7 @@ class ExperimentRecord(SQLModel, table=True):
     def _validate_fields(self) -> "ExperimentRecord":
         self.__class__._parse_json_object(self.sample_selection_json, "sample_selection_json")
         self.__class__._parse_json_object(self.default_worker_team_json, "default_worker_team_json")
+        self.__class__._parse_json_object(self.dependency_extras_json, "dependency_extras_json")
         self.__class__._parse_json_object(self.design_json, "design_json")
         self.__class__._parse_json_object(self.metadata_json, "metadata_json")
         return self
@@ -124,6 +132,8 @@ class RunRecord(SQLModel, table=True):
     worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     evaluator_slug: str | None = Field(default=None, index=True)
     model_target: str | None = None
+    sandbox_slug: str | None = Field(default=None, index=True)
+    dependency_extras_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     assignment_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     seed: int | None = None
     status: RunStatus = Field(index=True)
@@ -139,6 +149,11 @@ class RunRecord(SQLModel, table=True):
     def parsed_assignment(self) -> JsonObject:
         return self.__class__._parse_json_object(self.assignment_json, "assignment_json")
 
+    def parsed_dependency_extras(self) -> JsonObject:
+        return self.__class__._parse_json_object(
+            self.dependency_extras_json, "dependency_extras_json"
+        )
+
     def parsed_summary(self) -> JsonObject:
         return self.__class__._parse_json_object(self.summary_json, "summary_json")
 
@@ -151,6 +166,7 @@ class RunRecord(SQLModel, table=True):
     @model_validator(mode="after")
     def _validate_fields(self) -> "RunRecord":
         self.__class__._parse_json_object(self.worker_team_json, "worker_team_json")
+        self.__class__._parse_json_object(self.dependency_extras_json, "dependency_extras_json")
         self.__class__._parse_json_object(self.assignment_json, "assignment_json")
         self.__class__._parse_json_object(self.summary_json, "summary_json")
         try:
@@ -247,49 +263,6 @@ class RunTaskExecution(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 
 
-class RunResourceKind(StrEnum):
-    """Canonical kinds for ``run_resources.kind``.
-
-    Stored as VARCHAR; enforced at the API boundary, not in the DB schema.
-    Each kind documents the publisher that produces it so a new reader can
-    trace a row back to the code that wrote it.
-    """
-
-    OUTPUT = "output"
-    """Explicit text artifact published by a worker/toolkit.
-
-    Worker final assistant messages belong on
-    ``RunTaskExecution.final_assistant_message`` instead of this resource log.
-    """
-
-    REPORT = "report"
-    """Terminal report written by a worker into a sandbox publish
-    directory (default: ``/workspace/final_output/``).  Produced by
-    ``SandboxResourcePublisher.sync()`` -- called from the
-    research-rubrics toolkit after every write and from
-    ``persist_outputs`` at task end."""
-
-    ARTIFACT = "artifact"
-    """Intermediate file a worker saved into a publish directory that
-    isn't a report (e.g. plots, derived datasets).  Same publisher path
-    as ``REPORT`` but with a different ``PUBLISH_DIRS`` mapping."""
-
-    SEARCH_CACHE = "search_cache"
-    """Raw JSON search payload cached by the research toolkit's Exa
-    search handler.  Produced by the toolkit calling
-    ``publisher.publish_value(kind=SEARCH_CACHE, ...)``."""
-
-    NOTE = "note"
-    """Free-form scratch note written by an agent via
-    ``publish_value(kind=NOTE, ...)`` -- used by the manager worker to
-    leave breadcrumbs for subsequent researchers."""
-
-    IMPORT = "import"
-    """Copied snapshot materialized from another ``RunResource`` into a task
-    workspace. The source resource remains immutable and owns its original
-    artifact; the import row belongs to the consuming task execution."""
-
-
 class RunResource(SQLModel, table=True):
     __tablename__ = "run_resources"
 
@@ -299,7 +272,10 @@ class RunResource(SQLModel, table=True):
         default=None,
         foreign_key="run_task_executions.id",
     )
-    kind: str = "output"  # Literal["output"] — str for SQLModel compat
+    kind: str = Field(
+        default="output",
+        description="Canonical artifact kind from shared RunResourceKind.",
+    )
     name: str
     mime_type: str
     file_path: str
@@ -329,6 +305,8 @@ class RunResource(SQLModel, table=True):
 
     @model_validator(mode="after")
     def _validate_fields(self) -> "RunResource":
+        from ergon_core.core.persistence.shared.enums import RunResourceKind
+
         self.__class__._parse_metadata(self.metadata_json)
         try:
             RunResourceKind(self.kind)

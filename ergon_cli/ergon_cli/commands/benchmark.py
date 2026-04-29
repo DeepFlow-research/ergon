@@ -1,4 +1,4 @@
-"""Benchmark subcommand: list and setup benchmarks."""
+"""Benchmark subcommand: list, run, and setup benchmarks."""
 
 import json
 import os
@@ -11,9 +11,19 @@ from pathlib import Path
 from typing import Protocol
 
 from e2b import Template
-from ergon_core.api.json_types import JsonObject
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.persistence.shared.db import ensure_db
+from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
+from ergon_core.core.application.experiments.service import (
+    ExperimentService,
+)
+from ergon_core.core.application.experiments.models import (
+    ExperimentDefineRequest,
+    ExperimentRunRequest,
+)
+from ergon_core.core.shared.settings import settings
 
+from ergon_cli.commands.experiment import validate_explicit_runtime_choices
 from ergon_cli.discovery import list_benchmarks
 from ergon_cli.rendering import render_table
 
@@ -38,6 +48,8 @@ async def handle_benchmark(args: Namespace) -> int:
         benchmarks = list_benchmarks()
         render_table(["Slug", "Name", "Description"], benchmarks)
         return 0
+    elif args.bench_action == "run":
+        return await run_benchmark(args)
     elif args.bench_action == "setup":
         return setup_benchmark(args)
     else:
@@ -165,7 +177,51 @@ def setup_benchmark(args: Namespace) -> int:
     # 7. Report
     print(f"\nSuccess! Template ID: {template_id} (build {build_info.build_id}, {build_time}s)")
     print(
-        "Now run: "
-        f"`ergon experiment define {slug} --worker minif2f-react --model <model> --limit 1`"
+        f"Now run: `ergon benchmark run {slug} --limit 1 --worker <worker> "
+        "--model <model> --evaluator <evaluator> --sandbox "
+        f"{slug} --extras none`"
     )
+    return 0
+
+
+async def run_benchmark(args: Namespace) -> int:
+    ensure_db()
+    benchmark_slug = args.slug
+    validation_args = Namespace(
+        benchmark_slug=benchmark_slug,
+        worker=args.worker,
+        evaluator=args.evaluator,
+        sandbox=args.sandbox,
+        model=args.model,
+        extras=args.extras,
+    )
+    dependency_extras = validate_explicit_runtime_choices(validation_args)
+    cohort_name = args.slug if args.cohort is None else args.cohort
+    cohort = experiment_cohort_service.resolve_or_create(
+        name=cohort_name,
+        description=f"Benchmark: {args.slug} | worker: {args.worker} | evaluator: {args.evaluator}",
+        created_by="ergon-cli",
+    )
+    experiment_service = ExperimentService()
+    defined = experiment_service.define_benchmark_experiment(
+        ExperimentDefineRequest(
+            benchmark_slug=benchmark_slug,
+            name=args.name,
+            cohort_id=cohort.id,
+            limit=args.limit,
+            sample_ids=args.sample_id or None,
+            default_model_target=args.model,
+            default_worker_team={"primary": args.worker},
+            default_evaluator_slug=args.evaluator,
+            sandbox_slug=args.sandbox,
+            dependency_extras=dependency_extras,
+            metadata={"workflow": args.workflow, "max_questions": args.max_questions},
+        )
+    )
+    launched = await experiment_service.run_experiment(
+        ExperimentRunRequest(experiment_id=defined.experiment_id)
+    )
+    print(f"EXPERIMENT_ID={launched.experiment_id}")
+    for run_id in launched.run_ids:
+        print(f"RUN_ID={run_id}")
     return 0

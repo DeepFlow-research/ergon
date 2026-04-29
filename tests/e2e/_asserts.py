@@ -8,10 +8,8 @@ pass every check independently.  Cohort-level helpers (e.g.
 See docs/superpowers/plans/test-refactor/02-drivers-and-asserts.md §2
 and §10 for the full catalogue.
 
-Schema paths are best-effort sketches against the current
-``ergon_core.core.persistence.*`` models; if a table name moves, fix
-the import + query inline rather than pushing complexity into this
-module.
+Persistence-specific reads live behind ``ergon_core.test_support`` so
+these e2e assertions stay stable while private core modules move.
 """
 
 from __future__ import annotations
@@ -21,29 +19,34 @@ import asyncio
 import json
 import os
 import time
-from pathlib import Path
 from uuid import UUID
 
 import httpx
-from sqlmodel import select
-
-from ergon_core.core.api.schemas import RunTaskDto
-from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import BLOCKED, COMPLETED, FAILED
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import (
-    RunResource,
-    RunTaskExecution,
-    SandboxCommandWalEntry,
-    SandboxEvent,
+from ergon_core.core.application.read_models.models import RunTaskDto
+from ergon_core.test_support.e2e_read_helpers import (
+    ResourceSnapshot,
+    first_probe_resource,
+    leaf_execution_timings_by_slug,
+    list_named_resources,
+    list_root_execution_and_evaluations,
+    list_sandbox_command_wal,
+    list_sandbox_events,
+    read_resource_bytes,
 )
+from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
+from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
+from tests.fixtures.smoke_components.smoke_base.recursive import (
+    NESTED_LINE_SLUGS,
+    RecursiveSmokeWorkerBase,
+)
+from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBase
 
-from ergon_core.test_support.smoke_fixtures.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
-from ergon_core.test_support.smoke_fixtures.smoke_base.leaf_base import BaseSmokeLeafWorker
-from ergon_core.test_support.smoke_fixtures.smoke_base.worker_base import SmokeWorkerBase
 from tests.e2e._read_contracts import require_run_snapshot
 
 TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
+BLOCKED = "blocked"
+COMPLETED = "completed"
+FAILED = "failed"
 
 
 # =============================================================================
@@ -52,21 +55,30 @@ TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
 
 
 def _assert_run_graph(run_id: UUID) -> None:
-    """1 root + 9 leaves = 10 tasks; all COMPLETED; deps honoured."""
+    """Happy path: root + 9 direct children + 2 nested children; all COMPLETED."""
     snapshot = require_run_snapshot(run_id)
     tasks = list(snapshot.tasks.values())
+    by_slug = {task.name: task for task in tasks}
     leaves = [task for task in tasks if task.level > 0]
     root_tasks = [task for task in tasks if task.level == 0]
 
-    assert snapshot.total_tasks == 10, f"expected 10 tasks, got {snapshot.total_tasks}"
-    assert snapshot.total_leaf_tasks == 9, f"expected 9 leaf tasks, got {snapshot.total_leaf_tasks}"
+    assert snapshot.total_tasks == 12, f"expected 12 tasks, got {snapshot.total_tasks}"
+    assert snapshot.total_leaf_tasks == 10, (
+        f"expected 10 leaf tasks, got {snapshot.total_leaf_tasks}"
+    )
     assert len(root_tasks) == 1, f"expected 1 root task, got {len(root_tasks)}"
     assert snapshot.root_task_id == root_tasks[0].id
-    assert sorted(task.name for task in leaves) == sorted(EXPECTED_SUBTASK_SLUGS)
+    assert sorted(task.name for task in tasks if task.level == 1) == sorted(
+        EXPECTED_SUBTASK_SLUGS,
+    )
+    assert sorted(task.name for task in tasks if task.level == 2) == sorted(NESTED_LINE_SLUGS)
+    assert by_slug["l_2"].is_leaf is False
+    assert by_slug["l_2_a"].parent_id == by_slug["l_2"].id
+    assert by_slug["l_2_b"].parent_id == by_slug["l_2"].id
     non_completed = [(task.name, task.status) for task in tasks if task.status != COMPLETED]
     assert not non_completed, f"non-completed nodes: {non_completed}"
 
-    _assert_dag_edges(leaves)
+    _assert_dag_edges(tasks)
 
 
 def _assert_dag_edges(leaves: list[RunTaskDto]) -> None:
@@ -85,13 +97,14 @@ def _assert_dag_edges(leaves: list[RunTaskDto]) -> None:
         ("d_right", "d_join"),
         ("l_1", "l_2"),
         ("l_2", "l_3"),
+        ("l_2_a", "l_2_b"),
     }
     missing = expected_pairs - actual_pairs
     assert not missing, f"missing DAG edges: {missing}"
 
 
 def _assert_run_resources(run_id: UUID) -> None:
-    """Exactly 18 task resources: 9 benchmark artifacts + 9 probe_*.json."""
+    """Exactly 20 task resources: 10 benchmark artifacts + 10 probe_*.json."""
     snapshot = require_run_snapshot(run_id)
     resources = [
         resource
@@ -103,27 +116,28 @@ def _assert_run_resources(run_id: UUID) -> None:
         for resource in resources
         if resource.name.startswith("probe_") and resource.name.endswith(".json")
     ]
-    assert len(probes) == 9, f"expected 9 probe_*.json (kind=report) resources, got {len(probes)}"
+    assert len(probes) == 10, f"expected 10 probe_*.json (kind=report) resources, got {len(probes)}"
     worker_outputs = [resource for resource in resources if resource.name == "worker_output"]
     assert not worker_outputs, (
         "worker final assistant messages must stay on executions, not resources"
     )
-    assert len(resources) == 18, (
-        f"expected 18 task artifact resources (9 outputs + 9 probes), got {len(resources)}"
+    assert len(resources) == 20, (
+        f"expected 20 task artifact resources (10 outputs + 10 probes), got {len(resources)}"
     )
 
 
 def _assert_run_turn_counts(run_id: UUID) -> None:
-    """1 parent × PARENT_TURN_COUNT + N leaves × LEAF_TURN_COUNT context events.
+    """Parent + recursive ``l_2`` + artifact leaves emit fixed chunk counts.
 
-    Each smoke ``GenerationTurn`` has ``messages_in=[]`` and one ``TextPart``
-    in ``response_parts``, so ``persist_turn`` emits exactly 1 ``RunContextEvent``
-    per turn.  Total = PARENT_TURN_COUNT + len(EXPECTED_SUBTASK_SLUGS) × LEAF_TURN_COUNT.
+    Each smoke context chunk contains one assistant text part, so persistence
+    emits exactly one ``RunContextEvent`` per chunk.
     """
+    leaf_count = len(EXPECTED_SUBTASK_SLUGS) - 1 + len(NESTED_LINE_SLUGS)
     expected = (
         SmokeWorkerBase.PARENT_TURN_COUNT
-        + len(EXPECTED_SUBTASK_SLUGS) * BaseSmokeLeafWorker.LEAF_TURN_COUNT
-    )  # currently 3 + 9×2 = 21
+        + RecursiveSmokeWorkerBase.RECURSIVE_TURN_COUNT
+        + leaf_count * BaseSmokeLeafWorker.LEAF_TURN_COUNT
+    )  # currently 3 + 3 + 10×2 = 26
 
     snapshot = require_run_snapshot(run_id)
     event_count = sum(len(events) for events in snapshot.context_events_by_task.values())
@@ -131,29 +145,53 @@ def _assert_run_turn_counts(run_id: UUID) -> None:
     assert event_count == expected, (
         f"turn count mismatch: expected {expected} "
         f"(parent={SmokeWorkerBase.PARENT_TURN_COUNT}, "
-        f"leaves={len(EXPECTED_SUBTASK_SLUGS)}×{BaseSmokeLeafWorker.LEAF_TURN_COUNT}), got {event_count}"
+        f"recursive={RecursiveSmokeWorkerBase.RECURSIVE_TURN_COUNT}, "
+        f"leaves={leaf_count}×{BaseSmokeLeafWorker.LEAF_TURN_COUNT}), got {event_count}"
     )
 
 
 def _assert_run_evaluation(run_id: UUID) -> None:
-    """Exactly 1 RunTaskEvaluation row with score 1.0.
+    """Exactly 2 root RunTaskEvaluation rows with score 1.0.
 
     Retries for up to 30 s because the evaluator Inngest function fires
-    asynchronously after the run reaches terminal state.
+    asynchronously after the root task reaches terminal state.  The second
+    evaluator is the root timing marker; both must be created after root
+    execution completed.
     """
     deadline = time.monotonic() + 30
     evaluations = []
+    root_execution = None
     while time.monotonic() < deadline:
-        snapshot = require_run_snapshot(run_id)
-        evaluations = list(snapshot.evaluations_by_task.values())
-        if evaluations:
+        root_execution, evaluations = list_root_execution_and_evaluations(run_id)
+        if len(evaluations) == 2:
             break
         time.sleep(2)
-    assert len(evaluations) == 1, f"expected 1 task evaluation, got {len(evaluations)}"
-    assert evaluations[0].total_score == 1.0, (
-        f"expected score 1.0, got {evaluations[0].total_score}"
+    assert root_execution is not None, "expected root task execution"
+    assert root_execution.completed_at is not None, "expected root execution completed_at"
+    assert len(evaluations) == 2, f"expected 2 root task evaluations, got {len(evaluations)}"
+    scores = [evaluation.score for evaluation in evaluations]
+    assert scores == [1.0, 1.0], f"expected two score 1.0 evaluations, got {scores}"
+    early = [
+        evaluation.created_at
+        for evaluation in evaluations
+        if evaluation.created_at < root_execution.completed_at
+    ]
+    assert not early, (
+        "root evaluations must be created after the root execution completes; "
+        f"early timestamps={early}, completed_at={root_execution.completed_at}"
     )
+    snapshot = require_run_snapshot(run_id)
     assert snapshot.final_score == 1.0
+    snapshot_evaluations = list(snapshot.evaluations_by_task.values())
+    assert snapshot_evaluations, "expected run snapshot evaluation DTOs"
+    for dto in snapshot_evaluations:
+        assert dto.evaluator_name, "evaluation DTO must expose evaluator_name"
+        assert dto.aggregation_rule, "evaluation DTO must expose aggregation_rule"
+        for criterion in dto.criterion_results:
+            assert criterion.criterion_name, "criterion must expose criterion_name"
+            assert criterion.status in {"passed", "failed", "errored", "skipped"}
+            assert criterion.weight >= 0
+            assert criterion.contribution >= 0
 
 
 # =============================================================================
@@ -163,12 +201,7 @@ def _assert_run_evaluation(run_id: UUID) -> None:
 
 def _assert_sandbox_command_wal(run_id: UUID) -> None:
     """Bash commands land as WAL rows via ``PostgresSandboxEventSink``."""
-    with get_session() as s:
-        entries = list(
-            s.exec(
-                select(SandboxCommandWalEntry).where(SandboxCommandWalEntry.run_id == run_id),
-            ).all(),
-        )
+    entries = list_sandbox_command_wal(run_id)
     probes = [e for e in entries if "wc" in e.command or "probe" in e.command]
     # Canonical sad-path smokes block l_3 before it starts, so the eight
     # executed leaves should emit probe commands while l_3 emits none.
@@ -178,10 +211,9 @@ def _assert_sandbox_command_wal(run_id: UUID) -> None:
 def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
     """``sandbox_created`` + ``sandbox_closed`` symmetric per sandbox."""
     deadline = time.monotonic() + 30
-    events: list[SandboxEvent] = []
+    events = []
     while time.monotonic() < deadline:
-        with get_session() as s:
-            events = list(s.exec(select(SandboxEvent).where(SandboxEvent.run_id == run_id)).all())
+        events = list_sandbox_events(run_id)
         created = {e.sandbox_id for e in events if e.kind == "sandbox_created"}
         closed = {e.sandbox_id for e in events if e.kind == "sandbox_closed"}
         if created == closed:
@@ -197,15 +229,15 @@ def _assert_sandbox_lifecycle_events(run_id: UUID) -> None:
 
 
 def _assert_thread_messages_ordered(run_id: UUID) -> None:
-    """9 completion messages on the ``smoke-completion`` thread."""
+    """11 completion messages on the ``smoke-completion`` thread."""
     snapshot = require_run_snapshot(run_id)
     threads = [thread for thread in snapshot.threads if thread.topic == "smoke-completion"]
     assert len(threads) == 1, f"expected 1 smoke-completion thread, got {len(threads)}"
     msgs = sorted(threads[0].messages, key=lambda msg: msg.sequence_num)
-    assert len(msgs) == 9, f"expected 9 completion messages, got {len(msgs)}"
-    assert [m.sequence_num for m in msgs] == list(range(1, 10))
+    assert len(msgs) == 11, f"expected 11 completion messages, got {len(msgs)}"
+    assert [m.sequence_num for m in msgs] == list(range(1, 12))
     from_slugs = {m.from_agent_id.removeprefix("leaf-") for m in msgs}
-    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS), (
+    assert from_slugs == set(EXPECTED_SUBTASK_SLUGS) | set(NESTED_LINE_SLUGS), (
         f"from_agent_id slug set mismatch: {sorted(from_slugs)}"
     )
     assert all(m.to_agent_id == "parent" for m in msgs)
@@ -222,23 +254,11 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
     legacy ``kind='output'`` rows store container-internal download paths
     that are not directly accessible from the host-side test process.
     """
-    with get_session() as s:
-        row = s.exec(
-            select(RunResource)
-            .where(RunResource.run_id == run_id)
-            .where(
-                RunResource.name.like("probe_%.json"),  # ty: ignore[unresolved-attribute]
-            )
-            .where(RunResource.kind == "report")
-            .order_by(
-                RunResource.created_at,  # ty: ignore[unresolved-attribute]
-            )
-            .limit(1),
-        ).first()
+    row = first_probe_resource(run_id)
     assert row is not None, "no probe_*.json (kind=report) to round-trip"
     assert row.content_hash
-    bytes_a = Path(row.file_path).read_bytes()
-    bytes_b = Path(row.file_path).read_bytes()
+    bytes_a = read_resource_bytes(row)
+    bytes_b = read_resource_bytes(row)
     assert bytes_a == bytes_b, "blob read non-deterministic"
     parsed = json.loads(bytes_a)
     assert "exit_code" in parsed, f"probe JSON missing exit_code: {parsed!r}"
@@ -246,18 +266,18 @@ def _assert_blob_roundtrip(run_id: UUID) -> None:
 
 def _assert_minif2f_artifacts(run_id: UUID) -> None:
     """Every MiniF2F leaf persists a Lean proof artifact with the smoke theorem."""
-    resources = _require_named_resources(run_id, prefix="proof_", suffix=".lean", expected_count=9)
+    resources = _require_named_resources(run_id, prefix="proof_", suffix=".lean", expected_count=10)
     for resource in resources:
-        text = Path(resource.file_path).read_bytes().decode("utf-8")
+        text = read_resource_bytes(resource).decode("utf-8")
         assert "theorem smoke_trivial" in text, f"{resource.name} missing theorem marker"
         assert ":=" in text, f"{resource.name} missing Lean proof term"
 
 
 def _assert_swebench_artifacts(run_id: UUID) -> None:
     """Every SWE-Bench leaf persists a parseable Python patch with add()."""
-    resources = _require_named_resources(run_id, prefix="patch_", suffix=".py", expected_count=9)
+    resources = _require_named_resources(run_id, prefix="patch_", suffix=".py", expected_count=10)
     for resource in resources:
-        source = Path(resource.file_path).read_bytes().decode("utf-8")
+        source = read_resource_bytes(resource).decode("utf-8")
         module = ast.parse(source, filename=resource.name)
         function_names = {
             node.name for node in ast.walk(module) if isinstance(node, ast.FunctionDef)
@@ -271,17 +291,8 @@ def _require_named_resources(
     prefix: str,
     suffix: str,
     expected_count: int,
-) -> list[RunResource]:
-    with get_session() as s:
-        resources = list(
-            s.exec(
-                select(RunResource)
-                .where(RunResource.run_id == run_id)
-                .where(
-                    RunResource.name.like(f"{prefix}%{suffix}"),  # ty: ignore[unresolved-attribute]
-                ),
-            ).all(),
-        )
+) -> list[ResourceSnapshot]:
+    resources = list_named_resources(run_id, prefix=prefix, suffix=suffix)
     assert len(resources) == expected_count, (
         f"expected {expected_count} {prefix}*{suffix} resources, got {len(resources)}"
     )
@@ -298,25 +309,7 @@ def _assert_temporal_ordering(run_id: UUID) -> None:
     at least ``started`` state. Blocked descendants are skipped because
     they should never have execution timestamps.
     """
-    with get_session() as s:
-        leaves = list(
-            s.exec(
-                select(RunGraphNode)
-                .where(RunGraphNode.run_id == run_id)
-                .where(RunGraphNode.level > 0),
-            ).all(),
-        )
-        executions = list(
-            s.exec(
-                select(RunTaskExecution)
-                .where(RunTaskExecution.run_id == run_id)
-                .where(
-                    RunTaskExecution.node_id.in_([leaf.id for leaf in leaves]),  # ty: ignore[unresolved-attribute]
-                ),
-            ).all(),
-        )
-    by_node = {e.node_id: e for e in executions if e.node_id is not None}
-    slug_exec = {leaf.task_slug: by_node.get(leaf.id) for leaf in leaves}
+    slug_exec = leaf_execution_timings_by_slug(run_id)
 
     def _after(child: str, parents: list[str]) -> None:
         c_exec = slug_exec.get(child)
@@ -391,18 +384,9 @@ def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
     """``AlwaysFailSubworker`` writes ``partial_<node>.md`` before raising.
     The runtime's persist step must still serialize it as a RunResource."""
     deadline = time.monotonic() + 30
-    partials: list[RunResource] = []
+    partials: list[ResourceSnapshot] = []
     while time.monotonic() < deadline:
-        with get_session() as s:
-            partials = list(
-                s.exec(
-                    select(RunResource)
-                    .where(RunResource.run_id == run_id)
-                    .where(
-                        RunResource.name.like("partial_%.md"),  # ty: ignore[unresolved-attribute]
-                    ),
-                ).all(),
-            )
+        partials = list_named_resources(run_id, prefix="partial_", suffix=".md")
         if partials:
             break
         time.sleep(2)
@@ -412,21 +396,16 @@ def _assert_sadpath_partial_artifact(run_id: UUID) -> None:
     )
     r = partials[0]
     assert r.content_hash, "partial resource missing content_hash"
-    body = Path(r.file_path).read_bytes().decode("utf-8")
+    body = read_resource_bytes(r).decode("utf-8")
     assert body.startswith("# Partial work"), f"partial artifact body unexpected: {body[:80]!r}"
 
 
 def _assert_sadpath_partial_wal(run_id: UUID) -> None:
     """Pre-failure ``wc -l partial_*`` command persists as WAL row."""
     deadline = time.monotonic() + 30
-    wc: list[SandboxCommandWalEntry] = []
+    wc = []
     while time.monotonic() < deadline:
-        with get_session() as s:
-            entries = list(
-                s.exec(
-                    select(SandboxCommandWalEntry).where(SandboxCommandWalEntry.run_id == run_id),
-                ).all(),
-            )
+        entries = list_sandbox_command_wal(run_id)
         wc = [e for e in entries if "wc -l" in e.command and "partial_" in e.command]
         if wc:
             break

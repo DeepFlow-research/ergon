@@ -10,9 +10,9 @@ Scoring logic::
 from collections.abc import Iterable
 from typing import ClassVar
 
-from ergon_core.api.evaluator import Rubric
-from ergon_core.api.results import CriterionResult, TaskEvaluationResult
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Task
+from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.rubric import Rubric, TaskEvaluationResult
 
 from ergon_builtins.benchmarks.minif2f.criteria import build_proof_criterion
 
@@ -43,8 +43,8 @@ class MiniF2FRubric(Rubric):
 
     def aggregate_task(
         self,
-        task: BenchmarkTask,
-        criterion_results: Iterable[CriterionResult],
+        task: Task,
+        criterion_results: Iterable[CriterionOutcome],
     ) -> TaskEvaluationResult:
         results = list(criterion_results)
         if len(results) != 1:

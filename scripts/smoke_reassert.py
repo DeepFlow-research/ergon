@@ -37,7 +37,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 # Register smoke fixtures so runtime ClassVars (PARENT_TURN_COUNT etc.) are
 # wired up identically to how the driver sees them.
-from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+from tests.fixtures.smoke_components import register_smoke_fixtures
 
 register_smoke_fixtures()
 from tests.e2e._asserts import (

@@ -25,7 +25,6 @@ from collections.abc import Awaitable
 from types import UnionType
 from typing import ClassVar, Literal, Protocol, cast, get_args, get_type_hints
 
-from ergon_core.core.providers.generation.model_resolution import resolve_model_target
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
@@ -36,6 +35,7 @@ from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportWriteResponse,
     SearchResponse,
 )
+from ergon_builtins.models.resolution import resolve_model_target
 
 logger = logging.getLogger(__name__)
 

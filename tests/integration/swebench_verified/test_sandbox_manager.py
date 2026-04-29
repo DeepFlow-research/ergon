@@ -7,13 +7,11 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
+from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
-from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
-
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 # ---------------------------------------------------------------------------
 # Reset the singleton between tests — BaseSandboxManager stores _instance and
@@ -115,12 +113,12 @@ async def test_create_threads_template_kwarg_to_e2b_sdk(
 
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.infrastructure.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     # settings.e2b_api_key must be truthy for create() to proceed.
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.infrastructure.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 
@@ -180,11 +178,11 @@ async def test_verify_setup_raises_when_git_missing(
 
     fake_create = AsyncMock(return_value=fake_sandbox)
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.AsyncSandbox",
+        "ergon_core.core.infrastructure.sandbox.manager.AsyncSandbox",
         MagicMock(create=fake_create),
     )
     monkeypatch.setattr(
-        "ergon_core.core.providers.sandbox.manager.settings.e2b_api_key",
+        "ergon_core.core.infrastructure.sandbox.manager.settings.e2b_api_key",
         "test-key",
     )
 

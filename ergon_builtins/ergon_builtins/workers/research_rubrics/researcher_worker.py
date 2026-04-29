@@ -5,20 +5,17 @@ observability) at execute time from WorkerContext, then delegates to
 ReActWorker.execute().
 """
 
-from collections.abc import AsyncGenerator
 import time
+from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.api import RunResourceView
-from ergon_core.api.generation import GenerationTurn
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.providers.sandbox.research_rubrics_manager import (
+from ergon_core.api import Task, WorkerContext, WorkerStreamItem
+from ergon_core.core.application.resources import RunResourceView
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
     ResearchRubricsSandboxManager,
 )
 
-from ergon_builtins.tools.graph_toolkit import ResearchGraphToolkit
 from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportReadFailure,
     ReportReadResponse,
@@ -27,10 +24,15 @@ from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportWriteResponse,
     ReportWriteSuccess,
 )
+from ergon_builtins.tools.graph_toolkit import ResearchGraphToolkit
 from ergon_builtins.tools.research_rubrics_toolkit import (
     ResearchRubricsToolkit,
 )
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.workers.baselines.tool_budget import (
+    AgentToolBudgetDeps,
+    AgentToolBudgetState,
+)
 from ergon_builtins.workers.research_rubrics._run_skill import (
     ReportEditSkillRequest,
     ReportReadSkillRequest,
@@ -41,19 +43,29 @@ from ergon_builtins.workers.research_rubrics._run_skill import (
 )
 
 _RESEARCHER_SYSTEM_PROMPT = (
-    "You are a research agent. Your job is to investigate a research question "
-    "using web search and produce a well-sourced report.\n\n"
-    "You have access to:\n"
-    "- exa_search: Search the web for relevant sources\n"
-    "- exa_qa: Ask Exa a direct question\n"
-    "- exa_get_content: Extract full text from a URL\n"
-    "- write_report_draft: Write a markdown report draft\n"
-    "- edit_report_draft: Edit an existing draft\n"
-    "- read_report_draft: Read a draft file\n"
-    "- Resource discovery tools to observe peer outputs\n\n"
-    "Write your final report to 'final_output/report.md' using write_report_draft. "
-    "Include a # Findings section and a ## Sources section with citations."
+    "Role: You are a focused ResearchRubrics research agent.\n\n"
+    "Goal: Produce `final_output/report.md` with a concise, well-sourced answer "
+    "to your scoped task. Include a # Findings section and a ## Sources section "
+    "with citations.\n\n"
+    "Tools:\n"
+    "- `exa_search`: broad web search for candidate sources.\n"
+    "- `exa_qa`: focused Q&A when one specific fact or synthesis is missing.\n"
+    "- `exa_get_content`: read a specific URL that looks important.\n"
+    "- `write_report_draft` / `edit_report_draft` / `read_report_draft`: create, "
+    "revise, and inspect markdown report files.\n"
+    "- Resource discovery tools: inspect outputs from this task, peer tasks, "
+    "children, descendants, or the run.\n\n"
+    "Stop rules: You have a limited non-workflow tool budget. Use the minimum "
+    "evidence sufficient to answer correctly, then stop searching and write the "
+    "report. Search again only if a required fact/source is missing. If any tool "
+    "returns TOOL_BUDGET_EXHAUSTED, immediately write the best possible report "
+    "from the context already gathered."
 )
+
+_TOOL_BUDGET_LIMITS = {
+    "max_workflow_tool_calls": 12,
+    "max_other_tool_calls": 12,
+}
 
 
 def _workspace_path(relative_path: str) -> str:
@@ -89,15 +101,24 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             sandbox_id=sandbox_id,
             tools=[],
             system_prompt=_RESEARCHER_SYSTEM_PROMPT,
-            max_iterations=25,
+            max_iterations=60,
         )
+        self._agent_deps = AgentToolBudgetDeps(
+            tool_budget=AgentToolBudgetState(
+                max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
+                max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
+            ),
+        )
+
+    def build_agent_deps(self, context: WorkerContext) -> AgentToolBudgetDeps:
+        return self._agent_deps
 
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[GenerationTurn, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
         manager = ResearchRubricsSandboxManager()
 
         model_run_skill = make_run_skill(model=self.model)
@@ -133,10 +154,16 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         )
         graph_tools = graph_toolkit.build_tools()
 
+        self._agent_deps = AgentToolBudgetDeps(
+            tool_budget=AgentToolBudgetState(
+                max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
+                max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
+            ),
+        )
         self.tools = [*rr_tools, *graph_tools]
 
-        async for turn in super().execute(task, context=context):
-            yield turn
+        async for chunk in super().execute(task, context=context):
+            yield chunk
 
     async def _run_sandbox_report_skill(
         self,

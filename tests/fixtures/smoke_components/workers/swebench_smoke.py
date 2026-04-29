@@ -1,0 +1,92 @@
+"""SWE-Bench canonical smoke — happy-path fixtures.
+
+Writes a trivial Python module + runs ``py_compile`` + executes it as
+the probe.  ``add(2, 3) == 5`` self-check inside the file so a single
+probe run exercises compile + execute + assertion pass.
+"""
+
+import json
+
+from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
+from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
+from tests.fixtures.smoke_components.smoke_base.recursive import (
+    RecursiveSmokeWorkerBase,
+    RecursiveSmokeWorkerMixin,
+)
+from tests.fixtures.smoke_components.smoke_base.sadpath import (
+    AlwaysFailSubworker,
+    FailingSmokeLeafMixin,
+    SadPathSmokeWorkerMixin,
+)
+from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
+from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBase
+
+PY_SOURCE = """\
+def add(a, b):
+    return a + b
+
+
+if __name__ == "__main__":
+    assert add(2, 3) == 5
+"""
+
+
+class SweBenchSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
+    """Happy-path parent for the swebench-verified leg."""
+
+    type_slug = "swebench-smoke-worker"
+    leaf_slug = "swebench-smoke-leaf"
+    RECURSIVE_WORKER_SLUG = "swebench-smoke-recursive-worker"
+
+
+class SweBenchSubworker:
+    """Writes a trivial .py file + compiles + executes as the probe."""
+
+    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
+        patch_path = f"/workspace/final_output/patch_{node_id}.py"
+        await sandbox.files.write(patch_path, PY_SOURCE)
+
+        probe = await sandbox.commands.run(
+            f"python -m py_compile {patch_path} && python {patch_path}",
+            timeout=20,
+        )
+        probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()[:4096]
+        probe_path = f"/workspace/final_output/probe_{node_id}.json"
+        await sandbox.files.write(
+            probe_path,
+            json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),
+        )
+        return SubworkerResult(
+            file_path=patch_path,
+            probe_stdout=probe_stdout,
+            probe_exit_code=probe.exit_code,
+        )
+
+
+class SweBenchSmokeLeafWorker(BaseSmokeLeafWorker):
+    """Registered leaf that delegates to ``SweBenchSubworker``."""
+
+    type_slug = "swebench-smoke-leaf"
+    subworker_cls = SweBenchSubworker
+
+
+class SweBenchRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
+    """Nested ``l_2`` worker that delegates nested leaves to SWE-Bench."""
+
+    type_slug = "swebench-smoke-recursive-worker"
+    leaf_slug = "swebench-smoke-leaf"
+
+
+class SweBenchFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
+    """Registered leaf that fails after partial work."""
+
+    type_slug = "swebench-smoke-leaf-failing"
+    subworker_cls = AlwaysFailSubworker
+
+
+class SweBenchSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
+    """Parent that routes ``l_2`` to the failing leaf."""
+
+    type_slug = "swebench-sadpath-smoke-worker"
+    leaf_slug = "swebench-smoke-leaf"
+    FAILING_LEAF_SLUG = "swebench-smoke-leaf-failing"

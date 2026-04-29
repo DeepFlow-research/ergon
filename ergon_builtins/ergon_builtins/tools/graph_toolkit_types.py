@@ -7,7 +7,8 @@ Construct via ``from_view`` / ``from_row`` classmethods.
 from datetime import datetime
 from uuid import UUID
 
-from ergon_core.api import RunResourceKind, RunResourceView
+from ergon_core.core.application.resources import RunResourceView
+from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
 from pydantic import BaseModel, ConfigDict, Field
 

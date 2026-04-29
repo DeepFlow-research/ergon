@@ -10,8 +10,6 @@ from collections.abc import Awaitable, Callable
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
-
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
@@ -19,7 +17,9 @@ from ergon_core.core.persistence.shared.types import (
     RunId,
     TaskSlug,
 )
-from ergon_core.core.runtime.services.task_management_dto import (
+from ergon_core.core.application.tasks.models import SubtaskInfo
+from ergon_core.core.application.tasks.inspection import TaskInspectionService
+from ergon_core.core.application.tasks.models import (
     AddSubtaskCommand,
     CancelTaskCommand,
     PlanSubtasksCommand,
@@ -27,9 +27,8 @@ from ergon_core.core.runtime.services.task_management_dto import (
     RestartTaskCommand,
     SubtaskSpec,
 )
-from ergon_core.core.runtime.services.task_inspection_dto import SubtaskInfo
-from ergon_core.core.runtime.services.task_management_service import TaskManagementService
-from ergon_core.core.runtime.services.task_inspection_service import TaskInspectionService
+from ergon_core.core.application.tasks.management import TaskManagementService
+from pydantic import BaseModel
 
 from ergon_builtins.tools.bash_sandbox_tool import make_sandbox_bash_tool
 
@@ -152,12 +151,14 @@ class SubtaskLifecycleToolkit:
         run_id: UUID,
         parent_node_id: UUID,
         sandbox_id: str,
+        task_management_service: TaskManagementService | None = None,
+        task_inspection_service: TaskInspectionService | None = None,
     ) -> None:
         self._run_id = RunId(run_id)
         self._parent_node_id = NodeId(parent_node_id)
         self._sandbox_id = sandbox_id
-        self._mgmt = TaskManagementService()
-        self._inspect = TaskInspectionService()
+        self._mgmt = task_management_service or TaskManagementService()
+        self._inspect = task_inspection_service or TaskInspectionService()
 
     def get_tools(self) -> list[Callable[..., Awaitable[BaseModel]]]:
         """Return the eight subtask lifecycle tools for Agent(tools=[...])."""

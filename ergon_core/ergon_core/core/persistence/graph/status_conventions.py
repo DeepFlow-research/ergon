@@ -22,8 +22,18 @@ CANCELLED = "cancelled"
 BLOCKED = "blocked"
 
 TERMINAL_STATUSES = frozenset({COMPLETED, FAILED, CANCELLED})
+NON_AUTONOMOUS_STATUSES = TERMINAL_STATUSES | frozenset({BLOCKED})
 
 NodeStatus = Literal["pending", "ready", "running", "completed", "failed", "cancelled", "blocked"]
+
+
+def is_terminal_node_status(status: str) -> bool:
+    return status in TERMINAL_STATUSES
+
+
+def is_blockable_node_status(status: str) -> bool:
+    return status != RUNNING and status not in TERMINAL_STATUSES
+
 
 # ── Edge status ───────────────────────────────────────────────────
 # Edges are pure dependency relations (containment lives on the node).

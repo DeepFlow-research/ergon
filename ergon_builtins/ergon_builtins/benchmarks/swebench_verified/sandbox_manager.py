@@ -4,17 +4,18 @@ Per-task setup (cloning the repo at ``base_commit``, creating the venv at
 the right Python version, installing deps) is driven by
 ``swebench.harness.test_spec`` and runs inside
 ``_install_dependencies`` so it executes exactly once per sandbox_key.
-The task payload is fetched from the data layer (``queries.task_executions.
-get_task_payload``) rather than piggy-backing on the Inngest event.
+The task payload is fetched from the task repository rather than piggy-backing
+on the Inngest event.
 """
 
 import logging
 import shlex
 from uuid import UUID
 
-from ergon_core.core.persistence.queries import queries
-from ergon_core.core.providers.sandbox.errors import SandboxSetupError
-from ergon_core.core.providers.sandbox.manager import BaseSandboxManager
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.infrastructure.sandbox.errors import SandboxSetupError
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.swebench_verified.criterion import make_test_spec
 from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
@@ -73,7 +74,12 @@ class SWEBenchSandboxManager(BaseSandboxManager):
         ``BaseSandboxManager.create()`` — the early-return at ``create()``
         guards idempotence, so re-entry does not re-run these scripts.
         """
-        payload = queries.task_executions.get_task_payload(task_id, SWEBenchTaskPayload)
+        with get_session() as session:
+            payload = TaskExecutionRepository().task_payload_for_execution(
+                session,
+                task_id,
+                SWEBenchTaskPayload,
+            )
         if payload is None:
             raise SandboxSetupError(
                 f"No task_payload for task_id={task_id}; prepare step must commit "

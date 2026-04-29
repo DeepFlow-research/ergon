@@ -27,7 +27,7 @@ def build_proof_criterion(
         Ground-truth proof text (for reference only, not used in grading).
     """
     return ProofVerificationCriterion(
-        name="proof_verification",
+        slug="proof_verification",
         weight=1.0,
         max_score=max_score,
         problem_statement=problem_statement,

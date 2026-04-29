@@ -4,7 +4,7 @@ import logging
 from typing import cast
 from uuid import UUID
 
-from ergon_core.core.providers.sandbox.manager import AsyncSandbox, BaseSandboxManager
+from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox, BaseSandboxManager
 from ergon_core.test_support.sandbox.sentinel import STUB_SANDBOX_PREFIX
 
 logger = logging.getLogger(__name__)

@@ -293,5 +293,3 @@ Runs append below. Each entry should include command, env knobs, rollout artifac
   - Removed the builtins model-backend registration path and the old `cloud_passthrough.py` / `vllm_backend.py` modules.
 - Note:
   - The installed PydanticAI version exposes `OpenRouterProvider` but not `OpenRouterModel`; the implementation uses `OpenAIChatModel(..., provider=OpenRouterProvider(...))`, which gives the desired OpenRouter routing semantics.
-
-
