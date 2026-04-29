@@ -1,4 +1,5 @@
 from uuid import UUID, uuid4
+from unittest.mock import MagicMock
 
 import pytest
 from ergon_core.core.persistence.definitions.models import (
@@ -257,8 +258,10 @@ async def test_add_subtask_rejects_unknown_worker_slug_before_creating_node() ->
     session.add(parent)
     session.commit()
 
+    dashboard_emitter = MagicMock()
+
     with pytest.raises(ValueError, match="Unknown worker slug"):
-        await TaskManagementService().add_subtask(
+        await TaskManagementService(dashboard_emitter=dashboard_emitter).add_subtask(
             session,
             AddSubtaskCommand(
                 run_id=run_id,
