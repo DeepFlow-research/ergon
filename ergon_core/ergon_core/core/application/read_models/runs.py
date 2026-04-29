@@ -6,7 +6,7 @@ from pathlib import Path
 from statistics import mean
 from uuid import UUID
 
-from ergon_core.core.api.schemas import (
+from ergon_core.core.application.read_models.models import (
     RunSnapshotDto,
     TrainingCurvePointDto,
     TrainingMetricDto,
@@ -30,11 +30,21 @@ from ergon_core.core.persistence.telemetry.models import (
     TrainingMetric,
     TrainingSession,
 )
-from ergon_core.core.runtime.services.graph_dto import GraphMutationRecordDto
+from ergon_core.core.application.graph.models import GraphMutationRecordDto
+from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
+from ergon_core.core.application.read_models.run_snapshot import (
+    _build_communication_threads,
+    _build_task_map,
+    _context_events_by_task,
+    _task_keyed_evaluations,
+    _task_keyed_executions,
+    _task_keyed_resources,
+    _task_keyed_sandboxes,
+    _task_timestamps,
+)
+from ergon_core.core.application.read_models.resources import require_viewable_resource_size
 from pydantic import BaseModel
 from sqlmodel import select
-
-_RESOURCE_CONTENT_MAX_BYTES: int = 10 * 1024 * 1024
 
 
 class RunResourceBlob(BaseModel):
@@ -49,9 +59,6 @@ class RunReadService:
     """Owns database reads and DTO shaping for run API endpoints."""
 
     def build_run_snapshot(self, run_id: UUID) -> RunSnapshotDto | None:
-        # reason: reuse pure DTO helper functions without moving them in the same slice.
-        from ergon_core.core.api import runs as run_api_helpers
-
         with get_session() as session:
             run = session.get(RunRecord, run_id)
             if run is None:
@@ -104,7 +111,7 @@ class RunReadService:
         worker_by_binding: dict[str, ExperimentDefinitionWorker] = {
             w.binding_key: w for w in def_workers
         }
-        timestamps = run_api_helpers._task_timestamps(executions)
+        timestamps = _task_timestamps(executions)
         (
             task_map,
             root_task_id,
@@ -114,7 +121,7 @@ class RunReadService:
             failed_tasks,
             running_tasks,
             cancelled_tasks,
-        ) = run_api_helpers._build_task_map(nodes, edges, worker_by_binding, timestamps)
+        ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
 
         execution_task_map: dict[UUID, UUID] = {
             ex.id: ex.node_id for ex in executions if ex.node_id is not None
@@ -123,16 +130,12 @@ class RunReadService:
             n.definition_task_id: n.id for n in nodes if n.definition_task_id is not None
         }
 
-        context_events_by_task = run_api_helpers._context_events_by_task(
+        context_events_by_task = _context_events_by_task(
             context_events,
             execution_task_map,
         )
 
-        final_score: float | None = None
-        if evaluations:
-            scores = [ev.score for ev in evaluations if ev.score is not None]
-            if scores:
-                final_score = sum(scores) / len(scores)
+        score_summary = aggregate_evaluation_scores(evaluations)
 
         duration_seconds: float | None = None
         if run.started_at and run.completed_at:
@@ -150,22 +153,22 @@ class RunReadService:
             status=run.status,
             tasks=task_map,
             root_task_id=root_task_id,
-            resources_by_task=run_api_helpers._task_keyed_resources(
+            resources_by_task=_task_keyed_resources(
                 resources,
                 execution_task_map,
             ),
-            executions_by_task=run_api_helpers._task_keyed_executions(
+            executions_by_task=_task_keyed_executions(
                 executions,
                 worker_by_id,
             ),
-            evaluations_by_task=run_api_helpers._task_keyed_evaluations(
+            evaluations_by_task=_task_keyed_evaluations(
                 evaluations,
                 run_id_str,
                 defn_to_node,
             ),
             context_events_by_task=dict(context_events_by_task),
-            sandboxes_by_task=run_api_helpers._task_keyed_sandboxes(run_summary),
-            threads=run_api_helpers._build_communication_threads(
+            sandboxes_by_task=_task_keyed_sandboxes(run_summary),
+            threads=_build_communication_threads(
                 threads,
                 thread_messages,
                 execution_task_map,
@@ -179,7 +182,7 @@ class RunReadService:
             failed_tasks=failed_tasks,
             running_tasks=running_tasks,
             cancelled_tasks=cancelled_tasks,
-            final_score=final_score,
+            final_score=score_summary.final_score,
             error=run.error_message,
         )
 
@@ -228,8 +231,7 @@ class RunReadService:
         blob_path = Path(resource.file_path).resolve(strict=True)
         blob_path.relative_to(_blob_root())
         size = blob_path.stat().st_size
-        if size > _RESOURCE_CONTENT_MAX_BYTES:
-            raise ValueError(f"resource-too-large:{size}")
+        require_viewable_resource_size(size)
         return RunResourceBlob(
             path=blob_path,
             media_type=resource.mime_type or "application/octet-stream",
