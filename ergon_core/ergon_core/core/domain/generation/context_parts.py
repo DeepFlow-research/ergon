@@ -8,7 +8,7 @@ loading ``ergon_core.api``.
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 
