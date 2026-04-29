@@ -19,12 +19,8 @@ PayloadT = TypeVar(
 )
 
 
-class BenchmarkTask(BaseModel, Generic[PayloadT]):
-    """Unit of work passed to Worker.execute() and referenced in EvaluationContext.
-
-    ``task_payload`` is benchmark-owned structured data. Benchmarks should
-    bind ``BenchmarkTask[TheirPayloadModel]`` instead of passing ad hoc dicts.
-    """
+class Task(BaseModel, Generic[PayloadT]):
+    """Unit of work passed to Worker.execute() and referenced in CriterionContext."""
 
     model_config = {"frozen": True}
 

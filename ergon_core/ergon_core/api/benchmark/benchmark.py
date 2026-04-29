@@ -1,28 +1,17 @@
-"""Public benchmark ABC.
-
-Uses ABCs (not Protocols) for discoverability via isinstance, template-method
-helpers, and the HuggingFace "real classes" authoring feel. type_slug is
-ClassVar because it identifies the CLASS for registry lookup and definition
-persistence -- not a per-instance property.
-"""
+"""Public benchmark ABC."""
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
+from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import DependencyError
-from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-from ergon_core.core.runtime.dependencies import check_packages
+from ergon_core.core.infrastructure.dependencies import check_packages
 from pydantic import BaseModel
 
 
 class Benchmark(ABC):
-    """Base class for all benchmarks.
-
-    Subclasses MUST set ``type_slug`` and ``onboarding_deps`` and implement
-    ``build_instances``.  Omitting ``onboarding_deps`` raises ``TypeError``
-    at class definition time.
-    """
+    """Base class for all benchmarks."""
 
     type_slug: ClassVar[str]
     task_payload_model: ClassVar[type[BaseModel]] = EmptyTaskPayload
@@ -48,19 +37,12 @@ class Benchmark(ABC):
         ] = dict(metadata or {})
 
     @abstractmethod
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[BaseModel]]]:
-        """Materialize benchmark instances.
-
-        Returns a mapping of instance_key -> tasks for that instance.
-        """
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
+        """Materialize benchmark instances."""
         ...
 
     def evaluator_requirements(self) -> Sequence[str]:
-        """Declare evaluator slot names required by this benchmark.
-
-        Returns slot names (e.g. ``["default"]``) that ``Experiment.validate``
-        checks are filled by the experiment's evaluator mapping.
-        """
+        """Declare evaluator slot names required by this benchmark."""
         return ("default",)
 
     @classmethod
