@@ -1,29 +1,28 @@
 """Inngest child function: worker execution.
 
-Looks up the registered worker, constructs a BenchmarkTask, and runs execute().
+Looks up the registered worker, constructs a Task, and runs execute().
 Consumes the async generator, persisting context events to PG via the
-ContextEventRepository. Dashboard events are emitted per chunk via the
+ContextEventService. Dashboard events are emitted per chunk via the
 repository listener pattern.
 """
 
 import logging
 import traceback
+from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
 
-import inngest
-from ergon_builtins.registry import BENCHMARKS, WORKERS
-from ergon_core.api.task_types import BenchmarkTask, EmptyTaskPayload
-from ergon_core.api.worker_context import WorkerContext
-from ergon_core.core.dashboard.provider import get_dashboard_emitter
-from ergon_core.core.generation import ContextPartChunk
-from ergon_core.core.persistence.context.repository import ContextEventRepository
-from ergon_core.core.persistence.queries import queries
+from ergon_core.api.benchmark import EmptyTaskPayload, Task
+from ergon_core.api.registry import registry
+from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.core.application.experiments.repository import DefinitionRepository
+from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.runtime.errors import RegistryLookupError
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.child_function_payloads import WorkerExecuteRequest
-from ergon_core.core.runtime.services.inngest_function_results import WorkerExecuteResult
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.application.context.events import ContextEventService
+from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, RegistryLookupError
+from ergon_core.core.application.jobs.models import WorkerExecuteJobRequest
+from ergon_core.core.application.jobs.models import WorkerExecuteJobResult
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
     worker_execute_context,
@@ -33,14 +32,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 
-@inngest_client.create_function(
-    fn_id="worker-execute",
-    trigger=inngest.TriggerEvent(event="task/worker-execute"),
-    retries=0,
-    output_type=WorkerExecuteResult,
-)
-async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
-    payload = WorkerExecuteRequest.model_validate(ctx.event.data)
+async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExecuteJobResult:
     logger.info(
         "worker-execute run_id=%s task_id=%s worker_type=%s",
         payload.run_id,
@@ -49,7 +41,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     )
     span_start = datetime.now(UTC)
 
-    worker_cls = WORKERS.get(payload.worker_type)
+    worker_cls = registry.workers.get(payload.worker_type)
     if worker_cls is None:
         raise RegistryLookupError(
             registry_name="worker",
@@ -70,13 +62,17 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
     task_payload = None
     instance_key = str(payload.execution_id)
     if payload.task_id is not None:
-        task_row, instance_row = queries.definitions.get_task_with_instance(payload.task_id)
-        benchmark_cls = BENCHMARKS.get(payload.benchmark_type)
+        with get_session() as session:
+            task_row, instance_row = DefinitionRepository().task_with_instance(
+                session,
+                payload.task_id,
+            )
+        benchmark_cls = registry.benchmarks.get(payload.benchmark_type)
         if benchmark_cls is not None:
             task_payload = task_row.task_payload_as(benchmark_cls.task_payload_model)
         instance_key = instance_row.instance_key
 
-    task = BenchmarkTask[BaseModel](
+    task = Task[BaseModel](
         task_slug=payload.task_slug,
         instance_key=instance_key,
         description=payload.task_description,
@@ -92,7 +88,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         node_id=payload.node_id,
     )
 
-    context_event_repo = ContextEventRepository()
+    context_event_repo = ContextEventService()
     dashboard_emitter = get_dashboard_emitter()
     context_event_repo.add_listener(dashboard_emitter.on_context_event)
     dashboard_emitter.register_execution(
@@ -102,16 +98,15 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
 
     chunk_count = 0
     try:
-        async for chunk in worker.execute(task, context=worker_context):
-            await _persist_context_events(
+        output, chunk_count = await _consume_worker_stream(
+            worker.execute(task, context=worker_context),
+            lambda chunk, count: _persist_context_events(
                 context_event_repo,
                 payload,
                 chunk,
-                chunk_count,
-            )
-            chunk_count += 1
-
-        output = worker.get_output(worker_context)
+                count,
+            ),
+        )
 
     except Exception as exc:  # slopcop: ignore[no-broad-except]
         error_msg = str(exc)
@@ -121,7 +116,7 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
             chunk_count,
             error_msg,
         )
-        return WorkerExecuteResult(
+        return WorkerExecuteJobResult(
             success=False,
             error=error_msg,
             error_json={
@@ -158,16 +153,48 @@ async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
         )
     )
 
-    return WorkerExecuteResult(
+    return WorkerExecuteJobResult(
         success=output.success,
         final_assistant_message=output.output,
         error=None if output.success else output.output,
     )
 
 
+async def _consume_worker_stream(
+    stream: AsyncIterable[WorkerStreamItem],
+    persist_chunk: Callable[[ContextPartChunk, int], Awaitable[None]],
+) -> tuple[WorkerOutput, int]:
+    """Persist context chunks and return the terminal worker output."""
+    output: WorkerOutput | None = None
+    chunk_count = 0
+
+    async for item in stream:
+        if isinstance(item, WorkerOutput):
+            if output is not None:
+                raise ContractViolationError("Worker emitted multiple terminal WorkerOutput items")
+            output = item
+            continue
+
+        if output is not None:
+            raise ContractViolationError("Worker emitted context chunk after terminal WorkerOutput")
+
+        if not isinstance(item, ContextPartChunk):
+            raise ContractViolationError(
+                f"Worker stream expected ContextPartChunk or WorkerOutput, got {type(item).__name__}"
+            )
+
+        await persist_chunk(item, chunk_count)
+        chunk_count += 1
+
+    if output is None:
+        raise ContractViolationError("Worker stream ended without terminal WorkerOutput")
+
+    return output, chunk_count
+
+
 async def _persist_context_events(
-    context_event_repo: ContextEventRepository,
-    payload: WorkerExecuteRequest,
+    context_event_repo: ContextEventService,
+    payload: WorkerExecuteJobRequest,
     chunk: ContextPartChunk,
     chunk_count: int,
 ) -> None:

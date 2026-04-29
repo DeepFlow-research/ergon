@@ -7,39 +7,30 @@ all evaluations complete.
 """
 
 import logging
+from typing import Any
 
-import inngest
-from ergon_core.core.sandbox.lifecycle import terminate_sandbox_by_id
-from ergon_core.core.runtime.events.task_events import (
-    TaskCompletedEvent,
-)
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.inngest.evaluate_task_run import evaluate_task_run
-from ergon_core.core.runtime.services.child_function_payloads import (
-    EvaluateTaskRunRequest,
-)
-from ergon_core.core.runtime.services.evaluation_dto import (
+from ergon_core.core.application.evaluation.models import (
     DispatchEvaluatorsCommand,
 )
-from ergon_core.core.runtime.services.evaluator_dispatch_service import (
-    EvaluatorDispatchService,
+from ergon_core.core.application.evaluation.service import (
+    EvaluationService,
 )
-from ergon_core.core.runtime.services.inngest_function_results import (
-    EvaluateTaskRunResult,
-    EvaluatorsResult,
+from ergon_core.core.application.jobs.models import EvaluateTaskRunRequest
+from ergon_core.core.application.jobs.models import EvaluateTaskRunResult, EvaluatorsResult
+from ergon_core.core.application.events.task_events import (
+    TaskCompletedEvent,
 )
+from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
 
 logger = logging.getLogger(__name__)
 
 
-@inngest_client.create_function(
-    fn_id="task-check-evaluators",
-    trigger=inngest.TriggerEvent(event=TaskCompletedEvent.name),
-    retries=1,
-    output_type=EvaluatorsResult,
-)
-async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
-    payload = TaskCompletedEvent.model_validate(ctx.event.data)
+async def run_check_evaluators_job(
+    ctx: Any,
+    payload: TaskCompletedEvent,
+    *,
+    evaluate_task_run_function: Any,
+) -> EvaluatorsResult:
     if payload.node_id is None:
         await _terminate_sandbox(payload.sandbox_id)
         return EvaluatorsResult(
@@ -48,7 +39,7 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
             evaluators_run=0,
         )
 
-    dispatch_service = EvaluatorDispatchService()
+    dispatch_service = EvaluationService()
     dispatch = dispatch_service.prepare_dispatch(
         DispatchEvaluatorsCommand(
             run_id=payload.run_id,
@@ -71,7 +62,7 @@ async def check_and_run_evaluators(ctx: inngest.Context) -> EvaluatorsResult:
     for evaluator_payload in dispatch.valid_evaluators:
         result: EvaluateTaskRunResult = await ctx.step.invoke(
             f"evaluate-{evaluator_payload.evaluator_binding_key}",
-            function=evaluate_task_run,
+            function=evaluate_task_run_function,
             data=EvaluateTaskRunRequest(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,

@@ -3,36 +3,27 @@
 import logging
 from datetime import UTC, datetime
 
-import inngest
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
-from ergon_core.core.runtime.errors import DataIntegrityError
-from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
-from ergon_core.core.runtime.events.task_events import WorkflowFailedEvent
-from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
-from ergon_core.core.runtime.services.inngest_function_results import WorkflowFailedResult
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.infrastructure.inngest.errors import DataIntegrityError
+from ergon_core.core.application.events.infrastructure_events import RunCleanupEvent
+from ergon_core.core.application.events.task_events import WorkflowFailedEvent
+from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.application.jobs.models import WorkflowFailedResult
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
     truncate_text,
     workflow_failed_context,
     workflow_root_context,
 )
-from ergon_core.core.utils import utcnow
+from ergon_core.core.shared.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
 
-@inngest_client.create_function(
-    fn_id="workflow-failed",
-    trigger=inngest.TriggerEvent(event="workflow/failed"),
-    cancel=RUN_CANCEL,
-    retries=1,
-    output_type=WorkflowFailedResult,
-)
-async def fail_workflow_fn(ctx: inngest.Context) -> WorkflowFailedResult:
-    payload = WorkflowFailedEvent.model_validate(ctx.event.data)
+async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedResult:
     logger.info("workflow-failed run_id=%s error=%s", payload.run_id, payload.error)
     span_start = datetime.now(UTC)
 
@@ -47,7 +38,7 @@ async def fail_workflow_fn(ctx: inngest.Context) -> WorkflowFailedResult:
         session.commit()
 
     await inngest_client.send(
-        inngest.Event(
+        InngestEvent(
             name=RunCleanupEvent.name,
             data=RunCleanupEvent(
                 run_id=payload.run_id,

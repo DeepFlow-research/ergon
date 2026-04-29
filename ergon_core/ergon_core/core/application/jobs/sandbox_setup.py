@@ -1,7 +1,7 @@
 """Inngest child function: sandbox setup.
 
 Creates and configures a sandbox for task execution.
-Resolves the sandbox manager from SANDBOX_MANAGERS registry by benchmark_type.
+Resolves the sandbox manager from the core component registry.
 """
 
 import logging
@@ -10,50 +10,43 @@ from functools import partial
 from pathlib import Path
 from uuid import UUID
 
-import inngest
-from ergon_builtins.registry import SANDBOX_MANAGERS
+from ergon_core.api.registry import registry
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
-from ergon_core.core.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
-from ergon_core.core.runtime.errors import DataIntegrityError
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.child_function_payloads import SandboxSetupRequest
-from ergon_core.core.runtime.services.inngest_function_results import SandboxReadyResult
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from ergon_core.core.infrastructure.inngest.errors import DataIntegrityError
+from ergon_core.core.application.jobs.models import SandboxReadyResult, SandboxSetupRequest
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
     sandbox_setup_context,
 )
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.settings import settings
 from sqlmodel import col, select
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-@inngest_client.create_function(
-    fn_id="sandbox-setup",
-    trigger=inngest.TriggerEvent(event="task/sandbox-setup"),
-    retries=1,
-    output_type=SandboxReadyResult,
-)
-async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
+async def run_sandbox_setup_job(ctx: Any, payload: SandboxSetupRequest) -> SandboxReadyResult:
     """Create and configure a sandbox for task execution."""
-    payload = SandboxSetupRequest.model_validate(ctx.event.data)
     run_id = payload.run_id
     task_id = payload.task_id
     benchmark_type = payload.benchmark_type
+    manager_slug = _sandbox_manager_slug(payload)
     span_start = datetime.now(UTC)
 
     logger.info(
-        "sandbox-setup run_id=%s task_id=%s benchmark=%s",
+        "sandbox-setup run_id=%s task_id=%s benchmark=%s sandbox=%s",
         run_id,
         task_id,
         benchmark_type,
+        manager_slug,
     )
 
-    # Resolved on demand by benchmark_type (already in payload and
-    # definition row). Benchmarks not listed get DefaultSandboxManager.
-    manager_cls = SANDBOX_MANAGERS.get(benchmark_type, DefaultSandboxManager)
+    # Resolve from the explicit sandbox slug when present. Older payloads
+    # fall back to benchmark_type for compatibility.
+    manager_cls = registry.sandbox_managers.get(manager_slug, DefaultSandboxManager)
     sandbox_manager = manager_cls()
 
     output_dir = settings.runs_dir / str(run_id) / "tasks" / str(task_id)
@@ -83,12 +76,17 @@ async def sandbox_setup_fn(ctx: inngest.Context) -> SandboxReadyResult:
                 "run_id": str(run_id),
                 "task_id": str(task_id),
                 "benchmark_type": benchmark_type,
+                "sandbox_slug": manager_slug,
                 "sandbox_id": result.sandbox_id,
                 "input_resource_count": len(payload.input_resource_ids),
             },
         )
     )
     return result
+
+
+def _sandbox_manager_slug(payload: SandboxSetupRequest) -> str:
+    return payload.sandbox_slug or payload.benchmark_type
 
 
 async def _create_sandbox(

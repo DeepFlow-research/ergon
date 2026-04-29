@@ -11,18 +11,15 @@ read via the publisher (``kind='report'``/``kind='artifact'`` rows whose
 import logging
 from datetime import UTC, datetime
 
-import inngest
-from ergon_builtins.registry import SANDBOX_MANAGERS
-from ergon_core.core.sandbox.manager import (
+from ergon_core.api.registry import registry
+from ergon_core.core.infrastructure.sandbox.manager import (
     BaseSandboxManager,
     DefaultSandboxManager,
 )
-from ergon_core.core.sandbox.resource_publisher import SandboxResourcePublisher
-from ergon_core.core.runtime.errors import ContractViolationError
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.child_function_payloads import PersistOutputsRequest
-from ergon_core.core.runtime.services.inngest_function_results import PersistOutputsResult
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.infrastructure.sandbox.resource_publisher import SandboxResourcePublisher
+from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
+from ergon_core.core.application.jobs.models import PersistOutputsRequest, PersistOutputsResult
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
     persist_outputs_context,
@@ -31,15 +28,8 @@ from ergon_core.core.runtime.tracing import (
 logger = logging.getLogger(__name__)
 
 
-@inngest_client.create_function(
-    fn_id="persist-outputs",
-    trigger=inngest.TriggerEvent(event="task/persist-outputs"),
-    retries=1,
-    output_type=PersistOutputsResult,
-)
-async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
+async def run_persist_outputs_job(payload: PersistOutputsRequest) -> PersistOutputsResult:
     """Sync sandbox publish dirs to the blob store and register resources."""
-    payload = PersistOutputsRequest.model_validate(ctx.event.data)
     run_id = payload.run_id
     task_id = payload.task_id
     execution_id = payload.execution_id
@@ -60,7 +50,7 @@ async def persist_outputs_fn(ctx: inngest.Context) -> PersistOutputsResult:
             task_id=task_id,
         )
 
-    manager_cls = SANDBOX_MANAGERS.get(payload.benchmark_type, DefaultSandboxManager)
+    manager_cls = registry.sandbox_managers.get(payload.benchmark_type, DefaultSandboxManager)
     sandbox_manager = manager_cls()
 
     outputs_count = await _publish_resources(sandbox_manager, payload)

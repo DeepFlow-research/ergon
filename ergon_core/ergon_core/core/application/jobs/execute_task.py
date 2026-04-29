@@ -7,37 +7,34 @@ finalizes. Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
 import logging
 import traceback
 from datetime import UTC, datetime
+from typing import Any
 
-import inngest
-from ergon_core.core.runtime.errors import ContractViolationError
-from ergon_core.core.runtime.events.task_events import (
-    TaskCompletedEvent,
-    TaskFailedEvent,
-    TaskReadyEvent,
-)
-from ergon_core.core.runtime.inngest.persist_outputs import persist_outputs_fn
-from ergon_core.core.runtime.inngest.sandbox_setup import sandbox_setup_fn
-from ergon_core.core.runtime.inngest.worker_execute import worker_execute_fn
-from ergon_core.core.runtime.inngest.client import RUN_CANCEL, TASK_CANCEL, inngest_client
-from ergon_core.core.runtime.services.child_function_payloads import (
+from ergon_core.core.application.jobs.models import (
     PersistOutputsRequest,
-    SandboxSetupRequest,
-    WorkerExecuteRequest,
-)
-from ergon_core.core.runtime.services.inngest_function_results import (
     PersistOutputsResult,
     SandboxReadyResult,
+    SandboxSetupRequest,
     TaskExecuteResult,
-    WorkerExecuteResult,
+    WorkerExecuteJobRequest,
+    WorkerExecuteJobResult,
 )
-from ergon_core.core.runtime.services.orchestration_dto import (
+from ergon_core.core.application.tasks.execution import TaskExecutionService
+from ergon_core.core.application.workflows.orchestration import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
 )
-from ergon_core.core.runtime.services.task_execution_service import TaskExecutionService
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, NonRetriableError
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.application.events.task_events import (
+    TaskCompletedEvent,
+    TaskFailedEvent,
+    TaskReadyEvent,
+)
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
     task_execute_context,
@@ -48,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _prepare_execution(
-    ctx: inngest.Context,
+    ctx: Any,
     svc: TaskExecutionService,
     payload: TaskReadyEvent,
 ) -> PreparedTaskExecution:
@@ -66,35 +63,47 @@ async def _prepare_execution(
 
 
 async def _setup_sandbox(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
+    sandbox_setup_function: Any,
 ) -> SandboxReadyResult:
     # Dynamic subtasks have no static task_id. Use node_id as the sandbox key
     # so each subtask gets its own isolated sandbox slot in the manager registry.
     sandbox_task_key = payload.task_id or prepared.node_id
     return await ctx.step.invoke(
         "sandbox-setup",
-        function=sandbox_setup_fn,
+        function=sandbox_setup_function,
         data=SandboxSetupRequest(
             run_id=payload.run_id,
             definition_id=payload.definition_id,
             task_id=sandbox_task_key,
             benchmark_type=prepared.benchmark_type,
+            sandbox_slug=_sandbox_slug_for_run(payload.run_id),
         ).model_dump(),
     )
 
 
+def _sandbox_slug_for_run(run_id) -> str | None:
+    session = get_session()
+    try:
+        run = session.get(RunRecord, run_id)
+        return None if run is None else run.sandbox_slug
+    finally:
+        session.close()
+
+
 async def _run_worker(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
-) -> WorkerExecuteResult:
+    worker_execute_function: Any,
+) -> WorkerExecuteJobResult:
     return await ctx.step.invoke(
         "worker-execute",
-        function=worker_execute_fn,
-        data=WorkerExecuteRequest(
+        function=worker_execute_function,
+        data=WorkerExecuteJobRequest(
             run_id=payload.run_id,
             definition_id=payload.definition_id,
             task_id=payload.task_id,
@@ -112,15 +121,16 @@ async def _run_worker(
 
 
 async def _persist_outputs(
-    ctx: inngest.Context,
+    ctx: Any,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
+    persist_outputs_function: Any,
 ) -> PersistOutputsResult:
     output_task_key = payload.task_id or prepared.node_id
     return await ctx.step.invoke(
         "persist-outputs",
-        function=persist_outputs_fn,
+        function=persist_outputs_function,
         data=PersistOutputsRequest(
             run_id=payload.run_id,
             definition_id=payload.definition_id,
@@ -129,6 +139,7 @@ async def _persist_outputs(
             sandbox_id=sandbox_result.sandbox_id,
             output_dir=sandbox_result.output_dir,
             benchmark_type=prepared.benchmark_type,
+            sandbox_slug=_sandbox_slug_for_run(payload.run_id),
         ).model_dump(),
     )
 
@@ -139,7 +150,7 @@ async def _emit_task_completed(
     sandbox_id: str,
 ) -> None:
     await inngest_client.send(
-        inngest.Event(
+        InngestEvent(
             name=TaskCompletedEvent.name,
             data=TaskCompletedEvent(
                 run_id=payload.run_id,
@@ -160,7 +171,7 @@ async def _emit_task_failed(
     sandbox_id: str | None,
 ) -> None:
     await inngest_client.send(
-        inngest.Event(
+        InngestEvent(
             name=TaskFailedEvent.name,
             data=TaskFailedEvent(
                 run_id=payload.run_id,
@@ -178,16 +189,14 @@ async def _emit_task_failed(
 # retries=0: side effects (sandbox creation, model API calls, DB writes)
 # would duplicate on retry. Failure propagates via TaskFailedEvent.
 # Concurrency bounded by E2B sandbox quota and Postgres connection pool.
-@inngest_client.create_function(
-    fn_id="task-execute",
-    trigger=inngest.TriggerEvent(event="task/ready"),
-    cancel=[*RUN_CANCEL, *TASK_CANCEL],
-    retries=0,
-    concurrency=[inngest.Concurrency(limit=15)],
-    output_type=TaskExecuteResult,
-)
-async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
-    payload = TaskReadyEvent.model_validate(ctx.event.data)
+async def run_execute_task_job(
+    ctx: Any,
+    payload: TaskReadyEvent,
+    *,
+    sandbox_setup_function: Any,
+    worker_execute_function: Any,
+    persist_outputs_function: Any,
+) -> TaskExecuteResult:
     logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)
 
@@ -213,7 +222,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 task_id=payload.task_id,
             )
 
-        sandbox_result = await _setup_sandbox(ctx, payload, prepared)
+        sandbox_result = await _setup_sandbox(ctx, payload, prepared, sandbox_setup_function)
         if not sandbox_result.sandbox_id:
             raise ContractViolationError(
                 "sandbox-setup returned empty sandbox_id",
@@ -222,10 +231,10 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
             )
         task_sandbox_id = sandbox_result.sandbox_id
 
-        worker_result = await _run_worker(ctx, payload, prepared, sandbox_result)
+        worker_result = await _run_worker(ctx, payload, prepared, sandbox_result, worker_execute_function)
 
         if not worker_result.success:
-            await _persist_outputs(ctx, payload, prepared, sandbox_result)
+            await _persist_outputs(ctx, payload, prepared, sandbox_result, persist_outputs_function)
             error_msg = worker_result.error or "Worker execution failed"
             await svc.finalize_failure(
                 FailTaskExecutionCommand(
@@ -245,7 +254,7 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 error=error_msg,
             )
 
-        persist_result = await _persist_outputs(ctx, payload, prepared, sandbox_result)
+        persist_result = await _persist_outputs(ctx, payload, prepared, sandbox_result, persist_outputs_function)
 
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(
@@ -368,4 +377,4 @@ async def execute_task_fn(ctx: inngest.Context) -> TaskExecuteResult:
                 payload.node_id,
             )
 
-        raise inngest.NonRetriableError(message=error_msg) from exc
+        raise NonRetriableError(message=error_msg) from exc

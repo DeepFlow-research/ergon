@@ -8,27 +8,19 @@ Two durable steps:
 
 import logging
 
-import inngest
-from ergon_core.core.dashboard.provider import get_dashboard_emitter
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.runtime.events.task_events import TaskCancelledEvent
-from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
-from ergon_core.core.runtime.services.task_cleanup_dto import CleanupResult
-from ergon_core.core.runtime.services.task_cleanup_service import TaskCleanupService
+from ergon_core.core.application.events.task_events import TaskCancelledEvent
+from ergon_core.core.application.tasks.models import CleanupResult
+from ergon_core.core.application.tasks.cleanup import TaskCleanupService
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-@inngest_client.create_function(
-    fn_id="cleanup-cancelled-task",
-    trigger=inngest.TriggerEvent(event="task/cancelled"),
-    cancel=RUN_CANCEL,
-    retries=3,
-)
-async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> JsonObject:
+async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) -> JsonObject:
     """Clean up a single cancelled task's resources."""
-    payload = TaskCancelledEvent.model_validate(ctx.event.data)
     logger.info(
         "cleanup-cancelled node_id=%s execution_id=%s cause=%s",
         payload.node_id,

@@ -4,23 +4,20 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4, uuid5
 
-import inngest
-from ergon_core.core.dashboard.event_contracts import TaskTreeNode, WorkerRef
-from ergon_core.core.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.infrastructure.dashboard.event_contracts import TaskTreeNode, WorkerRef
+from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionWorker
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.runtime.events.task_events import (
+from ergon_core.core.application.events.task_events import (
     TaskReadyEvent,
     WorkflowStartedEvent,
 )
-from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
-from ergon_core.core.runtime.services.inngest_function_results import WorkflowStartResult
-from ergon_core.core.runtime.services.orchestration_dto import InitializeWorkflowCommand
-from ergon_core.core.runtime.services.workflow_initialization_service import (
-    WorkflowInitializationService,
-)
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.application.jobs.models import WorkflowStartResult
+from ergon_core.core.application.workflows.orchestration import InitializeWorkflowCommand
+from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
     workflow_start_context,
@@ -142,19 +139,11 @@ def _build_task_tree_for_run(
     )
 
 
-@inngest_client.create_function(
-    fn_id="workflow-start",
-    trigger=inngest.TriggerEvent(event="workflow/started"),
-    cancel=RUN_CANCEL,
-    retries=1,
-    output_type=WorkflowStartResult,
-)
-async def start_workflow_fn(ctx: inngest.Context) -> WorkflowStartResult:
-    payload = WorkflowStartedEvent.model_validate(ctx.event.data)
+async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStartResult:
     logger.info("workflow-start run_id=%s definition_id=%s", payload.run_id, payload.definition_id)
     span_start = datetime.now(UTC)
 
-    svc = WorkflowInitializationService()
+    svc = WorkflowService()
     initialized = await svc.initialize(
         InitializeWorkflowCommand(
             run_id=payload.run_id,
@@ -163,7 +152,7 @@ async def start_workflow_fn(ctx: inngest.Context) -> WorkflowStartResult:
     )
 
     events = [
-        inngest.Event(
+        InngestEvent(
             name=TaskReadyEvent.name,
             data=TaskReadyEvent(
                 run_id=payload.run_id,

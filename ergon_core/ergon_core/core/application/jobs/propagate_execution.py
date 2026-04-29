@@ -6,25 +6,22 @@ Resolves DAG dependencies and detects workflow terminal states.
 import logging
 from datetime import UTC, datetime
 
-import inngest
-from ergon_core.core.sandbox.lifecycle import terminate_sandbox_by_id
-from ergon_core.core.runtime.events.task_events import (
+from ergon_core.core.application.jobs.models import TaskPropagateResult
+from ergon_core.core.application.workflows.orchestration import (
+    PropagateTaskCompletionCommand,
+    WorkflowTerminalState,
+)
+from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
+from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,
     WorkflowCompletedEvent,
     WorkflowFailedEvent,
 )
-from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
-from ergon_core.core.runtime.services.inngest_function_results import TaskPropagateResult
-from ergon_core.core.runtime.services.orchestration_dto import (
-    PropagateTaskCompletionCommand,
-    WorkflowTerminalState,
-)
-from ergon_core.core.runtime.services.task_propagation_service import (
-    TaskPropagationService,
-)
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
     task_propagate_context,
@@ -33,19 +30,11 @@ from ergon_core.core.runtime.tracing import (
 logger = logging.getLogger(__name__)
 
 
-@inngest_client.create_function(
-    fn_id="task-propagate",
-    trigger=inngest.TriggerEvent(event="task/completed"),
-    cancel=RUN_CANCEL,
-    retries=1,
-    output_type=TaskPropagateResult,
-)
-async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
-    payload = TaskCompletedEvent.model_validate(ctx.event.data)
+async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateResult:
     logger.info("task-propagate run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)
 
-    svc = TaskPropagationService()
+    svc = WorkflowService()
     propagation = await svc.propagate(
         PropagateTaskCompletionCommand(
             run_id=payload.run_id,
@@ -56,8 +45,8 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
         )
     )
 
-    events: list[inngest.Event] = [
-        inngest.Event(
+    events: list[InngestEvent] = [
+        InngestEvent(
             name=TaskReadyEvent.name,
             data=TaskReadyEvent(
                 run_id=payload.run_id,
@@ -71,7 +60,7 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
 
     if propagation.workflow_terminal_state == WorkflowTerminalState.COMPLETED:
         events.append(
-            inngest.Event(
+            InngestEvent(
                 name=WorkflowCompletedEvent.name,
                 data=WorkflowCompletedEvent(
                     run_id=payload.run_id,
@@ -81,7 +70,7 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
         )
     elif propagation.workflow_terminal_state == WorkflowTerminalState.FAILED:
         events.append(
-            inngest.Event(
+            InngestEvent(
                 name=WorkflowFailedEvent.name,
                 data=WorkflowFailedEvent(
                     run_id=payload.run_id,
@@ -120,15 +109,7 @@ async def propagate_task_fn(ctx: inngest.Context) -> TaskPropagateResult:
     return result
 
 
-@inngest_client.create_function(
-    fn_id="task-failure-propagate",
-    trigger=inngest.TriggerEvent(event="task/failed"),
-    cancel=RUN_CANCEL,
-    retries=1,
-    output_type=TaskPropagateResult,
-)
-async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult:
-    payload = TaskFailedEvent.model_validate(ctx.event.data)
+async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropagateResult:
     logger.info(
         "task-failure-propagate run_id=%s task_id=%s error=%s",
         payload.run_id,
@@ -136,7 +117,7 @@ async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult
         payload.error,
     )
 
-    svc = TaskPropagationService()
+    svc = WorkflowService()
     propagation = await svc.propagate_failure(
         PropagateTaskCompletionCommand(
             run_id=payload.run_id,
@@ -149,11 +130,11 @@ async def propagate_task_failure_fn(ctx: inngest.Context) -> TaskPropagateResult
     await _terminate_failed_task_sandbox(payload.sandbox_id)
 
     # BLOCKED successors are a DB write only — no task/cancelled events.
-    failure_events: list[inngest.Event] = []
+    failure_events: list[InngestEvent] = []
 
     if propagation.workflow_terminal_state == WorkflowTerminalState.FAILED:
         failure_events.append(
-            inngest.Event(
+            InngestEvent(
                 name=WorkflowFailedEvent.name,
                 data=WorkflowFailedEvent(
                     run_id=payload.run_id,

@@ -3,20 +3,17 @@
 import logging
 from datetime import UTC, datetime
 
-import inngest
-from ergon_core.core.dashboard import emit_cohort_updated_for_run
-from ergon_core.core.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.infrastructure.dashboard import emit_cohort_updated_for_run
+from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
-from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
-from ergon_core.core.runtime.events.task_events import WorkflowCompletedEvent
-from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
-from ergon_core.core.runtime.services.inngest_function_results import WorkflowCompleteResult
-from ergon_core.core.runtime.services.orchestration_dto import FinalizeWorkflowCommand
-from ergon_core.core.runtime.services.workflow_finalization_service import (
-    WorkflowFinalizationService,
-)
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.application.events.infrastructure_events import RunCleanupEvent
+from ergon_core.core.application.events.task_events import WorkflowCompletedEvent
+from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.application.jobs.models import WorkflowCompleteResult
+from ergon_core.core.application.workflows.orchestration import FinalizeWorkflowCommand
+from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     get_trace_sink,
     workflow_complete_context,
@@ -26,19 +23,11 @@ from ergon_core.core.runtime.tracing import (
 logger = logging.getLogger(__name__)
 
 
-@inngest_client.create_function(
-    fn_id="workflow-complete",
-    trigger=inngest.TriggerEvent(event="workflow/completed"),
-    cancel=RUN_CANCEL,
-    retries=1,
-    output_type=WorkflowCompleteResult,
-)
-async def complete_workflow_fn(ctx: inngest.Context) -> WorkflowCompleteResult:
-    payload = WorkflowCompletedEvent.model_validate(ctx.event.data)
+async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> WorkflowCompleteResult:
     logger.info("workflow-complete run_id=%s", payload.run_id)
     span_start = datetime.now(UTC)
 
-    svc = WorkflowFinalizationService()
+    svc = WorkflowService()
     finalized = svc.finalize(
         FinalizeWorkflowCommand(
             run_id=payload.run_id,
@@ -63,7 +52,7 @@ async def complete_workflow_fn(ctx: inngest.Context) -> WorkflowCompleteResult:
     )
 
     await inngest_client.send(
-        inngest.Event(
+        InngestEvent(
             name=RunCleanupEvent.name,
             data=RunCleanupEvent(
                 run_id=payload.run_id,

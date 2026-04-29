@@ -12,26 +12,23 @@ Each function uses two durable steps:
 """
 
 import logging
+from typing import Any
 from uuid import UUID
 
-import inngest
+from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.runtime.events.task_events import (
+from ergon_core.core.application.events.task_events import (
     CancelCause,
     TaskCancelledEvent,
     TaskFailedEvent,
-)
-from ergon_core.core.runtime.inngest.client import RUN_CANCEL, inngest_client
-from ergon_core.core.runtime.services.subtask_blocking_service import SubtaskBlockingService
-from ergon_core.core.runtime.services.subtask_cancellation_service import (
-    SubtaskCancellationService,
 )
 
 logger = logging.getLogger(__name__)
 
 
 async def _cancel_orphans_for(
-    ctx: inngest.Context,
+    ctx: Any,
     *,
     run_id: UUID,
     definition_id: UUID,
@@ -39,7 +36,7 @@ async def _cancel_orphans_for(
     cause: CancelCause,
 ) -> int:
     """Two durable steps: scan-and-cancel, then emit events."""
-    svc = SubtaskCancellationService()
+    svc = TaskManagementService()
 
     async def _scan_and_cancel() -> dict:
         with get_session() as session:
@@ -62,7 +59,7 @@ async def _cancel_orphans_for(
 
         async def _emit_events() -> None:
             await inngest_client.send(
-                [inngest.Event(name="task/cancelled", data=e) for e in scan_result["events"]]
+                [InngestEvent(name="task/cancelled", data=e) for e in scan_result["events"]]
             )
 
         await ctx.step.run("emit-cancelled-events", _emit_events)
@@ -70,21 +67,14 @@ async def _cancel_orphans_for(
     return len(scan_result["cancelled_node_ids"])
 
 
-@inngest_client.create_function(
-    fn_id="block-descendants-on-failed",
-    trigger=inngest.TriggerEvent(event="task/failed"),
-    cancel=RUN_CANCEL,
-    retries=1,
-)
-async def block_descendants_on_failed_fn(ctx: inngest.Context) -> int:
+async def run_block_descendants_on_failed_job(ctx: Any, payload: TaskFailedEvent) -> int:
     """When a parent fails, PENDING/READY containment descendants become BLOCKED.
 
     RUNNING descendants are not interrupted. Horizontal (edge-based) successor
     BLOCKED propagation is handled separately in propagation.py.
     """
-    payload = TaskFailedEvent.model_validate(ctx.event.data)
     logger.info("block-descendants-on-failed parent=%s", payload.node_id)
-    svc = SubtaskBlockingService()
+    svc = TaskManagementService()
 
     async def _block_descendants() -> list[str]:
         with get_session() as session:
@@ -101,14 +91,7 @@ async def block_descendants_on_failed_fn(ctx: inngest.Context) -> int:
     return len(blocked)
 
 
-@inngest_client.create_function(
-    fn_id="cancel-orphans-on-cancelled",
-    trigger=inngest.TriggerEvent(event="task/cancelled"),
-    cancel=RUN_CANCEL,
-    retries=1,
-)
-async def cancel_orphans_on_cancelled_fn(ctx: inngest.Context) -> int:
-    payload = TaskCancelledEvent.model_validate(ctx.event.data)
+async def run_cancel_orphans_on_cancelled_job(ctx: Any, payload: TaskCancelledEvent) -> int:
     logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.node_id)
     return await _cancel_orphans_for(
         ctx,

@@ -7,15 +7,14 @@ import logging
 from functools import partial
 from uuid import UUID
 
-import inngest
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.sandbox.lifecycle import terminate_sandbox_by_id
-from ergon_core.core.runtime.errors import ConfigurationError, DataIntegrityError
-from ergon_core.core.runtime.events.infrastructure_events import RunCleanupEvent
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.inngest_function_results import RunCleanupResult
+from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
+from ergon_core.core.infrastructure.inngest.errors import ConfigurationError, DataIntegrityError
+from ergon_core.core.application.events.infrastructure_events import RunCleanupEvent
+from ergon_core.core.application.jobs.models import RunCleanupResult
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +25,8 @@ _STATUS_MAP: dict[str, RunStatus] = {
 }
 
 
-@inngest_client.create_function(
-    fn_id="run-cleanup",
-    trigger=inngest.TriggerEvent(event="run/cleanup"),
-    retries=0,
-    output_type=RunCleanupResult,
-)
-async def run_cleanup_fn(ctx: inngest.Context) -> RunCleanupResult:
+async def run_run_cleanup_job(ctx: Any, payload: RunCleanupEvent) -> RunCleanupResult:
     """Cleanup: terminate sandbox, ensure run status is correct."""
-    payload = RunCleanupEvent.model_validate(ctx.event.data)
     run_id = payload.run_id
     status = payload.status
     error_message = payload.error_message
