@@ -1,18 +1,17 @@
-"""DTOs for TaskManagementService — subtask lifecycle commands and results.
+"""Task-domain request and response models."""
 
-UUID fields use NewType aliases so type checkers catch cross-field
-swaps at the call boundary.
-"""
+from uuid import UUID
 
+from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
     NodeId,
     RunId,
     TaskSlug,
 )
+from ergon_core.core.application.events.task_events import TaskCancelledEvent
 from pydantic import BaseModel, Field
 
-# ── add_subtask ────────────────────────────────────────────────────────────
 
 
 class AddSubtaskCommand(BaseModel):
@@ -148,5 +147,40 @@ class RestartTaskResult(BaseModel):
     node_id: NodeId
     old_status: str
     invalidated_node_ids: list[NodeId] = Field(default_factory=list)
+
+    model_config = {"frozen": True}
+
+class CancelOrphansResult(BaseModel):
+    """Result of cascade-cancelling non-terminal children of a parent node."""
+
+    parent_node_id: NodeId
+    cancelled_node_ids: list[NodeId]
+    events_to_emit: list[TaskCancelledEvent]
+
+    model_config = {"frozen": True}
+
+
+class SubtaskInfo(BaseModel):
+    """A snapshot of one subtask suitable for the manager to reason over."""
+
+    node_id: NodeId
+    task_slug: str
+    description: str
+    status: NodeStatus
+    depends_on: list[NodeId]
+    output: str | None
+    error: str | None
+
+    model_config = {"frozen": True}
+
+
+class CleanupResult(BaseModel):
+    """Result of cleaning up a cancelled task execution."""
+
+    run_id: RunId
+    node_id: NodeId
+    execution_id: UUID | None
+    sandbox_released: bool
+    execution_row_updated: bool
 
     model_config = {"frozen": True}

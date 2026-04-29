@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from ergon_core.core.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -15,23 +15,23 @@ from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
-from ergon_core.core.runtime.errors.inngest_errors import ConfigurationError
-from ergon_core.core.runtime.execution.propagation import (
-    mark_task_failed,
-    mark_task_failed_by_node,
-    mark_task_running,
-)
-from ergon_core.core.runtime.services.graph_dto import MutationMeta
-from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
-from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
-from ergon_core.core.runtime.services.orchestration_dto import (
+from ergon_core.core.infrastructure.inngest.errors import ConfigurationError
+from ergon_core.core.application.graph.models import MutationMeta
+from ergon_core.core.application.graph.lookup import GraphNodeLookup
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.workflows.orchestration import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
 )
-from ergon_core.core.utils import require_not_none, utcnow
-from sqlalchemy import func
+from ergon_core.core.application.graph.propagation import (
+    mark_task_failed,
+    mark_task_failed_by_node,
+    mark_task_running,
+)
+from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.shared.utils import require_not_none, utcnow
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,7 @@ async def _emit_task_status(
 class TaskExecutionService:
     def __init__(self) -> None:
         self._graph_repo = WorkflowGraphRepository()
+        self._task_execution_repo = TaskExecutionRepository()
 
     async def prepare(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
         if command.node_id is not None:
@@ -138,7 +139,9 @@ class TaskExecutionService:
                 run_id=command.run_id,
                 node_id=node_id,
                 definition_worker_id=definition_worker_id,
-                attempt_number=self._next_attempt_number(session, command.run_id, node_id),
+                attempt_number=self._task_execution_repo.next_attempt_for_node(
+                    session, command.run_id, node_id
+                ),
                 status=TaskExecutionStatus.RUNNING,
                 started_at=utcnow(),
             )
@@ -260,7 +263,9 @@ class TaskExecutionService:
                 definition_task_id=task_id,
                 definition_worker_id=definition_worker_id,
                 node_id=resolved_node_id,
-                attempt_number=self._next_attempt_number_by_task(session, command.run_id, task_id),
+                attempt_number=self._task_execution_repo.next_attempt_for_definition_task(
+                    session, command.run_id, task_id
+                ),
                 status=TaskExecutionStatus.RUNNING,
                 started_at=utcnow(),
             )
@@ -373,22 +378,3 @@ class TaskExecutionService:
                 old_status=graph_status.RUNNING,
             )
 
-    # -- Helpers ---
-
-    def _next_attempt_number(self, session: Session, run_id: UUID, node_id: UUID) -> int:
-        count = session.exec(
-            select(func.count(RunTaskExecution.id)).where(
-                RunTaskExecution.run_id == run_id,
-                RunTaskExecution.node_id == node_id,
-            )
-        ).one()
-        return count + 1
-
-    def _next_attempt_number_by_task(self, session: Session, run_id: UUID, task_id: UUID) -> int:
-        count = session.exec(
-            select(func.count(RunTaskExecution.id)).where(
-                RunTaskExecution.run_id == run_id,
-                RunTaskExecution.definition_task_id == task_id,
-            )
-        ).one()
-        return count + 1

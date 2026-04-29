@@ -29,13 +29,13 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphNode,
 )
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
-from ergon_core.core.runtime.errors.graph_errors import (
+from ergon_core.core.application.graph.errors import (
     CycleError,
     DanglingEdgeError,
     EdgeNotFoundError,
     NodeNotFoundError,
 )
-from ergon_core.core.runtime.services.graph_dto import (
+from ergon_core.core.application.graph.models import (
     AnnotationDeletedMutation,
     AnnotationSetMutation,
     EdgeAddedMutation,
@@ -53,7 +53,7 @@ from ergon_core.core.runtime.services.graph_dto import (
     NodeStatusChangedMutation,
     WorkflowGraphDto,
 )
-from ergon_core.core.utils import utcnow
+from ergon_core.core.shared.utils import utcnow
 from pydantic import BaseModel
 from sqlmodel import Session, col, select
 

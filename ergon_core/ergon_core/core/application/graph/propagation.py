@@ -1,32 +1,25 @@
-"""Pure DAG state functions for task propagation.
+"""Workflow propagation service helpers.
 
 All state is stored in the graph layer (RunGraphNode, RunGraphEdge,
 RunGraphMutation). The graph mutation WAL is the single source of truth
 for DAG execution state.
-
-RunTaskStateEvent is no longer written or read by this module.
 """
 
 from uuid import UUID
 
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
 )
 from ergon_core.core.persistence.graph import status_conventions as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.runtime.services.graph_dto import MutationMeta
-from ergon_core.core.runtime.services.graph_lookup import GraphNodeLookup
-from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
+from ergon_core.core.application.graph.models import MutationMeta
+from ergon_core.core.application.graph.lookup import GraphNodeLookup
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from sqlmodel import Session, select
 
 _PROPAGATION_META = MutationMeta(actor="system:propagation")
-
-
-# ---------------------------------------------------------------------------
-# Write helpers — all writes go through the graph repo
-# ---------------------------------------------------------------------------
 
 
 async def _update_task_status(
@@ -112,11 +105,6 @@ async def mark_task_failed(
     )
 
 
-# ---------------------------------------------------------------------------
-# Read helpers — all reads go through RunGraphNode
-# ---------------------------------------------------------------------------
-
-
 async def get_initial_ready_tasks(
     session: Session,
     run_id: UUID,
@@ -125,7 +113,7 @@ async def get_initial_ready_tasks(
     graph_repo: WorkflowGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> list[UUID]:
-    """Return task IDs that have zero dependencies (root tasks)."""
+    """Return task IDs that have zero dependencies."""
     all_tasks_stmt = select(ExperimentDefinitionTask.id).where(
         ExperimentDefinitionTask.experiment_definition_id == definition_id,
     )
@@ -138,22 +126,17 @@ async def get_initial_ready_tasks(
 
     ready_ids = list(all_task_ids - tasks_with_deps)
 
-    for tid in ready_ids:
+    for task_id in ready_ids:
         await mark_task_ready(
             session,
             run_id,
-            tid,
+            task_id,
             graph_repo=graph_repo,
             graph_lookup=graph_lookup,
         )
 
     session.commit()
     return ready_ids
-
-
-# ---------------------------------------------------------------------------
-# Graph-native write helpers (no GraphNodeLookup)
-# ---------------------------------------------------------------------------
 
 
 async def mark_task_failed_by_node(
@@ -177,11 +160,6 @@ async def mark_task_failed_by_node(
     )
 
 
-# ---------------------------------------------------------------------------
-# Graph-native propagation (no GraphNodeLookup, walks RunGraphEdge)
-# ---------------------------------------------------------------------------
-
-
 async def _block_successors_bfs(
     session: Session,
     run_id: UUID,
@@ -191,15 +169,7 @@ async def _block_successors_bfs(
     terminal_status: str,
     graph_repo: WorkflowGraphRepository,
 ) -> None:
-    """BFS: propagate BLOCKED through the entire reachable subgraph.
-
-    Starts from seed_node_ids (direct successors of the failed node). When a
-    node is BLOCKED, its own outgoing edges are INVALIDATED and its successors
-    enqueued so BLOCKED propagates transitively (e.g. A→B→C, A fails → both
-    B and C become BLOCKED in one synchronous pass).
-
-    RUNNING and terminal nodes are skipped.
-    """
+    """Propagate BLOCKED through the reachable downstream graph."""
     queue = list(seed_node_ids)
     while queue:
         target_id = queue.pop()
@@ -251,21 +221,7 @@ async def on_task_completed_or_failed(
     *,
     graph_repo: WorkflowGraphRepository,
 ) -> list[UUID]:
-    """Handle a node reaching COMPLETED, FAILED, or CANCELLED.
-
-    Returns newly ready node IDs.
-
-    - COMPLETED: outgoing edges become SATISFIED; targets with all dependencies
-      satisfied transition to PENDING for scheduling.
-    - FAILED / CANCELLED: outgoing edges become INVALIDATED; reachable successors
-      transition to BLOCKED unless they are RUNNING or terminal.
-
-    Walks RunGraphEdge so it works for both static and dynamic tasks.
-
-    Precondition: the caller must ensure node_id is already in terminal_status
-    before calling this function. The node's own status is NOT written here —
-    only edge statuses and downstream candidate statuses are updated.
-    """
+    """Handle a node reaching COMPLETED, FAILED, or CANCELLED."""
     is_success = terminal_status == graph_status.COMPLETED
 
     outgoing = list(
@@ -287,8 +243,7 @@ async def on_task_completed_or_failed(
             meta=_PROPAGATION_META,
         )
 
-    candidate_node_ids = {e.target_node_id for e in outgoing}
-
+    candidate_node_ids = {edge.target_node_id for edge in outgoing}
     newly_ready: list[UUID] = []
 
     if not is_success:
@@ -303,7 +258,6 @@ async def on_task_completed_or_failed(
         session.commit()
         return newly_ready
 
-    # SUCCESS PATH: source completed — check if candidates can become READY.
     for candidate_id in candidate_node_ids:
         candidate_node = session.get(RunGraphNode, candidate_id)
         if candidate_node is None:
@@ -314,20 +268,6 @@ async def on_task_completed_or_failed(
         ):
             continue
 
-        # Eligibility:
-        #   - PENDING (first activation): normal case.
-        #   - CANCELLED managed subtask (parent_node_id is not None):
-        #     re-activation after the manager or an upstream restart
-        #     invalidated it. Policy: any CANCELLED managed subtask
-        #     re-activates when all deps re-satisfy; if the manager
-        #     explicitly cancelled and doesn't want it re-activated it
-        #     can re-cancel. Keeps propagation logic simple and avoids
-        #     needing a cancel_cause column on the node.
-        #   - CANCELLED static workflow node (parent_node_id is None):
-        #     NOT re-activated — no supervisor to adapt, and the static
-        #     workflow expects terminal nodes to stay terminal.
-        #
-        # Everything else (COMPLETED, FAILED, RUNNING, BLOCKED) is skipped.
         status = candidate_node.status
         is_managed_subtask = candidate_node.parent_node_id is not None
         is_pending = status == graph_status.PENDING
@@ -345,8 +285,8 @@ async def on_task_completed_or_failed(
             ).all()
         )
 
-        source_nodes = [session.get(RunGraphNode, e.source_node_id) for e in incoming]
-        if all(n is not None and n.status == graph_status.COMPLETED for n in source_nodes):
+        source_nodes = [session.get(RunGraphNode, edge.source_node_id) for edge in incoming]
+        if all(node is not None and node.status == graph_status.COMPLETED for node in source_nodes):
             reason = (
                 f"all dependencies satisfied after {node_id}"
                 if is_pending
@@ -361,20 +301,12 @@ async def on_task_completed_or_failed(
                     actor="system:propagation",
                     reason=reason,
                 ),
-                # Must be False for the CANCELLED -> PENDING transition;
-                # CANCELLED is terminal and only_if_not_terminal=True
-                # would block the re-activation write.
                 only_if_not_terminal=False,
             )
             newly_ready.append(candidate_id)
 
     session.commit()
     return newly_ready
-
-
-# ---------------------------------------------------------------------------
-# Graph-native terminal-state checks (no definition_id)
-# ---------------------------------------------------------------------------
 
 
 def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
@@ -384,8 +316,8 @@ def is_workflow_complete_v2(session: Session, run_id: UUID) -> bool:
     )
     if not statuses:
         return True
-    return all(s in graph_status.TERMINAL_STATUSES for s in statuses) and not any(
-        s == graph_status.FAILED for s in statuses
+    return all(status in graph_status.TERMINAL_STATUSES for status in statuses) and not any(
+        status == graph_status.FAILED for status in statuses
     )
 
 
@@ -393,21 +325,11 @@ _SETTLED_STATUSES = graph_status.TERMINAL_STATUSES | frozenset({graph_status.BLO
 
 
 def is_workflow_failed_v2(session: Session, run_id: UUID) -> bool:
-    """All nodes settled (terminal or BLOCKED) AND at least one FAILED.
-
-    BLOCKED nodes represent predecessor-failed state awaiting operator action.
-    Once all remaining work is settled — either terminal or BLOCKED with no
-    PENDING/RUNNING tasks remaining — the run cannot make further autonomous
-    progress. Treat this as a workflow failure so the RunRecord transitions to
-    FAILED and criterion evaluation fires.
-
-    BLOCKED nodes are preserved (not CANCELLED) so the operator can examine
-    them and use operator_unblock / restart_node to resume if desired.
-    """
+    """All nodes settled and at least one FAILED."""
     statuses = list(
         session.exec(select(RunGraphNode.status).where(RunGraphNode.run_id == run_id)).all()
     )
     if not statuses:
         return False
-    all_settled = all(s in _SETTLED_STATUSES for s in statuses)
-    return all_settled and any(s == graph_status.FAILED for s in statuses)
+    all_settled = all(status in _SETTLED_STATUSES for status in statuses)
+    return all_settled and any(status == graph_status.FAILED for status in statuses)

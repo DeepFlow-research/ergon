@@ -10,10 +10,12 @@ from collections import deque
 from uuid import UUID
 
 import inngest
-from ergon_core.core.dashboard.emitter import DashboardEmitter
-from ergon_core.core.dashboard.provider import get_dashboard_emitter
+from ergon_core.api.registry import registry
+from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
+from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import (
+    BLOCKED,
     CANCELLED,
     COMPLETED,
     EDGE_PENDING,
@@ -22,8 +24,8 @@ from ergon_core.core.persistence.graph.status_conventions import (
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.shared.types import NodeId, TaskSlug
-from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
-from ergon_core.core.runtime.errors.delegation_errors import (
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.application.tasks.errors import (
     CycleDetectedError,
     DuplicateTaskSlugError,
     RunRecordMissingError,
@@ -32,17 +34,20 @@ from ergon_core.core.runtime.errors.delegation_errors import (
     TaskRunningError,
     UnknownTaskSlugError,
 )
-from ergon_core.core.runtime.events.task_events import (
+from ergon_core.core.application.events.task_events import (
+    PropagationCancelCause,
     TaskCancelledEvent,
     TaskReadyEvent,
 )
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.graph_dto import MutationMeta
-from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
-from ergon_core.core.runtime.services.task_management_dto import (
+from ergon_core.core.infrastructure.inngest.client import inngest_client
+from ergon_core.core.application.graph.traversal import descendants
+from ergon_core.core.application.graph.models import MutationMeta
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.tasks.models import (
     AddSubtaskCommand,
     AddSubtaskResult,
     CancelTaskCommand,
+    CancelOrphansResult,
     CancelTaskResult,
     PlanSubtasksCommand,
     PlanSubtasksResult,
@@ -52,6 +57,7 @@ from ergon_core.core.runtime.services.task_management_dto import (
     RestartTaskResult,
     SubtaskSpec,
 )
+from ergon_core.core.application.tasks.repository import TaskExecutionRepository
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -65,46 +71,15 @@ def _count_non_terminal_descendants(session: Session, run_id: UUID, node_id: UUI
     Uses Python-level BFS rather than a recursive CTE so the logic is
     portable across SQLite (tests) and Postgres (production).
     """
-    count = 0
-    queue: deque[UUID] = deque([node_id])
-    while queue:
-        parent = queue.popleft()
-        children = session.exec(
-            select(RunGraphNode.id, RunGraphNode.status).where(
-                RunGraphNode.run_id == run_id,
-                RunGraphNode.parent_node_id == parent,
-            )
-        ).all()
-        for child_id, child_status in children:
-            if child_status not in TERMINAL_STATUSES:
-                count += 1
-            queue.append(child_id)
-    return count
-
-
-def _latest_execution_id(session: Session, node_id: UUID) -> UUID | None:
-    """Most recent execution for a node, or None.
-
-    Used to attach execution_id to TaskCancelledEvent so the cleanup
-    function can release the correct sandbox.
-    """
-    exe = session.exec(
-        select(RunTaskExecution.id)
-        .where(RunTaskExecution.node_id == node_id)
-        .order_by(RunTaskExecution.started_at.desc())  # type: ignore[union-attr]
-        .limit(1)
-    ).first()
-    return exe
+    return sum(
+        1
+        for descendant in descendants(session, run_id=run_id, root_node_id=node_id)
+        if descendant.status not in TERMINAL_STATUSES
+    )
 
 
 class TaskManagementService:
-    """Agent-initiated subtask lifecycle operations.
-
-    Separated from TaskInspectionService (read-only) and
-    SubtaskCancellationService (engine-driven cascade) because this
-    service is the only one called from agent tool closures during
-    the manager's ReAct loop.
-    """
+    """Task lifecycle mutations for manager actions and engine cascades."""
 
     def __init__(
         self,
@@ -112,6 +87,7 @@ class TaskManagementService:
         dashboard_emitter: DashboardEmitter | None = None,
     ) -> None:
         self._graph_repo = graph_repo or WorkflowGraphRepository()
+        self._task_execution_repo = TaskExecutionRepository()
         self._dashboard_emitter = dashboard_emitter or get_dashboard_emitter()
         self._graph_repo.add_mutation_listener(self._dashboard_emitter.graph_mutation)
 
@@ -129,11 +105,8 @@ class TaskManagementService:
         dependency edges (source=dep, target=new_node).
         """
         task_slug = command.task_slug
-        from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: dynamic task creation validates plugin worker slugs only when manager tools run
-            WORKERS,
-        )
 
-        if command.assigned_worker_slug not in WORKERS:
+        if command.assigned_worker_slug not in registry.workers:
             raise ValueError(f"Unknown worker slug: {command.assigned_worker_slug!r}")
 
         parent = self._graph_repo.get_node(
@@ -226,7 +199,9 @@ class TaskManagementService:
 
         if applied:
             definition_id = self._resolve_definition_id(session, command.run_id)
-            execution_id = _latest_execution_id(session, command.node_id)
+            execution_id = self._task_execution_repo.latest_execution_id_for_node(
+                session, command.node_id
+            )
             event = TaskCancelledEvent(
                 run_id=command.run_id,
                 definition_id=definition_id,
@@ -254,6 +229,77 @@ class TaskManagementService:
             cascaded_count=cascaded,
         )
 
+    async def cancel_orphans(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        definition_id: UUID,
+        parent_node_id: UUID,
+        cause: PropagationCancelCause,
+    ) -> CancelOrphansResult:
+        """Cancel every non-terminal containment descendant of parent_node_id."""
+        meta = MutationMeta(actor="system:cascade", reason=cause)
+        transitioned: list[UUID] = []
+
+        for child in descendants(session, run_id=run_id, root_node_id=parent_node_id):
+            if child.status in TERMINAL_STATUSES:
+                continue
+            applied = await self._graph_repo.update_node_status(
+                session,
+                run_id=run_id,
+                node_id=child.id,
+                new_status=CANCELLED,
+                meta=meta,
+                only_if_not_terminal=True,
+            )
+            if applied:
+                transitioned.append(child.id)
+
+        events = [
+            TaskCancelledEvent(
+                run_id=run_id,
+                definition_id=definition_id,
+                node_id=nid,
+                execution_id=self._task_execution_repo.latest_execution_id_for_node(session, nid),
+                cause=cause,
+            )
+            for nid in transitioned
+        ]
+        return CancelOrphansResult(
+            parent_node_id=parent_node_id,
+            cancelled_node_ids=transitioned,
+            events_to_emit=events,
+        )
+
+    async def block_pending_descendants(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        parent_node_id: UUID,
+        cause: str,
+    ) -> list[UUID]:
+        """Block non-terminal, non-running containment descendants."""
+        meta = MutationMeta(actor="system:cascade", reason=cause)
+        blocked: list[UUID] = []
+
+        for child in descendants(session, run_id=run_id, root_node_id=parent_node_id):
+            if child.status == RUNNING or child.status in TERMINAL_STATUSES:
+                continue
+            applied = await self._graph_repo.update_node_status(
+                session,
+                run_id=run_id,
+                node_id=child.id,
+                new_status=BLOCKED,
+                meta=meta,
+                only_if_not_terminal=True,
+            )
+            if applied:
+                blocked.append(child.id)
+
+        return blocked
+
     # ── plan_subtasks ────────────────────────────────────────
 
     async def plan_subtasks(
@@ -268,12 +314,9 @@ class TaskManagementService:
         root tasks (those with no depends_on).
         """
         self._validate_plan(command.subtasks)
-        from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: dynamic task creation validates plugin worker slugs only when manager tools run
-            WORKERS,
-        )
 
         for spec in command.subtasks:
-            if spec.assigned_worker_slug not in WORKERS:
+            if spec.assigned_worker_slug not in registry.workers:
                 raise ValueError(f"Unknown worker slug: {spec.assigned_worker_slug!r}")
 
         parent = self._graph_repo.get_node(
@@ -569,7 +612,7 @@ class TaskManagementService:
         )
 
         definition_id = self._resolve_definition_id(session, run_id)
-        execution_id = _latest_execution_id(session, node_id)
+        execution_id = self._task_execution_repo.latest_execution_id_for_node(session, node_id)
         event = TaskCancelledEvent(
             run_id=run_id,
             definition_id=definition_id,

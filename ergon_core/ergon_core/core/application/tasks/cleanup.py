@@ -1,11 +1,7 @@
 """TaskCleanupService — releases infrastructure for a CANCELLED task execution.
 
-Separated from SubtaskCancellationService because that service operates
-on graph nodes (state transitions, fan-out) while this one operates on
-execution resources (sandbox, telemetry, context streams). Different
-failure characteristics: a failed sandbox teardown should be retried
-for this node without re-cancelling siblings.
-
+Task lifecycle mutation lives in TaskManagementService; this service only
+handles per-execution cleanup after cancellation events are delivered.
 Idempotent: every mutating call checks current state before writing.
 """
 
@@ -14,7 +10,7 @@ from uuid import UUID
 
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-from ergon_core.core.runtime.services.task_cleanup_dto import CleanupResult
+from ergon_core.core.application.tasks.models import CleanupResult
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)

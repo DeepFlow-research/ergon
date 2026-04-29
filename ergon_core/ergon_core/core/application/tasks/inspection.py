@@ -9,8 +9,8 @@ from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED, FAILED
-from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-from ergon_core.core.runtime.services.task_inspection_dto import SubtaskInfo
+from ergon_core.core.application.tasks.models import SubtaskInfo
+from ergon_core.core.application.tasks.repository import TaskExecutionRepository
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,9 @@ class TaskInspectionService:
     Returns frozen SubtaskInfo snapshots — the manager agent uses these
     to decide which subtasks to cancel, refine, or wait on.
     """
+
+    def __init__(self) -> None:
+        self._task_execution_repo = TaskExecutionRepository()
 
     def list_subtasks(
         self,
@@ -92,12 +95,7 @@ class TaskInspectionService:
 
     def _latest_output(self, session: Session, node_id: UUID) -> str | None:
         """Truncated final_assistant_message from the most recent execution."""
-        exe = session.exec(
-            select(RunTaskExecution)
-            .where(RunTaskExecution.node_id == node_id)
-            .order_by(RunTaskExecution.started_at.desc())  # type: ignore[union-attr]
-            .limit(1)
-        ).first()
+        exe = self._task_execution_repo.latest_for_node(session, node_id)
         if exe is None or exe.final_assistant_message is None:
             return None
         text = exe.final_assistant_message
@@ -105,12 +103,7 @@ class TaskInspectionService:
 
     def _latest_error(self, session: Session, node_id: UUID) -> str | None:
         """Error message from the most recent execution."""
-        exe = session.exec(
-            select(RunTaskExecution)
-            .where(RunTaskExecution.node_id == node_id)
-            .order_by(RunTaskExecution.started_at.desc())  # type: ignore[union-attr]
-            .limit(1)
-        ).first()
+        exe = self._task_execution_repo.latest_for_node(session, node_id)
         if exe is None or exe.error_json is None:
             return None
         return str(exe.error_json.get("message", exe.error_json))

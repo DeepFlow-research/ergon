@@ -13,7 +13,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.status_conventions import NodeStatus
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.persistence.shared.types import (
     DefinitionId,
