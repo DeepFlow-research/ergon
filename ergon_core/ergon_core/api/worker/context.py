@@ -7,11 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class WorkerContext(BaseModel):
-    """Runtime context for a single worker execution.
-
-    Contains only per-execution state that the worker cannot know at
-    construction time.  Tools and configuration belong on the Worker itself.
-    """
+    """Runtime context for a single worker execution."""
 
     model_config = {"frozen": True}
 
