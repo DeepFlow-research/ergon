@@ -6,8 +6,8 @@ import time
 from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
-from ergon_core.core.sandbox.event_sink import SandboxEventSink
-from ergon_core.core.sandbox.utils import (
+from ergon_core.core.infrastructure.sandbox.event_sink import SandboxEventSink
+from ergon_core.core.infrastructure.sandbox.utils import (
     _truncate,
     bytes_length,
     coerce_text,

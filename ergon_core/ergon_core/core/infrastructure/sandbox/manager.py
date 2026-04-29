@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import ClassVar, Protocol, runtime_checkable
 from uuid import UUID
 
-from ergon_core.core.sandbox.errors import SandboxExpiredError
-from ergon_core.core.sandbox.event_sink import (
+from ergon_core.core.infrastructure.sandbox.errors import SandboxExpiredError
+from ergon_core.core.infrastructure.sandbox.event_sink import (
     NoopSandboxEventSink,
     SandboxEventSink,
 )
-from ergon_core.core.sandbox.utils import _truncate, coerce_text
-from ergon_core.core.settings import settings
+from ergon_core.core.infrastructure.sandbox.utils import _truncate, coerce_text
+from ergon_core.core.shared.settings import settings
 from pydantic import BaseModel
 
 
@@ -114,7 +114,7 @@ class BaseSandboxManager(ABC):
 
         Production callers MUST NOT call this after startup. The only
         sanctioned call site is inside the ``lifespan`` context manager in
-        ``ergon_core/ergon_core/core/api/app.py``.
+        ``ergon_core/ergon_core/core/rest_api/app.py``.
         """
         cls._event_sink = sink
 

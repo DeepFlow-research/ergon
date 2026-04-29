@@ -2,7 +2,6 @@
 
 Copies bytes out of an E2B sandbox into a content-addressed blob store on
 the local filesystem, then appends one row per new hash to ``run_resources``.
-All persistence goes through ``queries.resources`` (no session parameter).
 """
 
 import hashlib
@@ -14,9 +13,9 @@ from typing import ClassVar
 from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-from ergon_core.core.persistence.queries import queries
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunResourceKind
-from ergon_core.core.runtime.resources import RunResourceView
+from ergon_core.core.application.resources import RunResourceRepository, RunResourceView
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +53,7 @@ class SandboxResourcePublisher:
         self._task_execution_id = task_execution_id
         self._blob_root = blob_root
         self._publish_dirs = publish_dirs if publish_dirs is not None else self.DEFAULT_PUBLISH_DIRS
+        self._resource_repo = RunResourceRepository()
 
     # ------------------------------------------------------------------
     # Filesystem sync -- called from write-type toolkit methods and from
@@ -83,10 +83,12 @@ class SandboxResourcePublisher:
                 # path.  Any existing row with this file_path in the current task
                 # execution is proof the content is already logged.
                 durable_path = self._blob_path(content_hash)
-                prior = queries.resources.latest_by_path(
-                    task_execution_id=self._task_execution_id,
-                    file_path=str(durable_path),
-                )
+                with get_session() as session:
+                    prior = self._resource_repo.latest_by_path(
+                        session,
+                        task_execution_id=self._task_execution_id,
+                        file_path=str(durable_path),
+                    )
                 if prior is not None:
                     continue  # unchanged
 
@@ -96,18 +98,22 @@ class SandboxResourcePublisher:
                 guessed, _ = mimetypes.guess_type(entry.name)
                 mime = guessed or "application/octet-stream"
 
-                row = queries.resources.append(
-                    run_id=self._run_id,
-                    task_execution_id=self._task_execution_id,
-                    kind=resource_kind.value,
-                    name=entry.name,
-                    mime_type=mime,
-                    file_path=str(durable_path),
-                    size_bytes=len(content_bytes),
-                    error=None,
-                    content_hash=content_hash,
-                    metadata={"sandbox_origin": sandbox_full_path},
-                )
+                with get_session() as session:
+                    row = self._resource_repo.append(
+                        session,
+                        run_id=self._run_id,
+                        task_execution_id=self._task_execution_id,
+                        kind=resource_kind.value,
+                        name=entry.name,
+                        mime_type=mime,
+                        file_path=str(durable_path),
+                        size_bytes=len(content_bytes),
+                        error=None,
+                        content_hash=content_hash,
+                        metadata={"sandbox_origin": sandbox_full_path},
+                    )
+                    session.commit()
+                    session.refresh(row)
                 created.append(RunResourceView.from_row(row))
 
         return created
@@ -132,26 +138,32 @@ class SandboxResourcePublisher:
         content_bytes = content.encode("utf-8")
         content_hash = hashlib.sha256(content_bytes).hexdigest()
 
-        prior = queries.resources.find_by_hash(
-            task_execution_id=self._task_execution_id,
-            content_hash=content_hash,
-        )
+        with get_session() as session:
+            prior = self._resource_repo.find_by_hash(
+                session,
+                task_execution_id=self._task_execution_id,
+                content_hash=content_hash,
+            )
         if prior is not None:
             return None  # duplicate, no-op
 
         durable_path = self._write_blob(content_bytes, content_hash)
 
-        row = queries.resources.append(
-            run_id=self._run_id,
-            task_execution_id=self._task_execution_id,
-            kind=kind.value,
-            name=name,
-            mime_type=mime_type,
-            file_path=str(durable_path),
-            size_bytes=len(content_bytes),
-            error=None,
-            content_hash=content_hash,
-        )
+        with get_session() as session:
+            row = self._resource_repo.append(
+                session,
+                run_id=self._run_id,
+                task_execution_id=self._task_execution_id,
+                kind=kind.value,
+                name=name,
+                mime_type=mime_type,
+                file_path=str(durable_path),
+                size_bytes=len(content_bytes),
+                error=None,
+                content_hash=content_hash,
+            )
+            session.commit()
+            session.refresh(row)
         return RunResourceView.from_row(row)
 
     # ------------------------------------------------------------------
