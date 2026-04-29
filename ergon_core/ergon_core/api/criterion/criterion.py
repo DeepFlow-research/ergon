@@ -4,17 +4,14 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
+from ergon_core.api.criterion.context import CriterionContext
+from ergon_core.api.criterion.results import CriterionOutcome, ScoreScale
 from ergon_core.api.errors import DependencyError
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, CriterionScoreSpec
-from ergon_core.core.runtime.dependencies import check_packages
+from ergon_core.core.infrastructure.dependencies import check_packages
 
 
 class Criterion(ABC):
-    """Atomic evaluation unit that owns its own data-pulling and verification logic.
-
-    Subclasses must set ``type_slug`` and implement ``evaluate``.
-    """
+    """Atomic evaluation unit that owns its own data-pulling and verification logic."""
 
     type_slug: ClassVar[str]
     required_packages: ClassVar[list[str]] = []
@@ -26,20 +23,20 @@ class Criterion(ABC):
         slug: str,
         description: str | None = None,
         weight: float = 1.0,
-        score_spec: CriterionScoreSpec | None = None,
+        score_spec: ScoreScale | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.slug = slug
         self.description = description or slug
         self.weight = weight
-        self.score_spec = score_spec or CriterionScoreSpec()
+        self.score_spec = score_spec or ScoreScale()
         self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
 
     @abstractmethod
     async def evaluate(
         self,
-        context: EvaluationContext,
-    ) -> CriterionResult:
+        context: CriterionContext,
+    ) -> CriterionOutcome:
         """Run one atomic evaluation against the provided context."""
         ...
 
