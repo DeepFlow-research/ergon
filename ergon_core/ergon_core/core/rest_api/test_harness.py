@@ -20,7 +20,6 @@ from typing import Annotated
 from uuid import UUID
 
 import inngest
-from ergon_cli.composition import build_experiment
 from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
@@ -34,14 +33,13 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
     Thread,
 )
-from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
-from ergon_core.core.runtime.services.experiment_definition_service import (
-    ExperimentDefinitionService,
+from ergon_core.core.application.events.task_events import WorkflowStartedEvent
+from ergon_core.core.infrastructure.inngest.client import inngest_client
+from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
+from ergon_core.core.application.experiments.service import (
+    ExperimentService,
 )
-from ergon_core.core.runtime.services.experiment_launch_service import ExperimentLaunchService
-from ergon_core.core.runtime.services.experiment_schemas import (
+from ergon_core.core.application.experiments.models import (
     ExperimentDefineRequest,
     ExperimentRunRequest,
 )
@@ -441,6 +439,8 @@ class SubmitCohortRequest(BaseModel):
     benchmark_slug: str
     slots: list[CohortSlotRequest]
     cohort_key: str
+    sandbox_slug: str | None = None
+    dependency_extras: tuple[str, ...] = ("none",)
     # Smoke workers don't hit an LLM; the field is required downstream
     # only because ``WorkerSpec`` models it.  Default matches the CLI.
     model: str = "openai:gpt-4o"
@@ -468,7 +468,8 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
 
     run_ids: list[UUID] = []
     for slot in body.slots:
-        defined = ExperimentDefinitionService().define_benchmark_experiment(
+        experiment_service = ExperimentService()
+        defined = experiment_service.define_benchmark_experiment(
             ExperimentDefineRequest(
                 benchmark_slug=body.benchmark_slug,
                 cohort_id=cohort.id,
@@ -476,10 +477,12 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
                 default_model_target=body.model,
                 default_worker_team={"primary": slot.worker_slug},
                 default_evaluator_slug=slot.evaluator_slug,
+                sandbox_slug=body.sandbox_slug or body.benchmark_slug,
+                dependency_extras=body.dependency_extras,
                 metadata={"source": "test-harness"},
             )
         )
-        launched = await ExperimentLaunchService().run_experiment(
+        launched = await experiment_service.run_experiment(
             ExperimentRunRequest(experiment_id=defined.experiment_id)
         )
         run_ids.extend(launched.run_ids)

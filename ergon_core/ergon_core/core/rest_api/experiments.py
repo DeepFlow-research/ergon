@@ -2,16 +2,15 @@
 
 from uuid import UUID
 
-from ergon_core.core.runtime.services.experiment_definition_service import (
-    ExperimentDefinitionService,
+from ergon_core.core.application.experiments.service import (
+    ExperimentService,
 )
-from ergon_core.core.runtime.services.experiment_launch_service import ExperimentLaunchService
-from ergon_core.core.runtime.services.experiment_read_service import (
+from ergon_core.core.application.read_models.experiments import (
     ExperimentDetailDto,
     ExperimentReadService,
     ExperimentSummaryDto,
 )
-from ergon_core.core.runtime.services.experiment_schemas import (
+from ergon_core.core.application.experiments.models import (
     ExperimentDefineRequest,
     ExperimentDefineResult,
     ExperimentRunRequest,
@@ -37,7 +36,7 @@ def get_experiment(experiment_id: UUID) -> ExperimentDetailDto:
 
 @router.post("/define", response_model=ExperimentDefineResult, status_code=201)
 def define_experiment(request: ExperimentDefineRequest) -> ExperimentDefineResult:
-    return ExperimentDefinitionService().define_benchmark_experiment(request)
+    return ExperimentService().define_benchmark_experiment(request)
 
 
 @router.post("/{experiment_id}/run", response_model=ExperimentRunResult, status_code=202)
@@ -45,4 +44,4 @@ async def run_experiment(experiment_id: UUID, request: ExperimentRunRequest | No
     launch_request = request or ExperimentRunRequest(experiment_id=experiment_id)
     if launch_request.experiment_id != experiment_id:
         raise HTTPException(status_code=400, detail="experiment_id mismatch")
-    return await ExperimentLaunchService().run_experiment(launch_request)
+    return await ExperimentService().run_experiment(launch_request)

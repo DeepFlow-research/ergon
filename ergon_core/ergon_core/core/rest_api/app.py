@@ -21,23 +21,24 @@ logging.basicConfig(
 )
 
 import inngest.fast_api
-from ergon_core.core.api.cohorts import router as cohorts_router
-from ergon_core.core.api.experiments import router as experiments_router
-from ergon_core.core.api.rollouts import router as rollouts_router
-from ergon_core.core.api.runs import router as runs_router
-from ergon_core.core.api.test_harness import router as _test_harness_router
-from ergon_core.core.dashboard.provider import init_dashboard_emitter, reset_dashboard_emitter
+from ergon_core.api.registry import registry
+from ergon_core.core.rest_api.cohorts import router as cohorts_router
+from ergon_core.core.rest_api.experiments import router as experiments_router
+from ergon_core.core.rest_api.rollouts import router as rollouts_router
+from ergon_core.core.rest_api.runs import router as runs_router
+from ergon_core.core.rest_api.test_harness import router as _test_harness_router
+from ergon_core.core.infrastructure.dashboard.provider import init_dashboard_emitter, reset_dashboard_emitter
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.sandbox.event_sink import (
+from ergon_core.core.infrastructure.sandbox.event_sink import (
     CompoundSandboxEventSink,
     DashboardEmitterSandboxEventSink,
     PostgresSandboxEventSink,
 )
-from ergon_core.core.sandbox.manager import DefaultSandboxManager
+from ergon_core.core.infrastructure.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.inngest.registry import ALL_FUNCTIONS
-from ergon_core.core.settings import Settings, settings
+from ergon_core.core.infrastructure.inngest.client import inngest_client
+from ergon_core.core.infrastructure.inngest.registry import ALL_FUNCTIONS
+from ergon_core.core.shared.settings import Settings, settings
 from fastapi import FastAPI
 
 logger = logging.getLogger(__name__)
@@ -70,23 +71,20 @@ async def lifespan(app: FastAPI):
     dashboard_emitter = init_dashboard_emitter(enabled=True)
     app.state.dashboard_emitter = dashboard_emitter
 
-    # Wire the dashboard event sink on every sandbox manager subclass.
-    # Import ergon_builtins here (deferred) to avoid a circular import at
-    # module level; ergon_builtins imports ergon_core, not the reverse.
-    from ergon_builtins.registry import SANDBOX_MANAGERS
+    _run_startup_plugins(settings.startup_plugins)
 
+    # Wire the dashboard event sink on every registered sandbox manager class.
     sink = CompoundSandboxEventSink(
         DashboardEmitterSandboxEventSink(dashboard_emitter),
         PostgresSandboxEventSink(),
     )
     DefaultSandboxManager.set_event_sink(sink)
-    for manager_cls in SANDBOX_MANAGERS.values():
+    for manager_cls in registry.sandbox_managers.values():
         manager_cls.set_event_sink(sink)
     logger.info(
         "sandbox event sink wired on %d manager subclass(es)",
-        1 + len(SANDBOX_MANAGERS),
+        1 + len(registry.sandbox_managers),
     )
-    _run_startup_plugins(settings.startup_plugins)
 
     logger.info("app startup complete — all subsystems initialised")
     try:
