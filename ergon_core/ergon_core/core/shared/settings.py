@@ -63,7 +63,7 @@ class Settings(BaseSettings):
 
     @property
     def data_dir(self) -> Path:
-        return Path(__file__).parent.parent / "data"
+        return Path(__file__).parent.parent.parent / "data"
 
     @property
     def runs_dir(self) -> Path:
