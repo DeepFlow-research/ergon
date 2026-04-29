@@ -11,9 +11,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark_deps import BenchmarkDeps
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, Task
 from huggingface_hub import hf_hub_download
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
@@ -33,7 +31,7 @@ class MiniF2FBenchmark(Benchmark):
 
     type_slug: ClassVar[str] = "minif2f"
     task_payload_model: ClassVar[type[MiniF2FTaskPayload]] = MiniF2FTaskPayload
-    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(e2b=True)
+    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(e2b=True)
 
     def __init__(
         self,
@@ -54,9 +52,9 @@ class MiniF2FBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[MiniF2FTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[MiniF2FTaskPayload]]]:
         problems = self._load_problems()
-        tasks: list[BenchmarkTask[MiniF2FTaskPayload]] = []
+        tasks: list[Task[MiniF2FTaskPayload]] = []
         for problem in problems:
             payload = MiniF2FTaskPayload(
                 name=problem.name,
@@ -71,7 +69,7 @@ class MiniF2FBenchmark(Benchmark):
                 f"{problem.formal_statement}"
             )
             tasks.append(
-                BenchmarkTask[MiniF2FTaskPayload](
+                Task[MiniF2FTaskPayload](
                     task_slug=problem.name,
                     instance_key="default",
                     description=description,

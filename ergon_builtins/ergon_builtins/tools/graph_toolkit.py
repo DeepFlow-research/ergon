@@ -1,6 +1,6 @@
 """ResearchGraphToolkit — run-scoped resource discovery for research workers.
 
-Six pydantic-ai tools backed by ``ResourcesQueries`` and ``RunGraphEdge``
+Six pydantic-ai tools backed by resource and task repositories
 traversal so workers can enumerate their own, children's, and descendants'
 resources, plus lookup by logical_path / content_hash.
 """
@@ -8,8 +8,10 @@ resources, plus lookup by logical_path / content_hash.
 from collections.abc import Sequence
 from uuid import UUID
 
-from ergon_core.core.persistence.queries import queries
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
+from ergon_core.core.application.resources import RunResourceRepository
+from ergon_core.core.application.tasks.repository import TaskExecutionRepository
 from pydantic_ai import RunContext
 from pydantic_ai.tools import Tool
 
@@ -30,6 +32,8 @@ class ResearchGraphToolkit:
     def __init__(self, *, run_id: UUID, task_execution_id: UUID) -> None:
         self._run_id = run_id
         self._task_execution_id = task_execution_id
+        self._resource_repo = RunResourceRepository()
+        self._task_repo = TaskExecutionRepository()
 
     def build_tools(self) -> list["Tool"]:
         """Return the six resource-discovery tools for ``Agent(tools=[...])``."""
@@ -66,7 +70,8 @@ class ResearchGraphToolkit:
                 > tool_budget.max_other_tool_calls
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
-            rows = queries.resources.list_by_execution(task_execution_id)
+            with get_session() as session:
+                rows = self._resource_repo.list_by_execution(session, task_execution_id)
             return _to_refs_sorted(
                 [r for r in rows if r.run_id == run_id],
             )
@@ -95,10 +100,15 @@ class ResearchGraphToolkit:
                 > tool_budget.max_other_tool_calls
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
-            children = queries.task_executions.list_children_of(task_execution_id)
+            with get_session() as session:
+                children = self._task_repo.list_children_of_execution(
+                    session,
+                    task_execution_id,
+                )
             result: list[RunResource] = []
             for child in children:
-                rows = queries.resources.list_by_execution(child.id)
+                with get_session() as session:
+                    rows = self._resource_repo.list_by_execution(session, child.id)
                 result.extend(r for r in rows if r.run_id == run_id)
             return _to_refs_sorted(result)
 
@@ -138,15 +148,18 @@ class ResearchGraphToolkit:
             for _depth in range(max_depth):
                 next_frontier: list[UUID] = []
                 for parent_id in frontier:
-                    children = queries.task_executions.list_children_of(
-                        parent_id,
-                    )
+                    with get_session() as session:
+                        children = self._task_repo.list_children_of_execution(
+                            session,
+                            parent_id,
+                        )
                     for child in children:
                         if child.id in visited:
                             continue
                         visited.add(child.id)
                         next_frontier.append(child.id)
-                        rows = queries.resources.list_by_execution(child.id)
+                        with get_session() as session:
+                            rows = self._resource_repo.list_by_execution(session, child.id)
                         result.extend(r for r in rows if r.run_id == run_id)
                 frontier = next_frontier
                 if not frontier:
@@ -177,7 +190,8 @@ class ResearchGraphToolkit:
                 > tool_budget.max_other_tool_calls
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
-            rows = queries.resources.list_by_run(run_id)
+            with get_session() as session:
+                rows = self._resource_repo.list_by_run(session, run_id)
             return _to_refs_sorted(rows)
 
         return Tool(function=list_run_resources, takes_ctx=True)
@@ -207,7 +221,8 @@ class ResearchGraphToolkit:
                 > tool_budget.max_other_tool_calls
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
-            rows = queries.resources.list_by_run(run_id)
+            with get_session() as session:
+                rows = self._resource_repo.list_by_run(session, run_id)
             matching = [r for r in rows if r.file_path == logical_path]
             if not matching:
                 return None
@@ -241,7 +256,8 @@ class ResearchGraphToolkit:
                 > tool_budget.max_other_tool_calls
             ):
                 return tool_budget.exhausted_result("non-workflow tool budget reached")
-            rows = queries.resources.list_by_run(run_id)
+            with get_session() as session:
+                rows = self._resource_repo.list_by_run(session, run_id)
             matching = [r for r in rows if r.content_hash == content_hash]
             if not matching:
                 return None

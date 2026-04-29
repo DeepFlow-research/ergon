@@ -1,14 +1,15 @@
 from typing import ClassVar
 
-from ergon_core.api.criterion import Criterion
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import (
-    CriterionObservation,
-    CriterionObservationMessage,
-    CriterionResult,
-    CriterionScoreSpec,
+from ergon_core.api.criterion import (
+    Criterion,
+    CriterionContext,
+    CriterionEvidence,
+    CriterionOutcome,
+    EvidenceMessage,
+    ScoreScale,
 )
-from ergon_core.core.runtime.resources import RunResourceKind, RunResourceView
+from ergon_core.core.application.resources import RunResourceView
+from ergon_core.core.persistence.shared.enums import RunResourceKind
 from pydantic import BaseModel
 
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
@@ -46,13 +47,13 @@ class ResearchRubricsJudgeCriterion(Criterion):
             slug=slug,
             description=rubric.criterion,
             weight=rubric.weight,
-            score_spec=CriterionScoreSpec(max_score=abs(rubric.weight)),
+            score_spec=ScoreScale(max_score=abs(rubric.weight)),
         )
         self.rubric = rubric
         self.model = model
         self.system_prompt = self._build_system_prompt(rubric)
 
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         final_outputs, scratch_outputs = await self._load_researchrubrics_evidence(context)
         user_prompt = self._build_user_prompt(
             context,
@@ -66,7 +67,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
         evaluated_resource_ids = [
             str(evidence.resource.id) for evidence in [*final_outputs, *scratch_outputs]
         ]
-        return CriterionResult(
+        return CriterionOutcome(
             slug=self.slug,
             name=self.slug,
             score=self.score_spec.max_score if verdict.passed else 0.0,
@@ -99,11 +100,11 @@ class ResearchRubricsJudgeCriterion(Criterion):
         final_outputs: list[_ResourceEvidence],
         rubric: RubricCriterion,
         model: str,
-    ) -> CriterionObservation:
-        return CriterionObservation(
+    ) -> CriterionEvidence:
+        return CriterionEvidence(
             prompt_messages=[
-                CriterionObservationMessage(role="system", content=system_prompt),
-                CriterionObservationMessage(role="user", content=user_prompt),
+                EvidenceMessage(role="system", content=system_prompt),
+                EvidenceMessage(role="user", content=user_prompt),
             ],
             evidence_resource_ids=evaluated_resource_ids,
             output=verdict.model_dump(mode="json"),
@@ -137,16 +138,16 @@ class ResearchRubricsJudgeCriterion(Criterion):
     @classmethod
     async def _load_researchrubrics_evidence(
         cls,
-        context: EvaluationContext,
+        context: CriterionContext,
     ) -> tuple[list[_ResourceEvidence], list[_ResourceEvidence]]:
-        if context.runtime is None:
+        if not context.has_runtime:
             return [], []
 
-        resources = await context.runtime.list_resources()
+        resources = await context.list_resources()
         evidence: list[_ResourceEvidence] = []
         for resource in resources:
             try:
-                raw_content = await context.runtime.read_resource_by_id(resource.id)
+                raw_content = await context.read_resource_by_id(resource.id)
             except OSError as exc:
                 text = f"[Unable to read resource {resource.id}: {exc}]"
             else:
@@ -208,7 +209,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
     @classmethod
     def _build_user_prompt(
         cls,
-        context: EvaluationContext,
+        context: CriterionContext,
         *,
         final_outputs: list[_ResourceEvidence],
         scratch_outputs: list[_ResourceEvidence],

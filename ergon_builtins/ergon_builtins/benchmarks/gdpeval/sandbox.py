@@ -7,7 +7,7 @@ packages needed for GDP document-processing evaluation (PDF, OCR, etc.).
 import logging
 from uuid import UUID
 
-from ergon_core.core.sandbox.manager import BaseSandboxManager
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 try:
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]

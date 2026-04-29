@@ -10,8 +10,8 @@ import logging
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.sandbox.manager import BaseSandboxManager
-from ergon_core.core.sandbox.resource_publisher import (
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
+from ergon_core.core.infrastructure.sandbox.resource_publisher import (
     SandboxResourcePublisher,
 )
 

@@ -8,15 +8,13 @@ from types import NoneType
 from typing import Any, Self, cast
 from uuid import UUID
 
-from ergon_core.api import BenchmarkTask, Worker, WorkerContext, WorkerOutput
-from ergon_core.core.generation import (
+from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
-    ThinkingPart,
     ToolCallPart,
 )
-from ergon_core.core.persistence.context.repository import ContextEventRepository
-from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.application.context.events import ContextEventService
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
@@ -75,10 +73,10 @@ class ReActWorker(Worker):
 
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[ContextPartChunk, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
         async for chunk in self._run_agent(task, context):
             yield chunk
 
@@ -89,9 +87,9 @@ class ReActWorker(Worker):
 
     async def _run_agent(
         self,
-        task: BenchmarkTask,
+        task: Task,
         context: WorkerContext,
-    ) -> AsyncGenerator[ContextPartChunk, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
         """Run the underlying pydantic-ai agent and yield the chunks it produced."""
         resolved = resolve_model_target(self.model)
         configure_pydantic_ai_logfire()
@@ -113,6 +111,7 @@ class ReActWorker(Worker):
         node_count = 0
         adapter = PydanticAITranscriptAdapter()
         cursor = TranscriptTurnCursor()
+        emitted_chunks: list[ContextPartChunk] = []
         run = None
 
         try:
@@ -130,6 +129,7 @@ class ReActWorker(Worker):
                         cursor,
                         flush_pending=False,
                     ):
+                        emitted_chunks.append(chunk)
                         yield chunk
                     if node_count >= self.max_iterations:
                         logger.warning(
@@ -141,6 +141,7 @@ class ReActWorker(Worker):
                             cursor,
                             flush_pending=True,
                         ):
+                            emitted_chunks.append(chunk)
                             yield chunk
                         raise RuntimeError(
                             f"ReActWorker exceeded max_iterations={self.max_iterations}"
@@ -152,6 +153,7 @@ class ReActWorker(Worker):
                     cursor,
                     flush_pending=True,
                 ):
+                    emitted_chunks.append(chunk)
                     yield chunk
             raise
 
@@ -161,44 +163,10 @@ class ReActWorker(Worker):
                 cursor,
                 flush_pending=True,
             ):
+                emitted_chunks.append(chunk)
                 yield chunk
 
-    def get_output(self, context: WorkerContext) -> WorkerOutput:
-        """Extract the agent's text output from the last context event."""
-        return self._base_output(context)
-
-    def _base_output(self, context: WorkerContext) -> WorkerOutput:
-        """Build the worker's output from persisted context events."""
-        with get_session() as session:
-            repo = ContextEventRepository()
-            events = repo.get_for_execution(session, context.execution_id)
-
-        turn_ids: set[str] = set()
-        for e in events:
-            payload = e.parsed_payload()
-            if isinstance(payload.part, (AssistantTextPart, ToolCallPart, ThinkingPart)):
-                if payload.turn_id is None:
-                    continue
-                turn_ids.add(payload.turn_id)
-
-        text_events = [e for e in events if e.event_type == "assistant_text"]
-        if not text_events:
-            output = _latest_final_result_message(events)
-            if not output:
-                return WorkerOutput(output="", success=False)
-            return WorkerOutput(
-                output=output,
-                success=bool(output),
-                metadata={"turn_count": len(turn_ids)},
-            )
-        last = text_events[-1].parsed_payload()
-        if not isinstance(last.part, AssistantTextPart):
-            raise ValueError(f"Expected AssistantTextPart, got {type(last.part)}")
-        return WorkerOutput(
-            output=last.part.content,
-            success=True,
-            metadata={"turn_count": len(turn_ids)},
-        )
+        yield _worker_output_from_chunks(emitted_chunks)
 
     @classmethod
     def from_buffer(
@@ -208,7 +176,7 @@ class ReActWorker(Worker):
         **kwargs: Any,  # slopcop: ignore[no-typing-any]
     ) -> Self | None:
         """Return a ReActWorker pre-seeded with context event history."""
-        repo = ContextEventRepository()
+        repo = ContextEventService()
         events = repo.get_for_execution(session, execution_id)
         if not events:
             return None
@@ -217,7 +185,7 @@ class ReActWorker(Worker):
         return worker
 
 
-def _format_task(task: BenchmarkTask) -> str:
+def _format_task(task: Task) -> str:
     lines = [f"Task: {task.description}"]
     payload = task.task_payload.model_dump(mode="json")
     if payload:
@@ -226,20 +194,23 @@ def _format_task(task: BenchmarkTask) -> str:
     return "\n".join(lines)
 
 
-def _latest_final_result_message(
-    events: list[Any],  # slopcop: ignore[no-typing-any]
-) -> str:
+def _worker_output_from_chunks(chunks: list[ContextPartChunk]) -> WorkerOutput:
+    output = _latest_final_result_message(chunks)
+    if output:
+        return WorkerOutput(output=output, success=True)
+
+    text_parts = [chunk.part.content for chunk in chunks if isinstance(chunk.part, AssistantTextPart)]
+    if text_parts:
+        return WorkerOutput(output=text_parts[-1], success=True)
+
+    return WorkerOutput(output="", success=False)
+
+
+def _latest_final_result_message(chunks: list[ContextPartChunk]) -> str:
     """Extract fallback text from the latest ``final_result`` tool call."""
     messages: list[str] = []
-    for event in events:
-        try:
-            event_type = event.event_type
-        except AttributeError:
-            continue
-        if event_type != "tool_call":
-            continue
-        payload = event.parsed_payload()
-        part = payload.part
+    for chunk in chunks:
+        part = chunk.part
         if not isinstance(part, ToolCallPart) or part.tool_name != "final_result":
             continue
         messages.append(str(part.args.get("final_assistant_message", "")))

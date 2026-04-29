@@ -2,7 +2,7 @@
 
 import logging
 
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.settings import settings
 from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.openai import OpenAIProvider
 

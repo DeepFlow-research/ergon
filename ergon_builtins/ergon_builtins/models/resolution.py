@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 
 import pydantic_ai.models
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
 from pydantic_ai.models.openrouter import OpenRouterReasoning
 

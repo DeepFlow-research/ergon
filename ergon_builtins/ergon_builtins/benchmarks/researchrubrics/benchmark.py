@@ -8,9 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark_deps import BenchmarkDeps
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, Task
 
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
@@ -30,7 +28,7 @@ class ResearchRubricsBenchmark(Benchmark):
     type_slug: ClassVar[str] = "researchrubrics"
     dataset_name: ClassVar[str] = "ScaleAI/researchrubrics"
     task_payload_model: ClassVar[type[ResearchRubricsTaskPayload]] = ResearchRubricsTaskPayload
-    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
+    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(
         extras=("ergon-builtins[data]",),
         optional_keys=("EXA_API_KEY",),
     )
@@ -54,12 +52,12 @@ class ResearchRubricsBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[ResearchRubricsTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[ResearchRubricsTaskPayload]]]:
         payloads = self._load_rows()
-        tasks: list[BenchmarkTask[ResearchRubricsTaskPayload]] = []
+        tasks: list[Task[ResearchRubricsTaskPayload]] = []
         for payload in payloads:
             tasks.append(
-                BenchmarkTask[ResearchRubricsTaskPayload](
+                Task[ResearchRubricsTaskPayload](
                     task_slug=payload.sample_id,
                     instance_key="default",
                     description=payload.prompt,
@@ -80,7 +78,7 @@ class ResearchRubricsBenchmark(Benchmark):
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
         # reason: avoids circular import at module level
-        from ergon_core.core.settings import settings
+        from ergon_core.core.shared.settings import settings
 
         token = settings.hf_api_key
         ds = load_dataset(self.dataset_name, token=token)

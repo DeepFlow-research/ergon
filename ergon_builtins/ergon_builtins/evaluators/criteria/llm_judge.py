@@ -8,9 +8,7 @@ criterion classes with their own prompts and evidence formatting.
 
 from typing import ClassVar
 
-from ergon_core.api.criterion import Criterion
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, CriterionScoreSpec
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
 from pydantic import BaseModel
 
 from ergon_builtins.common.llm.structured_judge import (
@@ -49,12 +47,12 @@ class LLMJudgeCriterion(Criterion):
             slug=slug,
             description=description or slug,
             weight=weight,
-            score_spec=CriterionScoreSpec(max_score=max_score),
+            score_spec=ScoreScale(max_score=max_score),
         )
         self.prompt_template = prompt_template
         self.model = model
 
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         messages = [
             JudgeMessage(role="system", content=self.prompt_template),
             JudgeMessage(
@@ -73,7 +71,7 @@ class LLMJudgeCriterion(Criterion):
         )
 
         score = self.score_spec.max_score if verdict.passed else 0.0
-        return CriterionResult(
+        return CriterionOutcome(
             slug=self.slug,
             name=self.slug,
             score=score,

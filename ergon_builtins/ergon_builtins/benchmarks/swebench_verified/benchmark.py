@@ -10,9 +10,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark_deps import BenchmarkDeps
-from ergon_core.api.task_types import BenchmarkTask
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, Task
 
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
@@ -30,7 +28,7 @@ class SweBenchVerifiedBenchmark(Benchmark):
 
     type_slug: ClassVar[str] = "swebench-verified"
     task_payload_model: ClassVar[type[SWEBenchTaskPayload]] = SWEBenchTaskPayload
-    onboarding_deps: ClassVar[BenchmarkDeps] = BenchmarkDeps(
+    onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(
         e2b=True,
         extras=("ergon-builtins[data]",),
     )
@@ -50,13 +48,13 @@ class SweBenchVerifiedBenchmark(Benchmark):
         )
         self.limit = limit
 
-    def build_instances(self) -> Mapping[str, Sequence[BenchmarkTask[SWEBenchTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[SWEBenchTaskPayload]]]:
         instances = _load_rows(limit=self.limit)
-        tasks: list[BenchmarkTask[SWEBenchTaskPayload]] = []
+        tasks: list[Task[SWEBenchTaskPayload]] = []
         for instance in instances:
             payload = SWEBenchTaskPayload.from_instance(instance)
             tasks.append(
-                BenchmarkTask[SWEBenchTaskPayload](
+                Task[SWEBenchTaskPayload](
                     task_slug=instance.instance_id,
                     instance_key="default",
                     description=payload.build_worker_description(),

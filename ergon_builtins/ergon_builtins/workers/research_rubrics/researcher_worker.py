@@ -10,10 +10,8 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.core.generation import ContextPartChunk
-from ergon_core.core.runtime.resources import RunResourceView
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.api.worker_context import WorkerContext
+from ergon_core.api import Task, WorkerContext, WorkerStreamItem
+from ergon_core.core.application.resources import RunResourceView
 from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
     ResearchRubricsSandboxManager,
 )
@@ -117,10 +115,10 @@ class ResearchRubricsResearcherWorker(ReActWorker):
 
     async def execute(
         self,
-        task: BenchmarkTask,
+        task: Task,
         *,
         context: WorkerContext,
-    ) -> AsyncGenerator[ContextPartChunk, None]:
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
         manager = ResearchRubricsSandboxManager()
 
         model_run_skill = make_run_skill(model=self.model)

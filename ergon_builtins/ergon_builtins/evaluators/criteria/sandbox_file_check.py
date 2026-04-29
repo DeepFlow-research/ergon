@@ -4,7 +4,8 @@ Used by the smoke-test rubric for CI / E2E testing. Connects to the
 worker's sandbox via sandbox_id and checks for the expected file.
 """
 
-from ergon_core.api import Criterion, CriterionResult, EvaluationContext
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
+from e2b_code_interpreter import AsyncSandbox
 
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"
@@ -25,9 +26,9 @@ class SandboxFileCheckCriterion(Criterion):
         self.expected_path = expected_path
         self.expected_content = expected_content
 
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         if not context.sandbox_id:
-            return CriterionResult(
+            return CriterionOutcome(
                 slug=self.slug,
                 name=self.slug,
                 score=0.0,
@@ -36,18 +37,7 @@ class SandboxFileCheckCriterion(Criterion):
                 feedback="No sandbox_id available — cannot check files",
             )
 
-        try:
-            # Deferred: optional dependency
-            from e2b_code_interpreter import AsyncSandbox
-        except ImportError:
-            return CriterionResult(
-                slug=self.slug,
-                name=self.slug,
-                score=0.0,
-                passed=False,
-                weight=self.weight,
-                feedback="e2b_code_interpreter not installed",
-            )
+
 
         try:
             sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
@@ -57,7 +47,7 @@ class SandboxFileCheckCriterion(Criterion):
                 content = content.decode("utf-8")
 
             found = self.expected_content in content
-            return CriterionResult(
+            return CriterionOutcome(
                 slug=self.slug,
                 name=self.slug,
                 score=1.0 if found else 0.0,
@@ -71,7 +61,7 @@ class SandboxFileCheckCriterion(Criterion):
                 ),
             )
         except Exception as exc:  # slopcop: ignore[no-broad-except]
-            return CriterionResult(
+            return CriterionOutcome(
                 slug=self.slug,
                 name=self.slug,
                 score=0.0,

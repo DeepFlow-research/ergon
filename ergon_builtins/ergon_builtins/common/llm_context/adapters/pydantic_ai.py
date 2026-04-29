@@ -2,7 +2,7 @@
 
 import json
 
-from ergon_core.core.generation import (
+from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ContextPartChunkLog,

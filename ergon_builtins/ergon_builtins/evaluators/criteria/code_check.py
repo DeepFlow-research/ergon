@@ -7,9 +7,7 @@ InngestCriterionExecutor + DefaultCriterionRuntime.
 
 from typing import ClassVar
 
-from ergon_core.api.criterion import Criterion
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, CriterionScoreSpec
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
 
 
 class CodeCheckCriterion(Criterion):
@@ -36,15 +34,15 @@ class CodeCheckCriterion(Criterion):
             slug=slug,
             description=description or slug,
             weight=weight,
-            score_spec=CriterionScoreSpec(max_score=max_score),
+            score_spec=ScoreScale(max_score=max_score),
         )
         self.code_template = code_template
 
-    async def evaluate(self, context: EvaluationContext) -> CriterionResult:
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         output = context.worker_result.output
         passed = bool(output and len(output.strip()) > 0)
         score = self.score_spec.max_score if passed else 0.0
-        return CriterionResult(
+        return CriterionOutcome(
             slug=self.slug,
             name=self.slug,
             score=score,

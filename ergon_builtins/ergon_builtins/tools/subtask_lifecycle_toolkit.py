@@ -17,9 +17,9 @@ from ergon_core.core.persistence.shared.types import (
     RunId,
     TaskSlug,
 )
-from ergon_core.core.runtime.services.task_inspection_dto import SubtaskInfo
-from ergon_core.core.runtime.services.task_inspection_service import TaskInspectionService
-from ergon_core.core.runtime.services.task_management_dto import (
+from ergon_core.core.application.tasks.models import SubtaskInfo
+from ergon_core.core.application.tasks.inspection import TaskInspectionService
+from ergon_core.core.application.tasks.models import (
     AddSubtaskCommand,
     CancelTaskCommand,
     PlanSubtasksCommand,
@@ -27,7 +27,7 @@ from ergon_core.core.runtime.services.task_management_dto import (
     RestartTaskCommand,
     SubtaskSpec,
 )
-from ergon_core.core.runtime.services.task_management_service import TaskManagementService
+from ergon_core.core.application.tasks.management import TaskManagementService
 from pydantic import BaseModel
 
 from ergon_builtins.tools.bash_sandbox_tool import make_sandbox_bash_tool

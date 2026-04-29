@@ -13,7 +13,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from ergon_core.core.sandbox.manager import BaseSandboxManager
+    from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 logger = logging.getLogger(__name__)
 
