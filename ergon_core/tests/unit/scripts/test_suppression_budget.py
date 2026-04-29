@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def _load_budget_module():
-    script_path = Path(__file__).resolve().parents[2] / "scripts" / "check_suppression_budget.py"
+    script_path = Path(__file__).resolve().parents[4] / "scripts" / "check_suppression_budget.py"
     spec = importlib.util.spec_from_file_location("check_suppression_budget", script_path)
     assert spec is not None
     assert spec.loader is not None
