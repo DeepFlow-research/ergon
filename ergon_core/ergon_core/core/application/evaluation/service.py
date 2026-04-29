@@ -1,20 +1,46 @@
-"""Persistence and DTO shaping for task evaluations."""
+"""Single front-door service for task evaluation workflow."""
 
 from uuid import UUID
 
-from ergon_core.core.api.schemas import RunEvaluationCriterionDto, RunTaskEvaluationDto
+from ergon_core.api.benchmark import Task
+from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
+from ergon_core.core.persistence.definitions.models import (
+    ExperimentDefinitionEvaluator,
+    ExperimentDefinitionTask,
+    ExperimentDefinitionTaskEvaluator,
+)
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.evaluation_summary import (
-    CriterionResultEntry,
+    CriterionOutcomeEntry,
     EvaluationSummary,
 )
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
 from ergon_core.core.persistence.telemetry.repositories import (
     CreateTaskEvaluation,
     TelemetryRepository,
 )
-from ergon_core.core.runtime.errors import ContractViolationError
-from ergon_core.core.runtime.services.rubric_evaluation_service import EvaluationServiceResult
+from ergon_core.core.application.evaluation.executors import CriterionExecutor
+from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
+from ergon_core.core.application.evaluation.models import (
+    CriterionSpec,
+    DispatchEvaluatorsCommand,
+    PreparedEvaluatorDispatch,
+    PreparedSingleEvaluator,
+    TaskEvaluationContext,
+)
+from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
+from ergon_core.core.application.read_models.models import RunEvaluationCriterionDto, RunTaskEvaluationDto
 from pydantic import BaseModel
+from sqlmodel import Session, select
+
+
+class EvaluationServiceResult(BaseModel):
+    """Internal result carrying both the public evaluation + spec metadata."""
+
+    result: TaskEvaluationResult
+    specs: list[CriterionSpec]
 
 
 class PersistedEvaluation(BaseModel):
@@ -26,11 +52,110 @@ class PersistedEvaluation(BaseModel):
     dashboard_dto: RunTaskEvaluationDto
 
 
-class EvaluationPersistenceService:
-    """Persist task evaluations and produce typed dashboard DTOs."""
+class EvaluationService:
+    """Prepare, execute, and persist task evaluations."""
 
-    def __init__(self, telemetry_repo: TelemetryRepository | None = None) -> None:
+    def __init__(
+        self,
+        criterion_executor: CriterionExecutor | None = None,
+        telemetry_repo: TelemetryRepository | None = None,
+    ) -> None:
+        self.criterion_executor = criterion_executor
         self.telemetry_repo = telemetry_repo or TelemetryRepository()
+
+    def prepare_dispatch(self, command: DispatchEvaluatorsCommand) -> PreparedEvaluatorDispatch:
+        session = get_session()
+        try:
+            node = session.get(RunGraphNode, command.node_id)
+            if node is None:
+                raise LookupError(f"run graph node not found: {command.node_id}")
+            task_id = command.task_id or node.definition_task_id
+            if task_id is None:
+                return PreparedEvaluatorDispatch(
+                    node_id=command.node_id,
+                    task_id=None,
+                    evaluators_found=0,
+                )
+            task_evals = list(
+                session.exec(
+                    select(ExperimentDefinitionTaskEvaluator).where(
+                        ExperimentDefinitionTaskEvaluator.experiment_definition_id
+                        == command.definition_id,
+                        ExperimentDefinitionTaskEvaluator.task_id == task_id,
+                    )
+                ).all()
+            )
+            if not task_evals:
+                return PreparedEvaluatorDispatch(
+                    node_id=command.node_id,
+                    task_id=task_id,
+                    evaluators_found=0,
+                )
+            task_row = session.get(ExperimentDefinitionTask, task_id)
+            if task_row is None:
+                raise LookupError(f"definition task not found: {task_id}")
+            execution = session.get(RunTaskExecution, command.execution_id)
+            agent_reasoning = execution.final_assistant_message if execution is not None else None
+            valid_evaluators: list[PreparedSingleEvaluator] = []
+            for te in task_evals:
+                evaluator_def = session.exec(
+                    select(ExperimentDefinitionEvaluator).where(
+                        ExperimentDefinitionEvaluator.experiment_definition_id
+                        == command.definition_id,
+                        ExperimentDefinitionEvaluator.binding_key == te.evaluator_binding_key,
+                    )
+                ).first()
+                if evaluator_def is None:
+                    continue
+                valid_evaluators.append(
+                    PreparedSingleEvaluator(
+                        evaluator_id=evaluator_def.id,
+                        evaluator_binding_key=te.evaluator_binding_key,
+                        evaluator_type=evaluator_def.evaluator_type,
+                        task_input=task_row.description,
+                        agent_reasoning=agent_reasoning,
+                    )
+                )
+            return PreparedEvaluatorDispatch(
+                node_id=command.node_id,
+                task_id=task_id,
+                evaluators_found=len(task_evals),
+                valid_evaluators=valid_evaluators,
+            )
+        finally:
+            session.close()
+
+    async def evaluate(
+        self,
+        task_context: TaskEvaluationContext,
+        evaluator: Evaluator,
+        task: Task,
+        benchmark_name: str,
+    ) -> EvaluationServiceResult:
+        if self.criterion_executor is None:
+            raise RuntimeError("EvaluationService.evaluate requires a criterion executor")
+        criteria = list(evaluator.criteria_for(task))
+        specs = [
+            CriterionSpec(
+                criterion=c,
+                criterion_idx=i,
+                max_score=c.score_spec.max_score,
+                stage_idx=0,
+                stage_name="default",
+                aggregation_weight=c.weight,
+            )
+            for i, c in enumerate(criteria)
+        ]
+        criterion_results: list[CriterionOutcome] = await self.criterion_executor.execute_all(
+            task_context=task_context,
+            task=task,
+            benchmark_name=benchmark_name,
+            criteria=specs,
+        )
+        return EvaluationServiceResult(
+            result=evaluator.aggregate_task(task, criterion_results),
+            specs=specs,
+        )
 
     def persist_success(
         self,
@@ -61,7 +186,7 @@ class EvaluationPersistenceService:
                     summary_json=summary.model_dump(mode="json"),
                 ),
             )
-            self.telemetry_repo.refresh_run_evaluation_summary(session, run_id)
+            self._refresh_run_evaluation_summary(session, run_id)
             session.commit()
             session.refresh(evaluation)
             return PersistedEvaluation(
@@ -114,10 +239,28 @@ class EvaluationPersistenceService:
                     summary_json=summary.model_dump(mode="json"),
                 ),
             )
-            self.telemetry_repo.refresh_run_evaluation_summary(session, run_id)
+            self._refresh_run_evaluation_summary(session, run_id)
             session.commit()
         finally:
             session.close()
+
+    def _refresh_run_evaluation_summary(self, session: Session, run_id: UUID) -> None:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            return
+        evaluations = self.telemetry_repo.get_task_evaluations(session, run_id)
+        score_summary = aggregate_evaluation_scores(evaluations)
+        existing_summary = dict({} if run.summary_json is None else run.summary_json)
+        existing_summary.update(
+            {
+                "final_score": score_summary.final_score,
+                "normalized_score": score_summary.normalized_score,
+                "evaluators_count": score_summary.evaluators_count,
+            }
+        )
+        run.summary_json = existing_summary
+        session.add(run)
+        session.flush()
 
 
 def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str | None) -> str:
@@ -138,23 +281,20 @@ def build_evaluation_summary(
     service_result: EvaluationServiceResult,
     evaluation_input: str | None,
 ) -> EvaluationSummary:
-    """Build a strongly typed evaluation summary from service result + specs."""
     result = service_result.result
     specs = service_result.specs
-
     spec_by_idx = {s.criterion_idx: s for s in specs}
     max_score_total = _summary_max_score(result, specs)
-
-    entries: list[CriterionResultEntry] = []
+    entries: list[CriterionOutcomeEntry] = []
     for i, cr in enumerate(result.criterion_results):
         spec = spec_by_idx.get(i)
         if spec is None:
             raise ContractViolationError(
                 f"Criterion result at index {i} ({cr.slug!r}) has no matching "
-                f"CriterionSpec - specs and results are out of sync",
+                "CriterionSpec - specs and results are out of sync",
             )
         entries.append(
-            CriterionResultEntry(
+            CriterionOutcomeEntry(
                 criterion_slug=cr.slug,
                 criterion_name=cr.name,
                 criterion_type=spec.criterion.type_slug,
@@ -182,20 +322,16 @@ def build_evaluation_summary(
                 error=cr.error,
             )
         )
-
-    total_score = result.score
-
     stage_names = {s.stage_name for s in specs}
     stages_passed = sum(
         1
         for stage_name in stage_names
         if all(e.passed for e in entries if e.stage_name == stage_name)
     )
-
     return EvaluationSummary(
         evaluator_name=result.evaluator_name,
         max_score=max_score_total,
-        normalized_score=total_score,
+        normalized_score=result.score,
         stages_evaluated=len(stage_names),
         stages_passed=stages_passed,
         metadata=result.metadata,

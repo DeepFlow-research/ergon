@@ -2,9 +2,9 @@
 
 from typing import Protocol
 
-from ergon_core.api.results import CriterionResult
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.core.runtime.evaluation.evaluation_schemas import (
+from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.benchmark import Task
+from ergon_core.core.application.evaluation.models import (
     CriterionSpec,
     TaskEvaluationContext,
 )
@@ -16,7 +16,7 @@ class CriterionExecutor(Protocol):
     async def execute_all(
         self,
         task_context: TaskEvaluationContext,
-        task: BenchmarkTask,
+        task: Task,
         benchmark_name: str,
         criteria: list[CriterionSpec],
-    ) -> list[CriterionResult]: ...
+    ) -> list[CriterionOutcome]: ...

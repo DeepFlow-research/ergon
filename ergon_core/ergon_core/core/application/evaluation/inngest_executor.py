@@ -7,19 +7,20 @@ from uuid import UUID
 
 import inngest
 from ergon_core.api.criterion import Criterion
-from ergon_core.api.evaluation_context import EvaluationContext
-from ergon_core.api.results import CriterionResult, WorkerOutput
-from ergon_core.api.task_types import BenchmarkTask
-from ergon_core.core.runtime.evaluation.criterion_runtime import (
+from ergon_core.api.criterion import CriterionContext as PublicCriterionContext
+from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.benchmark import Task
+from ergon_core.api.worker import WorkerOutput
+from ergon_core.core.application.evaluation.criterion_runtime import (
     CriterionRuntimeOptions,
     DefaultCriterionRuntime,
 )
-from ergon_core.core.runtime.evaluation.evaluation_schemas import (
-    CriterionContext,
+from ergon_core.core.application.evaluation.models import (
+    CriterionContext as EngineCriterionContext,
     CriterionSpec,
     TaskEvaluationContext,
 )
-from ergon_core.core.runtime.tracing import (
+from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
     TraceSink,
     evaluation_criterion_context,
@@ -27,7 +28,7 @@ from ergon_core.core.runtime.tracing import (
 )
 
 if TYPE_CHECKING:
-    from ergon_core.core.sandbox.manager import BaseSandboxManager
+    from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 
 class InngestCriterionExecutor:
@@ -53,14 +54,14 @@ class InngestCriterionExecutor:
     async def execute_all(
         self,
         task_context: TaskEvaluationContext,
-        task: BenchmarkTask,
+        task: Task,
         benchmark_name: str,
         criteria: list[CriterionSpec],
-    ) -> list[CriterionResult]:
+    ) -> list[CriterionOutcome]:
         def make_step(spec: CriterionSpec):
-            async def run_criterion() -> CriterionResult:
+            async def run_criterion() -> CriterionOutcome:
                 span_start = datetime.now(UTC)
-                criterion_context = CriterionContext(
+                criterion_context = EngineCriterionContext(
                     run_id=task_context.run_id,
                     task_input=task_context.task_input,
                     agent_reasoning=task_context.agent_reasoning,
@@ -72,7 +73,7 @@ class InngestCriterionExecutor:
                 )
 
                 criterion = spec.criterion
-                cr_result: CriterionResult
+                cr_result: CriterionOutcome
 
                 runtime = DefaultCriterionRuntime(
                     context=criterion_context,
@@ -93,7 +94,7 @@ class InngestCriterionExecutor:
                 )
 
                 if isinstance(criterion, Criterion):
-                    eval_ctx = EvaluationContext(
+                    eval_ctx = PublicCriterionContext.with_runtime(
                         run_id=task_context.run_id,
                         task_id=self.task_id,
                         execution_id=self.execution_id,
@@ -101,8 +102,8 @@ class InngestCriterionExecutor:
                         worker_result=WorkerOutput(
                             output=agent_reasoning,
                         ),
-                        sandbox_id=task_context.sandbox_id,
                         runtime=runtime,
+                        sandbox_id=task_context.sandbox_id,
                     )
                     cr_result = await criterion.evaluate(eval_ctx)
                 else:
@@ -145,7 +146,7 @@ class InngestCriterionExecutor:
                 self.ctx.step.run,
                 step_name,
                 run_criterion,
-                output_type=CriterionResult,
+                output_type=CriterionOutcome,
             )
 
         return list(await self.ctx.group.parallel(tuple(make_step(spec) for spec in criteria)))

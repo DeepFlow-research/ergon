@@ -6,35 +6,26 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from e2b import SandboxNotFoundException, TimeoutException
-from ergon_core.core.runtime.evaluation.protocols import (
+from ergon_core.core.application.evaluation.protocols import (
     CommandResult,
-    CriterionRuntime,
     SandboxResult,
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
-from ergon_core.core.sandbox.errors import SandboxExpiredError
-from ergon_core.core.sandbox.event_sink import (
+from ergon_core.core.infrastructure.sandbox.errors import SandboxExpiredError
+from ergon_core.core.infrastructure.sandbox.event_sink import (
     NoopSandboxEventSink,
     SandboxEventSink,
 )
-from ergon_core.core.runtime.evaluation.evaluation_schemas import CriterionContext
-from ergon_core.core.runtime.resources import RunResourceView
+from ergon_core.core.application.evaluation.models import CriterionContext
+from ergon_core.core.application.resources import RunResourceView
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, desc, select
 
 if TYPE_CHECKING:
-    from ergon_core.core.sandbox.manager import AsyncSandbox, BaseSandboxManager
+    from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox, BaseSandboxManager
 
 logger = logging.getLogger(__name__)
-
-# Re-export the Protocol so existing imports from this module keep working.
-__all__ = [
-    "CriterionRuntime",
-    "CriterionRuntimeOptions",
-    "DefaultCriterionRuntime",
-    "ResourceNotFoundError",
-]
 
 
 class ResourceNotFoundError(LookupError):
