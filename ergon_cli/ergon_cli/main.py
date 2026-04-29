@@ -14,6 +14,12 @@ from ergon_cli.commands.run import handle_run
 from ergon_cli.commands.train import handle_train
 from ergon_cli.commands.worker import handle_worker
 from ergon_cli.commands.workflow import handle_workflow
+from ergon_builtins.registry import register_builtins
+from ergon_core.api.registry import registry
+
+
+def register_default_components() -> None:
+    register_builtins(registry)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,6 +36,32 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser.add_argument(
         "--force", action="store_true", help="Rebuild even if the template already exists"
     )
+    bench_run = bench_sub.add_parser(
+        "run", help="Define and run a benchmark experiment with explicit runtime choices"
+    )
+    bench_run.add_argument("slug", help="Benchmark slug")
+    bench_sample_group = bench_run.add_mutually_exclusive_group(required=True)
+    bench_sample_group.add_argument("--limit", type=int, default=None, help="Number of samples")
+    bench_sample_group.add_argument(
+        "--sample-id",
+        action="append",
+        default=None,
+        help="Specific benchmark sample id; can be repeated",
+    )
+    bench_run.add_argument("--name", default=None, help="Experiment name")
+    bench_run.add_argument("--cohort", default=None, help="Optional cohort/project folder")
+    bench_run.add_argument("--worker", required=True, help="Primary worker slug")
+    bench_run.add_argument("--model", required=True, help="Primary model target")
+    bench_run.add_argument("--evaluator", required=True, help="Evaluator slug")
+    bench_run.add_argument("--sandbox", required=True, help="Sandbox manager slug")
+    bench_run.add_argument(
+        "--extras",
+        action="append",
+        required=True,
+        help="Required dependency extra; repeat for multiple extras or pass 'none'",
+    )
+    bench_run.add_argument("--workflow", default="single", help="Workflow variant")
+    bench_run.add_argument("--max-questions", type=int, default=10, help="Max questions workers can ask")
 
     experiment = sub.add_parser("experiment", help="Experiment lifecycle")
     experiment_sub = experiment.add_subparsers(dest="experiment_action")
@@ -47,7 +79,14 @@ def build_parser() -> argparse.ArgumentParser:
     experiment_define.add_argument("--cohort", default=None, help="Optional cohort/project folder")
     experiment_define.add_argument("--worker", required=True, help="Primary worker slug")
     experiment_define.add_argument("--model", required=True, help="Primary model target")
-    experiment_define.add_argument("--evaluator", default=None, help="Optional evaluator slug")
+    experiment_define.add_argument("--evaluator", required=True, help="Evaluator slug")
+    experiment_define.add_argument("--sandbox", required=True, help="Sandbox manager slug")
+    experiment_define.add_argument(
+        "--extras",
+        action="append",
+        required=True,
+        help="Required dependency extra; repeat for multiple extras or pass 'none'",
+    )
     experiment_define.add_argument("--workflow", default="single", help="Workflow variant")
     experiment_define.add_argument(
         "--max-questions",
@@ -188,6 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def _main(argv: list[str] | None = None) -> int:
+    register_default_components()
     parser = build_parser()
     args = parser.parse_args(argv)
 

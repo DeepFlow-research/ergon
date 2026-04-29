@@ -2,9 +2,9 @@
 
 import os
 
-from ergon_core.api.experiment import Experiment
-from ergon_core.api.worker_spec import WorkerSpec
-
+from ergon_core.api.registry import registry
+from ergon_core.core.domain.experiments import Experiment, WorkerSpec
+from ergon_builtins.registry import register_builtins
 
 def build_experiment(
     benchmark_slug: str,
@@ -14,28 +14,26 @@ def build_experiment(
     workflow: str = "single",
     limit: int | None = None,
 ) -> Experiment:
+
+    register_builtins(registry)
     benchmark_registry_restore: tuple[dict[str, object], dict[str, object | None]] | None = None
     if os.environ.get("ENABLE_SMOKE_FIXTURES", os.environ.get("ENABLE_TEST_HARNESS")) == "1":
         # Host-side real-LLM canaries use the same test-support smoke fixtures as the
         # API container, but production CLI paths do not load them unless the
         # flag is explicitly enabled.
-        from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
-        from ergon_core.test_support.smoke_fixtures import register_smoke_fixtures
+        from tests.fixtures.smoke_components import register_smoke_fixtures
 
         slugs = ("researchrubrics", "minif2f", "swebench-verified")
         benchmark_registry_restore = (
-            {slug: BENCHMARKS[slug] for slug in slugs if slug in BENCHMARKS},
-            {slug: SANDBOX_MANAGERS.get(slug) for slug in slugs},
+            {slug: registry.benchmarks[slug] for slug in slugs if slug in registry.benchmarks},
+            {slug: registry.sandbox_managers.get(slug) for slug in slugs},
         )
         register_smoke_fixtures()
 
-    # Deferred: CLI startup cost
-    from ergon_builtins.registry import BENCHMARKS, EVALUATORS, WORKERS
-
-    if worker_slug not in WORKERS:
+    if worker_slug not in registry.workers:
         raise KeyError(worker_slug)
-    benchmark_cls = BENCHMARKS[benchmark_slug]
-    evaluator_cls = EVALUATORS[evaluator_slug]
+    benchmark_cls = registry.require_benchmark(benchmark_slug)
+    evaluator_cls = registry.require_evaluator(evaluator_slug)
 
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
     evaluator = evaluator_cls(name="evaluator")
@@ -97,11 +95,8 @@ def _build_smoke_experiment(
     at runtime via ``ExperimentDefinitionWorker`` lookup in
     ``task_execution_service._prepare_graph_native``.
     """
-    # reason: optional heavy dependency; imported only while building smoke compositions.
-    from ergon_builtins.registry import WORKERS
-
     # reason: optional test-support smoke fixtures; imported only for smoke compositions.
-    from ergon_core.test_support.smoke_fixtures.criteria.timing import (
+    from tests.fixtures.smoke_components.criteria.timing import (
         SmokePostRootTimingRubric,
     )
 
@@ -128,7 +123,7 @@ def _build_smoke_experiment(
     # hook imported will see the ``ConfigurationError`` from the
     # runtime (clearer stack) than a composition-time
     # ``KeyError: {env}-smoke-leaf``.
-    leaf_slugs = [slug for slug in leaf_slugs if slug in WORKERS]
+    leaf_slugs = [slug for slug in leaf_slugs if slug in registry.workers]
 
     workers: dict[str, WorkerSpec] = {parent_name: parent_spec}
     for leaf_slug in leaf_slugs:
@@ -185,7 +180,7 @@ def _build_researchrubrics_workflow_experiment(
     evaluators = {"default": evaluator}
     if "post-root" in benchmark.evaluator_requirements():
         # reason: optional test-support smoke fixtures; imported only when requested.
-        from ergon_core.test_support.smoke_fixtures.criteria.timing import (
+        from tests.fixtures.smoke_components.criteria.timing import (
             SmokePostRootTimingRubric,
         )
 
@@ -225,11 +220,9 @@ def _restore_benchmark_registry(
     benchmarks: dict[str, object],
     sandbox_managers: dict[str, object | None],
 ) -> None:
-    from ergon_builtins.registry import BENCHMARKS, SANDBOX_MANAGERS
-
-    BENCHMARKS.update(benchmarks)
+    registry.benchmarks.update(benchmarks)
     for slug, manager_cls in sandbox_managers.items():
         if manager_cls is None:
-            SANDBOX_MANAGERS.pop(slug, None)
+            registry.sandbox_managers.pop(slug, None)
         else:
-            SANDBOX_MANAGERS[slug] = manager_cls
+            registry.sandbox_managers[slug] = manager_cls

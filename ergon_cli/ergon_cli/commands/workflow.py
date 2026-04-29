@@ -9,10 +9,10 @@ from collections.abc import Callable
 from typing import cast
 from uuid import UUID
 
-from ergon_core.core.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.runtime.services.workflow_service import WorkflowService
+from ergon_core.core.application.workflows.service import WorkflowService
 from pydantic import BaseModel
 from sqlmodel import Session
 

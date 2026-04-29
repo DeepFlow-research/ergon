@@ -1,40 +1,31 @@
 """Benchmark subcommand: list, run, and setup benchmarks."""
 
-import asyncio
 import json
 import os
 import sys
 import time
 import tomllib
-from dataclasses import dataclass
 from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
-import inngest
 from e2b import Template
-from ergon_core.core.json_types import JsonObject
-from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES
-from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.runtime.events.task_events import WorkflowStartedEvent
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.cohort_service import experiment_cohort_service
-from ergon_core.core.runtime.services.run_service import create_run
-from ergon_core.core.settings import settings
+from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.persistence.shared.db import ensure_db
+from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
+from ergon_core.core.application.experiments.service import (
+    ExperimentService,
+)
+from ergon_core.core.application.experiments.models import (
+    ExperimentDefineRequest,
+    ExperimentRunRequest,
+)
+from ergon_core.core.shared.settings import settings
 
-from ergon_cli.composition import build_experiment
+from ergon_cli.commands.experiment import validate_explicit_runtime_choices
 from ergon_cli.discovery import list_benchmarks
-from ergon_cli.rendering import render_run_result, render_table
-
-
-@dataclass(frozen=True)
-class ExperimentRunHandle:
-    run_id: object
-    definition_id: object
-    benchmark_type: str
-    status: str
+from ergon_cli.rendering import render_table
 
 
 class BuildLog(Protocol):
@@ -185,90 +176,52 @@ def setup_benchmark(args: Namespace) -> int:
 
     # 7. Report
     print(f"\nSuccess! Template ID: {template_id} (build {build_info.build_id}, {build_time}s)")
-    print(f"Now run: `ergon benchmark run {slug} --worker minif2f-react --model <model> --limit 1`")
+    print(
+        f"Now run: `ergon benchmark run {slug} --limit 1 --worker <worker> "
+        "--model <model> --evaluator <evaluator> --sandbox "
+        f"{slug} --extras none`"
+    )
     return 0
 
 
 async def run_benchmark(args: Namespace) -> int:
     ensure_db()
-
-    experiment = build_experiment(
-        benchmark_slug=args.slug,
+    benchmark_slug = args.slug
+    validation_args = Namespace(
+        benchmark_slug=benchmark_slug,
+        worker=args.worker,
+        evaluator=args.evaluator,
+        sandbox=args.sandbox,
         model=args.model,
-        worker_slug=args.worker,
-        evaluator_slug=args.evaluator,
-        workflow=args.workflow,
-        limit=args.limit,
+        extras=args.extras,
     )
-    experiment.validate()
-    persisted = experiment.persist()
-    render_run_result(persisted)
-    print(f"\nExperiment persisted: {persisted.definition_id}")
-
+    dependency_extras = validate_explicit_runtime_choices(validation_args)
     cohort_name = args.slug if args.cohort is None else args.cohort
     cohort = experiment_cohort_service.resolve_or_create(
         name=cohort_name,
         description=f"Benchmark: {args.slug} | worker: {args.worker} | evaluator: {args.evaluator}",
         created_by="ergon-cli",
     )
-    print(f"\nCohort: {cohort.name} (id={cohort.id})")
-
-    print("\nCreating run and dispatching via Inngest...")
-    run_handle = await _create_and_dispatch(persisted, timeout=args.timeout, cohort_id=cohort.id)
-
-    print("\nRun completed:")
-    print(f"  Run ID:     {run_handle.run_id}")
-    print(f"  Status:     {run_handle.status}")
-    print(f"  Benchmark:  {run_handle.benchmark_type}")
-    return 0 if run_handle.status == "completed" else 1
-
-
-async def _create_and_dispatch(persisted, timeout: int = 600, cohort_id=None):
-    run = create_run(persisted, cohort_id=cohort_id)
-    print(f"  Run ID: {run.id}")
-
-    event = WorkflowStartedEvent(
-        run_id=run.id,
-        definition_id=persisted.definition_id,
-    )
-    await inngest_client.send(
-        inngest.Event(
-            name=WorkflowStartedEvent.name,
-            data=event.model_dump(mode="json"),
+    experiment_service = ExperimentService()
+    defined = experiment_service.define_benchmark_experiment(
+        ExperimentDefineRequest(
+            benchmark_slug=benchmark_slug,
+            name=args.name,
+            cohort_id=cohort.id,
+            limit=args.limit,
+            sample_ids=args.sample_id or None,
+            default_model_target=args.model,
+            default_worker_team={"primary": args.worker},
+            default_evaluator_slug=args.evaluator,
+            sandbox_slug=args.sandbox,
+            dependency_extras=dependency_extras,
+            metadata={"workflow": args.workflow, "max_questions": args.max_questions},
         )
     )
-    print("  WorkflowStartedEvent emitted. Polling for completion...")
-
-    start = time.time()
-    terminal = TERMINAL_RUN_STATUSES
-    poll_interval = 2.0
-
-    while True:
-        elapsed = time.time() - start
-        if elapsed > timeout:
-            print(f"  TIMEOUT after {timeout}s")
-            return ExperimentRunHandle(
-                run_id=run.id,
-                definition_id=persisted.definition_id,
-                benchmark_type=persisted.benchmark_type,
-                status="timeout",
-            )
-
-        session = get_session()
-        try:
-            current = session.get(RunRecord, run.id)
-            if current and current.status in terminal:
-                return ExperimentRunHandle(
-                    run_id=run.id,
-                    definition_id=persisted.definition_id,
-                    benchmark_type=persisted.benchmark_type,
-                    status=current.status,
-                )
-            status = current.status if current else "unknown"
-        finally:
-            session.close()
-
-        mins = int(elapsed) // 60
-        secs = int(elapsed) % 60
-        print(f"  [{mins:02d}:{secs:02d}] status={status}")
-        await asyncio.sleep(poll_interval)
+    launched = await experiment_service.run_experiment(
+        ExperimentRunRequest(experiment_id=defined.experiment_id)
+    )
+    print(f"EXPERIMENT_ID={launched.experiment_id}")
+    for run_id in launched.run_ids:
+        print(f"RUN_ID={run_id}")
+    return 0
