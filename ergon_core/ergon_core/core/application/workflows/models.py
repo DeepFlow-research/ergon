@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from ergon_core.core.runtime.services.graph_dto import GraphTaskRef as WorkflowTaskRef
+from ergon_core.core.application.graph.models import GraphTaskRef as WorkflowTaskRef
 from pydantic import BaseModel, Field
 
 

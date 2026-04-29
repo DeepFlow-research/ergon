@@ -4,19 +4,47 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 import inngest
+from ergon_core.api.registry import registry
+from ergon_core.core.persistence.definitions.models import (
+    ExperimentDefinition,
+    ExperimentDefinitionTask,
+)
+from ergon_core.core.persistence.graph import status_conventions as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.persistence.shared.enums import RunResourceKind, TaskExecutionStatus
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunResourceKind, RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
+    RunTaskEvaluation,
     RunTaskExecution,
 )
-from ergon_core.core.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
-from ergon_core.core.runtime.events.task_events import TaskReadyEvent
-from ergon_core.core.runtime.inngest.client import inngest_client
-from ergon_core.core.runtime.services.graph_dto import GraphEdgeDto, GraphNodeDto, MutationMeta
-from ergon_core.core.runtime.services.graph_repository import WorkflowGraphRepository
-from ergon_core.core.runtime.services.workflow_dto import (
+from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
+from ergon_core.core.application.events.task_events import TaskReadyEvent
+from ergon_core.core.application.graph.lookup import GraphNodeLookup
+from ergon_core.core.application.graph.propagation import (
+    get_initial_ready_tasks,
+    is_workflow_complete_v2,
+    is_workflow_failed_v2,
+    on_task_completed_or_failed,
+)
+from ergon_core.core.application.graph.traversal import descendant_ids
+from ergon_core.core.infrastructure.inngest.client import inngest_client
+from ergon_core.core.application.graph.models import GraphEdgeDto, GraphNodeDto, MutationMeta
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.workflows.orchestration import (
+    FinalizedWorkflowResult,
+    FinalizeWorkflowCommand,
+    InitializedWorkflow,
+    InitializeWorkflowCommand,
+    PropagateTaskCompletionCommand,
+    PropagationResult,
+    RunCompletionData,
+    TaskDescriptor,
+    WorkflowTerminalState,
+)
+from ergon_core.core.application.workflows.models import (
     WorkflowBlockerRef,
     WorkflowDependencyRef,
     WorkflowExecutionRef,
@@ -28,6 +56,8 @@ from ergon_core.core.runtime.services.workflow_dto import (
     WorkflowTaskRef,
     WorkflowTaskWorkspaceRef,
 )
+from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.shared.utils import require_not_none, utcnow
 from sqlmodel import Session, col, select
 
 ResourceScope = Literal["input", "upstream", "own", "children", "descendants", "visible"]
@@ -51,7 +81,242 @@ class WorkflowService:
     ) -> None:
         self._sandbox_manager_factory = sandbox_manager_factory or self._sandbox_manager_for
         self._graph_repo = graph_repository or WorkflowGraphRepository()
+        self._task_execution_repo = TaskExecutionRepository()
         self._task_ready_dispatcher = task_ready_dispatcher or self._dispatch_task_ready
+
+    async def initialize(self, command: InitializeWorkflowCommand) -> InitializedWorkflow:
+        """Load a definition, seed graph state, and return initially ready tasks."""
+        with get_session() as session:
+            definition = require_not_none(
+                session.get(ExperimentDefinition, command.definition_id),
+                f"Definition {command.definition_id} not found",
+            )
+            benchmark_cls = require_not_none(
+                registry.benchmarks.get(definition.benchmark_type),
+                f"Benchmark {definition.benchmark_type!r} not found",
+            )
+            all_tasks = list(
+                session.exec(
+                    select(ExperimentDefinitionTask).where(
+                        ExperimentDefinitionTask.experiment_definition_id
+                        == command.definition_id,
+                    )
+                ).all()
+            )
+
+            self._graph_repo.initialize_from_definition(
+                session,
+                command.run_id,
+                command.definition_id,
+                initial_node_status=graph_status.PENDING,
+                initial_edge_status=graph_status.EDGE_PENDING,
+                task_payload_model=benchmark_cls.task_payload_model,
+                meta=MutationMeta(actor="system:workflow_init"),
+            )
+            session.commit()
+
+            graph_lookup = GraphNodeLookup(session, command.run_id)
+            task_descriptors = [
+                TaskDescriptor(
+                    task_id=t.id,
+                    task_slug=t.task_slug,
+                    parent_task_id=t.parent_task_id,
+                    node_id=graph_lookup.node_id(t.id),
+                )
+                for t in all_tasks
+            ]
+
+            run_record = require_not_none(
+                session.get(RunRecord, command.run_id),
+                f"RunRecord {command.run_id} not found",
+            )
+            run_record.status = RunStatus.EXECUTING
+            run_record.started_at = utcnow()
+            session.add(run_record)
+            session.commit()
+
+            ready_ids = await get_initial_ready_tasks(
+                session,
+                command.run_id,
+                command.definition_id,
+                graph_repo=self._graph_repo,
+                graph_lookup=graph_lookup,
+            )
+            ready_id_set = set(ready_ids)
+            root_count = sum(1 for t in all_tasks if t.parent_task_id is None)
+
+            return InitializedWorkflow(
+                run_id=command.run_id,
+                definition_id=command.definition_id,
+                benchmark_type=definition.benchmark_type,
+                total_tasks=len(all_tasks),
+                total_root_tasks=root_count,
+                pending_tasks=task_descriptors,
+                initial_ready_tasks=[td for td in task_descriptors if td.task_id in ready_id_set],
+            )
+
+    def finalize(self, command: FinalizeWorkflowCommand) -> FinalizedWorkflowResult:
+        """Aggregate evaluations and close the run."""
+        with get_session() as session:
+            evaluations = list(
+                session.exec(
+                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == command.run_id)
+                ).all()
+            )
+            score_summary = aggregate_evaluation_scores(evaluations)
+            completion = RunCompletionData(
+                completed_at=utcnow(),
+                final_score=score_summary.final_score,
+                normalized_score=score_summary.normalized_score,
+            )
+            run_record = require_not_none(
+                session.get(RunRecord, command.run_id),
+                f"RunRecord {command.run_id} not found",
+            )
+            run_record.status = RunStatus.COMPLETED
+            run_record.completed_at = completion.completed_at
+            run_record.summary_json = {
+                "final_score": completion.final_score,
+                "normalized_score": completion.normalized_score,
+                "evaluators_count": score_summary.evaluators_count,
+                "total_cost_usd": completion.total_cost_usd,
+            }
+            session.add(run_record)
+            session.commit()
+
+            return FinalizedWorkflowResult(
+                run_id=command.run_id,
+                final_score=score_summary.final_score,
+                normalized_score=score_summary.normalized_score,
+                evaluators_count=score_summary.evaluators_count,
+            )
+
+    async def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+        """Handle successful task completion and schedule newly ready tasks."""
+        with get_session() as session:
+            node_id = command.node_id
+            if node_id is None:
+                graph_lookup = GraphNodeLookup(session, command.run_id)
+                node_id = graph_lookup.node_id(command.task_id)
+                if node_id is None:
+                    return PropagationResult(
+                        run_id=command.run_id,
+                        definition_id=command.definition_id,
+                        completed_task_id=command.task_id,
+                        workflow_terminal_state=WorkflowTerminalState.NONE,
+                    )
+
+            await self._graph_repo.update_node_status(
+                session,
+                run_id=command.run_id,
+                node_id=node_id,
+                new_status=graph_status.COMPLETED,
+                meta=MutationMeta(
+                    actor="system:propagation",
+                    reason=f"task {command.task_id} completed",
+                ),
+                only_if_not_terminal=True,
+            )
+            newly_ready_node_ids = await on_task_completed_or_failed(
+                session,
+                command.run_id,
+                node_id,
+                graph_status.COMPLETED,
+                graph_repo=self._graph_repo,
+            )
+            ready_descriptors = self._task_descriptors_for_nodes(session, newly_ready_node_ids)
+            terminal = WorkflowTerminalState.NONE
+            if is_workflow_complete_v2(session, command.run_id):
+                terminal = WorkflowTerminalState.COMPLETED
+            elif is_workflow_failed_v2(session, command.run_id):
+                terminal = WorkflowTerminalState.FAILED
+
+            return PropagationResult(
+                run_id=command.run_id,
+                definition_id=command.definition_id,
+                completed_task_id=command.task_id,
+                ready_tasks=ready_descriptors,
+                workflow_terminal_state=terminal,
+            )
+
+    async def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
+        """Handle task failure, block successors, and detect workflow terminal state."""
+        with get_session() as session:
+            node_id = command.node_id
+            if node_id is None:
+                graph_lookup = GraphNodeLookup(session, command.run_id)
+                node_id = graph_lookup.node_id(command.task_id)
+
+            if node_id is not None:
+                await self._graph_repo.update_node_status(
+                    session,
+                    run_id=command.run_id,
+                    node_id=node_id,
+                    new_status=graph_status.FAILED,
+                    meta=MutationMeta(
+                        actor="system:propagation",
+                        reason=f"task {command.task_id} failed",
+                    ),
+                    only_if_not_terminal=True,
+                )
+                await on_task_completed_or_failed(
+                    session,
+                    command.run_id,
+                    node_id,
+                    graph_status.FAILED,
+                    graph_repo=self._graph_repo,
+                )
+
+            terminal = WorkflowTerminalState.NONE
+            if is_workflow_failed_v2(session, command.run_id):
+                terminal = WorkflowTerminalState.FAILED
+
+            return PropagationResult(
+                run_id=command.run_id,
+                definition_id=command.definition_id,
+                completed_task_id=command.task_id,
+                workflow_terminal_state=terminal,
+            )
+
+    async def operator_unblock(self, *, run_id: UUID, node_id: UUID, reason: str) -> None:
+        with get_session() as session:
+            await self._graph_repo.update_node_status(
+                session,
+                run_id=run_id,
+                node_id=node_id,
+                new_status=graph_status.PENDING,
+                meta=MutationMeta(actor="operator:unblock", reason=reason),
+            )
+            session.commit()
+
+    async def restart_node(self, *, run_id: UUID, node_id: UUID, reason: str) -> None:
+        with get_session() as session:
+            await self._graph_repo.update_node_status(
+                session,
+                run_id=run_id,
+                node_id=node_id,
+                new_status=graph_status.PENDING,
+                meta=MutationMeta(actor="operator:restart", reason=reason),
+            )
+            session.commit()
+
+    @staticmethod
+    def _task_descriptors_for_nodes(
+        session: Session,
+        node_ids: list[UUID],
+    ) -> list[TaskDescriptor]:
+        descriptors: list[TaskDescriptor] = []
+        for node_id in node_ids:
+            node = session.get(RunGraphNode, node_id)
+            if node is not None:
+                descriptors.append(
+                    TaskDescriptor(
+                        task_id=node.definition_task_id,
+                        task_slug=node.task_slug,
+                        node_id=node_id,
+                    )
+                )
+        return descriptors
 
     def list_tasks(
         self,
@@ -84,16 +349,7 @@ class WorkflowService:
         *,
         node_id: UUID,
     ) -> RunTaskExecution | None:
-        stmt = (
-            select(RunTaskExecution)
-            .where(RunTaskExecution.node_id == node_id)
-            .order_by(
-                col(RunTaskExecution.attempt_number).desc(),
-                col(RunTaskExecution.started_at).desc(),
-            )
-            .limit(1)
-        )
-        return session.exec(stmt).first()
+        return self._task_execution_repo.latest_for_node(session, node_id)
 
     def list_dependencies(
         self,
@@ -281,11 +537,7 @@ class WorkflowService:
         assigned_worker_slug: str,
         dry_run: bool,
     ) -> WorkflowMutationRef:
-        from ergon_builtins.registry import (  # slopcop: ignore[guarded-function-import] -- reason: workflow mutation validates plugin worker slugs only when CLI tools run
-            WORKERS,
-        )
-
-        if assigned_worker_slug not in WORKERS:
+        if assigned_worker_slug not in registry.workers:
             raise ValueError(f"Unknown worker slug: {assigned_worker_slug!r}")
         parent = self._resolve_node(
             session,
@@ -738,20 +990,7 @@ class WorkflowService:
         node_id: UUID,
         max_depth: int,
     ) -> set[UUID]:
-        result: set[UUID] = set()
-        frontier = {node_id}
-        for _ in range(max_depth):
-            children = session.exec(
-                select(RunGraphNode).where(
-                    RunGraphNode.run_id == run_id,
-                    col(RunGraphNode.parent_node_id).in_(frontier),
-                )
-            ).all()
-            frontier = {child.id for child in children}
-            result.update(frontier)
-            if not frontier:
-                break
-        return result
+        return descendant_ids(session, run_id=run_id, root_node_id=node_id, max_depth=max_depth)
 
     @staticmethod
     def _producer_node_for_resource(

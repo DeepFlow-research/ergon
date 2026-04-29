@@ -3,20 +3,20 @@
 import logging
 from uuid import UUID
 
-from ergon_core.core.api.schemas import (
+from ergon_core.core.application.communication.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
 )
-from ergon_core.core.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import Thread, ThreadMessage
-from ergon_core.core.runtime.services.communication_schemas import (
+from ergon_core.core.application.communication.models import (
     CreateMessageRequest,
     MessageResponse,
     ThreadSummary,
     ThreadWithMessages,
 )
-from ergon_core.core.utils import utcnow
+from ergon_core.core.shared.utils import utcnow
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import func, select
 
