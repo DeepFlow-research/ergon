@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
 
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
@@ -48,13 +48,13 @@ class SweBenchVerifiedBenchmark(Benchmark):
         )
         self.limit = limit
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[SWEBenchTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[SWEBenchTaskPayload]]]:
         instances = _load_rows(limit=self.limit)
-        tasks: list[Task[SWEBenchTaskPayload]] = []
+        tasks: list[TaskSpec[SWEBenchTaskPayload]] = []
         for instance in instances:
             payload = SWEBenchTaskPayload.from_instance(instance)
             tasks.append(
-                Task[SWEBenchTaskPayload](
+                TaskSpec[SWEBenchTaskPayload](
                     task_slug=instance.instance_id,
                     instance_key="default",
                     description=payload.build_worker_description(),

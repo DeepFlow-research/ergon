@@ -99,14 +99,10 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
         *,
         name: str,
         model: str | None,
-        task_id: UUID,
-        sandbox_id: str,
     ) -> None:
         super().__init__(
             name=name,
             model=model,
-            task_id=task_id,
-            sandbox_id=sandbox_id,
             tools=[],
             system_prompt=_WORKFLOW_PROMPT,
             max_iterations=60,
@@ -135,12 +131,16 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
                 request,
                 (ReportWriteSkillRequest, ReportEditSkillRequest, ReportReadSkillRequest),
             ):
-                return await self._run_sandbox_report_skill(manager=manager, request=request)
+                return await self._run_sandbox_report_skill(
+                    manager=manager,
+                    task_id=task.task_id,
+                    request=request,
+                )
             return await model_run_skill(request)
 
         async def publisher_sync() -> list[RunResourceView]:
             publisher = manager.publisher_for(
-                task_id=self.task_id,
+                task_id=task.task_id,
                 run_id=context.run_id,
                 task_execution_id=context.execution_id,
             )
@@ -156,7 +156,7 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
         )
         workflow_tool = make_workflow_cli_tool(
             worker_context=context,
-            sandbox_task_key=self.task_id,
+            sandbox_task_key=task.task_id,
             benchmark_type="researchrubrics",
             budgeted=True,
         )
@@ -175,6 +175,7 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
         self,
         *,
         manager: ResearchRubricsSandboxManager,
+        task_id: UUID,
         request: ReportWriteSkillRequest | ReportEditSkillRequest | ReportReadSkillRequest,
     ) -> ReportWriteResponse | ReportReadResponse:
         started = time.perf_counter()
@@ -200,7 +201,7 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             if isinstance(request, ReportReadSkillRequest):
                 latency_ms = (time.perf_counter() - started) * 1000
                 content = await manager.read_report_file(
-                    task_id=self.task_id,
+                    task_id=task_id,
                     workspace_path=path,
                     duration_ms=int(latency_ms),
                 )
@@ -216,7 +217,7 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             )
             latency_ms = (time.perf_counter() - started) * 1000
             await manager.write_report_file(
-                task_id=self.task_id,
+                task_id=task_id,
                 workspace_path=path,
                 content=content,
                 duration_ms=int(latency_ms),

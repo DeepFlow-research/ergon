@@ -17,13 +17,13 @@ from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
-from ergon_builtins.benchmarks.minif2f.worker_factory import minif2f_react
+from ergon_builtins.benchmarks.minif2f.worker_factory import MiniF2FReactWorker
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
 from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
-from ergon_builtins.benchmarks.swebench_verified.worker_factory import swebench_react
+from ergon_builtins.benchmarks.swebench_verified.worker_factory import SWEBenchReactWorker
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.openrouter_backend import resolve_openrouter
 from ergon_builtins.models.openrouter_responses_backend import resolve_openrouter_responses
@@ -31,19 +31,10 @@ from ergon_builtins.models.resolution import ResolvedModel, register_model_backe
 from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.shared.workers.training_stub_worker import TrainingStubWorker
 
-# reason: Worker factory signature — every registry entry accepts the same
-# four keyword-only args. Plain ``Worker`` subclasses get them via
-# ``super().__init__``; benchmark factories read ``task_id`` to resolve a
-# live sandbox. RFC 2026-04-22 §1 + Open Question 1 resolution.
-WorkerFactory = Callable[..., Worker]
-
-
-
-WORKERS: dict[str, WorkerFactory] = {
+WORKERS: dict[str, type[Worker]] = {
     "training-stub": TrainingStubWorker,
-
-    "minif2f-react": minif2f_react,
-    "swebench-react": swebench_react,
+    "minif2f-react": MiniF2FReactWorker,
+    "swebench-react": SWEBenchReactWorker,
     # Test-only smoke workers register via tests/e2e/_fixtures/__init__.py;
     # they do NOT appear here (production CLI paths don't import tests).
 }
@@ -51,7 +42,6 @@ WORKERS: dict[str, WorkerFactory] = {
 BENCHMARKS: dict[str, type[Benchmark]] = {
     "minif2f": MiniF2FBenchmark,
     "swebench-verified": SweBenchVerifiedBenchmark,
-
 }
 
 EVALUATORS: dict[str, type[Evaluator]] = {

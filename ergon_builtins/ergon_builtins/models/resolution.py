@@ -38,6 +38,11 @@ def register_model_backend(prefix: str, resolver: Callable[..., ResolvedModel]) 
     _BACKEND_REGISTRY[prefix] = resolver
 
 
+def registered_model_backend_prefixes() -> set[str]:
+    """Return the model backend prefixes registered in this process."""
+    return set(_BACKEND_REGISTRY)
+
+
 def _target_prefix(model_target: str | None) -> str:
     target = model_target or ""
     return target.split(":", 1)[0] if ":" in target else ""

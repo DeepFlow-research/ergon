@@ -91,14 +91,10 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         *,
         name: str,
         model: str | None,
-        task_id: UUID,
-        sandbox_id: str,
     ) -> None:
         super().__init__(
             name=name,
             model=model,
-            task_id=task_id,
-            sandbox_id=sandbox_id,
             tools=[],
             system_prompt=_RESEARCHER_SYSTEM_PROMPT,
             max_iterations=60,
@@ -130,13 +126,14 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             ):
                 return await self._run_sandbox_report_skill(
                     manager=manager,
+                    task_id=task.task_id,
                     request=request,
                 )
             return await model_run_skill(request)
 
         async def publisher_sync() -> list[RunResourceView]:
             publisher = manager.publisher_for(
-                task_id=self.task_id,
+                task_id=task.task_id,
                 run_id=context.run_id,
                 task_execution_id=context.execution_id,
             )
@@ -169,6 +166,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         self,
         *,
         manager: ResearchRubricsSandboxManager,
+        task_id: UUID,
         request: ReportWriteSkillRequest | ReportEditSkillRequest | ReportReadSkillRequest,
     ) -> ReportWriteResponse | ReportReadResponse:
         started = time.perf_counter()
@@ -195,7 +193,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             if isinstance(request, ReportReadSkillRequest):
                 latency_ms = (time.perf_counter() - started) * 1000
                 content = await manager.read_report_file(
-                    task_id=self.task_id,
+                    task_id=task_id,
                     workspace_path=path,
                     duration_ms=int(latency_ms),
                 )
@@ -211,7 +209,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
             )
             latency_ms = (time.perf_counter() - started) * 1000
             await manager.write_report_file(
-                task_id=self.task_id,
+                task_id=task_id,
                 workspace_path=path,
                 content=content,
                 duration_ms=int(latency_ms),

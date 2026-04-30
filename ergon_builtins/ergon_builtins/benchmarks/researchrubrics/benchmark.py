@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
 
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
@@ -52,12 +52,12 @@ class ResearchRubricsBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[ResearchRubricsTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[ResearchRubricsTaskPayload]]]:
         payloads = self._load_rows()
-        tasks: list[Task[ResearchRubricsTaskPayload]] = []
+        tasks: list[TaskSpec[ResearchRubricsTaskPayload]] = []
         for payload in payloads:
             tasks.append(
-                Task[ResearchRubricsTaskPayload](
+                TaskSpec[ResearchRubricsTaskPayload](
                     task_slug=payload.sample_id,
                     instance_key="default",
                     description=payload.prompt,

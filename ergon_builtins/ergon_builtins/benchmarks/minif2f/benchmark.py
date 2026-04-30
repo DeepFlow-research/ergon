@@ -11,7 +11,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
 from huggingface_hub import hf_hub_download
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
@@ -52,9 +52,9 @@ class MiniF2FBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[MiniF2FTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[MiniF2FTaskPayload]]]:
         problems = self._load_problems()
-        tasks: list[Task[MiniF2FTaskPayload]] = []
+        tasks: list[TaskSpec[MiniF2FTaskPayload]] = []
         for problem in problems:
             payload = MiniF2FTaskPayload(
                 name=problem.name,
@@ -69,7 +69,7 @@ class MiniF2FBenchmark(Benchmark):
                 f"{problem.formal_statement}"
             )
             tasks.append(
-                Task[MiniF2FTaskPayload](
+                TaskSpec[MiniF2FTaskPayload](
                     task_slug=problem.name,
                     instance_key="default",
                     description=description,
