@@ -89,7 +89,7 @@ class _ExperimentDefinitionWriter:
         for binding_key, evaluator in experiment.evaluators.items():
             snapshot: JsonObject = {"name": evaluator.name}
             if isinstance(evaluator, Rubric):
-                snapshot["criteria"] = [c.name for c in evaluator.criteria]
+                snapshot["criteria"] = [c.slug for c in evaluator.criteria]
 
             evaluator_rows.append(
                 ExperimentDefinitionEvaluator(

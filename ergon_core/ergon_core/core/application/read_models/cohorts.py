@@ -171,9 +171,7 @@ class ExperimentCohortService:
             total_runs = len(runs)
             failed_runs = status_counts.get(RunStatus.FAILED, 0)
             average_score = (sum(scored_values) / len(scored_values)) if scored_values else None
-            average_duration_ms = (
-                (sum(durations_ms) // len(durations_ms)) if durations_ms else None
-            )
+            average_duration_ms = (sum(durations_ms) // len(durations_ms)) if durations_ms else None
 
             stats = session.exec(
                 select(ExperimentCohortStats).where(ExperimentCohortStats.cohort_id == cohort_id)

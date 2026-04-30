@@ -14,4 +14,3 @@ class ResourceTooLargeError(ReadModelError):
         )
         self.size_bytes = size_bytes
         self.limit_bytes = limit_bytes
-

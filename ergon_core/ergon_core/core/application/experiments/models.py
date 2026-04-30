@@ -16,6 +16,7 @@ class ExperimentDefineRequest(BaseModel):
     default_model_target: str | None = None
     default_worker_team: JsonObject = Field(default_factory=dict)
     default_evaluator_slug: str | None = None
+    evaluator_bindings: dict[str, str] = Field(default_factory=dict)
     sandbox_slug: str | None = None
     dependency_extras: tuple[str, ...] = ()
     design: JsonObject = Field(default_factory=dict)
@@ -71,6 +72,7 @@ class RunAssignment(BaseModel):
     sample_id: str | None = None
     worker_team: JsonObject
     evaluator_slug: str | None = None
+    evaluator_bindings: dict[str, str] = Field(default_factory=dict)
     model_target: str | None = None
     sandbox_slug: str | None = None
     dependency_extras: tuple[str, ...] = ()

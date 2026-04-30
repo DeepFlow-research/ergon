@@ -174,4 +174,3 @@ def leaf_execution_timings_by_slug(run_id: UUID) -> dict[str, TaskExecutionSnaps
 
     by_node = {execution.node_id: _execution_snapshot(execution) for execution in executions}
     return {leaf.task_slug: by_node.get(leaf.id) for leaf in leaves}
-

@@ -26,7 +26,10 @@ except ImportError:
     _OTLPSpanExporter = None
 
 from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.core.infrastructure.tracing.attributes import datetime_to_nanos, normalize_attributes
+from ergon_core.core.infrastructure.tracing.attributes import (
+    datetime_to_nanos,
+    normalize_attributes,
+)
 from ergon_core.core.infrastructure.tracing.ids import (
     EMPTY_SPAN_ID,
     TRACE_FLAGS_SAMPLED,

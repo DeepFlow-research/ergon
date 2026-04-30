@@ -52,14 +52,6 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("HF_API_KEY"),
     )
-    enable_test_harness: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("ENABLE_TEST_HARNESS"),
-    )
-    startup_plugin_specs: str = Field(
-        default="",
-        validation_alias=AliasChoices("ERGON_STARTUP_PLUGINS"),
-    )
 
     @property
     def data_dir(self) -> Path:
@@ -68,10 +60,6 @@ class Settings(BaseSettings):
     @property
     def runs_dir(self) -> Path:
         return self.data_dir / "runs"
-
-    @property
-    def startup_plugins(self) -> tuple[str, ...]:
-        return tuple(spec.strip() for spec in self.startup_plugin_specs.split(",") if spec.strip())
 
     def missing_values(self, names: list[str]) -> list[str]:
         return [

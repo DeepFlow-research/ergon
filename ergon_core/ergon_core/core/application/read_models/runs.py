@@ -182,7 +182,7 @@ class RunReadService:
             failed_tasks=failed_tasks,
             running_tasks=running_tasks,
             cancelled_tasks=cancelled_tasks,
-            final_score=score_summary.final_score,
+            final_score=score_summary.normalized_score,
             error=run.error_message,
         )
 
@@ -215,7 +215,6 @@ class RunReadService:
             )
             for m in mutations
         ]
-
     def get_resource_blob(self, run_id: UUID, resource_id: UUID) -> RunResourceBlob | None:
         with get_session() as session:
             resource = session.exec(
@@ -339,7 +338,6 @@ class RunReadService:
             )
             for m in metrics
         ]
-
 
 def _blob_root() -> Path:
     return Path(os.environ.get("ERGON_BLOB_ROOT", "/var/ergon/blob")).resolve()

@@ -54,7 +54,12 @@ from ergon_core.core.infrastructure.tracing.ids import (
 from ergon_core.core.infrastructure.tracing.noop import NoopTraceSink
 from ergon_core.core.infrastructure.tracing.otel import OtelTraceSink
 from ergon_core.core.infrastructure.tracing.sinks import get_trace_sink
-from ergon_core.core.infrastructure.tracing.types import CompletedSpan, SpanEvent, TraceContext, TraceSink
+from ergon_core.core.infrastructure.tracing.types import (
+    CompletedSpan,
+    SpanEvent,
+    TraceContext,
+    TraceSink,
+)
 
 __all__ = [
     "CompletedSpan",

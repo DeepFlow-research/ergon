@@ -60,4 +60,3 @@ class TelemetryRepository:
         session.add(evaluation)
         session.flush()
         return evaluation
-

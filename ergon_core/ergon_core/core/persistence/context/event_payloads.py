@@ -6,7 +6,11 @@ payload classes were removed in favor of ContextPartChunkLog.part.
 
 from typing import Literal
 
-from ergon_core.core.domain.generation.context_parts import ContextPart, ContextPartChunk, ContextPartChunkLog
+from ergon_core.core.domain.generation.context_parts import (
+    ContextPart,
+    ContextPartChunk,
+    ContextPartChunkLog,
+)
 
 ContextEventType = Literal[
     "system_prompt",
