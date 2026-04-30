@@ -289,15 +289,22 @@
           "sequence": 0,
           "eventType": "tool_call",
           "payload": {
-            "event_type": "tool_call",
-            "tool_call_id": "call-search-mas-layout",
-            "tool_name": "search",
-            "args": {
-              "query": "MAS layout"
+            "part": {
+              "part_kind": "tool_call",
+              "tool_call_id": "call-search-mas-layout",
+              "tool_name": "search",
+              "args": {
+                "query": "MAS layout"
+              }
             },
+            "token_ids": null,
+            "logprobs": null,
+            "sequence": 0,
+            "worker_binding_key": "researcher-a",
             "turn_id": "turn-search",
-            "turn_token_ids": null,
-            "turn_logprobs": null
+            "started_at": "2026-04-26T12:00:10.000Z",
+            "completed_at": "2026-04-26T12:00:14.000Z",
+            "policy_version": null
           },
           "createdAt": "2026-04-26T12:00:10.000Z",
           "startedAt": "2026-04-26T12:00:10.000Z",
