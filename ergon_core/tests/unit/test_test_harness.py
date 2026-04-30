@@ -66,7 +66,7 @@ def test_read_state_dto_exposes_live_playwright_contract_fields() -> None:
 
 def test_reset_route_is_available_without_secret_header() -> None:
     app = _build_app_with_harness()
-    client = TestClient(app)
+    client = TestClient(app, raise_server_exceptions=False)
     resp = client.post(
         "/api/__danger__/test-harness/write/reset",
         json={"cohort_prefix": "ci-smoke-"},
