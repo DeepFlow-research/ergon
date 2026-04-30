@@ -14,7 +14,6 @@
 import { config } from "../config";
 import {
   ContextEventState,
-  ExecutionAttemptState,
   TaskStatus,
   TaskTreeNode,
   TaskState,
@@ -26,9 +25,13 @@ import {
   WorkflowRunState,
 } from "../types";
 import { applyGraphMutation as reduceGraphMutation } from "@/features/graph/state/graphMutationReducer";
-import { inferTrigger } from "@/lib/runEvents";
 import type { DashboardGraphMutationData } from "@/lib/contracts/events";
-import type { TaskTransitionRecord } from "@/lib/types";
+import {
+  applySandboxClosed,
+  applySandboxCommand,
+  applySandboxCreated,
+  applyTaskStatusChanged,
+} from "@/lib/run-state/reducers";
 
 // Extend global to store DashboardStore instance across module loads
 declare global {
@@ -177,90 +180,19 @@ class DashboardStore {
     assignedWorkerSlug?: string | null
   ): void {
     const run = this.runs.get(runId);
-    const task = run?.tasks.get(taskId);
-    if (!run || !task) return;
+    if (!run) return;
 
-    const nextExecutionStatus =
-      newStatus === TaskStatus.READY ? TaskStatus.PENDING : newStatus;
-    const executions = run.executionsByTask.get(taskId) ?? [];
-    const latestExecution = executions[executions.length - 1];
-
-    if (newStatus === TaskStatus.RUNNING) {
-      if (
-        !latestExecution ||
-        latestExecution.status === TaskStatus.COMPLETED ||
-        latestExecution.status === TaskStatus.FAILED
-      ) {
-        const nextExecution: ExecutionAttemptState = {
-          id: `${taskId}:attempt:${executions.length + 1}`,
-          taskId,
-          attemptNumber: executions.length + 1,
-          status: TaskStatus.RUNNING,
-          agentId: assignedWorkerId ?? task.assignedWorkerId,
-          agentName: assignedWorkerSlug ?? task.assignedWorkerSlug,
-          startedAt: timestamp,
-          completedAt: null,
-          finalAssistantMessage: null,
-          outputResourceIds: [],
-          errorMessage: null,
-          score: null,
-          evaluationDetails: {},
-        };
-        run.executionsByTask.set(taskId, [...executions, nextExecution]);
-      } else {
-        latestExecution.status = TaskStatus.RUNNING;
-        latestExecution.startedAt = latestExecution.startedAt ?? timestamp;
-        latestExecution.agentId = assignedWorkerId ?? latestExecution.agentId;
-        latestExecution.agentName = assignedWorkerSlug ?? latestExecution.agentName;
-      }
-    } else if (latestExecution) {
-      latestExecution.status = nextExecutionStatus;
-      if (newStatus === TaskStatus.COMPLETED || newStatus === TaskStatus.FAILED) {
-        latestExecution.completedAt = timestamp;
-        if (newStatus === TaskStatus.FAILED && latestExecution.errorMessage === null) {
-          latestExecution.errorMessage = "Task execution failed";
-        }
-      }
-    }
-
-    const fromStatus = task.status;
-    task.status = newStatus;
-
-    if (fromStatus !== newStatus) {
-      const trigger = inferTrigger(fromStatus, newStatus);
-      const record: TaskTransitionRecord = {
-        from: fromStatus,
-        to: newStatus,
-        trigger,
-        at: timestamp,
-        sequence: null,
-        actor: assignedWorkerSlug ?? task.assignedWorkerSlug ?? null,
-        reason: null,
-      };
-      task.history = [...(task.history ?? []), record];
-      task.lastTrigger = trigger;
-    }
-
-    if (assignedWorkerId !== undefined) {
-      task.assignedWorkerId = assignedWorkerId;
-    }
-    if (assignedWorkerSlug !== undefined) {
-      task.assignedWorkerSlug = assignedWorkerSlug;
-    }
-
-    // Update timestamps
-    if (newStatus === TaskStatus.RUNNING && !task.startedAt) {
-      task.startedAt = timestamp;
-    }
-    if (
-      newStatus === TaskStatus.COMPLETED ||
-      newStatus === TaskStatus.FAILED
-    ) {
-      task.completedAt = timestamp;
-    }
-
-    // Update run metrics
-    this.recalculateRunMetrics(run);
+    this.runs.set(
+      runId,
+      applyTaskStatusChanged(run, {
+        runId,
+        taskId,
+        status: newStatus,
+        timestamp,
+        assignedWorkerId,
+        assignedWorkerSlug,
+      }),
+    );
   }
 
   /**
@@ -334,7 +266,7 @@ class DashboardStore {
       commands: pendingCommands,
     };
 
-    run.sandboxesByTask.set(taskId, sandbox);
+    this.runs.set(runId, applySandboxCreated(run, sandbox));
 
     const pendingByTask = this.pendingSandboxCommands.get(runId);
     if (pendingByTask) {
@@ -367,7 +299,7 @@ class DashboardStore {
       return;
     }
 
-    sandbox.commands.push(command);
+    this.runs.set(runId, applySandboxCommand(run, taskId, command));
   }
 
   /**
@@ -380,12 +312,9 @@ class DashboardStore {
     timestamp: string
   ): void {
     const run = this.runs.get(runId);
-    const sandbox = run?.sandboxesByTask.get(taskId);
-    if (!sandbox) return;
+    if (!run) return;
 
-    sandbox.status = "closed";
-    sandbox.closedAt = timestamp;
-    sandbox.closeReason = reason;
+    this.runs.set(runId, applySandboxClosed(run, taskId, reason, timestamp));
   }
 
   applyGraphMutation(runId: string, mutation: DashboardGraphMutationData): void {
@@ -459,35 +388,6 @@ class DashboardStore {
     return tasks;
   }
 
-  /**
-   * Recalculate run metrics based on current task states.
-   */
-  private recalculateRunMetrics(run: WorkflowRunState): void {
-    let completed = 0;
-    let running = 0;
-    let failed = 0;
-
-    for (const task of Array.from(run.tasks.values())) {
-      // Only count leaf tasks for metrics
-      if (!task.isLeaf) continue;
-
-      switch (task.status) {
-        case TaskStatus.COMPLETED:
-          completed++;
-          break;
-        case TaskStatus.RUNNING:
-          running++;
-          break;
-        case TaskStatus.FAILED:
-          failed++;
-          break;
-      }
-    }
-
-    run.completedTasks = completed;
-    run.runningTasks = running;
-    run.failedTasks = failed;
-  }
 }
 
 // Export singleton instance using global to persist across module reloads

@@ -415,7 +415,7 @@ const onSandboxClosed = inngest.createFunction(
     store.closeSandbox(runId, task_id, reason, timestamp);
 
     // Broadcast to run subscribers
-    broadcastSandboxClosed(runId, task_id, reason);
+    broadcastSandboxClosed(runId, task_id, reason, timestamp);
 
     return { success: true };
   }

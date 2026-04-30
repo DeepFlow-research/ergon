@@ -25,16 +25,20 @@ import {
 import type { GraphMutationSocketData } from "@/lib/contracts/events";
 import type { RunSandbox, RunSandboxCommand } from "@/lib/contracts/rest";
 import {
-  ExecutionAttemptState,
   ContextEventState,
   TaskStatus,
-  TaskState,
   SandboxState,
   SandboxCommandState,
   WorkflowRunState,
   SerializedWorkflowRunState,
 } from "@/lib/types";
 import { compareContextEvents, deserializeRunState } from "@/lib/runState";
+import {
+  applySandboxClosed,
+  applySandboxCommand,
+  applySandboxCreated,
+  applyTaskStatusChanged,
+} from "@/lib/run-state/reducers";
 import { useGraphMutations } from "@/features/graph/hooks/useGraphMutations";
 
 interface UseRunStateResult {
@@ -42,36 +46,6 @@ interface UseRunStateResult {
   isLoading: boolean;
   error: string | null;
   isSubscribed: boolean;
-}
-
-function recalculateTaskMetrics(tasks: Map<string, TaskState>): Pick<
-  WorkflowRunState,
-  "completedTasks" | "runningTasks" | "failedTasks"
-> {
-  let completedTasks = 0;
-  let runningTasks = 0;
-  let failedTasks = 0;
-
-  for (const task of tasks.values()) {
-    if (!task.isLeaf) continue;
-    switch (task.status) {
-      case TaskStatus.COMPLETED:
-        completedTasks += 1;
-        break;
-      case TaskStatus.RUNNING:
-        runningTasks += 1;
-        break;
-      case TaskStatus.FAILED:
-        failedTasks += 1;
-        break;
-    }
-  }
-
-  return { completedTasks, runningTasks, failedTasks };
-}
-
-function nextExecutionStatus(status: TaskStatus): TaskStatus {
-  return status === TaskStatus.READY ? TaskStatus.PENDING : status;
 }
 
 function normalizeSandboxState(sandbox: RunSandbox): SandboxState {
@@ -120,6 +94,7 @@ export function useRunState(
   const [isSubscribed, setIsSubscribed] = useState(false);
   const subscriptionRef = useRef<string | null>(null);
   const hasRunStateRef = useRef(initialRunState !== null);
+  const pendingSandboxCommandsRef = useRef<Map<string, SandboxCommandState[]>>(new Map());
 
   const loadSnapshot = useCallback(async () => {
     try {
@@ -162,100 +137,14 @@ export function useRunState(
 
       setRunState((prev) => {
         if (!prev) return prev;
-
-        const task = prev.tasks.get(data.taskId);
-        if (!task) return prev;
-
-        const updatedTask: TaskState = {
-          ...task,
+        return applyTaskStatusChanged(prev, {
+          runId: data.runId,
+          taskId: data.taskId,
           status,
-          assignedWorkerId: data.assignedWorkerId ?? task.assignedWorkerId,
-          assignedWorkerSlug: data.assignedWorkerSlug ?? task.assignedWorkerSlug,
-          startedAt:
-            status === TaskStatus.RUNNING && !task.startedAt
-              ? data.timestamp
-              : task.startedAt,
-          completedAt:
-            status === TaskStatus.COMPLETED ||
-            status === TaskStatus.FAILED
-              ? data.timestamp
-              : task.completedAt,
-        };
-
-        const newTasks = new Map(prev.tasks);
-        newTasks.set(data.taskId, updatedTask);
-
-        const existingExecutions = prev.executionsByTask.get(data.taskId) ?? [];
-        const latestExecution = existingExecutions[existingExecutions.length - 1];
-        let nextExecutions = existingExecutions;
-
-        if (status === TaskStatus.RUNNING) {
-          if (
-            !latestExecution ||
-            latestExecution.status === TaskStatus.COMPLETED ||
-            latestExecution.status === TaskStatus.FAILED
-          ) {
-            const createdExecution: ExecutionAttemptState = {
-              id: `${data.taskId}:attempt:${existingExecutions.length + 1}`,
-              taskId: data.taskId,
-              attemptNumber: existingExecutions.length + 1,
-              status: TaskStatus.RUNNING,
-              agentId: data.assignedWorkerId,
-              agentName: data.assignedWorkerSlug,
-              startedAt: data.timestamp,
-              completedAt: null,
-              finalAssistantMessage: null,
-              outputResourceIds: [],
-              errorMessage: null,
-              score: null,
-              evaluationDetails: {},
-            };
-            nextExecutions = [...existingExecutions, createdExecution];
-          } else {
-            nextExecutions = existingExecutions.map((execution, index) =>
-              index === existingExecutions.length - 1
-                ? {
-                    ...execution,
-                    status: TaskStatus.RUNNING,
-                    agentId: data.assignedWorkerId ?? execution.agentId,
-                    agentName: data.assignedWorkerSlug ?? execution.agentName,
-                    startedAt: execution.startedAt ?? data.timestamp,
-                  }
-                : execution,
-            );
-          }
-        } else if (latestExecution) {
-          nextExecutions = existingExecutions.map((execution, index) =>
-            index === existingExecutions.length - 1
-              ? {
-                  ...execution,
-                  status: nextExecutionStatus(status),
-                  completedAt:
-                    status === TaskStatus.COMPLETED || status === TaskStatus.FAILED
-                      ? data.timestamp
-                      : execution.completedAt,
-                  errorMessage:
-                    status === TaskStatus.FAILED
-                      ? execution.errorMessage ?? "Task execution failed"
-                      : execution.errorMessage,
-                }
-              : execution,
-          );
-        }
-
-        const newExecutionsByTask = new Map(prev.executionsByTask);
-        newExecutionsByTask.set(data.taskId, nextExecutions);
-
-        const { completedTasks, runningTasks, failedTasks } = recalculateTaskMetrics(newTasks);
-
-        return {
-          ...prev,
-          tasks: newTasks,
-          executionsByTask: newExecutionsByTask,
-          completedTasks,
-          runningTasks,
-          failedTasks,
-        };
+          timestamp: data.timestamp,
+          assignedWorkerId: data.assignedWorkerId,
+          assignedWorkerSlug: data.assignedWorkerSlug,
+        });
       });
     },
     [runId]
@@ -294,9 +183,15 @@ export function useRunState(
         if (!prev) return prev;
 
         const newSandboxesByTask = new Map(prev.sandboxesByTask);
-        newSandboxesByTask.set(data.sandbox.taskId, normalizeSandboxState(data.sandbox));
+        const taskId = data.sandbox.taskId;
+        const pendingCommands = pendingSandboxCommandsRef.current.get(taskId) ?? [];
+        pendingSandboxCommandsRef.current.delete(taskId);
 
-        return { ...prev, sandboxesByTask: newSandboxesByTask };
+        return applySandboxCreated(
+          { ...prev, sandboxesByTask: newSandboxesByTask },
+          normalizeSandboxState(data.sandbox),
+          pendingCommands,
+        );
       });
     },
     [runId]
@@ -311,18 +206,14 @@ export function useRunState(
       setRunState((prev) => {
         if (!prev) return prev;
 
-        const sandbox = prev.sandboxesByTask.get(data.taskId);
-        if (!sandbox) return prev;
+        const command = normalizeSandboxCommandState(data.command);
+        if (!prev.sandboxesByTask.has(data.taskId)) {
+          const pendingCommands = pendingSandboxCommandsRef.current.get(data.taskId) ?? [];
+          pendingSandboxCommandsRef.current.set(data.taskId, [...pendingCommands, command]);
+          return prev;
+        }
 
-        const updatedSandbox: SandboxState = {
-          ...sandbox,
-          commands: [...sandbox.commands, normalizeSandboxCommandState(data.command)],
-        };
-
-        const newSandboxesByTask = new Map(prev.sandboxesByTask);
-        newSandboxesByTask.set(data.taskId, updatedSandbox);
-
-        return { ...prev, sandboxesByTask: newSandboxesByTask };
+        return applySandboxCommand(prev, data.taskId, command);
       });
     },
     [runId]
@@ -337,20 +228,7 @@ export function useRunState(
       setRunState((prev) => {
         if (!prev) return prev;
 
-        const sandbox = prev.sandboxesByTask.get(data.taskId);
-        if (!sandbox) return prev;
-
-        const updatedSandbox: SandboxState = {
-          ...sandbox,
-          status: "closed",
-          closedAt: new Date().toISOString(),
-          closeReason: data.reason,
-        };
-
-        const newSandboxesByTask = new Map(prev.sandboxesByTask);
-        newSandboxesByTask.set(data.taskId, updatedSandbox);
-
-        return { ...prev, sandboxesByTask: newSandboxesByTask };
+        return applySandboxClosed(prev, data.taskId, data.reason, data.timestamp);
       });
     },
     [runId]
