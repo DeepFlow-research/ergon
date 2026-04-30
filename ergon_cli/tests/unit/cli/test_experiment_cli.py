@@ -64,7 +64,9 @@ def test_experiment_subcommands_are_registered_in_main_parser() -> None:
     assert list_args.limit == 3
 
 
-@pytest.mark.parametrize("missing_flag", ["--worker", "--model", "--evaluator", "--sandbox", "--extras"])
+@pytest.mark.parametrize(
+    "missing_flag", ["--worker", "--model", "--evaluator", "--sandbox", "--extras"]
+)
 def test_experiment_define_requires_explicit_runtime_choices(missing_flag: str) -> None:
     parser = build_parser()
     argv = [

@@ -14,6 +14,7 @@ from ergon_cli.commands.run import handle_run
 from ergon_cli.commands.train import handle_train
 from ergon_cli.commands.worker import handle_worker
 from ergon_cli.commands.workflow import handle_workflow
+from ergon_cli.bootstrap import register_and_publish_builtins
 from ergon_builtins.registry import register_builtins
 from ergon_core.api.registry import registry
 
@@ -61,7 +62,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Required dependency extra; repeat for multiple extras or pass 'none'",
     )
     bench_run.add_argument("--workflow", default="single", help="Workflow variant")
-    bench_run.add_argument("--max-questions", type=int, default=10, help="Max questions workers can ask")
+    bench_run.add_argument(
+        "--max-questions", type=int, default=10, help="Max questions workers can ask"
+    )
 
     experiment = sub.add_parser("experiment", help="Experiment lifecycle")
     experiment_sub = experiment.add_subparsers(dest="experiment_action")
@@ -227,9 +230,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 async def _main(argv: list[str] | None = None) -> int:
-    register_default_components()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command not in {None, "doctor", "onboard"}:
+        register_and_publish_builtins()
+    else:
+        register_default_components()
 
     async_handlers = {
         "benchmark": handle_benchmark,
