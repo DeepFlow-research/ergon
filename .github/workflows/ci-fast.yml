@@ -133,7 +133,7 @@ jobs:
         run: docker compose -f docker-compose.yml down -v
 
   unit-tests:
-    name: "Unit tests (Python)"
+    name: "Unit + state tests (Python)"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
