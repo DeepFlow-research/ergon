@@ -16,13 +16,11 @@
 # CI (ephemeral postgres password; minimal set; BuildKit GHA cache):
 #
 #     POSTGRES_PASSWORD=ci_test \
-#     TEST_HARNESS_SECRET="$GH_SECRET" \
 #     docker compose up -d postgres api inngest-dev dashboard
 #
-# Real-LLM harness (dedicated secret + provider keys):
+# Real-LLM harness (provider keys):
 #
 #     POSTGRES_PASSWORD=ergon \
-#     TEST_HARNESS_SECRET=real-llm-secret \
 #     OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 #     OPENAI_API_KEY="$OPENAI_API_KEY" \
 #     EXA_API_KEY="$EXA_API_KEY" \
@@ -83,9 +81,6 @@ services:
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
       - ERGON_API_BASE_URL=http://api:9000
-      - ENABLE_TEST_HARNESS=${ENABLE_TEST_HARNESS:-1}
-      - ERGON_STARTUP_PLUGINS=${ERGON_STARTUP_PLUGINS-ergon_builtins.registry:register_builtins,tests.fixtures.smoke_components:register_smoke_fixtures}
-      - TEST_HARNESS_SECRET=${TEST_HARNESS_SECRET:-local-dev}
       - ERGON_BLOB_ROOT=/tmp/ergon-blob
       - OTEL_TRACES_ENABLED=false
       - OTEL_SERVICE_NAME=ergon-core
@@ -95,7 +90,7 @@ services:
       - EXA_API_KEY=${EXA_API_KEY:-}
       - HF_API_KEY=${HF_API_KEY:-}
       # Put /app on sys.path so editable source mounts resolve in the API
-      # container while the smoke fixtures live in ergon_core.test_support.
+      # container while local smoke fixtures live under tests.fixtures.
       - PYTHONPATH=/app
       # Unbuffered Python stdio so ``docker compose logs api`` streams
       # logger output as it happens.  Default (buffered) hides
@@ -109,6 +104,7 @@ services:
       - ./ergon_core:/app/ergon_core
       - ./ergon_builtins:/app/ergon_builtins
       - ./ergon_cli:/app/ergon_cli
+      - ./tests:/app/tests
       - ./data:/app/data
       # Blob store bind mount so host-side pytest can read files the
       # SandboxResourcePublisher writes from inside the container.  The
@@ -120,10 +116,11 @@ services:
       postgres:
         condition: service_healthy
     command: >
-      uvicorn ergon_core.core.rest_api.app:app
+      uvicorn ergon_cli.api_app:app
       --host 0.0.0.0 --port 9000 --reload
       --reload-dir /app/ergon_core
       --reload-dir /app/ergon_builtins
+      --reload-dir /app/tests
       --timeout-graceful-shutdown 30
 
   dashboard:
@@ -139,7 +136,6 @@ services:
       - INNGEST_EVENT_KEY=dev
       - INNGEST_API_BASE_URL=http://inngest-dev:8288
       - WATCHPACK_POLLING=true
-      - NEXT_PUBLIC_ENABLE_TEST_HARNESS=${ENABLE_TEST_HARNESS:-1}
     depends_on:
       - inngest-dev
       - api

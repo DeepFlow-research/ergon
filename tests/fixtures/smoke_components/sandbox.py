@@ -207,4 +207,4 @@ class SmokeSandboxManager(BaseSandboxManager):
 
 
 def smoke_uses_local_sandbox() -> bool:
-    return os.environ.get("ENABLE_TEST_HARNESS") == "1" and settings.e2b_api_key is not None
+    return settings.e2b_api_key is not None

@@ -18,8 +18,8 @@ _UUID_RE = re.compile(
     re.IGNORECASE,
 )
 
-# NOTE: smoke fixture registration now lives exclusively inside the api
-# container via ``ERGON_STARTUP_PLUGINS``.
+# NOTE: smoke fixture registration now lives exclusively inside the local API
+# composition target.
 # Host-side pytest is a black-box client (``_submit.py`` → HTTP) and
 # doesn't need the fixtures in its own process.  Keeping the registry
 # single-sourced eliminates the drift window where a fixture edit
@@ -40,18 +40,13 @@ def _require_infra():
 
     Previously this silent-skipped when ERGON_DATABASE_URL was unset, which
     hid CI misconfigurations as "0 tests collected, green build". Now we also
-    probe Postgres and Inngest and fail loudly if either is down, unless
-    ERGON_SKIP_INFRA_CHECK=1 is set.
+    probe Postgres and Inngest and fail loudly if either is down.
     """
-    if os.environ.get("ERGON_SKIP_INFRA_CHECK") == "1":
-        return
-
     url = os.environ.get("ERGON_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
     if not url:
         pytest.fail(
             "E2E tests require ERGON_DATABASE_URL pointing at a live Postgres. "
-            "Run with docker-compose.yml (or scripts/smoke_local_up.sh), "
-            "or set ERGON_SKIP_INFRA_CHECK=1 to bypass."
+            "Run with docker-compose.yml (or scripts/smoke_local_up.sh)."
         )
 
     db_parsed = urlparse(url)
@@ -74,8 +69,7 @@ def _require_infra():
         lines.append(f"  inngest   = tcp://{ing_host}:{ing_port}  error: {ing_err}")
     lines += [
         "",
-        "Fix by starting the dev stack (docker compose up -d),",
-        "or set ERGON_SKIP_INFRA_CHECK=1 to bypass intentionally.",
+        "Fix by starting the dev stack (docker compose up -d).",
         "",
     ]
     pytest.fail("\n".join(lines))

@@ -1,11 +1,10 @@
-"""Integration smoke test for the /api/test/* test-harness endpoints.
+"""Integration smoke test for the /api/__danger__/test-harness/* test-harness endpoints.
 
 Round-trips against a real running server + Postgres:
   seed -> read state -> reset -> verify gone (404)
 
 Requires:
-  - Server running at ERGON_API_BASE_URL (default http://127.0.0.1:9000)
-    with ENABLE_TEST_HARNESS=1 and TEST_HARNESS_SECRET matching SECRET.
+  - Server running at ERGON_API_BASE_URL (default http://127.0.0.1:9000).
   - Postgres reachable at ERGON_DATABASE_URL.
 
 Skipped automatically when the API or database is unreachable.
@@ -24,9 +23,6 @@ from sqlalchemy.exc import OperationalError
 pytestmark = pytest.mark.integration
 
 API = os.environ.get("ERGON_API_BASE_URL", "http://127.0.0.1:9000")
-SECRET = os.environ.get("TEST_HARNESS_SECRET", "local-dev")
-
-_HEADERS = {"X-Test-Secret": SECRET}
 _COHORT_PREFIX = "ci-smoke-"
 _COHORT = "ci-smoke-harness-test"
 
@@ -38,20 +34,22 @@ _COHORT = "ci-smoke-harness-test"
 def _probe_harness_mounted() -> None:
     """Skip the session if the API is unreachable or the test-harness is not mounted.
 
-    Probes POST /api/test/write/reset without the secret header:
-      - harness mounted     → 401 (secret gate)
+    Probes POST /api/__danger__/test-harness/write/reset:
+      - harness mounted     → 200
       - harness not mounted → 404 (route missing)
       - API unreachable     → ConnectError (caught and skipped)
     """
     try:
         with httpx.Client(timeout=5.0) as client:
-            resp = client.post(f"{API}/api/test/write/reset", json={"cohort_prefix": "probe"})
+            resp = client.post(
+                f"{API}/api/__danger__/test-harness/write/reset", json={"cohort_prefix": "probe"}
+            )
     except (httpx.ConnectError, httpx.ReadTimeout):
         pytest.skip("API unreachable — skipping harness integration tests")
 
-    if resp.status_code != 401:
+    if resp.status_code != 200:
         pytest.skip(
-            f"Test harness not mounted (expected 401, got {resp.status_code}) "
+            f"Test harness not mounted (expected 200, got {resp.status_code}) "
             "— skipping harness integration tests"
         )
 
@@ -84,9 +82,8 @@ def _reset_before_each() -> None:
     try:
         with httpx.Client(timeout=10.0) as client:
             client.post(
-                f"{API}/api/test/write/reset",
+                f"{API}/api/__danger__/test-harness/write/reset",
                 json={"cohort_prefix": _COHORT_PREFIX},
-                headers=_HEADERS,
             )
     except (httpx.ConnectError, httpx.ReadTimeout):
         pass  # session fixture already skipped if truly unreachable
@@ -109,17 +106,16 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         defn_id = defn.id
 
     try:
-        # ── Step 2: seed a run via POST /api/test/write/run/seed ─────────────────
+        # ── Step 2: seed a run via POST /api/__danger__/test-harness/write/run/seed ─────────────────
         with httpx.Client(timeout=10.0) as client:
             seed_resp = client.post(
-                f"{API}/api/test/write/run/seed",
+                f"{API}/api/__danger__/test-harness/write/run/seed",
                 json={
                     "workflow_definition_id": str(defn_id),
                     "experiment_definition_id": str(defn_id),
                     "cohort": _COHORT,
                     "status": "completed",
                 },
-                headers=_HEADERS,
             )
 
         if seed_resp.status_code == 401:
@@ -128,28 +124,27 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         run_id = seed_resp.json()["run_id"]
         assert run_id  # non-empty UUID string
 
-        # ── Step 3: read state via GET /api/test/read/run/{run_id}/state ─────────
+        # ── Step 3: read state via GET /api/__danger__/test-harness/read/run/{run_id}/state ─────────
         with httpx.Client(timeout=10.0) as client:
-            state_resp = client.get(f"{API}/api/test/read/run/{run_id}/state")
+            state_resp = client.get(f"{API}/api/__danger__/test-harness/read/run/{run_id}/state")
 
         assert state_resp.status_code == 200, state_resp.text
         body = state_resp.json()
         assert body["run_id"] == run_id
         assert body["status"] == "completed"
 
-        # ── Step 4: reset via POST /api/test/write/reset ─────────────────────────
+        # ── Step 4: reset via POST /api/__danger__/test-harness/write/reset ─────────────────────────
         with httpx.Client(timeout=10.0) as client:
             reset_resp = client.post(
-                f"{API}/api/test/write/reset",
+                f"{API}/api/__danger__/test-harness/write/reset",
                 json={"cohort_prefix": _COHORT_PREFIX},
-                headers=_HEADERS,
             )
 
         assert reset_resp.status_code == 204, reset_resp.text
 
         # ── Step 5: confirm the run is gone ──────────────────────────────────────
         with httpx.Client(timeout=10.0) as client:
-            gone_resp = client.get(f"{API}/api/test/read/run/{run_id}/state")
+            gone_resp = client.get(f"{API}/api/__danger__/test-harness/read/run/{run_id}/state")
 
         assert gone_resp.status_code == 404, gone_resp.text
 
@@ -168,7 +163,7 @@ def test_write_cohort_accepts_explicit_runtime_choices() -> None:
 
     with httpx.Client(timeout=10.0) as client:
         response = client.post(
-            f"{API}/api/test/write/cohort",
+            f"{API}/api/__danger__/test-harness/write/cohort",
             json={
                 "benchmark_slug": "minif2f",
                 "slots": [
@@ -182,7 +177,6 @@ def test_write_cohort_accepts_explicit_runtime_choices() -> None:
                 "dependency_extras": ["none"],
                 "model": "openai:gpt-4o",
             },
-            headers=_HEADERS,
         )
 
     if response.status_code == 401:

@@ -43,10 +43,6 @@ def real_llm_stack(request: pytest.FixtureRequest) -> Generator[None, None, None
     # defaults to ``local-dev`` secret / empty OPENROUTER_API_KEY.
     env = {
         **os.environ,
-        "TEST_HARNESS_SECRET": os.environ.get(
-            "TEST_HARNESS_SECRET",
-            "real-llm-secret",
-        ),
     }
     subprocess.run(
         ["docker", "compose", "up", "-d", "--wait"],

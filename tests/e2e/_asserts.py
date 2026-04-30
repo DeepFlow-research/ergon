@@ -337,12 +337,10 @@ def _assert_temporal_ordering(run_id: UUID) -> None:
 
 
 def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
-    """3 runs visible via ``/api/test/read/cohort/{key}/runs`` harness endpoint."""
+    """3 runs visible via ``/api/__danger__/test-harness/read/cohort/{key}/runs`` harness endpoint."""
     api_base = os.environ["ERGON_API_BASE_URL"]
-    secret = os.environ["TEST_HARNESS_SECRET"]
     r = httpx.get(
-        f"{api_base}/api/test/read/cohort/{cohort_key}/runs",
-        headers={"X-Test-Secret": secret},
+        f"{api_base}/api/__danger__/test-harness/read/cohort/{cohort_key}/runs",
         timeout=10.0,
     )
     r.raise_for_status()
@@ -465,15 +463,11 @@ async def wait_for_terminal_status(
 ) -> str:
     """Poll until the run reaches one of the expected terminal statuses."""
     api_base = os.environ["ERGON_API_BASE_URL"]
-    secret = os.environ["TEST_HARNESS_SECRET"]
     deadline = time.monotonic() + timeout_seconds
     last_state: dict[str, object] | None = None
     async with httpx.AsyncClient(timeout=10.0) as client:
         while time.monotonic() < deadline:
-            r = await client.get(
-                f"{api_base}/api/test/read/run/{run_id}/state",
-                headers={"X-Test-Secret": secret},
-            )
+            r = await client.get(f"{api_base}/api/__danger__/test-harness/read/run/{run_id}/state")
             if r.status_code == 200:
                 state = r.json()
                 last_state = state

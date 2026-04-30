@@ -3,6 +3,8 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from ergon_builtins.registry import register_builtins
+from ergon_core.api.registry import registry
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
@@ -25,6 +27,8 @@ _EMITTER_INNGEST = "ergon_core.core.infrastructure.dashboard.emitter.inngest_cli
 
 @pytest.mark.asyncio
 async def test_add_subtask_dispatches_dependency_free_child() -> None:
+    register_builtins(registry)
+
     with get_session() as session:
         definition = make_experiment_definition(session)
         run = make_run(session, definition.id)

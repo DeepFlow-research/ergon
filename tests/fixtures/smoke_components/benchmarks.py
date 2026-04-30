@@ -10,7 +10,7 @@ task, so these fixtures replace the production benchmark loaders only when
 from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, Task
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, TaskSpec
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
 
@@ -51,9 +51,9 @@ class _SingleTaskSmokeBenchmark(Benchmark):
     task_payload: ClassVar[JsonObject] = {}
     task_payload_model = EmptyTaskPayload
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
         payload = self.task_payload_model.model_validate(self.task_payload)
-        task = Task[BaseModel](
+        task = TaskSpec[BaseModel](
             task_slug=self.task_slug,
             instance_key="default",
             description=self.task_description,

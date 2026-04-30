@@ -17,7 +17,7 @@ happy-path helper set; with ``--kind sad`` runs the sad-path helper set
 the first failure with a stack trace so you can edit + re-invoke.
 
 Requires the same env the drivers do (``ERGON_DATABASE_URL``,
-``ERGON_API_BASE_URL``, ``TEST_HARNESS_SECRET``).  Does NOT touch E2B,
+``ERGON_API_BASE_URL``).  Does NOT touch E2B,
 Playwright, or docker-compose.
 """
 

@@ -16,6 +16,7 @@ from ergon_core.core.application.evaluation.protocols import CommandResult
 
 def _task() -> Task[SWEBenchTaskPayload]:
     return Task[SWEBenchTaskPayload](
+        task_id=uuid4(),
         task_slug="django__django-1",
         instance_key="default",
         description="Fix the thing",

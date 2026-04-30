@@ -1,7 +1,5 @@
 """Test-only smoke component registration."""
 
-import os
-
 from ergon_core.api.registry import ComponentRegistry, registry
 from tests.fixtures.smoke_components.benchmarks import (
     MiniF2FSmokeBenchmark,
@@ -41,15 +39,18 @@ from tests.fixtures.smoke_components.workers.swebench_smoke import (
 def register_smoke_fixtures(target: ComponentRegistry = registry) -> None:
     """Register smoke-only benchmark, worker, evaluator, and sandbox slugs."""
 
-    if os.environ.get("ENABLE_TEST_HARNESS") == "1":
-        # Production benchmark loaders fetch external datasets. The smoke
-        # harness owns its benchmark roots so CI stays deterministic and offline.
-        target.benchmarks[ResearchRubricsSmokeBenchmark.type_slug] = ResearchRubricsSmokeBenchmark
-        target.benchmarks[MiniF2FSmokeBenchmark.type_slug] = MiniF2FSmokeBenchmark
-        target.benchmarks[SweBenchSmokeBenchmark.type_slug] = SweBenchSmokeBenchmark
-        target.sandbox_managers[ResearchRubricsSmokeBenchmark.type_slug] = SmokeSandboxManager
-        target.sandbox_managers[MiniF2FSmokeBenchmark.type_slug] = SmokeSandboxManager
-        target.sandbox_managers[SweBenchSmokeBenchmark.type_slug] = SmokeSandboxManager
+    # Production benchmark loaders fetch external datasets. The smoke harness
+    # owns its benchmark roots so CI stays deterministic and offline whenever
+    # this explicit test bootstrap is called.
+    for benchmark_cls in (
+        ResearchRubricsSmokeBenchmark,
+        MiniF2FSmokeBenchmark,
+        SweBenchSmokeBenchmark,
+    ):
+        target.deregister("benchmark", benchmark_cls.type_slug)
+        target.register_benchmark(benchmark_cls)
+        target.deregister("sandbox_manager", benchmark_cls.type_slug)
+        target.register_sandbox_manager(benchmark_cls.type_slug, SmokeSandboxManager)
 
     # ResearchRubrics happy-path
     target.register_worker(ResearchRubricsSmokeWorker.type_slug, ResearchRubricsSmokeWorker)
@@ -62,8 +63,12 @@ def register_smoke_fixtures(target: ComponentRegistry = registry) -> None:
     target.register_evaluator(SmokePostRootTimingRubric)
 
     # ResearchRubrics sad-path (paired with the happy run in each smoke cohort)
-    target.register_worker(ResearchRubricsSadPathSmokeWorker.type_slug, ResearchRubricsSadPathSmokeWorker)
-    target.register_worker(ResearchRubricsFailingLeafWorker.type_slug, ResearchRubricsFailingLeafWorker)
+    target.register_worker(
+        ResearchRubricsSadPathSmokeWorker.type_slug, ResearchRubricsSadPathSmokeWorker
+    )
+    target.register_worker(
+        ResearchRubricsFailingLeafWorker.type_slug, ResearchRubricsFailingLeafWorker
+    )
 
     # MiniF2F happy + sad-path
     target.register_worker(MiniF2FSmokeWorker.type_slug, MiniF2FSmokeWorker)
@@ -80,3 +85,6 @@ def register_smoke_fixtures(target: ComponentRegistry = registry) -> None:
     target.register_worker(SweBenchSadPathSmokeWorker.type_slug, SweBenchSadPathSmokeWorker)
     target.register_worker(SweBenchFailingLeafWorker.type_slug, SweBenchFailingLeafWorker)
     target.register_evaluator(SweBenchSmokeRubric)
+
+
+register_smoke_components = register_smoke_fixtures

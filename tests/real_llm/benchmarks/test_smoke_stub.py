@@ -4,7 +4,7 @@ actually spending tokens. Uses the researchrubrics smoke fixture + stub model.
 Validates:
   - docker stack up (or --assume-stack-up), stack fixture did not skip
   - `ergon benchmark run` CLI path works
-  - /api/test/read/run/{id}/state returns a terminal state
+  - /api/__danger__/test-harness/read/run/{id}/state returns a terminal state
   - Postgres row exists with the right relationships
   - Playwright can find the cohort in the dashboard
 """
@@ -47,8 +47,6 @@ async def test_harness_canary_smoke_stub(
 
     env = {
         **os.environ,
-        "ENABLE_TEST_HARNESS": "1",
-        "ERGON_STARTUP_PLUGINS": "ergon_builtins.registry:register_builtins,tests.fixtures.smoke_components:register_smoke_fixtures",
         "ERGON_DATABASE_URL": os.environ.get(
             "ERGON_DATABASE_URL",
             "postgresql://ergon:ergon_dev@127.0.0.1:5433/ergon",
