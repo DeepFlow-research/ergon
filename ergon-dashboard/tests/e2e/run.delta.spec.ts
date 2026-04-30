@@ -36,7 +36,7 @@ test("run header reacts to controlled completion delta", async ({ page }) => {
 
   await expect(page.getByTestId("run-header")).toContainText("Executing");
 
-  const response = await page.request.post("/api/test/dashboard/events/run-complete", {
+  const response = await page.request.post("/api/danger/test-harness/dashboard/events/run-complete", {
     data: {
       runId: FIXTURE_IDS.runId,
       status: "completed",
@@ -56,7 +56,7 @@ test("communication and evaluation react to controlled deltas", async ({ page })
   await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
   await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
 
-  const messageResponse = await page.request.post("/api/test/dashboard/events/thread-message", {
+  const messageResponse = await page.request.post("/api/danger/test-harness/dashboard/events/thread-message", {
     data: {
       runId: FIXTURE_IDS.runId,
       thread: createDeltaThread(),
@@ -64,7 +64,7 @@ test("communication and evaluation react to controlled deltas", async ({ page })
   });
   expect(messageResponse.ok()).toBeTruthy();
 
-  const evaluationResponse = await page.request.post("/api/test/dashboard/events/task-evaluation", {
+  const evaluationResponse = await page.request.post("/api/danger/test-harness/dashboard/events/task-evaluation", {
     data: {
       runId: FIXTURE_IDS.runId,
       taskId: FIXTURE_IDS.solveTaskId,
@@ -93,7 +93,7 @@ test("workspace actions react to controlled context event deltas", async ({ page
 
   await page.getByTestId("workspace-tab-actions").click();
   await expect(page.getByTestId("workspace-actions")).toContainText("lean_check");
-  const response = await page.request.post("/api/test/dashboard/events/context-event", {
+  const response = await page.request.post("/api/danger/test-harness/dashboard/events/context-event", {
     data: {
       runId: FIXTURE_IDS.runId,
       taskNodeId: FIXTURE_IDS.solveTaskId,
@@ -109,7 +109,7 @@ test("evaluation tab shows a clear empty criteria state", async ({ page }) => {
   await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
   await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
 
-  const response = await page.request.post("/api/test/dashboard/events/task-evaluation", {
+  const response = await page.request.post("/api/danger/test-harness/dashboard/events/task-evaluation", {
     data: {
       runId: FIXTURE_IDS.runId,
       taskId: FIXTURE_IDS.solveTaskId,
