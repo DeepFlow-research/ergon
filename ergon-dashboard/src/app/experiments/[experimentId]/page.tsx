@@ -1,72 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { config } from "@/lib/config";
-import { fetchErgonApi } from "@/lib/serverApi";
-import { getHarnessExperiment } from "@/lib/testing/dashboardHarness";
-
-interface ExperimentRunRow {
-  run_id: string;
-  workflow_definition_id: string;
-  benchmark_type: string;
-  instance_key: string;
-  status: string;
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  model_target: string | null;
-  evaluator_slug: string | null;
-  worker_team: Record<string, unknown>;
-  seed: number | null;
-  running_time_ms: number | null;
-  final_score: number | null;
-  total_tasks: number | null;
-  total_cost_usd: number | null;
-  error_message: string | null;
-}
-
-interface ExperimentStatusCounts {
-  pending: number;
-  executing: number;
-  evaluating: number;
-  completed: number;
-  failed: number;
-  cancelled: number;
-}
-
-interface ExperimentAnalytics {
-  total_runs: number;
-  status_counts: ExperimentStatusCounts;
-  average_score: number | null;
-  average_duration_ms: number | null;
-  average_tasks: number | null;
-  total_cost_usd: number | null;
-  latest_activity_at: string | null;
-  error_count: number;
-}
-
-interface ExperimentDetail {
-  experiment: {
-    experiment_id: string;
-    cohort_id: string | null;
-    name: string;
-    benchmark_type: string;
-    sample_count: number;
-    status: string;
-    default_model_target: string | null;
-    default_evaluator_slug: string | null;
-    default_worker_team: Record<string, unknown>;
-    created_at: string;
-    started_at: string | null;
-    completed_at: string | null;
-    run_count: number;
-  };
-  runs: ExperimentRunRow[];
-  analytics: ExperimentAnalytics;
-  sample_selection: Record<string, unknown>;
-  design: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-}
+import type { ExperimentDetail } from "@/lib/contracts/rest";
+import { loadExperimentDetail } from "@/lib/server-data/experiments";
 
 interface ExperimentPageProps {
   params: Promise<{ experimentId: string }>;
@@ -109,20 +45,17 @@ function runLink(runId: string, cohortId: string | null) {
 export default async function ExperimentPage({ params }: ExperimentPageProps) {
   const { experimentId } = await params;
   let detail: ExperimentDetail | null = null;
-  if (config.enableTestHarness) {
-    detail = getHarnessExperiment(experimentId) as ExperimentDetail | null;
-    if (detail === null) notFound();
+  const result = await loadExperimentDetail(experimentId);
+  if (result.ok) {
+    detail = result.data;
   } else {
-    const response = await fetchErgonApi(`/experiments/${experimentId}`);
-    if (response.status === 404) notFound();
-    if (!response.ok) {
-      throw new Error(`Failed to load experiment ${experimentId}: ${response.status}`);
-    }
-    detail = (await response.json()) as ExperimentDetail;
+    if (result.status === 404) notFound();
+    throw new Error(`Failed to load experiment ${experimentId}: ${result.status}`);
   }
 
   const experiment = detail.experiment;
   const analytics = detail.analytics;
+  const sampleSelection = detail.sample_selection ?? {};
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-8">
@@ -159,14 +92,14 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
         <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] p-4">
           <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Worker team</div>
           <div className="mt-1 text-sm text-[var(--ink)]">
-            {workerTeamLabel(experiment.default_worker_team)}
+            {workerTeamLabel(experiment.default_worker_team ?? {})}
           </div>
         </div>
         <div className="rounded-[var(--radius)] border border-[var(--line)] bg-[var(--card)] p-4">
           <div className="text-xs uppercase tracking-[0.08em] text-[var(--faint)]">Samples</div>
           <div className="mt-1 text-sm text-[var(--ink)]">
-            {Array.isArray(detail.sample_selection.instance_keys)
-              ? detail.sample_selection.instance_keys.join(", ")
+            {Array.isArray(sampleSelection.instance_keys)
+              ? sampleSelection.instance_keys.join(", ")
               : experiment.sample_count}
           </div>
         </div>
@@ -263,7 +196,7 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
               <tr key={run.run_id} className="border-b border-[var(--line)] last:border-0">
                 <td className="px-4 py-3">
                   <Link
-                    href={runLink(run.run_id, experiment.cohort_id)}
+                    href={runLink(run.run_id, experiment.cohort_id ?? null)}
                     className="font-mono text-xs text-[var(--ink)] underline-offset-2 hover:underline"
                   >
                     {run.run_id}

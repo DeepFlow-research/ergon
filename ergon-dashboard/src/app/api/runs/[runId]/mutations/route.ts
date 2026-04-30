@@ -30,12 +30,9 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json(
       {
         detail: `Ergon API is unavailable while loading mutations for run ${runId}.`,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Unknown backend fetch failure",
+        error: error instanceof Error ? error.message : "Unknown backend fetch failure",
       },
-      { status: 502 },
+      { status: 503 },
     );
   }
 }

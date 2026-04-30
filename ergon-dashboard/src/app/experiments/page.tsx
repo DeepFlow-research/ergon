@@ -1,33 +1,17 @@
 import Link from "next/link";
 
-import { fetchErgonApi } from "@/lib/serverApi";
-
-interface ExperimentSummary {
-  experiment_id: string;
-  cohort_id: string | null;
-  name: string;
-  benchmark_type: string;
-  sample_count: number;
-  status: string;
-  default_model_target: string | null;
-  default_evaluator_slug: string | null;
-  created_at: string;
-  run_count: number;
-}
+import { loadExperimentList, type ExperimentSummary } from "@/lib/server-data/experiments";
 
 export default async function ExperimentsPage() {
   let experiments: ExperimentSummary[] = [];
   let error: string | null = null;
 
-  try {
-    const response = await fetchErgonApi("/experiments?limit=100");
-    if (response.ok) {
-      experiments = (await response.json()) as ExperimentSummary[];
-    } else {
-      error = `API returned ${response.status}`;
-    }
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Failed to load experiments";
+  const result = await loadExperimentList();
+  if (result.ok) {
+    experiments = result.data;
+  } else {
+    const detail = (result.body as { detail?: string })?.detail;
+    error = detail ?? `API returned ${result.status}`;
   }
 
   return (
