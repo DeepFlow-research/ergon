@@ -2,7 +2,7 @@
 
 import pytest
 from ergon_builtins.registry_core import BENCHMARKS as CORE_BENCHMARKS
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, Task
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, TaskSpec
 from pydantic import BaseModel, ValidationError
 
 
@@ -75,7 +75,7 @@ class TestBenchmarkSubclassEnforcement:
         class LocalBenchmark(Benchmark):
             type_slug = "local-test"
 
-            def build_instances(self) -> dict[str, list[Task[BaseModel]]]:
+            def build_instances(self) -> dict[str, list[TaskSpec[BaseModel]]]:
                 return {}
 
         assert LocalBenchmark.type_slug == "local-test"
@@ -85,7 +85,7 @@ class TestBenchmarkSubclassEnforcement:
 class TestTaskPayloadContract:
     def test_task_payload_is_a_pydantic_model(self) -> None:
         payload = EmptyTaskPayload()
-        task = Task(
+        task = TaskSpec(
             task_slug="task",
             instance_key="default",
             description="desc",
@@ -96,7 +96,7 @@ class TestTaskPayloadContract:
 
     def test_plain_dict_payload_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            Task(
+            TaskSpec(
                 task_slug="task",
                 instance_key="default",
                 description="desc",

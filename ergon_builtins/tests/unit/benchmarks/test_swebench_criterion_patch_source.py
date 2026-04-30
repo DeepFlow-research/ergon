@@ -63,6 +63,7 @@ async def test_criterion_computes_patch_via_run_command(
         task_id=uuid4(),
         execution_id=uuid4(),
         task=Task[SWEBenchTaskPayload](
+            task_id=uuid4(),
             task_slug="django-1",
             instance_key="default",
             description="d",
@@ -129,6 +130,7 @@ async def test_criterion_short_circuits_on_empty_patch(
         task_id=uuid4(),
         execution_id=uuid4(),
         task=Task[SWEBenchTaskPayload](
+            task_id=uuid4(),
             task_slug="django-1",
             instance_key="default",
             description="d",

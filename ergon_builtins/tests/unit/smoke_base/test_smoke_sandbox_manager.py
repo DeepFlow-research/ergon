@@ -138,7 +138,6 @@ def test_smoke_benchmarks_use_smoke_sandbox_manager(
     )
     original_benchmarks = {slug: registry.benchmarks[slug] for slug in slugs}
     original_managers = {slug: registry.sandbox_managers.get(slug) for slug in slugs}
-    monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
 
     try:
         register_smoke_fixtures()
