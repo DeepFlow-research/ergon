@@ -98,8 +98,7 @@ class WorkflowService:
             all_tasks = list(
                 session.exec(
                     select(ExperimentDefinitionTask).where(
-                        ExperimentDefinitionTask.experiment_definition_id
-                        == command.definition_id,
+                        ExperimentDefinitionTask.experiment_definition_id == command.definition_id,
                     )
                 ).all()
             )

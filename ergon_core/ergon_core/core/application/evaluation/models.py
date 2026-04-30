@@ -37,6 +37,7 @@ class DispatchEvaluatorsCommand(BaseModel):
     task_id: UUID | None = None
     execution_id: UUID
 
+
 class CriterionContext(BaseModel):
     """Context for evaluating a single criterion within the engine."""
 

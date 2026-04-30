@@ -377,4 +377,3 @@ class TaskExecutionService:
                 new_status=graph_status.FAILED,
                 old_status=graph_status.RUNNING,
             )
-

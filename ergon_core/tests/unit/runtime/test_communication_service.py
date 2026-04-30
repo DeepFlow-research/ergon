@@ -3,7 +3,10 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
-from ergon_core.core.infrastructure.dashboard.provider import reset_dashboard_emitter, set_dashboard_emitter
+from ergon_core.core.infrastructure.dashboard.provider import (
+    reset_dashboard_emitter,
+    set_dashboard_emitter,
+)
 from ergon_core.core.application.communication import service as module
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from sqlalchemy.pool import StaticPool

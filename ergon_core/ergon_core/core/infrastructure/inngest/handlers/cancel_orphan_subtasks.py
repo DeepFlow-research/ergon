@@ -17,7 +17,9 @@ from ergon_core.core.application.events.task_events import TaskCancelledEvent, T
     retries=1,
 )
 async def block_descendants_on_failed_fn(ctx: inngest.Context) -> int:
-    return await run_block_descendants_on_failed_job(ctx, TaskFailedEvent.model_validate(ctx.event.data))
+    return await run_block_descendants_on_failed_job(
+        ctx, TaskFailedEvent.model_validate(ctx.event.data)
+    )
 
 
 @inngest_client.create_function(

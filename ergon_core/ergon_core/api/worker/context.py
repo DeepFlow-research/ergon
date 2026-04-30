@@ -21,10 +21,6 @@ class WorkerContext(BaseModel):
             "to worker_type."
         ),
     )
-    task_id: UUID | None = Field(
-        default=None,
-        description="Compatibility alias for the current runtime task/node identity.",
-    )
     execution_id: UUID
     sandbox_id: str
     node_id: UUID | None = Field(

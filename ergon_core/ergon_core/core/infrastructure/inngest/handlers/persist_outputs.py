@@ -4,7 +4,10 @@ import inngest
 
 from ergon_core.core.application.jobs.persist_outputs import run_persist_outputs_job
 from ergon_core.core.infrastructure.inngest.client import inngest_client
-from ergon_core.core.infrastructure.inngest.contracts import PersistOutputsRequest, PersistOutputsResult
+from ergon_core.core.infrastructure.inngest.contracts import (
+    PersistOutputsRequest,
+    PersistOutputsResult,
+)
 
 
 @inngest_client.create_function(

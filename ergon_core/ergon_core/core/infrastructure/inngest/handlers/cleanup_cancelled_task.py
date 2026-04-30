@@ -15,7 +15,9 @@ from ergon_core.core.shared.json_types import JsonObject
     retries=3,
 )
 async def cleanup_cancelled_task_fn(ctx: inngest.Context) -> JsonObject:
-    return await run_cleanup_cancelled_task_job(ctx, TaskCancelledEvent.model_validate(ctx.event.data))
+    return await run_cleanup_cancelled_task_job(
+        ctx, TaskCancelledEvent.model_validate(ctx.event.data)
+    )
 
 
 __all__ = ["cleanup_cancelled_task_fn"]

@@ -27,14 +27,10 @@ class Worker(ABC):
         *,
         name: str,
         model: str | None,
-        task_id: UUID | None = None,
-        sandbox_id: str | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self.name = name
         self.model = model
-        self.task_id = task_id
-        self.sandbox_id = sandbox_id
         self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
 
     @abstractmethod

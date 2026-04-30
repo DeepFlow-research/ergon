@@ -20,12 +20,26 @@ PayloadT = TypeVar(
 )
 
 
-class Task(BaseModel, Generic[PayloadT]):
-    """Unit of work passed to Worker.execute() and referenced in CriterionContext."""
+class TaskSpec(BaseModel, Generic[PayloadT]):
+    """Definition-time task template produced by benchmark authoring code."""
 
     model_config = {"frozen": True}
 
-    task_id: UUID | None = None
+    task_slug: str
+    instance_key: str
+    description: str
+    parent_task_slug: str | None = None
+    dependency_task_slugs: tuple[str, ...] = ()
+    evaluator_binding_keys: tuple[str, ...] = ()
+    task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # ty: ignore[invalid-assignment]
+
+
+class Task(BaseModel, Generic[PayloadT]):
+    """Runtime task passed to Worker.execute()."""
+
+    model_config = {"frozen": True}
+
+    task_id: UUID
     task_slug: str
     instance_key: str
     description: str

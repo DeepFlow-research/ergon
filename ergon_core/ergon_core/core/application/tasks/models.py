@@ -13,7 +13,6 @@ from ergon_core.core.application.events.task_events import TaskCancelledEvent
 from pydantic import BaseModel, Field
 
 
-
 class AddSubtaskCommand(BaseModel):
     """Create one subtask under a parent node.
 
@@ -149,6 +148,7 @@ class RestartTaskResult(BaseModel):
     invalidated_node_ids: list[NodeId] = Field(default_factory=list)
 
     model_config = {"frozen": True}
+
 
 class CancelOrphansResult(BaseModel):
     """Result of cascade-cancelling non-terminal children of a parent node."""

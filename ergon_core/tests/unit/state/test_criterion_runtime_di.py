@@ -242,7 +242,9 @@ class TestDbReadSession:
     def test_returns_session(self) -> None:
         """db_read_session returns the session from get_session()."""
         runtime = _make_runtime()
-        with patch("ergon_core.core.application.evaluation.criterion_runtime.get_session") as mock_get:
+        with patch(
+            "ergon_core.core.application.evaluation.criterion_runtime.get_session"
+        ) as mock_get:
             mock_get.return_value = MagicMock(spec=Session)
             sess = runtime.db_read_session()
         assert sess is mock_get.return_value
