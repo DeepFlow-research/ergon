@@ -34,9 +34,6 @@ jobs:
     timeout-minutes: 10
     env:
       SMOKE_ENV: ${{ matrix.env }}
-      ENABLE_TEST_HARNESS: "1"
-      ERGON_STARTUP_PLUGINS: "ergon_builtins.registry:register_builtins,tests.fixtures.smoke_components:register_smoke_fixtures"
-      TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-test-harness' }}
       E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
       GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
       SMOKE_COHORT_SIZE: "1"
@@ -73,8 +70,6 @@ jobs:
           COMPOSE_DOCKER_CLI_BUILD: "1"
           # Unified compose reads these as overrides (see docker-compose.yml).
           POSTGRES_PASSWORD: ci_test
-          ENABLE_TEST_HARNESS: "1"
-          ERGON_STARTUP_PLUGINS: "ergon_builtins.registry:register_builtins,tests.fixtures.smoke_components:register_smoke_fixtures"
         run: docker compose up -d --build --wait
         timeout-minutes: 5
 

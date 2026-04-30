@@ -89,6 +89,49 @@ jobs:
       - name: TypeScript check
         run: pnpm -C ergon-dashboard run typecheck
 
+      - name: Frontend unit tests
+        run: pnpm -C ergon-dashboard run test:unit
+
+  frontend-e2e:
+    name: "Dashboard harness e2e"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: frontend-checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: ergon-dashboard/pnpm-lock.yaml
+
+      - name: Install pnpm dependencies
+        run: pnpm -C ergon-dashboard install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm -C ergon-dashboard exec playwright install --with-deps chromium
+
+      - name: Start backend subset
+        env:
+          POSTGRES_PASSWORD: ci_test
+        run: docker compose up -d --build --wait postgres api inngest-dev
+        timeout-minutes: 10
+
+      - name: Run dashboard e2e
+        env:
+          ERGON_API_BASE_URL: http://127.0.0.1:9000
+        run: pnpm -C ergon-dashboard run e2e
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml logs api --tail 200
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v
+
   unit-tests:
     name: "Unit tests (Python)"
     runs-on: ubuntu-latest
@@ -131,8 +174,6 @@ jobs:
           # tier doesn't need the dashboard — specify the subset to
           # keep the job fast.
           POSTGRES_PASSWORD: ci_test
-          ENABLE_TEST_HARNESS: "1"
-          TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-local' }}
         run: docker compose up -d --build --wait postgres api inngest-dev
         timeout-minutes: 10
 
@@ -160,7 +201,6 @@ jobs:
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
-          TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-local' }}
         run: uv run pytest tests/integration -v --timeout=300
 
       - name: Dump API logs on failure
