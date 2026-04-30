@@ -1,12 +1,16 @@
-"""Application boundary for the persistent component catalog."""
+"""Application service for trusted component catalog references."""
 
 from importlib import import_module
 from typing import Any, Literal
 
+from ergon_core.api.benchmark import Benchmark
+from ergon_core.api.rubric import Evaluator
+from ergon_core.api.worker import Worker
 from ergon_core.core.persistence.components.models import ComponentCatalogEntry
 from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.core.shared.utils import utcnow as _utcnow
-from pydantic import BaseModel, Field
+from ergon_core.core.shared.utils import utcnow
+from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
+from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session, select
 
 ComponentKind = Literal["worker", "benchmark", "evaluator", "sandbox_manager", "model_backend"]
@@ -14,6 +18,8 @@ ComponentKind = Literal["worker", "benchmark", "evaluator", "sandbox_manager", "
 
 class ComponentRef(BaseModel):
     """Importable reference for a registered component."""
+
+    model_config = ConfigDict(frozen=True)
 
     kind: ComponentKind
     slug: str
@@ -25,100 +31,24 @@ class ComponentRef(BaseModel):
 
 
 class ComponentCatalogService:
-    """Publish and require component import refs."""
+    """CRUD and import-ref lookup for the persistent component catalog."""
 
     def upsert(self, session: Session, ref: ComponentRef) -> ComponentCatalogEntry:
-        statement = select(ComponentCatalogEntry).where(
-            ComponentCatalogEntry.kind == ref.kind,
-            ComponentCatalogEntry.slug == ref.slug,
-        )
-        entry = session.exec(statement).first()
-        if entry is None:
-            entry = ComponentCatalogEntry(
-                kind=ref.kind,
-                slug=ref.slug,
-                module=ref.module,
-                qualname=ref.qualname,
-                package=ref.package,
-                version=ref.version,
-                metadata_json=dict(ref.metadata),
-            )
-            session.add(entry)
-            return entry
-
-        entry.module = ref.module
-        entry.qualname = ref.qualname
-        entry.package = ref.package
-        entry.version = ref.version
-        entry.metadata_json = dict(ref.metadata)
-        entry.updated_at = _utcnow()
-        return entry
-
-    def require(self, session: Session, *, kind: ComponentKind, slug: str) -> ComponentRef:
-        statement = select(ComponentCatalogEntry).where(
-            ComponentCatalogEntry.kind == kind,
-            ComponentCatalogEntry.slug == slug,
-        )
-        entry = session.exec(statement).first()
-        if entry is None:
-            raise ValueError(f"Unknown {kind} component slug {slug!r}")
-        return ComponentRef(
-            kind=entry.kind,  # type: ignore[arg-type]
-            slug=entry.slug,
-            module=entry.module,
-            qualname=entry.qualname,
-            package=entry.package,
-            version=entry.version,
-            metadata=entry.parsed_metadata(),
-        )
-
-
-def import_component_ref(ref: ComponentRef) -> Any:  # slopcop: ignore[no-typing-any]
-    """Import the Python object referenced by a catalog row."""
-
-    target: Any = import_module(ref.module)  # slopcop: ignore[no-typing-any]
-    for part in ref.qualname.split("."):
-        target = getattr(target, part)
-    return target
-"""Application service for trusted component catalog references."""
-
-from importlib import import_module
-from typing import Any
-
-from ergon_core.core.persistence.components.models import ComponentCatalogEntry
-from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.core.shared.utils import utcnow
-from pydantic import BaseModel, ConfigDict, Field
-from sqlmodel import Session, select
-
-
-class ComponentRef(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    kind: str
-    slug: str
-    module: str
-    qualname: str
-    package: str | None = None
-    version: str | None = None
-    metadata: JsonObject = Field(default_factory=dict)
-
-
-class ComponentCatalogService:
-    def upsert(self, session: Session, ref: ComponentRef) -> ComponentCatalogEntry:
-        existing = session.exec(
+        row = session.exec(
             select(ComponentCatalogEntry).where(
                 ComponentCatalogEntry.kind == ref.kind,
                 ComponentCatalogEntry.slug == ref.slug,
             )
         ).one_or_none()
 
-        row = existing or ComponentCatalogEntry(
-            kind=ref.kind,
-            slug=ref.slug,
-            module=ref.module,
-            qualname=ref.qualname,
-        )
+        if row is None:
+            row = ComponentCatalogEntry(
+                kind=ref.kind,
+                slug=ref.slug,
+                module=ref.module,
+                qualname=ref.qualname,
+            )
+
         row.module = ref.module
         row.qualname = ref.qualname
         row.package = ref.package
@@ -128,7 +58,7 @@ class ComponentCatalogService:
         session.add(row)
         return row
 
-    def require(self, session: Session, *, kind: str, slug: str) -> ComponentRef:
+    def require(self, session: Session, *, kind: ComponentKind, slug: str) -> ComponentRef:
         row = session.exec(
             select(ComponentCatalogEntry).where(
                 ComponentCatalogEntry.kind == kind,
@@ -142,8 +72,57 @@ class ComponentCatalogService:
     def load_ref(self, ref: ComponentRef) -> Any:  # slopcop: ignore[no-typing-any]
         return import_component_ref(ref)
 
+    def build_worker(
+        self,
+        session: Session,
+        *,
+        slug: str,
+        name: str,
+        model: str | None,
+    ) -> Worker:
+        ref = self.require(session, kind="worker", slug=slug)
+        worker_cls = self.load_ref(ref)
+        if not isinstance(worker_cls, type) or not issubclass(worker_cls, Worker):
+            raise TypeError(
+                f"Worker component {slug!r} resolved to {worker_cls!r}, expected a Worker subclass"
+            )
+        return worker_cls(
+            name=name,
+            model=model,
+            metadata=ref.metadata,
+        )
+
+    def resolve_benchmark(self, session: Session, slug: str) -> type[Benchmark]:
+        component = self.load_ref(self.require(session, kind="benchmark", slug=slug))
+        if not isinstance(component, type) or not issubclass(component, Benchmark):
+            raise TypeError(
+                f"Benchmark component {slug!r} resolved to {component!r}, "
+                "expected a Benchmark subclass"
+            )
+        return component
+
+    def resolve_evaluator(self, session: Session, slug: str) -> type[Evaluator]:
+        component = self.load_ref(self.require(session, kind="evaluator", slug=slug))
+        if not isinstance(component, type) or not issubclass(component, Evaluator):
+            raise TypeError(
+                f"Evaluator component {slug!r} resolved to {component!r}, "
+                "expected an Evaluator subclass"
+            )
+        return component
+
+    def resolve_sandbox_manager(self, session: Session, slug: str) -> type[BaseSandboxManager]:
+        component = self.load_ref(self.require(session, kind="sandbox_manager", slug=slug))
+        if not isinstance(component, type) or not issubclass(component, BaseSandboxManager):
+            raise TypeError(
+                f"Sandbox manager component {slug!r} resolved to {component!r}, "
+                "expected a BaseSandboxManager subclass"
+            )
+        return component
+
 
 def import_component_ref(ref: ComponentRef) -> Any:  # slopcop: ignore[no-typing-any]
+    """Import the Python object referenced by a catalog row."""
+
     target: Any = import_module(ref.module)  # slopcop: ignore[no-typing-any]
     for part in ref.qualname.split("."):
         target = getattr(target, part)
@@ -152,7 +131,7 @@ def import_component_ref(ref: ComponentRef) -> Any:  # slopcop: ignore[no-typing
 
 def _row_to_ref(row: ComponentCatalogEntry) -> ComponentRef:
     return ComponentRef(
-        kind=row.kind,
+        kind=row.kind,  # type: ignore[arg-type]
         slug=row.slug,
         module=row.module,
         qualname=row.qualname,

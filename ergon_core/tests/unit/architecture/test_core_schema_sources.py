@@ -321,9 +321,7 @@ def test_definition_and_composition_services_do_not_live_in_runtime_services() -
 def test_runtime_services_package_no_longer_contains_domain_modules() -> None:
     services_dir = ROOT / "ergon_core/ergon_core/core/runtime/services"
     remaining = sorted(
-        path.name
-        for path in services_dir.glob("*.py")
-        if path.name != "__init__.py"
+        path.name for path in services_dir.glob("*.py") if path.name != "__init__.py"
     )
 
     assert remaining == []
