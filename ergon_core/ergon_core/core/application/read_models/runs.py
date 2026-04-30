@@ -215,6 +215,7 @@ class RunReadService:
             )
             for m in mutations
         ]
+
     def get_resource_blob(self, run_id: UUID, resource_id: UUID) -> RunResourceBlob | None:
         with get_session() as session:
             resource = session.exec(
@@ -338,6 +339,7 @@ class RunReadService:
             )
             for m in metrics
         ]
+
 
 def _blob_root() -> Path:
     return Path(os.environ.get("ERGON_BLOB_ROOT", "/var/ergon/blob")).resolve()
