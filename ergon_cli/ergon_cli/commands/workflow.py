@@ -324,7 +324,7 @@ async def _handle_manage(
             task_slug=args.task_slug,
             description=args.description,
             assigned_worker_slug=args.worker,
-            depends_on_task_slugs=args.depends_on_task_slug,
+            dry_run=False,
         )
         return _format_output(
             {"task": _dump(result)},

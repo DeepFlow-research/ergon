@@ -172,7 +172,8 @@ def validate_explicit_runtime_choices(args: Namespace) -> tuple[str, ...]:
         return extras
 
     benchmark_cls = benchmarks[args.benchmark_slug]
-    allowed_extras = set(getattr(benchmark_cls.onboarding_deps, "extras", ()))
+    onboarding_deps = benchmark_cls.onboarding_deps
+    allowed_extras = set(() if onboarding_deps is None else onboarding_deps.extras)
     unknown_extras = [extra for extra in extras if extra not in allowed_extras]
     if unknown_extras:
         raise ValueError(

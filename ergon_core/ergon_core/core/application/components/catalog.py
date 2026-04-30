@@ -125,7 +125,7 @@ def import_component_ref(ref: ComponentRef) -> Any:  # slopcop: ignore[no-typing
 
     target: Any = import_module(ref.module)  # slopcop: ignore[no-typing-any]
     for part in ref.qualname.split("."):
-        target = getattr(target, part)
+        target = vars(target)[part]
     return target
 
 

@@ -125,7 +125,7 @@ class StagedRubric(Rubric):
         for stage_idx, stage in enumerate(stages):
             for criterion in stage.criteria:
                 all_criteria.append(criterion)
-                criterion_stage_map[criterion.name] = stage_idx
+                criterion_stage_map[criterion.slug] = stage_idx
 
         super().__init__(name=name, criteria=all_criteria)
 

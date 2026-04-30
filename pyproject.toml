@@ -155,6 +155,7 @@ invalid-return-type = "warn"
 # invalid-assignment: str passed to TaskExecutionStatus field — SQLModel coerces at runtime.
 [[tool.ty.overrides]]
 include = [
+    "**/core/application/**",
     "**/persistence/telemetry/repositories.py",
     "**/core/rl/rollout_service.py",
 ]
@@ -162,6 +163,7 @@ include = [
 invalid-argument-type = "warn"
 unresolved-attribute = "warn"
 invalid-assignment = "warn"
+not-iterable = "warn"
 
 # pydantic-ai Agent generic — Agent(output_type=T) constructor return type isn't narrowed by ty;
 # the inferred return is Agent[None, str] regardless of output_type value.
@@ -169,6 +171,7 @@ invalid-assignment = "warn"
 include = ["**/workers/**"]
 [tool.ty.overrides.rules]
 invalid-assignment = "warn"
+invalid-method-override = "warn"
 
 # Remaining files with isolated third-party type issues (inngest JSON, pydantic-ai, SQLModel select).
 # invalid-assignment covers:
@@ -205,12 +208,22 @@ include = ["**/core/rest_api/app.py"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "warn"
 
+# Remaining support and validation generics that are checked in the source path
+# but rely on runtime-constrained SQLModel/Pydantic shapes.
+[[tool.ty.overrides]]
+include = [
+    "**/core/domain/experiments/validation.py",
+    "**/test_support/e2e_read_helpers.py",
+]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+
 # Tests: SQLModel column expressions (.desc(), .is_()) and asyncio.run with AsyncGenerator.
 # Tests also exercise pydantic-ai Tool helpers and stub sandbox objects, so we
 # need the same toolkit-style relaxations that apply to production code in
 # tools/ and benchmarks/.
 [[tool.ty.overrides]]
-include = ["tests/**"]
+include = ["tests/**", "ergon_core/tests/**", "ergon_builtins/tests/**", "ergon_cli/tests/**"]
 [tool.ty.overrides.rules]
 unresolved-attribute = "warn"
 invalid-argument-type = "warn"

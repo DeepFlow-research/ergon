@@ -182,7 +182,7 @@ class RunReadService:
             failed_tasks=failed_tasks,
             running_tasks=running_tasks,
             cancelled_tasks=cancelled_tasks,
-            final_score=score_summary.normalized_score,
+            final_score=_display_run_score(score_summary),
             error=run.error_message,
         )
 
@@ -339,6 +339,10 @@ class RunReadService:
             )
             for m in metrics
         ]
+
+
+def _display_run_score(score_summary) -> float | None:
+    return score_summary.normalized_score
 
 
 def _blob_root() -> Path:

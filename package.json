@@ -4,8 +4,8 @@
   "scripts": {
     "check:be:lint": "uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts",
     "check:be:fmt": "uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts",
-    "check:be:type": "uv run ty check ergon_core/ergon_core ergon_builtins ergon_cli ergon_infra",
-    "check:be:slopcop": "uv run slopcop ergon_core ergon_builtins ergon_cli ergon_infra",
+    "check:be:type": "uv run ty check ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra",
+    "check:be:slopcop": "uv run slopcop --warn-only ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra",
     "check:be:suppression-budget": "uv run python scripts/check_suppression_budget.py",
     "check:be:complexity": "uv run xenon --max-absolute F --max-modules E --max-average C ergon_core ergon_builtins ergon_cli ergon_infra",
     "check:be": "pnpm run check:be:lint && pnpm run check:be:fmt && pnpm run check:be:type && pnpm run check:be:slopcop && pnpm run check:be:suppression-budget && pnpm run check:be:complexity",

@@ -7,7 +7,7 @@ startup; ``ergon_core`` never imports those packages to discover components.
 """
 
 from collections.abc import Mapping
-from typing import TypeVar
+from typing import Protocol, TypeVar, cast
 
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.rubric import Evaluator
@@ -22,6 +22,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
 T = TypeVar("T")
+
+
+class _ImportableComponent(Protocol):
+    __module__: str
+    __qualname__: str
 
 
 class ComponentRegistry(BaseModel):
@@ -90,18 +95,19 @@ class ComponentRegistry(BaseModel):
 
     def _mapping_for(self, kind: ComponentKind) -> dict[str, object]:
         if kind == "worker":
-            return self.workers
+            return cast(dict[str, object], self.workers)
         if kind == "benchmark":
-            return self.benchmarks
+            return cast(dict[str, object], self.benchmarks)
         if kind == "evaluator":
-            return self.evaluators
+            return cast(dict[str, object], self.evaluators)
         if kind == "sandbox_manager":
-            return self.sandbox_managers
+            return cast(dict[str, object], self.sandbox_managers)
         raise ValueError(f"Unsupported component kind {kind!r}")
 
     def _remember_ref(self, kind: ComponentKind, slug: str, value: object) -> None:
-        module = getattr(value, "__module__", None)
-        qualname = getattr(value, "__qualname__", None)
+        component = cast(_ImportableComponent, value)
+        module = component.__module__
+        qualname = component.__qualname__
         if not isinstance(module, str) or not isinstance(qualname, str):
             raise ValueError(
                 f"Cannot register {kind} slug {slug!r}: component must be an importable "
