@@ -60,7 +60,9 @@ def test_file_dataset_importer_reads_each_file_in_directory(tmp_path: Path) -> N
     )
 
     report = importer.validate(ImportSource(dataset="logs", input_path=tmp_path, batch_id="batch"))
-    runs = list(importer.iter_runs(ImportSource(dataset="logs", input_path=tmp_path, batch_id="batch")))
+    runs = list(
+        importer.iter_runs(ImportSource(dataset="logs", input_path=tmp_path, batch_id="batch"))
+    )
 
     assert report.ok is True
     assert report.planned_runs == 2

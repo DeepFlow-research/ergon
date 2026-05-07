@@ -55,7 +55,11 @@ def _normalised_outcome(record: dict[str, object]) -> str:
         if lowered in {"failed", "failure", "unproved"}:
             return "failed"
         return lowered
-    return "proved" if _string_or_none(record.get("SearchResult")) in {"SUCCESS", "PROVED"} else "failed"
+    return (
+        "proved"
+        if _string_or_none(record.get("SearchResult")) in {"SUCCESS", "PROVED"}
+        else "failed"
+    )
 
 
 def _unavailable_search_detail_drops(affected_analysis: str) -> list[ParsedDrop]:

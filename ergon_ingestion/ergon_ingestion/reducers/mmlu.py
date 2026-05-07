@@ -25,7 +25,9 @@ PROMPT_EXTRACTION_FIELDS = [
 
 def answer_accuracy_reducer(row: dict[str, object]) -> ParsedReducer:
     """Recover per-row MMLU answer correctness from gold/predicted answer fields."""
-    predicted = normalized_answer(_first_present(row, ["predicted", "predicted_answer", "prediction"]))
+    predicted = normalized_answer(
+        _first_present(row, ["predicted", "predicted_answer", "prediction"])
+    )
     gold = normalized_answer(_first_present(row, ["gold", "answer", "target"]))
     return ParsedReducer(
         name="mmlu.answer_accuracy",
@@ -56,9 +58,7 @@ def prompt_extraction_convention_reducer(row: dict[str, object]) -> ParsedReduce
             "has_full_prompt": _has_full_prompt(row),
             "has_full_generation": _has_full_generation(row),
         },
-        implementation_ref=(
-            "ergon_ingestion.reducers.mmlu.prompt_extraction_convention_reducer"
-        ),
+        implementation_ref=("ergon_ingestion.reducers.mmlu.prompt_extraction_convention_reducer"),
         fields_read=PROMPT_EXTRACTION_FIELDS,
         drops=_missing_full_context_drops(row, "mmlu.prompt_extraction_convention"),
     )
@@ -86,9 +86,7 @@ def missing_full_context_fields(row: dict[str, object]) -> list[str]:
     return missing
 
 
-def _missing_full_context_drops(
-    row: dict[str, object], affected_analysis: str
-) -> list[ParsedDrop]:
+def _missing_full_context_drops(row: dict[str, object], affected_analysis: str) -> list[ParsedDrop]:
     return [
         ParsedDrop(
             loss_class="unavailable_source_field",

@@ -133,7 +133,9 @@ def _item_id(row: Record, *, fallback_id: str) -> str:
 
 
 def _model_name(row: Record) -> str:
-    return _string_or_none(_first_present(row, ["model", "model_name", "model_id"])) or "unknown_model"
+    return (
+        _string_or_none(_first_present(row, ["model", "model_name", "model_id"])) or "unknown_model"
+    )
 
 
 def _first_present(row: Record, keys: list[str]) -> object | None:

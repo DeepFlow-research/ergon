@@ -143,7 +143,5 @@ def _span_count(run: ParsedRun) -> int:
 
 
 def _annotation_payload(run: ParsedRun, namespace: str) -> dict:
-    annotations = {
-        annotation.namespace: annotation.payload for annotation in run.annotations
-    }
+    annotations = {annotation.namespace: annotation.payload for annotation in run.annotations}
     return annotations[namespace]

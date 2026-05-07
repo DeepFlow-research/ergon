@@ -25,24 +25,10 @@ def verify_export(export_dir: Path) -> dict[str, object]:
     truncation_hits: list[str] = []
     for family in ("runs", "reducers", "drops"):
         for shard in manifest["shards"].get(family, []):
-            path = export_dir / shard["path"]
-            if not path.exists():
-                raise RuntimeError(f"missing_shard:{path}")
-            actual_hash = _sha256_file(path)
-            if shard["sha256"] != actual_hash or checksums.get(shard["path"]) != actual_hash:
-                raise RuntimeError(f"shard_hash_mismatch:{path}")
-            rows = pq.read_table(path).to_pylist()
-            if len(rows) != shard["row_count"]:
-                raise RuntimeError(f"shard_row_count_mismatch:{path}")
+            path, rows = _verify_shard(export_dir, shard, checksums)
             counts[family] += len(rows)
             if family == "runs":
-                for row_index, row in enumerate(rows):
-                    if _contains_truncation_marker(row):
-                        truncation_hits.append(f"{path}:{row_index}")
-                    resources = json.loads(row.get("resources_json") or "[]")
-                    for resource in resources:
-                        _verify_resource(export_dir, resource)
-                        resources_checked += 1
+                resources_checked += _verify_run_rows(export_dir, path, rows, truncation_hits)
 
     if counts["runs"] != manifest["run_count"]:
         raise RuntimeError("manifest_run_count_mismatch")
@@ -61,6 +47,38 @@ def verify_export(export_dir: Path) -> dict[str, object]:
         "drop_count": counts["drops"],
         "resource_count": resources_checked,
     }
+
+
+def _verify_shard(
+    export_dir: Path, shard: dict[str, object], checksums: dict[str, str]
+) -> tuple[Path, list[dict[str, object]]]:
+    path = export_dir / str(shard["path"])
+    if not path.exists():
+        raise RuntimeError(f"missing_shard:{path}")
+    actual_hash = _sha256_file(path)
+    if shard["sha256"] != actual_hash or checksums.get(str(shard["path"])) != actual_hash:
+        raise RuntimeError(f"shard_hash_mismatch:{path}")
+    rows = pq.read_table(path).to_pylist()
+    if len(rows) != shard["row_count"]:
+        raise RuntimeError(f"shard_row_count_mismatch:{path}")
+    return path, rows
+
+
+def _verify_run_rows(
+    export_dir: Path,
+    shard_path: Path,
+    rows: list[dict[str, object]],
+    truncation_hits: list[str],
+) -> int:
+    resources_checked = 0
+    for row_index, row in enumerate(rows):
+        if _contains_truncation_marker(row):
+            truncation_hits.append(f"{shard_path}:{row_index}")
+        resources = json.loads(str(row.get("resources_json") or "[]"))
+        for resource in resources:
+            _verify_resource(export_dir, resource)
+            resources_checked += 1
+    return resources_checked
 
 
 def _verify_resource(export_dir: Path, resource: dict[str, object]) -> None:

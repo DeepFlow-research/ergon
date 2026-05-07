@@ -69,11 +69,7 @@ def test_browsecomp_importer_parses_answer_rows_resources_and_reducers(tmp_path:
         "judge_explanation": "The predicted answer names the same person.",
     }
 
-    drop_reasons = {
-        drop.reason
-        for reducer in runs[0].reducers
-        for drop in reducer.drops
-    }
+    drop_reasons = {drop.reason for reducer in runs[0].reducers for drop in reducer.drops}
     assert "source_row_does_not_include_browsing_trace" in drop_reasons
     assert "source_llm_judge_is_stochastic_and_not_replayable_without_original_judge_context" in (
         drop_reasons
@@ -105,9 +101,7 @@ def test_browsecomp_reducers_preserve_judge_fields_and_declare_caveats() -> None
     }
 
     declared_missing = {
-        drop.dropped_field_path
-        for reducer in [exact_match, llm_judge]
-        for drop in reducer.drops
+        drop.dropped_field_path for reducer in [exact_match, llm_judge] for drop in reducer.drops
     }
     assert "browsing_trace" in declared_missing
     assert "judge.replay_context" in declared_missing

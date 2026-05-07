@@ -64,9 +64,7 @@ def test_humaneval_importer_parses_jsonl_rows_with_code_resources_and_reducers(
     ]
     assert reducers["humaneval.evalplus_pass"].output == {"passed": False}
 
-    drop_reasons = {
-        drop.reason for reducer in runs[0].reducers for drop in reducer.drops
-    }
+    drop_reasons = {drop.reason for reducer in runs[0].reducers for drop in reducer.drops}
     assert "evalplus_is_test_suite_escalation_and_reporting_variance" in drop_reasons
 
 

@@ -284,9 +284,7 @@ def _compact_for_db(value: object) -> object:
         return value
     if isinstance(value, dict):
         compacted = {
-            key: _compaction_marker(item)
-            if _json_size(item) > MAX_DB_JSON_FIELD_BYTES
-            else item
+            key: _compaction_marker(item) if _json_size(item) > MAX_DB_JSON_FIELD_BYTES else item
             for key, item in value.items()
         }
         if _json_size(compacted) <= MAX_DB_JSON_BYTES:

@@ -94,7 +94,9 @@ def export_dataset(*, session: Session, config: ShardedExportConfig) -> DatasetE
     )
     _write_text(output_dir / "state.json", dump_model_json(state))
     _write_text(output_dir / "manifest.json", dump_model_json(manifest))
-    _write_text(output_dir / "checksums.json", json.dumps(checksums, indent=2, sort_keys=True) + "\n")
+    _write_text(
+        output_dir / "checksums.json", json.dumps(checksums, indent=2, sort_keys=True) + "\n"
+    )
     return manifest
 
 
@@ -132,7 +134,9 @@ def _export_resources(
         if not source.exists():
             raise RuntimeError(f"resource_missing_file:{resource.file_path}")
         suffix = source.suffix or Path(resource.name).suffix or ".bin"
-        relative = Path("resources") / resource.content_hash[:2] / f"{resource.content_hash}{suffix}"
+        relative = (
+            Path("resources") / resource.content_hash[:2] / f"{resource.content_hash}{suffix}"
+        )
         destination = output_dir / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists():
@@ -215,7 +219,9 @@ def _load_drop_rows(
     for run in runs:
         reducers = list(session.exec(select(RunReducer).where(RunReducer.run_id == run.id)))
         for reducer in reducers:
-            drops = session.exec(select(RunDropsManifest).where(RunDropsManifest.reducer_id == reducer.id))
+            drops = session.exec(
+                select(RunDropsManifest).where(RunDropsManifest.reducer_id == reducer.id)
+            )
             for drop in drops:
                 rows.append(
                     {
@@ -286,7 +292,9 @@ def _shard_batches(
 
 
 def _malformed_source_records(runs: list[RunRecord]) -> int:
-    return sum(1 for run in runs if "source_parse_error" in run.summary_json.get("observed_fields", {}))
+    return sum(
+        1 for run in runs if "source_parse_error" in run.summary_json.get("observed_fields", {})
+    )
 
 
 def _assert_file_identity(path: Path, expected_sha256: str, expected_size: int) -> None:

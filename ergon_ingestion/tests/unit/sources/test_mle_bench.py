@@ -84,11 +84,7 @@ def test_mle_bench_importer_emits_artifact_only_runs_with_archived_files(
         "convention": "archived_leaderboard_thresholds",
     }
 
-    drop_paths = {
-        drop.dropped_field_path
-        for reducer in first.reducers
-        for drop in reducer.drops
-    }
+    drop_paths = {drop.dropped_field_path for reducer in first.reducers for drop in reducer.drops}
     drop_reasons = {drop.reason for reducer in first.reducers for drop in reducer.drops}
     assert "live_reexecution_environment" in drop_paths
     assert "competition_private_test_runtime" in drop_paths
@@ -124,10 +120,7 @@ def test_mle_bench_reducers_preserve_score_medal_and_declared_artifact_limits() 
     }
 
     drops = score.drops + medal.drops
-    assert {
-        (drop.loss_class, drop.reason, drop.dropped_field_path)
-        for drop in drops
-    } >= {
+    assert {(drop.loss_class, drop.reason, drop.dropped_field_path) for drop in drops} >= {
         (
             "unavailable_source_field",
             "live_execution_env_unavailable_for_archived_artifact",

@@ -121,9 +121,7 @@ def test_tot_crosswords_importer_parses_paired_policy_traces(tmp_path: Path) -> 
         "final_reward",
     ]
     dropped_paths = {
-        drop.dropped_field_path
-        for reducer in reducers.values()
-        for drop in reducer.drops
+        drop.dropped_field_path for reducer in reducers.values() for drop in reducer.drops
     }
     assert {
         "evaluator.value_estimates",

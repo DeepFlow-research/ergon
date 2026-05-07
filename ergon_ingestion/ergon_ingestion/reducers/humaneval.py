@@ -11,7 +11,11 @@ def original_pass_reducer(record: dict[str, object]) -> ParsedReducer:
     return ParsedReducer(
         name="humaneval.original_pass",
         kind="original",
-        output={"passed": _passed_result(record, flat_key="original_passed", variants=("original", "base"))},
+        output={
+            "passed": _passed_result(
+                record, flat_key="original_passed", variants=("original", "base")
+            )
+        },
         implementation_ref="ergon_ingestion.reducers.humaneval.original_pass_reducer",
         fields_read=ORIGINAL_PASS_FIELDS,
         drops=[

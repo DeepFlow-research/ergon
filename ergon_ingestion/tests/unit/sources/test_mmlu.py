@@ -90,9 +90,10 @@ def test_mmlu_importer_parses_jsonl_rows_with_accuracy_and_convention_reducers(
         "subject": "abstract_algebra",
         "has_choice_logprobs": True,
     }
-    assert {
-        drop.dropped_field_path for drop in reducers["mmlu.answer_accuracy"].drops
-    } == {"full_generation", "full_prompt"}
+    assert {drop.dropped_field_path for drop in reducers["mmlu.answer_accuracy"].drops} == {
+        "full_generation",
+        "full_prompt",
+    }
 
     convention = reducers["mmlu.prompt_extraction_convention"]
     assert convention.fields_read == [

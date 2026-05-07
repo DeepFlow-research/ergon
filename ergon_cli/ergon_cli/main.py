@@ -156,7 +156,9 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_export.add_argument("--dataset", required=True, help="Dataset importer slug")
     ingest_export.add_argument("--batch", required=True, help="Import batch id")
     ingest_export.add_argument("--output", required=True, help="Dataset export directory")
-    ingest_export.add_argument("--format", choices=["parquet"], default="parquet", help="Shard format")
+    ingest_export.add_argument(
+        "--format", choices=["parquet"], default="parquet", help="Shard format"
+    )
     ingest_export.add_argument("--page-size", type=int, default=1000, help="DB page size")
     ingest_export.add_argument(
         "--shard-size-mb", type=float, default=256, help="Target shard size in MiB"

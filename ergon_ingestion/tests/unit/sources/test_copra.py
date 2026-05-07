@@ -77,10 +77,7 @@ Log:
     assert failure.resources[0].payload == "search exhausted without proof"
 
     drops = [drop for reducer in failure.reducers for drop in reducer.drops]
-    assert {
-        (drop.dropped_field_path, drop.reason, drop.loss_class)
-        for drop in drops
-    } >= {
+    assert {(drop.dropped_field_path, drop.reason, drop.loss_class) for drop in drops} >= {
         ("failed_proof_states", "unavailable_in_source", "unavailable_source_field"),
         ("failed_tactic_branches", "unavailable_in_source", "unavailable_source_field"),
     }

@@ -44,9 +44,7 @@ def test_tau_bench_importer_preserves_full_trace_events_resources_and_reducers(
         "message_index": 2,
     }
     assert runs[0].resources[0].name == "source-record.json"
-    assert runs[0].resources[0].payload["messages"][2]["tool_calls"][0]["name"] == (
-        "update_ticket"
-    )
+    assert runs[0].resources[0].payload["messages"][2]["tool_calls"][0]["name"] == ("update_ticket")
     assert runs[0].resources[1].name == "final-state.json"
     assert runs[0].resources[1].payload == {"ticket": {"id": "T-1", "status": "refunded"}}
 
@@ -68,11 +66,7 @@ def test_tau_bench_importer_preserves_full_trace_events_resources_and_reducers(
     assert reducers["tau_bench.sequence"].output["tool_names"] == ["update_ticket"]
     assert reducers["tau_bench.set"].output["tool_names"] == ["update_ticket"]
 
-    drop_reasons = {
-        drop.reason
-        for reducer in runs[0].reducers
-        for drop in reducer.drops
-    }
+    drop_reasons = {drop.reason for reducer in runs[0].reducers for drop in reducer.drops}
     assert "autonomy_and_user_turn_attribution_not_separable_from_trace" in drop_reasons
     assert "environment_internals_unavailable_beyond_final_state" in drop_reasons
 
@@ -100,7 +94,10 @@ def test_tau_bench_reducers_declare_fields_read_and_missing_caveats() -> None:
 
     assert tool_set.name == "tau_bench.set"
     assert tool_set.fields_read == ["messages"]
-    assert tool_set.output == {"tool_names": ["lookup_order"], "tool_result_names": ["lookup_order"]}
+    assert tool_set.output == {
+        "tool_names": ["lookup_order"],
+        "tool_result_names": ["lookup_order"],
+    }
 
     declared_missing = {
         drop.dropped_field_path

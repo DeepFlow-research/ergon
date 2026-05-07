@@ -13,7 +13,9 @@ def test_gpqa_importer_parses_row_records_with_generation_resources_and_reducers
     importer = GpqaImporter()
 
     runs = list(
-        importer.iter_runs(ImportSource(dataset="gpqa", input_path=source_path, batch_id="gpqa-unit"))
+        importer.iter_runs(
+            ImportSource(dataset="gpqa", input_path=source_path, batch_id="gpqa-unit")
+        )
     )
 
     assert [run.source_run_id for run in runs] == ["gpqa-001", "gpqa-002"]
@@ -57,11 +59,7 @@ def test_gpqa_importer_parses_row_records_with_generation_resources_and_reducers
         "extracted_answer": "photon",
     }
 
-    drop_reasons = {
-        drop.reason
-        for reducer in runs[0].reducers
-        for drop in reducer.drops
-    }
+    drop_reasons = {drop.reason for reducer in runs[0].reducers for drop in reducer.drops}
     assert "extraction_registry_mismatch_caveat" in drop_reasons
 
 
@@ -95,9 +93,7 @@ def test_gpqa_reducers_preserve_extractor_fields_and_declare_mismatch_caveat() -
     ]
 
     declared_missing = {
-        drop.dropped_field_path
-        for reducer in [accuracy, variant]
-        for drop in reducer.drops
+        drop.dropped_field_path for reducer in [accuracy, variant] for drop in reducer.drops
     }
     assert "extraction.registry_match" in declared_missing
 
