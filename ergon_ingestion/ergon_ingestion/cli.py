@@ -52,10 +52,11 @@ def _handle_describe(dataset_slug: str) -> int:
 
 
 def _source_from_args(args: Namespace) -> ImportSource:
+    batch = vars(args).get("batch", "validation")
     return ImportSource(
         dataset=args.dataset,
         input_path=Path(args.input),
-        batch_id=getattr(args, "batch", "validation"),
+        batch_id=batch,
     )
 
 

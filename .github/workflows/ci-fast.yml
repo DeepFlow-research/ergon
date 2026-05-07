@@ -20,16 +20,16 @@ jobs:
         run: uv sync --frozen --all-packages --group dev
 
       - name: Ruff check
-        run: uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
+        run: uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests scripts
 
       - name: Ruff format check
-        run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
+        run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests scripts
 
       - name: Type check (ty)
-        run: uv run ty check ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra
+        run: uv run ty check ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion
 
       - name: slopcop check
-        run: uv run slopcop --warn-only ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra
+        run: uv run slopcop --warn-only ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion
 
       - name: Suppression budget
         run: uv run python scripts/check_suppression_budget.py
@@ -37,7 +37,7 @@ jobs:
       - name: Cyclomatic complexity check (xenon)
         # Thresholds reflect current baseline; tighten as complexity debt is paid down.
         # F/E/C = max-absolute/max-modules/max-average. Radon grades: A(1-5) B(6-10) C(11-15) D(16-20) E(21-25) F(26+)
-        run: uv run xenon --max-absolute F --max-modules E --max-average C ergon_core ergon_builtins ergon_cli ergon_infra
+        run: uv run xenon --max-absolute F --max-modules E --max-average C ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion
 
   frontend-checks:
     name: "Lint + type-check (Frontend)"
@@ -151,7 +151,7 @@ jobs:
           # Python 3.12+ sys.monitoring backend — faster than the default
           # sys.settrace() tracer for ORM-heavy workloads like SQLAlchemy.
           COVERAGE_CORE: sysmon
-        run: uv run pytest ergon_core/tests/unit ergon_builtins/tests/unit ergon_cli/tests/unit -n auto --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
+        run: uv run pytest ergon_core/tests/unit ergon_builtins/tests/unit ergon_cli/tests/unit ergon_ingestion/tests/unit -n auto --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

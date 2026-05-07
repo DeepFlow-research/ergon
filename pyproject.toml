@@ -166,6 +166,18 @@ unresolved-attribute = "warn"
 invalid-assignment = "warn"
 not-iterable = "warn"
 
+# Ingestion adapters normalize heterogeneous public artifacts. The source data is
+# runtime-validated from JSON-like dict/list records, which ty cannot always
+# narrow after isinstance checks; SQLModel export queries have the same typed
+# column-expression limitations as the core application layer.
+[[tool.ty.overrides]]
+include = ["ergon_ingestion/ergon_ingestion/**"]
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn"
+invalid-return-type = "warn"
+call-non-callable = "warn"
+unresolved-attribute = "warn"
+
 # pydantic-ai Agent generic — Agent(output_type=T) constructor return type isn't narrowed by ty;
 # the inferred return is Agent[None, str] regardless of output_type value.
 [[tool.ty.overrides]]
@@ -224,7 +236,13 @@ invalid-argument-type = "warn"
 # need the same toolkit-style relaxations that apply to production code in
 # tools/ and benchmarks/.
 [[tool.ty.overrides]]
-include = ["tests/**", "ergon_core/tests/**", "ergon_builtins/tests/**", "ergon_cli/tests/**"]
+include = [
+    "tests/**",
+    "ergon_core/tests/**",
+    "ergon_builtins/tests/**",
+    "ergon_cli/tests/**",
+    "ergon_ingestion/tests/**",
+]
 [tool.ty.overrides.rules]
 unresolved-attribute = "warn"
 invalid-argument-type = "warn"
@@ -241,7 +259,7 @@ possibly-missing-submodule = "warn"
 invalid-argument-type = "warn"
 
 [tool.ty.environment]
-extra-paths = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra"]
+extra-paths = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra", "ergon_ingestion"]
 
 [tool.ty.analysis]
 allowed-unresolved-imports = [

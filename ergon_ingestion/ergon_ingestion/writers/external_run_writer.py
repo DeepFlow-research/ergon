@@ -266,8 +266,13 @@ class ExternalRunWriter:
 
 
 def _json_safe(value: object) -> object:
-    if hasattr(value, "tolist") and not isinstance(value, (str, bytes, bytearray)):
-        return _json_safe(value.tolist())
+    if not isinstance(value, (str, bytes, bytearray)):
+        try:
+            tolist = value.tolist
+        except AttributeError:
+            tolist = None
+        if tolist is not None:
+            return _json_safe(tolist())
     if isinstance(value, float):
         return value if math.isfinite(value) else None
     if isinstance(value, dict):

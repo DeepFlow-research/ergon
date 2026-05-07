@@ -26,6 +26,12 @@ COPY ergon_builtins/pyproject.toml ergon_builtins/
 COPY ergon_builtins/ergon_builtins/ ergon_builtins/ergon_builtins/
 RUN cd ergon_builtins && uv pip install --system -e ".[data]"
 
+# Install ergon_ingestion before ergon_cli.  The CLI imports the ingest command
+# at startup, and export subcommands need the package's data dependencies.
+COPY ergon_ingestion/pyproject.toml ergon_ingestion/
+COPY ergon_ingestion/ergon_ingestion/ ergon_ingestion/ergon_ingestion/
+RUN cd ergon_ingestion && uv pip install --system -e ".[data]"
+
 # Install ergon_cli so the test-harness ``POST /api/test/write/cohort``
 # endpoint can call ``ergon_cli.composition.build_experiment`` —
 # exactly the same composition path the CLI takes.  Lightweight: the

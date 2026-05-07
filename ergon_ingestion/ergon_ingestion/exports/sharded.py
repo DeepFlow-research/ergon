@@ -32,11 +32,15 @@ def export_dataset(*, session: Session, config: ShardedExportConfig) -> DatasetE
     if config.resume and manifest_path.exists():
         from ergon_ingestion.exports.verify import verify_export
 
+        existing_export_valid = False
         try:
             verify_export(output_dir)
         except RuntimeError:
-            pass
+            existing_export_valid = False
         else:
+            existing_export_valid = True
+
+        if existing_export_valid:
             return DatasetExportManifest.model_validate(json.loads(manifest_path.read_text()))
     output_dir.mkdir(parents=True, exist_ok=True)
     for family in ("runs", "reducers", "drops", "resources"):

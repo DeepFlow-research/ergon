@@ -6,6 +6,7 @@ on:
       - "ergon_core/**"
       - "ergon_builtins/**"
       - "ergon_cli/**"
+      - "ergon_ingestion/**"
       - "ergon_infra/**"
       - "tests/e2e/**"
       - "tests/unit/smoke_base/**"

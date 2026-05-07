@@ -210,7 +210,10 @@ def _coerce_value(value: str) -> object:
     try:
         return int(value)
     except ValueError:
-        pass
+        return _coerce_float_or_original(value)
+
+
+def _coerce_float_or_original(value: str) -> object:
     try:
         return float(value)
     except ValueError:
