@@ -1,0 +1,240 @@
+"""MiniWoB++ source parser for conditional web/UI interaction traces."""
+
+import gzip
+import json
+from collections.abc import Iterator
+from pathlib import Path
+
+from ergon_ingestion.models import (
+    ImporterInfo,
+    ImportSource,
+    ParsedAnnotation,
+    ParsedEvent,
+    ParsedResource,
+    ParsedRun,
+    ValidationReport,
+)
+from ergon_ingestion.reducers.miniwob import default_reducers
+
+Record = dict[str, object]
+
+
+class MiniWobImporter:
+    """Read local MiniWoB++ JSON, JSONL, and JSON.GZ trace exports."""
+
+    info = ImporterInfo(
+        slug="miniwob",
+        display_name="MiniWoB++",
+        schema_fit_class="full-trace",
+        supported_formats=["json", "jsonl", "json.gz"],
+        export_claim="conditional",
+        default_reducers=["miniwob.success", "miniwob.action_path"],
+    )
+
+    def validate(self, source: ImportSource) -> ValidationReport:
+        if not source.input_path.exists():
+            return ValidationReport(
+                dataset=self.info.slug,
+                input_path=source.input_path,
+                ok=False,
+                errors=[f"input path does not exist: {source.input_path}"],
+            )
+        return ValidationReport(
+            dataset=self.info.slug,
+            input_path=source.input_path,
+            ok=True,
+            planned_runs=_planned_runs(source.input_path),
+            warnings=["miniwob DOM/state/screenshot/replay artifacts are not imported as bytes"],
+        )
+
+    def iter_runs(self, source: ImportSource) -> Iterator[ParsedRun]:
+        report = self.validate(source)
+        if not report.ok:
+            raise FileNotFoundError("; ".join(report.errors))
+        for idx, record in enumerate(iter_miniwob_records(source.input_path), start=1):
+            yield parse_miniwob_record(record, fallback_id=f"row-{idx}")
+
+
+def iter_miniwob_records(path: Path) -> Iterator[Record]:
+    text = _read_text(path)
+    if _is_jsonl(path):
+        for line in text.splitlines():
+            if line.strip():
+                yield _as_record(json.loads(line))
+        return
+
+    data = json.loads(text)
+    if isinstance(data, list):
+        for item in data:
+            yield _as_record(item)
+        return
+    yield _as_record(data)
+
+
+def parse_miniwob_record(record: Record, *, fallback_id: str = "row-1") -> ParsedRun:
+    source_id = _source_run_id(record, fallback_id=fallback_id)
+    task_id = _string(record.get("task_id") or source_id)
+    instruction = _instruction(record)
+    actions = _actions(record)
+
+    return ParsedRun(
+        source_run_id=source_id,
+        instance_key=task_id,
+        description=f"Imported MiniWoB++ web/UI trace {source_id}",
+        schema_fit_class="full-trace",
+        observed_fields={
+            "episode_id": record.get("episode_id"),
+            "task_id": record.get("task_id"),
+            "instruction": instruction,
+            "actions": actions,
+            "reward": record.get("reward"),
+            "success": record.get("success"),
+            "outcome": record.get("outcome"),
+        },
+        missing_fields=["dom/state", "screenshots", "replay_environment"],
+        annotations=[
+            ParsedAnnotation(
+                namespace="miniwob.task",
+                payload={
+                    "episode_id": record.get("episode_id"),
+                    "task_id": record.get("task_id"),
+                    "instruction": instruction,
+                },
+            ),
+            ParsedAnnotation(
+                namespace="miniwob.outcome",
+                payload={
+                    "success": record.get("success"),
+                    "reward": record.get("reward"),
+                    "outcome": record.get("outcome"),
+                },
+            ),
+        ],
+        events=_events(instruction, actions),
+        resources=_resources(record, instruction, actions),
+        reducers=default_reducers(record),
+    )
+
+
+def _planned_runs(path: Path) -> int:
+    text = _read_text(path)
+    if _is_jsonl(path):
+        return sum(1 for line in text.splitlines() if line.strip())
+    data = json.loads(text)
+    if isinstance(data, list):
+        return len(data)
+    return 1
+
+
+def _read_text(path: Path) -> str:
+    if path.suffix == ".gz":
+        with gzip.open(path, "rt") as handle:
+            return handle.read()
+    return path.read_text()
+
+
+def _is_jsonl(path: Path) -> bool:
+    return path.suffix == ".jsonl" or path.suffixes[-2:] == [".jsonl", ".gz"]
+
+
+def _events(instruction: object, actions: list[Record]) -> list[ParsedEvent]:
+    events: list[ParsedEvent] = []
+    if instruction is not None:
+        events.append(
+            ParsedEvent(
+                sequence=0,
+                event_type="instruction",
+                payload={"instruction": instruction},
+            )
+        )
+    for action_index, action in enumerate(actions):
+        action_name = _action_name(action)
+        events.append(
+            ParsedEvent(
+                sequence=len(events),
+                event_type=f"ui_action.{action_name}",
+                payload={**action, "action_index": action_index},
+            )
+        )
+    return events
+
+
+def _resources(record: Record, instruction: object, actions: list[Record]) -> list[ParsedResource]:
+    resources = [
+        ParsedResource(
+            name="source-record.json",
+            kind="import",
+            mime_type="application/json",
+            payload=record,
+        ),
+        ParsedResource(
+            name="instruction.json",
+            kind="artifact",
+            mime_type="application/json",
+            payload={"instruction": instruction},
+        ),
+        ParsedResource(
+            name="actions.json",
+            kind="artifact",
+            mime_type="application/json",
+            payload={"actions": actions},
+        ),
+    ]
+    external_refs = _external_refs(record, actions)
+    if external_refs:
+        resources.append(
+            ParsedResource(
+                name="external-ui-artifacts.json",
+                kind="note",
+                mime_type="application/json",
+                payload={"external_refs": external_refs},
+            )
+        )
+    return resources
+
+
+def _external_refs(record: Record, actions: list[Record]) -> list[Record]:
+    refs: list[Record] = []
+    for key in ["dom_ref", "dom_snapshot_ref", "state_ref", "screenshot_ref", "screenshot_url"]:
+        if record.get(key) is not None:
+            refs.append({"field": key, "value": record[key]})
+    for action_index, action in enumerate(actions):
+        for key in ["dom_ref", "dom_snapshot_ref", "state_ref", "screenshot_ref", "screenshot_url"]:
+            if action.get(key) is not None:
+                refs.append({"field": f"actions[{action_index}].{key}", "value": action[key]})
+    return refs
+
+
+def _source_run_id(record: Record, *, fallback_id: str) -> str:
+    value = (
+        record.get("episode_id")
+        or record.get("source_run_id")
+        or record.get("run_id")
+        or record.get("id")
+    )
+    return fallback_id if value is None else str(value)
+
+
+def _instruction(record: Record) -> object:
+    return record.get("instruction") or record.get("utterance")
+
+
+def _actions(record: Record) -> list[Record]:
+    value = record.get("actions")
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _action_name(action: Record) -> str:
+    return str(action.get("type") or action.get("action") or action.get("name") or "unknown")
+
+
+def _string(value: object) -> str:
+    return "" if value is None else str(value)
+
+
+def _as_record(value: object) -> Record:
+    if isinstance(value, dict):
+        return value
+    return {"value": value}

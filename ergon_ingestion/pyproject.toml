@@ -1,0 +1,21 @@
+[project]
+name = "ergon-ingestion"
+version = "0.1.0"
+description = "Public artifact ingestion package for Ergon"
+license = "Apache-2.0"
+requires-python = ">=3.13"
+dependencies = ["ergon-core", "pydantic>=2.5.0"]
+
+[project.optional-dependencies]
+data = [
+    "pandas",
+    "pyarrow",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ergon_ingestion*"]

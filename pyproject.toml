@@ -30,13 +30,14 @@ build-backend = "setuptools.build_meta"
 include = []
 
 [tool.uv.workspace]
-members = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra"]
+members = ["ergon_core", "ergon_builtins", "ergon_cli", "ergon_infra", "ergon_ingestion"]
 
 [tool.uv.sources]
 ergon-core = { workspace = true }
 ergon-builtins = { workspace = true }
 ergon-cli = { workspace = true }
 ergon-infra = { workspace = true }
+ergon-ingestion = { workspace = true }
 
 [tool.ruff]
 line-length = 100
