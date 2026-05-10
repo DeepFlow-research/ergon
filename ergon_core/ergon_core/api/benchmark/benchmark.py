@@ -1,22 +1,32 @@
 """Public benchmark ABC."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
-from ergon_core.api.benchmark.task import EmptyTaskPayload, TaskSpec
+from pydantic import BaseModel, Field, field_validator
+
+from ergon_core.api._definition import DefinitionModelMixin, import_component_string
+from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.infrastructure.dependencies import check_packages
-from pydantic import BaseModel
 
 
-class Benchmark(ABC):
+class Benchmark(DefinitionModelMixin, BaseModel, ABC):
     """Base class for all benchmarks."""
+
+    model_config = {"arbitrary_types_allowed": True, "extra": "allow", "frozen": False}
 
     type_slug: ClassVar[str]
     task_payload_model: ClassVar[type[BaseModel]] = EmptyTaskPayload
     required_packages: ClassVar[list[str]] = []
     install_hint: ClassVar[str] = ""
+
+    name: str
+    description: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
     def __init__(
         self,
@@ -28,16 +38,37 @@ class Benchmark(ABC):
             Any,  # slopcop: ignore[no-typing-any] -- public metadata bag accepts arbitrary JSON-like values
         ]
         | None = None,
+        **data: Any,  # slopcop: ignore[no-typing-any]
     ) -> None:
-        self.name = name or self.__class__.__name__
-        self.description = description or ""
-        self.metadata: dict[
-            str,
-            Any,  # slopcop: ignore[no-typing-any] -- preserves caller-supplied benchmark metadata values
-        ] = dict(metadata or {})
+        super().__init__(
+            name=name or self.__class__.__name__,
+            description=description or "",
+            metadata=dict(metadata or {}),
+            **data,
+        )
+
+    @field_validator("tasks", mode="before", check_fields=False)
+    @classmethod
+    def _inflate_tasks(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        if isinstance(value, (list, tuple)):
+            return tuple(
+                Task.model_validate(item) if _is_definition(item) else item for item in value
+            )
+        return value
+
+    @classmethod
+    def from_definition(
+        cls,
+        benchmark_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
+    ) -> "Benchmark":
+        """Reconstruct a concrete benchmark from persisted definition JSON."""
+        benchmark_cls = import_component_string(benchmark_json["_type"])
+        data = dict(benchmark_json)
+        data.pop("_type", None)
+        return benchmark_cls.model_validate(data)
 
     @abstractmethod
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
         """Materialize benchmark instances."""
         ...
 
@@ -75,3 +106,7 @@ class Benchmark(ABC):
             if self.install_hint:
                 parts.append(f"Install with: {self.install_hint}")
             raise DependencyError("\n".join(parts))
+
+
+def _is_definition(value: object) -> bool:
+    return isinstance(value, dict) and "_type" in value

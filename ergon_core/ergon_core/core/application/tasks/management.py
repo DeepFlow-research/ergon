@@ -10,7 +10,6 @@ from collections import deque
 from uuid import UUID
 
 import inngest
-from ergon_core.api.registry import registry
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.graph.models import RunGraphNode
@@ -104,33 +103,33 @@ class TaskManagementService:
         is queryable without edge traversal. Wires depends_on as
         dependency edges (source=dep, target=new_node).
         """
-        task_slug = command.task_slug
-
-        if command.assigned_worker_slug not in registry.workers:
-            raise ValueError(f"Unknown worker slug: {command.assigned_worker_slug!r}")
-
-        parent = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.parent_node_id
+        task = command.task
+        task_slug = task.task_slug
+        parent = self._node_row_for_task(
+            session, run_id=command.run_id, task_id=command.parent_task_id
         )
 
         node = await self._graph_repo.add_node(
             session,
             command.run_id,
+            task=task,
             task_slug=task_slug,
             instance_key=parent.instance_key,
-            description=command.description,
+            description=task.description,
             status=PENDING,
-            assigned_worker_slug=command.assigned_worker_slug,
-            parent_node_id=command.parent_node_id,
+            assigned_worker_slug=task.worker.name,
+            parent_node_id=parent.id,
+            parent_task_id=parent.task_id,
             level=parent.level + 1,
             meta=_MANAGER_META,
         )
 
-        for dep_node_id in command.depends_on:
+        for dep_task_id in command.depends_on:
+            dep_node = self._node_row_for_task(session, run_id=command.run_id, task_id=dep_task_id)
             await self._graph_repo.add_edge(
                 session,
                 command.run_id,
-                source_node_id=dep_node_id,
+                source_node_id=dep_node.id,
                 target_node_id=node.id,
                 status=EDGE_PENDING,
                 meta=_MANAGER_META,
@@ -143,18 +142,18 @@ class TaskManagementService:
             await self._dispatch_task_ready(
                 run_id=command.run_id,
                 definition_id=definition_id,
-                node_id=node.id,
+                task_id=node.task_id,
             )
 
         logger.info(
             "add_subtask: created node %s (slug=%s) under parent %s",
             node.id,
             task_slug,
-            command.parent_node_id,
+            command.parent_task_id,
         )
 
         return AddSubtaskResult(
-            node_id=node.id,
+            task_id=node.task_id,
             task_slug=task_slug,
             status=PENDING,
         )
@@ -198,6 +197,9 @@ class TaskManagementService:
         session.commit()
 
         if applied:
+            node = session.get(RunGraphNode, command.node_id)
+            if node is None:
+                raise LookupError(f"run graph node not found: {command.node_id}")
             definition_id = self._resolve_definition_id(session, command.run_id)
             execution_id = self._task_execution_repo.latest_execution_id_for_node(
                 session, command.node_id
@@ -205,7 +207,7 @@ class TaskManagementService:
             event = TaskCancelledEvent(
                 run_id=command.run_id,
                 definition_id=definition_id,
-                node_id=command.node_id,
+                task_id=node.task_id,
                 execution_id=execution_id,
                 cause="manager_decision",
             )
@@ -256,16 +258,22 @@ class TaskManagementService:
             if applied:
                 transitioned.append(child.id)
 
-        events = [
-            TaskCancelledEvent(
-                run_id=run_id,
-                definition_id=definition_id,
-                node_id=nid,
-                execution_id=self._task_execution_repo.latest_execution_id_for_node(session, nid),
-                cause=cause,
+        events = []
+        for node_id in transitioned:
+            node = session.get(RunGraphNode, node_id)
+            if node is None:
+                continue
+            events.append(
+                TaskCancelledEvent(
+                    run_id=run_id,
+                    definition_id=definition_id,
+                    task_id=node.task_id,
+                    execution_id=self._task_execution_repo.latest_execution_id_for_node(
+                        session, node_id
+                    ),
+                    cause=cause,
+                )
             )
-            for nid in transitioned
-        ]
         return CancelOrphansResult(
             parent_node_id=parent_node_id,
             cancelled_node_ids=transitioned,
@@ -315,39 +323,39 @@ class TaskManagementService:
         """
         self._validate_plan(command.subtasks)
 
-        for spec in command.subtasks:
-            if spec.assigned_worker_slug not in registry.workers:
-                raise ValueError(f"Unknown worker slug: {spec.assigned_worker_slug!r}")
-
-        parent = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.parent_node_id
+        parent = self._node_row_for_task(
+            session, run_id=command.run_id, task_id=command.parent_task_id
         )
 
         slug_to_node_id: dict[TaskSlug, NodeId] = {}
+        slug_to_task_id: dict[TaskSlug, UUID] = {}
         roots: list[TaskSlug] = []
 
         for spec in command.subtasks:
-            task_slug = spec.task_slug
+            task_slug = spec.task.task_slug
 
             node = await self._graph_repo.add_node(
                 session,
                 command.run_id,
+                task=spec.task,
                 task_slug=task_slug,
                 instance_key=parent.instance_key,
-                description=spec.description,
+                description=spec.task.description,
                 status=PENDING,
-                assigned_worker_slug=spec.assigned_worker_slug,
-                parent_node_id=command.parent_node_id,
+                assigned_worker_slug=spec.task.worker.name,
+                parent_node_id=parent.id,
+                parent_task_id=parent.task_id,
                 level=parent.level + 1,
                 meta=_MANAGER_META,
             )
-            slug_to_node_id[spec.task_slug] = node.id
+            slug_to_node_id[spec.task.task_slug] = node.id
+            slug_to_task_id[spec.task.task_slug] = node.task_id
 
             if not spec.depends_on:
-                roots.append(spec.task_slug)
+                roots.append(spec.task.task_slug)
 
         for spec in command.subtasks:
-            target_id = slug_to_node_id[spec.task_slug]
+            target_id = slug_to_node_id[spec.task.task_slug]
             for dep_slug in spec.depends_on:
                 source_id = slug_to_node_id[dep_slug]
                 await self._graph_repo.add_edge(
@@ -366,18 +374,18 @@ class TaskManagementService:
             await self._dispatch_task_ready(
                 run_id=command.run_id,
                 definition_id=definition_id,
-                node_id=slug_to_node_id[root_slug],
+                task_id=slug_to_task_id[root_slug],
             )
 
         logger.info(
             "plan_subtasks: created %d nodes (%d roots) under parent %s",
             len(command.subtasks),
             len(roots),
-            command.parent_node_id,
+            command.parent_task_id,
         )
 
         return PlanSubtasksResult(
-            nodes=slug_to_node_id,
+            tasks=slug_to_task_id,
             roots=roots,
         )
 
@@ -488,7 +496,7 @@ class TaskManagementService:
         await self._dispatch_task_ready(
             run_id=command.run_id,
             definition_id=definition_id,
-            node_id=command.node_id,
+            task_id=node.task_id,
         )
 
         logger.info(
@@ -613,10 +621,13 @@ class TaskManagementService:
 
         definition_id = self._resolve_definition_id(session, run_id)
         execution_id = self._task_execution_repo.latest_execution_id_for_node(session, node_id)
+        node = session.get(RunGraphNode, node_id)
+        if node is None:
+            raise LookupError(f"run graph node not found: {node_id}")
         event = TaskCancelledEvent(
             run_id=run_id,
             definition_id=definition_id,
-            node_id=node_id,
+            task_id=node.task_id,
             execution_id=execution_id,
             cause="downstream_invalidation",
         )
@@ -698,9 +709,10 @@ class TaskManagementService:
         """Return the set of task_slugs, raising on duplicates."""
         slugs: set[TaskSlug] = set()
         for spec in subtasks:
-            if spec.task_slug in slugs:
-                raise DuplicateTaskSlugError(spec.task_slug)
-            slugs.add(spec.task_slug)
+            task_slug = spec.task.task_slug
+            if task_slug in slugs:
+                raise DuplicateTaskSlugError(task_slug)
+            slugs.add(task_slug)
         return slugs
 
     @staticmethod
@@ -716,12 +728,12 @@ class TaskManagementService:
     @staticmethod
     def _check_no_cycles(subtasks: list[SubtaskSpec]) -> None:
         """Kahn's algorithm for cycle detection on the task_slug graph."""
-        in_degree: dict[TaskSlug, int] = {spec.task_slug: 0 for spec in subtasks}
-        adj: dict[TaskSlug, list[TaskSlug]] = {spec.task_slug: [] for spec in subtasks}
+        in_degree: dict[TaskSlug, int] = {spec.task.task_slug: 0 for spec in subtasks}
+        adj: dict[TaskSlug, list[TaskSlug]] = {spec.task.task_slug: [] for spec in subtasks}
         for spec in subtasks:
             for dep in spec.depends_on:
-                adj[dep].append(spec.task_slug)
-                in_degree[spec.task_slug] += 1
+                adj[dep].append(spec.task.task_slug)
+                in_degree[spec.task.task_slug] += 1
 
         queue = deque(slug for slug, d in in_degree.items() if d == 0)
         visited = 0
@@ -750,19 +762,30 @@ class TaskManagementService:
             raise RunRecordMissingError(run_id)
         return run.workflow_definition_id
 
+    @staticmethod
+    def _node_row_for_task(session: Session, *, run_id: UUID, task_id: UUID) -> RunGraphNode:
+        row = session.exec(
+            select(RunGraphNode).where(
+                RunGraphNode.run_id == run_id,
+                RunGraphNode.task_id == task_id,
+            )
+        ).first()
+        if row is None:
+            raise ValueError(f"RunGraphNode task_id={task_id} not found in run {run_id}")
+        return row
+
     async def _dispatch_task_ready(
         self,
         *,
         run_id: UUID,
         definition_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> None:
         """Fire task/ready Inngest event (after commit)."""
         event = TaskReadyEvent(
             run_id=run_id,
             definition_id=definition_id,
-            task_id=None,
-            node_id=node_id,
+            task_id=task_id,
         )
         await inngest_client.send(
             inngest.Event(
@@ -771,6 +794,6 @@ class TaskManagementService:
             )
         )
         logger.info(
-            "dispatch_task_ready: fired task/ready for node %s",
-            node_id,
+            "dispatch_task_ready: fired task/ready for task %s",
+            task_id,
         )

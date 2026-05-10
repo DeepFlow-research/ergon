@@ -17,14 +17,28 @@ from uuid import UUID
 
 from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.events.task_events import (
     CancelCause,
     TaskCancelledEvent,
     TaskFailedEvent,
 )
+from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
+
+
+def _node_id_for_task(session: Session, *, run_id: UUID, task_id: UUID) -> UUID:
+    node_id = session.exec(
+        select(RunGraphNode.id).where(
+            RunGraphNode.run_id == run_id,
+            RunGraphNode.task_id == task_id,
+        )
+    ).first()
+    if node_id is None:
+        raise LookupError(f"run graph node not found for task_id={task_id}")
+    return node_id
 
 
 async def _cancel_orphans_for(
@@ -73,15 +87,18 @@ async def run_block_descendants_on_failed_job(ctx: Any, payload: TaskFailedEvent
     RUNNING descendants are not interrupted. Horizontal (edge-based) successor
     BLOCKED propagation is handled separately in propagation.py.
     """
-    logger.info("block-descendants-on-failed parent=%s", payload.node_id)
+    logger.info("block-descendants-on-failed parent=%s", payload.task_id)
     svc = TaskManagementService()
 
     async def _block_descendants() -> list[str]:
         with get_session() as session:
+            parent_node_id = _node_id_for_task(
+                session, run_id=payload.run_id, task_id=payload.task_id
+            )
             blocked_ids = await svc.block_pending_descendants(
                 session,
                 run_id=payload.run_id,
-                parent_node_id=payload.node_id,
+                parent_node_id=parent_node_id,
                 cause="parent_failed",
             )
             session.commit()
@@ -92,11 +109,13 @@ async def run_block_descendants_on_failed_job(ctx: Any, payload: TaskFailedEvent
 
 
 async def run_cancel_orphans_on_cancelled_job(ctx: Any, payload: TaskCancelledEvent) -> int:
-    logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.node_id)
+    logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.task_id)
+    with get_session() as session:
+        parent_node_id = _node_id_for_task(session, run_id=payload.run_id, task_id=payload.task_id)
     return await _cancel_orphans_for(
         ctx,
         run_id=payload.run_id,
         definition_id=payload.definition_id,
-        parent_node_id=payload.node_id,
+        parent_node_id=parent_node_id,
         cause="parent_terminal",
     )

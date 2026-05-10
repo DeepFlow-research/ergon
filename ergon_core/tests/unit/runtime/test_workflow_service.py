@@ -2,6 +2,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from ergon_core.api import EmptyTaskPayload, Sandbox, Task, Worker, WorkerContext, WorkerOutput
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.enums import (
@@ -17,6 +18,25 @@ from ergon_core.core.persistence.telemetry.models import (
 from ergon_core.core.application.workflows.service import WorkflowService
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
+from typing import AsyncGenerator, ClassVar
+
+
+class _WorkflowTestSandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _WorkflowTestWorker(Worker):
+    type_slug: ClassVar[str] = "workflow-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
 
 
 def _session() -> Session:
@@ -39,8 +59,17 @@ def _node(
     parent_node_id: UUID | None = None,
     level: int = 0,
 ) -> RunGraphNode:
+    task = Task(
+        task_slug=slug,
+        instance_key="instance",
+        description=description or f"Task {slug}",
+        worker=_WorkflowTestWorker(name="worker", model=None),
+        sandbox=_WorkflowTestSandbox(),
+        task_payload=EmptyTaskPayload(),
+    )
     return RunGraphNode(
         run_id=run_id,
+        task_json=task.model_dump(mode="json"),
         instance_key="instance",
         task_slug=slug,
         description=description or f"Task {slug}",

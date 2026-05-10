@@ -12,7 +12,7 @@ Tests cover:
 from typing import ClassVar
 from uuid import uuid4
 
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
+from ergon_core.core.persistence.shared.types import TaskSlug
 from tests.fixtures.smoke_components.smoke_base.worker_base import SmokeWorkerBase
 
 
@@ -33,9 +33,12 @@ class _RoutingSubclass(SmokeWorkerBase):
         override = self.routing.get(slug)
         if override is None:
             return spec
-        # Use model_copy to swap just the assigned_worker_slug; frozen model.
+        # Use model_copy to swap just the bound worker; frozen model.
+        task = spec.task.model_copy(
+            update={"worker": spec.task.worker.model_copy(update={"name": override})}
+        )
         return spec.model_copy(
-            update={"assigned_worker_slug": AssignedWorkerSlug(override)},
+            update={"task": task},
         )
 
 
@@ -49,9 +52,9 @@ def _instance(cls):
 def test_default_spec_for_uses_leaf_slug() -> None:
     worker = _instance(_HappySubclass)
     spec = worker._spec_for("d_root", (), "Diamond root")
-    assert spec.task_slug == TaskSlug("d_root")
-    assert spec.description == "Diamond root"
-    assert spec.assigned_worker_slug == AssignedWorkerSlug("unit-test-leaf-happy")
+    assert spec.task.task_slug == TaskSlug("d_root")
+    assert spec.task.description == "Diamond root"
+    assert spec.task.worker.name == "unit-test-leaf-happy"
     assert spec.depends_on == []
 
 
@@ -65,10 +68,10 @@ def test_routing_subclass_overrides_only_named_slug() -> None:
     worker = _instance(_RoutingSubclass)
     # Non-matching slug: default route
     d_root = worker._spec_for("d_root", (), "Root")
-    assert d_root.assigned_worker_slug == AssignedWorkerSlug("unit-test-leaf-happy")
+    assert d_root.task.worker.name == "unit-test-leaf-happy"
     # Matching slug: override
     l_2 = worker._spec_for("l_2", ("l_1",), "Line 2")
-    assert l_2.assigned_worker_slug == AssignedWorkerSlug("unit-test-leaf-failing")
+    assert l_2.task.worker.name == "unit-test-leaf-failing"
     # Dep + task_slug survive the override
-    assert l_2.task_slug == TaskSlug("l_2")
+    assert l_2.task.task_slug == TaskSlug("l_2")
     assert l_2.depends_on == [TaskSlug("l_1")]

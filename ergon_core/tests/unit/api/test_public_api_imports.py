@@ -28,7 +28,7 @@ def test_object_first_experiment_run_api_is_retired() -> None:
     public_api = importlib.import_module("ergon_core.api")
 
     assert not hasattr(public_api, "ExperimentRunHandle")
-    assert not hasattr(public_api, "Experiment")
+    assert hasattr(public_api, "Experiment")
 
 
 def test_core_api_app_imports_without_context_payload_cycle() -> None:

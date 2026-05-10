@@ -25,12 +25,12 @@ from ergon_core.core.shared.utils import utcnow
 from sqlalchemy.exc import SQLAlchemyError
 
 if TYPE_CHECKING:
-    from ergon_core.core.domain.experiments import Experiment
+    from ergon_core.api import Experiment
     from ergon_core.api.criterion import Criterion
 
 
 def _criterion_snapshot_name(criterion: "Criterion") -> str:
-    return criterion.slug
+    return getattr(criterion, "criterion", criterion).slug
 
 
 class _ExperimentDefinitionWriter:
@@ -65,48 +65,45 @@ class _ExperimentDefinitionWriter:
             created_at=now,
         )
 
-        # -- worker rows --
-        # reason: RFC 2026-04-22 §1 — ``Experiment.workers`` now holds
-        # ``WorkerSpec`` descriptors. ``worker_slug`` maps 1:1 to
-        # ``ExperimentDefinitionWorker.worker_type`` (registry key persisted
-        # verbatim; worker_execute looks it up through the core registry).
+        # -- worker/evaluator rows --
         worker_rows: list[ExperimentDefinitionWorker] = []
-        worker_bindings: dict[str, str] = {}
-
-        for binding_key, spec in experiment.workers.items():
-            worker_rows.append(
-                ExperimentDefinitionWorker(
-                    id=uuid4(),
-                    experiment_definition_id=definition_id,
-                    binding_key=binding_key,
-                    worker_type=spec.worker_slug,
-                    model_target=spec.model,
-                    snapshot_json={"name": spec.name, "model": spec.model},
-                    created_at=now,
-                )
-            )
-            worker_bindings[binding_key] = spec.worker_slug
-
-        # -- evaluator rows --
         evaluator_rows: list[ExperimentDefinitionEvaluator] = []
-        evaluator_bindings: dict[str, str] = {}
-
-        for binding_key, evaluator in experiment.evaluators.items():
-            snapshot: JsonObject = {"name": evaluator.name}
-            if isinstance(evaluator, Rubric):
-                snapshot["criteria"] = [_criterion_snapshot_name(c) for c in evaluator.criteria]
-
-            evaluator_rows.append(
-                ExperimentDefinitionEvaluator(
-                    id=uuid4(),
-                    experiment_definition_id=definition_id,
-                    binding_key=binding_key,
-                    evaluator_type=evaluator.type_slug,
-                    snapshot_json=snapshot,
-                    created_at=now,
-                )
-            )
-            evaluator_bindings[binding_key] = evaluator.type_slug
+        seen_workers: set[str] = set()
+        seen_evaluators: set[str] = set()
+        for tasks in instances_map.values():
+            for task in tasks:
+                if task.worker.name not in seen_workers:
+                    worker_rows.append(
+                        ExperimentDefinitionWorker(
+                            id=uuid4(),
+                            experiment_definition_id=definition_id,
+                            binding_key=task.worker.name,
+                            worker_type=task.worker.type_slug,
+                            model_target=task.worker.model,
+                            snapshot_json=task.worker.model_dump(mode="json"),
+                            created_at=now,
+                        )
+                    )
+                    seen_workers.add(task.worker.name)
+                for evaluator in task.evaluators:
+                    if evaluator.name in seen_evaluators:
+                        continue
+                    snapshot: JsonObject = evaluator.model_dump(mode="json")
+                    if isinstance(evaluator, Rubric):
+                        snapshot["criteria"] = [
+                            _criterion_snapshot_name(c) for c in evaluator.criteria
+                        ]
+                    evaluator_rows.append(
+                        ExperimentDefinitionEvaluator(
+                            id=uuid4(),
+                            experiment_definition_id=definition_id,
+                            binding_key=evaluator.name,
+                            evaluator_type=evaluator.type_slug,
+                            snapshot_json=snapshot,
+                            created_at=now,
+                        )
+                    )
+                    seen_evaluators.add(evaluator.name)
 
         # -- instance + task rows (two-pass for parent resolution) --
         instance_rows: list[ExperimentDefinitionInstance] = []
@@ -130,6 +127,7 @@ class _ExperimentDefinitionWriter:
                     task_slug=task.task_slug,
                     description=task.description,
                     task_payload_json=task.task_payload.model_dump(mode="json"),
+                    task_json=task.model_dump(mode="json"),
                     created_at=now,
                 )
                 task_rows_by_key[(instance_key, task.task_slug)] = task_row
@@ -167,40 +165,20 @@ class _ExperimentDefinitionWriter:
 
         # ---- 4. Assignment rows ------------------------------------------
         assignment_rows: list[ExperimentDefinitionTaskAssignment] = []
-
-        if experiment.assignments is None and len(experiment.workers) == 1:
-            sole_key = next(iter(experiment.workers))
-            for task_row in task_rows:
-                if task_row.id is None:
-                    raise ValueError("Task row has no assigned ID for assignment")
+        for instance_key, tasks in instances_map.items():
+            for task in tasks:
+                task_id = task_rows_by_key[(instance_key, task.task_slug)].id
+                if task_id is None:
+                    raise ValueError(f"Task {task.task_slug!r} has no assigned ID for assignment")
                 assignment_rows.append(
                     ExperimentDefinitionTaskAssignment(
                         id=uuid4(),
                         experiment_definition_id=definition_id,
-                        task_id=task_row.id,
-                        worker_binding_key=sole_key,
+                        task_id=task_id,
+                        worker_binding_key=task.worker.name,
                         created_at=now,
                     )
                 )
-        elif experiment.assignments is not None:
-            for worker_key, task_ref in experiment.assignments.items():
-                task_slugs = [task_ref] if isinstance(task_ref, str) else list(task_ref)
-                for tk in task_slugs:
-                    for (inst_key, t_key), task_row in task_rows_by_key.items():
-                        if t_key == tk:
-                            if task_row.id is None:
-                                raise ValueError(
-                                    f"Task {t_key!r} has no assigned ID for assignment"
-                                )
-                            assignment_rows.append(
-                                ExperimentDefinitionTaskAssignment(
-                                    id=uuid4(),
-                                    experiment_definition_id=definition_id,
-                                    task_id=task_row.id,
-                                    worker_binding_key=worker_key,
-                                    created_at=now,
-                                )
-                            )
 
         # -- task-evaluator binding rows --
         task_evaluator_rows: list[ExperimentDefinitionTaskEvaluator] = []
@@ -211,13 +189,13 @@ class _ExperimentDefinitionWriter:
                     raise ValueError(
                         f"Task {task.task_slug!r} has no assigned ID for evaluator binding"
                     )
-                for eval_key in task.evaluator_binding_keys:
+                for evaluator in task.evaluators:
                     task_evaluator_rows.append(
                         ExperimentDefinitionTaskEvaluator(
                             id=uuid4(),
                             experiment_definition_id=definition_id,
                             task_id=task_id,
-                            evaluator_binding_key=eval_key,
+                            evaluator_binding_key=evaluator.name,
                             created_at=now,
                         )
                     )
@@ -260,8 +238,8 @@ class _ExperimentDefinitionWriter:
         return DefinitionHandle(
             definition_id=definition_id,
             benchmark_type=benchmark_type,
-            worker_bindings=worker_bindings,
-            evaluator_bindings=evaluator_bindings,
+            worker_bindings={row.binding_key: row.worker_type for row in worker_rows},
+            evaluator_bindings={row.binding_key: row.evaluator_type for row in evaluator_rows},
             instance_count=len(instance_rows),
             task_count=len(task_rows),
             created_at=created_at,

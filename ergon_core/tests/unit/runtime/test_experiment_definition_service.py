@@ -1,7 +1,8 @@
 from collections.abc import Mapping, Sequence
+from typing import AsyncGenerator, ClassVar
 
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark import TaskSpec
+from ergon_core.api import Sandbox, Worker, WorkerContext, WorkerOutput
+from ergon_core.api.benchmark import Benchmark, Task
 from ergon_core.core.application.experiments import service as service_module
 from ergon_core.core.application.experiments.models import ExperimentDefineRequest
 from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
@@ -15,6 +16,24 @@ class _Payload(BaseModel):
     value: int
 
 
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "definition-service-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
+
+
 class _Benchmark(Benchmark):
     type_slug = "ci-benchmark"
     task_payload_model = _Payload
@@ -23,14 +42,16 @@ class _Benchmark(Benchmark):
         super().__init__()
         self.limit = limit
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
         selected = ["sample-a", "sample-b", "sample-c"][: self.limit]
         return {
             key: [
-                TaskSpec[_Payload](
+                Task[_Payload](
                     instance_key=key,
                     task_slug=f"{key}-root",
                     description=f"Task for {key}",
+                    worker=_Worker(name="worker", model=None),
+                    sandbox=_Sandbox(),
                     task_payload=_Payload(value=index),
                 )
             ]

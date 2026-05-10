@@ -1,21 +1,38 @@
 """Public criterion ABC."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from pydantic import BaseModel, Field
+
+from ergon_core.api._definition import DefinitionModelMixin, import_component_string
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.criterion.results import CriterionOutcome, ScoreScale
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.infrastructure.dependencies import check_packages
 
+if TYPE_CHECKING:
+    from ergon_core.api.sandbox import Sandbox
 
-class Criterion(ABC):
+
+class Criterion(DefinitionModelMixin, BaseModel, ABC):
     """Atomic evaluation unit that owns its own data-pulling and verification logic."""
+
+    model_config = {"arbitrary_types_allowed": True, "extra": "allow", "frozen": False}
 
     type_slug: ClassVar[str]
     required_packages: ClassVar[list[str]] = []
     install_hint: ClassVar[str] = ""
+    requires_sandbox: ClassVar[type[Sandbox] | None] = None
+
+    slug: str
+    description: str
+    weight: float = 1.0
+    score_spec: ScoreScale = Field(default_factory=ScoreScale)
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
     def __init__(
         self,
@@ -25,12 +42,27 @@ class Criterion(ABC):
         weight: float = 1.0,
         score_spec: ScoreScale | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
+        **data: Any,  # slopcop: ignore[no-typing-any]
     ) -> None:
-        self.slug = slug
-        self.description = description or slug
-        self.weight = weight
-        self.score_spec = score_spec or ScoreScale()
-        self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
+        super().__init__(
+            slug=slug,
+            description=description or slug,
+            weight=weight,
+            score_spec=score_spec or ScoreScale(),
+            metadata=dict(metadata or {}),
+            **data,
+        )
+
+    @classmethod
+    def from_definition(
+        cls,
+        criterion_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
+    ) -> "Criterion":
+        """Reconstruct a concrete criterion from persisted definition JSON."""
+        criterion_cls = import_component_string(criterion_json["_type"])
+        data = dict(criterion_json)
+        data.pop("_type", None)
+        return criterion_cls.model_validate(data)
 
     @abstractmethod
     async def evaluate(

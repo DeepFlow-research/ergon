@@ -11,18 +11,20 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
+from ergon_core.api import Sandbox, Task, Worker, WorkerContext, WorkerStreamItem
+from ergon_core.api.registry import registry
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, NodeId, RunId, TaskSlug
+from ergon_core.core.persistence.shared.types import RunId, TaskSlug
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import communication_service
 from ergon_core.core.application.tasks.inspection import TaskInspectionService
 from ergon_core.core.application.tasks.models import PlanSubtasksCommand, SubtaskSpec
 from ergon_core.core.application.tasks.management import TaskManagementService
+from tests.fixtures.smoke_components.sandbox import SmokeSandboxDefinition
 
 NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
 NESTED_SUBTASK_GRAPH: tuple[tuple[str, tuple[str, ...], str], ...] = (
@@ -46,6 +48,7 @@ class RecursiveSmokeWorkerBase(Worker):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
         if context.node_id is None:
             raise ValueError(f"{type(self).__name__} requires context.node_id")
@@ -61,9 +64,7 @@ class RecursiveSmokeWorkerBase(Worker):
 
         specs = [
             SubtaskSpec(
-                task_slug=TaskSlug(slug),
-                description=desc,
-                assigned_worker_slug=AssignedWorkerSlug(self.leaf_slug),
+                task=_smoke_task(worker_slug=self.leaf_slug, task_slug=slug, description=desc),
                 depends_on=[TaskSlug(dep) for dep in deps],
             )
             for slug, deps, desc in NESTED_SUBTASK_GRAPH
@@ -73,13 +74,13 @@ class RecursiveSmokeWorkerBase(Worker):
                 session,
                 PlanSubtasksCommand(
                     run_id=RunId(context.run_id),
-                    parent_node_id=NodeId(context.node_id),
+                    parent_task_id=context.task_id,
                     subtasks=specs,
                 ),
             )
 
         summary = "\n".join(
-            f"{slug}: planned (node_id={result.nodes[TaskSlug(slug)]})"
+            f"{slug}: planned (task_id={result.tasks[TaskSlug(slug)]})"
             for slug, _deps, _desc in NESTED_SUBTASK_GRAPH
         )
         yield ContextPartChunk(
@@ -161,8 +162,34 @@ class RecursiveSmokeWorkerMixin:
     def _spec_for(self, slug, deps, desc):
         worker_slug = self.RECURSIVE_WORKER_SLUG if slug in self.RECURSIVE_SLUGS else self.leaf_slug
         return SubtaskSpec(
-            task_slug=TaskSlug(slug),
-            description=desc,
-            assigned_worker_slug=AssignedWorkerSlug(worker_slug),
+            task=_smoke_task(worker_slug=worker_slug, task_slug=slug, description=desc),
             depends_on=[TaskSlug(d) for d in deps],
         )
+
+
+def _smoke_task(*, worker_slug: str, task_slug: str, description: str) -> Task:
+    try:
+        worker_cls = registry.require_worker(worker_slug)
+    except ValueError:
+        worker_cls = _FallbackSmokeWorker
+    return Task(
+        task_slug=task_slug,
+        instance_key="smoke",
+        description=description,
+        worker=worker_cls(name=worker_slug, model=None),
+        sandbox=SmokeSandboxDefinition(),
+        task_payload={},
+    )
+
+
+class _FallbackSmokeWorker(Worker):
+    type_slug: ClassVar[str] = "fallback-smoke-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        yield WorkerOutput(output="", success=True)

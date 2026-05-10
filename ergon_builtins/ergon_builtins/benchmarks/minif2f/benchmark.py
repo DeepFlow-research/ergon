@@ -11,10 +11,14 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
+from ergon_core.api import Evaluator, Sandbox, Task, Worker
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements
 from huggingface_hub import hf_hub_download
 
+from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
+from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandbox
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
+from ergon_builtins.benchmarks.minif2f.worker_factory import MiniF2FReactWorker
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +37,20 @@ class MiniF2FBenchmark(Benchmark):
     task_payload_model: ClassVar[type[MiniF2FTaskPayload]] = MiniF2FTaskPayload
     onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(e2b=True)
 
+    data_dir: Path | None = None
+    limit: int | None = None
+    worker: Worker
+    sandbox: Sandbox
+    evaluators: tuple[Evaluator, ...]
+
     def __init__(
         self,
         *,
         data_dir: Path | str | None = None,
         limit: int | None = None,
+        worker: Worker | None = None,
+        sandbox: Sandbox | None = None,
+        evaluators: tuple[Evaluator, ...] | None = None,
         name: str | None = None,
         description: str | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
@@ -46,15 +59,18 @@ class MiniF2FBenchmark(Benchmark):
             name=name or "minif2f",
             description=description or "MiniF2F formal math proof benchmark (Lean 4, v2c)",
             metadata=metadata,
+            data_dir=Path(data_dir) if data_dir else None,
+            limit=limit,
+            worker=worker or MiniF2FReactWorker(name="default", model=None),
+            sandbox=sandbox or MiniF2FSandbox(),
+            evaluators=evaluators or (MiniF2FRubric(name="default"),),
         )
-        self.data_dir = Path(data_dir) if data_dir else None
-        self.limit = limit
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[MiniF2FTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[MiniF2FTaskPayload]]]:
         problems = self._load_problems()
-        tasks: list[TaskSpec[MiniF2FTaskPayload]] = []
+        tasks: list[Task[MiniF2FTaskPayload]] = []
         for problem in problems:
             payload = MiniF2FTaskPayload(
                 name=problem.name,
@@ -69,11 +85,13 @@ class MiniF2FBenchmark(Benchmark):
                 f"{problem.formal_statement}"
             )
             tasks.append(
-                TaskSpec[MiniF2FTaskPayload](
+                Task[MiniF2FTaskPayload](
                     task_slug=problem.name,
                     instance_key="default",
                     description=description,
-                    evaluator_binding_keys=("default",),
+                    worker=self.worker.model_copy(deep=True),
+                    sandbox=self.sandbox.model_copy(deep=True),
+                    evaluators=tuple(e.model_copy(deep=True) for e in self.evaluators),
                     task_payload=payload,
                 )
             )

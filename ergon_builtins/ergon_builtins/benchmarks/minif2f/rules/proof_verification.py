@@ -47,6 +47,10 @@ class ProofVerificationCriterion(Criterion):
 
     type_slug: ClassVar[str] = "proof-verification"
 
+    problem_statement: str | None = None
+    ground_truth_proof: str | None = None
+    formal_system: str = "lean"
+
     def __init__(
         self,
         *,
@@ -61,10 +65,10 @@ class ProofVerificationCriterion(Criterion):
             slug=slug,
             weight=weight,
             score_spec=ScoreScale(max_score=max_score),
+            problem_statement=problem_statement,
+            ground_truth_proof=ground_truth_proof,
+            formal_system=formal_system,
         )
-        self.problem_statement = problem_statement
-        self.ground_truth_proof = ground_truth_proof
-        self.formal_system = formal_system
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         proof_data = await self._extract_proof(context)

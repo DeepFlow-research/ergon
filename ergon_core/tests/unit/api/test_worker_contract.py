@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 
 from ergon_core.api.benchmark import Task
+from ergon_core.api.sandbox import Sandbox
 from ergon_core.api.worker import Worker, WorkerContext, WorkerOutput
 from ergon_core.api.worker.worker import WorkerStreamItem
 
@@ -13,6 +14,7 @@ class ContractSmokeWorker(Worker):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
         yield WorkerOutput(output="ok", success=True)
 

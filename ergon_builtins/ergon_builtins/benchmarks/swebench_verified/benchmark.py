@@ -10,12 +10,16 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
+from ergon_core.api import Evaluator, Sandbox, Task, Worker
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements
 
+from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
+from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import SWEBenchSandbox
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
 )
+from ergon_builtins.benchmarks.swebench_verified.worker_factory import SWEBenchReactWorker
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +37,18 @@ class SweBenchVerifiedBenchmark(Benchmark):
         extras=("ergon-builtins[data]",),
     )
 
+    limit: int | None = None
+    worker: Worker
+    sandbox: Sandbox
+    evaluators: tuple[Evaluator, ...]
+
     def __init__(
         self,
         *,
         limit: int | None = None,
+        worker: Worker | None = None,
+        sandbox: Sandbox | None = None,
+        evaluators: tuple[Evaluator, ...] | None = None,
         name: str | None = None,
         description: str | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
@@ -45,20 +57,25 @@ class SweBenchVerifiedBenchmark(Benchmark):
             name=name or "swebench-verified",
             description=description or "SWE-Bench Verified GitHub issue-fix benchmark",
             metadata=metadata,
+            limit=limit,
+            worker=worker or SWEBenchReactWorker(name="default", model=None),
+            sandbox=sandbox or SWEBenchSandbox(),
+            evaluators=evaluators or (SWEBenchRubric(name="default"),),
         )
-        self.limit = limit
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[SWEBenchTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[SWEBenchTaskPayload]]]:
         instances = _load_rows(limit=self.limit)
-        tasks: list[TaskSpec[SWEBenchTaskPayload]] = []
+        tasks: list[Task[SWEBenchTaskPayload]] = []
         for instance in instances:
             payload = SWEBenchTaskPayload.from_instance(instance)
             tasks.append(
-                TaskSpec[SWEBenchTaskPayload](
+                Task[SWEBenchTaskPayload](
                     task_slug=instance.instance_id,
                     instance_key="default",
                     description=payload.build_worker_description(),
-                    evaluator_binding_keys=("default",),
+                    worker=self.worker.model_copy(deep=True),
+                    sandbox=self.sandbox.model_copy(deep=True),
+                    evaluators=tuple(e.model_copy(deep=True) for e in self.evaluators),
                     task_payload=payload,
                 )
             )

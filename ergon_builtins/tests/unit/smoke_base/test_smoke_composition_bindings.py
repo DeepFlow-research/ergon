@@ -13,12 +13,9 @@ def test_happy_smoke_experiment_binds_recursive_worker() -> None:
         limit=1,
     )
 
-    assert set(experiment.workers) >= {
-        "parent",
-        "researchrubrics-smoke-leaf",
-        "researchrubrics-smoke-recursive-worker",
-    }
-    assert set(experiment.evaluators) >= {"default", "post-root"}
+    task = experiment.benchmark.build_instances()["default"][0]
+    assert task.worker.type_slug == "researchrubrics-smoke-worker"
+    assert {evaluator.name for evaluator in task.evaluators} >= {"default", "post-root"}
 
 
 def test_sad_smoke_experiment_does_not_bind_recursive_worker() -> None:
@@ -32,10 +29,6 @@ def test_sad_smoke_experiment_does_not_bind_recursive_worker() -> None:
         limit=1,
     )
 
-    assert "researchrubrics-smoke-recursive-worker" not in experiment.workers
-    assert set(experiment.workers) >= {
-        "parent",
-        "researchrubrics-smoke-leaf",
-        "researchrubrics-smoke-leaf-failing",
-    }
-    assert set(experiment.evaluators) >= {"default", "post-root"}
+    task = experiment.benchmark.build_instances()["default"][0]
+    assert task.worker.type_slug == "researchrubrics-sadpath-smoke-worker"
+    assert {evaluator.name for evaluator in task.evaluators} >= {"default", "post-root"}

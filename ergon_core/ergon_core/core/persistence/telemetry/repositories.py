@@ -18,7 +18,9 @@ class CreateTaskEvaluation(BaseModel):
     node_id: UUID
     task_execution_id: UUID
     definition_task_id: UUID | None
-    definition_evaluator_id: UUID
+    definition_evaluator_id: UUID | None = None
+    evaluator_index: int | None = None
+    evaluator_name: str | None = None
     score: float | None = None
     passed: bool | None = None
     feedback: str | None = None
@@ -52,6 +54,8 @@ class TelemetryRepository:
             task_execution_id=command.task_execution_id,
             definition_task_id=command.definition_task_id,
             definition_evaluator_id=command.definition_evaluator_id,
+            evaluator_index=command.evaluator_index,
+            evaluator_name=command.evaluator_name,
             score=command.score,
             passed=command.passed,
             feedback=command.feedback,

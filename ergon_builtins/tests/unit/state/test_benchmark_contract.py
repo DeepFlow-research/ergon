@@ -1,9 +1,35 @@
 """Contract: every registered benchmark declares onboarding_deps."""
 
+from collections.abc import AsyncGenerator
+from typing import ClassVar
+
 import pytest
 from ergon_builtins.registry_core import BENCHMARKS as CORE_BENCHMARKS
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, TaskSpec
+from ergon_core.api import Sandbox, Worker, WorkerContext, WorkerOutput
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, Task
 from pydantic import BaseModel, ValidationError
+
+
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "benchmark-contract-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
+
+
+def _task_bindings() -> dict[str, object]:
+    return {"worker": _Worker(name="worker", model=None), "sandbox": _Sandbox()}
 
 
 def _require_onboarding_deps(slug: str, cls: type[Benchmark]) -> BenchmarkRequirements:
@@ -75,7 +101,7 @@ class TestBenchmarkSubclassEnforcement:
         class LocalBenchmark(Benchmark):
             type_slug = "local-test"
 
-            def build_instances(self) -> dict[str, list[TaskSpec[BaseModel]]]:
+            def build_instances(self) -> dict[str, list[Task[BaseModel]]]:
                 return {}
 
         assert LocalBenchmark.type_slug == "local-test"
@@ -85,10 +111,11 @@ class TestBenchmarkSubclassEnforcement:
 class TestTaskPayloadContract:
     def test_task_payload_is_a_pydantic_model(self) -> None:
         payload = EmptyTaskPayload()
-        task = TaskSpec(
+        task = Task(
             task_slug="task",
             instance_key="default",
             description="desc",
+            **_task_bindings(),
             task_payload=payload,
         )
 
@@ -96,9 +123,10 @@ class TestTaskPayloadContract:
 
     def test_plain_dict_payload_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            TaskSpec(
+            Task(
                 task_slug="task",
                 instance_key="default",
                 description="desc",
+                **_task_bindings(),
                 task_payload={"loose": "dict"},
             )

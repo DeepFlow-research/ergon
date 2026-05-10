@@ -1,29 +1,17 @@
-"""Phase 0 schema tests: node_id on events, DTOs, and optional task_id."""
+"""Schema tests for task_id-only runtime event contracts."""
 
 from uuid import uuid4
 
 import pytest
-from ergon_core.api.worker import WorkerContext
 from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
     TaskReadyEvent,
 )
-from ergon_core.core.application.workflows.orchestration import (
-    PreparedTaskExecution,
-    PrepareTaskExecutionCommand,
-    PropagateTaskCompletionCommand,
-    TaskDescriptor,
-)
+from pydantic import ValidationError
 
 
-class TestDynamicTaskNone:
-    def test_task_ready_event_task_id_defaults_to_none(self):
-        evt = TaskReadyEvent(run_id=uuid4(), definition_id=uuid4())
-        assert evt.task_id is None
-
-
-_NODE_ID_CASES = [
+_TASK_EVENTS = [
     (
         "TaskReadyEvent",
         lambda: TaskReadyEvent(run_id=uuid4(), definition_id=uuid4(), task_id=uuid4()),
@@ -39,37 +27,10 @@ _NODE_ID_CASES = [
         ),
     ),
     (
-        "PrepareTaskExecutionCommand",
-        lambda: PrepareTaskExecutionCommand(
+        "TaskCompletedEvent",
+        lambda: TaskCompletedEvent(
             run_id=uuid4(),
             definition_id=uuid4(),
-            task_id=uuid4(),
-        ),
-    ),
-    # PreparedTaskExecution dropped from this parametrisation: its
-    # ``node_id`` is no longer optional — every prepared task IS a
-    # graph node, so ``node_id: UUID`` is required.  See
-    # docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
-    (
-        "TaskDescriptor",
-        lambda: TaskDescriptor(
-            task_id=uuid4(),
-            task_slug="test-task",
-        ),
-    ),
-    (
-        "PropagateTaskCompletionCommand",
-        lambda: PropagateTaskCompletionCommand(
-            run_id=uuid4(),
-            definition_id=uuid4(),
-            task_id=uuid4(),
-            execution_id=uuid4(),
-        ),
-    ),
-    (
-        "WorkerContext",
-        lambda: WorkerContext(
-            run_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
             sandbox_id="sbx-123",
@@ -78,36 +39,15 @@ _NODE_ID_CASES = [
 ]
 
 
-@pytest.mark.parametrize("label,factory", _NODE_ID_CASES, ids=[c[0] for c in _NODE_ID_CASES])
-def test_node_id_defaults_to_none(label, factory):
+@pytest.mark.parametrize("label,factory", _TASK_EVENTS, ids=[c[0] for c in _TASK_EVENTS])
+def test_task_events_require_task_id_and_do_not_dump_node_id(label, factory):
     obj = factory()
-    assert obj.node_id is None
     data = obj.model_dump()
-    assert data["node_id"] is None
-    roundtripped = type(obj).model_validate(data)
-    assert roundtripped.node_id is None
+
+    assert obj.task_id is not None
+    assert "node_id" not in data
 
 
-def test_task_completed_event_requires_node_id() -> None:
-    node_id = uuid4()
-    event = TaskCompletedEvent(
-        run_id=uuid4(),
-        definition_id=uuid4(),
-        task_id=uuid4(),
-        execution_id=uuid4(),
-        sandbox_id="sbx-123",
-        node_id=node_id,
-    )
-
-    assert event.node_id == node_id
-
-
-@pytest.mark.parametrize("label,factory", _NODE_ID_CASES, ids=[c[0] for c in _NODE_ID_CASES])
-def test_node_id_round_trips(label, factory):
-    nid = uuid4()
-    obj = factory()
-    obj_with_id = type(obj).model_validate({**obj.model_dump(), "node_id": str(nid)})
-    assert obj_with_id.node_id == nid
-    data = obj_with_id.model_dump()
-    roundtripped = type(obj).model_validate(data)
-    assert roundtripped.node_id == nid
+def test_task_ready_event_rejects_missing_task_id() -> None:
+    with pytest.raises(ValidationError):
+        TaskReadyEvent(run_id=uuid4(), definition_id=uuid4())

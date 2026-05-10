@@ -1,12 +1,14 @@
 """Contracts for Inngest criterion executor runtime wiring."""
 
 from uuid import uuid4
+from typing import AsyncGenerator, ClassVar
 
 import pytest
+from ergon_core.api import Sandbox, Worker, WorkerContext, WorkerOutput
+from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
-from ergon_core.api.benchmark import Task
 from ergon_core.core.application.evaluation.models import (
     CriterionSpec,
     TaskEvaluationContext,
@@ -41,6 +43,24 @@ class _Criterion(Criterion):
         return CriterionOutcome(name=self.slug, score=1.0, passed=True)
 
 
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "criterion-executor-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
+
+
 @pytest.mark.asyncio
 async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) -> None:
     execution_id = uuid4()
@@ -73,11 +93,12 @@ async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) 
             agent_reasoning="output",
         ),
         Task(
-            task_id=uuid4(),
             task_slug="task",
             instance_key="default",
             description="input",
-            evaluator_binding_keys=("default",),
+            worker=_Worker(name="worker", model=None),
+            sandbox=_Sandbox(),
+            evaluators=(),
         ),
         "benchmark",
         [CriterionSpec(criterion=criterion)],

@@ -15,6 +15,7 @@ SWE-Bench fixtures in Phase D follow the same shape.
 """
 
 import json
+from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
@@ -36,7 +37,7 @@ class ResearchRubricsSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
 
     type_slug = "researchrubrics-smoke-worker"
     leaf_slug = "researchrubrics-smoke-leaf"
-    RECURSIVE_WORKER_SLUG = "researchrubrics-smoke-recursive-worker"
+    RECURSIVE_WORKER_SLUG: ClassVar[str] = "researchrubrics-smoke-recursive-worker"
 
 
 class ResearchRubricsSubworker:
@@ -97,4 +98,4 @@ class ResearchRubricsSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase
 
     type_slug = "researchrubrics-sadpath-smoke-worker"
     leaf_slug = "researchrubrics-smoke-leaf"
-    FAILING_LEAF_SLUG = "researchrubrics-smoke-leaf-failing"
+    FAILING_LEAF_SLUG: ClassVar[str] = "researchrubrics-smoke-leaf-failing"

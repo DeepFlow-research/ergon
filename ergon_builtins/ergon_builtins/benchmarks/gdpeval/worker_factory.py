@@ -2,8 +2,8 @@
 
 from collections.abc import AsyncGenerator
 
-from ergon_core.api import Task, WorkerContext, WorkerStreamItem
-from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
+from ergon_core.api import Sandbox, Task, WorkerContext, WorkerStreamItem
+from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandbox
 from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 from ergon_builtins.shared.workers.react_worker import ReActWorker
 
@@ -34,12 +34,17 @@ class GDPEvalReactWorker(ReActWorker):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
+        if not isinstance(sandbox, GDPEvalSandbox):
+            raise TypeError(
+                f"GDPEvalReactWorker requires GDPEvalSandbox, got {type(sandbox).__name__}"
+            )
         toolkit = GDPEvalToolkit(
             task_id=task.task_id,
             run_id=context.run_id,
-            sandbox_manager=GDPEvalSandboxManager(),
+            sandbox_manager=sandbox.manager,
         )
         self.tools = list(toolkit.get_tools())
-        async for item in super().execute(task, context=context):
+        async for item in super().execute(task, context=context, sandbox=sandbox):
             yield item

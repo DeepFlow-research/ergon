@@ -6,6 +6,7 @@ from uuid import UUID
 import ergon_builtins.workers.baselines.react_worker as react_worker_module
 import pytest
 from ergon_builtins.workers.baselines.react_worker import ReActWorker, _worker_output_from_chunks
+from ergon_core.api import Sandbox
 from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput
 from ergon_core.core.domain.generation.context_parts import (
@@ -167,12 +168,25 @@ class _DepsWorker(ReActWorker):
         return {"execution_id": str(context.execution_id)}
 
 
+class _TestSandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
 def _minimal_task() -> Task:
+    worker = ReActWorker(
+        name="task-worker",
+        model=None,
+        tools=[],
+        system_prompt=None,
+        max_iterations=10,
+    )
     return Task(
-        task_id=UUID(int=6),
         task_slug="unit-task",
         instance_key="unit-instance",
         description="Unit task",
+        worker=worker,
+        sandbox=_TestSandbox(),
         task_payload=EmptyTaskPayload(),
     )
 
@@ -183,6 +197,7 @@ def _minimal_context() -> WorkerContext:
         definition_id=UUID(int=4),
         execution_id=UUID(int=5),
         sandbox_id="test-sandbox",
+        task_id=UUID(int=6),
         node_id=UUID(int=6),
     )
 
@@ -211,8 +226,13 @@ async def test_react_worker_yields_partial_chunk_before_reraising_agent_iter_fai
     )
 
     chunks = []
+    task = _minimal_task()
     with pytest.raises(RuntimeError, match="tool validation failed"):
-        async for chunk in worker.execute(_minimal_task(), context=_minimal_context()):
+        async for chunk in worker.execute(
+            task,
+            context=_minimal_context(),
+            sandbox=task.sandbox,
+        ):
             chunks.append(chunk)
 
     assert [chunk.part.part_kind for chunk in chunks] == ["user_message", "assistant_text"]
@@ -242,7 +262,15 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
         max_iterations=10,
     )
 
-    items = [item async for item in worker.execute(_minimal_task(), context=_minimal_context())]
+    task = _minimal_task()
+    items = [
+        item
+        async for item in worker.execute(
+            task,
+            context=_minimal_context(),
+            sandbox=task.sandbox,
+        )
+    ]
 
     chunks = items[:-1]
     assert [chunk.part.part_kind for chunk in chunks] == ["user_message", "assistant_text"]

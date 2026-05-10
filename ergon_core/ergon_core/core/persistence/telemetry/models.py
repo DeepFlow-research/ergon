@@ -341,10 +341,13 @@ class RunTaskEvaluation(SQLModel, table=True):
         foreign_key="experiment_definition_tasks.id",
         index=True,
     )
-    definition_evaluator_id: UUID = Field(
+    definition_evaluator_id: UUID | None = Field(
+        default=None,
         foreign_key="experiment_definition_evaluators.id",
         index=True,
     )
+    evaluator_index: int | None = Field(default=None, index=True)
+    evaluator_name: str | None = Field(default=None, index=True)
     score: float | None = None
     passed: bool | None = None
     feedback: str | None = None

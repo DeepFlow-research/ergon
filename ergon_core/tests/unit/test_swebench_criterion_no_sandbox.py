@@ -21,10 +21,29 @@ import ergon_builtins.benchmarks.swebench_verified.criterion as criterion_module
 import pytest
 from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
-from ergon_core.api.criterion import CriterionContext
-from ergon_core.api.worker import WorkerOutput
+from ergon_core.api import Sandbox, Worker, WorkerContext, WorkerOutput
 from ergon_core.api.benchmark import Task
+from ergon_core.api.criterion import CriterionContext
 from ergon_core.core.application.evaluation.protocols import CommandResult
+from typing import AsyncGenerator, ClassVar
+
+
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "swebench-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
 
 
 def _task_payload() -> SWEBenchTaskPayload:
@@ -44,10 +63,11 @@ def _task_payload() -> SWEBenchTaskPayload:
 
 def _task() -> Task[SWEBenchTaskPayload]:
     return Task[SWEBenchTaskPayload](
-        task_id=uuid4(),
         task_slug="swe-001",
         instance_key="default",
         description="Fix the bug",
+        worker=_Worker(name="worker", model=None),
+        sandbox=_Sandbox(),
         task_payload=_task_payload(),
     )
 

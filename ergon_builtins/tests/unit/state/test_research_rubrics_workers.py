@@ -25,6 +25,7 @@ from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
     _WORKFLOW_PROMPT,
     ResearchRubricsWorkflowCliReActWorker,
 )
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import ResearchRubricsSandbox
 from ergon_core.api.benchmark import Task
 from ergon_core.api.worker import WorkerContext, WorkerStreamItem
 
@@ -34,22 +35,27 @@ from ergon_core.api.worker import WorkerContext, WorkerStreamItem
 
 
 def _make_context(*, with_node_id: bool = True) -> WorkerContext:
+    task_id = uuid4()
     return WorkerContext(
         run_id=uuid4(),
         definition_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="fake-sandbox",
-        node_id=uuid4() if with_node_id else None,
+        task_id=task_id,
+        node_id=task_id if with_node_id else None,
     )
 
 
 def _make_task() -> Task:
-    return Task(
-        task_id=uuid4(),
+    task = Task(
         task_slug="test-task",
         instance_key="default",
         description="Test research question",
+        worker=ResearchRubricsResearcherWorker(name="task-worker", model=None),
+        sandbox=ResearchRubricsSandbox(),
     )
+    object.__setattr__(task, "_task_id", uuid4())
+    return task
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +106,7 @@ class TestResearcherWorker:
             ),
         ):
             turns = []
-            async for turn in worker.execute(task, context=context):
+            async for turn in worker.execute(task, context=context, sandbox=task.sandbox):
                 turns.append(turn)
 
         # After execute, tools should be populated:
@@ -144,7 +150,7 @@ class TestResearcherWorker:
             ),
         ):
             turns = []
-            async for turn in worker.execute(task, context=context):
+            async for turn in worker.execute(task, context=context, sandbox=task.sandbox):
                 turns.append(turn)
 
         tool_names = {_tool_name(t) for t in worker.tools}

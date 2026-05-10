@@ -12,7 +12,7 @@ the RL training loop.
 import random
 from collections.abc import AsyncGenerator
 
-from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.api import Sandbox, Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
@@ -39,6 +39,7 @@ class TrainingStubWorker(Worker):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
         output = ""
         for chunk in _build_synthetic_chunks(task.task_slug):

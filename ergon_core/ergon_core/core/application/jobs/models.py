@@ -5,7 +5,7 @@ from uuid import UUID
 
 from ergon_core.core.application.events.base import InngestEventContract
 from ergon_core.core.shared.json_types import JsonObject
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class SandboxSetupRequest(InngestEventContract):
@@ -27,22 +27,9 @@ class WorkerExecuteRequest(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None
+    task_id: UUID
     execution_id: UUID
     sandbox_id: str
-    task_slug: str
-    task_description: str
-    assigned_worker_slug: str
-    worker_type: str
-    model_target: str
-    benchmark_type: str
-    node_id: UUID | None = None
-
-    @model_validator(mode="after")
-    def _has_static_or_dynamic_identity(self) -> "WorkerExecuteRequest":
-        if self.task_id is None and self.node_id is None:
-            raise ValueError("WorkerExecuteRequest requires task_id or node_id")
-        return self
 
 
 class PersistOutputsRequest(InngestEventContract):
@@ -65,12 +52,10 @@ class EvaluateTaskRunRequest(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
-    node_id: UUID
+    task_id: UUID
     execution_id: UUID
-    evaluator_id: UUID
-    evaluator_binding_key: str
-    evaluator_type: str
+    evaluator_index: int
+    evaluator_name: str
     agent_reasoning: str | None = None
     sandbox_id: str | None = None
 

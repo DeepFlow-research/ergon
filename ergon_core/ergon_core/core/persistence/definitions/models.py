@@ -183,6 +183,7 @@ class ExperimentDefinitionTask(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column("task_payload", JSON),
     )
+    task_json: JsonObject = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: task_payload --
@@ -199,6 +200,7 @@ class ExperimentDefinitionTask(SQLModel, table=True):
     @model_validator(mode="after")
     def _validate_task_payload(self) -> "ExperimentDefinitionTask":
         self.__class__._parse_task_payload_json(self.task_payload_json)
+        self.__class__._parse_task_payload_json(self.task_json)
         return self
 
 

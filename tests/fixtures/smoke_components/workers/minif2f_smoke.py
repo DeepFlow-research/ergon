@@ -8,6 +8,7 @@ so a genuinely broken toolchain fails loudly there.
 """
 
 import json
+from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
@@ -35,7 +36,7 @@ class MiniF2FSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
 
     type_slug = "minif2f-smoke-worker"
     leaf_slug = "minif2f-smoke-leaf"
-    RECURSIVE_WORKER_SLUG = "minif2f-smoke-recursive-worker"
+    RECURSIVE_WORKER_SLUG: ClassVar[str] = "minif2f-smoke-recursive-worker"
 
 
 class MiniF2FSubworker:
@@ -91,4 +92,4 @@ class MiniF2FSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
 
     type_slug = "minif2f-sadpath-smoke-worker"
     leaf_slug = "minif2f-smoke-leaf"
-    FAILING_LEAF_SLUG = "minif2f-smoke-leaf-failing"
+    FAILING_LEAF_SLUG: ClassVar[str] = "minif2f-smoke-leaf-failing"

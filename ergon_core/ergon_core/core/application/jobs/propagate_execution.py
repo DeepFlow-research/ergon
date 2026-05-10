@@ -13,6 +13,7 @@ from ergon_core.core.application.workflows.orchestration import (
 )
 from ergon_core.core.application.workflows.service import WorkflowService
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
+from ergon_core.core.infrastructure.sandbox.lifecycle import SandboxLifecycleHub
 from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
@@ -41,7 +42,6 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
-            node_id=payload.node_id,
         )
     )
 
@@ -52,7 +52,6 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
-                node_id=td.node_id,
             ).model_dump(mode="json"),
         )
         for td in propagation.ready_tasks
@@ -124,10 +123,13 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
-            node_id=payload.node_id,
         )
     )
-    await _terminate_failed_task_sandbox(payload.sandbox_id)
+    await _terminate_failed_task_sandbox(
+        payload.sandbox_id,
+        run_id=payload.run_id,
+        task_id=payload.task_id,
+    )
 
     # BLOCKED successors are a DB write only — no task/cancelled events.
     failure_events: list[InngestEvent] = []
@@ -157,8 +159,9 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
     return result
 
 
-async def _terminate_failed_task_sandbox(sandbox_id: str | None) -> None:
+async def _terminate_failed_task_sandbox(sandbox_id: str | None, *, run_id, task_id) -> None:
     result = await terminate_sandbox_by_id(sandbox_id)
+    SandboxLifecycleHub().discard(run_id=run_id, task_id=task_id)
     if not result.terminated:
         logger.info(
             "failed-task sandbox cleanup did not terminate sandbox_id=%s reason=%s",

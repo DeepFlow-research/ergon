@@ -8,11 +8,17 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 from datasets import load_dataset
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
+from ergon_core.api import Evaluator, Sandbox, Task, Worker
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements
 
+from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import ResearchRubricsSandbox
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
     RubricCriterion,
+)
+from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
+    ResearchRubricsWorkflowCliReActWorker,
 )
 
 
@@ -35,10 +41,18 @@ class ResearchRubricsBenchmark(Benchmark):
     required_packages: ClassVar[list[str]] = ["datasets", "huggingface_hub"]
     install_hint: ClassVar[str] = "pip install 'ergon-builtins[data]'"
 
+    limit: int | None = None
+    worker: Worker
+    sandbox: Sandbox
+    evaluators: tuple[Evaluator, ...]
+
     def __init__(
         self,
         *,
         limit: int | None = None,
+        worker: Worker | None = None,
+        sandbox: Sandbox | None = None,
+        evaluators: tuple[Evaluator, ...] | None = None,
         name: str | None = None,
         description: str | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
@@ -47,21 +61,26 @@ class ResearchRubricsBenchmark(Benchmark):
             name=name or "researchrubrics",
             description=description or "ResearchRubrics deep-research benchmark",
             metadata=metadata,
+            limit=limit,
+            worker=worker or ResearchRubricsWorkflowCliReActWorker(name="default", model=None),
+            sandbox=sandbox or ResearchRubricsSandbox(),
+            evaluators=evaluators or (ResearchRubricsRubric(name="default"),),
         )
-        self.limit = limit
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[ResearchRubricsTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[ResearchRubricsTaskPayload]]]:
         payloads = self._load_rows()
-        tasks: list[TaskSpec[ResearchRubricsTaskPayload]] = []
+        tasks: list[Task[ResearchRubricsTaskPayload]] = []
         for payload in payloads:
             tasks.append(
-                TaskSpec[ResearchRubricsTaskPayload](
+                Task[ResearchRubricsTaskPayload](
                     task_slug=payload.sample_id,
                     instance_key="default",
                     description=payload.prompt,
-                    evaluator_binding_keys=("default",),
+                    worker=self.worker.model_copy(deep=True),
+                    sandbox=self.sandbox.model_copy(deep=True),
+                    evaluators=tuple(e.model_copy(deep=True) for e in self.evaluators),
                     task_payload=payload,
                 )
             )

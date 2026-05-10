@@ -55,7 +55,6 @@ async def _prepare_execution(
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=payload.task_id,
-                node_id=payload.node_id,
             )
         )
 
@@ -68,9 +67,7 @@ async def _setup_sandbox(
     prepared: PreparedTaskExecution,
     sandbox_setup_function: Any,
 ) -> SandboxReadyResult:
-    # Dynamic subtasks have no static task_id. Use node_id as the sandbox key
-    # so each subtask gets its own isolated sandbox slot in the manager registry.
-    sandbox_task_key = payload.task_id or prepared.node_id
+    sandbox_task_key = payload.task_id
     return await ctx.step.invoke(
         "sandbox-setup",
         function=sandbox_setup_function,
@@ -158,7 +155,6 @@ async def _emit_task_completed(
                 task_id=payload.task_id,
                 execution_id=prepared.execution_id,
                 sandbox_id=sandbox_id,
-                node_id=prepared.node_id,
             ).model_dump(mode="json"),
         )
     )
@@ -180,7 +176,6 @@ async def _emit_task_failed(
                 execution_id=prepared.execution_id,
                 error=error_message,
                 sandbox_id=sandbox_id,
-                node_id=prepared.node_id,
             ).model_dump(mode="json"),
         )
     )
@@ -366,19 +361,12 @@ async def run_execute_task_job(
             )
         else:
             # Prepare itself raised — no execution row, no task_slug, no
-            # reliable task_id (``payload.task_id`` may be ``None`` for
-            # dynamic subtasks, which is why prepare raised in the
-            # first place).  Log loudly; the span + event emission
-            # requires a non-null task_id which we don't have here.  The
-            # run_graph_node stays in RUNNING on this branch. The
-            # ``node_id``/``task_id`` identity cleanup in README (Open refactors)
-            # targets this ambiguity. Without *this* hoist, even the traceback
-            # was invisible — the function just silently died in Inngest.
+            # Prepare itself raised — no execution row or task_slug yet.
+            # Log loudly; without this hoist the traceback was invisible
+            # and the function just silently died in Inngest.
             logger.error(
-                "task-execute: prepare raised for task_id=%s node_id=%s — "
-                "no execution row to finalize",
+                "task-execute: prepare raised for task_id=%s — no execution row to finalize",
                 payload.task_id,
-                payload.node_id,
             )
 
         raise NonRetriableError(message=error_msg) from exc

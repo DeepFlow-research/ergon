@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) -> JsonObject:
     """Clean up a single cancelled task's resources."""
     logger.info(
-        "cleanup-cancelled node_id=%s execution_id=%s cause=%s",
-        payload.node_id,
+        "cleanup-cancelled task_id=%s execution_id=%s cause=%s",
+        payload.task_id,
         payload.execution_id,
         payload.cause,
     )
@@ -31,7 +31,7 @@ async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) 
     if payload.execution_id is None:
         return CleanupResult(
             run_id=payload.run_id,
-            node_id=payload.node_id,
+            node_id=payload.task_id,
             execution_id=None,
             sandbox_released=False,
             execution_row_updated=False,
@@ -44,7 +44,7 @@ async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) 
             result = svc.cleanup(
                 session,
                 run_id=payload.run_id,
-                node_id=payload.node_id,
+                node_id=payload.task_id,
                 execution_id=payload.execution_id,
             )
         return result.model_dump(mode="json")

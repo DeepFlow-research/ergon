@@ -4,10 +4,8 @@ Asserts only the override behaviour — the parent ``execute`` is
 ``@final`` and tested in ``test_smoke_worker_base_final.py``.
 """
 
-from uuid import uuid4
-
 import pytest
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
+from ergon_core.core.persistence.shared.types import TaskSlug
 from tests.fixtures.smoke_components.workers.minif2f_smoke import (
     MiniF2FSadPathSmokeWorker,
 )
@@ -37,14 +35,14 @@ def test_l_2_routed_to_failing_leaf(worker_cls, happy_leaf: str, failing_leaf: s
         model=None,
     )
     spec = worker._spec_for("l_2", ("l_1",), "Line 2")
-    assert spec.task_slug == TaskSlug("l_2")
-    assert spec.assigned_worker_slug == AssignedWorkerSlug(failing_leaf)
+    assert spec.task.task_slug == TaskSlug("l_2")
+    assert spec.task.worker.name == failing_leaf
     assert spec.depends_on == [TaskSlug("l_1")]
 
     for slug in ("d_root", "d_left", "d_right", "d_join", "l_1", "l_3", "s_a", "s_b"):
         spec = worker._spec_for(slug, (), "…")
-        assert spec.assigned_worker_slug == AssignedWorkerSlug(happy_leaf), (
-            f"{slug} should use happy leaf, got {spec.assigned_worker_slug}"
+        assert spec.task.worker.name == happy_leaf, (
+            f"{slug} should use happy leaf, got {spec.task.worker.name}"
         )
 
 

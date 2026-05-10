@@ -14,6 +14,7 @@ from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 from ergon_core.core.infrastructure.sandbox.resource_publisher import (
     SandboxResourcePublisher,
 )
+from ergon_builtins.sandbox_runtime import ManagerBackedSandbox
 
 try:
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
@@ -116,6 +117,12 @@ class ResearchRubricsSandboxManager(BaseSandboxManager):
             run_id=run_id,
             task_execution_id=task_execution_id,
         )
+
+
+class ResearchRubricsSandbox(ManagerBackedSandbox):
+    """Public ResearchRubrics sandbox definition backed by its manager."""
+
+    manager_cls: ClassVar[type[BaseSandboxManager]] = ResearchRubricsSandboxManager
 
     async def read_report_file(
         self,

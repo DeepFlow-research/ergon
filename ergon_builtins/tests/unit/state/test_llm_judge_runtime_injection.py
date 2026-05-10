@@ -7,13 +7,34 @@ Verifies:
 """
 
 from unittest.mock import AsyncMock
+from collections.abc import AsyncGenerator
+from typing import ClassVar
 from uuid import uuid4
 
 import pytest
+from ergon_core.api import Sandbox, Worker, WorkerContext
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.api.benchmark import Task
+
+
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "llm-judge-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
 
 
 def _make_eval_context(
@@ -25,10 +46,11 @@ def _make_eval_context(
         task_id=uuid4(),
         execution_id=uuid4(),
         task=Task(
-            task_id=uuid4(),
             task_slug="test",
             instance_key="default",
             description="What is quantum computing?",
+            worker=_Worker(name="worker", model=None),
+            sandbox=_Sandbox(),
         ),
         worker_result=WorkerOutput(
             output="Quantum computing uses qubits...",

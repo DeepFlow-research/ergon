@@ -2,9 +2,9 @@
 
 from collections.abc import AsyncGenerator
 
-from ergon_core.api import Task, WorkerContext, WorkerStreamItem
+from ergon_core.api import Sandbox, Task, WorkerContext, WorkerStreamItem
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
-    SWEBenchSandboxManager,
+    SWEBenchSandbox,
 )
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 from ergon_builtins.shared.workers.react_prompts import SWEBENCH_SYSTEM_PROMPT
@@ -30,15 +30,13 @@ class SWEBenchReactWorker(ReActWorker):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        sandbox = SWEBenchSandboxManager().get_sandbox(task.task_id)
-        if sandbox is None:
-            raise RuntimeError(
-                f"SWE-Bench worker requires a live sandbox for task_id={task.task_id}; "
-                "SandboxSetupRequest must have completed (including "
-                "_install_dependencies) before worker-execute runs."
+        if not isinstance(sandbox, SWEBenchSandbox):
+            raise TypeError(
+                f"SWEBenchReactWorker requires SWEBenchSandbox, got {type(sandbox).__name__}"
             )
-        toolkit = SWEBenchToolkit(sandbox=sandbox, workdir="/workspace/repo")
+        toolkit = SWEBenchToolkit(sandbox=sandbox.raw_sandbox, workdir="/workspace/repo")
         self.tools = list(toolkit.get_tools())
-        async for item in super().execute(task, context=context):
+        async for item in super().execute(task, context=context, sandbox=sandbox):
             yield item

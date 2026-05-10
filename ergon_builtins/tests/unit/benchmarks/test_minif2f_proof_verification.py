@@ -6,13 +6,15 @@ was removed in RFC 2026-04-22).
 """
 
 from unittest.mock import AsyncMock, MagicMock
+from collections.abc import AsyncGenerator
+from typing import ClassVar
 from uuid import uuid4
 
 import pytest
 from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
-from ergon_core.api import WorkerOutput
+from ergon_core.api import Sandbox, Worker, WorkerContext, WorkerOutput
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.core.application.evaluation.protocols import CommandResult
@@ -21,12 +23,31 @@ from ergon_core.core.application.evaluation.criterion_runtime import (
 )
 
 
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "minif2f-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
+
+
 def _make_task() -> Task:
     return Task(
-        task_id=uuid4(),
         task_slug="t1",
         instance_key="default",
         description="theorem t : True := by trivial",
+        worker=_Worker(name="worker", model=None),
+        sandbox=_Sandbox(),
         task_payload=EmptyTaskPayload(),
     )
 

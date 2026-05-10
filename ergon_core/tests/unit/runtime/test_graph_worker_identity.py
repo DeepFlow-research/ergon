@@ -1,7 +1,11 @@
+from collections.abc import AsyncGenerator
+from typing import ClassVar
 from uuid import UUID, uuid4
 from unittest.mock import MagicMock
 
 import pytest
+from ergon_core.api import EmptyTaskPayload, Sandbox, Task, Worker, WorkerContext, WorkerOutput
+from ergon_core.api.worker import WorkerStreamItem
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -32,8 +36,43 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "identity-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        yield WorkerOutput(output=f"{task.task_slug}:{sandbox.env}", success=True)
+
+
 class _Payload(BaseModel):
     pass
+
+
+def _task_json(
+    *,
+    task_slug: str = "root",
+    instance_key: str = "sample-1",
+    description: str = "Root task",
+    worker_name: str = "primary",
+) -> dict:
+    return Task(
+        task_slug=task_slug,
+        instance_key=instance_key,
+        description=description,
+        worker=_Worker(name=worker_name, model="stub:constant"),
+        sandbox=_Sandbox(env={"ROLE": worker_name}),
+        task_payload=EmptyTaskPayload(),
+    ).model_dump(mode="json")
 
 
 def _session() -> Session:
@@ -75,6 +114,7 @@ def _definition_with_worker(
                 task_slug="root",
                 description="Root task",
                 task_payload_json={},
+                task_json=_task_json(),
             ),
             ExperimentDefinitionWorker(
                 experiment_definition_id=definition_id,
@@ -150,6 +190,60 @@ def test_graph_initialization_writes_concrete_worker_slug_from_definition_bindin
 
     node = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).one()
     assert node.assigned_worker_slug == "minif2f-react"
+
+
+def test_graph_initialization_copies_definition_task_json_as_task_identity() -> None:
+    session = _session()
+    definition_id = _definition_with_worker(session, worker_type="minif2f-react")
+    run_id = _run(session, definition_id=definition_id)
+    definition_task = session.exec(
+        select(ExperimentDefinitionTask).where(
+            ExperimentDefinitionTask.experiment_definition_id == definition_id
+        )
+    ).one()
+
+    WorkflowGraphRepository().initialize_from_definition(
+        session,
+        run_id,
+        definition_id,
+        initial_node_status=TaskExecutionStatus.PENDING,
+        initial_edge_status="pending",
+        task_payload_model=_Payload,
+        meta=MutationMeta(actor="test"),
+    )
+
+    node = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).one()
+    assert node.task_id == definition_task.id
+    assert node.task_json == definition_task.task_json
+    assert node.parent_task_id is None
+
+
+def test_graph_node_view_inflates_task_with_runtime_task_id() -> None:
+    session = _session()
+    run_id = uuid4()
+    task_id = uuid4()
+    task_json = _task_json(task_slug="dynamic-leaf", worker_name="dynamic")
+    session.add(
+        RunGraphNode(
+            run_id=run_id,
+            task_id=task_id,
+            task_json=task_json,
+            parent_task_id=None,
+            instance_key="sample-1",
+            task_slug="dynamic-leaf",
+            description="Dynamic task",
+            status=TaskExecutionStatus.PENDING,
+        )
+    )
+    session.commit()
+
+    node = WorkflowGraphRepository().node(session, run_id=run_id, task_id=task_id)
+
+    assert node.task_id == task_id
+    assert node.task.task_id == task_id
+    assert node.task.task_slug == "dynamic-leaf"
+    assert isinstance(node.task.worker, _Worker)
+    assert node.task.worker.name == "dynamic"
 
 
 @pytest.mark.asyncio
@@ -242,12 +336,17 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
 
 
 @pytest.mark.asyncio
-async def test_add_subtask_rejects_unknown_worker_slug_before_creating_node() -> None:
+async def test_add_subtask_inserts_full_task_json_and_dispatches_task_id_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session = _session()
     definition_id = _definition_with_worker(session, worker_type="minif2f-react")
     run_id = _run(session, definition_id=definition_id)
+    parent_task_id = uuid4()
     parent = RunGraphNode(
         run_id=run_id,
+        task_id=parent_task_id,
+        task_json=_task_json(task_slug="parent"),
         instance_key="sample-1",
         task_slug="parent",
         description="Parent task",
@@ -259,26 +358,43 @@ async def test_add_subtask_rejects_unknown_worker_slug_before_creating_node() ->
     session.commit()
 
     dashboard_emitter = MagicMock()
+    sent_events = []
 
-    with pytest.raises(ValueError, match="Unknown worker slug"):
-        await TaskManagementService(dashboard_emitter=dashboard_emitter).add_subtask(
-            session,
-            AddSubtaskCommand(
-                run_id=run_id,
-                parent_node_id=parent.id,
-                task_slug="bad-worker",
-                description="Should not be inserted",
-                assigned_worker_slug="not-a-real-worker",
-            ),
-        )
+    async def _send(event) -> None:
+        sent_events.append(event)
+
+    monkeypatch.setattr(
+        "ergon_core.core.application.tasks.management.inngest_client.send",
+        _send,
+    )
+    task = Task(
+        task_slug="child",
+        instance_key="sample-1",
+        description="Dynamic child task",
+        worker=_Worker(name="child-worker", model="stub:constant"),
+        sandbox=_Sandbox(env={"ROLE": "child"}),
+        task_payload=EmptyTaskPayload(),
+    )
+
+    result = await TaskManagementService(dashboard_emitter=dashboard_emitter).add_subtask(
+        session,
+        AddSubtaskCommand(
+            run_id=run_id,
+            parent_task_id=parent_task_id,
+            task=task,
+        ),
+    )
 
     inserted = session.exec(
-        select(RunGraphNode).where(
-            RunGraphNode.run_id == run_id,
-            RunGraphNode.task_slug == "bad-worker",
-        )
-    ).first()
-    assert inserted is None
+        select(RunGraphNode).where(RunGraphNode.task_id == result.task_id)
+    ).one()
+    assert inserted.task_json == task.model_dump(mode="json")
+    assert inserted.parent_task_id == parent_task_id
+    assert inserted.assigned_worker_slug == "child-worker"
+    assert result.task_id == inserted.task_id
+    assert sent_events
+    assert sent_events[0].data["task_id"] == str(result.task_id)
+    assert "node_id" not in sent_events[0].data
 
 
 class _session_context:

@@ -7,15 +7,39 @@ are read for the patch payload.
 """
 
 from unittest.mock import AsyncMock, MagicMock
+from collections.abc import AsyncGenerator
+from typing import ClassVar
 from uuid import uuid4
 
 import pytest
 from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
-from ergon_core.api import WorkerOutput
+from ergon_core.api import Sandbox, Worker, WorkerContext, WorkerOutput
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.benchmark import Task
 from ergon_core.core.application.evaluation.protocols import CommandResult
+
+
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "swebench-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
+
+
+def _bindings() -> dict[str, object]:
+    return {"worker": _Worker(name="worker", model=None), "sandbox": _Sandbox()}
 
 
 def _fake_run(cmd: str, timeout: int = 30) -> CommandResult:
@@ -63,10 +87,10 @@ async def test_criterion_computes_patch_via_run_command(
         task_id=uuid4(),
         execution_id=uuid4(),
         task=Task[SWEBenchTaskPayload](
-            task_id=uuid4(),
             task_slug="django-1",
             instance_key="default",
             description="d",
+            **_bindings(),
             task_payload=payload,
         ),
         worker_result=WorkerOutput(output="", success=True),
@@ -130,10 +154,10 @@ async def test_criterion_short_circuits_on_empty_patch(
         task_id=uuid4(),
         execution_id=uuid4(),
         task=Task[SWEBenchTaskPayload](
-            task_id=uuid4(),
             task_slug="django-1",
             instance_key="default",
             description="d",
+            **_bindings(),
             task_payload=payload,
         ),
         worker_result=WorkerOutput(output="", success=True),

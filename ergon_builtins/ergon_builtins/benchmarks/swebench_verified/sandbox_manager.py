@@ -10,6 +10,7 @@ on the Inngest event.
 
 import logging
 import shlex
+from typing import ClassVar
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
@@ -23,6 +24,7 @@ from ergon_builtins.benchmarks.swebench_verified.sandbox_manager_support import 
     payload_to_swebench_row,
 )
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
+from ergon_builtins.sandbox_runtime import ManagerBackedSandbox
 
 try:
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
@@ -125,3 +127,9 @@ class SWEBenchSandboxManager(BaseSandboxManager):
             task_id,
             (result.stdout or "(no version output)").strip(),
         )
+
+
+class SWEBenchSandbox(ManagerBackedSandbox):
+    """Public SWE-Bench sandbox definition backed by SWEBenchSandboxManager."""
+
+    manager_cls: ClassVar[type[BaseSandboxManager]] = SWEBenchSandboxManager

@@ -8,7 +8,7 @@ from types import NoneType
 from typing import Any, Self, cast
 from uuid import UUID
 
-from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.api import Sandbox, Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
@@ -27,6 +27,7 @@ from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
 )
 from ergon_builtins.models.resolution import resolve_model_target
 from ergon_builtins.observability.pydantic_ai_logfire import configure_pydantic_ai_logfire
+from pydantic import PrivateAttr
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,11 @@ class ReActWorker(Worker):
 
     type_slug = "react-v1"
 
+    tools: list[Any]  # slopcop: ignore[no-typing-any]
+    system_prompt: str | None
+    max_iterations: int
+    _seed_messages: list[ModelMessage] | None = PrivateAttr(default=None)
+
     def __init__(
         self,
         *,
@@ -63,17 +69,20 @@ class ReActWorker(Worker):
         system_prompt: str | None,
         max_iterations: int,
     ) -> None:
-        super().__init__(name=name, model=model)
-        self.tools: list[AgentTool] = tools
-        self.system_prompt: str | None = system_prompt
-        self.max_iterations: int = max_iterations
-        self._seed_messages: list[ModelMessage] | None = None
+        super().__init__(
+            name=name,
+            model=model,
+            tools=tools,
+            system_prompt=system_prompt,
+            max_iterations=max_iterations,
+        )
 
     async def execute(
         self,
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
         async for chunk in self._run_agent(task, context):
             yield chunk

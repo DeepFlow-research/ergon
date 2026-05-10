@@ -3,7 +3,19 @@
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
+from collections.abc import AsyncGenerator
+from collections.abc import Iterable
+from typing import Any, ClassVar
+
+from ergon_core.api import (
+    Evaluator,
+    Sandbox,
+    SandboxRuntime,
+    Task,
+    TaskEvaluationResult,
+    Worker,
+)
+from ergon_core.api.criterion import Criterion, CriterionOutcome
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 from ergon_core.core.application.evaluation.models import (
@@ -16,6 +28,38 @@ from ergon_core.core.application.evaluation.models import (
 )
 from ergon_core.core.application.evaluation.service import EvaluationService
 from pydantic import ValidationError
+
+
+class _SchemaWorker(Worker):
+    type_slug: ClassVar[str] = "schema-worker"
+
+    async def execute(
+        self, task: Task, *, context: Any, sandbox: Sandbox
+    ) -> AsyncGenerator[Any, None]:
+        if False:
+            yield None
+
+
+class _SchemaSandbox(Sandbox):
+    type_slug: ClassVar[str] = "schema-sandbox"
+
+    async def provision(self, *, run_id, task_id) -> SandboxRuntime:
+        raise NotImplementedError
+
+    async def terminate(self) -> None:
+        return None
+
+
+class _SchemaEvaluator(Evaluator):
+    type_slug: ClassVar[str] = "schema-evaluator"
+
+    def criteria_for(self, task: Task) -> Iterable[Criterion]:
+        return ()
+
+    def aggregate_task(
+        self, task: Task, criterion_results: Iterable[CriterionOutcome]
+    ) -> TaskEvaluationResult:
+        return TaskEvaluationResult(evaluator_name=self.name, score=1.0, passed=True)
 
 
 def test_criterion_context_requires_task_input_and_agent_reasoning_field() -> None:
@@ -42,72 +86,56 @@ def test_task_evaluation_context_allows_missing_agent_output_value() -> None:
 def test_prepared_single_evaluator_requires_task_input() -> None:
     with pytest.raises(ValidationError):
         PreparedSingleEvaluator(
-            evaluator_id=uuid4(),
-            evaluator_binding_key="rubric",
-            evaluator_type="researchrubrics-rubric",
+            evaluator_index=0,
+            evaluator_name="rubric",
         )
 
 
-def test_evaluator_dispatch_uses_definition_task_description(
+def test_evaluator_dispatch_uses_task_bound_evaluator_and_description(  # noqa: C901
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     definition_id = uuid4()
     task_id = uuid4()
     node_id = uuid4()
-    evaluator_id = uuid4()
     execution_id = uuid4()
-
-    class _TaskEvaluatorRow:
-        evaluator_binding_key = "rubric"
-
-    class _EvaluatorDefinitionRow:
-        id = evaluator_id
-        evaluator_type = "researchrubrics-rubric"
-
-    class _TaskRow:
-        description = "actual task prompt"
 
     class _ExecutionRow:
         final_assistant_message = "worker answer"
 
-    class _AllResult:
-        def all(self) -> list[_TaskEvaluatorRow]:
-            return [_TaskEvaluatorRow()]
+    task = Task(
+        task_slug="task",
+        instance_key="instance",
+        description="actual task prompt",
+        worker=_SchemaWorker(name="worker", model=None),
+        sandbox=_SchemaSandbox(),
+        evaluators=(_SchemaEvaluator(name="rubric"),),
+        task_payload={},
+    )
 
     class _FirstResult:
-        def first(self) -> _EvaluatorDefinitionRow:
-            return _EvaluatorDefinitionRow()
-
-    class _Session:
-        def __init__(self) -> None:
-            self.exec_calls = 0
-
-        def exec(self, _statement) -> _AllResult | _FirstResult:
-            self.exec_calls += 1
-            if self.exec_calls == 1:
-                return _AllResult()
-            return _FirstResult()
-
-        def get(
-            self,
-            model: type[RunTaskExecution] | type[ExperimentDefinitionTask] | type[RunGraphNode],
-            _id,
-        ) -> _ExecutionRow | _TaskRow | RunGraphNode | None:
-            graph_node = RunGraphNode(
+        def first(self) -> RunGraphNode:
+            return RunGraphNode(
                 id=node_id,
                 run_id=uuid4(),
+                task_id=task_id,
                 definition_task_id=task_id,
                 instance_key="instance",
                 task_slug="task",
                 description="actual task prompt",
+                task_json=task.model_dump(mode="json"),
                 status="completed",
             )
-            rows = {
-                RunGraphNode: graph_node,
-                RunTaskExecution: _ExecutionRow(),
-                ExperimentDefinitionTask: _TaskRow(),
-            }
-            return rows.get(model)
+
+    class _Session:
+        def exec(self, _statement) -> _FirstResult:
+            return _FirstResult()
+
+        def get(
+            self,
+            model: type[RunTaskExecution],
+            _id,
+        ) -> _ExecutionRow | None:
+            return _ExecutionRow() if model is RunTaskExecution else None
 
         def close(self) -> None:
             pass
@@ -121,10 +149,11 @@ def test_evaluator_dispatch_uses_definition_task_description(
         DispatchEvaluatorsCommand(
             run_id=uuid4(),
             definition_id=definition_id,
-            node_id=node_id,
             task_id=task_id,
             execution_id=execution_id,
         )
     )
 
     assert dispatch.valid_evaluators[0].task_input == "actual task prompt"
+    assert dispatch.valid_evaluators[0].evaluator_index == 0
+    assert dispatch.valid_evaluators[0].evaluator_name == "rubric"

@@ -47,6 +47,7 @@ class RunGraphNode(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
+    task_id: UUID = Field(default_factory=uuid4, index=True)
     definition_task_id: UUID | None = Field(
         default=None,
         foreign_key="experiment_definition_tasks.id",
@@ -65,6 +66,7 @@ class RunGraphNode(SQLModel, table=True):
         ),
     )
     description: str
+    task_json: JsonObject = Field(default_factory=dict, sa_column=Column(JSON))
 
     status: str = Field(
         index=True,
@@ -91,6 +93,7 @@ class RunGraphNode(SQLModel, table=True):
             "for dynamic subtasks so hierarchy can be read without joins or edge traversal."
         ),
     )
+    parent_task_id: UUID | None = Field(default=None, index=True)
 
     level: int = Field(
         default=0,
@@ -102,6 +105,12 @@ class RunGraphNode(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
+
+    @model_validator(mode="after")
+    def _validate_task_json(self) -> "RunGraphNode":
+        if not isinstance(self.task_json, dict):
+            raise ValueError(f"task_json must be a dict, got {type(self.task_json).__name__}")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +135,8 @@ class RunGraphEdge(SQLModel, table=True):
         foreign_key="run_graph_nodes.id",
         index=True,
     )
+    source_task_id: UUID | None = Field(default=None, index=True)
+    target_task_id: UUID | None = Field(default=None, index=True)
     status: str = Field(index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

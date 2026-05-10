@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
+from ergon_core.api import Task
 from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
@@ -43,10 +44,12 @@ class GraphNodeDto(BaseModel):
 
     id: NodeId
     run_id: RunId
+    task_id: UUID
     definition_task_id: DefinitionId | None
     instance_key: str
     task_slug: str
     description: str
+    task_json: JsonObject
     status: str = Field(
         description=(
             "Domain-specific node lifecycle status stored as a string because the database "
@@ -55,7 +58,21 @@ class GraphNodeDto(BaseModel):
     )
     assigned_worker_slug: str | None
     parent_node_id: NodeId | None
+    parent_task_id: UUID | None
     level: int
+
+
+class RunGraphNodeView(BaseModel):
+    """Typed runtime view of a run graph node with its inflated task."""
+
+    model_config = {"frozen": True, "arbitrary_types_allowed": True}
+
+    run_id: RunId
+    task_id: UUID
+    parent_task_id: UUID | None
+    status: str
+    level: int
+    task: Task
 
 
 class GraphTaskRef(BaseModel):
@@ -80,6 +97,8 @@ class GraphEdgeDto(BaseModel):
     definition_dependency_id: DefinitionId | None
     source_node_id: NodeId
     target_node_id: NodeId
+    source_task_id: UUID | None
+    target_task_id: UUID | None
     status: str = Field(
         description=(
             "Domain-specific edge lifecycle status stored as a string because the database "
@@ -149,11 +168,13 @@ class NodeAddedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["node.added"] = "node.added"
+    task_id: UUID | None = None
     task_slug: str
     instance_key: str
     description: str
     status: str
     assigned_worker_slug: str | None
+    parent_task_id: UUID | None = None
 
 
 class NodeRemovedMutation(BaseModel):
@@ -162,11 +183,13 @@ class NodeRemovedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["node.removed"] = "node.removed"
+    task_id: UUID | None = None
     task_slug: str
     instance_key: str
     description: str
     status: str
     assigned_worker_slug: str | None
+    parent_task_id: UUID | None = None
 
 
 class NodeStatusChangedMutation(BaseModel):
@@ -196,6 +219,8 @@ class EdgeAddedMutation(BaseModel):
     mutation_type: Literal["edge.added"] = "edge.added"
     source_node_id: NodeId
     target_node_id: NodeId
+    source_task_id: UUID | None = None
+    target_task_id: UUID | None = None
     status: str
 
 
@@ -207,6 +232,8 @@ class EdgeRemovedMutation(BaseModel):
     mutation_type: Literal["edge.removed"] = "edge.removed"
     source_node_id: NodeId
     target_node_id: NodeId
+    source_task_id: UUID | None = None
+    target_task_id: UUID | None = None
     status: str
 
 

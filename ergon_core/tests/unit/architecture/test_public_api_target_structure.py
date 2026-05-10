@@ -10,9 +10,15 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
     expected = {
         "Benchmark",
         "BenchmarkRequirements",
+        "ContainmentViolation",
         "Task",
-        "TaskSpec",
         "EmptyTaskPayload",
+        "Evaluator",
+        "Experiment",
+        "Sandbox",
+        "SandboxKindMismatch",
+        "SandboxNotLiveError",
+        "SandboxRuntime",
         "Worker",
         "WorkerContext",
         "WorkerOutput",
@@ -25,9 +31,9 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "EvidenceMessage",
         "Rubric",
         "TaskEvaluationResult",
+        "TaskNotMaterializedError",
+        "WeightedCriterion",
         "CriterionCheckError",
-        "ComponentRegistry",
-        "registry",
     }
     retired = {
         "BenchmarkTask",
@@ -38,16 +44,17 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "CriterionObservation",
         "CriterionObservationMessage",
         "CriteriaCheckError",
-        "Experiment",
+        "ComponentRegistry",
         "WorkerSpec",
+        "TaskSpec",
         "PersistedExperimentDefinition",
         "DefinitionHandle",
+        "registry",
     }
 
     assert set(public_api.__all__) == expected
     assert all(hasattr(public_api, name) for name in expected)
     assert retired.isdisjoint(public_api.__all__)
-    assert all(not hasattr(public_api, name) for name in retired)
 
 
 def test_semantic_api_clusters_are_importable() -> None:
@@ -60,7 +67,6 @@ def test_semantic_api_clusters_are_importable() -> None:
         "Benchmark",
         "BenchmarkRequirements",
         "Task",
-        "TaskSpec",
         "EmptyTaskPayload",
     ]
     assert worker.__all__ == ["Worker", "WorkerContext", "WorkerOutput", "WorkerStreamItem"]
@@ -72,16 +78,20 @@ def test_semantic_api_clusters_are_importable() -> None:
         "CriterionEvidence",
         "EvidenceMessage",
     ]
-    assert rubric.__all__ == ["Evaluator", "Rubric", "TaskEvaluationResult"]
+    assert rubric.__all__ == ["Evaluator", "Rubric", "TaskEvaluationResult", "WeightedCriterion"]
 
 
-def test_core_composition_owns_experiment_worker_spec_and_definition_handle() -> None:
+def test_core_composition_owns_definition_handle_only() -> None:
     composition = importlib.import_module("ergon_core.core.domain.experiments")
 
-    assert composition.__all__ == ["DefinitionHandle", "Experiment", "WorkerSpec"]
+    assert composition.__all__ == ["DefinitionHandle"]
     assert hasattr(composition, "DefinitionHandle")
-    assert hasattr(composition, "Experiment")
-    assert hasattr(composition, "WorkerSpec")
+    assert not hasattr(composition, "Experiment")
+    assert not hasattr(composition, "WorkerSpec")
+
+
+def test_old_core_experiment_module_stays_deleted() -> None:
+    assert importlib.util.find_spec("ergon_core.core.domain.experiments.experiment") is None
 
 
 def test_public_worker_module_does_not_import_persistence_or_sessions() -> None:

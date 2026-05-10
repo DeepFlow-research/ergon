@@ -11,13 +11,11 @@ import traceback
 from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
 
-from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
-from ergon_core.core.application.components.catalog import ComponentCatalogService
-from ergon_core.core.application.experiments.repository import DefinitionRepository
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.infrastructure.sandbox.lifecycle import SandboxLifecycleHub
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
@@ -28,71 +26,45 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
     worker_execute_context,
 )
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+_SANDBOX_LIFECYCLE_HUB = SandboxLifecycleHub()
 
 
 async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExecuteJobResult:
     logger.info(
-        "worker-execute run_id=%s task_id=%s worker_type=%s",
+        "worker-execute run_id=%s task_id=%s",
         payload.run_id,
         payload.task_id,
-        payload.worker_type,
     )
     span_start = datetime.now(UTC)
 
-    if payload.node_id is None:
-        raise ContractViolationError(
-            "worker-execute requires node_id",
-            run_id=payload.run_id,
-            task_id=payload.task_id,
-            execution_id=payload.execution_id,
-            sandbox_id=payload.sandbox_id,
-        )
-
-    catalog = ComponentCatalogService()
-    task_payload = None
-    instance_key = str(payload.node_id)
     with get_session() as session:
-        worker = catalog.build_worker(
-            session,
-            slug=payload.worker_type,
-            name=payload.assigned_worker_slug,
-            model=payload.model_target,
-        )
-        node = session.get(RunGraphNode, payload.node_id)
-        if node is None:
+        try:
+            node = WorkflowGraphRepository().node(
+                session,
+                run_id=payload.run_id,
+                task_id=payload.task_id,
+            )
+        except Exception as exc:
             raise ContractViolationError(
-                f"RunGraphNode {payload.node_id} not found",
+                f"RunGraphNode task_id={payload.task_id} not found",
                 run_id=payload.run_id,
                 task_id=payload.task_id,
                 execution_id=payload.execution_id,
                 sandbox_id=payload.sandbox_id,
-            )
-        if node.definition_task_id is not None:
-            task_row, instance_row = DefinitionRepository().task_with_instance(
-                session,
-                node.definition_task_id,
-            )
-            benchmark_cls = catalog.resolve_benchmark(session, payload.benchmark_type)
-            task_payload = task_row.task_payload_as(benchmark_cls.task_payload_model)
-            instance_key = instance_row.instance_key
+            ) from exc
 
-    task = Task[BaseModel](
-        task_id=payload.node_id,
-        task_slug=payload.task_slug,
-        instance_key=instance_key,
-        description=payload.task_description,
-        task_payload=task_payload or EmptyTaskPayload(),
-    )
+    task = node.task
+    worker = task.worker
 
     worker_context = WorkerContext(
         run_id=payload.run_id,
         definition_id=payload.definition_id,
         execution_id=payload.execution_id,
         sandbox_id=payload.sandbox_id,
-        node_id=payload.node_id,
+        task_id=payload.task_id,
+        node_id=payload.task_id,
     )
 
     context_event_repo = ContextEventService()
@@ -100,13 +72,18 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
     context_event_repo.add_listener(dashboard_emitter.on_context_event)
     dashboard_emitter.register_execution(
         execution_id=payload.execution_id,
-        task_node_id=payload.node_id,
+        task_node_id=payload.task_id,
     )
 
     chunk_count = 0
     try:
+        sandbox = await _SANDBOX_LIFECYCLE_HUB.acquire(
+            task.sandbox,
+            run_id=payload.run_id,
+            task_id=payload.task_id,
+        )
         output, chunk_count = await _consume_worker_stream(
-            worker.execute(task, context=worker_context),
+            worker.execute(task, context=worker_context, sandbox=sandbox),
             lambda chunk, count: _persist_context_events(
                 context_event_repo,
                 payload,
@@ -116,6 +93,11 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         )
 
     except Exception as exc:  # slopcop: ignore[no-broad-except]
+        if "sandbox" in locals():
+            try:
+                await _SANDBOX_LIFECYCLE_HUB.release(sandbox)
+            except Exception:  # slopcop: ignore[no-broad-except]
+                logger.warning("failed to release sandbox after worker error", exc_info=True)
         error_msg = str(exc)
         logger.exception(
             "worker-execute failed task_id=%s after %d chunks: %s",
@@ -151,8 +133,8 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
                 "task_id": str(payload.task_id),
                 "execution_id": str(payload.execution_id),
                 "sandbox_id": payload.sandbox_id,
-                "worker_type": payload.worker_type,
-                "model_target": payload.model_target,
+                "worker_type": worker.type_slug,
+                "model_target": worker.model,
                 "success": output.success,
                 "output_length": len(output.output),
                 "chunk_count": chunk_count,
@@ -212,7 +194,7 @@ async def _persist_context_events(
                 session,
                 run_id=payload.run_id,
                 execution_id=payload.execution_id,
-                worker_binding_key=payload.assigned_worker_slug,
+                worker_binding_key=payload.task_id.hex,
                 chunk=chunk,
             )
     except Exception:  # slopcop: ignore[no-broad-except]

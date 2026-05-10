@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from ergon_core.api import Task
 from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
@@ -21,11 +22,9 @@ class AddSubtaskCommand(BaseModel):
     """
 
     run_id: RunId
-    parent_node_id: NodeId
-    task_slug: TaskSlug = Field(min_length=1)
-    description: str = Field(min_length=1)
-    assigned_worker_slug: AssignedWorkerSlug
-    depends_on: list[NodeId] = Field(default_factory=list)
+    parent_task_id: UUID
+    task: Task
+    depends_on: list[UUID] = Field(default_factory=list)
 
     model_config = {"frozen": True}
 
@@ -33,7 +32,7 @@ class AddSubtaskCommand(BaseModel):
 class AddSubtaskResult(BaseModel):
     """Result snapshot after creating a subtask node."""
 
-    node_id: NodeId
+    task_id: UUID
     task_slug: TaskSlug
     status: str
 
@@ -46,9 +45,7 @@ class AddSubtaskResult(BaseModel):
 class SubtaskSpec(BaseModel):
     """One entry in a plan_subtasks call."""
 
-    task_slug: TaskSlug = Field(min_length=1)
-    description: str = Field(min_length=1)
-    assigned_worker_slug: AssignedWorkerSlug
+    task: Task
     depends_on: list[TaskSlug] = Field(default_factory=list)
 
     model_config = {"frozen": True}
@@ -58,7 +55,7 @@ class PlanSubtasksCommand(BaseModel):
     """Batch-create subtasks with local dependency references."""
 
     run_id: RunId
-    parent_node_id: NodeId
+    parent_task_id: UUID
     subtasks: list[SubtaskSpec]
 
     model_config = {"frozen": True}
@@ -67,7 +64,7 @@ class PlanSubtasksCommand(BaseModel):
 class PlanSubtasksResult(BaseModel):
     """Maps task_slug to created node_id plus identifies root tasks."""
 
-    nodes: dict[TaskSlug, NodeId]
+    tasks: dict[TaskSlug, UUID]
     roots: list[TaskSlug]
 
     model_config = {"frozen": True}

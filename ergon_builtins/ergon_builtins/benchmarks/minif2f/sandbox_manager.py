@@ -8,9 +8,11 @@ smoke-tests that ``lake env lean --version`` returns cleanly.
 """
 
 import logging
+from typing import ClassVar
 from uuid import UUID
 
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
+from ergon_builtins.sandbox_runtime import ManagerBackedSandbox
 
 from ergon_builtins.benchmarks.minif2f.sandbox.utils import (
     REGISTRY_PATH,
@@ -99,3 +101,9 @@ class MiniF2FSandboxManager(BaseSandboxManager):
             task_id,
             (result.stdout or "(no version output)").strip(),
         )
+
+
+class MiniF2FSandbox(ManagerBackedSandbox):
+    """Public MiniF2F sandbox definition backed by MiniF2FSandboxManager."""
+
+    manager_cls: ClassVar[type[BaseSandboxManager]] = MiniF2FSandboxManager

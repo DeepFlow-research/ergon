@@ -1,6 +1,8 @@
 """Tests for ResearchRubrics benchmark registration and vanilla variant."""
 
 from datetime import UTC, datetime
+from collections.abc import AsyncGenerator
+from typing import ClassVar
 from uuid import uuid4
 
 import pytest
@@ -15,13 +17,44 @@ from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
 )
 from ergon_builtins.benchmarks.researchrubrics.vanilla import ResearchRubricsVanillaBenchmark
 from ergon_builtins.registry_data import BENCHMARKS, EVALUATORS, WORKERS
-from ergon_core.api import Benchmark
+from ergon_core.api import Benchmark, Sandbox, Worker, WorkerContext
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.application.resources import RunResourceView
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.api.benchmark import Task
+
+
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+
+class _Worker(Worker):
+    type_slug: ClassVar[str] = "researchrubrics-test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerOutput, None]:
+        yield WorkerOutput(output="", success=True)
+
+
+def _task(**kwargs) -> Task:
+    task_cls = (
+        Task[ResearchRubricsTaskPayload]
+        if isinstance(kwargs.get("task_payload"), ResearchRubricsTaskPayload)
+        else Task
+    )
+    return task_cls(
+        worker=_Worker(name="worker", model=None),
+        sandbox=_Sandbox(),
+        **kwargs,
+    )
 
 
 class _FakeJudgeRuntime:
@@ -129,12 +162,9 @@ class TestResearchRubricsBenchmarkRegistration:
             limit=1,
         )
 
-        assert set(experiment.workers) == {
-            "manager",
-            "researchrubrics-researcher",
-            "researchrubrics-workflow-cli-react",
-        }
-        assert experiment.assignments == {"manager": ["sample"]}
+        task = experiment.benchmark.build_instances()["default"][0]
+        assert task.worker.type_slug == "researchrubrics-workflow-cli-react"
+        assert task.evaluators
 
 
 class TestResearchRubricsVanillaBenchmark:
@@ -194,12 +224,10 @@ class TestResearchRubricsRubric:
 
     def test_can_construct_without_prebound_criteria(self):
         rubric = ResearchRubricsRubric(name="evaluator")
-        task = Task[ResearchRubricsTaskPayload](
-            task_id=uuid4(),
+        task = _task(
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
-            evaluator_binding_keys=("default",),
             task_payload=ResearchRubricsTaskPayload.model_validate(
                 {
                     "sample_id": "sample",
@@ -230,12 +258,10 @@ class TestResearchRubricsRubric:
 
     def test_aggregate_uses_result_weights(self):
         rubric = ResearchRubricsRubric(name="evaluator")
-        task = Task(
-            task_id=uuid4(),
+        task = _task(
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
-            evaluator_binding_keys=("default",),
         )
 
         result = rubric.aggregate_task(
@@ -282,12 +308,10 @@ class TestResearchRubricsJudgeCriterion:
             run_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
-            task=Task(
-                task_id=uuid4(),
+            task=_task(
                 task_slug="sample",
                 instance_key="default",
                 description="Write a report.",
-                evaluator_binding_keys=("default",),
             ),
             worker_result=WorkerOutput(output="assistant summary only"),
             runtime=runtime,

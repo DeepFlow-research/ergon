@@ -4,8 +4,8 @@ from collections.abc import AsyncGenerator
 from typing import Any
 from uuid import UUID
 
-from ergon_core.api import Task, WorkerContext, WorkerStreamItem
-from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
+from ergon_core.api import Sandbox, Task, WorkerContext, WorkerStreamItem
+from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandbox
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_builtins.shared.workers.react_prompts import MINIF2F_SYSTEM_PROMPT
 from ergon_builtins.shared.workers.react_worker import ReActWorker
@@ -54,18 +54,18 @@ class MiniF2FReactWorker(ReActWorker):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        sandbox = MiniF2FSandboxManager().get_sandbox(task.task_id)
-        if sandbox is None:
-            raise RuntimeError(
-                f"MiniF2F worker requires a live sandbox for task_id={task.task_id}; "
-                "SandboxSetupRequest must have completed before worker-execute runs."
+        if not isinstance(sandbox, MiniF2FSandbox):
+            raise TypeError(
+                f"MiniF2FReactWorker requires MiniF2FSandbox, got {type(sandbox).__name__}"
             )
+        raw_sandbox = sandbox.raw_sandbox
         toolkit = MiniF2FToolkit(
-            sandbox=sandbox,
-            sandbox_run_skill=_minif2f_run_skill(sandbox),
+            sandbox=raw_sandbox,
+            sandbox_run_skill=_minif2f_run_skill(raw_sandbox),
             run_id=task.task_id,
         )
         self.tools = list(toolkit.get_tools())
-        async for item in super().execute(task, context=context):
+        async for item in super().execute(task, context=context, sandbox=sandbox):
             yield item

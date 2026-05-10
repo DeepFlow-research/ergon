@@ -158,7 +158,6 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
-                node_id=td.node_id,
             ).model_dump(mode="json"),
         )
         for td in initialized.initial_ready_tasks

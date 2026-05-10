@@ -110,6 +110,11 @@ class StagedRubric(Rubric):
 
     type_slug: ClassVar[str] = "gdpeval-staged-rubric"
 
+    category_name: str
+    max_total_score: float
+    stages: list[EvaluationStage]
+    rationale: str | None = None
+
     def __init__(
         self,
         *,
@@ -127,12 +132,14 @@ class StagedRubric(Rubric):
                 all_criteria.append(criterion)
                 criterion_stage_map[criterion.slug] = stage_idx
 
-        super().__init__(name=name, criteria=all_criteria)
-
-        self.category_name = category_name
-        self.max_total_score = max_total_score
-        self.stages = list(stages)
-        self.rationale = rationale
+        super().__init__(
+            name=name,
+            criteria=all_criteria,
+            category_name=category_name,
+            max_total_score=max_total_score,
+            stages=list(stages),
+            rationale=rationale,
+        )
         self._criterion_stage_map = criterion_stage_map
 
         total_stage_max = sum(s.max_points for s in stages)

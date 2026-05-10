@@ -5,7 +5,6 @@ from ergon_core.api.benchmark import (
     BenchmarkRequirements,
     EmptyTaskPayload,
     Task,
-    TaskSpec,
 )
 from ergon_core.api.criterion import (
     Criterion,
@@ -15,30 +14,43 @@ from ergon_core.api.criterion import (
     EvidenceMessage,
     ScoreScale,
 )
-from ergon_core.api.errors import CriterionCheckError
-from ergon_core.api.registry import ComponentRegistry, registry
-from ergon_core.api.rubric import Rubric, TaskEvaluationResult
+from ergon_core.api.errors import (
+    ContainmentViolation,
+    CriterionCheckError,
+    SandboxKindMismatch,
+    SandboxNotLiveError,
+    TaskNotMaterializedError,
+)
+from ergon_core.api.experiment import Experiment
+from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult, WeightedCriterion
+from ergon_core.api.sandbox import Sandbox, SandboxRuntime
 from ergon_core.api.worker import Worker, WorkerContext, WorkerOutput, WorkerStreamItem
 
 __all__ = [
     "Benchmark",
     "BenchmarkRequirements",
-    "ComponentRegistry",
+    "ContainmentViolation",
     "Criterion",
     "CriterionCheckError",
     "CriterionContext",
     "CriterionEvidence",
     "CriterionOutcome",
     "EmptyTaskPayload",
+    "Evaluator",
     "EvidenceMessage",
+    "Experiment",
     "Rubric",
+    "Sandbox",
+    "SandboxKindMismatch",
+    "SandboxNotLiveError",
+    "SandboxRuntime",
     "ScoreScale",
     "Task",
-    "TaskSpec",
     "TaskEvaluationResult",
+    "TaskNotMaterializedError",
+    "WeightedCriterion",
     "Worker",
     "WorkerContext",
     "WorkerOutput",
     "WorkerStreamItem",
-    "registry",
 ]

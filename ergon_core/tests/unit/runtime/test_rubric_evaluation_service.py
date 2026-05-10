@@ -1,13 +1,17 @@
 """Contracts for rubric evaluation service spec construction."""
 
-import pytest
+from collections.abc import AsyncGenerator
 from uuid import uuid4
 
+import pytest
+
+from ergon_core.api import Sandbox, WeightedCriterion, Worker, WorkerContext, WorkerOutput
+from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext
-from ergon_core.api.rubric import Rubric
 from ergon_core.api.criterion import CriterionOutcome, ScoreScale
-from ergon_core.api.benchmark import Task
+from ergon_core.api.rubric import Rubric
+from ergon_core.api.worker import WorkerStreamItem
 from ergon_core.core.application.evaluation.models import (
     CriterionSpec,
     TaskEvaluationContext,
@@ -31,6 +35,24 @@ class _Criterion(Criterion):
         return CriterionOutcome(name=self.slug, score=self.score_spec.max_score, passed=True)
 
 
+class _Sandbox(Sandbox):
+    async def provision(self) -> None:
+        pass
+
+
+class _Worker(Worker):
+    type_slug = "test-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        yield WorkerOutput(output=task.task_slug, success=True)
+
+
 class _Executor:
     def __init__(self) -> None:
         self.seen_specs: list[CriterionSpec] = []
@@ -48,7 +70,7 @@ class _Executor:
                 name=spec.criterion.slug,
                 score=spec.max_score,
                 passed=True,
-                weight=spec.criterion.weight,
+                weight=spec.aggregation_weight,
             )
             for spec in criteria
         ]
@@ -61,9 +83,22 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
     evaluator = Rubric(
         name="rubric",
         criteria=[
-            _Criterion(slug="positive", weight=2.0, max_score=2.0),
-            _Criterion(slug="negative", weight=-5.0, max_score=5.0),
+            WeightedCriterion(
+                criterion=_Criterion(slug="positive", weight=2.0, max_score=2.0),
+                weight=2.0,
+            ),
+            WeightedCriterion(
+                criterion=_Criterion(slug="negative", weight=-5.0, max_score=5.0),
+                weight=-5.0,
+            ),
         ],
+    )
+    task_definition = Task(
+        task_slug="task",
+        instance_key="default",
+        description="Task",
+        worker=_Worker(name="worker", model="stub:model"),
+        sandbox=_Sandbox(),
     )
 
     await service.evaluate(
@@ -73,14 +108,9 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
             agent_reasoning=None,
         ),
         evaluator,
-        Task(
-            task_id=uuid4(),
-            task_slug="task",
-            instance_key="default",
-            description="Task",
-            evaluator_binding_keys=("default",),
-        ),
+        Task.from_definition(task_definition.model_dump(), task_id=uuid4()),
         "benchmark",
     )
 
     assert [spec.max_score for spec in executor.seen_specs] == [2.0, 5.0]
+    assert [spec.aggregation_weight for spec in executor.seen_specs] == [2.0, -5.0]

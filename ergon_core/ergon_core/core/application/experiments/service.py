@@ -5,8 +5,7 @@ from inspect import Parameter, signature
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark import TaskSpec
+from ergon_core.api.benchmark import Benchmark, Task
 from ergon_core.api.registry import registry
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.persistence.shared.db import get_session
@@ -22,7 +21,7 @@ from ergon_core.core.shared.utils import utcnow
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from ergon_core.core.domain.experiments import Experiment
+    from ergon_core.api import Experiment
 
 WorkflowDefinitionFactory = Callable[
     [ExperimentRecord, RunAssignment],
@@ -126,7 +125,7 @@ def _construct_benchmark(cls: Callable[..., Benchmark], *, limit: int | None) ->
 
 
 def _select_samples(
-    instances: Mapping[str, Sequence[TaskSpec[BaseModel]]],
+    instances: Mapping[str, Sequence[Task[BaseModel]]],
     request: ExperimentDefineRequest,
 ) -> list[str]:
     if request.sample_ids is not None:

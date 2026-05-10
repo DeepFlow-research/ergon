@@ -10,9 +10,9 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.api import Task
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug
 from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox
 from ergon_core.core.application.communication.models import CreateMessageRequest
+from tests.fixtures.smoke_components.sandbox import SmokeSandboxDefinition
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
 from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
 
@@ -135,10 +135,16 @@ async def test_send_completion_message_not_called_when_subworker_raises(
         subworker_cls = _FailingSubworker
 
     leaf = _FailingLeaf(name="unit-test", model=None)
-    task = Task(task_id=uuid4(), task_slug="l_fail", instance_key="default", description="x")
+    task = Task(
+        task_slug="l_fail",
+        instance_key="default",
+        description="x",
+        worker=leaf,
+        sandbox=SmokeSandboxDefinition(),
+    )
 
     with pytest.raises(RuntimeError, match="sad-path"):
-        async for _ in leaf.execute(task, context=_context()):
+        async for _ in leaf.execute(task, context=_context(), sandbox=task.sandbox):
             pass
 
     save_mock.assert_not_called()

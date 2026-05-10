@@ -4,14 +4,12 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from uuid import UUID
 
 import inngest
-from ergon_core.api.benchmark import Benchmark
+from ergon_core.api import Experiment
+from ergon_core.api.benchmark import Benchmark, Task
 from ergon_core.api.registry import registry
 from ergon_core.api.rubric import Evaluator
-from ergon_core.core.domain.experiments import Experiment
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.api.benchmark import TaskSpec
-from ergon_core.core.domain.experiments import WorkerSpec
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import ExperimentRecord
 from ergon_core.core.application.events.task_events import WorkflowStartedEvent
@@ -121,17 +119,14 @@ def _persist_single_sample_workflow_definition(
     benchmark_slug = _metadata_str(experiment, "benchmark_slug") or experiment.benchmark_type
     benchmark = _single_sample_benchmark(benchmark_slug, assignment.instance_key)
     worker_slug = _primary_worker_slug(assignment.worker_team)
-    worker = WorkerSpec(
-        worker_slug=worker_slug,
-        name="primary",
-        model=assignment.model_target or "openai:gpt-4o",
-    )
+    worker_cls = registry.require_worker(worker_slug)
+    worker = worker_cls(name="primary", model=assignment.model_target or "openai:gpt-4o")
     evaluators = _evaluator_bindings(assignment.evaluator_slug, assignment.evaluator_bindings)
-    workflow = Experiment.from_single_worker(
-        benchmark=benchmark,
-        worker=worker,
-        evaluators=evaluators,
-    )
+    if hasattr(benchmark, "worker"):
+        benchmark.worker = worker
+    if hasattr(benchmark, "evaluators"):
+        benchmark.evaluators = tuple(evaluators.values())
+    workflow = Experiment(benchmark=benchmark)
     workflow.validate()
     return _ExperimentDefinitionWriter().persist_definition(workflow)
 
@@ -195,7 +190,7 @@ class _SingleSampleBenchmark(Benchmark):
         self,
         source: Benchmark,
         instance_key: str,
-        tasks: Sequence[TaskSpec[BaseModel]],
+        tasks: Sequence[Task[BaseModel]],
     ) -> None:
         super().__init__(
             name=source.name,
@@ -206,7 +201,7 @@ class _SingleSampleBenchmark(Benchmark):
         self._instance_key = instance_key
         self._tasks = list(tasks)
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
         return {self._instance_key: self._tasks}
 
     def evaluator_requirements(self) -> Sequence[str]:

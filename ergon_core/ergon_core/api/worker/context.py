@@ -23,6 +23,7 @@ class WorkerContext(BaseModel):
     )
     execution_id: UUID
     sandbox_id: str
+    task_id: UUID
     node_id: UUID | None = Field(
         default=None,
         description="RunGraphNode.id — this worker's graph node identity.",

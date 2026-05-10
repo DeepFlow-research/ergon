@@ -10,9 +10,10 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
 
-from ergon_core.api import Task, WorkerContext, WorkerStreamItem
+from ergon_core.api import Sandbox, Task, WorkerContext, WorkerStreamItem
 from ergon_core.core.application.resources import RunResourceView
 from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
+    ResearchRubricsSandbox,
     ResearchRubricsSandboxManager,
 )
 
@@ -114,8 +115,14 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        manager = ResearchRubricsSandboxManager()
+        if not isinstance(sandbox, ResearchRubricsSandbox):
+            raise TypeError(
+                f"ResearchRubricsResearcherWorker requires ResearchRubricsSandbox, "
+                f"got {type(sandbox).__name__}"
+            )
+        manager = sandbox.manager
 
         model_run_skill = make_run_skill(model=self.model)
 
@@ -159,7 +166,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         )
         self.tools = [*rr_tools, *graph_tools]
 
-        async for chunk in super().execute(task, context=context):
+        async for chunk in super().execute(task, context=context, sandbox=sandbox):
             yield chunk
 
     async def _run_sandbox_report_skill(

@@ -8,11 +8,14 @@ task, so these fixtures replace the production benchmark loaders only when
 """
 
 from collections.abc import Mapping, Sequence
-from typing import ClassVar
+from typing import Any, ClassVar
 
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, TaskSpec
+from ergon_core.api import Evaluator, Sandbox, Worker
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, EmptyTaskPayload, Task
+from ergon_core.api.registry import registry
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
+from tests.fixtures.smoke_components.sandbox import SmokeSandboxDefinition
 
 
 class ResearchRubricsTaskPayload(BaseModel):
@@ -50,14 +53,39 @@ class _SingleTaskSmokeBenchmark(Benchmark):
     task_description: ClassVar[str]
     task_payload: ClassVar[JsonObject] = {}
     task_payload_model = EmptyTaskPayload
+    worker_slug: ClassVar[str]
+    worker: Worker | None = None
+    sandbox: Sandbox | None = None
+    evaluators: tuple[Evaluator, ...] = ()
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
+    def __init__(
+        self,
+        *,
+        worker: Worker | None = None,
+        sandbox: Sandbox | None = None,
+        evaluators: tuple[Evaluator, ...] | None = None,
+        **kwargs: Any,  # slopcop: ignore[no-typing-any]
+    ) -> None:
+        super().__init__(
+            worker=worker,
+            sandbox=sandbox,
+            evaluators=evaluators or (),
+            **kwargs,
+        )
+
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
         payload = self.task_payload_model.model_validate(self.task_payload)
-        task = TaskSpec[BaseModel](
+        worker = self.worker
+        if worker is None:
+            worker_cls = registry.require_worker(self.worker_slug)
+            worker = worker_cls(name=self.worker_slug, model=None)
+        task = Task[BaseModel](
             task_slug=self.task_slug,
             instance_key="default",
             description=self.task_description,
-            evaluator_binding_keys=("default", "post-root"),
+            worker=worker,
+            sandbox=self.sandbox or SmokeSandboxDefinition(),
+            evaluators=tuple(self.evaluators),
             task_payload=payload,
         )
         return {"default": [task]}
@@ -71,6 +99,7 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
     task_payload_model = ResearchRubricsTaskPayload
     task_slug: ClassVar[str] = "smoke-001"
     task_description: ClassVar[str] = "Write a short smoke-test research report."
+    worker_slug: ClassVar[str] = "researchrubrics-smoke-worker"
     task_payload: ClassVar[JsonObject] = {
         "sample_id": "smoke-001",
         "domain": "smoke",
@@ -90,6 +119,7 @@ class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
     task_payload_model = MiniF2FTaskPayload
     task_slug: ClassVar[str] = "mathd_algebra_478"
     task_description: ClassVar[str] = "Prove the smoke_trivial theorem in Lean."
+    worker_slug: ClassVar[str] = "minif2f-smoke-worker"
     task_payload: ClassVar[JsonObject] = {
         "name": "mathd_algebra_478",
         "informal_statement": "Smoke theorem used by the canonical E2E fixture.",
@@ -103,6 +133,7 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
     task_payload_model = SWEBenchTaskPayload
     task_slug: ClassVar[str] = "astropy__astropy-12907"
     task_description: ClassVar[str] = "Create the simple Python add() patch used by smoke tests."
+    worker_slug: ClassVar[str] = "swebench-smoke-worker"
     task_payload: ClassVar[JsonObject] = {
         "instance_id": "astropy__astropy-12907",
         "repo": "smoke/repo",

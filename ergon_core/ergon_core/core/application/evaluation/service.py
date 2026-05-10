@@ -5,11 +5,6 @@ from uuid import UUID
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinitionEvaluator,
-    ExperimentDefinitionTask,
-    ExperimentDefinitionTaskEvaluator,
-)
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.evaluation_summary import (
@@ -69,60 +64,30 @@ class EvaluationService:
     def prepare_dispatch(self, command: DispatchEvaluatorsCommand) -> PreparedEvaluatorDispatch:
         session = get_session()
         try:
-            node = session.get(RunGraphNode, command.node_id)
+            node = session.exec(
+                select(RunGraphNode).where(
+                    RunGraphNode.run_id == command.run_id,
+                    RunGraphNode.task_id == command.task_id,
+                )
+            ).first()
             if node is None:
-                raise LookupError(f"run graph node not found: {command.node_id}")
-            task_id = command.task_id or node.definition_task_id
-            if task_id is None:
-                return PreparedEvaluatorDispatch(
-                    node_id=command.node_id,
-                    task_id=None,
-                    evaluators_found=0,
-                )
-            task_evals = list(
-                session.exec(
-                    select(ExperimentDefinitionTaskEvaluator).where(
-                        ExperimentDefinitionTaskEvaluator.experiment_definition_id
-                        == command.definition_id,
-                        ExperimentDefinitionTaskEvaluator.task_id == task_id,
-                    )
-                ).all()
-            )
-            if not task_evals:
-                return PreparedEvaluatorDispatch(
-                    node_id=command.node_id,
-                    task_id=task_id,
-                    evaluators_found=0,
-                )
-            task_row = session.get(ExperimentDefinitionTask, task_id)
-            if task_row is None:
-                raise LookupError(f"definition task not found: {task_id}")
+                raise LookupError(f"run graph node not found: {command.task_id}")
+            task = Task.from_definition(node.task_json, task_id=node.task_id)
             execution = session.get(RunTaskExecution, command.execution_id)
             agent_reasoning = execution.final_assistant_message if execution is not None else None
-            valid_evaluators: list[PreparedSingleEvaluator] = []
-            for te in task_evals:
-                evaluator_def = session.exec(
-                    select(ExperimentDefinitionEvaluator).where(
-                        ExperimentDefinitionEvaluator.experiment_definition_id
-                        == command.definition_id,
-                        ExperimentDefinitionEvaluator.binding_key == te.evaluator_binding_key,
-                    )
-                ).first()
-                if evaluator_def is None:
-                    continue
-                valid_evaluators.append(
-                    PreparedSingleEvaluator(
-                        evaluator_id=evaluator_def.id,
-                        evaluator_binding_key=te.evaluator_binding_key,
-                        evaluator_type=evaluator_def.evaluator_type,
-                        task_input=task_row.description,
-                        agent_reasoning=agent_reasoning,
-                    )
+            valid_evaluators = [
+                PreparedSingleEvaluator(
+                    evaluator_index=index,
+                    evaluator_name=evaluator.name,
+                    task_input=task.description,
+                    agent_reasoning=agent_reasoning,
                 )
+                for index, evaluator in enumerate(task.evaluators)
+            ]
             return PreparedEvaluatorDispatch(
-                node_id=command.node_id,
-                task_id=task_id,
-                evaluators_found=len(task_evals),
+                node_id=node.id,
+                task_id=node.task_id,
+                evaluators_found=len(task.evaluators),
                 valid_evaluators=valid_evaluators,
             )
         finally:
@@ -137,18 +102,7 @@ class EvaluationService:
     ) -> EvaluationServiceResult:
         if self.criterion_executor is None:
             raise RuntimeError("EvaluationService.evaluate requires a criterion executor")
-        criteria = list(evaluator.criteria_for(task))
-        specs = [
-            CriterionSpec(
-                criterion=c,
-                criterion_idx=i,
-                max_score=c.score_spec.max_score,
-                stage_idx=0,
-                stage_name="default",
-                aggregation_weight=c.weight,
-            )
-            for i, c in enumerate(criteria)
-        ]
+        specs = _criterion_specs(evaluator, task)
         criterion_results: list[CriterionOutcome] = await self.criterion_executor.execute_all(
             task_context=task_context,
             task=task,
@@ -167,7 +121,8 @@ class EvaluationService:
         node_id: UUID,
         task_execution_id: UUID,
         definition_task_id: UUID | None,
-        evaluator_id: UUID,
+        evaluator_index: int,
+        evaluator_name: str,
         service_result: EvaluationServiceResult,
         evaluation_input: str | None = None,
     ) -> PersistedEvaluation:
@@ -182,7 +137,8 @@ class EvaluationService:
                     node_id=node_id,
                     task_execution_id=task_execution_id,
                     definition_task_id=definition_task_id,
-                    definition_evaluator_id=evaluator_id,
+                    evaluator_index=evaluator_index,
+                    evaluator_name=evaluator_name,
                     score=result.score,
                     passed=result.passed,
                     feedback=result.feedback,
@@ -213,7 +169,7 @@ class EvaluationService:
         node_id: UUID,
         task_execution_id: UUID,
         definition_task_id: UUID | None,
-        evaluator_id: UUID,
+        evaluator_index: int,
         evaluator_name: str,
         exc: Exception,
     ) -> None:
@@ -235,7 +191,8 @@ class EvaluationService:
                     node_id=node_id,
                     task_execution_id=task_execution_id,
                     definition_task_id=definition_task_id,
-                    definition_evaluator_id=evaluator_id,
+                    evaluator_index=evaluator_index,
+                    evaluator_name=evaluator_name,
                     score=0.0,
                     passed=False,
                     feedback=f"{error_type}: {exc}",
@@ -264,6 +221,34 @@ class EvaluationService:
         run.summary_json = existing_summary
         session.add(run)
         session.flush()
+
+
+def _criterion_specs(evaluator: Evaluator, task: Task) -> list[CriterionSpec]:
+    weighted_criteria = getattr(evaluator, "criteria", None)
+    if weighted_criteria is not None:
+        return [
+            CriterionSpec(
+                criterion=weighted.criterion,
+                criterion_idx=i,
+                max_score=weighted.criterion.score_spec.max_score,
+                stage_idx=0,
+                stage_name="default",
+                aggregation_weight=weighted.weight,
+            )
+            for i, weighted in enumerate(weighted_criteria)
+        ]
+
+    return [
+        CriterionSpec(
+            criterion=criterion,
+            criterion_idx=i,
+            max_score=criterion.score_spec.max_score,
+            stage_idx=0,
+            stage_name="default",
+            aggregation_weight=criterion.weight,
+        )
+        for i, criterion in enumerate(evaluator.criteria_for(task))
+    ]
 
 
 def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str | None) -> str:

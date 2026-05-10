@@ -1,26 +1,41 @@
 """Public worker ABC."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Mapping
-from typing import Any, ClassVar, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 from uuid import UUID
 
-from ergon_core.api.benchmark.task import Task
+from pydantic import BaseModel, Field
+
+from ergon_core.api._definition import DefinitionModelMixin, import_component_string
 from ergon_core.api.errors import DependencyError
-from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.infrastructure.dependencies import check_packages
 
+if TYPE_CHECKING:
+    from ergon_core.api.benchmark.task import Task
+    from ergon_core.api.sandbox import Sandbox
+    from ergon_core.api.worker.context import WorkerContext
+
 WorkerStreamItem = ContextPartChunk | WorkerOutput
 
 
-class Worker(ABC):
+class Worker(DefinitionModelMixin, BaseModel, ABC):
     """Base class for all workers."""
+
+    model_config = {"arbitrary_types_allowed": True, "extra": "allow", "frozen": False}
 
     type_slug: ClassVar[str]
     required_packages: ClassVar[list[str]] = []
     install_hint: ClassVar[str] = ""
+    requires_sandbox: ClassVar[type[Sandbox] | None] = None
+
+    name: str
+    model: str | None
+    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
     def __init__(
         self,
@@ -28,10 +43,19 @@ class Worker(ABC):
         name: str,
         model: str | None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
+        **data: Any,  # slopcop: ignore[no-typing-any]
     ) -> None:
-        self.name = name
-        self.model = model
-        self.metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
+        super().__init__(name=name, model=model, metadata=dict(metadata or {}), **data)
+
+    @classmethod
+    def from_definition(
+        cls, worker_json: dict[str, Any]
+    ) -> "Worker":  # slopcop: ignore[no-typing-any]
+        """Reconstruct a concrete worker from persisted definition JSON."""
+        worker_cls = import_component_string(worker_json["_type"])
+        data = dict(worker_json)
+        data.pop("_type", None)
+        return worker_cls.model_validate(data)
 
     @abstractmethod
     async def execute(
@@ -39,6 +63,7 @@ class Worker(ABC):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
         """Run the worker, yielding context chunks and a terminal WorkerOutput."""
         raise NotImplementedError

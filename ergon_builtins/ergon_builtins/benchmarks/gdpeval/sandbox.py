@@ -5,9 +5,11 @@ packages needed for GDP document-processing evaluation (PDF, OCR, etc.).
 """
 
 import logging
+from typing import ClassVar
 from uuid import UUID
 
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
+from ergon_builtins.sandbox_runtime import ManagerBackedSandbox
 
 try:
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
@@ -71,3 +73,9 @@ class GDPEvalSandboxManager(BaseSandboxManager):
             )
 
         logger.info("GDPEval package verification passed (task_id=%s)", task_id)
+
+
+class GDPEvalSandbox(ManagerBackedSandbox):
+    """Public GDPEval sandbox definition backed by GDPEvalSandboxManager."""
+
+    manager_cls: ClassVar[type[BaseSandboxManager]] = GDPEvalSandboxManager

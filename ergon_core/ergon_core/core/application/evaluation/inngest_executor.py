@@ -40,7 +40,7 @@ class InngestCriterionExecutor:
         *,
         task_id: UUID,
         execution_id: UUID,
-        evaluator_id: UUID,
+        evaluator_id: UUID | None,
         sandbox_manager: "BaseSandboxManager",
         trace_sink: TraceSink | None = None,
     ):

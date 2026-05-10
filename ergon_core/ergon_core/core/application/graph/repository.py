@@ -15,6 +15,7 @@ from collections.abc import Awaitable, Callable
 from typing import Literal
 from uuid import UUID, uuid4
 
+from ergon_core.api import Task
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
@@ -51,6 +52,7 @@ from ergon_core.core.application.graph.models import (
     NodeFieldChangedMutation,
     NodeRemovedMutation,
     NodeStatusChangedMutation,
+    RunGraphNodeView,
     WorkflowGraphDto,
 )
 from ergon_core.core.shared.utils import utcnow
@@ -163,12 +165,15 @@ class WorkflowGraphRepository:
                 RunGraphNode(
                     id=node_id,
                     run_id=run_id,
+                    task_id=task.id,
                     definition_task_id=task.id,
                     instance_key=instance_key_by_id[task.instance_id],
                     task_slug=task.task_slug,
                     description=task.description,
+                    task_json=task.task_json,
                     status=initial_node_status,
                     assigned_worker_slug=worker_by_task.get(task.id),
+                    parent_task_id=task.parent_task_id,
                     created_at=now,
                     updated_at=now,
                 )
@@ -183,6 +188,8 @@ class WorkflowGraphRepository:
                     definition_dependency_id=dep.id,
                     source_node_id=def_to_node[dep.depends_on_task_id],
                     target_node_id=def_to_node[dep.task_id],
+                    source_task_id=dep.depends_on_task_id,
+                    target_task_id=dep.task_id,
                     status=initial_edge_status,
                     created_at=now,
                     updated_at=now,
@@ -205,7 +212,7 @@ class WorkflowGraphRepository:
                     sequence=seq,
                     mutation_type="node.added",
                     target_type="node",
-                    target_id=node.id,
+                    target_id=node.task_id,
                     actor=meta.actor,
                     old_value=None,
                     new_value=_node_snapshot(node).model_dump(mode="json"),
@@ -221,7 +228,7 @@ class WorkflowGraphRepository:
                     RunGraphAnnotation(
                         run_id=run_id,
                         target_type="node",
-                        target_id=node.id,
+                        target_id=node.task_id,
                         namespace="payload",
                         sequence=seq,
                         payload=payload,
@@ -254,7 +261,7 @@ class WorkflowGraphRepository:
                     sequence=seq,
                     mutation_type="edge.added",
                     target_type="edge",
-                    target_id=edge.id,
+                    target_id=edge.target_task_id or edge.id,
                     actor=meta.actor,
                     old_value=None,
                     new_value=_edge_snapshot(edge).model_dump(mode="json"),
@@ -281,12 +288,16 @@ class WorkflowGraphRepository:
         session: Session,
         run_id: UUID,
         *,
+        task: Task | None = None,
+        task_id: UUID | None = None,
+        task_json: dict | None = None,
         task_slug: str,
         instance_key: str,
         description: str,
         status: str,
         assigned_worker_slug: str | None = None,
         parent_node_id: UUID | None = None,
+        parent_task_id: UUID | None = None,
         level: int = 0,
         meta: MutationMeta,
     ) -> GraphNodeDto:
@@ -296,14 +307,25 @@ class WorkflowGraphRepository:
         The caller (TaskManagementService) computes level = parent.level + 1.
         """
         now = utcnow()
+        if task is not None:
+            task_json = task.model_dump(mode="json")
+            task_slug = task.task_slug
+            instance_key = task.instance_key
+            description = task.description
+            assigned_worker_slug = task.worker.name
+        resolved_task_id = task_id or uuid4()
         node = RunGraphNode(
+            id=resolved_task_id,
             run_id=run_id,
+            task_id=resolved_task_id,
             instance_key=instance_key,
             task_slug=task_slug,
             description=description,
+            task_json=task_json or {},
             status=status,
             assigned_worker_slug=assigned_worker_slug,
             parent_node_id=parent_node_id,
+            parent_task_id=parent_task_id,
             level=level,
             created_at=now,
             updated_at=now,
@@ -316,7 +338,7 @@ class WorkflowGraphRepository:
             run_id,
             mutation_type="node.added",
             target_type="node",
-            target_id=node.id,
+            target_id=node.task_id,
             meta=meta,
             old_value=None,
             new_value=_node_snapshot(node),
@@ -465,12 +487,16 @@ class WorkflowGraphRepository:
         self._require_node_exists(session, run_id, source_node_id)
         self._require_node_exists(session, run_id, target_node_id)
         self._check_no_cycle(session, run_id, source_node_id, target_node_id)
+        source = self._get_node_row(session, run_id, source_node_id)
+        target = self._get_node_row(session, run_id, target_node_id)
 
         now = utcnow()
         edge = RunGraphEdge(
             run_id=run_id,
             source_node_id=source_node_id,
             target_node_id=target_node_id,
+            source_task_id=source.task_id,
+            target_task_id=target.task_id,
             status=status,
             created_at=now,
             updated_at=now,
@@ -483,7 +509,7 @@ class WorkflowGraphRepository:
             run_id,
             mutation_type="edge.added",
             target_type="edge",
-            target_id=edge.id,
+            target_id=edge.target_task_id or edge.id,
             meta=meta,
             old_value=None,
             new_value=_edge_snapshot(edge),
@@ -725,6 +751,23 @@ class WorkflowGraphRepository:
     ) -> GraphNodeDto:
         return _to_node_dto(self._get_node_row(session, run_id, node_id))
 
+    def node(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_id: UUID,
+    ) -> RunGraphNodeView:
+        row = self._get_node_row_by_task(session, run_id, task_id)
+        return RunGraphNodeView(
+            run_id=row.run_id,
+            task_id=row.task_id,
+            parent_task_id=row.parent_task_id,
+            status=row.status,
+            level=row.level,
+            task=Task.from_definition(row.task_json, task_id=row.task_id),
+        )
+
     def get_edge(
         self,
         session: Session,
@@ -825,6 +868,22 @@ class WorkflowGraphRepository:
         ).first()
         if row is None:
             raise NodeNotFoundError(node_id, run_id=run_id)
+        return row
+
+    def _get_node_row_by_task(
+        self,
+        session: Session,
+        run_id: UUID,
+        task_id: UUID,
+    ) -> RunGraphNode:
+        row = session.exec(
+            select(RunGraphNode).where(
+                RunGraphNode.task_id == task_id,
+                RunGraphNode.run_id == run_id,
+            )
+        ).first()
+        if row is None:
+            raise NodeNotFoundError(task_id, run_id=run_id)
         return row
 
     def _get_edge_row(
@@ -941,13 +1000,16 @@ def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
     return GraphNodeDto(
         id=row.id,
         run_id=row.run_id,
+        task_id=row.task_id,
         definition_task_id=row.definition_task_id,
         instance_key=row.instance_key,
         task_slug=row.task_slug,
         description=row.description,
+        task_json=row.task_json,
         status=row.status,
         assigned_worker_slug=row.assigned_worker_slug,
         parent_node_id=row.parent_node_id,
+        parent_task_id=row.parent_task_id,
         level=row.level,
     )
 
@@ -959,6 +1021,8 @@ def _to_edge_dto(row: RunGraphEdge) -> GraphEdgeDto:
         definition_dependency_id=row.definition_dependency_id,
         source_node_id=row.source_node_id,
         target_node_id=row.target_node_id,
+        source_task_id=row.source_task_id,
+        target_task_id=row.target_task_id,
         status=row.status,
     )
 
@@ -993,11 +1057,13 @@ def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationRecordDto:
 
 def _node_removed_snapshot(node: RunGraphNode) -> NodeRemovedMutation:
     return NodeRemovedMutation(
+        task_id=node.task_id,
         task_slug=node.task_slug,
         instance_key=node.instance_key,
         description=node.description,
         status=node.status,
         assigned_worker_slug=node.assigned_worker_slug,
+        parent_task_id=node.parent_task_id,
     )
 
 
@@ -1005,17 +1071,21 @@ def _edge_removed_snapshot(edge: RunGraphEdge) -> EdgeRemovedMutation:
     return EdgeRemovedMutation(
         source_node_id=edge.source_node_id,
         target_node_id=edge.target_node_id,
+        source_task_id=edge.source_task_id,
+        target_task_id=edge.target_task_id,
         status=edge.status,
     )
 
 
 def _node_snapshot(node: RunGraphNode) -> NodeAddedMutation:
     return NodeAddedMutation(
+        task_id=node.task_id,
         task_slug=node.task_slug,
         instance_key=node.instance_key,
         description=node.description,
         status=node.status,
         assigned_worker_slug=node.assigned_worker_slug,
+        parent_task_id=node.parent_task_id,
     )
 
 
@@ -1023,6 +1093,8 @@ def _edge_snapshot(edge: RunGraphEdge) -> EdgeAddedMutation:
     return EdgeAddedMutation(
         source_node_id=edge.source_node_id,
         target_node_id=edge.target_node_id,
+        source_task_id=edge.source_task_id,
+        target_task_id=edge.target_task_id,
         status=edge.status,
     )
 

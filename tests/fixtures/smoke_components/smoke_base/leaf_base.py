@@ -24,7 +24,7 @@ from collections.abc import AsyncGenerator, Mapping
 from typing import Any, ClassVar
 from uuid import UUID
 
-from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
+from ergon_core.api import Sandbox, Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
@@ -70,6 +70,7 @@ class BaseSmokeLeafWorker(Worker):
         task: Task,
         *,
         context: WorkerContext,
+        sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
         node_hex = context.node_id.hex[:8] if context.node_id else "unknown"
 

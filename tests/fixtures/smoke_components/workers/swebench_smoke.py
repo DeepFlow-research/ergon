@@ -6,6 +6,7 @@ probe run exercises compile + execute + assertion pass.
 """
 
 import json
+from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
@@ -36,7 +37,7 @@ class SweBenchSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
 
     type_slug = "swebench-smoke-worker"
     leaf_slug = "swebench-smoke-leaf"
-    RECURSIVE_WORKER_SLUG = "swebench-smoke-recursive-worker"
+    RECURSIVE_WORKER_SLUG: ClassVar[str] = "swebench-smoke-recursive-worker"
 
 
 class SweBenchSubworker:
@@ -89,4 +90,4 @@ class SweBenchSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
 
     type_slug = "swebench-sadpath-smoke-worker"
     leaf_slug = "swebench-smoke-leaf"
-    FAILING_LEAF_SLUG = "swebench-smoke-leaf-failing"
+    FAILING_LEAF_SLUG: ClassVar[str] = "swebench-smoke-leaf-failing"

@@ -1,7 +1,5 @@
-from uuid import uuid4
-
 import pytest
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
+from ergon_core.core.persistence.shared.types import TaskSlug
 from tests.fixtures.smoke_components.workers.minif2f_smoke import MiniF2FSmokeWorker
 from tests.fixtures.smoke_components.workers.researchrubrics_smoke import (
     ResearchRubricsSmokeWorker,
@@ -32,12 +30,12 @@ def test_happy_l_2_routes_to_recursive_worker(
     )
 
     spec = worker._spec_for("l_2", ("l_1",), "Line 2")
-    assert spec.task_slug == TaskSlug("l_2")
-    assert spec.assigned_worker_slug == AssignedWorkerSlug(recursive_worker)
+    assert spec.task.task_slug == TaskSlug("l_2")
+    assert spec.task.worker.name == recursive_worker
     assert spec.depends_on == [TaskSlug("l_1")]
 
     for slug in ("d_root", "d_left", "d_right", "d_join", "l_1", "l_3", "s_a", "s_b"):
         spec = worker._spec_for(slug, (), "...")
-        assert spec.assigned_worker_slug == AssignedWorkerSlug(happy_leaf), (
-            f"{slug} should use happy leaf, got {spec.assigned_worker_slug}"
+        assert spec.task.worker.name == happy_leaf, (
+            f"{slug} should use happy leaf, got {spec.task.worker.name}"
         )

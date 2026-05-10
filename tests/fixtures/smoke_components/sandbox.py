@@ -9,9 +9,10 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast
+from typing import ClassVar, cast
 from uuid import UUID
 
+from ergon_builtins.sandbox_runtime import ManagerBackedSandbox
 from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox, BaseSandboxManager
 from ergon_core.core.shared.settings import settings
 from pydantic import BaseModel
@@ -204,6 +205,12 @@ class SmokeSandboxManager(BaseSandboxManager):
                 reason=reason,
                 run_id=run_id,
             )
+
+
+class SmokeSandboxDefinition(ManagerBackedSandbox):
+    """Public sandbox definition used by object-bound smoke tasks."""
+
+    manager_cls: ClassVar[type[BaseSandboxManager]] = SmokeSandboxManager
 
 
 def smoke_uses_local_sandbox() -> bool:

@@ -4,6 +4,7 @@ from typing import Literal
 from uuid import UUID, uuid4
 
 import inngest
+from ergon_core.api import EmptyTaskPayload, Task
 from ergon_core.api.registry import registry
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
@@ -561,21 +562,37 @@ class WorkflowService:
                 message=f"Would add task {task_slug}",
             )
 
+        parent_task = Task.from_definition(parent.task_json, task_id=parent.task_id)
+        worker_cls = registry.require_worker(assigned_worker_slug)
+        task = Task(
+            task_slug=task_slug,
+            instance_key=parent.instance_key,
+            description=description,
+            worker=worker_cls(name=assigned_worker_slug, model=None),
+            sandbox=parent_task.sandbox.model_copy(deep=True),
+            evaluators=tuple(
+                evaluator.model_copy(deep=True) for evaluator in parent_task.evaluators
+            ),
+            parent_task_slug=parent.task_slug,
+            task_payload=EmptyTaskPayload(),
+        )
+
         created = await self._graph_repo.add_node(
             session,
             run_id,
+            task=task,
             task_slug=task_slug,
             instance_key=parent.instance_key,
             description=description,
             status=TaskExecutionStatus.PENDING.value,
-            assigned_worker_slug=assigned_worker_slug,
             parent_node_id=parent.id,
+            parent_task_id=parent.task_id,
             level=parent.level + 1,
             meta=self._meta("add-task"),
         )
         session.commit()
         definition_id = self._resolve_definition_id(session, run_id)
-        await self._task_ready_dispatcher(run_id, definition_id, created.id)
+        await self._task_ready_dispatcher(run_id, definition_id, created.task_id)
         return WorkflowMutationRef(
             action="add-task",
             dry_run=False,
@@ -850,12 +867,11 @@ class WorkflowService:
             raise ValueError(f"run {run_id} not found")
         return run.workflow_definition_id
 
-    async def _dispatch_task_ready(self, run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
+    async def _dispatch_task_ready(self, run_id: UUID, definition_id: UUID, task_id: UUID) -> None:
         event = TaskReadyEvent(
             run_id=run_id,
             definition_id=definition_id,
-            task_id=None,
-            node_id=node_id,
+            task_id=task_id,
         )
         await inngest_client.send(
             inngest.Event(

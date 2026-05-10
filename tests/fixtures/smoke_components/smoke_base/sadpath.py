@@ -8,10 +8,13 @@ started while independent branches continue normally.
 from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-from ergon_core.api import WorkerContext
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
+from ergon_core.api import Sandbox, Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.api.registry import registry
+from ergon_core.core.persistence.shared.types import TaskSlug
 from ergon_core.core.application.tasks.models import SubtaskSpec
+from tests.fixtures.smoke_components.sandbox import SmokeSandboxDefinition
 from tests.fixtures.smoke_components.smoke_base.subworker import SubworkerResult
+from collections.abc import AsyncGenerator
 
 
 class AlwaysFailSubworker:
@@ -61,9 +64,7 @@ class SadPathSmokeWorkerMixin:
     def _spec_for(self, slug, deps, desc):
         leaf_slug = self.FAILING_LEAF_SLUG if slug in self.FAILING_SLUGS else self.leaf_slug
         return SubtaskSpec(
-            task_slug=TaskSlug(slug),
-            description=desc,
-            assigned_worker_slug=AssignedWorkerSlug(leaf_slug),
+            task=_smoke_task(worker_slug=leaf_slug, task_slug=slug, description=desc),
             depends_on=[TaskSlug(d) for d in deps],
         )
 
@@ -77,3 +78,31 @@ class FailingSmokeLeafMixin:
         result: SubworkerResult,
     ) -> None:
         return None
+
+
+def _smoke_task(*, worker_slug: str, task_slug: str, description: str) -> Task:
+    try:
+        worker_cls = registry.require_worker(worker_slug)
+    except ValueError:
+        worker_cls = _FallbackSmokeWorker
+    return Task(
+        task_slug=task_slug,
+        instance_key="smoke",
+        description=description,
+        worker=worker_cls(name=worker_slug, model=None),
+        sandbox=SmokeSandboxDefinition(),
+        task_payload={},
+    )
+
+
+class _FallbackSmokeWorker(Worker):
+    type_slug: ClassVar[str] = "fallback-smoke-worker"
+
+    async def execute(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        yield WorkerOutput(output="", success=True)
