@@ -19,7 +19,6 @@ from ergon_core.core.application.read_models.models import (
     RunTaskEvaluationDto,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionWorker
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.telemetry.models import (
     RunResource,
@@ -33,7 +32,7 @@ from ergon_core.core.persistence.telemetry.models import (
 def _build_task_map(
     nodes: list[RunGraphNode],
     edges: list[RunGraphEdge],
-    worker_by_binding: dict[str, ExperimentDefinitionWorker],
+    worker_by_binding: dict[str, object],
     task_timestamps: dict[UUID, tuple[datetime | None, datetime | None]],
 ) -> tuple[dict[str, RunTaskDto], str, int, int, int, int, int, int]:
     """Three clean passes using stored containment columns.
@@ -49,23 +48,18 @@ def _build_task_map(
 
     for node in nodes:
         nid = str(node.id)
-        worker = (
-            worker_by_binding.get(node.assigned_worker_slug)
-            if node.assigned_worker_slug is not None
-            else None
-        )
         started_at, completed_at = task_timestamps.get(node.id, (None, None))
         task_map[nid] = RunTaskDto(
             id=nid,
             name=node.task_slug,
             description=node.description,
             status=node.status,
-            parent_id=str(node.parent_node_id) if node.parent_node_id else None,
+            parent_id=str(node.parent_task_id) if node.parent_task_id else None,
             child_ids=[],
             depends_on_ids=[],
             is_leaf=True,
             level=node.level,
-            assigned_worker_id=str(worker.id) if worker else None,
+            assigned_worker_id=None,
             assigned_worker_slug=node.assigned_worker_slug,
             started_at=started_at,
             completed_at=completed_at,
@@ -79,7 +73,7 @@ def _build_task_map(
             )
 
     for edge in edges:
-        src, tgt = str(edge.source_node_id), str(edge.target_node_id)
+        src, tgt = str(edge.source_task_id), str(edge.target_task_id)
         target_task = task_map.get(tgt)
         if target_task is None:
             continue
@@ -101,24 +95,18 @@ def _build_task_map(
 
 def _task_keyed_executions(
     executions: list[RunTaskExecution],
-    worker_map: dict[UUID, ExperimentDefinitionWorker],
+    worker_map: dict[UUID, object],
 ) -> dict[str, list[RunExecutionAttemptDto]]:
     by_task: dict[str, list[RunExecutionAttemptDto]] = defaultdict(list)
     for ex in sorted(
         executions,
-        key=lambda e: ("" if e.node_id is None else str(e.node_id), e.attempt_number),
+        key=lambda e: (str(e.task_id), e.attempt_number),
     ):
-        if ex.node_id is None:
-            continue
-        tid = str(ex.node_id)
+        tid = str(ex.task_id)
         error_msg: str | None = None
         if ex.error_json:
             message = ex.error_json.get("message")
             error_msg = message if isinstance(message, str) else str(ex.error_json)
-
-        worker = worker_map.get(ex.definition_worker_id) if ex.definition_worker_id else None
-        agent_id = str(worker.id) if worker else None
-        agent_name = worker.binding_key if worker else None
 
         resource_ids: list[str] = []
         output = ex.parsed_output()
@@ -136,8 +124,8 @@ def _task_keyed_executions(
                 final_assistant_message=ex.final_assistant_message,
                 error_message=error_msg,
                 score=None,
-                agent_id=agent_id,
-                agent_name=agent_name,
+                agent_id=None,
+                agent_name=None,
                 output_resource_ids=resource_ids,
             )
         )
@@ -183,12 +171,7 @@ def _task_keyed_evaluations(
     del defn_to_node
     result: dict[str, RunTaskEvaluationDto] = {}
     for ev in evaluations:
-        node_id = ev.node_id
-        if node_id is None:
-            # Evaluation rows without runtime node identity cannot be
-            # truthfully rendered in a task workspace.
-            continue
-        tid = str(node_id)
+        tid = str(ev.task_id)
         summary = ev.parsed_summary()
 
         criterion_results = [

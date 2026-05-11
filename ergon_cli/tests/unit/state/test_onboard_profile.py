@@ -161,12 +161,7 @@ class TestOnboardingWizardSeesAllBenchmarks:
     """The wizard must offer all registered benchmarks."""
 
     def test_wizard_sees_all_registered_slugs(self) -> None:
-        from ergon_builtins.registry import register_builtins
-        from ergon_core.api.registry import ComponentRegistry
-        from ergon_core.core.application.components.catalog import ComponentCatalogService
-
-        registry = ComponentRegistry(catalog_service=ComponentCatalogService())
-        register_builtins(registry)
+        from ergon_cli.onboarding.profile import _benchmarks
 
         # ``smoke-test`` and ``researchrubrics-smoke`` benchmarks retired
         # alongside the canonical-smoke refactor — smoke now runs
@@ -179,4 +174,4 @@ class TestOnboardingWizardSeesAllBenchmarks:
             "researchrubrics",
             "researchrubrics-vanilla",
         }
-        assert expected <= set(registry.benchmarks)
+        assert expected <= set(_benchmarks())

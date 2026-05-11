@@ -49,15 +49,16 @@ def make_workflow_cli_tool(
     """
 
     async def run_command(command: str) -> str:
-        if worker_context.node_id is None:
-            raise ValueError("workflow tool requires WorkerContext.node_id")
+        task_id = worker_context.task_id
+        if task_id is None:
+            raise ValueError("workflow tool requires WorkerContext.task_id")
 
         output = await asyncio.to_thread(
             execute_command,
             command,
             context=WorkflowCommandContext(
                 run_id=worker_context.run_id,
-                node_id=worker_context.node_id,
+                node_id=task_id,
                 execution_id=worker_context.execution_id,
                 sandbox_task_key=sandbox_task_key,
                 benchmark_type=benchmark_type,

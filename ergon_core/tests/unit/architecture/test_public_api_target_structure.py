@@ -25,10 +25,10 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "WorkerContext",
         "WorkerOutput",
         "WorkerStreamItem",
+        "SpawnedTaskHandle",
         "Criterion",
         "CriterionContext",
         "CriterionOutcome",
-        "ScoreScale",
         "CriterionEvidence",
         "EvidenceMessage",
         "Rubric",
@@ -52,6 +52,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "PersistedExperimentDefinition",
         "DefinitionHandle",
         "registry",
+        "ScoreScale",
     }
 
     assert set(public_api.__all__) == expected
@@ -71,12 +72,17 @@ def test_semantic_api_clusters_are_importable() -> None:
         "Task",
         "EmptyTaskPayload",
     ]
-    assert worker.__all__ == ["Worker", "WorkerContext", "WorkerOutput", "WorkerStreamItem"]
+    assert worker.__all__ == [
+        "Worker",
+        "WorkerContext",
+        "WorkerOutput",
+        "WorkerStreamItem",
+        "SpawnedTaskHandle",
+    ]
     assert criterion.__all__ == [
         "Criterion",
         "CriterionContext",
         "CriterionOutcome",
-        "ScoreScale",
         "CriterionEvidence",
         "EvidenceMessage",
     ]
@@ -119,7 +125,9 @@ def test_criterion_context_hides_runtime_protocol_field() -> None:
     context_fields = context_module.CriterionContext.model_fields
 
     assert "runtime" not in context_fields
-    assert hasattr(context_module.CriterionContext, "execute_code")
+    assert "_runtime" not in context_module.CriterionContext.__private_attributes__
+    assert not hasattr(context_module.CriterionContext, "execute_code")
+    assert not hasattr(context_module.CriterionContext, "with_runtime")
 
 
 def test_public_api_uses_shared_json_object_alias() -> None:
@@ -146,5 +154,85 @@ def test_public_api_modules_do_not_hide_import_cycles() -> None:
                 for child in ast.walk(node):
                     if isinstance(child, (ast.Import, ast.ImportFrom)):
                         offenders.append(f"{path.relative_to(api_root)}:{child.lineno}:function import")
+
+    assert offenders == []
+
+
+def test_authoring_runtime_deletes_component_catalog_and_definition_pools() -> None:
+    persistence_root = Path(__file__).parents[3] / "ergon_core" / "core" / "persistence"
+    offenders: list[str] = []
+    forbidden = (
+        "ComponentCatalog",
+        "ComponentCatalogEntry",
+        "ExperimentDefinitionWorker",
+        "ExperimentDefinitionEvaluator",
+        "worker_bindings",
+        "evaluator_bindings",
+    )
+
+    for path in persistence_root.rglob("*.py"):
+        source = path.read_text()
+        for snippet in forbidden:
+            if snippet in source:
+                offenders.append(f"{path.relative_to(persistence_root)}:{snippet}")
+
+    assert offenders == []
+
+
+def test_authoring_runtime_uses_task_id_without_run_graph_node_identity() -> None:
+    persistence_root = Path(__file__).parents[3] / "ergon_core" / "core" / "persistence"
+    offenders: list[str] = []
+    forbidden = (
+        "node_id",
+        "run_graph_node_id",
+        "definition_task_id",
+    )
+
+    for path in persistence_root.rglob("*.py"):
+        source = path.read_text()
+        for snippet in forbidden:
+            if snippet in source:
+                offenders.append(f"{path.relative_to(persistence_root)}:{snippet}")
+
+    assert offenders == []
+
+
+def test_criterion_runtime_indirection_is_deleted() -> None:
+    runtime_root = Path(__file__).parents[3] / "ergon_core"
+    offenders: list[str] = []
+    forbidden = (
+        "DefaultCriterionRuntime",
+        "CriterionRuntimeOptions",
+        "ScoreScale",
+        "score_spec",
+    )
+
+    for path in runtime_root.rglob("*.py"):
+        if path.name == "test_public_api_target_structure.py":
+            continue
+        source = path.read_text()
+        for snippet in forbidden:
+            if snippet in source:
+                offenders.append(f"{path.relative_to(runtime_root)}:{snippet}")
+
+    assert offenders == []
+
+
+def test_legacy_sandbox_manager_modules_are_deleted() -> None:
+    runtime_root = Path(__file__).parents[3] / "ergon_core"
+    offenders: list[str] = []
+    forbidden = (
+        "BaseSandboxManager",
+        "SandboxManager",
+        "sandbox_manager",
+    )
+
+    for path in runtime_root.rglob("*.py"):
+        if path.name == "test_public_api_target_structure.py":
+            continue
+        source = path.read_text()
+        for snippet in forbidden:
+            if snippet in source:
+                offenders.append(f"{path.relative_to(runtime_root)}:{snippet}")
 
     assert offenders == []

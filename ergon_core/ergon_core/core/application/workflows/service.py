@@ -5,7 +5,6 @@ from uuid import UUID, uuid4
 
 import inngest
 from ergon_core.api import EmptyTaskPayload, Task
-from ergon_core.api.registry import registry
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -21,7 +20,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
 )
 from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
-from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
 from ergon_core.core.application.events.task_events import TaskReadyEvent
 from ergon_core.core.application.graph.lookup import GraphNodeLookup
 from ergon_core.core.application.graph.propagation import (
@@ -65,22 +63,14 @@ ResourceScope = Literal["input", "upstream", "own", "children", "descendants", "
 
 
 class WorkflowService:
-    """Run-scoped workflow navigation and resource-copy policy.
-
-    ``sandbox_manager_factory`` is intentionally injectable so unit tests can
-    verify materialization without opening a real E2B sandbox. Production code
-    uses ``DefaultSandboxManager`` today; benchmark-specific manager routing can
-    be added here once the CLI has callers outside the ResearchRubrics POC.
-    """
+    """Run-scoped workflow navigation and resource-copy policy."""
 
     def __init__(
         self,
         *,
-        sandbox_manager_factory: Callable[[str], BaseSandboxManager] | None = None,
         graph_repository: WorkflowGraphRepository | None = None,
         task_ready_dispatcher: Callable[[UUID, UUID, UUID], Awaitable[None]] | None = None,
     ) -> None:
-        self._sandbox_manager_factory = sandbox_manager_factory or self._sandbox_manager_for
         self._graph_repo = graph_repository or WorkflowGraphRepository()
         self._task_execution_repo = TaskExecutionRepository()
         self._task_ready_dispatcher = task_ready_dispatcher or self._dispatch_task_ready
@@ -91,10 +81,6 @@ class WorkflowService:
             definition = require_not_none(
                 session.get(ExperimentDefinition, command.definition_id),
                 f"Definition {command.definition_id} not found",
-            )
-            benchmark_cls = require_not_none(
-                registry.benchmarks.get(definition.benchmark_type),
-                f"Benchmark {definition.benchmark_type!r} not found",
             )
             all_tasks = list(
                 session.exec(
@@ -110,7 +96,7 @@ class WorkflowService:
                 command.definition_id,
                 initial_node_status=graph_status.PENDING,
                 initial_edge_status=graph_status.EDGE_PENDING,
-                task_payload_model=benchmark_cls.task_payload_model,
+                task_payload_model=EmptyTaskPayload,
                 meta=MutationMeta(actor="system:workflow_init"),
             )
             session.commit()
@@ -537,8 +523,6 @@ class WorkflowService:
         assigned_worker_slug: str,
         dry_run: bool,
     ) -> WorkflowMutationRef:
-        if assigned_worker_slug not in registry.workers:
-            raise ValueError(f"Unknown worker slug: {assigned_worker_slug!r}")
         parent = self._resolve_node(
             session,
             run_id=run_id,
@@ -563,12 +547,16 @@ class WorkflowService:
             )
 
         parent_task = Task.from_definition(parent.task_json, task_id=parent.task_id)
-        worker_cls = registry.require_worker(assigned_worker_slug)
+        if assigned_worker_slug != parent_task.worker.name:
+            raise ValueError(
+                "Dynamic task spawning can only reuse the parent task's bound worker "
+                "until experiment-level worker pools are reintroduced."
+            )
         task = Task(
             task_slug=task_slug,
             instance_key=parent.instance_key,
             description=description,
-            worker=worker_cls(name=assigned_worker_slug, model=None),
+            worker=parent_task.worker.model_copy(deep=True),
             sandbox=parent_task.sandbox.model_copy(deep=True),
             evaluators=tuple(
                 evaluator.model_copy(deep=True) for evaluator in parent_task.evaluators
@@ -789,35 +777,10 @@ class WorkflowService:
         if dry_run:
             return result
 
-        manager = self._sandbox_manager_factory(benchmark_type)
-        await manager.upload_file(sandbox_task_key, source.file_path, sandbox_path)
-
-        copy = RunResource(
-            run_id=run_id,
-            task_execution_id=current_execution_id,
-            kind=RunResourceKind.IMPORT.value,
-            name=result.copied_name,
-            mime_type=source.mime_type,
-            file_path=source.file_path,
-            size_bytes=source.size_bytes,
-            metadata_json={
-                "source_resource_id": str(source.id),
-                "source_task_slug": producer.task_slug if producer is not None else None,
-                "sandbox_destination": sandbox_path,
-            },
-            error=None,
-            content_hash=source.content_hash,
-            copied_from_resource_id=source.id,
+        raise RuntimeError(
+            "Resource materialization into live sandboxes moved to Sandbox objects and is "
+            "not available through WorkflowService."
         )
-        session.add(copy)
-        session.commit()
-        session.refresh(copy)
-        return result.model_copy(update={"copied_resource_id": copy.id})
-
-    @staticmethod
-    def _sandbox_manager_for(benchmark_type: str) -> BaseSandboxManager:
-        _ = benchmark_type
-        return DefaultSandboxManager()
 
     @staticmethod
     def _task_ref(node: RunGraphNode) -> WorkflowTaskRef:

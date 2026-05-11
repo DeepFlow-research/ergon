@@ -2,7 +2,7 @@
 
 NewType aliases are erased at runtime but catch cross-field
 misassignment in type checkers (e.g., passing a task_slug where a
-node_id is expected).
+UUID task identity is expected).
 """
 
 from typing import NewType

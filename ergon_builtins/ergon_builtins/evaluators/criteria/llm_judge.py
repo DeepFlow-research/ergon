@@ -8,7 +8,8 @@ criterion classes with their own prompts and evidence formatting.
 
 from typing import ClassVar
 
-from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
+from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
+from ergon_core.api.sandbox import Sandbox
 from pydantic import BaseModel
 
 from ergon_builtins.common.llm.structured_judge import (
@@ -33,26 +34,28 @@ class LLMJudgeCriterion(Criterion):
 
     type_slug: ClassVar[str] = "llm-judge"
 
+    prompt_template: str
+    model: str = "gpt-4o"
+    max_score: float = 1.0
+
     def __init__(
         self,
         *,
         slug: str,
         prompt_template: str,
         description: str = "",  # slopcop: ignore[no-str-empty-default]
-        weight: float = 1.0,
         max_score: float = 1.0,
         model: str = "gpt-4o",
     ) -> None:
         super().__init__(
             slug=slug,
             description=description or slug,
-            weight=weight,
-            score_spec=ScoreScale(max_score=max_score),
+            prompt_template=prompt_template,
+            model=model,
+            max_score=max_score,
         )
-        self.prompt_template = prompt_template
-        self.model = model
 
-    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
+    async def evaluate(self, context: CriterionContext, *, sandbox: Sandbox) -> CriterionOutcome:
         messages = [
             JudgeMessage(role="system", content=self.prompt_template),
             JudgeMessage(
@@ -70,13 +73,12 @@ class LLMJudgeCriterion(Criterion):
             model=self.model,
         )
 
-        score = self.score_spec.max_score if verdict.passed else 0.0
+        score = self.max_score if verdict.passed else 0.0
         return CriterionOutcome(
             slug=self.slug,
             name=self.slug,
             score=score,
             passed=verdict.passed,
-            weight=self.weight,
-            max_score=self.score_spec.max_score,
+            max_score=self.max_score,
             feedback=verdict.reasoning,
         )

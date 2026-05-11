@@ -20,7 +20,6 @@ logging.basicConfig(
 )
 
 import inngest.fast_api
-from ergon_core.api.registry import registry
 from ergon_core.core.rest_api.cohorts import router as cohorts_router
 from ergon_core.core.rest_api.experiments import router as experiments_router
 from ergon_core.core.rest_api.rollouts import router as rollouts_router
@@ -31,12 +30,6 @@ from ergon_core.core.infrastructure.dashboard.provider import (
     reset_dashboard_emitter,
 )
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.infrastructure.sandbox.event_sink import (
-    CompoundSandboxEventSink,
-    DashboardEmitterSandboxEventSink,
-    PostgresSandboxEventSink,
-)
-from ergon_core.core.infrastructure.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.infrastructure.inngest.registry import ALL_FUNCTIONS
@@ -60,19 +53,6 @@ async def lifespan(app: FastAPI):
     app.state.vllm_manager = None
     dashboard_emitter = init_dashboard_emitter(enabled=True)
     app.state.dashboard_emitter = dashboard_emitter
-
-    # Wire the dashboard event sink on every registered sandbox manager class.
-    sink = CompoundSandboxEventSink(
-        DashboardEmitterSandboxEventSink(dashboard_emitter),
-        PostgresSandboxEventSink(),
-    )
-    DefaultSandboxManager.set_event_sink(sink)
-    for manager_cls in registry.sandbox_managers.values():
-        manager_cls.set_event_sink(sink)
-    logger.info(
-        "sandbox event sink wired on %d manager subclass(es)",
-        1 + len(registry.sandbox_managers),
-    )
 
     logger.info("app startup complete — all subsystems initialised")
     try:

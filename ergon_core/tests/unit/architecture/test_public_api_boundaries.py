@@ -290,7 +290,6 @@ def test_application_clusters_stay_out_of_runtime_layout() -> None:
         core_root / "application" / "evaluation" / "service.py",
         core_root / "application" / "evaluation" / "executors.py",
         core_root / "application" / "evaluation" / "inngest_executor.py",
-        core_root / "application" / "evaluation" / "criterion_runtime.py",
         core_root / "application" / "evaluation" / "scoring.py",
         core_root / "application" / "evaluation" / "protocols.py",
         core_root / "application" / "evaluation" / "models.py",
@@ -445,7 +444,6 @@ def test_sandbox_dashboard_tracing_and_dependencies_stay_in_infrastructure() -> 
 
     for new_path in (
         core_root / "infrastructure" / "sandbox" / "__init__.py",
-        core_root / "infrastructure" / "sandbox" / "manager.py",
         core_root / "infrastructure" / "sandbox" / "lifecycle.py",
         core_root / "infrastructure" / "sandbox" / "resource_publisher.py",
         core_root / "infrastructure" / "sandbox" / "instrumentation.py",
@@ -516,9 +514,7 @@ def test_e2e_tests_do_not_import_private_core_repositories() -> None:
     assert offenders == []
 
 
-def test_local_api_composition_mounts_test_owned_smoke_components() -> None:
+def test_local_api_composition_does_not_mount_deleted_smoke_registry() -> None:
     api_app = ROOT / "ergon_cli" / "ergon_cli" / "api_app.py"
-    compose = ROOT / "docker-compose.yml"
 
-    assert "tests.fixtures.smoke_components" in api_app.read_text()
-    assert "./tests:/app/tests" in compose.read_text()
+    assert "tests.fixtures.smoke_components" not in api_app.read_text()

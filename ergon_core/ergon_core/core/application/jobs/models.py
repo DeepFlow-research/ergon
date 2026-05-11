@@ -29,7 +29,7 @@ class WorkerExecuteRequest(InngestEventContract):
     definition_id: UUID
     task_id: UUID
     execution_id: UUID
-    sandbox_id: str
+    sandbox_id: str | None = None
 
 
 class PersistOutputsRequest(InngestEventContract):
@@ -123,6 +123,7 @@ class WorkerExecuteResult(BaseModel):
     final_assistant_message: str | None = None
     error: str | None = None
     error_json: JsonObject | None = None
+    sandbox_id: str | None = None
 
 
 class PersistOutputsResult(BaseModel):

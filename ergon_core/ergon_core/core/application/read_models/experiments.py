@@ -166,7 +166,7 @@ def _run_row(run: RunRecord, *, total_tasks: int | None = None) -> ExperimentRun
 def _task_counts_by_run(session, run_ids: list[UUID]) -> dict[UUID, int]:
     return {
         run_id: len(
-            list(session.exec(select(RunGraphNode.id).where(RunGraphNode.run_id == run_id)))
+            list(session.exec(select(RunGraphNode.task_id).where(RunGraphNode.run_id == run_id)))
         )
         for run_id in run_ids
     }

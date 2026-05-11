@@ -6,14 +6,12 @@ from ergon_core.api.criterion.results import (
     CriterionEvidence,
     CriterionOutcome,
     EvidenceMessage,
-    ScoreScale,
 )
 
 __all__ = [
     "Criterion",
     "CriterionContext",
     "CriterionOutcome",
-    "ScoreScale",
     "CriterionEvidence",
     "EvidenceMessage",
 ]

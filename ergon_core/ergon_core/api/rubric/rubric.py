@@ -94,7 +94,7 @@ class Rubric(Evaluator):
 def _as_weighted_criterion(value: WeightedCriterion | Criterion) -> WeightedCriterion:
     if isinstance(value, WeightedCriterion):
         return value
-    return WeightedCriterion(criterion=value, weight=value.weight)
+    return WeightedCriterion(criterion=value)
 
 
 def _results_with_configured_weights(

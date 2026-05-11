@@ -10,10 +10,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ergon_core.core.application.jobs.models import (
-    PersistOutputsRequest,
-    PersistOutputsResult,
-    SandboxReadyResult,
-    SandboxSetupRequest,
     TaskExecuteResult,
     WorkerExecuteJobRequest,
     WorkerExecuteJobResult,
@@ -27,8 +23,6 @@ from ergon_core.core.application.workflows.orchestration import (
 )
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, NonRetriableError
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -61,40 +55,10 @@ async def _prepare_execution(
     return await ctx.step.run("prepare-execution", _prepare, output_type=PreparedTaskExecution)
 
 
-async def _setup_sandbox(
-    ctx: Any,
-    payload: TaskReadyEvent,
-    prepared: PreparedTaskExecution,
-    sandbox_setup_function: Any,
-) -> SandboxReadyResult:
-    sandbox_task_key = payload.task_id
-    return await ctx.step.invoke(
-        "sandbox-setup",
-        function=sandbox_setup_function,
-        data=SandboxSetupRequest(
-            run_id=payload.run_id,
-            definition_id=payload.definition_id,
-            task_id=sandbox_task_key,
-            benchmark_type=prepared.benchmark_type,
-            sandbox_slug=_sandbox_slug_for_run(payload.run_id),
-        ).model_dump(),
-    )
-
-
-def _sandbox_slug_for_run(run_id) -> str | None:
-    session = get_session()
-    try:
-        run = session.get(RunRecord, run_id)
-        return None if run is None else run.sandbox_slug
-    finally:
-        session.close()
-
-
 async def _run_worker(
     ctx: Any,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
-    sandbox_result: SandboxReadyResult,
     worker_execute_function: Any,
 ) -> WorkerExecuteJobResult:
     return await ctx.step.invoke(
@@ -105,7 +69,6 @@ async def _run_worker(
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
-            sandbox_id=sandbox_result.sandbox_id,
             task_slug=prepared.task_slug,
             task_description=prepared.task_description,
             assigned_worker_slug=prepared.assigned_worker_slug,
@@ -113,30 +76,6 @@ async def _run_worker(
             model_target=prepared.model_target,
             benchmark_type=prepared.benchmark_type,
             node_id=prepared.node_id,
-        ).model_dump(),
-    )
-
-
-async def _persist_outputs(
-    ctx: Any,
-    payload: TaskReadyEvent,
-    prepared: PreparedTaskExecution,
-    sandbox_result: SandboxReadyResult,
-    persist_outputs_function: Any,
-) -> PersistOutputsResult:
-    output_task_key = payload.task_id or prepared.node_id
-    return await ctx.step.invoke(
-        "persist-outputs",
-        function=persist_outputs_function,
-        data=PersistOutputsRequest(
-            run_id=payload.run_id,
-            definition_id=payload.definition_id,
-            task_id=output_task_key,
-            execution_id=prepared.execution_id,
-            sandbox_id=sandbox_result.sandbox_id,
-            output_dir=sandbox_result.output_dir,
-            benchmark_type=prepared.benchmark_type,
-            sandbox_slug=_sandbox_slug_for_run(payload.run_id),
         ).model_dump(),
     )
 
@@ -188,9 +127,7 @@ async def run_execute_task_job(
     ctx: Any,
     payload: TaskReadyEvent,
     *,
-    sandbox_setup_function: Any,
     worker_execute_function: Any,
-    persist_outputs_function: Any,
 ) -> TaskExecuteResult:
     logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)
@@ -217,21 +154,10 @@ async def run_execute_task_job(
                 task_id=payload.task_id,
             )
 
-        sandbox_result = await _setup_sandbox(ctx, payload, prepared, sandbox_setup_function)
-        if not sandbox_result.sandbox_id:
-            raise ContractViolationError(
-                "sandbox-setup returned empty sandbox_id",
-                run_id=payload.run_id,
-                task_id=payload.task_id,
-            )
-        task_sandbox_id = sandbox_result.sandbox_id
-
-        worker_result = await _run_worker(
-            ctx, payload, prepared, sandbox_result, worker_execute_function
-        )
+        worker_result = await _run_worker(ctx, payload, prepared, worker_execute_function)
+        task_sandbox_id = worker_result.sandbox_id
 
         if not worker_result.success:
-            await _persist_outputs(ctx, payload, prepared, sandbox_result, persist_outputs_function)
             error_msg = worker_result.error or "Worker execution failed"
             await svc.finalize_failure(
                 FailTaskExecutionCommand(
@@ -251,10 +177,6 @@ async def run_execute_task_job(
                 error=error_msg,
             )
 
-        persist_result = await _persist_outputs(
-            ctx, payload, prepared, sandbox_result, persist_outputs_function
-        )
-
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(
                 execution_id=prepared.execution_id,
@@ -262,13 +184,9 @@ async def run_execute_task_job(
             )
         )
 
-        # task_sandbox_id was populated from sandbox-setup above; the
-        # contract violation was already raised if it was missing. Assert via
-        # ContractViolationError rather than `assert` so the check survives
-        # `python -O`.
         if task_sandbox_id is None:
             raise ContractViolationError(
-                "task_sandbox_id is None after sandbox-setup completed",
+                "worker_execute completed without a sandbox_id",
                 run_id=payload.run_id,
                 task_id=payload.task_id,
             )
@@ -301,7 +219,7 @@ async def run_execute_task_job(
             task_id=payload.task_id,
             execution_id=prepared.execution_id,
             success=True,
-            outputs_count=persist_result.outputs_count,
+            outputs_count=0,
         )
 
     except Exception as exc:  # slopcop: ignore[no-broad-except]

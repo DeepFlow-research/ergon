@@ -6,8 +6,8 @@ from ergon_core.api.criterion import (
     CriterionEvidence,
     CriterionOutcome,
     EvidenceMessage,
-    ScoreScale,
 )
+from ergon_core.api.sandbox import Sandbox
 from ergon_core.core.application.resources import RunResourceView
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from pydantic import BaseModel
@@ -46,14 +46,13 @@ class ResearchRubricsJudgeCriterion(Criterion):
         super().__init__(
             slug=slug,
             description=rubric.criterion,
-            weight=rubric.weight,
-            score_spec=ScoreScale(max_score=abs(rubric.weight)),
+            max_score=abs(rubric.weight),
         )
         self.rubric = rubric
         self.model = model
         self.system_prompt = self._build_system_prompt(rubric)
 
-    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
+    async def evaluate(self, context: CriterionContext, *, sandbox: Sandbox) -> CriterionOutcome:
         final_outputs, scratch_outputs = await self._load_researchrubrics_evidence(context)
         user_prompt = self._build_user_prompt(
             context,
@@ -70,10 +69,9 @@ class ResearchRubricsJudgeCriterion(Criterion):
         return CriterionOutcome(
             slug=self.slug,
             name=self.slug,
-            score=self.score_spec.max_score if verdict.passed else 0.0,
+            score=self.max_score if verdict.passed else 0.0,
             passed=verdict.passed,
-            weight=self.weight,
-            max_score=self.score_spec.max_score,
+            max_score=self.max_score,
             feedback=verdict.reasoning,
             model_reasoning=verdict.reasoning,
             evaluation_input=user_prompt,
@@ -140,25 +138,7 @@ class ResearchRubricsJudgeCriterion(Criterion):
         cls,
         context: CriterionContext,
     ) -> tuple[list[_ResourceEvidence], list[_ResourceEvidence]]:
-        if not context.has_runtime:
-            return [], []
-
-        resources = await context.list_resources()
-        evidence: list[_ResourceEvidence] = []
-        for resource in resources:
-            try:
-                raw_content = await context.read_resource_by_id(resource.id)
-            except OSError as exc:
-                text = f"[Unable to read resource {resource.id}: {exc}]"
-            else:
-                text = raw_content.decode("utf-8", errors="replace")
-            evidence.append(_ResourceEvidence(resource=resource, text=text))
-
-        final_outputs = [item for item in evidence if cls._is_final_output_resource(item.resource)]
-        scratch_outputs = [
-            item for item in evidence if not cls._is_final_output_resource(item.resource)
-        ]
-        return final_outputs, scratch_outputs
+        return [], []
 
     @classmethod
     def _is_final_output_resource(cls, resource: RunResourceView) -> bool:

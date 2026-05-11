@@ -11,8 +11,12 @@ import traceback
 from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
 
+from ergon_core.api.benchmark import Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.resources.repository import RunResourceRepository
+from ergon_core.core.application.tasks.inspection import TaskInspectionService
+from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.infrastructure.sandbox.lifecycle import SandboxLifecycleHub
@@ -55,16 +59,18 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
                 sandbox_id=payload.sandbox_id,
             ) from exc
 
-    task = node.task
+    task = Task.from_definition(node.task_json, task_id=node.task_id)
     worker = task.worker
 
-    worker_context = WorkerContext(
+    worker_context = WorkerContext._for_job(
         run_id=payload.run_id,
         definition_id=payload.definition_id,
         execution_id=payload.execution_id,
-        sandbox_id=payload.sandbox_id,
         task_id=payload.task_id,
-        node_id=payload.task_id,
+        task_mgmt=TaskManagementService(),
+        task_inspect=TaskInspectionService(),
+        resource_repo=RunResourceRepository(),
+        session_factory=get_session,
     )
 
     context_event_repo = ContextEventService()
@@ -108,6 +114,7 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         return WorkerExecuteJobResult(
             success=False,
             error=error_msg,
+            sandbox_id=sandbox.sandbox_id if "sandbox" in locals() and sandbox.is_live else None,
             error_json={
                 "message": error_msg,
                 "exception_type": type(exc).__name__,
@@ -146,6 +153,7 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         success=output.success,
         final_assistant_message=output.output,
         error=None if output.success else output.output,
+        sandbox_id=sandbox.sandbox_id if sandbox.is_live else None,
     )
 
 

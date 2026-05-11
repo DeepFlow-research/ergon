@@ -36,10 +36,10 @@ class _Criterion(Criterion):
 
     def __init__(self) -> None:
         super().__init__(slug="criterion")
-        self.observed_runtime = False
+        self.observed_sandbox = False
 
-    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
-        self.observed_runtime = context.has_runtime
+    async def evaluate(self, context: CriterionContext, *, sandbox: Sandbox) -> CriterionOutcome:
+        self.observed_sandbox = isinstance(sandbox, Sandbox)
         return CriterionOutcome(name=self.slug, score=1.0, passed=True)
 
 
@@ -62,20 +62,10 @@ class _Worker(Worker):
 
 
 @pytest.mark.asyncio
-async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) -> None:
+async def test_executor_passes_task_sandbox_to_criterion() -> None:
     execution_id = uuid4()
     definition_task_id = uuid4()
-    captured_options = []
-
-    class FakeRuntime:
-        def __init__(self, *, context, sandbox_manager, options) -> None:
-            captured_options.append(options)
-            self.task_scope = options.task_id
-
-    monkeypatch.setattr(
-        "ergon_core.core.application.evaluation.inngest_executor.DefaultCriterionRuntime",
-        FakeRuntime,
-    )
+    sandbox = _Sandbox()
 
     criterion = _Criterion()
     executor = InngestCriterionExecutor(
@@ -83,7 +73,7 @@ async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) 
         task_id=definition_task_id,
         execution_id=execution_id,
         evaluator_id=uuid4(),
-        sandbox_manager=object(),
+        sandbox=sandbox,
     )
 
     await executor.execute_all(
@@ -104,5 +94,4 @@ async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) 
         [CriterionSpec(criterion=criterion)],
     )
 
-    assert captured_options[0].task_id == execution_id
-    assert criterion.observed_runtime is True
+    assert criterion.observed_sandbox is True

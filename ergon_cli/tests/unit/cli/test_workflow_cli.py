@@ -54,7 +54,7 @@ class _ManagingService:
         }
 
         return AddSubtaskResult(
-            node_id=uuid4(),
+            task_id=uuid4(),
             task_slug="source-scout",
             status="pending",
         )

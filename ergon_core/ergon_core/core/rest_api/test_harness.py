@@ -33,7 +33,6 @@ from ergon_core.core.application.experiments.models import (
     ExperimentDefineRequest,
     ExperimentRunRequest,
 )
-from ergon_core.api.registry import registry
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, asc, select
@@ -463,9 +462,4 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
 
 
 def _extra_evaluator_bindings(benchmark_slug: str) -> dict[str, str]:
-    benchmark = registry.require_benchmark(benchmark_slug)()
-    requirements = set(benchmark.evaluator_requirements())
-    if "post-root" not in requirements:
-        return {}
-    registry.require_evaluator("smoke-post-root-timing-criterion")
-    return {"post-root": "smoke-post-root-timing-criterion"}
+    return {}

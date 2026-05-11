@@ -186,13 +186,8 @@ def validate_explicit_runtime_choices(args: Namespace) -> tuple[str, ...]:
 def _load_registry():
     from ergon_builtins.models.resolution import registered_model_backend_prefixes
     from ergon_builtins.registry import register_builtins
-    from ergon_core.api.registry import registry
+    from ergon_cli.discovery import _maps
 
-    register_builtins(registry)
-    return (
-        registry.benchmarks,
-        registry.workers,
-        registry.evaluators,
-        registry.sandbox_managers,
-        registered_model_backend_prefixes(),
-    )
+    register_builtins()
+    benchmarks, evaluators, workers = _maps()
+    return (benchmarks, workers, evaluators, {}, registered_model_backend_prefixes())

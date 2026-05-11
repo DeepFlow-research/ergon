@@ -18,6 +18,7 @@ from ergon_core.core.application.evaluation.service import (
     EvaluationService,
 )
 from ergon_core.core.application.jobs.models import EvaluateTaskRunResult
+from ergon_core.core.infrastructure.sandbox.lifecycle import SandboxLifecycleHub
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.infrastructure.tracing import (
@@ -30,6 +31,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 evaluation_persistence = EvaluationService()
+_SANDBOX_LIFECYCLE_HUB = SandboxLifecycleHub()
 
 
 async def run_evaluate_task_run_job(
@@ -58,8 +60,6 @@ async def run_evaluate_task_run_job(
             )
         task = Task.from_definition(node.task_json, task_id=node.task_id)
 
-    node_id = node.id
-    definition_task_id = node.definition_task_id
     try:
         evaluator = task.evaluators[evaluator_index]
     except IndexError as exc:
@@ -76,15 +76,15 @@ async def run_evaluate_task_run_job(
             evaluator_name,
             evaluator.name,
         )
-    sandbox_manager = getattr(task.sandbox, "manager", object())
+    sandbox = await _SANDBOX_LIFECYCLE_HUB.acquire(task.sandbox, run_id=run_id, task_id=task_id)
     evaluator_trace_id = uuid5(NAMESPACE_URL, f"{run_id}:{task_id}:evaluator:{evaluator_index}")
 
     executor = InngestCriterionExecutor(
         ctx,
-        task_id=node_id,
+        task_id=task_id,
         execution_id=execution_id,
         evaluator_id=evaluator_trace_id,
-        sandbox_manager=sandbox_manager,
+        sandbox=sandbox,
     )
 
     task_input = task.description
@@ -112,9 +112,8 @@ async def run_evaluate_task_run_job(
         )
         evaluation_persistence.persist_failure(
             run_id=run_id,
-            node_id=node_id,
+            task_id=task_id,
             task_execution_id=execution_id,
-            definition_task_id=definition_task_id,
             evaluator_index=evaluator_index,
             evaluator_name=evaluator_name,
             exc=exc,
@@ -128,23 +127,22 @@ async def run_evaluate_task_run_job(
 
     persisted = evaluation_persistence.persist_success(
         run_id=run_id,
-        node_id=node_id,
+        task_id=task_id,
         task_execution_id=execution_id,
-        definition_task_id=definition_task_id,
         evaluator_index=evaluator_index,
         evaluator_name=evaluator.name,
         service_result=service_result,
     )
     await get_dashboard_emitter().task_evaluation_updated(
         run_id=run_id,
-        task_id=node_id,
+        task_id=task_id,
         evaluation=persisted.dashboard_dto,
     )
 
     get_trace_sink().emit_span(
         CompletedSpan(
             name="evaluation.task",
-            context=evaluation_task_context(run_id, node_id, execution_id, evaluator_trace_id),
+            context=evaluation_task_context(run_id, task_id, execution_id, evaluator_trace_id),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={

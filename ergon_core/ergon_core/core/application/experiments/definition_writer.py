@@ -7,18 +7,14 @@ BoundExperiment intermediate, no constructor_state() serialisation.
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from ergon_core.api.rubric import Rubric
 from ergon_core.core.domain.experiments import DefinitionHandle
-from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
-    ExperimentDefinitionEvaluator,
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionTaskDependency,
     ExperimentDefinitionTaskEvaluator,
-    ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.shared.utils import utcnow
@@ -26,11 +22,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 if TYPE_CHECKING:
     from ergon_core.api import Experiment
-    from ergon_core.api.criterion import Criterion
-
-
-def _criterion_snapshot_name(criterion: "Criterion") -> str:
-    return getattr(criterion, "criterion", criterion).slug
 
 
 class _ExperimentDefinitionWriter:
@@ -64,46 +55,6 @@ class _ExperimentDefinitionWriter:
             metadata_json=dict(experiment.metadata),
             created_at=now,
         )
-
-        # -- worker/evaluator rows --
-        worker_rows: list[ExperimentDefinitionWorker] = []
-        evaluator_rows: list[ExperimentDefinitionEvaluator] = []
-        seen_workers: set[str] = set()
-        seen_evaluators: set[str] = set()
-        for tasks in instances_map.values():
-            for task in tasks:
-                if task.worker.name not in seen_workers:
-                    worker_rows.append(
-                        ExperimentDefinitionWorker(
-                            id=uuid4(),
-                            experiment_definition_id=definition_id,
-                            binding_key=task.worker.name,
-                            worker_type=task.worker.type_slug,
-                            model_target=task.worker.model,
-                            snapshot_json=task.worker.to_definition(),
-                            created_at=now,
-                        )
-                    )
-                    seen_workers.add(task.worker.name)
-                for evaluator in task.evaluators:
-                    if evaluator.name in seen_evaluators:
-                        continue
-                    snapshot: JsonObject = evaluator.to_definition()
-                    if isinstance(evaluator, Rubric):
-                        snapshot["criteria"] = [
-                            _criterion_snapshot_name(c) for c in evaluator.criteria
-                        ]
-                    evaluator_rows.append(
-                        ExperimentDefinitionEvaluator(
-                            id=uuid4(),
-                            experiment_definition_id=definition_id,
-                            binding_key=evaluator.name,
-                            evaluator_type=evaluator.type_slug,
-                            snapshot_json=snapshot,
-                            created_at=now,
-                        )
-                    )
-                    seen_evaluators.add(evaluator.name)
 
         # -- instance + task rows (two-pass for parent resolution) --
         instance_rows: list[ExperimentDefinitionInstance] = []
@@ -203,8 +154,6 @@ class _ExperimentDefinitionWriter:
         # ---- 5. Write all rows in one transaction ------------------------
         DefinitionRow = (
             ExperimentDefinition
-            | ExperimentDefinitionWorker
-            | ExperimentDefinitionEvaluator
             | ExperimentDefinitionInstance
             | ExperimentDefinitionTask
             | ExperimentDefinitionTaskDependency
@@ -213,8 +162,6 @@ class _ExperimentDefinitionWriter:
         )
         all_rows: list[DefinitionRow] = [
             definition_row,
-            *worker_rows,
-            *evaluator_rows,
             *instance_rows,
             *task_rows,
             *dependency_rows,
@@ -238,8 +185,6 @@ class _ExperimentDefinitionWriter:
         return DefinitionHandle(
             definition_id=definition_id,
             benchmark_type=benchmark_type,
-            worker_bindings={row.binding_key: row.worker_type for row in worker_rows},
-            evaluator_bindings={row.binding_key: row.evaluator_type for row in evaluator_rows},
             instance_count=len(instance_rows),
             task_count=len(task_rows),
             created_at=created_at,

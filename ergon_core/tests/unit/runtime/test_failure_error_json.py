@@ -13,12 +13,11 @@ async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> 
 
     execution_id = uuid4()
     run_id = uuid4()
-    node_id = uuid4()
+    task_id = uuid4()
     execution = SimpleNamespace(
         id=execution_id,
         run_id=run_id,
-        node_id=node_id,
-        definition_task_id=None,
+        task_id=task_id,
     )
 
     class Session:
@@ -45,20 +44,21 @@ async def test_finalize_failure_preserves_structured_error_json(monkeypatch) -> 
 
     monkeypatch.setattr(module, "get_session", fake_get_session)
 
-    async def fake_mark_failed_by_node(*args, **kwargs):
+    async def fake_mark_failed(*args, **kwargs):
         return None
 
     async def fake_emit_task_status(*args, **kwargs):
         return None
 
-    monkeypatch.setattr(module, "mark_task_failed_by_node", fake_mark_failed_by_node)
+    monkeypatch.setattr(module, "mark_task_failed", fake_mark_failed)
+    monkeypatch.setattr(module, "GraphNodeLookup", lambda session, run_id: object())
     monkeypatch.setattr(module, "_emit_task_status", fake_emit_task_status)
 
     await TaskExecutionService().finalize_failure(
         FailTaskExecutionCommand(
             execution_id=execution_id,
             run_id=run_id,
-            task_id=None,
+            task_id=task_id,
             error_message="provider returned malformed response",
             error_json=structured_error,
         )

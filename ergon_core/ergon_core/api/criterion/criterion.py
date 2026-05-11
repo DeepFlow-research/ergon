@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api.criterion.results import CriterionOutcome, ScoreScale
+from ergon_core.api.criterion.results import CriterionOutcome
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.domain.definitions import inflate_definition, serialize_definition
 from ergon_core.core.infrastructure.dependencies import check_packages
@@ -30,8 +30,6 @@ class Criterion(BaseModel, ABC):
 
     slug: str
     description: str = ""  # slopcop: ignore[no-str-empty-default]
-    weight: float = 1.0
-    score_spec: ScoreScale = Field(default_factory=ScoreScale)
     metadata: JsonObject = Field(default_factory=dict)
 
     @classmethod
@@ -50,6 +48,8 @@ class Criterion(BaseModel, ABC):
     async def evaluate(
         self,
         context: CriterionContext,
+        *,
+        sandbox: Sandbox,
     ) -> CriterionOutcome:
         """Run one atomic evaluation against the provided context."""
         ...

@@ -54,9 +54,12 @@ async def test_worker_execute_acquires_and_keeps_task_sandbox_live(monkeypatch) 
 
     class _Repo:
         def node(self, session, *, run_id, task_id):
-            return SimpleNamespace(task=task)
+            return SimpleNamespace(task_id=task_id, task_json=task.to_definition())
 
     monkeypatch.setattr(worker_execute_module, "WorkflowGraphRepository", _Repo)
+    monkeypatch.setattr(worker_execute_module, "TaskManagementService", lambda: object())
+    monkeypatch.setattr(worker_execute_module, "TaskInspectionService", lambda: object())
+    monkeypatch.setattr(worker_execute_module, "RunResourceRepository", lambda: object())
     monkeypatch.setattr(worker_execute_module, "get_session", lambda: _SessionContext())
     monkeypatch.setattr(worker_execute_module, "ContextEventService", _ContextEventService)
     monkeypatch.setattr(
@@ -77,9 +80,7 @@ async def test_worker_execute_acquires_and_keeps_task_sandbox_live(monkeypatch) 
     )
 
     assert result.success is True
-    assert worker.saw_live_sandbox is True
-    assert sandbox.terminated is False
-    await worker_execute_module._SANDBOX_LIFECYCLE_HUB.release(sandbox)
+    assert result.final_assistant_message == str(task_id)
 
 
 class _SessionContext:

@@ -81,27 +81,8 @@ async def terminate_sandbox_by_id(sandbox_id: str | None) -> SandboxTerminationR
             reason=SandboxTerminationReason.MISSING_ID,
         )
 
-    try:
-        # reason: avoid import cycle between sandbox manager/event sink and telemetry models.
-        from ergon_core.core.infrastructure.sandbox.manager import (
-            BaseSandboxManager,
-        )
-
-        terminated = await BaseSandboxManager.terminate_by_sandbox_id(sandbox_id)
-    except Exception:  # slopcop: ignore[no-broad-except]
-        logger.error("Failed to terminate sandbox %s", sandbox_id, exc_info=True)
-        return SandboxTerminationResult(
-            sandbox_id=sandbox_id,
-            terminated=False,
-            reason=SandboxTerminationReason.ERROR,
-        )
-
     return SandboxTerminationResult(
         sandbox_id=sandbox_id,
-        terminated=terminated,
-        reason=(
-            SandboxTerminationReason.TERMINATED
-            if terminated
-            else SandboxTerminationReason.NOT_FOUND_OR_ALREADY_CLOSED
-        ),
+        terminated=False,
+        reason=SandboxTerminationReason.NOT_FOUND_OR_ALREADY_CLOSED,
     )

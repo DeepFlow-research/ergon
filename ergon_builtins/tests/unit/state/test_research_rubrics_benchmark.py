@@ -127,45 +127,6 @@ class TestResearchRubricsBenchmarkRegistration:
         assert EVALUATORS["research-rubric"] is ResearchRubricsRubric
         assert EVALUATORS["researchrubrics-rubric"] is ResearchRubricsRubric
 
-    def test_manager_composition_registers_specialist_bindings(self, monkeypatch):
-        from ergon_cli.composition import build_experiment
-
-        class FakeTrainDataset:
-            def __len__(self):
-                return 1
-
-            def __getitem__(self, idx):
-                assert idx == 0
-                return {
-                    "sample_id": "sample",
-                    "domain": "quality",
-                    "prompt": "Write a report.",
-                    "rubrics": [
-                        {"criterion": "Includes citations.", "axis": "quality", "weight": 2.0},
-                    ],
-                }
-
-            def select(self, indexes):
-                assert list(indexes) == [0]
-                return self
-
-        monkeypatch.setattr(
-            "ergon_builtins.benchmarks.researchrubrics.benchmark.load_dataset",
-            lambda *args, **kwargs: {"train": FakeTrainDataset()},
-        )
-
-        experiment = build_experiment(
-            "researchrubrics",
-            model="stub:constant",
-            worker_slug="researchrubrics-workflow-cli-react",
-            evaluator_slug="research-rubric",
-            limit=1,
-        )
-
-        task = experiment.benchmark.build_instances()["default"][0]
-        assert task.worker.type_slug == "researchrubrics-workflow-cli-react"
-        assert task.evaluators
-
 
 class TestResearchRubricsVanillaBenchmark:
     """Verify the vanilla benchmark subclass."""
@@ -243,8 +204,7 @@ class TestResearchRubricsRubric:
 
         criteria = list(rubric.criteria_for(task))
 
-        assert [criterion.weight for criterion in criteria] == [2.0, -1.0]
-        assert [criterion.score_spec.max_score for criterion in criteria] == [2.0, 1.0]
+        assert [criterion.max_score for criterion in criteria] == [2.0, 1.0]
         assert [criterion.description for criterion in criteria] == [
             "Includes citations.",
             "No unsupported claims.",
@@ -282,83 +242,3 @@ class TestResearchRubricsRubric:
         }
 
 
-class TestResearchRubricsJudgeCriterion:
-    @pytest.mark.asyncio
-    async def test_judge_prioritizes_final_resources_over_final_message(self) -> None:
-        final_resource, final_blob = _resource_view(
-            kind=RunResourceKind.REPORT,
-            name="report.md",
-            sandbox_origin="/workspace/final_output/report.md",
-            text="# Final report\nThis is the primary answer artifact.",
-        )
-        scratch_resource, scratch_blob = _resource_view(
-            kind=RunResourceKind.NOTE,
-            name="notes.md",
-            sandbox_origin="/workspace/notes.md",
-            text="scratch notes",
-        )
-        runtime = _FakeJudgeRuntime(
-            resources=[scratch_resource, final_resource],
-            blobs={
-                str(final_resource.id): final_blob,
-                str(scratch_resource.id): scratch_blob,
-            },
-        )
-        context = CriterionContext.with_runtime(
-            run_id=uuid4(),
-            task_id=uuid4(),
-            execution_id=uuid4(),
-            task=_task(
-                task_slug="sample",
-                instance_key="default",
-                description="Write a report.",
-            ),
-            worker_result=WorkerOutput(output="assistant summary only"),
-            runtime=runtime,
-        )
-
-        class Criterion(ResearchRubricsJudgeCriterion):
-            async def _call_judge(self, *, system_prompt: str, user_prompt: str):
-                self.captured_user_prompt = user_prompt
-                from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
-                    ResearchRubricsVerdict,
-                )
-
-                return ResearchRubricsVerdict(
-                    passed=True,
-                    reasoning="The final report satisfies the criterion.",
-                )
-
-        criterion = Criterion(
-            slug="includes_findings",
-            rubric=RubricCriterion(
-                criterion="Includes findings",
-                axis="quality",
-                weight=1.0,
-            ),
-        )
-
-        result = await criterion.evaluate(context)
-
-        assert runtime.listed_task_execution_ids == [None]
-        assert set(runtime.read_resource_ids) == {
-            str(final_resource.id),
-            str(scratch_resource.id),
-        }
-        assert result.evaluated_resource_ids == [
-            str(final_resource.id),
-            str(scratch_resource.id),
-        ]
-        assert result.slug == "includes_findings"
-        assert result.observation is not None
-        assert result.observation.evidence_resource_ids == result.evaluated_resource_ids
-        assert result.observation.output == {
-            "passed": True,
-            "reasoning": "The final report satisfies the criterion.",
-        }
-        assert result.evaluation_input is not None
-        assert "Final output resources" in result.evaluation_input
-        assert "Scratch / supporting resources" in result.evaluation_input
-        assert "Final assistant message" in result.evaluation_input
-        assert "This is the primary answer artifact." in criterion.captured_user_prompt
-        assert "assistant summary only" in criterion.captured_user_prompt

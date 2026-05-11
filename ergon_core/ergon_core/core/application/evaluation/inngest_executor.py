@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 from functools import partial
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 import inngest
@@ -10,11 +9,8 @@ from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext as PublicCriterionContext
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.benchmark import Task
+from ergon_core.api.sandbox import Sandbox
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.application.evaluation.criterion_runtime import (
-    CriterionRuntimeOptions,
-    DefaultCriterionRuntime,
-)
 from ergon_core.core.application.evaluation.models import (
     CriterionContext as EngineCriterionContext,
     CriterionSpec,
@@ -27,10 +23,6 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
 )
 
-if TYPE_CHECKING:
-    from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
-
-
 class InngestCriterionExecutor:
     """Executes criteria in parallel using Inngest step.run boundaries."""
 
@@ -41,14 +33,14 @@ class InngestCriterionExecutor:
         task_id: UUID,
         execution_id: UUID,
         evaluator_id: UUID | None,
-        sandbox_manager: "BaseSandboxManager",
+        sandbox: Sandbox,
         trace_sink: TraceSink | None = None,
     ):
         self.ctx = ctx
         self.task_id = task_id
         self.execution_id = execution_id
         self.evaluator_id = evaluator_id
-        self.sandbox_manager = sandbox_manager
+        self.sandbox = sandbox
         self._sink = trace_sink or get_trace_sink()
 
     async def execute_all(
@@ -75,26 +67,12 @@ class InngestCriterionExecutor:
                 criterion = spec.criterion
                 cr_result: CriterionOutcome
 
-                runtime = DefaultCriterionRuntime(
-                    context=criterion_context,
-                    sandbox_manager=self.sandbox_manager,
-                    options=CriterionRuntimeOptions(
-                        run_id=task_context.run_id,
-                        task_id=self.execution_id,
-                        # Per RFC ``sandbox-lifetime-covers-criteria``: pass
-                        # the task's sandbox_id so ensure_sandbox prefers
-                        # ``manager.reconnect(sandbox_id)`` over constructing
-                        # a fresh sandbox when running cross-process.
-                        sandbox_id=task_context.sandbox_id,
-                    ),
-                )
-
                 agent_reasoning = (
                     "" if task_context.agent_reasoning is None else task_context.agent_reasoning
                 )
 
                 if isinstance(criterion, Criterion):
-                    eval_ctx = PublicCriterionContext.with_runtime(
+                    eval_ctx = PublicCriterionContext(
                         run_id=task_context.run_id,
                         task_id=self.task_id,
                         execution_id=self.execution_id,
@@ -102,15 +80,11 @@ class InngestCriterionExecutor:
                         worker_result=WorkerOutput(
                             output=agent_reasoning,
                         ),
-                        runtime=runtime,
                         sandbox_id=task_context.sandbox_id,
                     )
-                    cr_result = await criterion.evaluate(eval_ctx)
+                    cr_result = await criterion.evaluate(eval_ctx, sandbox=self.sandbox)
                 else:
-                    try:
-                        cr_result = await criterion.evaluate(runtime, criterion_context)
-                    finally:
-                        await runtime.cleanup()
+                    cr_result = await criterion.evaluate(criterion_context)
 
                 self._sink.emit_span(
                     CompletedSpan(

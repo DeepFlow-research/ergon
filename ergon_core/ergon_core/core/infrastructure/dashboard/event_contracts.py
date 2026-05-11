@@ -34,8 +34,7 @@ from pydantic import BaseModel, Field
 
 
 class WorkerRef(BaseModel):
-    """Reference to an ``ExperimentDefinitionWorker`` row as seen by the
-    dashboard — matches the Zod ``WorkerRefSchema``."""
+    """Reference to the worker assignment shown by the dashboard."""
 
     model_config = {"frozen": True}
 
@@ -48,7 +47,7 @@ class TaskTreeNode(BaseModel):
     """Recursive task tree node embedded in workflow.started.
 
     Shape matches the dashboard Zod ``TaskTreeNodeSchema``.  Built from
-    ``RunGraphNode`` + ``RunGraphEdge`` + ``ExperimentDefinitionWorker``
+    ``RunGraphNode`` + ``RunGraphEdge``
     at emit time; see ``start_workflow._build_task_tree_for_run``.
     """
 

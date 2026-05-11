@@ -16,18 +16,15 @@ from ergon_cli.onboarding.prompts import ask_secret, confirm, select_multiple, s
 def handle_onboard(args: Namespace) -> int:
     print("\nWelcome to Ergon!  Let's get your environment set up.\n")
 
-    # reason: deferred import avoids pulling heavy ergon_builtins deps at CLI startup.
-    from ergon_builtins.registry import register_builtins
-    from ergon_core.api.registry import registry
-
-    register_builtins(registry)
+    from ergon_cli.discovery import _maps
 
     profile = OnboardProfile()
+    benchmarks, _, _ = _maps()
 
     # --- Q1: benchmarks -------------------------------------------------------
     profile.benchmarks = select_multiple(
         "Which benchmarks do you want to run?",
-        [(slug, slug) for slug in sorted(registry.benchmarks)],
+        [(slug, slug) for slug in sorted(benchmarks)],
     )
 
     # --- Q2: LLM providers ----------------------------------------------------

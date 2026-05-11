@@ -6,7 +6,6 @@ from uuid import UUID
 import inngest
 from ergon_core.api import Experiment
 from ergon_core.api.benchmark import Benchmark, Task
-from ergon_core.api.registry import registry
 from ergon_core.api.rubric import Evaluator
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.shared.json_types import JsonObject
@@ -108,29 +107,6 @@ def _assign_runs(experiment: ExperimentRecord) -> list[RunAssignment]:
     ]
 
 
-def _persist_single_sample_workflow_definition(
-    experiment: ExperimentRecord,
-    assignment: RunAssignment,
-) -> DefinitionHandle:
-    from ergon_core.core.application.experiments.definition_writer import (  # slopcop: ignore[guarded-function-import] -- reason: keep definition writing behind application launch plumbing
-        _ExperimentDefinitionWriter,
-    )
-
-    benchmark_slug = _metadata_str(experiment, "benchmark_slug") or experiment.benchmark_type
-    benchmark = _single_sample_benchmark(benchmark_slug, assignment.instance_key)
-    worker_slug = _primary_worker_slug(assignment.worker_team)
-    worker_cls = registry.require_worker(worker_slug)
-    worker = worker_cls(name="primary", model=assignment.model_target or "openai:gpt-4o")
-    evaluators = _evaluator_bindings(assignment.evaluator_slug, assignment.evaluator_bindings)
-    if hasattr(benchmark, "worker"):
-        benchmark.worker = worker
-    if hasattr(benchmark, "evaluators"):
-        benchmark.evaluators = tuple(evaluators.values())
-    workflow = Experiment(benchmark=benchmark)
-    workflow.validate()
-    return _ExperimentDefinitionWriter().persist_definition(workflow)
-
-
 def _metadata_str(experiment: ExperimentRecord, key: str) -> str | None:
     value = experiment.parsed_metadata().get(key)
     return value if isinstance(value, str) else None
@@ -154,33 +130,6 @@ def _evaluator_binding_slugs(experiment: ExperimentRecord) -> dict[str, str]:
         if isinstance(key, str) and isinstance(value, str)
     }
 
-
-def _evaluator_bindings(
-    evaluator_slug: str | None,
-    evaluator_binding_slugs: Mapping[str, str],
-) -> dict[str, Evaluator]:
-    evaluators: dict[str, Evaluator] = {}
-    if evaluator_slug is None:
-        return evaluators
-    evaluator_cls = registry.require_evaluator(evaluator_slug)
-    evaluators["default"] = evaluator_cls(name="default")
-    for binding_key, bound_evaluator_slug in evaluator_binding_slugs.items():
-        if binding_key == "default":
-            continue
-        bound_evaluator_cls = registry.require_evaluator(bound_evaluator_slug)
-        evaluators[binding_key] = bound_evaluator_cls(name=binding_key)
-    return evaluators
-
-
-def _single_sample_benchmark(benchmark_slug: str, instance_key: str) -> Benchmark:
-    source = registry.require_benchmark(benchmark_slug)()
-    instances = source.build_instances()
-    if instance_key not in instances:
-        raise ValueError(
-            f"Experiment sample {instance_key!r} not found in benchmark {benchmark_slug!r}"
-        )
-    wrapper_cls = _single_sample_benchmark_cls(source)
-    return wrapper_cls(source, instance_key, instances[instance_key])
 
 
 class _SingleSampleBenchmark(Benchmark):

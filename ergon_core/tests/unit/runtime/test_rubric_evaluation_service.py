@@ -9,7 +9,7 @@ from ergon_core.api import Sandbox, WeightedCriterion, Worker, WorkerContext, Wo
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext
-from ergon_core.api.criterion import CriterionOutcome, ScoreScale
+from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.rubric import Rubric
 from ergon_core.api.worker import WorkerStreamItem
 from ergon_core.core.application.evaluation.models import (
@@ -27,12 +27,11 @@ class _Criterion(Criterion):
     def __init__(self, *, slug: str, weight: float, max_score: float) -> None:
         super().__init__(
             slug=slug,
-            weight=weight,
-            score_spec=ScoreScale(max_score=max_score),
+            max_score=max_score,
         )
 
-    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
-        return CriterionOutcome(name=self.slug, score=self.score_spec.max_score, passed=True)
+    async def evaluate(self, context: CriterionContext, *, sandbox: Sandbox) -> CriterionOutcome:
+        return CriterionOutcome(name=self.slug, score=self.max_score, passed=True)
 
 
 class _Sandbox(Sandbox):

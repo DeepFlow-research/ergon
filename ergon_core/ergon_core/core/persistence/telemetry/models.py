@@ -186,23 +186,18 @@ class RunRecord(SQLModel, table=True):
 
 class RunTaskExecution(SQLModel, table=True):
     __tablename__ = "run_task_executions"
+    __table_args__ = (
+        sa.ForeignKeyConstraint(
+            ["run_id", "task_id"],
+            ["run_graph_nodes.run_id", "run_graph_nodes.task_id"],
+            name="fk_run_task_executions_task",
+        ),
+        sa.Index("ix_run_task_executions_task", "run_id", "task_id"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
-        index=True,
-    )
-    definition_worker_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_workers.id",
-        index=True,
-    )
-    node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
-        index=True,
-    )
+    task_id: UUID = Field(index=True)
     attempt_number: int = 1
     status: TaskExecutionStatus = Field(index=True)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
@@ -235,19 +230,10 @@ class RunTaskExecution(SQLModel, table=True):
             raise ValueError(f"error_json must be a dict, got {type(data).__name__}")
         return data
 
-    def validate_identity(self) -> None:
-        """Require enough identity to map execution rows to a static or dynamic task."""
-        if self.definition_task_id is None and self.node_id is None:
-            raise ValueError(
-                "RunTaskExecution requires definition_task_id for static tasks "
-                "or node_id for dynamic graph nodes"
-            )
-
     @model_validator(mode="after")
     def _validate_fields(self) -> "RunTaskExecution":
         self.__class__._parse_output(self.output_json)
         self.__class__._parse_error(self.error_json)
-        self.validate_identity()
         try:
             TaskExecutionStatus(self.status)
         except ValueError:
@@ -325,25 +311,20 @@ class RunResource(SQLModel, table=True):
 
 class RunTaskEvaluation(SQLModel, table=True):
     __tablename__ = "run_task_evaluations"
+    __table_args__ = (
+        sa.ForeignKeyConstraint(
+            ["run_id", "task_id"],
+            ["run_graph_nodes.run_id", "run_graph_nodes.task_id"],
+            name="fk_run_task_evaluations_task",
+        ),
+        sa.Index("ix_run_task_evaluations_task", "run_id", "task_id"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
-        index=True,
-    )
+    task_id: UUID = Field(index=True)
     task_execution_id: UUID = Field(
         foreign_key="run_task_executions.id",
-        index=True,
-    )
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
-        index=True,
-    )
-    definition_evaluator_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_evaluators.id",
         index=True,
     )
     evaluator_index: int | None = Field(default=None, index=True)

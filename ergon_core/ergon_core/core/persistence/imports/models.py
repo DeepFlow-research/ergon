@@ -19,7 +19,7 @@ class RunReducer(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    node_id: UUID | None = Field(default=None, foreign_key="run_graph_nodes.id", index=True)
+    task_id: UUID | None = Field(default=None, index=True)
     task_execution_id: UUID | None = Field(
         default=None,
         foreign_key="run_task_executions.id",

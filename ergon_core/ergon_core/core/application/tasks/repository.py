@@ -19,7 +19,7 @@ class TaskExecutionRepository:
     def latest_for_node(self, session: Session, node_id: UUID) -> RunTaskExecution | None:
         stmt = (
             select(RunTaskExecution)
-            .where(RunTaskExecution.node_id == node_id)
+            .where(RunTaskExecution.task_id == node_id)
             .order_by(
                 col(RunTaskExecution.attempt_number).desc(),
                 col(RunTaskExecution.started_at).desc(),
@@ -42,7 +42,7 @@ class TaskExecutionRepository:
             select(RunTaskExecution)
             .where(
                 RunTaskExecution.run_id == run_id,
-                RunTaskExecution.definition_task_id == definition_task_id,
+                RunTaskExecution.task_id == definition_task_id,
             )
             .order_by(
                 col(RunTaskExecution.attempt_number).desc(),
@@ -58,13 +58,13 @@ class TaskExecutionRepository:
         parent_execution_id: UUID,
     ) -> list[RunTaskExecution]:
         parent = session.get(RunTaskExecution, parent_execution_id)
-        if parent is None or parent.node_id is None:
+        if parent is None:
             return []
-        child_node_ids_stmt = select(RunGraphNode.id).where(
-            RunGraphNode.parent_node_id == parent.node_id
+        child_task_ids_stmt = select(RunGraphNode.task_id).where(
+            RunGraphNode.parent_task_id == parent.task_id
         )
         stmt = select(RunTaskExecution).where(
-            col(RunTaskExecution.node_id).in_(child_node_ids_stmt)
+            col(RunTaskExecution.task_id).in_(child_task_ids_stmt)
         )
         return list(session.exec(stmt).all())
 
@@ -78,7 +78,7 @@ class TaskExecutionRepository:
             select(ExperimentDefinitionTask)
             .join(
                 RunTaskExecution,
-                RunTaskExecution.definition_task_id == ExperimentDefinitionTask.id,
+                RunTaskExecution.task_id == ExperimentDefinitionTask.id,
             )
             .where(RunTaskExecution.id == task_execution_id)
         )
@@ -91,7 +91,7 @@ class TaskExecutionRepository:
         count = session.exec(
             select(func.count(RunTaskExecution.id)).where(
                 RunTaskExecution.run_id == run_id,
-                RunTaskExecution.node_id == node_id,
+                RunTaskExecution.task_id == node_id,
             )
         ).one()
         return count + 1
@@ -105,7 +105,7 @@ class TaskExecutionRepository:
         count = session.exec(
             select(func.count(RunTaskExecution.id)).where(
                 RunTaskExecution.run_id == run_id,
-                RunTaskExecution.definition_task_id == definition_task_id,
+                RunTaskExecution.task_id == definition_task_id,
             )
         ).one()
         return count + 1

@@ -33,22 +33,103 @@ class TaskInspectionService:
         session: Session,
         *,
         run_id: UUID,
-        parent_node_id: UUID,
+        parent_node_id: UUID | None = None,
+        parent_task_id: UUID | None = None,
     ) -> list[SubtaskInfo]:
-        """Direct children of parent_node_id, ordered by task_slug.
+        """Direct children of a parent node/task, ordered by task_slug.
 
         Deterministic ordering lets the LLM refer to subtasks by
-        position across turns without node_id confusion.
+        position across turns without task_id confusion.
         """
+        if parent_node_id is None and parent_task_id is None:
+            raise ValueError("parent_node_id or parent_task_id is required")
+
+        parent_filter = (
+            RunGraphNode.parent_task_id == parent_task_id
+            if parent_task_id is not None
+            else RunGraphNode.parent_node_id == parent_node_id
+        )
         nodes = session.exec(
             select(RunGraphNode)
             .where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.parent_node_id == parent_node_id,
+                parent_filter,
             )
             .order_by(RunGraphNode.task_slug, RunGraphNode.id)
         ).all()
         return [self._hydrate(session, n) for n in nodes]
+
+    def descendants(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        parent_task_id: UUID,
+        max_depth: int = 3,
+    ) -> list[SubtaskInfo]:
+        """Breadth-first descendants of parent_task_id up to max_depth."""
+        if max_depth < 1:
+            return []
+
+        results: list[SubtaskInfo] = []
+        frontier = [parent_task_id]
+        depth = 0
+        while frontier and depth < max_depth:
+            next_frontier: list[UUID] = []
+            for task_id in frontier:
+                children = self.list_subtasks(session, run_id=run_id, parent_task_id=task_id)
+                results.extend(children)
+                next_frontier.extend(child.task_id for child in children)
+            frontier = next_frontier
+            depth += 1
+
+        return results
+
+    def get_task(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_id: UUID,
+    ) -> SubtaskInfo:
+        """Single task snapshot by task_id."""
+        node = session.exec(
+            select(RunGraphNode).where(
+                RunGraphNode.run_id == run_id,
+                RunGraphNode.task_id == task_id,
+            )
+        ).one()
+        return self._hydrate(session, node)
+
+    def is_descendant(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        ancestor_task_id: UUID,
+        candidate_task_id: UUID,
+    ) -> bool:
+        """Return whether candidate_task_id is below ancestor_task_id."""
+        frontier = [ancestor_task_id]
+        seen: set[UUID] = set()
+
+        while frontier:
+            current = frontier.pop(0)
+            if current in seen:
+                continue
+            seen.add(current)
+            children = session.exec(
+                select(RunGraphNode.task_id).where(
+                    RunGraphNode.run_id == run_id,
+                    RunGraphNode.parent_task_id == current,
+                )
+            ).all()
+            for child_task_id in children:
+                if child_task_id == candidate_task_id:
+                    return True
+                frontier.append(child_task_id)
+
+        return False
 
     def get_subtask(
         self,
@@ -84,7 +165,7 @@ class TaskInspectionService:
             error = self._latest_error(session, node.id)
 
         return SubtaskInfo(
-            node_id=node.id,
+            task_id=node.task_id,
             task_slug=node.task_slug,
             description=node.description,
             status=node.status,  # type: ignore[arg-type]

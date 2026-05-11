@@ -12,7 +12,6 @@ from ergon_core.api.criterion import (
     CriterionEvidence,
     CriterionOutcome,
     EvidenceMessage,
-    ScoreScale,
 )
 from ergon_core.api.errors import (
     ContainmentViolation,
@@ -24,7 +23,7 @@ from ergon_core.api.errors import (
 from ergon_core.api.experiment import Experiment
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult, WeightedCriterion
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
-from ergon_core.api.worker import Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.api.worker import SpawnedTaskHandle, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
 
 __all__ = [
     "Benchmark",
@@ -44,7 +43,7 @@ __all__ = [
     "SandboxKindMismatch",
     "SandboxNotLiveError",
     "SandboxRuntime",
-    "ScoreScale",
+    "SpawnedTaskHandle",
     "Task",
     "TaskEvaluationResult",
     "TaskNotMaterializedError",

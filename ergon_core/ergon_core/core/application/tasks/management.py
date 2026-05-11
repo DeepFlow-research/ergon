@@ -7,6 +7,7 @@ subtask mutations; read-only queries live in TaskInspectionService.
 
 import logging
 from collections import deque
+from typing import Any
 from uuid import UUID
 
 import inngest
@@ -92,6 +93,26 @@ class TaskManagementService:
 
     # ── add_subtask ──────────────────────────────────────────
 
+    async def spawn_task(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        parent_task_id: UUID,
+        task: Any,  # slopcop: ignore[no-typing-any] -- AddSubtaskCommand validates Task
+        depends_on: list[UUID] | None = None,
+    ) -> AddSubtaskResult:
+        """WorkerContext-facing wrapper that keeps command construction internal."""
+        return await self.add_subtask(
+            session,
+            AddSubtaskCommand(
+                run_id=run_id,
+                parent_task_id=parent_task_id,
+                task=task,
+                depends_on=list(depends_on or []),
+            ),
+        )
+
     async def add_subtask(
         self,
         session: Session,
@@ -118,7 +139,6 @@ class TaskManagementService:
             description=task.description,
             status=PENDING,
             assigned_worker_slug=task.worker.name,
-            parent_node_id=parent.id,
             parent_task_id=parent.task_id,
             level=parent.level + 1,
             meta=_MANAGER_META,
@@ -159,6 +179,19 @@ class TaskManagementService:
         )
 
     # ── cancel_task ──────────────────────────────────────────
+
+    async def cancel_task_by_id(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_id: UUID,
+    ) -> CancelTaskResult:
+        """WorkerContext-facing wrapper until the node/task identity migration lands."""
+        return await self.cancel_task(
+            session,
+            CancelTaskCommand(run_id=run_id, node_id=task_id),
+        )
 
     async def cancel_task(
         self,
@@ -343,7 +376,6 @@ class TaskManagementService:
                 description=spec.task.description,
                 status=PENDING,
                 assigned_worker_slug=spec.task.worker.name,
-                parent_node_id=parent.id,
                 parent_task_id=parent.task_id,
                 level=parent.level + 1,
                 meta=_MANAGER_META,
@@ -391,6 +423,24 @@ class TaskManagementService:
 
     # ── refine_task ──────────────────────────────────────────
 
+    async def refine_task_by_id(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_id: UUID,
+        description: str,
+    ) -> RefineTaskResult:
+        """WorkerContext-facing wrapper until the node/task identity migration lands."""
+        return await self.refine_task(
+            session,
+            RefineTaskCommand(
+                run_id=run_id,
+                node_id=task_id,
+                new_description=description,
+            ),
+        )
+
     async def refine_task(
         self,
         session: Session,
@@ -435,6 +485,19 @@ class TaskManagementService:
         )
 
     # ── restart_task ─────────────────────────────────────────
+
+    async def restart_task_by_id(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_id: UUID,
+    ) -> RestartTaskResult:
+        """WorkerContext-facing wrapper until the node/task identity migration lands."""
+        return await self.restart_task(
+            session,
+            RestartTaskCommand(run_id=run_id, node_id=task_id),
+        )
 
     async def restart_task(
         self,

@@ -1,9 +1,7 @@
-import importlib
-
 from ergon_builtins.models.resolution import resolve_model_target
+from ergon_builtins.registry import register_builtins
 
-# Importing the builtins registry registers production model backends.
-importlib.import_module("ergon_builtins.registry")
+register_builtins()
 
 
 def test_openrouter_target_resolves_to_openrouter_provider_model() -> None:

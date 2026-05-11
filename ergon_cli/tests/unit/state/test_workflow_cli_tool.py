@@ -16,7 +16,7 @@ async def test_workflow_tool_injects_worker_context() -> None:
         run_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
-        node_id=uuid4(),
+        task_id=uuid4(),
     )
     seen = {}
 
@@ -33,7 +33,7 @@ async def test_workflow_tool_injects_worker_context() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -41,9 +41,9 @@ async def test_workflow_tool_injects_worker_context() -> None:
     assert await workflow("inspect task-tree") == "ok"
     assert seen["command"] == "inspect task-tree"
     assert seen["context"].run_id == context.run_id
-    assert seen["context"].node_id == context.node_id
+    assert seen["context"].node_id == context.task_id
     assert seen["context"].execution_id == context.execution_id
-    assert seen["context"].sandbox_task_key == context.node_id
+    assert seen["context"].sandbox_task_key == context.task_id
     assert seen["context"].benchmark_type == "researchrubrics"
 
 
@@ -53,7 +53,7 @@ async def test_workflow_tool_reports_nonzero_exit() -> None:
         run_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
-        node_id=uuid4(),
+        task_id=uuid4(),
     )
 
     def execute(command, *, context, session_factory, service):
@@ -66,7 +66,7 @@ async def test_workflow_tool_reports_nonzero_exit() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -80,7 +80,7 @@ async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None
         run_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
-        node_id=uuid4(),
+        task_id=uuid4(),
     )
 
     def execute(command, *, context, session_factory, service):
@@ -89,7 +89,7 @@ async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -105,7 +105,7 @@ async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> N
         run_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
-        node_id=uuid4(),
+        task_id=uuid4(),
     )
 
     class Session:
@@ -114,7 +114,7 @@ async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> N
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute_workflow_command,
         session_factory=Session,
@@ -133,7 +133,7 @@ async def test_budgeted_workflow_tool_returns_structured_exhaustion() -> None:
         run_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
-        node_id=uuid4(),
+        task_id=uuid4(),
     )
     calls = 0
 
@@ -144,7 +144,7 @@ async def test_budgeted_workflow_tool_returns_structured_exhaustion() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.node_id,
+        sandbox_task_key=context.task_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
         budgeted=True,

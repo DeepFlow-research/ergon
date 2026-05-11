@@ -5,7 +5,7 @@ worker's sandbox via sandbox_id and checks for the expected file.
 """
 
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
-from e2b_code_interpreter import AsyncSandbox
+from ergon_core.api.sandbox import Sandbox
 
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"
@@ -18,28 +18,16 @@ class SandboxFileCheckCriterion(Criterion):
         self,
         *,
         slug: str = "sandbox-file-check",
-        weight: float = 1.0,
         expected_path: str = MARKER_PATH,
         expected_content: str = MARKER_CONTENT,
     ) -> None:
-        super().__init__(slug=slug, weight=weight)
+        super().__init__(slug=slug)
         self.expected_path = expected_path
         self.expected_content = expected_content
 
-    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
-        if not context.sandbox_id:
-            return CriterionOutcome(
-                slug=self.slug,
-                name=self.slug,
-                score=0.0,
-                passed=False,
-                weight=self.weight,
-                feedback="No sandbox_id available — cannot check files",
-            )
-
+    async def evaluate(self, context: CriterionContext, *, sandbox: Sandbox) -> CriterionOutcome:
         try:
-            sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
-            content = await sandbox.files.read(self.expected_path)
+            content = await sandbox.read_file(self.expected_path)
 
             if isinstance(content, bytes):
                 content = content.decode("utf-8")
@@ -50,7 +38,6 @@ class SandboxFileCheckCriterion(Criterion):
                 name=self.slug,
                 score=1.0 if found else 0.0,
                 passed=found,
-                weight=self.weight,
                 feedback=(
                     f"Found expected content at {self.expected_path}"
                     if found
@@ -64,6 +51,5 @@ class SandboxFileCheckCriterion(Criterion):
                 name=self.slug,
                 score=0.0,
                 passed=False,
-                weight=self.weight,
                 feedback=f"Failed to read {self.expected_path}: {exc}",
             )

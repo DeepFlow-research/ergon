@@ -12,10 +12,7 @@ from uuid import UUID
 
 from ergon_core.api import Sandbox, Task, WorkerContext, WorkerStreamItem
 from ergon_core.core.application.resources import RunResourceView
-from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
-    ResearchRubricsSandbox,
-    ResearchRubricsSandboxManager,
-)
+from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import ResearchRubricsSandbox
 
 from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
     ReportReadFailure,
@@ -122,8 +119,6 @@ class ResearchRubricsResearcherWorker(ReActWorker):
                 f"ResearchRubricsResearcherWorker requires ResearchRubricsSandbox, "
                 f"got {type(sandbox).__name__}"
             )
-        manager = sandbox.manager
-
         model_run_skill = make_run_skill(model=self.model)
 
         async def run_skill(request: SkillRequest) -> SkillResponse:
@@ -132,19 +127,13 @@ class ResearchRubricsResearcherWorker(ReActWorker):
                 (ReportWriteSkillRequest, ReportEditSkillRequest, ReportReadSkillRequest),
             ):
                 return await self._run_sandbox_report_skill(
-                    manager=manager,
-                    task_id=task.task_id,
+                    sandbox=sandbox,
                     request=request,
                 )
             return await model_run_skill(request)
 
         async def publisher_sync() -> list[RunResourceView]:
-            publisher = manager.publisher_for(
-                task_id=task.task_id,
-                run_id=context.run_id,
-                task_execution_id=context.execution_id,
-            )
-            return await publisher.sync()
+            return []
 
         rr_toolkit = ResearchRubricsToolkit(
             run_skill=run_skill,
@@ -172,8 +161,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
     async def _run_sandbox_report_skill(
         self,
         *,
-        manager: ResearchRubricsSandboxManager,
-        task_id: UUID,
+        sandbox: ResearchRubricsSandbox,
         request: ReportWriteSkillRequest | ReportEditSkillRequest | ReportReadSkillRequest,
     ) -> ReportWriteResponse | ReportReadResponse:
         started = time.perf_counter()
@@ -199,8 +187,8 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         try:
             if isinstance(request, ReportReadSkillRequest):
                 latency_ms = (time.perf_counter() - started) * 1000
-                content = await manager.read_report_file(
-                    task_id=task_id,
+                content = await sandbox.read_report_file(
+                    task_id=UUID(int=0),
                     workspace_path=path,
                     duration_ms=int(latency_ms),
                 )
@@ -215,8 +203,8 @@ class ResearchRubricsResearcherWorker(ReActWorker):
                 request.content if isinstance(request, ReportWriteSkillRequest) else request.patch
             )
             latency_ms = (time.perf_counter() - started) * 1000
-            await manager.write_report_file(
-                task_id=task_id,
+            await sandbox.write_report_file(
+                task_id=UUID(int=0),
                 workspace_path=path,
                 content=content,
                 duration_ms=int(latency_ms),

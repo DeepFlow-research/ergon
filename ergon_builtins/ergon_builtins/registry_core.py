@@ -8,20 +8,13 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ergon_core.api import Benchmark, Worker
-from ergon_core.api.registry import ComponentRegistry, registry
 from ergon_core.api.rubric import Evaluator
-from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
-from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
-from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_builtins.benchmarks.minif2f.worker_factory import MiniF2FReactWorker
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
-from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
-    SWEBenchSandboxManager,
-)
 from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
 from ergon_builtins.benchmarks.swebench_verified.worker_factory import SWEBenchReactWorker
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
@@ -51,12 +44,6 @@ EVALUATORS: dict[str, type[Evaluator]] = {
     "swebench-rubric": SWEBenchRubric,
 }
 
-SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
-    "gdpeval": GDPEvalSandboxManager,
-    "minif2f": MiniF2FSandboxManager,
-    "swebench-verified": SWEBenchSandboxManager,
-}
-
 SANDBOX_TEMPLATES: dict[str, Path] = {
     "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox",
     "swebench-verified": Path(__file__).parent / "benchmarks/swebench_verified/sandbox",
@@ -72,16 +59,8 @@ MODEL_BACKENDS: dict[str, Callable[..., ResolvedModel]] = {
 }
 
 
-def register_core_builtins(target: ComponentRegistry = registry) -> None:
-    """Register builtins that are safe without optional dependency extras."""
+def register_core_builtins() -> None:
+    """Register builtins that still use global process registries."""
 
-    for slug, worker_factory in WORKERS.items():
-        target.register_worker(slug, worker_factory)
-    for benchmark_cls in BENCHMARKS.values():
-        target.register_benchmark(benchmark_cls)
-    for slug, evaluator_cls in EVALUATORS.items():
-        target.register_evaluator(evaluator_cls, slug=slug)
-    for slug, manager_cls in SANDBOX_MANAGERS.items():
-        target.register_sandbox_manager(slug, manager_cls)
     for prefix, resolver in MODEL_BACKENDS.items():
         register_model_backend(prefix, resolver)

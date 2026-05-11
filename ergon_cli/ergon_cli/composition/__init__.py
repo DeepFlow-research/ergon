@@ -1,8 +1,11 @@
-"""Build Experiment from CLI args using registry lookups."""
+"""Build Experiment from CLI args using explicit builtins maps."""
 
 from ergon_core.api import Experiment
-from ergon_core.api.registry import registry
-from ergon_builtins.registry import register_builtins
+from ergon_builtins.registry_core import (
+    BENCHMARKS as CORE_BENCHMARKS,
+    EVALUATORS as CORE_EVALUATORS,
+    WORKERS as CORE_WORKERS,
+)
 
 
 def build_experiment(
@@ -13,18 +16,27 @@ def build_experiment(
     workflow: str = "single",
     limit: int | None = None,
 ) -> Experiment:
+    benchmarks = dict(CORE_BENCHMARKS)
+    evaluators = dict(CORE_EVALUATORS)
+    workers = dict(CORE_WORKERS)
+    try:
+        from ergon_builtins.registry_data import (
+            BENCHMARKS as DATA_BENCHMARKS,
+            EVALUATORS as DATA_EVALUATORS,
+            WORKERS as DATA_WORKERS,
+        )
+    except ImportError:
+        pass
+    else:
+        benchmarks.update(DATA_BENCHMARKS)
+        evaluators.update(DATA_EVALUATORS)
+        workers.update(DATA_WORKERS)
 
-    if (
-        worker_slug not in registry.workers
-        or benchmark_slug not in registry.benchmarks
-        or evaluator_slug not in registry.evaluators
-    ):
-        register_builtins(registry)
-    if worker_slug not in registry.workers:
+    if worker_slug not in workers:
         raise KeyError(worker_slug)
-    benchmark_cls = registry.require_benchmark(benchmark_slug)
-    evaluator_cls = registry.require_evaluator(evaluator_slug)
-    worker_cls = registry.require_worker(worker_slug)
+    benchmark_cls = benchmarks[benchmark_slug]
+    evaluator_cls = evaluators[evaluator_slug]
+    worker_cls = workers[worker_slug]
 
     evaluator = evaluator_cls(name="default")
     worker = worker_cls(name="worker", model=model)
@@ -39,9 +51,8 @@ def build_experiment(
     # Smoke-worker composition: the parent worker spawns 9 subtasks via
     # ``add_subtask(assigned_worker_slug="{env}-smoke-leaf")``, so the
     # experiment must also carry a binding for that leaf slug —
-    # otherwise ``task_execution_service._prepare_graph_native`` will
-    # raise ``ConfigurationError: No ExperimentDefinitionWorker with
-    # binding_key='{env}-smoke-leaf'`` when the first subtask fires.
+    # object-bound tasks must carry the extra smoke evaluators at benchmark
+    # construction time.
     # Happy smoke parents additionally route top-level ``l_2`` to
     # ``{env}-smoke-recursive-worker`` so dependency propagation waits on
     # a non-leaf dynamic task. ``{env}-sadpath-smoke-worker`` instead needs

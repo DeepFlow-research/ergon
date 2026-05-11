@@ -1,4 +1,4 @@
-"""Batch-loaded mapping from definition task/edge IDs to run graph IDs.
+"""Batch-loaded mapping from authored task IDs to run graph task IDs.
 
 Constructed once per propagation call. Two queries at init time,
 zero per-node queries during dependency resolution.
@@ -11,23 +11,19 @@ from sqlmodel import Session, select
 
 
 class GraphNodeLookup:
-    """Maps definition_task_id to run_graph_node.id for one run.
+    """Maps authored task IDs to run-graph task IDs for one run.
 
-    Also caches edge lookups (source_node_id, target_node_id) -> edge_id.
+    Also caches edge lookups (source_task_id, target_task_id) -> edge_id.
     """
 
     def __init__(self, session: Session, run_id: UUID) -> None:
         node_rows = session.exec(
-            select(RunGraphNode.id, RunGraphNode.definition_task_id).where(
-                RunGraphNode.run_id == run_id
-            )
+            select(RunGraphNode.task_id).where(RunGraphNode.run_id == run_id)
         ).all()
-        self._nodes: dict[UUID, UUID] = {
-            defn_id: node_id for node_id, defn_id in node_rows if defn_id is not None
-        }
+        self._nodes: dict[UUID, UUID] = {task_id: task_id for task_id in node_rows}
 
         edge_rows = session.exec(
-            select(RunGraphEdge.id, RunGraphEdge.source_node_id, RunGraphEdge.target_node_id).where(
+            select(RunGraphEdge.id, RunGraphEdge.source_task_id, RunGraphEdge.target_task_id).where(
                 RunGraphEdge.run_id == run_id
             )
         ).all()
@@ -36,15 +32,15 @@ class GraphNodeLookup:
         }
 
     def node_id(self, definition_task_id: UUID) -> UUID | None:
-        """Get the run graph node ID for a definition task ID."""
+        """Get the run graph task ID for an authored task ID."""
         return self._nodes.get(definition_task_id)
 
     def edge_id_by_nodes(self, source_node_id: UUID, target_node_id: UUID) -> UUID | None:
-        """Get edge ID by source and target node IDs."""
+        """Get edge ID by source and target task IDs."""
         return self._edges.get((source_node_id, target_node_id))
 
     def edge_id(self, source_defn_id: UUID, target_defn_id: UUID) -> UUID | None:
-        """Get edge ID by source and target definition task IDs."""
+        """Get edge ID by source and target authored task IDs."""
         src = self.node_id(source_defn_id)
         tgt = self.node_id(target_defn_id)
         if src is None or tgt is None:

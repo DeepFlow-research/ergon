@@ -28,7 +28,6 @@ def build_proof_criterion(
     """
     return ProofVerificationCriterion(
         slug="proof_verification",
-        weight=1.0,
         max_score=max_score,
         problem_statement=problem_statement,
         ground_truth_proof=ground_truth_proof,

@@ -17,5 +17,5 @@ class SWEBenchRubric(Rubric):
     def __init__(self, *, name: str = "swebench-rubric") -> None:
         super().__init__(
             name=name,
-            criteria=[SWEBenchTestCriterion(slug="test-resolution", weight=1.0)],
+            criteria=[SWEBenchTestCriterion(slug="test-resolution")],
         )

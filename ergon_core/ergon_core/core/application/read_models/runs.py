@@ -15,7 +15,6 @@ from ergon_core.core.application.read_models.models import (
 from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
-    ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
@@ -68,19 +67,11 @@ class RunReadService:
             if definition is None:
                 return None
 
-            def_id = run.workflow_definition_id
             nodes = list(
                 session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
             )
             edges = list(
                 session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all()
-            )
-            def_workers = list(
-                session.exec(
-                    select(ExperimentDefinitionWorker).where(
-                        ExperimentDefinitionWorker.experiment_definition_id == def_id
-                    )
-                ).all()
             )
             executions = list(
                 session.exec(
@@ -107,10 +98,6 @@ class RunReadService:
                 ).all()
             )
 
-        worker_by_id: dict[UUID, ExperimentDefinitionWorker] = {w.id: w for w in def_workers}
-        worker_by_binding: dict[str, ExperimentDefinitionWorker] = {
-            w.binding_key: w for w in def_workers
-        }
         timestamps = _task_timestamps(executions)
         (
             task_map,
@@ -121,13 +108,10 @@ class RunReadService:
             failed_tasks,
             running_tasks,
             cancelled_tasks,
-        ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
+        ) = _build_task_map(nodes, edges, {}, timestamps)
 
         execution_task_map: dict[UUID, UUID] = {
-            ex.id: ex.node_id for ex in executions if ex.node_id is not None
-        }
-        defn_to_node: dict[UUID, UUID] = {
-            n.definition_task_id: n.id for n in nodes if n.definition_task_id is not None
+            ex.id: ex.task_id for ex in executions
         }
 
         context_events_by_task = _context_events_by_task(
@@ -159,12 +143,12 @@ class RunReadService:
             ),
             executions_by_task=_task_keyed_executions(
                 executions,
-                worker_by_id,
+                {},
             ),
             evaluations_by_task=_task_keyed_evaluations(
                 evaluations,
                 run_id_str,
-                defn_to_node,
+                {},
             ),
             context_events_by_task=dict(context_events_by_task),
             sandboxes_by_task=_task_keyed_sandboxes(run_summary),

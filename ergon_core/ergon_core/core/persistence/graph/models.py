@@ -17,6 +17,7 @@ from uuid import UUID, uuid4
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
+import sqlalchemy as sa
 from sqlalchemy import JSON, Column, DateTime, Index
 from sqlmodel import Field, SQLModel
 
@@ -44,17 +45,17 @@ TZDateTime = DateTime(timezone=True)
 
 class RunGraphNode(SQLModel, table=True):
     __tablename__ = "run_graph_nodes"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
-    task_id: UUID = Field(default_factory=uuid4, index=True)
-    definition_task_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_tasks.id",
+    __table_args__ = (
+        sa.PrimaryKeyConstraint("run_id", "task_id"),
+        sa.Index("ix_run_graph_nodes_parent", "run_id", "parent_task_id"),
+        sa.Index("ix_run_graph_nodes_status", "run_id", "status"),
     )
+
+    run_id: UUID = Field(foreign_key="runs.id")
+    task_id: UUID = Field(default_factory=uuid4)
     instance_key: str = Field(
         description=(
-            "Benchmark instance identifier for this node, such as a dataset row or "
+            "Benchmark instance identifier for this task, such as a dataset row or "
             "environment variant; maps to ExperimentDefinitionInstance.instance_key."
         )
     )
@@ -69,9 +70,8 @@ class RunGraphNode(SQLModel, table=True):
     task_json: JsonObject = Field(default_factory=dict, sa_column=Column(JSON))
 
     status: str = Field(
-        index=True,
         description=(
-            "Free-form node status owned by the experiment layer so different "
+            "Free-form task status owned by the experiment layer so different "
             "experiments can define lifecycles without core schema changes."
         ),
     )
@@ -84,16 +84,11 @@ class RunGraphNode(SQLModel, table=True):
         ),
     )
 
-    parent_node_id: UUID | None = Field(
+    parent_task_id: UUID | None = Field(
         default=None,
-        foreign_key="run_graph_nodes.id",
         index=True,
-        description=(
-            "Self-referential containment parent. Null for definition-seeded roots and set "
-            "for dynamic subtasks so hierarchy can be read without joins or edge traversal."
-        ),
+        description="Task id of the parent node for dynamically spawned child tasks.",
     )
-    parent_task_id: UUID | None = Field(default=None, index=True)
 
     level: int = Field(
         default=0,
@@ -112,6 +107,11 @@ class RunGraphNode(SQLModel, table=True):
             raise ValueError(f"task_json must be a dict, got {type(self.task_json).__name__}")
         return self
 
+    @property
+    def id(self) -> UUID:
+        """Compatibility accessor while application DTOs finish moving to task_id."""
+        return self.task_id
+
 
 # ---------------------------------------------------------------------------
 # RunGraphEdge
@@ -120,23 +120,30 @@ class RunGraphNode(SQLModel, table=True):
 
 class RunGraphEdge(SQLModel, table=True):
     __tablename__ = "run_graph_edges"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "run_id",
+            "source_task_id",
+            "target_task_id",
+            name="uq_run_graph_edges_natural",
+        ),
+        sa.ForeignKeyConstraint(
+            ["run_id", "source_task_id"],
+            ["run_graph_nodes.run_id", "run_graph_nodes.task_id"],
+            name="fk_run_graph_edges_source",
+        ),
+        sa.ForeignKeyConstraint(
+            ["run_id", "target_task_id"],
+            ["run_graph_nodes.run_id", "run_graph_nodes.task_id"],
+            name="fk_run_graph_edges_target",
+        ),
+        sa.Index("ix_run_graph_edges_target", "run_id", "target_task_id"),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    definition_dependency_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_definition_task_dependencies.id",
-    )
-    source_node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
-        index=True,
-    )
-    target_node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
-        index=True,
-    )
-    source_task_id: UUID | None = Field(default=None, index=True)
-    target_task_id: UUID | None = Field(default=None, index=True)
+    source_task_id: UUID = Field(index=True)
+    target_task_id: UUID = Field(index=True)
     status: str = Field(index=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

@@ -160,7 +160,7 @@ class CancelOrphansResult(BaseModel):
 class SubtaskInfo(BaseModel):
     """A snapshot of one subtask suitable for the manager to reason over."""
 
-    node_id: NodeId
+    task_id: UUID
     task_slug: str
     description: str
     status: NodeStatus

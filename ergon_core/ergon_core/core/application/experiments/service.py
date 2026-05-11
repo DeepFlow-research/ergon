@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from ergon_core.api.benchmark import Benchmark, Task
-from ergon_core.api.registry import registry
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import ExperimentRecord
@@ -110,7 +109,9 @@ class ExperimentService:
 
     def _benchmark_cls(self, benchmark_slug: str) -> Callable[..., Benchmark]:
         if self._benchmarks is None:
-            self._benchmarks = registry.benchmarks
+            raise ValueError(
+                "Slug-based benchmark lookup was removed; pass benchmark classes explicitly."
+            )
         return self._benchmarks[benchmark_slug]
 
 

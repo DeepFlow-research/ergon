@@ -28,77 +28,40 @@
 - Public JSON-shaped metadata and definition annotations use the shared
   `JsonObject` alias rather than raw `dict[str, Any]`.
 - Several public API models were simplified to normal Pydantic construction:
-  no custom constructors on `Benchmark`, `Criterion`, `Rubric`, or `Worker`;
-  `CriterionContext` uses `with_runtime(...)` for explicit runtime injection.
+  no custom constructors on `Benchmark`, `Criterion`, `Rubric`, or `Worker`.
+- `WorkerContext` now exposes the curated runtime facade for task spawning,
+  graph inspection, mutation, and resource lookup, with framework-only service
+  injection through private attributes and `SpawnedTaskHandle`.
+- `CriterionContext` is pure data. Criteria receive the live task `Sandbox`
+  directly, and the old `CriterionRuntime` indirection, `ScoreScale`,
+  `Criterion.weight`, and `Criterion.score_spec` are gone.
+- The old public/component registry path and component catalog implementation
+  were deleted from `ergon_core`; builtins now expose explicit metadata maps
+  instead of registering through `ergon_core.api.registry`.
+- The runtime graph uses `(run_id, task_id)` identity as the persisted node key,
+  and task execution/evaluation telemetry points at `task_id`.
+- Definition worker/evaluator pool rows were deleted from persistence and the
+  definition writer/read-model paths.
+- The old sandbox manager base classes and job steps were deleted. Builtin
+  sandbox definitions now derive from public `Sandbox` / direct E2B adapters,
+  and worker/evaluator execution shares sandbox lifecycle through
+  `SandboxLifecycleHub`.
+- Old-shape registry/runtime/sandbox-manager tests were removed or updated, and
+  unit verification is green for `ergon-core`, `ergon-builtins`, and
+  `ergon-cli`.
 
 ## Partially Landed
 
-- The public API export surface is partially updated. `Experiment`, `Sandbox`,
-  `SandboxRuntime`, `WeightedCriterion`, and the new exception types are
-  exported, but `SpawnedTaskHandle` is not present because the planned
-  `WorkerContext.spawn_task` surface did not land.
-- Task identity cleanup is only partial. `task_id` is now the runtime identity
-  used by key paths, but the old `node_id`/row-id model still exists in graph
-  persistence and several runtime/read-model paths.
-- Repository inflation is only partial. `worker_execute.py` uses
-  `RunGraphNodeView.task`, but evaluation paths still call
-  `Task.from_definition(node.task_json, ...)` directly.
-- Object-bound task JSON exists on definition and run rows, but old denormalized
-  columns such as `description`, `task_slug`, `instance_key`, and
-  `assigned_worker_slug` still exist.
-- Sandbox lifecycle behavior was adjusted enough for the current execution and
-  evaluation flow, but the old sandbox manager system still exists and remains
-  used by builtins/integration paths.
-- Evaluator execution is object-bound at dispatch time, but definition
-  worker/evaluator pool tables and several references to those rows still
-  exist.
-- Public API construction cleanup is partial. The core public base classes have
-  been simplified, but several builtin worker classes still override
-  `__init__`, pass `tools=[]`, and mutate `self.tools` during execution.
+- Object-bound task JSON exists on definition and run rows, but the graph still
+  intentionally retains denormalized read-model columns such as `description`,
+  `task_slug`, `instance_key`, and `assigned_worker_slug`.
+- The planned `ergon_builtins.toolkits` package and final
+  `ReActWorker(toolkit=...)` constructor shape did not fully land. The old
+  manager-backed sandbox pieces were removed, but benchmark-specific ReAct
+  workers still exist.
 
 ## Not Landed
 
-- The full "two tables, one identity" schema rewrite did not land. The target
-  composite `(run_id, task_id)` primary key for `run_graph_nodes` is not the
-  current schema.
-- `run_graph_nodes.id`, `definition_task_id`, `parent_node_id`,
-  `assigned_worker_slug`, `description`, `task_slug`, and `instance_key` were
-  not fully removed from the runtime graph model.
-- `run_graph_edges`, task execution rows, task evaluation rows, Inngest payloads,
-  and internal DTOs were not fully rewritten around `(run_id, task_id)`.
-- `ComponentRegistry`, `ComponentCatalogEntry`, and `ComponentCatalogService`
-  were not deleted. `ergon_core.api.registry` and the component catalog code
-  still exist.
-- The `ergon_builtins` registry files were not deleted or reduced to CLI-only
-  aliases. `ergon_builtins/registry.py`, `registry_core.py`,
-  `registry_data.py`, and `registry_local_models.py` still exist.
-- `experiment_definition_workers` and `experiment_definition_evaluators` were
-  not deleted. Several application/read-model paths still reference those rows.
-- `BaseSandboxManager` and `DefaultSandboxManager` were not deleted. Concrete
-  builtins still include manager-backed sandbox implementations.
-- The planned `ergon_builtins.sandboxes` package did not land. Concrete sandbox
-  kinds were not moved to `ergon_builtins/sandboxes/{lean,python,swebench,...}.py`.
-- The planned `ergon_builtins.toolkits` package did not land. Existing benchmark
-  toolkits were not moved into a shared toolkit package or converted into the
-  final `ReActWorker(toolkit=...)` shape.
-- The ReAct worker/toolkit collapse did not land. Benchmark-specific ReAct
-  workers such as `MiniF2FReactWorker`, `SWEBenchReactWorker`, and
-  `ResearchRubricsWorkflowCliReActWorker` still exist.
-- `WorkerContext` did not receive the planned curated runtime facade:
-  `spawn_task`, `cancel_task`, `refine_task`, `restart_task`, `subtasks`,
-  `descendants`, `get_task`, `resources`, service `PrivateAttr` injection, or
-  `SpawnedTaskHandle`.
-- `CriterionContext` was not reduced to pure data. It still owns runtime proxy
-  methods and uses `CriterionRuntime` via `with_runtime(...)`.
-- `DefaultCriterionRuntime` and `CriterionRuntimeOptions` were not deleted.
-- `Criterion.evaluate(...)` still takes `CriterionContext`; it does not yet take
-  the task sandbox directly as planned in Phase 4.
-- `Criterion.weight` and `Criterion.score_spec` were not removed. The
-  `WeightedCriterion` wrapper exists, but criteria still carry aggregation
-  fields.
-- The planned test/file deletion cleanup did not land. Registry-oriented tests,
-  sandbox-manager integration tests, and other old-shape tests remain because
-  the underlying old systems remain.
 - Architecture docs outside this RFC folder were not updated. The migration
   doc's "On acceptance" tasks for `docs/architecture/01_public_api.md` and
   `docs/architecture/cross_cutting/sandbox_lifecycle.md` remain outstanding.
@@ -123,10 +86,7 @@
 
 - Treat `01-api-surface.md` through `06-decisions-log.md` as the target state,
   not a claim that the PR is complete.
-- This PR currently lands the object-bound authoring surface and a subset of the
-  runtime/materialization changes. It does not complete the persistence,
-  WorkerContext, criterion-runtime, sandbox-manager, or builtin ReAct/toolkit
-  migrations.
-- Before merge, decide whether this PR should remain a partial implementation of
-  the target, or whether the "Not landed" items above are blockers that must be
-  implemented in this branch.
+- This PR now lands the object-bound authoring surface plus the runtime
+  identity, WorkerContext, criterion-runtime, sandbox-manager, and registry
+  removals. Remaining deltas are documentation updates and the deeper builtin
+  ReAct/toolkit packaging cleanup.

@@ -54,8 +54,7 @@ from pydantic import ValidationError
         (
             lambda: RunTaskExecution(
                 run_id=uuid4(),
-                definition_task_id=uuid4(),
-                node_id=uuid4(),
+                    task_id=uuid4(),
                 status=TaskExecutionStatus.RUNNING,
             ),
             "status",

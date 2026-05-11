@@ -118,9 +118,8 @@ class EvaluationService:
         self,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         task_execution_id: UUID,
-        definition_task_id: UUID | None,
         evaluator_index: int,
         evaluator_name: str,
         service_result: EvaluationServiceResult,
@@ -134,9 +133,8 @@ class EvaluationService:
                 session,
                 CreateTaskEvaluation(
                     run_id=run_id,
-                    node_id=node_id,
+                    task_id=task_id,
                     task_execution_id=task_execution_id,
-                    definition_task_id=definition_task_id,
                     evaluator_index=evaluator_index,
                     evaluator_name=evaluator_name,
                     score=result.score,
@@ -153,7 +151,7 @@ class EvaluationService:
                 dashboard_dto=build_dashboard_evaluation_dto(
                     evaluation_id=evaluation.id,
                     run_id=run_id,
-                    task_id=node_id,
+                    task_id=task_id,
                     total_score=result.score,
                     created_at=evaluation.created_at,
                     summary=summary,
@@ -166,9 +164,8 @@ class EvaluationService:
         self,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         task_execution_id: UUID,
-        definition_task_id: UUID | None,
         evaluator_index: int,
         evaluator_name: str,
         exc: Exception,
@@ -188,9 +185,8 @@ class EvaluationService:
                 session,
                 CreateTaskEvaluation(
                     run_id=run_id,
-                    node_id=node_id,
+                    task_id=task_id,
                     task_execution_id=task_execution_id,
-                    definition_task_id=definition_task_id,
                     evaluator_index=evaluator_index,
                     evaluator_name=evaluator_name,
                     score=0.0,
@@ -230,7 +226,7 @@ def _criterion_specs(evaluator: Evaluator, task: Task) -> list[CriterionSpec]:
             CriterionSpec(
                 criterion=weighted.criterion,
                 criterion_idx=i,
-                max_score=weighted.criterion.score_spec.max_score,
+                max_score=getattr(weighted.criterion, "max_score", 1.0),
                 stage_idx=0,
                 stage_name="default",
                 aggregation_weight=weighted.weight,
@@ -242,10 +238,10 @@ def _criterion_specs(evaluator: Evaluator, task: Task) -> list[CriterionSpec]:
         CriterionSpec(
             criterion=criterion,
             criterion_idx=i,
-            max_score=criterion.score_spec.max_score,
+            max_score=getattr(criterion, "max_score", 1.0),
             stage_idx=0,
             stage_name="default",
-            aggregation_weight=criterion.weight,
+            aggregation_weight=1.0,
         )
         for i, criterion in enumerate(evaluator.criteria_for(task))
     ]
