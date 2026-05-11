@@ -14,8 +14,8 @@ from ergon_core.api._definition import (
     is_definition,
     to_definition_dict,
 )
+from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.errors import TaskNotMaterializedError
-from ergon_core.api.rubric.evaluator import Evaluator
 from ergon_core.api.sandbox.sandbox import Sandbox
 from ergon_core.api.worker.worker import Worker
 

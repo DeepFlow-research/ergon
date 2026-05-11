@@ -1,20 +1,12 @@
 """Public runtime-facing criterion context."""
 
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 from uuid import UUID
 
+from ergon_core.api.benchmark.task import Task
+from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.evaluation.protocols import CriterionRuntime
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SkipValidation
-
-if TYPE_CHECKING:
-    from ergon_core.api.benchmark.task import Task
-    from ergon_core.api.worker.results import WorkerOutput
-
-    TaskField = Task
-    WorkerOutputField = WorkerOutput
-else:
-    TaskField = Any
-    WorkerOutputField = Any
 
 
 class CriterionContext(BaseModel):
@@ -25,8 +17,8 @@ class CriterionContext(BaseModel):
     run_id: UUID
     task_id: UUID
     execution_id: UUID
-    task: TaskField
-    worker_result: WorkerOutputField
+    task: Task
+    worker_result: WorkerOutput
     sandbox_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
     _runtime: Annotated[CriterionRuntime | None, SkipValidation] = PrivateAttr(default=None)

@@ -10,7 +10,7 @@ from pydantic import BaseModel, SerializeAsAny, field_validator
 from ergon_core.api._definition import from_definition_dict, is_definition
 from ergon_core.api.criterion.criterion import Criterion
 from ergon_core.api.criterion.results import CriterionOutcome
-from ergon_core.api.rubric.evaluator import Evaluator
+from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult
 
 if TYPE_CHECKING:
