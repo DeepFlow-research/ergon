@@ -11,6 +11,7 @@ from ergon_cli.commands.evaluator import handle_evaluator
 from ergon_cli.commands.experiment import handle_experiment
 from ergon_cli.commands.onboard import handle_onboard
 from ergon_cli.commands.run import handle_run
+from ergon_cli.commands.stack import handle_start, handle_stop
 from ergon_cli.commands.train import handle_train
 from ergon_cli.commands.worker import handle_worker
 from ergon_cli.commands.workflow import handle_workflow
@@ -224,6 +225,13 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser("doctor", help="Check environment health")
     doctor.add_argument("--verbose", action="store_true", help="Show detailed output")
 
+    # -- stack lifecycle (thin docker compose wrappers) ------------------------
+    sub.add_parser(
+        "start",
+        help="Start the local dev stack (postgres + api + inngest + dashboard)",
+    )
+    sub.add_parser("stop", help="Stop the local dev stack")
+
     # -- train (RL training) --------------------------------------------------
     train_cmd = sub.add_parser("train", help="RL training with Ergon environments")
     train_sub = train_cmd.add_subparsers(dest="train_action")
@@ -287,7 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
 async def _main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command not in {None, "doctor", "onboard"}:
+    if args.command not in {None, "doctor", "onboard", "start", "stop"}:
         register_and_publish_builtins()
     else:
         register_default_components()
@@ -306,6 +314,8 @@ async def _main(argv: list[str] | None = None) -> int:
         "ingest": handle_ingest,
         "onboard": handle_onboard,
         "doctor": handle_doctor,
+        "start": handle_start,
+        "stop": handle_stop,
     }
 
     if args.command in async_handlers:
