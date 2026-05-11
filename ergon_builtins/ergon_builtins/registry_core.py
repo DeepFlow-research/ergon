@@ -13,10 +13,10 @@ from ergon_core.api.rubric import Evaluator
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
-from ergon_builtins.benchmarks.minif2f.worker_factory import MiniF2FReactWorker
+from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_react_worker
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
 from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
-from ergon_builtins.benchmarks.swebench_verified.worker_factory import SWEBenchReactWorker
+from ergon_builtins.benchmarks.swebench_verified.worker_factory import make_swebench_react_worker
 from ergon_builtins.models.cloud_passthrough import resolve_cloud
 from ergon_builtins.models.openrouter_backend import resolve_openrouter
 from ergon_builtins.models.openrouter_responses_backend import resolve_openrouter_responses
@@ -24,10 +24,10 @@ from ergon_builtins.models.resolution import ResolvedModel, register_model_backe
 from ergon_builtins.models.vllm_backend import resolve_vllm
 from ergon_builtins.shared.workers.training_stub_worker import TrainingStubWorker
 
-WORKERS: dict[str, type[Worker]] = {
+WORKERS: dict[str, Callable[..., Worker]] = {
     "training-stub": TrainingStubWorker,
-    "minif2f-react": MiniF2FReactWorker,
-    "swebench-react": SWEBenchReactWorker,
+    "minif2f-react": make_minif2f_react_worker,
+    "swebench-react": make_swebench_react_worker,
     # Test-only smoke workers register via tests/e2e/_fixtures/__init__.py;
     # they do NOT appear here (production CLI paths don't import tests).
 }

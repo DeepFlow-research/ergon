@@ -68,17 +68,17 @@ def _build_task_tree_for_run(
         edge_rows = list(
             session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all()
         )
-    # children_by_parent: parent_node_id -> [child_node_id]
+    # children_by_parent: parent_task_id -> [child_task_id]
     children_by_parent: dict[UUID | None, list[UUID]] = {}
     node_by_id: dict[UUID, RunGraphNode] = {n.id: n for n in node_rows}
     for n in node_rows:
-        children_by_parent.setdefault(n.parent_node_id, []).append(n.id)
+        children_by_parent.setdefault(n.parent_task_id, []).append(n.id)
 
-    # depends_on_by_target: target_node_id -> [source_node_id]
+    # depends_on_by_target: target_task_id -> [source_task_id]
     # Edges are stored as source=dependency, target=dependent task.
     depends_on_by_target: dict[UUID, list[UUID]] = {}
     for e in edge_rows:
-        depends_on_by_target.setdefault(e.target_node_id, []).append(e.source_node_id)
+        depends_on_by_target.setdefault(e.target_task_id, []).append(e.source_task_id)
 
     def build(node_id: UUID) -> TaskTreeNode:
         node = node_by_id[node_id]
@@ -95,7 +95,7 @@ def _build_task_tree_for_run(
             depends_on=[str(s) for s in depends_on_by_target.get(node_id, [])],
             is_leaf=not child_ids,
             resources=[],
-            parent_id=str(node.parent_node_id) if node.parent_node_id else None,
+            parent_id=str(node.parent_task_id) if node.parent_task_id else None,
         )
 
     root_ids = children_by_parent.get(None, [])

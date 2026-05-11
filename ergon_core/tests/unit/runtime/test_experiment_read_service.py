@@ -84,11 +84,13 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
                 session.add(
                     RunGraphNode(
                         run_id=run_id,
-                        instance_key=instance_key,
-                        task_slug=f"{instance_key}-{index}",
-                        description="Task",
+                        task_json={
+                            "instance_key": instance_key,
+                            "task_slug": f"{instance_key}-{index}",
+                            "description": "Task",
+                            "worker": {"name": "ci-worker"},
+                        },
                         status="completed",
-                        assigned_worker_slug="ci-worker",
                         level=index,
                     )
                 )

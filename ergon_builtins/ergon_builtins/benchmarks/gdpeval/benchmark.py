@@ -20,7 +20,7 @@ from ergon_builtins.benchmarks.gdpeval.loader import (
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
 from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandbox
 from ergon_builtins.benchmarks.gdpeval.task_schemas import GDPTaskConfig
-from ergon_builtins.benchmarks.gdpeval.worker_factory import GDPEvalReactWorker
+from ergon_builtins.benchmarks.gdpeval.worker_factory import make_gdpeval_react_worker
 
 
 class GDPEvalBenchmark(Benchmark):
@@ -66,7 +66,7 @@ class GDPEvalBenchmark(Benchmark):
             dataset_repo=dataset_repo,
             split=split,
             limit=limit,
-            worker=worker or GDPEvalReactWorker(name="default", model=None),
+            worker=worker or make_gdpeval_react_worker(name="default", model=None),
             sandbox=sandbox or GDPEvalSandbox(),
             evaluators=evaluators
             or (

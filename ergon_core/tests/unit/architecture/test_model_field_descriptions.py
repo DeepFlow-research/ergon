@@ -63,10 +63,7 @@ def test_graph_dto_field_docs_are_schema_metadata() -> None:
 
 
 def test_sqlmodel_field_docs_are_schema_metadata() -> None:
-    assert _description(RunGraphNode, "instance_key")
-    assert _description(RunGraphNode, "task_slug")
     assert _description(RunGraphNode, "status")
-    assert _description(RunGraphNode, "assigned_worker_slug")
     assert _description(RunGraphNode, "parent_task_id")
     assert _description(RunGraphNode, "level")
     assert _description(RunContextEvent, "event_type")

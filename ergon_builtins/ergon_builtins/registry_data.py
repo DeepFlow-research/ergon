@@ -3,11 +3,13 @@
 Eager, fully-typed imports.
 """
 
+from collections.abc import Callable
+
 from ergon_core.api import Benchmark, Worker
 from ergon_core.api.rubric import Evaluator
 
 from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
-from ergon_builtins.benchmarks.gdpeval.worker_factory import GDPEvalReactWorker
+from ergon_builtins.benchmarks.gdpeval.worker_factory import make_gdpeval_react_worker
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.vanilla import (
@@ -17,7 +19,7 @@ from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
     ResearchRubricsResearcherWorker,
 )
 from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
-    ResearchRubricsWorkflowCliReActWorker,
+    make_researchrubrics_workflow_react_worker,
 )
 
 BENCHMARKS: dict[str, type[Benchmark]] = {
@@ -31,10 +33,10 @@ EVALUATORS: dict[str, type[Evaluator]] = {
     "researchrubrics-rubric": ResearchRubricsRubric,
 }
 
-WORKERS: dict[str, type[Worker]] = {
-    "gdpeval-react": GDPEvalReactWorker,
+WORKERS: dict[str, Callable[..., Worker]] = {
+    "gdpeval-react": make_gdpeval_react_worker,
     "researchrubrics-researcher": ResearchRubricsResearcherWorker,
-    "researchrubrics-workflow-cli-react": ResearchRubricsWorkflowCliReActWorker,
+    "researchrubrics-workflow-cli-react": make_researchrubrics_workflow_react_worker,
 }
 
 def register_data_builtins() -> None:

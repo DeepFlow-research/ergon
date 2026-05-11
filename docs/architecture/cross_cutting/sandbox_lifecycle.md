@@ -1,94 +1,39 @@
 # Cross-Cutting — Sandbox Lifecycle
 
-## 1. Purpose
+## Purpose
 
-The sandbox is a shared, long-lived resource that spans Worker execution AND criteria evaluation. Getting its lifecycle correct is an Ergon invariant that crosses the providers, runtime, and evaluator layers. A worker writes into the sandbox's filesystem during generator turns; criteria read that filesystem after the worker terminates; the sandbox must stay alive across that boundary. This document is the authoritative reference for lifecycle questions — timeouts, teardown timing, reconnect semantics, cancellation, and the rejected alternatives.
+The sandbox is the live environment shared by worker execution and task evaluation. A worker writes files and intermediate state into the sandbox; evaluators and criteria may inspect that same environment before teardown. Lifecycle ownership is coordinated by the runtime, not by benchmark workers.
 
-## 2. Core abstractions
+## Current Abstractions
 
-| Name | Kind | Freeze status | Owner |
-| --- | --- | --- | --- |
-| Per-task sandbox | lifecycle mode | Frozen; the only supported mode today. | Providers layer. |
-| `BaseSandboxManager.create(task_id, event_sink)` | method | Signature frozen; `event_sink` becomes required after RFC 2026-04-17-sandbox-event-sink-activation. | Providers layer. |
-| `BaseSandboxManager.close(sandbox_id)` | method | Frozen. Idempotent. Safe from any cancellation path. | Providers layer. |
-| `BaseSandboxManager.reconnect(sandbox_id)` | method | **Pending API.** Criteria will use this to attach to the task's still-live sandbox. See follow-ups. | Providers layer. |
-| Sandbox-timeout floor | invariant | Enforced by manager `create` only after RFC 2026-04-17-sandbox-lifetime-covers-criteria lands. | Providers layer. |
+- **`Sandbox`** is the public benchmark-authored definition. It declares how to provision and terminate an environment.
+- **`SandboxRuntime`** is the internal protocol that backs public operations such as command execution and file I/O.
+- **`SandboxLifecycleHub`** is the framework-owned coordinator that acquires, caches, releases, and discards live sandbox instances for `(run_id, task_id)`.
+- **Builtin E2B sandboxes** derive from the public `Sandbox` base through direct E2B adapters. The old `BaseSandboxManager` / `DefaultSandboxManager` path has been removed.
 
-The per-task sandbox is owned by the worker runtime for the duration of `Worker.execute()`, then ownership transfers to the evaluator harness for the duration of `check_evaluators`, then the harness calls `close`. There is never a moment when two components both believe they own the sandbox; handoff is explicit at `check_evaluators` entry.
-
-## 3. Control flow
+## Control Flow
 
 ```
-task starts -> Manager.create() -> sandbox_id persisted on the execution row
-    |
-    v
-worker yields GenerationTurns; uses sandbox.commands.run(...) for tools
-    |
-    v
-worker terminates (COMPLETED | FAILED | CANCELLED)
-    |    sandbox is NOT yet closed
-    v
-check_evaluators fires; for each evaluator binding:
-    +-> fan out one criterion execution
-    |       criterion calls (future) CriterionRuntime.get_sandbox()
-    |       -> Manager.reconnect(sandbox_id)
-    |       -> runs e.g. swebench-harness test scripts inside the same sandbox
-    |   criterion writes score to RunTaskEvaluation
-    |
-    v
-all criteria done -> Manager.close(sandbox_id) via finalization path
-    v
-finalize_success
+task ready
+  -> worker_execute resolves RunGraphNodeView.task
+  -> SandboxLifecycleHub.acquire(run_id, task_id, task.sandbox)
+  -> Sandbox.provision() creates the live runtime if needed
+  -> Worker.execute(task, context, sandbox) runs with the live public Sandbox
+  -> evaluator dispatch passes the same task Sandbox to criteria
+  -> runtime releases or discards the sandbox through SandboxLifecycleHub
 ```
 
-Data movement notes:
+## Invariants
 
-- The `sandbox_id` is the only handle that crosses the worker-to-evaluator boundary. It is written to the execution row by the worker runtime at create time and read back by `check_evaluators` when fanning out criteria.
-- Worker's on-disk state (files written to `/workspace/final_output/`, tool-call intermediates, language-specific build artifacts) is what criteria actually consume. That is the load-bearing reason the sandbox must outlive the worker.
-- Criteria write scores to `RunTaskEvaluation` rows, not to the sandbox. Sandbox is read-only from the criterion's perspective (by convention; E2B does not enforce this).
+1. **Sandbox lifecycle is framework-owned.** Workers and criteria receive a `Sandbox` object; they do not construct provider clients directly or close shared task sandboxes on their own.
+2. **The task sandbox is keyed by `task_id`.** The graph and telemetry no longer use a separate node identity for lifecycle lookups.
+3. **Criteria receive capabilities explicitly.** `CriterionContext` remains pure data and criteria use the `sandbox` argument for live environment access.
+4. **Resource materialization is sandbox-owned.** Workflow services should not copy resources directly into live environments; public sandbox operations own that boundary.
+5. **Builtin setup belongs to sandbox definitions/toolkits.** Benchmark-specific manager subclasses are gone. If a benchmark needs a special template, use a concrete `Sandbox` subclass or toolkit spec rather than reintroducing manager-backed setup.
 
-## 4. Invariants
+## Anti-Patterns
 
-1. **Sandbox lives until all criteria for the task have completed.** Teardown runs after `check_evaluators` finishes, NOT at task completion, NOT during `finalize_success`. Confirm by reading the teardown call at `check_evaluators.py:82`. This was a point of confusion in earlier drafts of this doc — the correction is that teardown follows criteria, not the other way around.
-2. **Sandbox timeout on creation MUST be at least `task_timeout + max_criterion_timeout`.** Criteria running against a timed-out sandbox is a data-loss bug: the criterion reconnects, the sandbox is dead, the score is lost. Pending enforcement in RFC 2026-04-17-sandbox-lifetime-covers-criteria. Today this is a convention — managers set a generous timeout by inspection, not by formula.
-3. **Criteria MUST reconnect via the manager, never by constructing `AsyncSandbox` directly.** Direct construction loses template pinning, loses event emission, and creates a fresh container that cannot see the worker's on-disk state. Enforced end-to-end by the smoke tier on every PR: `DefaultCriterionRuntime.ensure_sandbox` prefers `manager.reconnect(sandbox_id)` over `manager.create(...)` when a task sandbox_id is available, and the smoke criterion `_verify_sandbox_setup` hooks run their env health checks through `context.runtime.run_command(...)` — never via `AsyncSandbox.connect`.
-4. **`close(sandbox_id)` is idempotent and safe to call from any cancellation path.** Calling it twice is a no-op on the second call. Calling it from the cancellation cleanup hook is the only correct way to release a leaking sandbox.
-5. **Per-task environment setup lives in `_install_dependencies`.** For benchmarks that require per-task environment setup (clone a specific commit, install version-pinned deps, apply a harness spec), that work runs inside `BaseSandboxManager._install_dependencies(sandbox, task_id)` — not inside the worker's `execute()`, not inside a separate `on_run_start` hook, and not inside the criterion. Managers that need per-task data (payload, instance-id metadata) read it from the data layer via `queries.task_executions.get_task_payload(task_id)`; `SandboxSetupRequest` carries only `task_id`, not the full payload.
-6. **`_install_dependencies` is idempotent per `sandbox_key`.** `BaseSandboxManager.create()` early-returns when `sandbox_key` is already in `_sandboxes`, so repeat `ensure_sandbox()` / `create()` calls for the same key do NOT re-run setup scripts. This guarantee is load-bearing now that per-task setup (SWE-Bench clone + install, MiniF2F env bootstrap) lives in `_install_dependencies`; losing it would mean criterion-level `ensure_sandbox()` calls silently re-clone and re-install. Locked in by `tests/unit/sandbox/test_ensure_sandbox_idempotence.py`.
-
-## 5. Failure modes
-
-- **Sandbox killed mid-task (OOM, network blip, E2B platform incident).** The next `sandbox.commands.run` call from inside the worker raises. System-owner steering: the task transitions to FAILED with the raised error captured as the failure reason. Managers of dynamic subtasks then figure out re-coordination per fractal-OS semantics — a failed subtask surfaces to its parent, which decides whether to retry, substitute, or fail upward. Static workflow nodes have no manager to catch the failure; downstream siblings in a static DAG inherit the failure per the rules laid out in `cross_cutting/error_propagation.md`.
-- **Sandbox times out after task but before criteria run.** The worker completed fine, `check_evaluators` fans out, the first criterion's reconnect hits a dead sandbox. Pending fix: bump timeout on creation to `task_timeout + max_criterion_timeout`. Until that RFC lands, managers set a generous literal timeout.
-- **Cancellation.** `ergon run cancel` emits a `TaskCancelledEvent`. The `cleanup_cancelled_task_fn` cleanup hook fires. Its `release-sandbox` step is currently a **STUB** — it logs but does not call `Manager.close(sandbox_id)`. Consequence: cancelled tasks leak sandboxes until the E2B-side inactivity timeout reclaims them. Pending fix: `docs/rfcs/active/2026-04-17-cleanup-cancelled-task-release-sandbox.md`.
-- **Criterion raises mid-evaluation.** The criterion's error bubbles to the evaluator harness, which records a failed `RunTaskEvaluation` and continues fanning out remaining criteria. The sandbox stays up until every criterion completes (success or failure); only then does teardown fire. A raising criterion does not short-circuit teardown.
-
-## 6. Lifecycle modes considered but NOT implemented
-
-- **Per-run** — share one sandbox across every task in a DAG. Rejected: cross-task isolation is a correctness property, not just a cleanliness one. A compromised tool call in task A could poison task B's filesystem. The per-task teardown gives every task a clean slate at start.
-- **Per-cohort** — warm pool of prebuilt sandboxes shared across runs. Deferred: this would cut training-time cold-start cost meaningfully, but adds eviction policy, poisoning mitigation, and debugging complexity. No current benchmark justifies the investment.
-- **Per-turn** — fresh sandbox per LLM call. Rejected: too slow (seconds per turn in E2B), and it breaks the load-bearing assumption that tool results from turn N are on disk for turn N+1. Most workers cd around, cat files, build artifacts, and cross-reference outputs between turns; a fresh sandbox per turn would require rebuilding that state from scratch every call.
-- The current design is "per-task, optional reuse if a benchmark opts in." No benchmark opts in today — the mechanism for opt-in (a `lifecycle_mode` enum on the manager) does not yet exist.
-
-## 7. Extension points
-
-### 7.1 Opt into sandbox reuse (future)
-
-Not implemented. The future shape is a `lifecycle_mode: ClassVar[LifecycleMode]` enum on `BaseSandboxManager` subclasses with variants like `PER_TASK` (current behavior) and `PER_COHORT`. Adding this requires resolving the cross-task isolation question — cohort-level sandboxes would need explicit reset hooks between tasks. No RFC drafted.
-
-### 7.2 Override teardown trigger
-
-A subclass that needs non-standard teardown timing (e.g., to inspect sandbox state post-mortem before close) can subclass the harness entry points in `check_evaluators` or `finalize_success`. This is rarely the right move — the teardown timing is an invariant that the rest of the system depends on. Coordinate with the workflow finalization invariants documented in `02_runtime_lifecycle.md` before changing anything here.
-
-## 8. Anti-patterns
-
-- **Closing the sandbox in `finalize_success` instead of after `check_evaluators`.** If `finalize_success` fires before criteria complete, every criterion sees a dead sandbox. Correct path: teardown runs inside the `check_evaluators` completion path (see `check_evaluators.py:82`). No current offenders — this is preserved by the existing harness structure.
-- **Constructing a fresh sandbox inside a criterion.** Breaks provenance (the criterion is now scoring a clean environment instead of the worker's actual output state) and isolates the criterion from everything the worker put on disk. The correct path is `CriterionRuntime.get_sandbox()` once RFC 2026-04-17-criterion-runtime-di-container lands. Until then, criteria reconnect via whatever manager API is available and should never call `AsyncSandbox.create` directly.
-- **Leaking sandboxes on cancellation.** Current offender: the `cleanup_cancelled_task_fn.release-sandbox` step is a stub. Every cancelled task leaks its sandbox until E2B's inactivity timeout reclaims it. Pending fix in RFC 2026-04-17-cleanup-cancelled-task-release-sandbox.
-- **Assuming teardown happens on task COMPLETED.** It does not. The sandbox is alive for the entire evaluator fan-out. Any code that assumes a COMPLETED task implies a torn-down sandbox is wrong; use the sandbox-closed event (or `check_evaluators` completion) instead.
-
-## 9. Follow-ups
-
-- `docs/rfcs/active/2026-04-17-sandbox-lifetime-covers-criteria.md` — enforce the timeout invariant (`task_timeout + max_criterion_timeout`); add `reconnect(sandbox_id)` to `BaseSandboxManager` if the method is missing in the form criteria need.
-- `docs/rfcs/active/2026-04-17-cleanup-cancelled-task-release-sandbox.md` — replace the stubbed `release-sandbox` step with a real `Manager.close(sandbox_id)` call.
-- `docs/rfcs/active/2026-04-17-criterion-runtime-di-container.md` — add `CriterionRuntime.get_sandbox()` so criteria attach via the manager, and `CriterionRuntime.read_resource(name)` so they read published outputs via a stable API instead of ad-hoc `RunResource` DB reads.
+- Reintroducing `BaseSandboxManager` or manager-backed public sandboxes.
+- Creating a fresh provider sandbox inside a criterion instead of using the task sandbox passed by the runtime.
+- Closing or killing a sandbox from worker code as part of normal success.
+- Duplicating lifecycle identity with `node_id` when `task_id` is already the canonical key.

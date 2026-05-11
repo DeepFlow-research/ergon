@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 def _node_id_for_task(session: Session, *, run_id: UUID, task_id: UUID) -> UUID:
     node_id = session.exec(
-        select(RunGraphNode.id).where(
+        select(RunGraphNode.task_id).where(
             RunGraphNode.run_id == run_id,
             RunGraphNode.task_id == task_id,
         )

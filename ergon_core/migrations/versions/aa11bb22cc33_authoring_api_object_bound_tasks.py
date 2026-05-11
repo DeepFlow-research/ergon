@@ -62,6 +62,11 @@ def upgrade() -> None:
         ["run_id", "task_id"],
         unique=True,
     )
+    with op.batch_alter_table("run_graph_nodes") as batch_op:
+        batch_op.drop_column("assigned_worker_slug")
+        batch_op.drop_column("description")
+        batch_op.drop_column("task_slug")
+        batch_op.drop_column("instance_key")
 
     op.add_column("run_graph_edges", sa.Column("source_task_id", sa.Uuid(), nullable=True))
     op.add_column("run_graph_edges", sa.Column("target_task_id", sa.Uuid(), nullable=True))
@@ -121,5 +126,9 @@ def downgrade() -> None:
     op.drop_column("run_graph_nodes", "parent_task_id")
     op.drop_column("run_graph_nodes", "task_json")
     op.drop_column("run_graph_nodes", "task_id")
+    op.add_column("run_graph_nodes", sa.Column("instance_key", sa.String(), nullable=False))
+    op.add_column("run_graph_nodes", sa.Column("task_slug", sa.String(), nullable=False))
+    op.add_column("run_graph_nodes", sa.Column("description", sa.String(), nullable=False))
+    op.add_column("run_graph_nodes", sa.Column("assigned_worker_slug", sa.String(), nullable=True))
 
     op.drop_column("experiment_definition_tasks", "task_json")

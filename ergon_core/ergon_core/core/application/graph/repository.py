@@ -17,7 +17,6 @@ from uuid import UUID, uuid4
 
 from ergon_core.api import Task
 from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
 )
@@ -59,9 +58,8 @@ from sqlmodel import Session, col, select
 
 logger = logging.getLogger(__name__)
 
-# Only fields the execution runtime needs for dispatch live on the core row.
-# Everything experiment-specific (payload, contracts, criteria, budgets)
-# goes in annotations so the core schema stays domain-agnostic.
+# Mutable definition fields are edited inside task_json. The graph row itself
+# stores only runtime state: status, parent task, level, and timestamps.
 _UPDATABLE_NODE_FIELDS = frozenset({"description", "assigned_worker_slug"})
 
 
@@ -113,15 +111,6 @@ class WorkflowGraphRepository:
         """
         now = utcnow()
 
-        instances = list(
-            session.exec(
-                select(ExperimentDefinitionInstance).where(
-                    ExperimentDefinitionInstance.experiment_definition_id == definition_id,
-                )
-            ).all()
-        )
-        instance_key_by_id = {i.id: i.instance_key for i in instances}
-
         tasks = list(
             session.exec(
                 select(ExperimentDefinitionTask).where(
@@ -142,18 +131,13 @@ class WorkflowGraphRepository:
         node_rows: list[RunGraphNode] = []
 
         for task in tasks:
-            task_obj = Task.from_definition(task.task_json, task_id=task.id)
             def_to_task[task.id] = task.id
             node_rows.append(
                 RunGraphNode(
                     run_id=run_id,
                     task_id=task.id,
-                    instance_key=instance_key_by_id[task.instance_id],
-                    task_slug=task.task_slug,
-                    description=task.description,
                     task_json=task.task_json,
                     status=initial_node_status,
-                    assigned_worker_slug=task_obj.worker.name,
                     parent_task_id=task.parent_task_id,
                     created_at=now,
                     updated_at=now,
@@ -286,20 +270,12 @@ class WorkflowGraphRepository:
         now = utcnow()
         if task is not None:
             task_json = task.to_definition()
-            task_slug = task.task_slug
-            instance_key = task.instance_key
-            description = task.description
-            assigned_worker_slug = task.worker.name
         resolved_task_id = task_id or uuid4()
         node = RunGraphNode(
             run_id=run_id,
             task_id=resolved_task_id,
-            instance_key=instance_key,
-            task_slug=task_slug,
-            description=description,
             task_json=task_json or {},
             status=status,
-            assigned_worker_slug=assigned_worker_slug,
             parent_task_id=parent_task_id,
             level=level,
             created_at=now,
@@ -426,11 +402,16 @@ class WorkflowGraphRepository:
         if field == "description":
             if value is None:
                 raise ValueError("description cannot be cleared")
-            old_value = node.description
-            node.description = value
+            task = _task_from_node(node)
+            old_value = task.description
+            task.description = value
         else:
-            old_value = node.assigned_worker_slug
-            node.assigned_worker_slug = value
+            task = _task_from_node(node)
+            old_value = task.worker.name
+            if value is None:
+                raise ValueError("assigned_worker_slug cannot be cleared")
+            task.worker.name = value
+        node.task_json = task.to_definition()
         node.updated_at = utcnow()
         session.add(node)
         session.flush()
@@ -738,7 +719,7 @@ class WorkflowGraphRepository:
             parent_task_id=row.parent_task_id,
             status=row.status,
             level=row.level,
-            task=Task.from_definition(row.task_json, task_id=row.task_id),
+            task=_task_from_node(row),
         )
 
     def get_edge(
@@ -970,17 +951,18 @@ class WorkflowGraphRepository:
 
 
 def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
+    task = _task_from_node(row)
     return GraphNodeDto(
         id=row.id,
         run_id=row.run_id,
         task_id=row.task_id,
         definition_task_id=None,
-        instance_key=row.instance_key,
-        task_slug=row.task_slug,
-        description=row.description,
+        instance_key=task.instance_key,
+        task_slug=task.task_slug,
+        description=task.description,
         task_json=row.task_json,
         status=row.status,
-        assigned_worker_slug=row.assigned_worker_slug,
+        assigned_worker_slug=task.worker.name,
         parent_node_id=row.parent_task_id,
         parent_task_id=row.parent_task_id,
         level=row.level,
@@ -1029,13 +1011,14 @@ def _to_mutation_dto(row: RunGraphMutation) -> GraphMutationRecordDto:
 
 
 def _node_removed_snapshot(node: RunGraphNode) -> NodeRemovedMutation:
+    task = _task_from_node(node)
     return NodeRemovedMutation(
         task_id=node.task_id,
-        task_slug=node.task_slug,
-        instance_key=node.instance_key,
-        description=node.description,
+        task_slug=task.task_slug,
+        instance_key=task.instance_key,
+        description=task.description,
         status=node.status,
-        assigned_worker_slug=node.assigned_worker_slug,
+        assigned_worker_slug=task.worker.name,
         parent_task_id=node.parent_task_id,
     )
 
@@ -1051,15 +1034,20 @@ def _edge_removed_snapshot(edge: RunGraphEdge) -> EdgeRemovedMutation:
 
 
 def _node_snapshot(node: RunGraphNode) -> NodeAddedMutation:
+    task = _task_from_node(node)
     return NodeAddedMutation(
         task_id=node.task_id,
-        task_slug=node.task_slug,
-        instance_key=node.instance_key,
-        description=node.description,
+        task_slug=task.task_slug,
+        instance_key=task.instance_key,
+        description=task.description,
         status=node.status,
-        assigned_worker_slug=node.assigned_worker_slug,
+        assigned_worker_slug=task.worker.name,
         parent_task_id=node.parent_task_id,
     )
+
+
+def _task_from_node(node: RunGraphNode) -> Task:
+    return Task.from_definition(node.task_json, task_id=node.task_id)
 
 
 def _edge_snapshot(edge: RunGraphEdge) -> EdgeAddedMutation:

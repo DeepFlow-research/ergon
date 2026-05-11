@@ -197,6 +197,19 @@ def test_authoring_runtime_uses_task_id_without_run_graph_node_identity() -> Non
     assert offenders == []
 
 
+def test_run_graph_node_does_not_duplicate_task_definition_fields() -> None:
+    from ergon_core.core.persistence.graph.models import RunGraphNode
+
+    duplicated_task_fields = {
+        "instance_key",
+        "task_slug",
+        "description",
+        "assigned_worker_slug",
+    }
+
+    assert duplicated_task_fields.isdisjoint(RunGraphNode.model_fields)
+
+
 def test_criterion_runtime_indirection_is_deleted() -> None:
     runtime_root = Path(__file__).parents[3] / "ergon_core"
     offenders: list[str] = []

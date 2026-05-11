@@ -27,7 +27,7 @@ def descendants(
             session.exec(
                 select(RunGraphNode).where(
                     RunGraphNode.run_id == run_id,
-                    RunGraphNode.parent_node_id == parent_id,
+                    RunGraphNode.parent_task_id == parent_id,
                 )
             ).all()
         )

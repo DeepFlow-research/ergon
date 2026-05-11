@@ -293,11 +293,13 @@ class WorkflowService:
     ) -> list[TaskDescriptor]:
         descriptors: list[TaskDescriptor] = []
         for node_id in node_ids:
-            node = session.get(RunGraphNode, node_id)
+            node = session.exec(
+                select(RunGraphNode).where(RunGraphNode.task_id == node_id)
+            ).first()
             if node is not None:
                 descriptors.append(
                     TaskDescriptor(
-                        task_id=node.definition_task_id,
+                        task_id=node.task_id,
                         task_slug=node.task_slug,
                         node_id=node_id,
                     )
@@ -313,7 +315,7 @@ class WorkflowService:
     ) -> list[WorkflowTaskRef]:
         stmt = select(RunGraphNode).where(RunGraphNode.run_id == run_id)
         if parent_node_id is not None:
-            stmt = stmt.where(RunGraphNode.parent_node_id == parent_node_id)
+            stmt = stmt.where(RunGraphNode.parent_task_id == parent_node_id)
         nodes = list(session.exec(stmt).all())
         nodes.sort(key=lambda node: (node.level, node.task_slug, str(node.id)))
         return [self._task_ref(node) for node in nodes]
@@ -347,9 +349,9 @@ class WorkflowService:
     ) -> list[WorkflowDependencyRef]:
         clauses = []
         if direction in {"upstream", "both"}:
-            clauses.append(RunGraphEdge.target_node_id == node_id)
+            clauses.append(RunGraphEdge.target_task_id == node_id)
         if direction in {"downstream", "both"}:
-            clauses.append(RunGraphEdge.source_node_id == node_id)
+            clauses.append(RunGraphEdge.source_task_id == node_id)
         if not clauses:
             raise ValueError(f"unsupported dependency direction: {direction}")
 
@@ -789,7 +791,7 @@ class WorkflowService:
             task_slug=node.task_slug,
             status=node.status,
             level=node.level,
-            parent_node_id=node.parent_node_id,
+            parent_node_id=node.parent_task_id,
             assigned_worker_slug=node.assigned_worker_slug,
             description=node.description,
         )
@@ -889,10 +891,10 @@ class WorkflowService:
             raise ValueError("node_id or task_slug is required")
         stmt = select(RunGraphNode).where(RunGraphNode.run_id == run_id)
         if node_id is not None:
-            stmt = stmt.where(RunGraphNode.id == node_id)
-        if task_slug is not None:
-            stmt = stmt.where(RunGraphNode.task_slug == task_slug)
+            stmt = stmt.where(RunGraphNode.task_id == node_id)
         rows = list(session.exec(stmt).all())
+        if task_slug is not None:
+            rows = [row for row in rows if row.task_slug == task_slug]
         if len(rows) != 1:
             raise ValueError(f"expected exactly one task, got {len(rows)}")
         return rows[0]
@@ -942,15 +944,15 @@ class WorkflowService:
             edges = session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_node_id == node_id,
+                    RunGraphEdge.target_task_id == node_id,
                 )
             ).all()
-            return {edge.source_node_id for edge in edges}
+            return {edge.source_task_id for edge in edges}
         if scope == "children":
             children = session.exec(
                 select(RunGraphNode).where(
                     RunGraphNode.run_id == run_id,
-                    RunGraphNode.parent_node_id == node_id,
+                    RunGraphNode.parent_task_id == node_id,
                 )
             ).all()
             return {child.id for child in children}
@@ -980,7 +982,12 @@ class WorkflowService:
         execution = session.get(RunTaskExecution, resource.task_execution_id)
         if execution is None:
             return None
-        return session.get(RunGraphNode, execution.node_id)
+        return session.exec(
+            select(RunGraphNode).where(
+                RunGraphNode.run_id == execution.run_id,
+                RunGraphNode.task_id == execution.task_id,
+            )
+        ).first()
 
     @staticmethod
     def _copy_name(name: str) -> str:

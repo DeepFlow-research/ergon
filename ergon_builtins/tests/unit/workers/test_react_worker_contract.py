@@ -26,7 +26,7 @@ def test_no_adapter_kwarg() -> None:
 
 @pytest.mark.parametrize(
     "kwarg",
-    ["name", "model", "tools", "system_prompt", "max_iterations"],
+    ["name", "model", "toolkit", "system_prompt", "max_iterations"],
 )
 def test_all_kwargs_required_and_keyword_only(kwarg: str) -> None:
     sig = inspect.signature(ReActWorker.__init__)
@@ -41,7 +41,7 @@ def test_all_kwargs_required_and_keyword_only(kwarg: str) -> None:
 
 
 def test_construct_with_minimal_explicit_kwargs() -> None:
-    """A ReActWorker can be built with explicit [] tools and None prompt."""
+    """A ReActWorker can be built with an explicit toolkit and None prompt."""
     # reason: RFC 2026-04-22 §1 — base ``Worker.__init__`` now requires
     # ``task_id`` and ``sandbox_id``; the registry factory supplies real
     # values at execute time, test fixture supplies placeholders that are
@@ -49,15 +49,34 @@ def test_construct_with_minimal_explicit_kwargs() -> None:
     worker = ReActWorker(
         name="unit",
         model=None,
-        tools=[],
+        toolkit=None,
         system_prompt=None,
         max_iterations=1,
     )
     assert worker.name == "unit"
     assert worker.model is None
-    assert worker.tools == []
+    assert worker.toolkit is None
     assert worker.system_prompt is None
     assert worker.max_iterations == 1
+
+
+def test_react_worker_no_longer_accepts_eager_tools() -> None:
+    sig = inspect.signature(ReActWorker.__init__)
+    assert "tools" not in sig.parameters
+
+
+def test_benchmark_react_subclasses_are_removed() -> None:
+    from ergon_builtins.benchmarks.minif2f import worker_factory as minif2f_workers
+    from ergon_builtins.benchmarks.swebench_verified import (
+        worker_factory as swebench_workers,
+    )
+    from ergon_builtins.benchmarks.gdpeval import worker_factory as gdpeval_workers
+    from ergon_builtins.workers.research_rubrics import workflow_cli_react_worker
+
+    assert not hasattr(minif2f_workers, "MiniF2FReactWorker")
+    assert not hasattr(swebench_workers, "SWEBenchReactWorker")
+    assert not hasattr(gdpeval_workers, "GDPEvalReactWorker")
+    assert not hasattr(workflow_cli_react_worker, "ResearchRubricsWorkflowCliReActWorker")
 
 
 def test_pydantic_ai_transcript_adapter_lives_outside_worker() -> None:
@@ -177,7 +196,7 @@ def _minimal_task() -> Task:
     worker = ReActWorker(
         name="task-worker",
         model=None,
-        tools=[],
+        toolkit=None,
         system_prompt=None,
         max_iterations=10,
     )
@@ -220,7 +239,7 @@ async def test_react_worker_yields_partial_chunk_before_reraising_agent_iter_fai
     worker = ReActWorker(
         name="unit",
         model=None,
-        tools=[],
+        toolkit=None,
         system_prompt=None,
         max_iterations=10,
     )
@@ -257,7 +276,7 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
     worker = _DepsWorker(
         name="unit",
         model=None,
-        tools=[],
+        toolkit=None,
         system_prompt=None,
         max_iterations=10,
     )

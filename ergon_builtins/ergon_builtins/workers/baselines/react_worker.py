@@ -3,7 +3,7 @@
 
 import json
 import logging
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator
 from types import NoneType
 from typing import Any, Self, cast
 from uuid import UUID
@@ -15,10 +15,9 @@ from ergon_core.core.domain.generation.context_parts import (
     ToolCallPart,
 )
 from ergon_core.core.application.context.events import ContextEventService
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
-from pydantic_ai.tools import Tool
 from sqlmodel import Session
 
 from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
@@ -28,11 +27,10 @@ from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
 from ergon_builtins.models.resolution import resolve_model_target
 from ergon_builtins.observability.pydantic_ai_logfire import configure_pydantic_ai_logfire
 from pydantic import PrivateAttr
+from ergon_core.core.domain.definitions import has_definition_type, inflate_definition
+from ergon_builtins.toolkits.react import ReActToolkit
 
 logger = logging.getLogger(__name__)
-
-AgentTool = Tool[object] | Callable[..., object]
-
 
 class _AgentOutput(BaseModel):
     """Structured output the ReAct agent returns at the end of a run."""
@@ -49,13 +47,13 @@ class ReActWorker(Worker):
 
     All wiring (tool list, system prompt, iteration budget) is supplied
     at construction time — the worker is framework-agnostic. Registry
-    factories build per-benchmark instances by closing over the sandbox
-    and passing a concrete toolkit through ``tools=``.
+    factories build per-benchmark instances by passing a serializable
+    toolkit spec that materializes live tools at execution time.
     """
 
     type_slug = "react-v1"
 
-    tools: list[Any]  # slopcop: ignore[no-typing-any]
+    toolkit: ReActToolkit | None
     system_prompt: str | None
     max_iterations: int
     _seed_messages: list[ModelMessage] | None = PrivateAttr(default=None)
@@ -65,17 +63,24 @@ class ReActWorker(Worker):
         *,
         name: str,
         model: str | None,
-        tools: list[AgentTool],
+        toolkit: ReActToolkit | None,
         system_prompt: str | None,
         max_iterations: int,
     ) -> None:
         super().__init__(
             name=name,
             model=model,
-            tools=tools,
+            toolkit=toolkit,
             system_prompt=system_prompt,
             max_iterations=max_iterations,
         )
+
+    @field_validator("toolkit", mode="before")
+    @classmethod
+    def _inflate_toolkit(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        if has_definition_type(value):
+            return inflate_definition(value)
+        return value
 
     async def execute(
         self,
@@ -84,18 +89,37 @@ class ReActWorker(Worker):
         context: WorkerContext,
         sandbox: Sandbox,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        async for chunk in self._run_agent(task, context):
+        async for chunk in self._run_agent(
+            task,
+            context,
+            tools=self.build_tools(task, context=context, sandbox=sandbox),
+        ):
             yield chunk
+
+    def build_tools(
+        self,
+        task: Task,
+        *,
+        context: WorkerContext,
+        sandbox: Sandbox,
+    ) -> list[Any]:  # slopcop: ignore[no-typing-any]
+        if self.toolkit is None:
+            return []
+        return self.toolkit.build_tools(task=task, context=context, sandbox=sandbox)
 
     def build_agent_deps(
         self, context: WorkerContext
     ) -> Any | None:  # slopcop: ignore[no-typing-any]
-        return None
+        if self.toolkit is None:
+            return None
+        return self.toolkit.build_agent_deps(context=context)
 
     async def _run_agent(
         self,
         task: Task,
         context: WorkerContext,
+        *,
+        tools: list[Any],  # slopcop: ignore[no-typing-any]
     ) -> AsyncGenerator[WorkerStreamItem, None]:
         """Run the underlying pydantic-ai agent and yield the chunks it produced."""
         resolved = resolve_model_target(self.model)
@@ -108,7 +132,7 @@ class ReActWorker(Worker):
             Agent(
                 model=resolved.model,
                 instructions=self.system_prompt or None,
-                tools=self.tools,
+                tools=tools,
                 output_type=_AgentOutput,
                 deps_type=cast(type[Any], deps_type),
             ),

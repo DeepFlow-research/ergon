@@ -49,22 +49,23 @@
 - Old-shape registry/runtime/sandbox-manager tests were removed or updated, and
   unit verification is green for `ergon-core`, `ergon-builtins`, and
   `ergon-cli`.
+- `RunGraphNode` no longer duplicates task definition metadata columns. The
+  graph row keeps runtime state plus `task_json`; read models derive
+  `description`, `task_slug`, `instance_key`, and assigned worker name from the
+  object-bound task definition.
+- Builtin benchmark ReAct workers now use the generic
+  `ReActWorker(toolkit=...)` shape and serializable toolkit specs under
+  `ergon_builtins.toolkits`. Benchmark-specific ReAct subclasses were removed.
+- Architecture docs outside this RFC folder were updated for the accepted
+  authoring API and sandbox lifecycle shape.
 
 ## Partially Landed
 
-- Object-bound task JSON exists on definition and run rows, but the graph still
-  intentionally retains denormalized read-model columns such as `description`,
-  `task_slug`, `instance_key`, and `assigned_worker_slug`.
-- The planned `ergon_builtins.toolkits` package and final
-  `ReActWorker(toolkit=...)` constructor shape did not fully land. The old
-  manager-backed sandbox pieces were removed, but benchmark-specific ReAct
-  workers still exist.
+- None.
 
 ## Not Landed
 
-- Architecture docs outside this RFC folder were not updated. The migration
-  doc's "On acceptance" tasks for `docs/architecture/01_public_api.md` and
-  `docs/architecture/cross_cutting/sandbox_lifecycle.md` remain outstanding.
+- None.
 
 ## Intentional Post-Plan Changes
 
@@ -87,6 +88,6 @@
 - Treat `01-api-surface.md` through `06-decisions-log.md` as the target state,
   not a claim that the PR is complete.
 - This PR now lands the object-bound authoring surface plus the runtime
-  identity, WorkerContext, criterion-runtime, sandbox-manager, and registry
-  removals. Remaining deltas are documentation updates and the deeper builtin
-  ReAct/toolkit packaging cleanup.
+  identity, WorkerContext, criterion-runtime, sandbox-manager, registry,
+  denormalized graph column, ReAct/toolkit, and architecture documentation
+  cleanups.

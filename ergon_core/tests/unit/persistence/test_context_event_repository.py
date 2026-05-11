@@ -42,11 +42,13 @@ def _execution_fixture(session: Session) -> tuple:
     definition_id = uuid4()
     node = RunGraphNode(
         run_id=run_id,
-        instance_key="instance",
-        task_slug="task",
-        description="Task",
+        task_json={
+            "instance_key": "instance",
+            "task_slug": "task",
+            "description": "Task",
+            "worker": {"name": "worker"},
+        },
         status="running",
-        assigned_worker_slug="worker",
     )
     session.add(
         ExperimentRecord(

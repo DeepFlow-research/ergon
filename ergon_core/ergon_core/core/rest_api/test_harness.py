@@ -145,8 +145,8 @@ def read_run_state(
             task_slug=n.task_slug,
             level=n.level,
             status=n.status,
-            parent_node_id=n.parent_node_id,
-            parent_task_slug=(slug_by_node_id.get(n.parent_node_id) if n.parent_node_id else None),
+            parent_node_id=n.parent_task_id,
+            parent_task_slug=(slug_by_node_id.get(n.parent_task_id) if n.parent_task_id else None),
         )
         for n in nodes
     ]
@@ -172,8 +172,8 @@ def read_run_state(
     )
     evaluations = [
         TestEvaluationDto(
-            task_id=ev.node_id,
-            task_slug=slug_by_node_id.get(ev.node_id),
+            task_id=ev.task_id,
+            task_slug=slug_by_node_id.get(ev.task_id),
             score=float(ev.score) if ev.score is not None else 0.0,
             reason="" if ev.feedback is None else ev.feedback,
         )
@@ -185,7 +185,7 @@ def read_run_state(
     )
     executions = [
         TestExecutionDto(
-            task_slug=slug_by_node_id.get(ex.node_id) if ex.node_id else None,
+            task_slug=slug_by_node_id.get(ex.task_id) if ex.task_id else None,
             status=ex.status,
             error=_execution_error_message(ex),
         )

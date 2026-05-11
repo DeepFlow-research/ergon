@@ -96,7 +96,6 @@ def test_evaluator_dispatch_uses_task_bound_evaluator_and_description(  # noqa: 
 ) -> None:
     definition_id = uuid4()
     task_id = uuid4()
-    node_id = uuid4()
     execution_id = uuid4()
 
     class _ExecutionRow:
@@ -115,13 +114,8 @@ def test_evaluator_dispatch_uses_task_bound_evaluator_and_description(  # noqa: 
     class _FirstResult:
         def first(self) -> RunGraphNode:
             return RunGraphNode(
-                id=node_id,
                 run_id=uuid4(),
                 task_id=task_id,
-                definition_task_id=task_id,
-                instance_key="instance",
-                task_slug="task",
-                description="actual task prompt",
                 task_json=task.to_definition(),
                 status="completed",
             )

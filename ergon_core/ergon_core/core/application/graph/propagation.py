@@ -198,7 +198,7 @@ async def _block_successors_bfs(
                 session.exec(
                     select(RunGraphEdge).where(
                         RunGraphEdge.run_id == run_id,
-                        RunGraphEdge.source_node_id == target_id,
+                        RunGraphEdge.source_task_id == target_id,
                     )
                 ).all()
             )
@@ -228,7 +228,7 @@ async def on_task_completed_or_failed(
         session.exec(
             select(RunGraphEdge).where(
                 RunGraphEdge.run_id == run_id,
-                RunGraphEdge.source_node_id == node_id,
+                RunGraphEdge.source_task_id == node_id,
             )
         ).all()
     )
@@ -269,7 +269,7 @@ async def on_task_completed_or_failed(
             continue
 
         status = candidate_node.status
-        is_managed_subtask = candidate_node.parent_node_id is not None
+        is_managed_subtask = candidate_node.parent_task_id is not None
         is_pending = status == graph_status.PENDING
         is_reactivatable_cancelled = status == graph_status.CANCELLED and is_managed_subtask
 
@@ -280,7 +280,7 @@ async def on_task_completed_or_failed(
             session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_node_id == candidate_id,
+                    RunGraphEdge.target_task_id == candidate_id,
                 )
             ).all()
         )

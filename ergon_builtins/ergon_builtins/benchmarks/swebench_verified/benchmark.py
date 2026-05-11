@@ -19,7 +19,7 @@ from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
 )
-from ergon_builtins.benchmarks.swebench_verified.worker_factory import SWEBenchReactWorker
+from ergon_builtins.benchmarks.swebench_verified.worker_factory import make_swebench_react_worker
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class SweBenchVerifiedBenchmark(Benchmark):
             description=description or "SWE-Bench Verified GitHub issue-fix benchmark",
             metadata=dict(metadata or {}),
             limit=limit,
-            worker=worker or SWEBenchReactWorker(name="default", model=None),
+            worker=worker or make_swebench_react_worker(name="default", model=None),
             sandbox=sandbox or SWEBenchSandbox(),
             evaluators=evaluators or (SWEBenchRubric(name="default"),),
         )

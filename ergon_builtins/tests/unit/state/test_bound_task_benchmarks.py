@@ -35,7 +35,8 @@ def test_minif2f_tasks_bind_default_worker_sandbox_and_evaluator(
     task = MiniF2FBenchmark().build_instances()["default"][0]
 
     _assert_bound_task(task)
-    assert task.worker.type_slug == "minif2f-react"
+    assert task.worker.type_slug == "react-v1"
+    assert type(task.worker.toolkit).__name__ == "MiniF2FReActToolkit"
     assert type(task.sandbox).__name__ == "MiniF2FSandbox"
     assert task.evaluators[0].type_slug == "minif2f-rubric"
 
@@ -63,7 +64,8 @@ def test_swebench_tasks_bind_default_worker_sandbox_and_evaluator(
     task = SweBenchVerifiedBenchmark().build_instances()["default"][0]
 
     _assert_bound_task(task)
-    assert task.worker.type_slug == "swebench-react"
+    assert task.worker.type_slug == "react-v1"
+    assert type(task.worker.toolkit).__name__ == "SWEBenchReActToolkit"
     assert type(task.sandbox).__name__ == "SWEBenchSandbox"
     assert task.evaluators[0].type_slug == "swebench-rubric"
 
@@ -90,7 +92,8 @@ def test_gdpeval_tasks_bind_default_worker_sandbox_and_evaluator(
     task = GDPEvalBenchmark(dataset_repo="fake/repo").build_instances()["default"][0]
 
     _assert_bound_task(task)
-    assert task.worker.type_slug == "gdpeval-react"
+    assert task.worker.type_slug == "react-v1"
+    assert type(task.worker.toolkit).__name__ == "GDPEvalReActToolkit"
     assert type(task.sandbox).__name__ == "GDPEvalSandbox"
     assert task.evaluators[0].type_slug == "gdpeval-staged-rubric"
 
@@ -114,7 +117,8 @@ def test_researchrubrics_tasks_bind_default_worker_sandbox_and_evaluator(
     task = ResearchRubricsBenchmark().build_instances()["default"][0]
 
     _assert_bound_task(task)
-    assert task.worker.type_slug == "researchrubrics-workflow-cli-react"
+    assert task.worker.type_slug == "react-v1"
+    assert type(task.worker.toolkit).__name__ == "ResearchRubricsWorkflowToolkit"
     assert type(task.sandbox).__name__ == "ResearchRubricsSandbox"
     assert task.evaluators[0].type_slug == "researchrubrics-rubric"
 

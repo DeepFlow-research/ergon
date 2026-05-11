@@ -53,34 +53,12 @@ class RunGraphNode(SQLModel, table=True):
 
     run_id: UUID = Field(foreign_key="runs.id")
     task_id: UUID = Field(default_factory=uuid4)
-    instance_key: str = Field(
-        description=(
-            "Benchmark instance identifier for this task, such as a dataset row or "
-            "environment variant; maps to ExperimentDefinitionInstance.instance_key."
-        )
-    )
-    task_slug: str = Field(
-        index=True,
-        description=(
-            "Task slot in the experiment template, or the caller-chosen slug for a "
-            "dynamically spawned subtask. Required at creation and persisted verbatim."
-        ),
-    )
-    description: str
     task_json: JsonObject = Field(default_factory=dict, sa_column=Column(JSON))
 
     status: str = Field(
         description=(
             "Free-form task status owned by the experiment layer so different "
             "experiments can define lifecycles without core schema changes."
-        ),
-    )
-
-    assigned_worker_slug: str | None = Field(
-        default=None,
-        description=(
-            "Worker registry slug assigned to execute this node, for example "
-            "'researchrubrics-researcher' or 'canonical-smoke'."
         ),
     )
 
@@ -111,6 +89,29 @@ class RunGraphNode(SQLModel, table=True):
     def id(self) -> UUID:
         """Compatibility accessor while application DTOs finish moving to task_id."""
         return self.task_id
+
+    @property
+    def instance_key(self) -> str:
+        value = self.task_json.get("instance_key")
+        return value if isinstance(value, str) else ""
+
+    @property
+    def task_slug(self) -> str:
+        value = self.task_json.get("task_slug")
+        return value if isinstance(value, str) else str(self.task_id)
+
+    @property
+    def description(self) -> str:
+        value = self.task_json.get("description")
+        return value if isinstance(value, str) else ""
+
+    @property
+    def assigned_worker_slug(self) -> str | None:
+        worker = self.task_json.get("worker")
+        if not isinstance(worker, dict):
+            return None
+        name = worker.get("name")
+        return name if isinstance(name, str) else None
 
 
 # ---------------------------------------------------------------------------

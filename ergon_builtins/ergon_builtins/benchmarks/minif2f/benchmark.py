@@ -18,7 +18,7 @@ from huggingface_hub import hf_hub_download
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandbox
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
-from ergon_builtins.benchmarks.minif2f.worker_factory import MiniF2FReactWorker
+from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_react_worker
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class MiniF2FBenchmark(Benchmark):
             metadata=dict(metadata or {}),
             data_dir=Path(data_dir) if data_dir else None,
             limit=limit,
-            worker=worker or MiniF2FReactWorker(name="default", model=None),
+            worker=worker or make_minif2f_react_worker(name="default", model=None),
             sandbox=sandbox or MiniF2FSandbox(),
             evaluators=evaluators or (MiniF2FRubric(name="default"),),
         )

@@ -18,7 +18,7 @@ from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     RubricCriterion,
 )
 from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
-    ResearchRubricsWorkflowCliReActWorker,
+    make_researchrubrics_workflow_react_worker,
 )
 
 
@@ -62,7 +62,7 @@ class ResearchRubricsBenchmark(Benchmark):
             description=description or "ResearchRubrics deep-research benchmark",
             metadata=dict(metadata or {}),
             limit=limit,
-            worker=worker or ResearchRubricsWorkflowCliReActWorker(name="default", model=None),
+            worker=worker or make_researchrubrics_workflow_react_worker(name="default", model=None),
             sandbox=sandbox or ResearchRubricsSandbox(),
             evaluators=evaluators or (ResearchRubricsRubric(name="default"),),
         )

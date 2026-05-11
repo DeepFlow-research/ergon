@@ -77,6 +77,12 @@ class ExternalRunWriter:
             task_slug="imported-root",
             task_type="imported",
             description=parsed.description,
+            task_json={
+                "instance_key": parsed.instance_key,
+                "task_slug": "imported-root",
+                "description": parsed.description,
+                "worker": {"name": "imported"},
+            },
             task_payload_json={
                 "field_provenance": "required-spine",
                 "source_run_id": parsed.source_run_id,
@@ -106,10 +112,8 @@ class ExternalRunWriter:
 
         node = RunGraphNode(
             run_id=run.id,
-            definition_task_id=task.id,
-            instance_key=parsed.instance_key,
-            task_slug="imported-root",
-            description=parsed.description,
+            task_id=task.id,
+            task_json=task.task_json,
             status="completed",
         )
         self._session.add(node)
@@ -117,8 +121,7 @@ class ExternalRunWriter:
 
         execution = RunTaskExecution(
             run_id=run.id,
-            definition_task_id=task.id,
-            node_id=node.id,
+            task_id=node.task_id,
             status=TaskExecutionStatus.COMPLETED,
             output_json={
                 "imported": True,

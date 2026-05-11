@@ -115,11 +115,14 @@ def make_node(
     """Create a RunGraphNode row for test scaffolding."""
     node = RunGraphNode(
         run_id=run_id,
-        instance_key="test",
-        task_slug=task_slug,
-        description=f"Test node: {task_slug}",
+        task_json={
+            "instance_key": "test",
+            "task_slug": task_slug,
+            "description": f"Test node: {task_slug}",
+            "worker": {"name": "test-worker"},
+        },
         status=status,
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_node_id,
         level=level,
     )
     session.add(node)
@@ -139,8 +142,8 @@ def make_edge(
     """Create a RunGraphEdge row for test scaffolding."""
     edge = RunGraphEdge(
         run_id=run_id,
-        source_node_id=source_node_id,
-        target_node_id=target_node_id,
+        source_task_id=source_node_id,
+        target_task_id=target_node_id,
         status=status,
     )
     session.add(edge)

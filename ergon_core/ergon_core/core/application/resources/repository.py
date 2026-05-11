@@ -4,7 +4,6 @@ from uuid import UUID
 
 from ergon_core.core.persistence.telemetry.models import RunResource
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.shared.json_types import JsonObject
 from sqlmodel import Session, select
 
@@ -40,11 +39,9 @@ class RunResourceRepository:
             raise ValueError(f"unknown resource scope: {scope}")
 
         execution_ids = session.exec(
-            select(RunTaskExecution.id)
-            .join(RunGraphNode, RunTaskExecution.node_id == RunGraphNode.id)
-            .where(
+            select(RunTaskExecution.id).where(
                 RunTaskExecution.run_id == run_id,
-                RunGraphNode.task_id.in_(task_ids),
+                RunTaskExecution.task_id.in_(task_ids),
             )
         ).all()
         if not execution_ids:

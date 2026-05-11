@@ -44,19 +44,20 @@ class TaskInspectionService:
         if parent_node_id is None and parent_task_id is None:
             raise ValueError("parent_node_id or parent_task_id is required")
 
-        parent_filter = (
-            RunGraphNode.parent_task_id == parent_task_id
-            if parent_task_id is not None
-            else RunGraphNode.parent_node_id == parent_node_id
+        parent_filter = RunGraphNode.parent_task_id == (
+            parent_task_id if parent_task_id is not None else parent_node_id
         )
-        nodes = session.exec(
-            select(RunGraphNode)
-            .where(
-                RunGraphNode.run_id == run_id,
-                parent_filter,
-            )
-            .order_by(RunGraphNode.task_slug, RunGraphNode.id)
-        ).all()
+        nodes = list(
+            session.exec(
+                select(RunGraphNode)
+                .where(
+                    RunGraphNode.run_id == run_id,
+                    parent_filter,
+                )
+                .order_by(RunGraphNode.task_id)
+            ).all()
+        )
+        nodes.sort(key=lambda node: (node.task_slug, str(node.id)))
         return [self._hydrate(session, n) for n in nodes]
 
     def descendants(
@@ -142,7 +143,7 @@ class TaskInspectionService:
         node = session.exec(
             select(RunGraphNode).where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.id == node_id,
+                RunGraphNode.task_id == node_id,
             )
         ).one()
         return self._hydrate(session, node)
@@ -150,8 +151,8 @@ class TaskInspectionService:
     def _hydrate(self, session: Session, node: RunGraphNode) -> SubtaskInfo:
         """Build a SubtaskInfo from a RunGraphNode, attaching deps and output/error."""
         deps = session.exec(
-            select(RunGraphEdge.source_node_id).where(
-                RunGraphEdge.target_node_id == node.id,
+            select(RunGraphEdge.source_task_id).where(
+                RunGraphEdge.target_task_id == node.id,
                 RunGraphEdge.run_id == node.run_id,
             )
         ).all()
