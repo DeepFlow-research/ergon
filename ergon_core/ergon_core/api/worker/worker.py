@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator, Mapping
+from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 from uuid import UUID
 
@@ -14,6 +14,7 @@ from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.domain.definitions import inflate_definition, serialize_definition
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.infrastructure.dependencies import check_packages
+from ergon_core.core.shared.json_types import JsonObject
 
 if TYPE_CHECKING:
     from ergon_core.api.benchmark.task import Task
@@ -34,27 +35,17 @@ class Worker(BaseModel, ABC):
     requires_sandbox: ClassVar[type[Sandbox] | None] = None
 
     name: str
-    model: str | None
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
-
-    def __init__(
-        self,
-        *,
-        name: str,
-        model: str | None,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-        **data: Any,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(name=name, model=model, metadata=dict(metadata or {}), **data)
+    model: str | None = None
+    metadata: JsonObject = Field(default_factory=dict)
 
     @classmethod
     def from_definition(
-        cls, worker_json: dict[str, Any]
-    ) -> "Worker":  # slopcop: ignore[no-typing-any]
+        cls, worker_json: JsonObject
+    ) -> "Worker":
         """Reconstruct a concrete worker from persisted definition JSON."""
         return inflate_definition(worker_json)
 
-    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    def to_definition(self) -> JsonObject:
         """Serialize this worker for persisted experiment definitions."""
         return serialize_definition(self)
 

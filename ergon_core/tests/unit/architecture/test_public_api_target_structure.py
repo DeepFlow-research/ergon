@@ -122,16 +122,15 @@ def test_criterion_context_hides_runtime_protocol_field() -> None:
     assert hasattr(context_module.CriterionContext, "execute_code")
 
 
-def test_public_result_models_do_not_import_core_json_types() -> None:
-    modules = [
-        importlib.import_module("ergon_core.api.worker.results"),
-        importlib.import_module("ergon_core.api.criterion.results"),
-        importlib.import_module("ergon_core.api.rubric.results"),
-    ]
+def test_public_api_uses_shared_json_object_alias() -> None:
+    api_root = Path(__file__).parents[3] / "ergon_core" / "api"
+    offenders: list[str] = []
+    for path in api_root.rglob("*.py"):
+        source = path.read_text()
+        if "dict[str, Any]" in source:
+            offenders.append(str(path.relative_to(api_root)))
 
-    assert all(
-        "ergon_core.core.shared.json_types" not in inspect.getsource(module) for module in modules
-    )
+    assert offenders == []
 
 
 def test_public_api_modules_do_not_hide_import_cycles() -> None:

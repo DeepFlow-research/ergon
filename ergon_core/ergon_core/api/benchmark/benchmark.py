@@ -16,6 +16,7 @@ from ergon_core.core.domain.definitions import (
     serialize_definition,
 )
 from ergon_core.core.infrastructure.dependencies import check_packages
+from ergon_core.core.shared.json_types import JsonObject
 
 
 class Benchmark(BaseModel, ABC):
@@ -30,17 +31,17 @@ class Benchmark(BaseModel, ABC):
 
     name: str = ""  # slopcop: ignore[no-str-empty-default]
     description: str = ""  # slopcop: ignore[no-str-empty-default]
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: JsonObject = Field(default_factory=dict)
 
     @classmethod
     def from_definition(
         cls,
-        benchmark_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        benchmark_json: JsonObject,
     ) -> "Benchmark":
         """Reconstruct a concrete benchmark from persisted definition JSON."""
         return inflate_definition(benchmark_json)
 
-    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    def to_definition(self) -> JsonObject:
         """Serialize this benchmark for persisted experiment definitions."""
         return serialize_definition(self)
 
@@ -57,10 +58,7 @@ class Benchmark(BaseModel, ABC):
     def parse_task_payload(
         cls,
         payload: BaseModel
-        | Mapping[
-            str,
-            Any,  # slopcop: ignore[no-typing-any] -- arbitrary persisted JSON is validated below
-        ]
+        | JsonObject
         | None,
     ) -> BaseModel:
         """Validate persisted JSON into this benchmark's payload model."""

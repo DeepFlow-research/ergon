@@ -6,6 +6,7 @@ from uuid import UUID
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.evaluation.protocols import CriterionRuntime
+from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 
@@ -20,7 +21,7 @@ class CriterionContext(BaseModel):
     task: Task
     worker_result: WorkerOutput
     sandbox_id: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: JsonObject = Field(default_factory=dict)
     _runtime: CriterionRuntime | None = PrivateAttr(default=None)
 
     @classmethod

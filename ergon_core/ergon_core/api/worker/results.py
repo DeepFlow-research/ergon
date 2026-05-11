@@ -1,8 +1,7 @@
 """Public worker result models."""
 
-from typing import Any
-
 from pydantic import BaseModel, Field
+from ergon_core.core.shared.json_types import JsonObject
 
 
 class WorkerOutput(BaseModel):
@@ -12,4 +11,4 @@ class WorkerOutput(BaseModel):
 
     output: str
     success: bool = True
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: JsonObject = Field(default_factory=dict)

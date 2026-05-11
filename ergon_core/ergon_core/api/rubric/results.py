@@ -1,8 +1,7 @@
 """Public rubric result models."""
 
-from typing import Any
-
 from ergon_core.api.criterion.results import CriterionOutcome
+from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel, Field
 
 
@@ -17,4 +16,4 @@ class TaskEvaluationResult(BaseModel):
     evaluator_name: str
     criterion_results: list[CriterionOutcome] = Field(default_factory=list)
     feedback: str | None = None
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: JsonObject = Field(default_factory=dict)

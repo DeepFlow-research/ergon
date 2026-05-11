@@ -1,10 +1,9 @@
 """Public criterion result models."""
 
-from typing import Any, Literal
+from typing import Literal
 
+from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel, Field, model_validator
-
-JsonObject = dict[str, Any]  # slopcop: ignore[no-typing-any] -- public JSON-like metadata bag
 
 
 class ScoreScale(BaseModel):
@@ -56,8 +55,8 @@ class CriterionOutcome(BaseModel):
     evaluated_action_ids: list[str] = Field(default_factory=list)
     evaluated_resource_ids: list[str] = Field(default_factory=list)
     observation: CriterionEvidence | None = None
-    error: dict[str, Any] | None = None  # slopcop: ignore[no-typing-any]
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    error: JsonObject | None = None
+    metadata: JsonObject = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod

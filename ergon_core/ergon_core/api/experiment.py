@@ -1,7 +1,6 @@
 """Public experiment composition root."""
 
 from collections.abc import Iterable, Mapping
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
@@ -13,6 +12,7 @@ from ergon_core.api.rubric import Evaluator
 from ergon_core.api.sandbox import Sandbox
 from ergon_core.core.domain.experiments.validation import ExperimentValidationService
 from ergon_core.core.domain.experiments.handles import DefinitionHandle
+from ergon_core.core.shared.json_types import JsonObject
 
 
 class Experiment(BaseModel):
@@ -21,7 +21,7 @@ class Experiment(BaseModel):
     model_config = {"arbitrary_types_allowed": True, "extra": "forbid", "frozen": False}
 
     benchmark: Benchmark
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: JsonObject = Field(default_factory=dict)
 
     _persisted: DefinitionHandle | None = PrivateAttr(default=None)
 

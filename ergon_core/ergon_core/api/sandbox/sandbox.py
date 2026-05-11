@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from ergon_core.api.errors import SandboxNotLiveError
 from ergon_core.api.sandbox.runtime import SandboxRuntime
 from ergon_core.core.domain.definitions import inflate_definition, serialize_definition
+from ergon_core.core.shared.json_types import JsonObject
 
 
 class Sandbox(BaseModel, ABC):
@@ -23,12 +24,12 @@ class Sandbox(BaseModel, ABC):
 
     @classmethod
     def from_definition(
-        cls, sandbox_json: dict[str, Any]
-    ) -> "Sandbox":  # slopcop: ignore[no-typing-any]
+        cls, sandbox_json: JsonObject
+    ) -> "Sandbox":
         """Reconstruct a concrete sandbox from persisted definition JSON."""
         return inflate_definition(sandbox_json)
 
-    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    def to_definition(self) -> JsonObject:
         """Serialize this sandbox for persisted experiment definitions."""
         return serialize_definition(self)
 

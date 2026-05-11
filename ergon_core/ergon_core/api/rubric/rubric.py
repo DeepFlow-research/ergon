@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, SerializeAsAny, field_validator
@@ -46,25 +46,10 @@ class Rubric(Evaluator):
             return tuple(
                 WeightedCriterion.model_validate(item)
                 if isinstance(item, dict) and "criterion" in item
-                else item
+                else _as_weighted_criterion(item)
                 for item in value
             )
         return value
-
-    def __init__(
-        self,
-        *,
-        name: str,
-        criteria: Iterable[WeightedCriterion | Criterion],
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-        **data: Any,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(
-            name=name,
-            metadata=metadata,
-            criteria=tuple(_as_weighted_criterion(criterion) for criterion in criteria),
-            **data,
-        )
 
     def criteria_for(self, task: Task) -> Iterable[Criterion]:
         return tuple(weighted.criterion for weighted in self.criteria)

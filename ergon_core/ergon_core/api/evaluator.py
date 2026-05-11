@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
@@ -12,6 +12,7 @@ from ergon_core.api.errors import DependencyError
 from ergon_core.api.sandbox.sandbox import Sandbox
 from ergon_core.core.domain.definitions import inflate_definition, serialize_definition
 from ergon_core.core.infrastructure.dependencies import check_packages
+from ergon_core.core.shared.json_types import JsonObject
 
 if TYPE_CHECKING:
     from ergon_core.api.benchmark.task import Task
@@ -31,13 +32,13 @@ class Evaluator(BaseModel, ABC):
     requires_sandbox: ClassVar[type[Sandbox] | None] = None
 
     name: str
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: JsonObject = Field(default_factory=dict)
 
     def __init__(
         self,
         *,
         name: str,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
+        metadata: JsonObject | None = None,
         **data: Any,  # slopcop: ignore[no-typing-any]
     ) -> None:
         super().__init__(name=name, metadata=dict(metadata or {}), **data)
@@ -45,12 +46,12 @@ class Evaluator(BaseModel, ABC):
     @classmethod
     def from_definition(
         cls,
-        evaluator_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        evaluator_json: JsonObject,
     ) -> "Evaluator":
         """Reconstruct a concrete evaluator from persisted definition JSON."""
         return inflate_definition(evaluator_json)
 
-    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    def to_definition(self) -> JsonObject:
         """Serialize this evaluator for persisted experiment definitions."""
         return serialize_definition(self)
 

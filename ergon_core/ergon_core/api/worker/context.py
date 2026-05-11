@@ -1,9 +1,9 @@
 """Per-execution runtime state passed to Worker.execute()."""
 
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from ergon_core.core.shared.json_types import JsonObject
 
 
 class WorkerContext(BaseModel):
@@ -28,4 +28,4 @@ class WorkerContext(BaseModel):
         default=None,
         description="RunGraphNode.id — this worker's graph node identity.",
     )
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: JsonObject = Field(default_factory=dict)

@@ -11,6 +11,7 @@ from ergon_core.api.criterion.results import CriterionOutcome, ScoreScale
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.domain.definitions import inflate_definition, serialize_definition
 from ergon_core.core.infrastructure.dependencies import check_packages
+from ergon_core.core.shared.json_types import JsonObject
 
 if TYPE_CHECKING:
     from ergon_core.api.criterion.context import CriterionContext
@@ -31,17 +32,17 @@ class Criterion(BaseModel, ABC):
     description: str = ""  # slopcop: ignore[no-str-empty-default]
     weight: float = 1.0
     score_spec: ScoreScale = Field(default_factory=ScoreScale)
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: JsonObject = Field(default_factory=dict)
 
     @classmethod
     def from_definition(
         cls,
-        criterion_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        criterion_json: JsonObject,
     ) -> "Criterion":
         """Reconstruct a concrete criterion from persisted definition JSON."""
         return inflate_definition(criterion_json)
 
-    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    def to_definition(self) -> JsonObject:
         """Serialize this criterion for persisted experiment definitions."""
         return serialize_definition(self)
 

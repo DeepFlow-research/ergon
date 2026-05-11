@@ -17,6 +17,7 @@ from ergon_core.core.domain.definitions import (
     inflate_definition,
     serialize_definition,
 )
+from ergon_core.core.shared.json_types import JsonObject
 
 
 class EmptyTaskPayload(BaseModel):
@@ -85,7 +86,7 @@ class Task(BaseModel, Generic[PayloadT]):
     @classmethod
     def from_definition(
         cls,
-        task_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
+        task_json: JsonObject,
         *,
         task_id: UUID,
     ) -> "Task":
@@ -94,7 +95,7 @@ class Task(BaseModel, Generic[PayloadT]):
         object.__setattr__(instance, "_task_id", task_id)
         return instance
 
-    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    def to_definition(self) -> JsonObject:
         """Serialize this task for persisted experiment definitions."""
         return serialize_definition(self)
 
