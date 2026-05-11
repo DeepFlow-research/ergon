@@ -1,15 +1,14 @@
 """Cohort submission helper for canonical smoke drivers.
 
-POSTs ``/api/test/write/cohort`` on the api container; returns the
+POSTs ``/api/__danger__/test-harness/write/cohort`` on the api container; returns the
 run_ids in the same order as the slots passed in.
 
 Tests are a pure black-box client of the stack: they do not import any
 ergon internals, do not call ``build_experiment`` / ``create_run`` /
 ``inngest.send`` in-process, and do not register worker / evaluator
-slugs in the test process.  All of that lives inside the api container
-(see ``ERGON_STARTUP_PLUGINS`` registering smoke fixtures in the API
-container).  Single source of truth for fixtures ⇒ no host / container
-staleness risk.
+slugs in the test process.  All of that lives inside the api container's
+local composition target.  Single source of truth for fixtures ⇒ no host /
+container staleness risk.
 
 Each slot can use a different ``(worker_slug, criterion_slug)`` pair.
 Empty slots list is valid (returns ``[]``) but unlikely in practice.
@@ -52,8 +51,7 @@ def build_cohort_payload(
     return {
         "benchmark_slug": benchmark_slug,
         "slots": [
-            {"worker_slug": worker, "evaluator_slug": criterion}
-            for worker, criterion in slots
+            {"worker_slug": worker, "evaluator_slug": criterion} for worker, criterion in slots
         ],
         "cohort_key": cohort_key,
         "sandbox_slug": sandbox_slug,
@@ -94,7 +92,7 @@ async def submit_cohort(
         model=model,
     )
     async with httpx.AsyncClient(base_url=_api_base(), timeout=30.0) as client:
-        response = await client.post("/api/test/write/cohort", json=payload)
+        response = await client.post("/api/__danger__/test-harness/write/cohort", json=payload)
         if response.status_code >= 400:
             pytest.fail(
                 "cohort submission failed: "

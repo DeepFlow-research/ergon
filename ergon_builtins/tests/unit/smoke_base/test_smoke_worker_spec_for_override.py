@@ -43,8 +43,6 @@ def _instance(cls):
     return cls(
         name="unit-test",
         model=None,
-        task_id=uuid4(),
-        sandbox_id="sbx-unit",
     )
 
 

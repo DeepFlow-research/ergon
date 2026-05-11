@@ -1,8 +1,9 @@
 from ergon_cli.composition import build_experiment
+from tests.fixtures.smoke_components import register_smoke_fixtures
 
 
-def test_happy_smoke_experiment_binds_recursive_worker(monkeypatch) -> None:
-    monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
+def test_happy_smoke_experiment_binds_recursive_worker() -> None:
+    register_smoke_fixtures()
 
     experiment = build_experiment(
         benchmark_slug="researchrubrics",
@@ -20,8 +21,8 @@ def test_happy_smoke_experiment_binds_recursive_worker(monkeypatch) -> None:
     assert set(experiment.evaluators) >= {"default", "post-root"}
 
 
-def test_sad_smoke_experiment_does_not_bind_recursive_worker(monkeypatch) -> None:
-    monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
+def test_sad_smoke_experiment_does_not_bind_recursive_worker() -> None:
+    register_smoke_fixtures()
 
     experiment = build_experiment(
         benchmark_slug="researchrubrics",

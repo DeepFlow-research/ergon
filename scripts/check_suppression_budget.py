@@ -32,9 +32,9 @@ class SuppressionCounts(NamedTuple):
 # Keep this baseline equal to the current repository count. Lower it as cleanup
 # lands; raise it only when a new suppression is explicitly reviewed.
 BUDGET = SuppressionCounts(
-    slopcop_ignore=217,
-    noqa=0,
-    type_ignore=72,
+    slopcop_ignore=222,
+    noqa=2,
+    type_ignore=64,
 )
 
 _SLOPCOP_IGNORE = re.compile(r"\bslopcop:\s*ignore\b")

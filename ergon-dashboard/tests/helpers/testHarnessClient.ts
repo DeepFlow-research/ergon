@@ -48,7 +48,7 @@ export class BackendHarnessClient {
 
   async getRunState(runId: string): Promise<TestRunStateDto> {
     const response = await this.request.get(
-      `${this.baseUrl}/api/test/read/run/${runId}/state`,
+      `${this.baseUrl}/api/__danger__/test-harness/read/run/${runId}/state`,
     );
     if (!response.ok()) {
       throw new Error(

@@ -14,13 +14,9 @@ This preflight is deliberately NOT at `tests/conftest.py` — the
 `tests/unit/` tier runs without the integration Inngest/Postgres stack and
 must not be gated on this preflight. Scoping is by filesystem path, per
 `docs/architecture/07_testing.md` §4.
-
-Opt out of the preflight with ERGON_SKIP_INFRA_CHECK=1 when you knowingly
-want to run against a missing backend (e.g. debugging retry paths).
 """
 
 import asyncio
-import os
 import socket
 from urllib.parse import urlparse
 
@@ -74,9 +70,6 @@ def _probe_tcp(host: str, port: int, timeout: float = 0.5) -> str | None:
 
 
 def pytest_sessionstart(session: pytest.Session) -> None:
-    if os.environ.get("ERGON_SKIP_INFRA_CHECK") == "1":
-        return
-
     ensure_db()
 
     parsed = urlparse(settings.inngest_api_base_url)
@@ -101,8 +94,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
                 "with exponential backoff (~3s per call). The 15-step DAG scenario",
                 "alone turns into ~170s of pure retry waits.",
                 "",
-                "Fix by starting the dev stack (see docs/architecture/07_testing.md),",
-                "or set ERGON_SKIP_INFRA_CHECK=1 to bypass this check intentionally.",
+                "Fix by starting the dev stack (see docs/architecture/07_testing.md).",
                 "",
             ]
         ),

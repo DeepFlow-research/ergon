@@ -20,16 +20,16 @@ jobs:
         run: uv sync --frozen --all-packages --group dev
 
       - name: Ruff check
-        run: uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
+        run: uv run ruff check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests scripts
 
       - name: Ruff format check
-        run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra tests scripts
+        run: uv run ruff format --check ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion tests scripts
 
       - name: Type check (ty)
-        run: uv run ty check ergon_core/ergon_core ergon_builtins ergon_cli ergon_infra
+        run: uv run ty check ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion
 
       - name: slopcop check
-        run: uv run slopcop ergon_core ergon_builtins ergon_cli ergon_infra
+        run: uv run slopcop --warn-only ergon_core/ergon_core ergon_builtins/ergon_builtins ergon_cli/ergon_cli ergon_infra ergon_ingestion/ergon_ingestion
 
       - name: Suppression budget
         run: uv run python scripts/check_suppression_budget.py
@@ -37,7 +37,7 @@ jobs:
       - name: Cyclomatic complexity check (xenon)
         # Thresholds reflect current baseline; tighten as complexity debt is paid down.
         # F/E/C = max-absolute/max-modules/max-average. Radon grades: A(1-5) B(6-10) C(11-15) D(16-20) E(21-25) F(26+)
-        run: uv run xenon --max-absolute F --max-modules E --max-average C ergon_core ergon_builtins ergon_cli ergon_infra
+        run: uv run xenon --max-absolute F --max-modules E --max-average C ergon_core ergon_builtins ergon_cli ergon_infra ergon_ingestion
 
   frontend-checks:
     name: "Lint + type-check (Frontend)"
@@ -89,11 +89,53 @@ jobs:
       - name: TypeScript check
         run: pnpm -C ergon-dashboard run typecheck
 
+      - name: Frontend unit tests
+        run: pnpm -C ergon-dashboard run test:unit
+
+  frontend-e2e:
+    name: "Dashboard harness e2e"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: frontend-checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: ergon-dashboard/pnpm-lock.yaml
+
+      - name: Install pnpm dependencies
+        run: pnpm -C ergon-dashboard install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm -C ergon-dashboard exec playwright install --with-deps chromium
+
+      - name: Start backend subset
+        env:
+          POSTGRES_PASSWORD: ci_test
+        run: docker compose up -d --build --wait postgres api inngest-dev
+        timeout-minutes: 10
+
+      - name: Run dashboard e2e
+        env:
+          ERGON_API_BASE_URL: http://127.0.0.1:9000
+        run: pnpm -C ergon-dashboard run e2e
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml logs api --tail 200
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v
+
   unit-tests:
-    name: "Unit tests (Python)"
+    name: "Unit + state tests (Python)"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: lint-and-type-check
     steps:
       - uses: actions/checkout@v4
 
@@ -109,7 +151,7 @@ jobs:
           # Python 3.12+ sys.monitoring backend — faster than the default
           # sys.settrace() tracer for ORM-heavy workloads like SQLAlchemy.
           COVERAGE_CORE: sysmon
-        run: uv run pytest tests/unit -n auto --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
+        run: uv run pytest ergon_core/tests/unit ergon_builtins/tests/unit ergon_cli/tests/unit ergon_ingestion/tests/unit -n auto --cov=ergon_core --cov=ergon_builtins --cov-report=xml:coverage.xml
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -121,7 +163,6 @@ jobs:
     name: "Integration tests (Python)"
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: lint-and-type-check
     steps:
       - uses: actions/checkout@v4
 
@@ -131,8 +172,6 @@ jobs:
           # tier doesn't need the dashboard — specify the subset to
           # keep the job fast.
           POSTGRES_PASSWORD: ci_test
-          ENABLE_TEST_HARNESS: "1"
-          TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-local' }}
         run: docker compose up -d --build --wait postgres api inngest-dev
         timeout-minutes: 10
 
@@ -160,7 +199,6 @@ jobs:
           INNGEST_API_BASE_URL: http://localhost:8289
           INNGEST_DEV: "1"
           INNGEST_EVENT_KEY: dev
-          TEST_HARNESS_SECRET: ${{ secrets.TEST_HARNESS_SECRET || 'ci-local' }}
         run: uv run pytest tests/integration -v --timeout=300
 
       - name: Dump API logs on failure

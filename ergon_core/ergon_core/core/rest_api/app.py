@@ -4,7 +4,6 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
-from importlib import import_module
 
 # Root-logger handler so ``logger.exception`` / ``logger.error`` from
 # anywhere in the app actually reach ``docker compose logs api``.
@@ -27,7 +26,10 @@ from ergon_core.core.rest_api.experiments import router as experiments_router
 from ergon_core.core.rest_api.rollouts import router as rollouts_router
 from ergon_core.core.rest_api.runs import router as runs_router
 from ergon_core.core.rest_api.test_harness import router as _test_harness_router
-from ergon_core.core.infrastructure.dashboard.provider import init_dashboard_emitter, reset_dashboard_emitter
+from ergon_core.core.infrastructure.dashboard.provider import (
+    init_dashboard_emitter,
+    reset_dashboard_emitter,
+)
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.infrastructure.sandbox.event_sink import (
     CompoundSandboxEventSink,
@@ -44,18 +46,6 @@ from fastapi import FastAPI
 logger = logging.getLogger(__name__)
 
 
-def _run_startup_plugins(plugin_specs: tuple[str, ...]) -> None:
-    for spec in plugin_specs:
-        module_name, sep, attr_name = spec.partition(":")
-        if not sep or not module_name or not attr_name:
-            raise RuntimeError(
-                f"Invalid ERGON_STARTUP_PLUGINS entry {spec!r}; expected 'module:function'"
-            )
-        module = import_module(module_name)
-        plugin = getattr(module, attr_name)  # slopcop: ignore[no-hasattr-getattr]
-        plugin()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("starting ensure_db...")
@@ -70,8 +60,6 @@ async def lifespan(app: FastAPI):
     app.state.vllm_manager = None
     dashboard_emitter = init_dashboard_emitter(enabled=True)
     app.state.dashboard_emitter = dashboard_emitter
-
-    _run_startup_plugins(settings.startup_plugins)
 
     # Wire the dashboard event sink on every registered sandbox manager class.
     sink = CompoundSandboxEventSink(
@@ -111,8 +99,6 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Test-only harness: mounted in CI + local-e2e only.
-if settings.enable_test_harness:
-    app.include_router(_test_harness_router)
+app.include_router(_test_harness_router)
 
 inngest.fast_api.serve(app, inngest_client, ALL_FUNCTIONS)

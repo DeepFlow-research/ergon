@@ -87,6 +87,14 @@ worker. That is the whole point.
 - Enforcement is architectural: there is no `.artifacts` field to
   populate, so the failure mode is a type error at construction, not a
   silent data loss at the Inngest seam.
+- Imported public artifact releases are exported by Ergon itself through
+  `ergon_ingestion.exports`. The exporter paginates imported `RunRecord`
+  rows, writes sharded Parquet for runs/reducers/drops, copies
+  content-addressed `RunResource` blobs into `resources/<sha-prefix>/`,
+  writes `manifest.json`, `checksums.json`, and `state.json`, and verifies
+  resource hashes before publication. Artifact repositories may invoke this
+  exporter, but they must not reimplement pagination, sharding, resource
+  materialization, checksums, or manifest semantics.
 
 ## Example of the correct pattern (reference)
 

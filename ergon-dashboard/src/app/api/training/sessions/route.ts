@@ -18,8 +18,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(await res.json());
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Backend unreachable" },
-      { status: 502 },
+      {
+        detail: "Ergon API is unavailable while loading training sessions.",
+        error: err instanceof Error ? err.message : "Unknown backend fetch failure",
+      },
+      { status: 503 },
     );
   }
 }

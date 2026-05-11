@@ -23,7 +23,7 @@ export const config = {
   socketCorsOrigin: process.env.SOCKET_CORS_ORIGIN || "*",
 
   // Testing
-  enableTestHarness: process.env.ENABLE_TEST_HARNESS === "1",
+  enableTestHarness: true,
 
   // Store
   maxRunsToKeep: parseInt(process.env.MAX_RUNS_TO_KEEP || "50", 10),

@@ -15,7 +15,11 @@ from ergon_core.core.application.context.events import ContextEventService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord, RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import (
+    ExperimentRecord,
+    RunRecord,
+    RunTaskExecution,
+)
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 

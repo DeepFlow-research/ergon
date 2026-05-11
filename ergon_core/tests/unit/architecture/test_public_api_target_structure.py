@@ -11,6 +11,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "Benchmark",
         "BenchmarkRequirements",
         "Task",
+        "TaskSpec",
         "EmptyTaskPayload",
         "Worker",
         "WorkerContext",
@@ -26,7 +27,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "TaskEvaluationResult",
         "CriterionCheckError",
         "ComponentRegistry",
-        "WorkerFactory",
         "registry",
     }
     retired = {
@@ -56,7 +56,13 @@ def test_semantic_api_clusters_are_importable() -> None:
     criterion = importlib.import_module("ergon_core.api.criterion")
     rubric = importlib.import_module("ergon_core.api.rubric")
 
-    assert benchmark.__all__ == ["Benchmark", "BenchmarkRequirements", "Task", "EmptyTaskPayload"]
+    assert benchmark.__all__ == [
+        "Benchmark",
+        "BenchmarkRequirements",
+        "Task",
+        "TaskSpec",
+        "EmptyTaskPayload",
+    ]
     assert worker.__all__ == ["Worker", "WorkerContext", "WorkerOutput", "WorkerStreamItem"]
     assert criterion.__all__ == [
         "Criterion",
@@ -106,4 +112,6 @@ def test_public_result_models_do_not_import_core_json_types() -> None:
         importlib.import_module("ergon_core.api.rubric.results"),
     ]
 
-    assert all("ergon_core.core.shared.json_types" not in inspect.getsource(module) for module in modules)
+    assert all(
+        "ergon_core.core.shared.json_types" not in inspect.getsource(module) for module in modules
+    )

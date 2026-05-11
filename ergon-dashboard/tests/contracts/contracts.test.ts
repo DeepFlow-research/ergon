@@ -9,6 +9,12 @@ import {
 } from "../../src/lib/contracts/events";
 import { parseCohortDetail, parseRunSnapshot } from "../../src/lib/contracts/rest";
 import { deserializeRunState } from "../../src/lib/runState";
+import { store } from "../../src/lib/state/store";
+import {
+  getHarnessRun,
+  resetDashboardHarness,
+  seedDashboardHarness,
+} from "../../src/lib/testing/dashboardHarness";
 import { createDashboardSeed, FIXTURE_IDS } from "../helpers/dashboardFixtures";
 
 test("run snapshot parser accepts object-map transport", () => {
@@ -26,7 +32,7 @@ test("run snapshot parser accepts object-map transport", () => {
   ]);
 });
 
-test("run snapshot hydration preserves context event actions", () => {
+test("run snapshot hydration converts context part chunks into UI action payloads", () => {
   const seed = createDashboardSeed();
   const run = seed.runs?.[0];
 
@@ -37,20 +43,13 @@ test("run snapshot hydration preserves context event actions", () => {
   assert.equal(events.length, 2);
   assert.equal(events[0]?.eventType, "tool_call");
   assert.deepEqual(events[0]?.payload, {
-    part: {
-      part_kind: "tool_call",
-      tool_call_id: "call-lean-check",
-      tool_name: "lean_check",
-      args: { file: "proof.lean" },
-    },
-    token_ids: [101, 102, 103],
-    logprobs: null,
-    sequence: 0,
-    worker_binding_key: "react-worker",
+    event_type: "tool_call",
+    tool_call_id: "call-lean-check",
+    tool_name: "lean_check",
+    args: { file: "proof.lean" },
     turn_id: "turn-1",
-    started_at: "2026-03-18T12:00:18.000Z",
-    completed_at: "2026-03-18T12:00:18.100Z",
-    policy_version: null,
+    turn_token_ids: [101, 102, 103],
+    turn_logprobs: null,
   });
 });
 
@@ -115,6 +114,23 @@ test("cohort detail parser accepts harness payload", () => {
   assert.equal(parsed.experiments[0]?.status_counts.completed, 3);
   assert.equal(parsed.experiments[0]?.final_score, 1);
   assert.equal(parsed.experiments[0]?.total_cost_usd, 0.42);
+});
+
+test("dashboard harness only serves explicitly seeded runs", () => {
+  const seed = createDashboardSeed();
+  const run = seed.runs?.[0];
+  assert.ok(run);
+
+  resetDashboardHarness();
+  store.seedRun(deserializeRunState({ ...run, id: "live-event-run" }));
+
+  assert.equal(getHarnessRun("live-event-run"), null);
+
+  seedDashboardHarness({ runs: [run] });
+
+  const seededRun = getHarnessRun(FIXTURE_IDS.runId);
+  assert.equal(seededRun?.id, FIXTURE_IDS.runId);
+  assert.equal(deserializeRunState(seededRun).id, FIXTURE_IDS.runId);
 });
 
 test("workflow started event parser validates recursive task trees", () => {

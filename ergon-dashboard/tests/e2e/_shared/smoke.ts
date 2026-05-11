@@ -49,6 +49,12 @@ function requireEnv(name: string): string {
   return v;
 }
 
+function missingSmokeEnv(): string[] {
+  return ["COHORT_KEY", "SCREENSHOT_DIR", "ERGON_API_BASE_URL", "SMOKE_COHORT_JSON"].filter(
+    (name) => !process.env[name],
+  );
+}
+
 async function screenshot(target: Page, out: string): Promise<void> {
   await fs.mkdir(path.dirname(out), { recursive: true });
   await target.screenshot({ path: out, fullPage: true });
@@ -185,12 +191,22 @@ async function assertRunWorkspace(
 }
 
 export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
+  const missing = missingSmokeEnv();
+  if (missing.length > 0) {
+    test.describe(`${cfg.env} canonical smoke`, () => {
+      test.skip(
+        `requires smoke environment: ${missing.join(", ")}`,
+        async () => {},
+      );
+    });
+    return;
+  }
+
   const cohortKey = requireEnv("COHORT_KEY");
   const screenshotDir = requireEnv("SCREENSHOT_DIR");
-  const secret = requireEnv("TEST_HARNESS_SECRET");
   const apiBase = requireEnv("ERGON_API_BASE_URL");
 
-  const client = new BackendHarnessClient(apiBase, secret);
+  const client = new BackendHarnessClient(apiBase);
   const cohort = readCohortFromEnv();
 
   test.describe(`${cfg.env} canonical smoke`, () => {

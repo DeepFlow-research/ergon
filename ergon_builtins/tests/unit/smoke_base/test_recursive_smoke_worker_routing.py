@@ -29,8 +29,6 @@ def test_happy_l_2_routes_to_recursive_worker(
     worker = worker_cls(
         name="unit-test",
         model=None,
-        task_id=uuid4(),
-        sandbox_id="sbx-unit",
     )
 
     spec = worker._spec_for("l_2", ("l_1",), "Line 2")

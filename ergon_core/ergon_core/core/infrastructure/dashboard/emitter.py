@@ -447,6 +447,7 @@ class DashboardEmitter:
         except Exception:  # slopcop: ignore[no-broad-except]
             logger.warning("Failed to emit dashboard/cohort.updated", exc_info=True)
 
+
 async def emit_cohort_updated_for_run(run_id: UUID) -> None:
     """Refresh and emit the current cohort summary for a run, if it has a cohort."""
     cohort_id = experiment_cohort_service.cohort_id_for_run(run_id)

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
     from e2b.sandbox.commands.command_handle import CommandExitException  # type: ignore[import-untyped]
 
+
 class SandboxCallResult(Protocol):
     """Opaque SDK return value forwarded by sandbox proxy methods."""
 

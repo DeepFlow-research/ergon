@@ -292,5 +292,3 @@ class ResolveCohortRequest(BaseModel):
     description: str | None = None
     created_by: str | None = None
     metadata: JsonObject = Field(default_factory=dict)
-
-

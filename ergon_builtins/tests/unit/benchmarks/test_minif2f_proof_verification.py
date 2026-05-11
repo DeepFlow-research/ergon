@@ -23,6 +23,7 @@ from ergon_core.core.application.evaluation.criterion_runtime import (
 
 def _make_task() -> Task:
     return Task(
+        task_id=uuid4(),
         task_slug="t1",
         instance_key="default",
         description="theorem t : True := by trivial",

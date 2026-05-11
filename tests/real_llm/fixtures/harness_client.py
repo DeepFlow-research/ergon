@@ -1,4 +1,4 @@
-"""Python twin of the TS testHarnessClient.ts for /api/test/read/* endpoints."""
+"""Python twin of the TS testHarnessClient.ts for /api/__danger__/test-harness/read/* endpoints."""
 
 import os
 import time
@@ -16,7 +16,7 @@ class BackendHarnessClient:
 
     def get_run_state(self, run_id: str) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         with httpx.Client(timeout=10.0) as client:
-            r = client.get(f"{self._base}/api/test/read/run/{run_id}/state")
+            r = client.get(f"{self._base}/api/__danger__/test-harness/read/run/{run_id}/state")
             r.raise_for_status()
             return r.json()
 

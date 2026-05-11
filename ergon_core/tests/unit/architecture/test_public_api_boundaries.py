@@ -159,8 +159,7 @@ def test_code_and_config_do_not_reference_old_internal_core_api() -> None:
         path
         for root in INTERNAL_API_REFERENCE_ROOTS
         for path in root.rglob("*.py")
-        if "__pycache__" not in path.parts
-        and path != Path(__file__).resolve()
+        if "__pycache__" not in path.parts and path != Path(__file__).resolve()
     ]
     checked_paths.extend(path for path in INTERNAL_API_REFERENCE_FILES if path.exists())
 
@@ -515,3 +514,11 @@ def test_e2e_tests_do_not_import_private_core_repositories() -> None:
                 offenders.append(f"{path.relative_to(ROOT)} imports {needle!r}")
 
     assert offenders == []
+
+
+def test_local_api_composition_mounts_test_owned_smoke_components() -> None:
+    api_app = ROOT / "ergon_cli" / "ergon_cli" / "api_app.py"
+    compose = ROOT / "docker-compose.yml"
+
+    assert "tests.fixtures.smoke_components" in api_app.read_text()
+    assert "./tests:/app/tests" in compose.read_text()

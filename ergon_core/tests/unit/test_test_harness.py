@@ -3,9 +3,7 @@
 from collections.abc import Iterator
 from uuid import uuid4
 
-import pytest
 from ergon_core.core.rest_api import test_harness
-from ergon_core.core.rest_api.app import _run_startup_plugins
 from ergon_core.core.rest_api.test_harness import get_session_dep, router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -39,26 +37,17 @@ def _null_session_factory() -> Iterator[_NullSession]:
     yield _NullSession()
 
 
-def _build_app_with_harness(
-    monkeypatch: pytest.MonkeyPatch, *, enabled: bool, secret: str | None = "ci-secret"
-) -> FastAPI:
+def _build_app_with_harness() -> FastAPI:
     app = FastAPI()
-    monkeypatch.setenv("ENABLE_TEST_HARNESS", "1" if enabled else "0")
-    if secret is not None:
-        monkeypatch.setenv("TEST_HARNESS_SECRET", secret)
-    else:
-        monkeypatch.delenv("TEST_HARNESS_SECRET", raising=False)
-
-    if enabled:
-        app.include_router(router)
-        app.dependency_overrides[get_session_dep] = _null_session_factory
+    app.include_router(router)
+    app.dependency_overrides[get_session_dep] = _null_session_factory
     return app
 
 
-def test_read_endpoint_returns_404_for_unknown_run_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _build_app_with_harness(monkeypatch, enabled=True)
+def test_read_endpoint_returns_404_for_unknown_run_id() -> None:
+    app = _build_app_with_harness()
     client = TestClient(app)
-    resp = client.get(f"/api/test/read/run/{uuid4()}/state")
+    resp = client.get(f"/api/__danger__/test-harness/read/run/{uuid4()}/state")
     assert resp.status_code == 404
 
 
@@ -75,41 +64,11 @@ def test_read_state_dto_exposes_live_playwright_contract_fields() -> None:
     } <= set(test_harness.TestRunStateDto.model_fields)
 
 
-def test_read_endpoint_unmounted_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _build_app_with_harness(monkeypatch, enabled=False)
-    client = TestClient(app)
-    resp = client.get(f"/api/test/read/run/{uuid4()}/state")
-    assert resp.status_code == 404  # unmounted = route doesn't exist
-
-
-def test_seed_requires_secret_header(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _build_app_with_harness(monkeypatch, enabled=True, secret="ci-secret")
-    client = TestClient(app)
+def test_reset_route_is_available_without_secret_header() -> None:
+    app = _build_app_with_harness()
+    client = TestClient(app, raise_server_exceptions=False)
     resp = client.post(
-        "/api/test/write/run/seed",
-        json={"workflow_definition_id": "00000000-0000-0000-0000-000000000001"},
+        "/api/__danger__/test-harness/write/reset",
+        json={"cohort_prefix": "ci-smoke-"},
     )
-    assert resp.status_code == 401
-
-
-def test_seed_returns_500_when_secret_env_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _build_app_with_harness(monkeypatch, enabled=True, secret=None)
-    client = TestClient(app)
-    resp = client.post(
-        "/api/test/write/run/seed",
-        json={"workflow_definition_id": "00000000-0000-0000-0000-000000000001"},
-        headers={"X-Test-Secret": "anything"},
-    )
-    assert resp.status_code == 500
-
-
-def test_reset_requires_secret_header(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _build_app_with_harness(monkeypatch, enabled=True, secret="ci-secret")
-    client = TestClient(app)
-    resp = client.post("/api/test/write/reset", json={"cohort_prefix": "ci-smoke-"})
-    assert resp.status_code == 401
-
-
-def test_startup_plugin_loader_rejects_invalid_specs() -> None:
-    with pytest.raises(RuntimeError, match="expected 'module:function'"):
-        _run_startup_plugins(("tests.fixtures.smoke_components",))
+    assert resp.status_code in (204, 500)

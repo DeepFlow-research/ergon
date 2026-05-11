@@ -12,7 +12,11 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord, RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import (
+    ExperimentRecord,
+    RunRecord,
+    RunTaskExecution,
+)
 from sqlmodel import select
 
 _MINIMAL_SWEBENCH_PAYLOAD: dict[str, object] = {

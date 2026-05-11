@@ -37,7 +37,6 @@ def _make_context(*, with_node_id: bool = True) -> WorkerContext:
     return WorkerContext(
         run_id=uuid4(),
         definition_id=uuid4(),
-        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="fake-sandbox",
         node_id=uuid4() if with_node_id else None,
@@ -46,6 +45,7 @@ def _make_context(*, with_node_id: bool = True) -> WorkerContext:
 
 def _make_task() -> Task:
     return Task(
+        task_id=uuid4(),
         task_slug="test-task",
         instance_key="default",
         description="Test research question",
@@ -64,8 +64,6 @@ class TestResearcherWorker:
         worker = ResearchRubricsResearcherWorker(
             name="test-researcher",
             model=None,
-            task_id=uuid4(),
-            sandbox_id="test-sandbox",
         )
         assert worker.type_slug == "researchrubrics-researcher"
         assert worker.tools == []
@@ -76,8 +74,6 @@ class TestResearcherWorker:
         worker = ResearchRubricsResearcherWorker(
             name="test-researcher",
             model="openai:gpt-4o",
-            task_id=context.task_id,
-            sandbox_id=context.sandbox_id,
         )
         task = _make_task()
 
@@ -129,8 +125,6 @@ class TestResearcherWorker:
         worker = ResearchRubricsWorkflowCliReActWorker(
             name="test-researcher",
             model="openai:gpt-4o",
-            task_id=context.task_id,
-            sandbox_id=context.sandbox_id,
         )
         task = _make_task()
 
@@ -178,14 +172,13 @@ class TestResearcherWorker:
         worker = ResearchRubricsResearcherWorker(
             name="test-researcher",
             model=None,
-            task_id=task_id,
-            sandbox_id="test-sandbox",
         )
         manager = MagicMock()
         manager.write_report_file = AsyncMock()
 
         result = await worker._run_sandbox_report_skill(
             manager=manager,
+            task_id=task_id,
             request=ReportWriteSkillRequest(
                 relative_path="final_output/report.md",
                 content="# Report",
@@ -205,14 +198,13 @@ class TestResearcherWorker:
         worker = ResearchRubricsResearcherWorker(
             name="test-researcher",
             model=None,
-            task_id=task_id,
-            sandbox_id="test-sandbox",
         )
         manager = MagicMock()
         manager.read_report_file = AsyncMock(return_value="# Existing")
 
         result = await worker._run_sandbox_report_skill(
             manager=manager,
+            task_id=task_id,
             request=ReportReadSkillRequest(relative_path="final_output/report.md"),
         )
 

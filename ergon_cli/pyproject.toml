@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "CLI for Ergon experiment orchestration"
 license = "Apache-2.0"
 requires-python = ">=3.13"
-dependencies = ["ergon-core", "ergon-builtins[all]"]
+dependencies = ["ergon-core", "ergon-builtins[all]", "ergon-ingestion"]
 
 [project.optional-dependencies]
 training = ["ergon-infra[all]"]

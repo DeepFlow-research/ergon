@@ -73,6 +73,7 @@ async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) 
             agent_reasoning="output",
         ),
         Task(
+            task_id=uuid4(),
             task_slug="task",
             instance_key="default",
             description="input",

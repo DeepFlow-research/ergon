@@ -20,8 +20,8 @@ Sad-path leaves (``AlwaysFailSubworker`` in Phase C) raise inside
 See docs/superpowers/plans/test-refactor/01-fixtures.md §2.4.
 """
 
-from collections.abc import AsyncGenerator
-from typing import ClassVar
+from collections.abc import AsyncGenerator, Mapping
+from typing import Any, ClassVar
 from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
@@ -60,10 +60,9 @@ class BaseSmokeLeafWorker(Worker):
         *,
         name: str,
         model: str | None,
-        task_id: UUID,
-        sandbox_id: str,
+        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
-        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
+        super().__init__(name=name, model=model, metadata=metadata)
         self._last_result: SubworkerResult | None = None
 
     async def execute(

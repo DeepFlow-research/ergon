@@ -8,7 +8,11 @@ import pytest
 from ergon_builtins.workers.baselines.react_worker import ReActWorker, _worker_output_from_chunks
 from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput
-from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk, ToolCallPart
+from ergon_core.core.domain.generation.context_parts import (
+    AssistantTextPart,
+    ContextPartChunk,
+    ToolCallPart,
+)
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
 
@@ -21,7 +25,7 @@ def test_no_adapter_kwarg() -> None:
 
 @pytest.mark.parametrize(
     "kwarg",
-    ["name", "model", "task_id", "sandbox_id", "tools", "system_prompt", "max_iterations"],
+    ["name", "model", "tools", "system_prompt", "max_iterations"],
 )
 def test_all_kwargs_required_and_keyword_only(kwarg: str) -> None:
     sig = inspect.signature(ReActWorker.__init__)
@@ -44,8 +48,6 @@ def test_construct_with_minimal_explicit_kwargs() -> None:
     worker = ReActWorker(
         name="unit",
         model=None,
-        task_id=UUID(int=1),
-        sandbox_id="test-sandbox",
         tools=[],
         system_prompt=None,
         max_iterations=1,
@@ -167,6 +169,7 @@ class _DepsWorker(ReActWorker):
 
 def _minimal_task() -> Task:
     return Task(
+        task_id=UUID(int=6),
         task_slug="unit-task",
         instance_key="unit-instance",
         description="Unit task",
@@ -178,7 +181,6 @@ def _minimal_context() -> WorkerContext:
     return WorkerContext(
         run_id=UUID(int=3),
         definition_id=UUID(int=4),
-        task_id=UUID(int=2),
         execution_id=UUID(int=5),
         sandbox_id="test-sandbox",
         node_id=UUID(int=6),
@@ -203,8 +205,6 @@ async def test_react_worker_yields_partial_chunk_before_reraising_agent_iter_fai
     worker = ReActWorker(
         name="unit",
         model=None,
-        task_id=UUID(int=1),
-        sandbox_id="test-sandbox",
         tools=[],
         system_prompt=None,
         max_iterations=10,
@@ -237,8 +237,6 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
     worker = _DepsWorker(
         name="unit",
         model=None,
-        task_id=UUID(int=1),
-        sandbox_id="test-sandbox",
         tools=[],
         system_prompt=None,
         max_iterations=10,

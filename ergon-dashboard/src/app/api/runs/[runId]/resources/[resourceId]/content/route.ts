@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { config } from "@/lib/config";
 import { fetchErgonApi } from "@/lib/serverApi";
 
 interface RouteContext {
@@ -19,17 +18,9 @@ interface RouteContext {
 export async function GET(_request: Request, context: RouteContext) {
   const { runId, resourceId } = await context.params;
 
-  if (config.enableTestHarness) {
-    // The test harness doesn't persist resources; surface a 404 so viewers
-    // render a "not found" state rather than a cryptic proxy error.
-    return NextResponse.json(
-      { detail: "Resource content unavailable in test harness mode" },
-      { status: 404 },
-    );
-  }
-
   try {
     const upstream = await fetchErgonApi(`/runs/${runId}/resources/${resourceId}/content`, {
+      timeoutMs: 30_000,
       headers: {
         Accept: "*/*",
       },

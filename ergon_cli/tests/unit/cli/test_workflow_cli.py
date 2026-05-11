@@ -41,7 +41,7 @@ class _ManagingService:
         task_slug,
         description,
         assigned_worker_slug,
-        depends_on_task_slugs,
+        dry_run,
     ):
         assert isinstance(session, _Session)
         self.added = {
@@ -50,7 +50,7 @@ class _ManagingService:
             "task_slug": task_slug,
             "description": description,
             "assigned_worker_slug": assigned_worker_slug,
-            "depends_on_task_slugs": depends_on_task_slugs,
+            "dry_run": dry_run,
         }
 
         return AddSubtaskResult(
@@ -205,7 +205,6 @@ def test_manage_add_task_creates_subtask_with_injected_parent_context() -> None:
         "manage add-task --task-slug source-scout "
         "--worker researchrubrics-researcher "
         "--description 'Find authoritative sources' "
-        "--depends-on-task-slug prior-step "
         "--format json",
         context=WorkflowCommandContext(
             run_id=run_id,
@@ -227,5 +226,5 @@ def test_manage_add_task_creates_subtask_with_injected_parent_context() -> None:
         "task_slug": "source-scout",
         "description": "Find authoritative sources",
         "assigned_worker_slug": "researchrubrics-researcher",
-        "depends_on_task_slugs": ["prior-step"],
+        "dry_run": False,
     }

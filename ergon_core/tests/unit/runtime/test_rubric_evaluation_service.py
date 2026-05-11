@@ -74,6 +74,7 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
         ),
         evaluator,
         Task(
+            task_id=uuid4(),
             task_slug="task",
             instance_key="default",
             description="Task",

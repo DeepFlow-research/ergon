@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Group, Panel, Separator, type Layout } from "react-resizable-panels";
+import { Group, Panel, Separator } from "react-resizable-panels";
 
 import { DAGCanvas } from "@/components/dag/DAGCanvas";
 import { StatusBadge } from "@/components/common/StatusBadge";
@@ -17,46 +17,15 @@ import {
   parseGraphMutationDtoArray,
   type GraphMutationDto,
 } from "@/features/graph/contracts/graphMutations";
-import { createReplayInitialState, replayToSequence } from "@/features/graph/state/graphMutationReducer";
 import { useRunState } from "@/hooks/useRunState";
 import { buildRunEvents } from "@/lib/runEvents";
 import { RunLifecycleStatus, SerializedWorkflowRunState, TaskStatus } from "@/lib/types";
-
-const VERTICAL_LAYOUT_STORAGE_KEY = "ergon-run-debugger-vertical-layout:v1";
-const HORIZONTAL_LAYOUT_STORAGE_KEY = "ergon-run-debugger-horizontal-layout:v1";
-const DEFAULT_VERTICAL_LAYOUT: Layout = { "graph-workspace": 62, timeline: 38 };
-const DEFAULT_HORIZONTAL_LAYOUT: Layout = { graph: 58, workspace: 42 };
-
-function loadPanelLayout(storageKey: string, fallback: Layout): Layout {
-  if (typeof window === "undefined") return fallback;
-
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Layout;
-    return Object.fromEntries(
-      Object.entries(fallback).map(([id, defaultSize]) => {
-        const size = parsed[id];
-        return [id, Number.isFinite(size) ? size : defaultSize];
-      }),
-    );
-  } catch {
-    return fallback;
-  }
-}
-
-function savePanelLayout(storageKey: string, layout: Layout): void {
-  try {
-    window.localStorage.setItem(storageKey, JSON.stringify(layout));
-  } catch {
-    // Ignore storage failures; resizing should still work for the session.
-  }
-}
-
-function panelPercent(layout: Layout, id: string, fallback: number): string {
-  const size = layout[id];
-  return `${Number.isFinite(size) ? size : fallback}%`;
-}
+import {
+  nearestMutationAtOrBefore,
+  useRunDisplayState,
+} from "@/components/run/useRunDisplayState";
+import { useRunKeyboardShortcuts } from "@/components/run/useRunKeyboardShortcuts";
+import { panelPercent, useRunPanelLayout } from "@/components/run/useRunPanelLayout";
 
 function formatSeconds(value: number | null): string {
   if (value == null) return "—";
@@ -69,62 +38,51 @@ function formatPercent(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function nearestMutationAtOrBefore(
-  mutations: GraphMutationDto[],
-  sequence: number,
-): GraphMutationDto | null {
-  let selected: GraphMutationDto | null = null;
-  for (const mutation of mutations) {
-    if (mutation.sequence > sequence) break;
-    selected = mutation;
-  }
-  return selected ?? mutations[0] ?? null;
-}
-
 export function RunWorkspacePage({
   runId,
   cohortId,
+  cohortLabel,
   initialRunState = null,
   ssrError = null,
 }: {
   runId: string;
   cohortId?: string;
+  cohortLabel?: string | null;
   initialRunState?: SerializedWorkflowRunState | null;
   ssrError?: string | null;
 }) {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | null>(null);
   const [isStreamOpen, setIsStreamOpen] = useState(false);
-  const [verticalLayout, setVerticalLayout] = useState<Layout>(() =>
-    loadPanelLayout(VERTICAL_LAYOUT_STORAGE_KEY, DEFAULT_VERTICAL_LAYOUT),
-  );
-  const [horizontalLayout, setHorizontalLayout] = useState<Layout>(() =>
-    loadPanelLayout(HORIZONTAL_LAYOUT_STORAGE_KEY, DEFAULT_HORIZONTAL_LAYOUT),
-  );
-  const [hasLoadedPanelLayouts, setHasLoadedPanelLayouts] = useState(false);
+  const {
+    verticalLayout,
+    setVerticalLayout,
+    horizontalLayout,
+    setHorizontalLayout,
+    hasLoadedPanelLayouts,
+  } = useRunPanelLayout();
   const { runState, isLoading, error, isSubscribed } = useRunState(runId, initialRunState);
 
-  // A null snapshot means the graph follows live state; a sequence replays
-  // mutations to that point.
-  const [snapshotSequence, setSnapshotSequence] = useState<number | null>(null);
-  const currentSequence = snapshotSequence ?? 0;
   const [mutations, setMutations] = useState<GraphMutationDto[]>([]);
   const requestedSequenceRef = useRef<number | null>(null);
   const pendingActivityResolutionRef = useRef<RunActivity | null>(null);
   const selectedActivityIdRef = useRef<string | null>(null);
   const mutationsLoadedRef = useRef(false);
 
+  const {
+    displayState,
+    selectedActivityId,
+    setSelectedActivityId,
+    snapshotSequence,
+    setSnapshotSequence,
+    currentSequence,
+    selectedTimelineTime,
+  } = useRunDisplayState(runState, mutations);
+
   useEffect(() => {
     selectedActivityIdRef.current = selectedActivityId;
   }, [selectedActivityId]);
-
-  useEffect(() => {
-    setVerticalLayout(loadPanelLayout(VERTICAL_LAYOUT_STORAGE_KEY, DEFAULT_VERTICAL_LAYOUT));
-    setHorizontalLayout(loadPanelLayout(HORIZONTAL_LAYOUT_STORAGE_KEY, DEFAULT_HORIZONTAL_LAYOUT));
-    setHasLoadedPanelLayouts(true);
-  }, []);
 
   // Fetch mutations once per run load so snapshot selection is always ready.
   useEffect(() => {
@@ -165,19 +123,7 @@ export function RunWorkspacePage({
     return () => {
       cancelled = true;
     };
-  }, [runId]);
-
-  // Build display state: replay only for an explicit snapshot; otherwise live.
-  const displayState = useMemo(() => {
-    if (snapshotSequence === null || mutations.length === 0) return runState;
-    if (!runState) return runState;
-    const replayBaseState = createReplayInitialState(runState, mutations, snapshotSequence);
-    return replayToSequence(
-      mutations,
-      snapshotSequence,
-      replayBaseState,
-    );
-  }, [runState, mutations, snapshotSequence]);
+  }, [runId, setSnapshotSequence]);
 
   const selectedTask = useMemo(() => {
     if (!displayState || !selectedTaskId) return null;
@@ -227,11 +173,6 @@ export function RunWorkspacePage({
     [activities, selectedActivityId],
   );
 
-  const selectedTimelineTime = useMemo(() => {
-    if (snapshotSequence === null) return null;
-    return nearestMutationAtOrBefore(mutations, snapshotSequence)?.created_at ?? null;
-  }, [mutations, snapshotSequence]);
-
   const highlightedTaskIds = useMemo(() => {
     const ids = new Set<string>();
     if (selectedTaskId) ids.add(selectedTaskId);
@@ -239,64 +180,16 @@ export function RunWorkspacePage({
     return ids;
   }, [selectedActivity, selectedTaskId]);
 
-  // D7: keyboard shortcuts — Esc unwinds UI state, `e` toggles event stream,
-  // `1-6` filters by lifecycle status.
-  useEffect(() => {
-    const STATUS_ORDER: TaskStatus[] = [
-      TaskStatus.PENDING,
-      TaskStatus.READY,
-      TaskStatus.RUNNING,
-      TaskStatus.COMPLETED,
-      TaskStatus.FAILED,
-      TaskStatus.CANCELLED,
-    ];
-    const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target) {
-        const tag = target.tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) {
-          return;
-        }
-      }
-
-      if (e.key === "Escape") {
-        if (selectedTaskId) { setSelectedTaskId(null); return; }
-        if (snapshotSequence !== null) { setSnapshotSequence(null); return; }
-        if (statusFilter) { setStatusFilter(null); return; }
-        return;
-      }
-
-      if (e.key === "e" || e.key === "E") {
-        setIsStreamOpen((prev) => !prev);
-        return;
-      }
-
-      if (e.key === "ArrowLeft" && snapshotSequence !== null) {
-        const idx = mutations.findIndex((m) => m.sequence === snapshotSequence);
-        if (idx > 0) setSnapshotSequence(mutations[idx - 1].sequence);
-        return;
-      }
-      if (e.key === "ArrowRight" && snapshotSequence !== null) {
-        const idx = mutations.findIndex((m) => m.sequence === snapshotSequence);
-        if (idx >= 0 && idx < mutations.length - 1) setSnapshotSequence(mutations[idx + 1].sequence);
-        return;
-      }
-
-      if ((e.key === "d" || e.key === "D") && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        if (selectedTaskId) setSelectedTaskId(null);
-        return;
-      }
-
-      const idx = Number(e.key) - 1;
-      if (!Number.isNaN(idx) && idx >= 0 && idx < STATUS_ORDER.length) {
-        const next = STATUS_ORDER[idx];
-        setStatusFilter((prev) => (prev === next ? null : next));
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [selectedTaskId, statusFilter, mutations, snapshotSequence]);
+  useRunKeyboardShortcuts({
+    selectedTaskId,
+    clearSelectedTask: () => setSelectedTaskId(null),
+    snapshotSequence,
+    setSnapshotSequence,
+    statusFilter,
+    setStatusFilter,
+    toggleEventStream: () => setIsStreamOpen((prev) => !prev),
+    mutations,
+  });
 
   useEffect(() => {
     if (!selectedTaskId || !displayState) return;
@@ -358,7 +251,7 @@ export function RunWorkspacePage({
                   className="max-w-[180px] truncate hover:text-[var(--ink)]"
                   data-testid="run-breadcrumb-cohort"
                 >
-                  Cohort
+                  {cohortLabel ?? "Cohort"}
                 </Link>
                 <span>›</span>
               </>
@@ -471,7 +364,6 @@ export function RunWorkspacePage({
           onLayoutChange={(layout) => {
             if (activities.length > 0) {
               setVerticalLayout(layout);
-              savePanelLayout(VERTICAL_LAYOUT_STORAGE_KEY, layout);
             }
           }}
           className="size-full"
@@ -494,7 +386,6 @@ export function RunWorkspacePage({
               onLayoutChange={(layout) => {
                 if (isInspectorOpen) {
                   setHorizontalLayout(layout);
-                  savePanelLayout(HORIZONTAL_LAYOUT_STORAGE_KEY, layout);
                 }
               }}
               className="size-full"

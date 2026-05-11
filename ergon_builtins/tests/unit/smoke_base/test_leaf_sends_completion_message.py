@@ -36,9 +36,13 @@ def _leaf() -> _Leaf:
     return _Leaf(
         name="unit-test",
         model=None,
-        task_id=uuid4(),
-        sandbox_id="sbx-unit",
     )
+
+
+def test_leaf_worker_accepts_catalog_metadata() -> None:
+    leaf = _Leaf(name="unit-test", model=None, metadata={"source": "catalog"})
+
+    assert leaf.metadata == {"source": "catalog"}
 
 
 def _context(*, node_id=None, execution_id=None, run_id=None):
@@ -130,8 +134,8 @@ async def test_send_completion_message_not_called_when_subworker_raises(
         type_slug = "unit-test-leaf-failing"
         subworker_cls = _FailingSubworker
 
-    leaf = _FailingLeaf(name="unit-test", model=None, task_id=uuid4(), sandbox_id="sbx-unit")
-    task = Task(task_slug="l_fail", instance_key="default", description="x")
+    leaf = _FailingLeaf(name="unit-test", model=None)
+    task = Task(task_id=uuid4(), task_slug="l_fail", instance_key="default", description="x")
 
     with pytest.raises(RuntimeError, match="sad-path"):
         async for _ in leaf.execute(task, context=_context()):

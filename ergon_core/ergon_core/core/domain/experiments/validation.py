@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING
 
-from ergon_core.api.benchmark import Benchmark, Task
+from ergon_core.api.benchmark import Benchmark, TaskSpec
 from ergon_core.api.rubric import Evaluator
 from ergon_core.core.domain.experiments.worker_spec import WorkerSpec
 
@@ -43,7 +43,7 @@ def _validate_required_evaluators(
 
 
 def _validate_instances(
-    instances: Mapping[str, Sequence[Task]],
+    instances: Mapping[str, Sequence[TaskSpec]],
     evaluator_keys: set[str],
 ) -> dict[str, set[str]]:
     all_task_slugs_by_instance: dict[str, set[str]] = {}
@@ -54,7 +54,7 @@ def _validate_instances(
     return all_task_slugs_by_instance
 
 
-def _collect_task_slugs(instance_key: str, tasks: Sequence[Task]) -> set[str]:
+def _collect_task_slugs(instance_key: str, tasks: Sequence[TaskSpec]) -> set[str]:
     task_slugs: set[str] = set()
     for task in tasks:
         if task.instance_key != instance_key:
@@ -70,7 +70,7 @@ def _collect_task_slugs(instance_key: str, tasks: Sequence[Task]) -> set[str]:
 
 def _validate_task_links(
     instance_key: str,
-    tasks: Sequence[Task],
+    tasks: Sequence[TaskSpec],
     task_slugs: set[str],
     evaluator_keys: set[str],
 ) -> None:
@@ -80,14 +80,14 @@ def _validate_task_links(
         _validate_task_evaluators(task, evaluator_keys)
 
 
-def _validate_parent_task(instance_key: str, task: Task, task_slugs: set[str]) -> None:
+def _validate_parent_task(instance_key: str, task: TaskSpec, task_slugs: set[str]) -> None:
     if task.parent_task_slug is not None and task.parent_task_slug not in task_slugs:
         raise ValueError(
             f"Unknown parent_task_slug {task.parent_task_slug!r} in instance {instance_key!r}"
         )
 
 
-def _validate_dependency_tasks(instance_key: str, task: Task, task_slugs: set[str]) -> None:
+def _validate_dependency_tasks(instance_key: str, task: TaskSpec, task_slugs: set[str]) -> None:
     for dep_slug in task.dependency_task_slugs:
         if dep_slug not in task_slugs:
             raise ValueError(
@@ -96,7 +96,7 @@ def _validate_dependency_tasks(instance_key: str, task: Task, task_slugs: set[st
             )
 
 
-def _validate_task_evaluators(task: Task, evaluator_keys: set[str]) -> None:
+def _validate_task_evaluators(task: TaskSpec, evaluator_keys: set[str]) -> None:
     for eval_key in task.evaluator_binding_keys:
         if eval_key not in evaluator_keys:
             raise ValueError(

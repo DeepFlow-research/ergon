@@ -28,6 +28,28 @@ The Pydantic registry remains useful as an authoring and publishing helper, but 
 
 ## ID Model
 
+Use two task shapes, because authoring and runtime happen at different times:
+
+```python
+TaskSpec            # definition/authoring shape; no runtime id
+Task.task_id        # worker-facing runtime id
+Task.task_id == RunGraphNode.id
+```
+
+Benchmark code defines static task specs before any run exists. Those specs are persisted as `ExperimentDefinitionTask` rows. When a run starts, core materializes/copies those definition tasks into `RunGraphNode` rows. Worker execution only receives the runtime `Task` built from a `RunGraphNode`.
+
+The faithful lifecycle is:
+
+```text
+Benchmark.build_instances() returns TaskSpec objects
+        ↓
+ExperimentDefinitionTask rows store the static template
+        ↓
+Run launch creates RunGraphNode rows for that run
+        ↓
+Worker receives Task(task_id=RunGraphNode.id, ...)
+```
+
 Use one worker-facing task identity:
 
 ```python
@@ -40,11 +62,12 @@ Use explicit names for internal/template identity:
 
 ```python
 definition_id       # ExperimentDefinition.id, the static experiment template
+definition_task_id  # ExperimentDefinitionTask.id, persisted template link only
 node_id             # RunGraphNode.id, the runtime task identity
 execution_id        # RunTaskExecution.id, one attempt to execute a node
 ```
 
-Do not pass `definition_task_id` through public `Task` or runtime event/job payloads. Keep it only as an optional persisted relationship on rows such as `RunGraphNode` / `RunTaskExecution` when the application layer needs static-template joins. If runtime needs definition data, resolve it from `node_id` through the persisted graph/run links (`RunGraphNode.run_id` -> `RunRecord.workflow_definition_id` -> `ExperimentDefinition`) or use the already available run/definition context in the application layer.
+Do not pass `definition_task_id` through public worker-facing `Task` or runtime event/job payloads. Keep it only as an optional persisted relationship on rows such as `RunGraphNode` / `RunTaskExecution` when the application layer needs static-template joins. If runtime needs definition data, resolve it from `node_id` by loading `RunGraphNode` and following `RunGraphNode.definition_task_id`, or by using the already available run/definition context in the application layer.
 
 ## File Structure
 
@@ -770,26 +793,73 @@ Expected: PASS.
 
 ---
 
-### Task 7: Move Execution Identity Out Of Worker Construction
+### Task 7: Split Definition Task Specs From Runtime Worker Tasks
 
 **Files:**
 - Modify: `ergon_core/ergon_core/api/benchmark/task.py`
+- Modify: `ergon_core/ergon_core/api/benchmark/__init__.py`
 - Modify: `ergon_core/ergon_core/api/worker/context.py`
 - Modify: `ergon_core/ergon_core/api/worker/worker.py`
 - Modify: `ergon_core/ergon_core/core/application/events/task_events.py`
 - Modify: `ergon_core/ergon_core/core/application/jobs/models.py`
 - Modify: `ergon_core/ergon_core/core/application/workflows/orchestration.py`
+- Modify: `ergon_core/ergon_core/core/application/experiments/definition_writer.py`
 - Modify: `ergon_core/ergon_core/core/application/jobs/execute_task.py`
 - Modify worker subclasses/factories that still require `task_id` or `sandbox_id`
+- Test: `ergon_core/tests/unit/api/test_task_spec_contract.py`
 - Test: `ergon_core/tests/unit/api/test_worker_contract.py`
 
-- [ ] **Step 1: Write worker construction contract tests**
+- [ ] **Step 1: Write task spec and worker task contract tests**
+
+Create `ergon_core/tests/unit/api/test_task_spec_contract.py`:
+
+```python
+from uuid import uuid4
+
+import pytest
+from pydantic import ValidationError
+
+from ergon_core.api.benchmark import EmptyTaskPayload, Task, TaskSpec
+
+
+def test_task_spec_is_definition_time_and_has_no_runtime_id() -> None:
+    spec = TaskSpec(
+        task_slug="root",
+        instance_key="default",
+        description="Definition-time task",
+        task_payload=EmptyTaskPayload(),
+    )
+
+    assert spec.task_slug == "root"
+    assert not hasattr(spec, "task_id")
+
+
+def test_worker_task_requires_runtime_graph_node_identity() -> None:
+    node_id = uuid4()
+
+    task = Task(
+        task_id=node_id,
+        task_slug="root",
+        instance_key="default",
+        description="Runtime task",
+    )
+
+    assert task.task_id == node_id
+
+
+def test_worker_task_rejects_missing_runtime_identity() -> None:
+    with pytest.raises(ValidationError, match="task_id"):
+        Task(
+            task_slug="root",
+            instance_key="default",
+            description="Runtime task",
+        )
+```
 
 Create `ergon_core/tests/unit/api/test_worker_contract.py`:
 
 ```python
 from collections.abc import AsyncGenerator
-from uuid import uuid4
 
 from ergon_core.api.benchmark import Task
 from ergon_core.api.worker import Worker, WorkerContext, WorkerOutput
@@ -814,46 +884,138 @@ def test_worker_constructor_has_only_authoring_configuration() -> None:
     assert isinstance(worker, ContractSmokeWorker)
     assert worker.name == "primary"
     assert worker.model == "stub:constant"
-
-
-def test_task_carries_non_null_runtime_task_identity() -> None:
-    node_id = uuid4()
-
-    task = Task(
-        task_id=node_id,
-        task_slug="root",
-        instance_key="default",
-        description="Run root task",
-    )
-
-    assert task.task_id == node_id
 ```
 
-- [ ] **Step 2: Run worker contract tests and verify they fail**
+- [ ] **Step 2: Run task and worker contract tests and verify they fail**
 
 Run:
 
 ```bash
-uv run pytest ergon_core/tests/unit/api/test_worker_contract.py -q
+uv run pytest ergon_core/tests/unit/api/test_task_spec_contract.py ergon_core/tests/unit/api/test_worker_contract.py -q
 ```
 
-Expected: FAIL because `Task.task_id` does not exist yet and `Worker.__init__` still requires `task_id` and `sandbox_id`.
+Expected: FAIL because `TaskSpec` does not exist yet, worker-facing `Task.task_id` is not required yet, and `Worker.__init__` still requires `task_id` and `sandbox_id`.
 
-- [ ] **Step 3: Add non-null task identity to `Task`**
+- [ ] **Step 3: Add `TaskSpec` for definition-time authoring and make `Task` runtime-only**
 
 Modify `ergon_core/ergon_core/api/benchmark/task.py`:
 
 ```python
+from typing import Generic, TypeVar
 from uuid import UUID
 
+from pydantic import BaseModel, Field
+
+
+class EmptyTaskPayload(BaseModel):
+    """Default payload for benchmarks that do not need task-specific data."""
+
+    model_config = {"extra": "forbid", "frozen": True}
+
+
+PayloadT = TypeVar(
+    "PayloadT",
+    bound=BaseModel,
+    default=EmptyTaskPayload,
+    covariant=True,
+)
+
+
+class TaskSpec(BaseModel, Generic[PayloadT]):
+    """Definition-time task template produced by benchmark authoring code."""
+
+    model_config = {"frozen": True}
+
+    task_slug: str
+    instance_key: str
+    description: str
+    parent_task_slug: str | None = None
+    dependency_task_slugs: tuple[str, ...] = ()
+    evaluator_binding_keys: tuple[str, ...] = ()
+    task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # ty: ignore[invalid-assignment]
+
+
 class Task(BaseModel, Generic[PayloadT]):
+    """Runtime task passed to Worker.execute()."""
+
+    model_config = {"frozen": True}
+
     task_id: UUID
     task_slug: str
     instance_key: str
     description: str
+    parent_task_slug: str | None = None
+    dependency_task_slugs: tuple[str, ...] = ()
+    evaluator_binding_keys: tuple[str, ...] = ()
+    task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # ty: ignore[invalid-assignment]
 ```
 
+Modify `ergon_core/ergon_core/api/benchmark/__init__.py` to export both names:
+
+```python
+from ergon_core.api.benchmark.task import EmptyTaskPayload, Task, TaskSpec
+```
+
+Benchmark authoring code should construct `TaskSpec`, because no run graph node exists yet. Worker execution code should construct `Task`, because it has a concrete `RunGraphNode.id`.
+
 `Task.task_id` is the worker-facing runtime task identity. It must always be `RunGraphNode.id`, not `ExperimentDefinitionTask.id`. Static definition tasks and dynamic subtasks both have a `RunGraphNode`, so worker authors get one non-null task id for every execution.
+
+- [ ] **Step 3a: Update benchmark authoring APIs to return `TaskSpec`**
+
+Update benchmark protocol/type hints and tests so `Benchmark.build_instances()` returns definition-time specs:
+
+```python
+from ergon_core.api.benchmark import TaskSpec
+
+def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
+    return {
+        "sample-1": [
+            TaskSpec(
+                task_slug="root",
+                instance_key="sample-1",
+                description="Solve sample 1",
+            )
+        ]
+    }
+```
+
+Update `ergon_core/ergon_core/core/application/experiments/definition_writer.py` to persist `TaskSpec` objects into `ExperimentDefinitionTask` rows. Do not invent a `task_id` during this phase.
+
+The persistence mapping should remain:
+
+```python
+ExperimentDefinitionTask(
+    id=uuid4(),
+    experiment_definition_id=definition_id,
+    instance_id=instance_id,
+    task_slug=spec.task_slug,
+    parent_task_id=parent_task_id,
+    description=spec.description,
+    task_payload_json=spec.task_payload.model_dump(mode="json"),
+)
+```
+
+- [ ] **Step 3b: Keep launch/materialization as the definition-to-run copy boundary**
+
+When a run starts, core must materialize static definition tasks into `RunGraphNode` rows. Preserve the persisted template link but do not pass it through worker-facing payloads:
+
+```python
+RunGraphNode(
+    run_id=run_id,
+    definition_task_id=definition_task.id,
+    instance_key=instance.instance_key,
+    task_slug=definition_task.task_slug,
+    description=definition_task.description,
+    status=TaskExecutionStatus.PENDING,
+    assigned_worker_slug=assigned_worker_slug,
+    parent_node_id=parent_node_id,
+    level=level,
+)
+```
+
+Dynamic subtasks skip the definition layer and insert directly into `RunGraphNode` with `definition_task_id=None`.
+
+- [ ] **Step 3c: Remove nullable task identity from runtime payloads**
 
 Remove the old nullable event/request `task_id` from runtime payloads. Runtime events/jobs should carry `node_id` as the task identity:
 
@@ -869,8 +1031,6 @@ context.sandbox_id  # non-null sandbox identity
 ```
 
 If helper tools need a sandbox/task key, pass `task.task_id` to those helpers explicitly when building them. Do not use `WorkerContext.task_id` as a second, nullable source of truth.
-
-- [ ] **Step 3b: Remove nullable task identity from runtime payloads**
 
 Remove internal event and job fields that currently use nullable `task_id` for `ExperimentDefinitionTask.id`:
 
@@ -932,12 +1092,12 @@ async def execute(self, task: Task, *, context: WorkerContext) -> AsyncGenerator
 
 If a sandbox manager currently only looks up sandboxes by definition task id, add a public lookup/reconnect path by `sandbox_id`. Do not force worker construction to know about sandbox registry keys.
 
-- [ ] **Step 6: Run worker contract tests**
+- [ ] **Step 6: Run task spec and worker contract tests**
 
 Run:
 
 ```bash
-uv run pytest ergon_core/tests/unit/api/test_worker_contract.py -q
+uv run pytest ergon_core/tests/unit/api/test_task_spec_contract.py ergon_core/tests/unit/api/test_worker_contract.py -q
 ```
 
 Expected: PASS.

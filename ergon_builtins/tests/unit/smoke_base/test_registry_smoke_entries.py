@@ -6,8 +6,6 @@ registered as of the current phase — update the expected sets when
 adding env fixtures.
 """
 
-import pytest
-
 
 def _registry_maps():
     from ergon_core.api.registry import registry
@@ -82,9 +80,7 @@ def test_swebench_slugs_registered() -> None:
     assert "swebench-smoke-criterion" in evaluators
 
 
-def test_smoke_benchmarks_are_test_owned_when_harness_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_smoke_benchmarks_are_test_owned_when_harness_enabled() -> None:
     from ergon_builtins.registry import register_builtins
     from ergon_core.api.registry import registry
     from tests.fixtures.smoke_components import register_smoke_fixtures
@@ -94,12 +90,13 @@ def test_smoke_benchmarks_are_test_owned_when_harness_enabled(
     slugs = ("researchrubrics", "minif2f", "swebench-verified")
     original_benchmarks = {slug: registry.benchmarks[slug] for slug in slugs}
     original_managers = {slug: registry.sandbox_managers.get(slug) for slug in slugs}
-    monkeypatch.setenv("ENABLE_TEST_HARNESS", "1")
 
     try:
         register_smoke_fixtures()
         for slug in slugs:
-            assert registry.benchmarks[slug].__module__.startswith("tests.fixtures.smoke_components")
+            assert registry.benchmarks[slug].__module__.startswith(
+                "tests.fixtures.smoke_components"
+            )
             assert registry.sandbox_managers[slug] is SmokeSandboxManager
     finally:
         registry.benchmarks.update(original_benchmarks)

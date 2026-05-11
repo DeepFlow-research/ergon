@@ -1,9 +1,8 @@
 /**
  * Backend test-harness client (distinct from the dashboard's
- * /api/test/dashboard/* client in ./testHarnessClient.ts).
+ * /api/__danger__/test-harness/dashboard/* client in ./testHarnessClient.ts).
  *
- * Hits the FastAPI backend at ERGON_API_BASE_URL, gated by
- * X-Test-Secret: TEST_HARNESS_SECRET. Read-only; smoke specs use this to
+ * Hits the FastAPI backend at ERGON_API_BASE_URL. Read-only; smoke specs use this to
  * assert against real run state by polling the backend directly (not
  * through the dashboard's Socket.io stream).
  *
@@ -50,19 +49,11 @@ export interface BackendCohortRun {
 }
 
 export class BackendHarnessClient {
-  constructor(
-    private readonly baseUrl: string,
-    private readonly secret: string,
-  ) {}
-
-  private headers(): HeadersInit {
-    return { "X-Test-Secret": this.secret };
-  }
+  constructor(private readonly baseUrl: string) {}
 
   async getRunState(runId: string): Promise<BackendRunState> {
     const r = await fetch(
-      `${this.baseUrl}/api/test/read/run/${runId}/state`,
-      { headers: this.headers() },
+      `${this.baseUrl}/api/__danger__/test-harness/read/run/${runId}/state`,
     );
     if (!r.ok) {
       throw new Error(`harness ${r.status}: ${await r.text()}`);
@@ -72,8 +63,7 @@ export class BackendHarnessClient {
 
   async getCohortRuns(cohortKey: string): Promise<BackendCohortRun[]> {
     const r = await fetch(
-      `${this.baseUrl}/api/test/read/cohort/${encodeURIComponent(cohortKey)}/runs`,
-      { headers: this.headers() },
+      `${this.baseUrl}/api/__danger__/test-harness/read/cohort/${encodeURIComponent(cohortKey)}/runs`,
     );
     if (!r.ok) {
       throw new Error(`harness ${r.status}: ${await r.text()}`);
@@ -83,8 +73,7 @@ export class BackendHarnessClient {
 
   async getCohortId(cohortKey: string): Promise<string> {
     const r = await fetch(
-      `${this.baseUrl}/api/test/read/cohort/${encodeURIComponent(cohortKey)}/id`,
-      { headers: this.headers() },
+      `${this.baseUrl}/api/__danger__/test-harness/read/cohort/${encodeURIComponent(cohortKey)}/id`,
     );
     if (!r.ok) {
       throw new Error(`harness ${r.status}: ${await r.text()}`);

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
-from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
+from ergon_core.api.benchmark.task import EmptyTaskPayload, TaskSpec
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.infrastructure.dependencies import check_packages
 from pydantic import BaseModel
@@ -37,7 +37,7 @@ class Benchmark(ABC):
         ] = dict(metadata or {})
 
     @abstractmethod
-    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
         """Materialize benchmark instances."""
         ...
 

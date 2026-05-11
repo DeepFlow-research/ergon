@@ -31,7 +31,10 @@ from ergon_core.core.application.evaluation.models import (
     TaskEvaluationContext,
 )
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
-from ergon_core.core.application.read_models.models import RunEvaluationCriterionDto, RunTaskEvaluationDto
+from ergon_core.core.application.read_models.models import (
+    RunEvaluationCriterionDto,
+    RunTaskEvaluationDto,
+)
 from pydantic import BaseModel
 from sqlmodel import Session, select
 

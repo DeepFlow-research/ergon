@@ -1,10 +1,9 @@
 """Build Experiment from CLI args using registry lookups."""
 
-import os
-
 from ergon_core.api.registry import registry
 from ergon_core.core.domain.experiments import Experiment, WorkerSpec
 from ergon_builtins.registry import register_builtins
+
 
 def build_experiment(
     benchmark_slug: str,
@@ -15,21 +14,12 @@ def build_experiment(
     limit: int | None = None,
 ) -> Experiment:
 
-    register_builtins(registry)
-    benchmark_registry_restore: tuple[dict[str, object], dict[str, object | None]] | None = None
-    if os.environ.get("ENABLE_SMOKE_FIXTURES", os.environ.get("ENABLE_TEST_HARNESS")) == "1":
-        # Host-side real-LLM canaries use the same test-support smoke fixtures as the
-        # API container, but production CLI paths do not load them unless the
-        # flag is explicitly enabled.
-        from tests.fixtures.smoke_components import register_smoke_fixtures
-
-        slugs = ("researchrubrics", "minif2f", "swebench-verified")
-        benchmark_registry_restore = (
-            {slug: registry.benchmarks[slug] for slug in slugs if slug in registry.benchmarks},
-            {slug: registry.sandbox_managers.get(slug) for slug in slugs},
-        )
-        register_smoke_fixtures()
-
+    if (
+        worker_slug not in registry.workers
+        or benchmark_slug not in registry.benchmarks
+        or evaluator_slug not in registry.evaluators
+    ):
+        register_builtins(registry)
     if worker_slug not in registry.workers:
         raise KeyError(worker_slug)
     benchmark_cls = registry.require_benchmark(benchmark_slug)
@@ -37,8 +27,6 @@ def build_experiment(
 
     benchmark = _construct_benchmark(benchmark_cls, workflow=workflow, limit=limit)
     evaluator = evaluator_cls(name="evaluator")
-    if benchmark_registry_restore is not None:
-        _restore_benchmark_registry(*benchmark_registry_restore)
 
     # Smoke-worker composition: the parent worker spawns 9 subtasks via
     # ``add_subtask(assigned_worker_slug="{env}-smoke-leaf")``, so the
@@ -214,15 +202,3 @@ def _construct_benchmark(cls, workflow: str, limit: int | None):
 
     # Bare constructor
     return cls()
-
-
-def _restore_benchmark_registry(
-    benchmarks: dict[str, object],
-    sandbox_managers: dict[str, object | None],
-) -> None:
-    registry.benchmarks.update(benchmarks)
-    for slug, manager_cls in sandbox_managers.items():
-        if manager_cls is None:
-            registry.sandbox_managers.pop(slug, None)
-        else:
-            registry.sandbox_managers[slug] = manager_cls

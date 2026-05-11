@@ -7,8 +7,12 @@ from ergon_core.core.infrastructure.inngest.handlers.cancel_orphan_subtasks impo
     block_descendants_on_failed_fn,
     cancel_orphans_on_cancelled_fn,
 )
-from ergon_core.core.infrastructure.inngest.handlers.check_evaluators import check_and_run_evaluators
-from ergon_core.core.infrastructure.inngest.handlers.cleanup_cancelled_task import cleanup_cancelled_task_fn
+from ergon_core.core.infrastructure.inngest.handlers.check_evaluators import (
+    check_and_run_evaluators,
+)
+from ergon_core.core.infrastructure.inngest.handlers.cleanup_cancelled_task import (
+    cleanup_cancelled_task_fn,
+)
 from ergon_core.core.infrastructure.inngest.handlers.complete_workflow import complete_workflow_fn
 from ergon_core.core.infrastructure.inngest.handlers.evaluate_task_run import evaluate_task_run
 from ergon_core.core.infrastructure.inngest.handlers.execute_task import execute_task_fn

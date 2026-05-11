@@ -35,8 +35,6 @@ def test_l_2_routed_to_failing_leaf(worker_cls, happy_leaf: str, failing_leaf: s
     worker = worker_cls(
         name="unit-test",
         model=None,
-        task_id=uuid4(),
-        sandbox_id="sbx-unit",
     )
     spec = worker._spec_for("l_2", ("l_1",), "Line 2")
     assert spec.task_slug == TaskSlug("l_2")

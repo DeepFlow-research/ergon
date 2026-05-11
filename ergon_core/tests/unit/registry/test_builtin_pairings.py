@@ -3,6 +3,7 @@
 import pytest
 
 from ergon_core.api.registry import ComponentRegistry
+from ergon_core.core.application.components.catalog import ComponentCatalogService
 
 
 CORE_PAIRINGS = [
@@ -51,7 +52,7 @@ DATA_PAIRINGS = [
 def test_core_pairings_reference_registered_slugs(pairing: dict[str, object]) -> None:
     from ergon_builtins.registry_core import register_core_builtins
 
-    registry = ComponentRegistry()
+    registry = ComponentRegistry(catalog_service=ComponentCatalogService())
     register_core_builtins(registry)
 
     _assert_pairing(pairing, registry)
@@ -62,7 +63,7 @@ def test_data_pairings_reference_registered_slugs(pairing: dict[str, object]) ->
     pytest.importorskip("datasets", reason="ergon-builtins[data] not installed")
     from ergon_builtins.registry import register_builtins
 
-    registry = ComponentRegistry()
+    registry = ComponentRegistry(catalog_service=ComponentCatalogService())
     register_builtins(registry)
 
     _assert_pairing(pairing, registry)

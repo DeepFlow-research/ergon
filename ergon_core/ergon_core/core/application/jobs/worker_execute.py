@@ -12,14 +12,15 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
 
 from ergon_core.api.benchmark import EmptyTaskPayload, Task
-from ergon_core.api.registry import registry
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.core.application.components.catalog import ComponentCatalogService
 from ergon_core.core.application.experiments.repository import DefinitionRepository
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
-from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, RegistryLookupError
+from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.application.jobs.models import WorkerExecuteJobRequest
 from ergon_core.core.application.jobs.models import WorkerExecuteJobResult
 from ergon_core.core.infrastructure.tracing import (
@@ -41,38 +42,45 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
     )
     span_start = datetime.now(UTC)
 
-    worker_cls = registry.workers.get(payload.worker_type)
-    if worker_cls is None:
-        raise RegistryLookupError(
-            registry_name="worker",
-            slug=payload.worker_type,
+    if payload.node_id is None:
+        raise ContractViolationError(
+            "worker-execute requires node_id",
             run_id=payload.run_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
             sandbox_id=payload.sandbox_id,
         )
 
-    worker = worker_cls(
-        name=payload.assigned_worker_slug,
-        model=payload.model_target,
-        task_id=payload.task_id,
-        sandbox_id=payload.sandbox_id,
-    )
-
+    catalog = ComponentCatalogService()
     task_payload = None
-    instance_key = str(payload.execution_id)
-    if payload.task_id is not None:
-        with get_session() as session:
+    instance_key = str(payload.node_id)
+    with get_session() as session:
+        worker = catalog.build_worker(
+            session,
+            slug=payload.worker_type,
+            name=payload.assigned_worker_slug,
+            model=payload.model_target,
+        )
+        node = session.get(RunGraphNode, payload.node_id)
+        if node is None:
+            raise ContractViolationError(
+                f"RunGraphNode {payload.node_id} not found",
+                run_id=payload.run_id,
+                task_id=payload.task_id,
+                execution_id=payload.execution_id,
+                sandbox_id=payload.sandbox_id,
+            )
+        if node.definition_task_id is not None:
             task_row, instance_row = DefinitionRepository().task_with_instance(
                 session,
-                payload.task_id,
+                node.definition_task_id,
             )
-        benchmark_cls = registry.benchmarks.get(payload.benchmark_type)
-        if benchmark_cls is not None:
+            benchmark_cls = catalog.resolve_benchmark(session, payload.benchmark_type)
             task_payload = task_row.task_payload_as(benchmark_cls.task_payload_model)
-        instance_key = instance_row.instance_key
+            instance_key = instance_row.instance_key
 
     task = Task[BaseModel](
+        task_id=payload.node_id,
         task_slug=payload.task_slug,
         instance_key=instance_key,
         description=payload.task_description,
@@ -82,7 +90,6 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
     worker_context = WorkerContext(
         run_id=payload.run_id,
         definition_id=payload.definition_id,
-        task_id=payload.task_id,
         execution_id=payload.execution_id,
         sandbox_id=payload.sandbox_id,
         node_id=payload.node_id,

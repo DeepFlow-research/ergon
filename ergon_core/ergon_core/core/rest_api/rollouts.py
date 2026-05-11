@@ -26,14 +26,19 @@ router = APIRouter(prefix="/rollouts", tags=["rollouts"])
 
 
 def get_rollout_service(request: Request) -> RolloutService:
-    service = getattr(request.app.state, "rollout_service", None)
-    if service is None:
+    try:
+        service = request.app.state.rollout_service
+    except AttributeError:
         raise HTTPException(503, "RolloutService not initialized")
     return cast(RolloutService, service)
 
 
 def get_vllm_manager(request: Request) -> VLLMManager | None:
-    return cast(VLLMManager | None, getattr(request.app.state, "vllm_manager", None))
+    try:
+        manager = request.app.state.vllm_manager
+    except AttributeError:
+        return None
+    return cast(VLLMManager, manager)
 
 
 @router.post("/submit", response_model=SubmitResponse, status_code=202)

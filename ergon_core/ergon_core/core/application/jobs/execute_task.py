@@ -231,7 +231,9 @@ async def run_execute_task_job(
             )
         task_sandbox_id = sandbox_result.sandbox_id
 
-        worker_result = await _run_worker(ctx, payload, prepared, sandbox_result, worker_execute_function)
+        worker_result = await _run_worker(
+            ctx, payload, prepared, sandbox_result, worker_execute_function
+        )
 
         if not worker_result.success:
             await _persist_outputs(ctx, payload, prepared, sandbox_result, persist_outputs_function)
@@ -254,7 +256,9 @@ async def run_execute_task_job(
                 error=error_msg,
             )
 
-        persist_result = await _persist_outputs(ctx, payload, prepared, sandbox_result, persist_outputs_function)
+        persist_result = await _persist_outputs(
+            ctx, payload, prepared, sandbox_result, persist_outputs_function
+        )
 
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(

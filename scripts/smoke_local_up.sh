@@ -47,10 +47,7 @@ Stack is up.  Export these in your shell before running smoke:
     export INNGEST_EVENT_KEY=dev
     export ERGON_API_BASE_URL=http://127.0.0.1:9000
     export PLAYWRIGHT_BASE_URL=http://127.0.0.1:3001
-    export ENABLE_TEST_HARNESS=1
-    export ERGON_STARTUP_PLUGINS=ergon_builtins.registry:register_builtins,tests.fixtures.smoke_components:register_smoke_fixtures
-    export TEST_HARNESS_SECRET=local-dev
-    export SCREENSHOT_DIR=/tmp/playwright
+    export     export SCREENSHOT_DIR=/tmp/playwright
     export E2B_API_KEY=<your key>   # required for real sandbox runs
 
 Then: scripts/smoke_local_run.sh minif2f   (or researchrubrics / swebench-verified)

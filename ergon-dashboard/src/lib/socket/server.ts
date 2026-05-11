@@ -249,10 +249,11 @@ export function broadcastSandboxCommand(
 export function broadcastSandboxClosed(
   runId: string,
   taskId: string,
-  reason: string
+  reason: string,
+  timestamp: string,
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("sandbox:closed", { runId, taskId, reason });
+  io?.to(`run:${runId}`).emit("sandbox:closed", { runId, taskId, reason, timestamp });
 }
 
 export function broadcastThreadMessage(

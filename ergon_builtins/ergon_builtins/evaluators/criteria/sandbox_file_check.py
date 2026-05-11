@@ -37,8 +37,6 @@ class SandboxFileCheckCriterion(Criterion):
                 feedback="No sandbox_id available — cannot check files",
             )
 
-
-
         try:
             sandbox = await AsyncSandbox.connect(sandbox_id=context.sandbox_id)
             content = await sandbox.files.read(self.expected_path)

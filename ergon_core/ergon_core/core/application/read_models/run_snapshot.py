@@ -315,9 +315,7 @@ def _build_communication_threads(
                             else None
                         ),
                         task_execution_id=(
-                            str(message.task_execution_id)
-                            if message.task_execution_id
-                            else None
+                            str(message.task_execution_id) if message.task_execution_id else None
                         ),
                         from_agent_id=message.from_agent_id,
                         to_agent_id=message.to_agent_id,

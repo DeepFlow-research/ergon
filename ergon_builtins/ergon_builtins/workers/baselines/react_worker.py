@@ -59,13 +59,11 @@ class ReActWorker(Worker):
         *,
         name: str,
         model: str | None,
-        task_id: UUID,
-        sandbox_id: str,
         tools: list[AgentTool],
         system_prompt: str | None,
         max_iterations: int,
     ) -> None:
-        super().__init__(name=name, model=model, task_id=task_id, sandbox_id=sandbox_id)
+        super().__init__(name=name, model=model)
         self.tools: list[AgentTool] = tools
         self.system_prompt: str | None = system_prompt
         self.max_iterations: int = max_iterations
@@ -199,7 +197,9 @@ def _worker_output_from_chunks(chunks: list[ContextPartChunk]) -> WorkerOutput:
     if output:
         return WorkerOutput(output=output, success=True)
 
-    text_parts = [chunk.part.content for chunk in chunks if isinstance(chunk.part, AssistantTextPart)]
+    text_parts = [
+        chunk.part.content for chunk in chunks if isinstance(chunk.part, AssistantTextPart)
+    ]
     if text_parts:
         return WorkerOutput(output=text_parts[-1], success=True)
 

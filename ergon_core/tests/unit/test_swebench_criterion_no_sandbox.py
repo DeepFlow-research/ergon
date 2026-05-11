@@ -44,6 +44,7 @@ def _task_payload() -> SWEBenchTaskPayload:
 
 def _task() -> Task[SWEBenchTaskPayload]:
     return Task[SWEBenchTaskPayload](
+        task_id=uuid4(),
         task_slug="swe-001",
         instance_key="default",
         description="Fix the bug",

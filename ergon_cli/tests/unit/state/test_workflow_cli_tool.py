@@ -14,7 +14,6 @@ from ergon_core.api.worker import WorkerContext
 async def test_workflow_tool_injects_worker_context() -> None:
     context = WorkerContext(
         run_id=uuid4(),
-        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
         node_id=uuid4(),
@@ -34,7 +33,7 @@ async def test_workflow_tool_injects_worker_context() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.task_id,
+        sandbox_task_key=context.node_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -44,7 +43,7 @@ async def test_workflow_tool_injects_worker_context() -> None:
     assert seen["context"].run_id == context.run_id
     assert seen["context"].node_id == context.node_id
     assert seen["context"].execution_id == context.execution_id
-    assert seen["context"].sandbox_task_key == context.task_id
+    assert seen["context"].sandbox_task_key == context.node_id
     assert seen["context"].benchmark_type == "researchrubrics"
 
 
@@ -52,7 +51,6 @@ async def test_workflow_tool_injects_worker_context() -> None:
 async def test_workflow_tool_reports_nonzero_exit() -> None:
     context = WorkerContext(
         run_id=uuid4(),
-        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
         node_id=uuid4(),
@@ -68,7 +66,7 @@ async def test_workflow_tool_reports_nonzero_exit() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.task_id,
+        sandbox_task_key=context.node_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -80,7 +78,6 @@ async def test_workflow_tool_reports_nonzero_exit() -> None:
 async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None:
     context = WorkerContext(
         run_id=uuid4(),
-        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
         node_id=uuid4(),
@@ -92,7 +89,7 @@ async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.task_id,
+        sandbox_task_key=context.node_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
     )
@@ -106,7 +103,6 @@ async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None
 async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> None:
     context = WorkerContext(
         run_id=uuid4(),
-        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
         node_id=uuid4(),
@@ -118,7 +114,7 @@ async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> N
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.task_id,
+        sandbox_task_key=context.node_id,
         benchmark_type="researchrubrics",
         execute_command=execute_workflow_command,
         session_factory=Session,
@@ -135,7 +131,6 @@ async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> N
 async def test_budgeted_workflow_tool_returns_structured_exhaustion() -> None:
     context = WorkerContext(
         run_id=uuid4(),
-        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sandbox",
         node_id=uuid4(),
@@ -149,7 +144,7 @@ async def test_budgeted_workflow_tool_returns_structured_exhaustion() -> None:
 
     workflow = make_workflow_cli_tool(
         worker_context=context,
-        sandbox_task_key=context.task_id,
+        sandbox_task_key=context.node_id,
         benchmark_type="researchrubrics",
         execute_command=execute,
         budgeted=True,

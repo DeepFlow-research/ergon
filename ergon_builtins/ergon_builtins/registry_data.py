@@ -3,15 +3,13 @@
 Eager, fully-typed imports.
 """
 
-from collections.abc import Callable
-
 from ergon_core.api import Benchmark, Worker
 from ergon_core.api.registry import ComponentRegistry, registry
 from ergon_core.api.rubric import Evaluator
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
-from ergon_builtins.benchmarks.gdpeval.worker_factory import gdpeval_react
+from ergon_builtins.benchmarks.gdpeval.worker_factory import GDPEvalReactWorker
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
@@ -38,13 +36,8 @@ EVALUATORS: dict[str, type[Evaluator]] = {
     "researchrubrics-rubric": ResearchRubricsRubric,
 }
 
-# reason: RFC 2026-04-22 §1 — base ``Worker.__init__`` now requires
-# ``task_id`` / ``sandbox_id`` kwargs, and every registered worker subclass
-# forwards them through to ``super().__init__``. The registry therefore
-# stores the bare class (``WorkerFactory = Callable[..., Worker]``) and
-# ``_plain`` has been deleted.
-WORKERS: dict[str, Callable[..., Worker]] = {
-    "gdpeval-react": gdpeval_react,
+WORKERS: dict[str, type[Worker]] = {
+    "gdpeval-react": GDPEvalReactWorker,
     "researchrubrics-researcher": ResearchRubricsResearcherWorker,
     "researchrubrics-workflow-cli-react": ResearchRubricsWorkflowCliReActWorker,
 }

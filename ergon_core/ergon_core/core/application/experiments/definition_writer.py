@@ -26,6 +26,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 if TYPE_CHECKING:
     from ergon_core.core.domain.experiments import Experiment
+    from ergon_core.api.criterion import Criterion
+
+
+def _criterion_snapshot_name(criterion: "Criterion") -> str:
+    return criterion.slug
 
 
 class _ExperimentDefinitionWriter:
@@ -89,7 +94,7 @@ class _ExperimentDefinitionWriter:
         for binding_key, evaluator in experiment.evaluators.items():
             snapshot: JsonObject = {"name": evaluator.name}
             if isinstance(evaluator, Rubric):
-                snapshot["criteria"] = [c.name for c in evaluator.criteria]
+                snapshot["criteria"] = [_criterion_snapshot_name(c) for c in evaluator.criteria]
 
             evaluator_rows.append(
                 ExperimentDefinitionEvaluator(

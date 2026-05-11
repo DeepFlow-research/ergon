@@ -12,7 +12,9 @@ async def _stream_with_terminal_output() -> AsyncGenerator[ContextPartChunk | Wo
     yield WorkerOutput(output="final result", success=True)
 
 
-async def _stream_without_terminal_output() -> AsyncGenerator[ContextPartChunk | WorkerOutput, None]:
+async def _stream_without_terminal_output() -> AsyncGenerator[
+    ContextPartChunk | WorkerOutput, None
+]:
     yield ContextPartChunk(part=AssistantTextPart(content="transcript"))
 
 

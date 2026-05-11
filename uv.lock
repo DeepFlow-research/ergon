@@ -18,6 +18,7 @@ members = [
     "ergon-cli",
     "ergon-core",
     "ergon-infra",
+    "ergon-ingestion",
 ]
 
 [[package]]
@@ -1145,6 +1146,7 @@ source = { editable = "ergon_cli" }
 dependencies = [
     { name = "ergon-builtins", extra = ["all"] },
     { name = "ergon-core" },
+    { name = "ergon-ingestion" },
 ]
 
 [package.optional-dependencies]
@@ -1157,6 +1159,7 @@ requires-dist = [
     { name = "ergon-builtins", extras = ["all"], editable = "ergon_builtins" },
     { name = "ergon-core", editable = "ergon_core" },
     { name = "ergon-infra", extras = ["all"], marker = "extra == 'training'", editable = "ergon_infra" },
+    { name = "ergon-ingestion", editable = "ergon_ingestion" },
 ]
 provides-extras = ["training"]
 
@@ -1251,6 +1254,30 @@ requires-dist = [
     { name = "trl", extras = ["vllm"], marker = "extra == 'training'", specifier = ">=1.0.0,<2.0.0" },
 ]
 provides-extras = ["training", "skypilot", "all"]
+
+[[package]]
+name = "ergon-ingestion"
+version = "0.1.0"
+source = { editable = "ergon_ingestion" }
+dependencies = [
+    { name = "ergon-core" },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+data = [
+    { name = "pandas" },
+    { name = "pyarrow" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ergon-core", editable = "ergon_core" },
+    { name = "pandas", marker = "extra == 'data'" },
+    { name = "pyarrow", marker = "extra == 'data'" },
+    { name = "pydantic", specifier = ">=2.5.0" },
+]
+provides-extras = ["data"]
 
 [[package]]
 name = "eval-type-backport"

@@ -57,6 +57,7 @@ class Experiment:
 
         ExperimentValidationService().validate(self)
 
+
 def _normalise_assignments(
     raw: Mapping[str, str | Sequence[str]],
 ) -> dict[str, str | list[str]]:

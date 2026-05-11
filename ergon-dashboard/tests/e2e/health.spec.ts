@@ -9,11 +9,9 @@ import { test, expect } from "@playwright/test";
  * - The response shape matches the expected schema
  */
 
-const BASE = process.env.BASE_URL ?? "http://localhost:3001";
-
 test.describe("Health endpoint", () => {
   test("returns 200 with healthy status when build is fresh", async ({ request }) => {
-    const res = await request.get(`${BASE}/api/health`);
+    const res = await request.get("/api/health");
     expect(res.status()).toBe(200);
 
     const body = await res.json();
@@ -26,7 +24,7 @@ test.describe("Health endpoint", () => {
   });
 
   test("response schema includes all expected fields", async ({ request }) => {
-    const res = await request.get(`${BASE}/api/health`);
+    const res = await request.get("/api/health");
     const body = await res.json();
 
     expect(body).toHaveProperty("status");
@@ -40,7 +38,7 @@ test.describe("Health endpoint", () => {
   });
 
   test("SSR import check exercises the actual module graph", async ({ request }) => {
-    const res = await request.get(`${BASE}/api/health`);
+    const res = await request.get("/api/health");
     const body = await res.json();
 
     expect(body.checks.ssr_imports).toBe("ok");
@@ -54,8 +52,7 @@ test.describe("Health endpoint", () => {
 
 test.describe("Build health toast (UI)", () => {
   test("toast is hidden when build is healthy", async ({ page }) => {
-    await page.goto(`${BASE}/`);
-    await page.waitForLoadState("networkidle");
+    await page.goto("/");
 
     const toast = page.locator('[data-testid="build-health-toast"]');
     await expect(toast).not.toBeVisible();

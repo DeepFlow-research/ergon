@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from ergon_core.api.benchmark import Benchmark
-from ergon_core.api.benchmark import Task
+from ergon_core.api.benchmark import TaskSpec
 from ergon_core.api.registry import registry
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.persistence.shared.db import get_session
@@ -54,6 +54,10 @@ class ExperimentService:
         selected_samples = _select_samples(instances, request)
         name = request.name or _generated_name(request.benchmark_slug, len(selected_samples))
 
+        design = dict(request.design)
+        if request.evaluator_bindings:
+            design["evaluator_bindings"] = dict(request.evaluator_bindings)
+
         experiment = ExperimentRecord(
             cohort_id=request.cohort_id,
             name=name,
@@ -65,7 +69,7 @@ class ExperimentService:
             default_model_target=request.default_model_target,
             sandbox_slug=request.sandbox_slug,
             dependency_extras_json={"extras": list(request.dependency_extras)},
-            design_json=request.design,
+            design_json=design,
             seed=request.seed,
             metadata_json={
                 **request.metadata,
@@ -122,7 +126,7 @@ def _construct_benchmark(cls: Callable[..., Benchmark], *, limit: int | None) ->
 
 
 def _select_samples(
-    instances: Mapping[str, Sequence[Task[BaseModel]]],
+    instances: Mapping[str, Sequence[TaskSpec[BaseModel]]],
     request: ExperimentDefineRequest,
 ) -> list[str]:
     if request.sample_ids is not None:

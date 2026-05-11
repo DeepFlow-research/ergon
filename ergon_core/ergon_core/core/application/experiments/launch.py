@@ -10,7 +10,7 @@ from ergon_core.api.rubric import Evaluator
 from ergon_core.core.domain.experiments import Experiment
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.api.benchmark import Task
+from ergon_core.api.benchmark import TaskSpec
 from ergon_core.core.domain.experiments import WorkerSpec
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import ExperimentRecord
@@ -98,6 +98,7 @@ def _assign_runs(experiment: ExperimentRecord) -> list[RunAssignment]:
             sample_id=instance_key,
             worker_team=experiment.parsed_default_worker_team(),
             evaluator_slug=experiment.default_evaluator_slug,
+            evaluator_bindings=_evaluator_binding_slugs(experiment),
             model_target=experiment.default_model_target,
             sandbox_slug=experiment.sandbox_slug,
             dependency_extras=tuple(experiment.parsed_dependency_extras().get("extras", ())),
@@ -125,7 +126,7 @@ def _persist_single_sample_workflow_definition(
         name="primary",
         model=assignment.model_target or "openai:gpt-4o",
     )
-    evaluators = _evaluator_bindings(assignment.evaluator_slug)
+    evaluators = _evaluator_bindings(assignment.evaluator_slug, assignment.evaluator_bindings)
     workflow = Experiment.from_single_worker(
         benchmark=benchmark,
         worker=worker,
@@ -147,11 +148,33 @@ def _primary_worker_slug(worker_team: JsonObject) -> str:
     return value
 
 
-def _evaluator_bindings(evaluator_slug: str | None) -> dict[str, Evaluator]:
-    if evaluator_slug is None:
+def _evaluator_binding_slugs(experiment: ExperimentRecord) -> dict[str, str]:
+    design = experiment.design_json or {}
+    bindings = design.get("evaluator_bindings")
+    if not isinstance(bindings, dict):
         return {}
+    return {
+        key: value
+        for key, value in bindings.items()
+        if isinstance(key, str) and isinstance(value, str)
+    }
+
+
+def _evaluator_bindings(
+    evaluator_slug: str | None,
+    evaluator_binding_slugs: Mapping[str, str],
+) -> dict[str, Evaluator]:
+    evaluators: dict[str, Evaluator] = {}
+    if evaluator_slug is None:
+        return evaluators
     evaluator_cls = registry.require_evaluator(evaluator_slug)
-    return {"default": evaluator_cls(name="evaluator")}
+    evaluators["default"] = evaluator_cls(name="default")
+    for binding_key, bound_evaluator_slug in evaluator_binding_slugs.items():
+        if binding_key == "default":
+            continue
+        bound_evaluator_cls = registry.require_evaluator(bound_evaluator_slug)
+        evaluators[binding_key] = bound_evaluator_cls(name=binding_key)
+    return evaluators
 
 
 def _single_sample_benchmark(benchmark_slug: str, instance_key: str) -> Benchmark:
@@ -172,7 +195,7 @@ class _SingleSampleBenchmark(Benchmark):
         self,
         source: Benchmark,
         instance_key: str,
-        tasks: Sequence[Task[BaseModel]],
+        tasks: Sequence[TaskSpec[BaseModel]],
     ) -> None:
         super().__init__(
             name=source.name,
@@ -183,7 +206,7 @@ class _SingleSampleBenchmark(Benchmark):
         self._instance_key = instance_key
         self._tasks = list(tasks)
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
         return {self._instance_key: self._tasks}
 
     def evaluator_requirements(self) -> Sequence[str]:

@@ -8,7 +8,7 @@ cm2435-new/gdpval_preference_rubrics and exposes them via the
 from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
 
 from ergon_builtins.benchmarks.gdpeval.loader import (
     HF_REPO_ID,
@@ -54,17 +54,17 @@ class GDPEvalBenchmark(Benchmark):
         self.split = split
         self.limit = limit
 
-    def build_instances(self) -> Mapping[str, Sequence[Task[GDPTaskConfig]]]:
+    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[GDPTaskConfig]]]:
         """Materialise one ``BenchmarkTask`` per GDP task.
 
         All tasks land in a single ``"default"`` instance since there is
         no multi-instance structure in the GDP dataset.
         """
-        tasks: list[Task[GDPTaskConfig]] = []
+        tasks: list[TaskSpec[GDPTaskConfig]] = []
         for payload in self._load_task_configs():
             description = extract_task_description(payload.task_id, repo_id=self.dataset_repo)
             tasks.append(
-                Task[GDPTaskConfig](
+                TaskSpec[GDPTaskConfig](
                     task_slug=payload.task_id,
                     instance_key="default",
                     description=description,

@@ -1,20 +1,10 @@
-"""Test-only FastAPI router exposing narrow DTOs for Playwright/backend tests.
-
-Gates:
-  - Router is only mounted when ``ENABLE_TEST_HARNESS=1`` (caller-side in
-    ``app.py``). When unset or ``0`` the include_router call is skipped and
-    the routes do not exist at all.
-  - Write endpoints additionally require the ``X-Test-Secret`` header
-    to match ``TEST_HARNESS_SECRET``. Absence of the env var = 500 (distinct
-    from 401 bad secret) so misconfiguration is distinguishable from auth
-    failure.
+"""Danger-prefixed FastAPI router exposing narrow DTOs for tests.
 
 Wire-shape stability: these DTOs are consumed by Playwright helpers in the
 dashboard. Schema is additive-only — never remove or rename a field without
 coordinating a TS helper update.
 """
 
-import os
 from collections.abc import Iterator
 from typing import Annotated
 from uuid import UUID
@@ -43,11 +33,12 @@ from ergon_core.core.application.experiments.models import (
     ExperimentDefineRequest,
     ExperimentRunRequest,
 )
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from ergon_core.api.registry import registry
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, asc, select
 
-router = APIRouter(prefix="/api/test", tags=["test-harness"])
+router = APIRouter(prefix="/api/__danger__/test-harness", tags=["danger-test-harness"])
 
 
 # ---------------------------------------------------------------------------
@@ -119,23 +110,6 @@ def get_session_dep() -> Iterator[Session]:
     """
     with Session(get_engine()) as session:
         yield session
-
-
-def _require_secret(
-    x_test_secret: Annotated[str | None, Header(alias="X-Test-Secret")] = None,
-) -> None:
-    """Gate write endpoints on ``TEST_HARNESS_SECRET``.
-
-    Co-located with the DTOs and env-var policy for the test harness.
-    """
-    configured = os.environ.get("TEST_HARNESS_SECRET")
-    if configured is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="TEST_HARNESS_SECRET not configured",
-        )
-    if x_test_secret != configured:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
 
 def _execution_error_message(execution: RunTaskExecution) -> str | None:
@@ -290,7 +264,7 @@ def read_cohort_runs(
 
 
 # ---------------------------------------------------------------------------
-# Write endpoints — gated on X-Test-Secret
+# Write endpoints — danger-prefixed local/test harness
 # ---------------------------------------------------------------------------
 #
 # Schema reality vs. spec:
@@ -331,9 +305,7 @@ class ResetRequest(BaseModel):
 @router.post("/write/run/seed", status_code=201)
 def seed_run(
     body: SeedRunRequest,
-    x_test_secret: Annotated[str | None, Header(alias="X-Test-Secret")] = None,
 ) -> dict:
-    _require_secret(x_test_secret)
     definition_id = body.workflow_definition_id or body.experiment_definition_id
     if definition_id is None:
         raise HTTPException(
@@ -394,9 +366,7 @@ def seed_run(
 @router.post("/write/reset", status_code=204)
 def reset_test_rows(
     body: ResetRequest,
-    x_test_secret: Annotated[str | None, Header(alias="X-Test-Secret")] = None,
 ) -> None:
-    _require_secret(x_test_secret)
     with Session(get_engine()) as s:
         # Cannot SQL-filter on JSON prefix portably; load seeded rows and
         # filter in Python. Bounded by the seed endpoint being test-only.
@@ -469,6 +439,7 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
     run_ids: list[UUID] = []
     for slot in body.slots:
         experiment_service = ExperimentService()
+        evaluator_bindings = _extra_evaluator_bindings(body.benchmark_slug)
         defined = experiment_service.define_benchmark_experiment(
             ExperimentDefineRequest(
                 benchmark_slug=body.benchmark_slug,
@@ -477,6 +448,7 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
                 default_model_target=body.model,
                 default_worker_team={"primary": slot.worker_slug},
                 default_evaluator_slug=slot.evaluator_slug,
+                evaluator_bindings=evaluator_bindings,
                 sandbox_slug=body.sandbox_slug or body.benchmark_slug,
                 dependency_extras=body.dependency_extras,
                 metadata={"source": "test-harness"},
@@ -488,3 +460,12 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
         run_ids.extend(launched.run_ids)
 
     return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)
+
+
+def _extra_evaluator_bindings(benchmark_slug: str) -> dict[str, str]:
+    benchmark = registry.require_benchmark(benchmark_slug)()
+    requirements = set(benchmark.evaluator_requirements())
+    if "post-root" not in requirements:
+        return {}
+    registry.require_evaluator("smoke-post-root-timing-criterion")
+    return {"post-root": "smoke-post-root-timing-criterion"}

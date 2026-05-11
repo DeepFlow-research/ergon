@@ -22,7 +22,7 @@ case "${env_slug}" in
   *) echo "unknown env: ${env_slug}" >&2; exit 2 ;;
 esac
 
-for var in ERGON_DATABASE_URL ERGON_API_BASE_URL TEST_HARNESS_SECRET ENABLE_TEST_HARNESS; do
+for var in ERGON_DATABASE_URL ERGON_API_BASE_URL; do
   if [ -z "${!var:-}" ]; then
     echo "FATAL: \$${var} not set — run 'source <(scripts/smoke_local_up.sh | tail -n +2)' or export manually" >&2
     exit 1

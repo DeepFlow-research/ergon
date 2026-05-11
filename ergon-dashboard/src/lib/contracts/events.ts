@@ -182,6 +182,7 @@ export const SandboxClosedSocketDataSchema = z.object({
   runId: z.string(),
   taskId: z.string(),
   reason: z.string(),
+  timestamp: z.string(),
 });
 
 export type TaskTrigger = z.infer<typeof TaskTriggerSchema>;
