@@ -72,7 +72,7 @@ def _task_json(
         worker=_Worker(name=worker_name, model="stub:constant"),
         sandbox=_Sandbox(env={"ROLE": worker_name}),
         task_payload=EmptyTaskPayload(),
-    ).model_dump(mode="json")
+    ).to_definition()
 
 
 def _session() -> Session:
@@ -388,7 +388,7 @@ async def test_add_subtask_inserts_full_task_json_and_dispatches_task_id_only(
     inserted = session.exec(
         select(RunGraphNode).where(RunGraphNode.task_id == result.task_id)
     ).one()
-    assert inserted.task_json == task.model_dump(mode="json")
+    assert inserted.task_json == task.to_definition()
     assert inserted.parent_task_id == parent_task_id
     assert inserted.assigned_worker_slug == "child-worker"
     assert result.task_id == inserted.task_id

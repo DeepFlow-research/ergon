@@ -8,13 +8,13 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, field_validator
 
-from ergon_core.api._definition import DefinitionModelMixin, import_component_string
+from ergon_core.api._definition import import_component_string, to_definition_dict
 from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.infrastructure.dependencies import check_packages
 
 
-class Benchmark(DefinitionModelMixin, BaseModel, ABC):
+class Benchmark(BaseModel, ABC):
     """Base class for all benchmarks."""
 
     model_config = {"arbitrary_types_allowed": True, "extra": "allow", "frozen": False}
@@ -22,10 +22,10 @@ class Benchmark(DefinitionModelMixin, BaseModel, ABC):
     type_slug: ClassVar[str]
     task_payload_model: ClassVar[type[BaseModel]] = EmptyTaskPayload
     required_packages: ClassVar[list[str]] = []
-    install_hint: ClassVar[str] = ""
+    install_hint: ClassVar[str]
 
     name: str
-    description: str = ""
+    description: str
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
     def __init__(
@@ -47,15 +47,6 @@ class Benchmark(DefinitionModelMixin, BaseModel, ABC):
             **data,
         )
 
-    @field_validator("tasks", mode="before", check_fields=False)
-    @classmethod
-    def _inflate_tasks(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-        if isinstance(value, (list, tuple)):
-            return tuple(
-                Task.model_validate(item) if _is_definition(item) else item for item in value
-            )
-        return value
-
     @classmethod
     def from_definition(
         cls,
@@ -66,6 +57,10 @@ class Benchmark(DefinitionModelMixin, BaseModel, ABC):
         data = dict(benchmark_json)
         data.pop("_type", None)
         return benchmark_cls.model_validate(data)
+
+    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Serialize this benchmark for persisted experiment definitions."""
+        return to_definition_dict(self)
 
     @abstractmethod
     def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
@@ -107,6 +102,15 @@ class Benchmark(DefinitionModelMixin, BaseModel, ABC):
                 parts.append(f"Install with: {self.install_hint}")
             raise DependencyError("\n".join(parts))
 
+    @field_validator("tasks", mode="before", check_fields=False)
+    @classmethod
+    def _inflate_tasks(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        if isinstance(value, (list, tuple)):
+            return tuple(
+                Task.model_validate(item) if cls._is_definition(item) else item for item in value
+            )
+        return value
 
-def _is_definition(value: object) -> bool:
-    return isinstance(value, dict) and "_type" in value
+    @staticmethod
+    def _is_definition(value: object) -> bool:
+        return isinstance(value, dict) and "_type" in value

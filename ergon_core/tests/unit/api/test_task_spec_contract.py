@@ -51,7 +51,7 @@ def test_worker_task_requires_runtime_graph_node_identity() -> None:
         worker=_Worker(name="worker", model="stub:model"),
         sandbox=_Sandbox(),
     )
-    task = Task.from_definition(definition.model_dump(), task_id=node_id)
+    task = Task.from_definition(definition.to_definition(), task_id=node_id)
 
     assert task.task_id == node_id
 

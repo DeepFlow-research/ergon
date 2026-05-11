@@ -3,7 +3,7 @@
 from importlib import import_module
 from typing import Any, TypeVar
 
-from pydantic import model_serializer
+from pydantic import BaseModel
 
 T = TypeVar("T")
 
@@ -27,11 +27,29 @@ def import_component_string(path: str) -> type[Any]:  # slopcop: ignore[no-typin
     return component
 
 
-class DefinitionModelMixin:
-    """Mixin that injects `_type` into pydantic model dumps."""
+def to_definition_dict(model: BaseModel) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    """Serialize a Pydantic authoring object with an explicit type discriminator."""
+    data = _definition_model_dump(model)
+    data["_type"] = component_path(type(model))
+    return data
 
-    @model_serializer(mode="wrap")
-    def _serialize_with_type(self, serializer) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
-        data = serializer(self)
-        data["_type"] = component_path(type(self))
-        return data
+
+def _definition_value(value: Any) -> Any:  # slopcop: ignore[no-typing-any]
+    to_definition = getattr(value, "to_definition", None)
+    if callable(to_definition):
+        return to_definition()
+    if isinstance(value, BaseModel):
+        return _definition_model_dump(value)
+    if isinstance(value, tuple | list):
+        return [_definition_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _definition_value(item) for key, item in value.items()}
+    return value
+
+
+def _definition_model_dump(model: BaseModel) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+    data = model.model_dump(mode="json")
+    for field_name in type(model).model_fields:
+        if field_name in data:
+            data[field_name] = _definition_value(getattr(model, field_name))
+    return data

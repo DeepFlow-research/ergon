@@ -108,7 +108,7 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
             agent_reasoning=None,
         ),
         evaluator,
-        Task.from_definition(task_definition.model_dump(), task_id=uuid4()),
+        Task.from_definition(task_definition.to_definition(), task_id=uuid4()),
         "benchmark",
     )
 

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api._definition import DefinitionModelMixin, import_component_string
+from ergon_core.api._definition import import_component_string, to_definition_dict
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 WorkerStreamItem = ContextPartChunk | WorkerOutput
 
 
-class Worker(DefinitionModelMixin, BaseModel, ABC):
+class Worker(BaseModel, ABC):
     """Base class for all workers."""
 
     model_config = {"arbitrary_types_allowed": True, "extra": "allow", "frozen": False}
@@ -56,6 +56,10 @@ class Worker(DefinitionModelMixin, BaseModel, ABC):
         data = dict(worker_json)
         data.pop("_type", None)
         return worker_cls.model_validate(data)
+
+    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Serialize this worker for persisted experiment definitions."""
+        return to_definition_dict(self)
 
     @abstractmethod
     async def execute(

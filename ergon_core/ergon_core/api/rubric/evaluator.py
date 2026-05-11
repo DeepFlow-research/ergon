@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field, field_validator
 
-from ergon_core.api._definition import DefinitionModelMixin, import_component_string
+from ergon_core.api._definition import import_component_string, to_definition_dict
 from ergon_core.api.criterion.results import CriterionOutcome
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.rubric.results import TaskEvaluationResult
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from ergon_core.api.sandbox import Sandbox
 
 
-class Evaluator(DefinitionModelMixin, BaseModel, ABC):
+class Evaluator(BaseModel, ABC):
     """Base class for custom dynamic evaluators."""
 
     model_config = {"arbitrary_types_allowed": True, "extra": "allow", "frozen": False}
@@ -59,6 +59,10 @@ class Evaluator(DefinitionModelMixin, BaseModel, ABC):
         data = dict(evaluator_json)
         data.pop("_type", None)
         return evaluator_cls.model_validate(data)
+
+    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Serialize this evaluator for persisted experiment definitions."""
+        return to_definition_dict(self)
 
     @abstractmethod
     def criteria_for(self, task: Task) -> Iterable[Criterion]:

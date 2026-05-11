@@ -183,14 +183,25 @@ def test_authoring_models_round_trip_through_type_discriminators() -> None:
     benchmark = _Benchmark(name="bench", tasks=(task,))
     task_id = uuid4()
 
-    worker_json = worker.model_dump()
-    sandbox_json = sandbox.model_dump()
-    criterion_json = criterion.model_dump()
-    evaluator_json = evaluator.model_dump()
-    benchmark_json = benchmark.model_dump()
-    task_json = task.model_dump()
+    assert "_type" not in worker.model_dump(mode="json")
+    assert "_type" not in sandbox.model_dump(mode="json")
+    assert "_type" not in criterion.model_dump(mode="json")
+    assert "_type" not in evaluator.model_dump(mode="json")
+    assert "_type" not in benchmark.model_dump(mode="json")
+    assert "_type" not in task.model_dump(mode="json")
+
+    worker_json = worker.to_definition()
+    sandbox_json = sandbox.to_definition()
+    criterion_json = criterion.to_definition()
+    evaluator_json = evaluator.to_definition()
+    benchmark_json = benchmark.to_definition()
+    task_json = task.to_definition()
 
     assert worker_json["_type"].endswith(":_Worker")
+    assert task_json["worker"]["_type"].endswith(":_Worker")
+    assert task_json["sandbox"]["_type"].endswith(":_Sandbox")
+    assert task_json["evaluators"][0]["_type"].endswith(":_CriterionEvaluator")
+    assert task_json["evaluators"][0]["criteria"][0]["criterion"]["_type"].endswith(":_Criterion")
     assert Worker.from_definition(worker_json) == worker
     assert Sandbox.from_definition(sandbox_json) == sandbox
     assert Criterion.from_definition(criterion_json) == criterion

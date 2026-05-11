@@ -5,12 +5,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field, PrivateAttr
 
-from ergon_core.api._definition import DefinitionModelMixin, import_component_string
+from ergon_core.api._definition import import_component_string, to_definition_dict
 from ergon_core.api.errors import SandboxNotLiveError
 from ergon_core.api.sandbox.runtime import SandboxRuntime
 
 
-class Sandbox(DefinitionModelMixin, BaseModel, ABC):
+class Sandbox(BaseModel, ABC):
     """Base for typed sandbox definitions with runtime-backed IO proxies."""
 
     model_config = {"arbitrary_types_allowed": True, "extra": "ignore", "frozen": False}
@@ -30,6 +30,10 @@ class Sandbox(DefinitionModelMixin, BaseModel, ABC):
         data = dict(sandbox_json)
         data.pop("_type", None)
         return sandbox_cls.model_validate(data)
+
+    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Serialize this sandbox for persisted experiment definitions."""
+        return to_definition_dict(self)
 
     @abstractmethod
     async def provision(self) -> None:

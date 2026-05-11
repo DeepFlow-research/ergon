@@ -69,7 +69,7 @@ def _node(
     )
     return RunGraphNode(
         run_id=run_id,
-        task_json=task.model_dump(mode="json"),
+        task_json=task.to_definition(),
         instance_key="instance",
         task_slug=slug,
         description=description or f"Task {slug}",

@@ -80,7 +80,7 @@ class _ExperimentDefinitionWriter:
                             binding_key=task.worker.name,
                             worker_type=task.worker.type_slug,
                             model_target=task.worker.model,
-                            snapshot_json=task.worker.model_dump(mode="json"),
+                            snapshot_json=task.worker.to_definition(),
                             created_at=now,
                         )
                     )
@@ -88,7 +88,7 @@ class _ExperimentDefinitionWriter:
                 for evaluator in task.evaluators:
                     if evaluator.name in seen_evaluators:
                         continue
-                    snapshot: JsonObject = evaluator.model_dump(mode="json")
+                    snapshot: JsonObject = evaluator.to_definition()
                     if isinstance(evaluator, Rubric):
                         snapshot["criteria"] = [
                             _criterion_snapshot_name(c) for c in evaluator.criteria
@@ -127,7 +127,7 @@ class _ExperimentDefinitionWriter:
                     task_slug=task.task_slug,
                     description=task.description,
                     task_payload_json=task.task_payload.model_dump(mode="json"),
-                    task_json=task.model_dump(mode="json"),
+                    task_json=task.to_definition(),
                     created_at=now,
                 )
                 task_rows_by_key[(instance_key, task.task_slug)] = task_row

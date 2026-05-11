@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, PrivateAttr, SerializeAsAny, field_validator
 
-from ergon_core.api._definition import DefinitionModelMixin, import_component_string
+from ergon_core.api._definition import import_component_string, to_definition_dict
 from ergon_core.api.errors import TaskNotMaterializedError
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ PayloadT = TypeVar(
 )
 
 
-class Task(DefinitionModelMixin, BaseModel, Generic[PayloadT]):
+class Task(BaseModel, Generic[PayloadT]):
     """Unified definition/runtime task type."""
 
     model_config = {"arbitrary_types_allowed": True, "extra": "ignore", "frozen": False}
@@ -51,8 +51,7 @@ class Task(DefinitionModelMixin, BaseModel, Generic[PayloadT]):
     @field_validator("worker", mode="before")
     @classmethod
     def _inflate_worker(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-        if _is_definition(value):
-            # reason: Worker imports Task for annotations; importing here breaks the model cycle.
+        if cls._is_definition(value):
             from ergon_core.api.worker.worker import Worker
 
             return Worker.from_definition(value)
@@ -61,8 +60,7 @@ class Task(DefinitionModelMixin, BaseModel, Generic[PayloadT]):
     @field_validator("sandbox", mode="before")
     @classmethod
     def _inflate_sandbox(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-        if _is_definition(value):
-            # reason: Sandbox participates in Task's public fields but should not shape import order.
+        if cls._is_definition(value):
             from ergon_core.api.sandbox import Sandbox
 
             return Sandbox.from_definition(value)
@@ -72,11 +70,11 @@ class Task(DefinitionModelMixin, BaseModel, Generic[PayloadT]):
     @classmethod
     def _inflate_evaluators(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
         if isinstance(value, (list, tuple)):
-            # reason: Evaluator imports Criterion, whose context imports Task.
             from ergon_core.api.rubric.evaluator import Evaluator
 
             return tuple(
-                Evaluator.from_definition(item) if _is_definition(item) else item for item in value
+                Evaluator.from_definition(item) if cls._is_definition(item) else item
+                for item in value
             )
         return value
 
@@ -104,9 +102,13 @@ class Task(DefinitionModelMixin, BaseModel, Generic[PayloadT]):
         object.__setattr__(instance, "_task_id", task_id)
         return instance
 
+    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Serialize this task for persisted experiment definitions."""
+        return to_definition_dict(self)
 
-def _is_definition(value: object) -> bool:
-    return isinstance(value, dict) and "_type" in value
+    @staticmethod
+    def _is_definition(value: object) -> bool:
+        return isinstance(value, dict) and "_type" in value
 
 
 from ergon_core.api.sandbox import Sandbox  # noqa: E402

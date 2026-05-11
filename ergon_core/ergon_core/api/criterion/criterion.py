@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api._definition import DefinitionModelMixin, import_component_string
+from ergon_core.api._definition import import_component_string, to_definition_dict
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.criterion.results import CriterionOutcome, ScoreScale
 from ergon_core.api.errors import DependencyError
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from ergon_core.api.sandbox import Sandbox
 
 
-class Criterion(DefinitionModelMixin, BaseModel, ABC):
+class Criterion(BaseModel, ABC):
     """Atomic evaluation unit that owns its own data-pulling and verification logic."""
 
     model_config = {"arbitrary_types_allowed": True, "extra": "allow", "frozen": False}
@@ -63,6 +63,10 @@ class Criterion(DefinitionModelMixin, BaseModel, ABC):
         data = dict(criterion_json)
         data.pop("_type", None)
         return criterion_cls.model_validate(data)
+
+    def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Serialize this criterion for persisted experiment definitions."""
+        return to_definition_dict(self)
 
     @abstractmethod
     async def evaluate(

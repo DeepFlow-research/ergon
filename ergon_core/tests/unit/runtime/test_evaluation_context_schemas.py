@@ -122,7 +122,7 @@ def test_evaluator_dispatch_uses_task_bound_evaluator_and_description(  # noqa: 
                 instance_key="instance",
                 task_slug="task",
                 description="actual task prompt",
-                task_json=task.model_dump(mode="json"),
+                task_json=task.to_definition(),
                 status="completed",
             )
 

@@ -308,7 +308,7 @@ class WorkflowGraphRepository:
         """
         now = utcnow()
         if task is not None:
-            task_json = task.model_dump(mode="json")
+            task_json = task.to_definition()
             task_slug = task.task_slug
             instance_key = task.instance_key
             description = task.description
