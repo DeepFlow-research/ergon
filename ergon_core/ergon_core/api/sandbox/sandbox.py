@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, PrivateAttr
 
-from ergon_core.api._definition import import_component_string, to_definition_dict
+from ergon_core.api._definition import from_definition_dict, to_definition_dict
 from ergon_core.api.errors import SandboxNotLiveError
 from ergon_core.api.sandbox.runtime import SandboxRuntime
 
@@ -26,10 +26,7 @@ class Sandbox(BaseModel, ABC):
         cls, sandbox_json: dict[str, Any]
     ) -> "Sandbox":  # slopcop: ignore[no-typing-any]
         """Reconstruct a concrete sandbox from persisted definition JSON."""
-        sandbox_cls = import_component_string(sandbox_json["_type"])
-        data = dict(sandbox_json)
-        data.pop("_type", None)
-        return sandbox_cls.model_validate(data)
+        return from_definition_dict(sandbox_json)
 
     def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Serialize this sandbox for persisted experiment definitions."""

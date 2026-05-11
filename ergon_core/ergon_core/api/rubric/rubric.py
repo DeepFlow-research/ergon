@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, SerializeAsAny, field_validator
 
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api._definition import from_definition_dict, is_definition
 from ergon_core.api.criterion.criterion import Criterion
 from ergon_core.api.criterion.results import CriterionOutcome
 from ergon_core.api.rubric.evaluator import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult
+
+if TYPE_CHECKING:
+    from ergon_core.api.benchmark.task import Task
 
 
 class WeightedCriterion(BaseModel):
@@ -25,10 +28,9 @@ class WeightedCriterion(BaseModel):
     @field_validator("criterion", mode="before")
     @classmethod
     def _inflate_criterion(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-        if isinstance(value, dict) and "_type" in value:
-            return Criterion.from_definition(value)
+        if is_definition(value):
+            return from_definition_dict(value)
         return value
-
 
 class Rubric(Evaluator):
     """Concrete evaluator with a fixed criteria list."""
@@ -36,6 +38,18 @@ class Rubric(Evaluator):
     type_slug = "rubric"
 
     criteria: tuple[SerializeAsAny[WeightedCriterion], ...]
+
+    @field_validator("criteria", mode="before", check_fields=False)
+    @classmethod
+    def _inflate_criteria(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        if isinstance(value, (list, tuple)):
+            return tuple(
+                WeightedCriterion.model_validate(item)
+                if isinstance(item, dict) and "criterion" in item
+                else item
+                for item in value
+            )
+        return value
 
     def __init__(
         self,

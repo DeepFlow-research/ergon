@@ -27,6 +27,19 @@ def import_component_string(path: str) -> type[Any]:  # slopcop: ignore[no-typin
     return component
 
 
+def is_definition(value: object) -> bool:
+    """Return true for persisted authoring definition dictionaries."""
+    return isinstance(value, dict) and "_type" in value
+
+
+def from_definition_dict(definition: dict[str, Any]) -> Any:  # slopcop: ignore[no-typing-any]
+    """Inflate a `_type`-tagged definition dictionary into its concrete model."""
+    model_cls = import_component_string(definition["_type"])
+    data = dict(definition)
+    data.pop("_type", None)
+    return model_cls.model_validate(data)
+
+
 def to_definition_dict(model: BaseModel) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
     """Serialize a Pydantic authoring object with an explicit type discriminator."""
     data = _definition_model_dump(model)

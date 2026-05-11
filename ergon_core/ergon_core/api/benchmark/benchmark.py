@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, field_validator
 
-from ergon_core.api._definition import import_component_string, to_definition_dict
+from ergon_core.api._definition import from_definition_dict, import_component_string, is_definition, to_definition_dict
 from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.infrastructure.dependencies import check_packages
@@ -107,10 +107,6 @@ class Benchmark(BaseModel, ABC):
     def _inflate_tasks(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
         if isinstance(value, (list, tuple)):
             return tuple(
-                Task.model_validate(item) if cls._is_definition(item) else item for item in value
+                from_definition_dict(item) if is_definition(item) else item for item in value
             )
         return value
-
-    @staticmethod
-    def _is_definition(value: object) -> bool:
-        return isinstance(value, dict) and "_type" in value

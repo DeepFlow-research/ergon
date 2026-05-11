@@ -11,6 +11,7 @@ from ergon_core.api.criterion import Criterion
 from ergon_core.api.errors import SandboxKindMismatch, TaskNotMaterializedError
 from ergon_core.api.rubric import Evaluator
 from ergon_core.api.sandbox import Sandbox
+from ergon_core.core.domain.experiments.validation import ExperimentValidationService
 from ergon_core.core.domain.experiments.handles import DefinitionHandle
 
 
@@ -49,9 +50,6 @@ class Experiment(BaseModel):
 
     def validate(self) -> None:
         """Run cross-component validation before persistence."""
-        # reason: validation imports the public Experiment type for annotations.
-        from ergon_core.core.domain.experiments.validation import ExperimentValidationService
-
         ExperimentValidationService().validate(self)
 
 

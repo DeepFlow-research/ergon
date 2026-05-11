@@ -6,9 +6,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
-from ergon_core.api._definition import import_component_string, to_definition_dict
+from ergon_core.api._definition import from_definition_dict, to_definition_dict
 from ergon_core.api.criterion.results import CriterionOutcome
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.rubric.results import TaskEvaluationResult
@@ -42,23 +42,13 @@ class Evaluator(BaseModel, ABC):
     ) -> None:
         super().__init__(name=name, metadata=dict(metadata or {}), **data)
 
-    @field_validator("criteria", mode="before", check_fields=False)
-    @classmethod
-    def _inflate_criteria(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-        if isinstance(value, (list, tuple)):
-            return tuple(_inflate_criterion_value(item) for item in value)
-        return value
-
     @classmethod
     def from_definition(
         cls,
         evaluator_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
     ) -> "Evaluator":
         """Reconstruct a concrete evaluator from persisted definition JSON."""
-        evaluator_cls = import_component_string(evaluator_json["_type"])
-        data = dict(evaluator_json)
-        data.pop("_type", None)
-        return evaluator_cls.model_validate(data)
+        return from_definition_dict(evaluator_json)
 
     def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Serialize this evaluator for persisted experiment definitions."""
@@ -90,18 +80,3 @@ class Evaluator(BaseModel, ABC):
                 parts.append(f"Install with: {self.install_hint}")
             raise DependencyError("\n".join(parts))
 
-
-def _is_definition(value: object) -> bool:
-    return isinstance(value, dict) and "_type" in value
-
-
-def _inflate_criterion_value(value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-    if isinstance(value, dict) and "criterion" in value:
-        from ergon_core.api.rubric.rubric import WeightedCriterion
-
-        return WeightedCriterion.model_validate(value)
-    if _is_definition(value):
-        from ergon_core.api.criterion.criterion import Criterion
-
-        return Criterion.from_definition(value)
-    return value

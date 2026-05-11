@@ -2,6 +2,8 @@
 
 import importlib
 import inspect
+import ast
+from pathlib import Path
 
 
 def test_public_api_root_exports_semantic_authoring_names_only() -> None:
@@ -125,3 +127,20 @@ def test_public_result_models_do_not_import_core_json_types() -> None:
     assert all(
         "ergon_core.core.shared.json_types" not in inspect.getsource(module) for module in modules
     )
+
+
+def test_public_api_modules_do_not_hide_import_cycles() -> None:
+    api_root = Path(__file__).parents[3] / "ergon_core" / "api"
+    offenders: list[str] = []
+    for path in api_root.rglob("*.py"):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if node.func.attr == "model_rebuild":
+                    offenders.append(f"{path.relative_to(api_root)}:{node.lineno}:model_rebuild")
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for child in ast.walk(node):
+                    if isinstance(child, (ast.Import, ast.ImportFrom)):
+                        offenders.append(f"{path.relative_to(api_root)}:{child.lineno}:function import")
+
+    assert offenders == []

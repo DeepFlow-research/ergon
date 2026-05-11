@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api._definition import import_component_string, to_definition_dict
+from ergon_core.api._definition import from_definition_dict, to_definition_dict
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
@@ -52,10 +52,7 @@ class Worker(BaseModel, ABC):
         cls, worker_json: dict[str, Any]
     ) -> "Worker":  # slopcop: ignore[no-typing-any]
         """Reconstruct a concrete worker from persisted definition JSON."""
-        worker_cls = import_component_string(worker_json["_type"])
-        data = dict(worker_json)
-        data.pop("_type", None)
-        return worker_cls.model_validate(data)
+        return from_definition_dict(worker_json)
 
     def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Serialize this worker for persisted experiment definitions."""
