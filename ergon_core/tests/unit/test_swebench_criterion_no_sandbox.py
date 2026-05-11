@@ -25,6 +25,7 @@ from ergon_core.api import Sandbox, Worker, WorkerContext, WorkerOutput
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.core.application.evaluation.protocols import CommandResult
+from pydantic import ValidationError
 from typing import AsyncGenerator, ClassVar
 
 
@@ -94,7 +95,7 @@ async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
         )
     )
 
-    ctx = CriterionContext(
+    ctx = CriterionContext.with_runtime(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
@@ -122,6 +123,19 @@ async def test_evaluate_calls_ensure_sandbox_not_spawn_eval_sandbox() -> None:
         await criterion.evaluate(ctx)
 
     mock_runtime.ensure_sandbox.assert_awaited_once()
+
+
+def test_criterion_context_runtime_is_not_a_model_field() -> None:
+    """Runtime injection must use the explicit factory, not BaseModel construction."""
+    with pytest.raises(ValidationError):
+        CriterionContext(
+            run_id=uuid4(),
+            task_id=uuid4(),
+            execution_id=uuid4(),
+            task=_task(),
+            worker_result=WorkerOutput(output="", success=True),
+            runtime=MagicMock(),
+        )
 
 
 def test_spawn_eval_sandbox_does_not_exist() -> None:

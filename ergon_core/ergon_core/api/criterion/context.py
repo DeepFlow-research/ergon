@@ -1,18 +1,18 @@
 """Public runtime-facing criterion context."""
 
-from typing import Annotated, Any
+from typing import Any
 from uuid import UUID
 
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.evaluation.protocols import CriterionRuntime
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SkipValidation
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 
 class CriterionContext(BaseModel):
     """Task, worker output, and public criterion capabilities."""
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
     run_id: UUID
     task_id: UUID
@@ -21,17 +21,7 @@ class CriterionContext(BaseModel):
     worker_result: WorkerOutput
     sandbox_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
-    _runtime: Annotated[CriterionRuntime | None, SkipValidation] = PrivateAttr(default=None)
-
-    def __init__(self, **data: Any) -> None:  # slopcop: ignore[no-typing-any]
-        runtime = data.pop("runtime", None)
-        super().__init__(**data)
-        if runtime is not None:
-            object.__setattr__(self, "_runtime", runtime)
-
-    def model_post_init(self, context: Any, /) -> None:  # slopcop: ignore[no-typing-any]
-        if isinstance(context, dict) and "runtime" in context:
-            object.__setattr__(self, "_runtime", context["runtime"])
+    _runtime: CriterionRuntime | None = PrivateAttr(default=None)
 
     @classmethod
     def with_runtime(

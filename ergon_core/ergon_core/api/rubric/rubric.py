@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, SerializeAsAny, field_validator
 
-from ergon_core.api._definition import from_definition_dict, is_definition
 from ergon_core.api.criterion.criterion import Criterion
 from ergon_core.api.criterion.results import CriterionOutcome
 from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult
+from ergon_core.core.domain.definitions import has_definition_type, inflate_definition
 
 if TYPE_CHECKING:
     from ergon_core.api.benchmark.task import Task
@@ -28,8 +28,8 @@ class WeightedCriterion(BaseModel):
     @field_validator("criterion", mode="before")
     @classmethod
     def _inflate_criterion(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-        if is_definition(value):
-            return from_definition_dict(value)
+        if has_definition_type(value):
+            return inflate_definition(value)
         return value
 
 class Rubric(Evaluator):

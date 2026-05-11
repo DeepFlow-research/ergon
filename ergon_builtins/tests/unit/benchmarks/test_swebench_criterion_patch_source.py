@@ -82,7 +82,7 @@ async def test_criterion_computes_patch_via_run_command(
     # Worker produces empty output; criterion must still derive the patch
     # from the sandbox.
     run_id = uuid4()
-    context = CriterionContext(
+    context = CriterionContext.with_runtime(
         run_id=run_id,
         task_id=uuid4(),
         execution_id=uuid4(),
@@ -149,7 +149,7 @@ async def test_criterion_short_circuits_on_empty_patch(
         hints_text="",
     )
 
-    context = CriterionContext(
+    context = CriterionContext.with_runtime(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),

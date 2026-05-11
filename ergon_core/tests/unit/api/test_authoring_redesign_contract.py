@@ -121,6 +121,14 @@ class _Runtime:
         return [path]
 
 
+def test_benchmark_uses_plain_model_field_defaults() -> None:
+    benchmark = _Benchmark(tasks=())
+
+    assert benchmark.name == ""
+    assert benchmark.description == ""
+    assert benchmark.metadata == {}
+
+
 def test_public_exceptions_keep_canonical_context_attributes() -> None:
     task_id = uuid4()
     ancestor = uuid4()

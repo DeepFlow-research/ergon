@@ -56,7 +56,7 @@ class SweBenchVerifiedBenchmark(Benchmark):
         super().__init__(
             name=name or "swebench-verified",
             description=description or "SWE-Bench Verified GitHub issue-fix benchmark",
-            metadata=metadata,
+            metadata=dict(metadata or {}),
             limit=limit,
             worker=worker or SWEBenchReactWorker(name="default", model=None),
             sandbox=sandbox or SWEBenchSandbox(),

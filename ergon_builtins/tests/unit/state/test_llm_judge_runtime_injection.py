@@ -1,7 +1,7 @@
 """Tests for LLM-judge criteria using provider-owned structured judge calls.
 
 Verifies:
-- CriterionContext accepts an optional runtime field
+- CriterionContext accepts runtime through its explicit factory
 - LLMJudgeCriterion.evaluate() does not rely on CriterionRuntime LLM policy
 - Legacy criteria that ignore context.runtime keep working
 """
@@ -41,7 +41,7 @@ def _make_eval_context(
     *,
     runtime: object = None,
 ) -> CriterionContext:
-    return CriterionContext(
+    return CriterionContext.with_runtime(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),

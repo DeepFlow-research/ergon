@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api._definition import from_definition_dict, to_definition_dict
 from ergon_core.api.criterion.results import CriterionOutcome, ScoreScale
 from ergon_core.api.errors import DependencyError
+from ergon_core.core.domain.definitions import inflate_definition, serialize_definition
 from ergon_core.core.infrastructure.dependencies import check_packages
 
 if TYPE_CHECKING:
@@ -25,33 +24,14 @@ class Criterion(BaseModel, ABC):
 
     type_slug: ClassVar[str]
     required_packages: ClassVar[list[str]] = []
-    install_hint: ClassVar[str] = ""
+    install_hint: ClassVar[str]
     requires_sandbox: ClassVar[type[Sandbox] | None] = None
 
     slug: str
-    description: str
+    description: str = ""  # slopcop: ignore[no-str-empty-default]
     weight: float = 1.0
     score_spec: ScoreScale = Field(default_factory=ScoreScale)
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
-
-    def __init__(
-        self,
-        *,
-        slug: str,
-        description: str | None = None,
-        weight: float = 1.0,
-        score_spec: ScoreScale | None = None,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-        **data: Any,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(
-            slug=slug,
-            description=description or slug,
-            weight=weight,
-            score_spec=score_spec or ScoreScale(),
-            metadata=dict(metadata or {}),
-            **data,
-        )
 
     @classmethod
     def from_definition(
@@ -59,11 +39,11 @@ class Criterion(BaseModel, ABC):
         criterion_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
     ) -> "Criterion":
         """Reconstruct a concrete criterion from persisted definition JSON."""
-        return from_definition_dict(criterion_json)
+        return inflate_definition(criterion_json)
 
     def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Serialize this criterion for persisted experiment definitions."""
-        return to_definition_dict(self)
+        return serialize_definition(self)
 
     @abstractmethod
     async def evaluate(

@@ -60,7 +60,7 @@ class ResearchRubricsBenchmark(Benchmark):
         super().__init__(
             name=name or "researchrubrics",
             description=description or "ResearchRubrics deep-research benchmark",
-            metadata=metadata,
+            metadata=dict(metadata or {}),
             limit=limit,
             worker=worker or ResearchRubricsWorkflowCliReActWorker(name="default", model=None),
             sandbox=sandbox or ResearchRubricsSandbox(),

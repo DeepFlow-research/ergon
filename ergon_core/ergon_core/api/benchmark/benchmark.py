@@ -8,9 +8,13 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field, field_validator
 
-from ergon_core.api._definition import from_definition_dict, import_component_string, is_definition, to_definition_dict
 from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import DependencyError
+from ergon_core.core.domain.definitions import (
+    has_definition_type,
+    inflate_definition,
+    serialize_definition,
+)
 from ergon_core.core.infrastructure.dependencies import check_packages
 
 
@@ -24,28 +28,9 @@ class Benchmark(BaseModel, ABC):
     required_packages: ClassVar[list[str]] = []
     install_hint: ClassVar[str]
 
-    name: str
-    description: str
+    name: str = ""  # slopcop: ignore[no-str-empty-default]
+    description: str = ""  # slopcop: ignore[no-str-empty-default]
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
-
-    def __init__(
-        self,
-        *,
-        name: str | None = None,
-        description: str | None = None,
-        metadata: Mapping[
-            str,
-            Any,  # slopcop: ignore[no-typing-any] -- public metadata bag accepts arbitrary JSON-like values
-        ]
-        | None = None,
-        **data: Any,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(
-            name=name or self.__class__.__name__,
-            description=description or "",
-            metadata=dict(metadata or {}),
-            **data,
-        )
 
     @classmethod
     def from_definition(
@@ -53,14 +38,11 @@ class Benchmark(BaseModel, ABC):
         benchmark_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
     ) -> "Benchmark":
         """Reconstruct a concrete benchmark from persisted definition JSON."""
-        benchmark_cls = import_component_string(benchmark_json["_type"])
-        data = dict(benchmark_json)
-        data.pop("_type", None)
-        return benchmark_cls.model_validate(data)
+        return inflate_definition(benchmark_json)
 
     def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Serialize this benchmark for persisted experiment definitions."""
-        return to_definition_dict(self)
+        return serialize_definition(self)
 
     @abstractmethod
     def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
@@ -107,6 +89,6 @@ class Benchmark(BaseModel, ABC):
     def _inflate_tasks(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
         if isinstance(value, (list, tuple)):
             return tuple(
-                from_definition_dict(item) if is_definition(item) else item for item in value
+                inflate_definition(item) if has_definition_type(item) else item for item in value
             )
         return value

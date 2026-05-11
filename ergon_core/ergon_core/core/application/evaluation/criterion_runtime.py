@@ -12,7 +12,6 @@ from ergon_core.core.application.evaluation.protocols import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource
-from ergon_core.core.infrastructure.sandbox.errors import SandboxExpiredError
 from ergon_core.core.infrastructure.sandbox.event_sink import (
     NoopSandboxEventSink,
     SandboxEventSink,
@@ -21,15 +20,13 @@ from ergon_core.core.application.evaluation.models import CriterionContext
 from ergon_core.core.application.resources import RunResourceView
 from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session, desc, select
+from ergon_core.core.application.evaluation.errors import ResourceNotFoundError
 
 if TYPE_CHECKING:
     from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox, BaseSandboxManager
 
 logger = logging.getLogger(__name__)
 
-
-class ResourceNotFoundError(LookupError):
-    """Raised by ``read_resource`` when no ``RunResource`` row matches the name."""
 
 
 class CriterionRuntimeOptions(BaseModel):

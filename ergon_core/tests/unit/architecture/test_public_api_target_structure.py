@@ -96,6 +96,11 @@ def test_old_core_experiment_module_stays_deleted() -> None:
     assert importlib.util.find_spec("ergon_core.core.domain.experiments.experiment") is None
 
 
+def test_definition_serialization_is_not_an_api_private_module() -> None:
+    assert importlib.util.find_spec("ergon_core.api._definition") is None
+    assert importlib.util.find_spec("ergon_core.core.domain.definitions.serialization") is not None
+
+
 def test_public_worker_module_does_not_import_persistence_or_sessions() -> None:
     worker_module = importlib.import_module("ergon_core.api.worker.worker")
     source = inspect.getsource(worker_module)

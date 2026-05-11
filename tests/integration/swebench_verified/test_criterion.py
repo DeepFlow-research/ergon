@@ -74,7 +74,7 @@ def _ctx(
     runtime: object | None = None,
 ) -> CriterionContext:
     run_id = uuid4()
-    return CriterionContext(
+    return CriterionContext.with_runtime(
         run_id=run_id,
         task_id=uuid4(),
         execution_id=uuid4(),

@@ -5,6 +5,7 @@ import pytest
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome, ScoreScale
+from pydantic import ValidationError
 
 
 class _Criterion(Criterion):
@@ -19,7 +20,7 @@ class _Criterion(Criterion):
 
 
 def test_criterion_requires_slug_keyword() -> None:
-    with pytest.raises(TypeError):
+    with pytest.raises(ValidationError):
         _Criterion(name="legacy-name")  # type: ignore[call-arg]
 
 
@@ -33,3 +34,12 @@ def test_criterion_exposes_slug_and_score_spec_without_compatibility_aliases() -
     assert criterion.score_spec.max_score == 2.5
     assert not hasattr(criterion, "name")
     assert not hasattr(criterion, "max_score")
+
+
+def test_criterion_uses_plain_model_field_defaults() -> None:
+    criterion = _Criterion(slug="canonical-slug")
+
+    assert criterion.description == ""
+    assert criterion.weight == 1.0
+    assert criterion.score_spec == ScoreScale()
+    assert criterion.metadata == {}

@@ -20,7 +20,7 @@ class WorkerContext(BaseModel):
             "config. Used by delegation tools to resolve assigned_worker_slug "
             "to worker_type."
         ),
-    )
+    ) #TODO: find some way to remove this, seems like a bad dependency
     execution_id: UUID
     sandbox_id: str
     task_id: UUID

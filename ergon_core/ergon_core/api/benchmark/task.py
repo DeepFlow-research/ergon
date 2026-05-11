@@ -8,16 +8,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, PrivateAttr, SerializeAsAny, field_validator
 
-from ergon_core.api._definition import (
-    from_definition_dict,
-    import_component_string,
-    is_definition,
-    to_definition_dict,
-)
 from ergon_core.api.evaluator import Evaluator
 from ergon_core.api.errors import TaskNotMaterializedError
 from ergon_core.api.sandbox.sandbox import Sandbox
 from ergon_core.api.worker.worker import Worker
+from ergon_core.core.domain.definitions import (
+    has_definition_type,
+    inflate_definition,
+    serialize_definition,
+)
 
 
 class EmptyTaskPayload(BaseModel):
@@ -54,15 +53,15 @@ class Task(BaseModel, Generic[PayloadT]):
     @field_validator("worker", mode="before")
     @classmethod
     def _inflate_worker(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-        if is_definition(value):
-            return from_definition_dict(value)
+        if has_definition_type(value):
+            return inflate_definition(value)
         return value
 
     @field_validator("sandbox", mode="before")
     @classmethod
     def _inflate_sandbox(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
-        if is_definition(value):
-            return from_definition_dict(value)
+        if has_definition_type(value):
+            return inflate_definition(value)
         return value
 
     @field_validator("evaluators", mode="before")
@@ -70,7 +69,7 @@ class Task(BaseModel, Generic[PayloadT]):
     def _inflate_evaluators(cls, value: Any) -> Any:  # slopcop: ignore[no-typing-any]
         if isinstance(value, (list, tuple)):
             return tuple(
-                from_definition_dict(item) if is_definition(item) else item for item in value
+                inflate_definition(item) if has_definition_type(item) else item for item in value
             )
         return value
 
@@ -91,14 +90,11 @@ class Task(BaseModel, Generic[PayloadT]):
         task_id: UUID,
     ) -> "Task":
         """Reconstruct a task and bind its runtime identity."""
-        task_cls = import_component_string(task_json["_type"])
-        data = dict(task_json)
-        data.pop("_type", None)
-        instance = task_cls.model_validate(data)
+        instance = inflate_definition(task_json)
         object.__setattr__(instance, "_task_id", task_id)
         return instance
 
     def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Serialize this task for persisted experiment definitions."""
-        return to_definition_dict(self)
+        return serialize_definition(self)
 

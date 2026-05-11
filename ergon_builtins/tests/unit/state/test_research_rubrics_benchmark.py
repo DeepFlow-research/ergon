@@ -304,7 +304,7 @@ class TestResearchRubricsJudgeCriterion:
                 str(scratch_resource.id): scratch_blob,
             },
         )
-        context = CriterionContext(
+        context = CriterionContext.with_runtime(
             run_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),

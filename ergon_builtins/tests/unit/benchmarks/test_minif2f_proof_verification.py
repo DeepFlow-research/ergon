@@ -67,7 +67,7 @@ async def test_reads_proof_via_runtime_read_resource() -> None:
     # `metadata`; if the production path were still reaching into metadata,
     # `_verify_proof` would short-circuit on "No criterion runtime" and
     # `read_resource` would never be awaited.
-    context = CriterionContext(
+    context = CriterionContext.with_runtime(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
@@ -93,7 +93,7 @@ async def test_scores_zero_when_proof_missing() -> None:
     runtime = MagicMock()
     runtime.read_resource = AsyncMock(side_effect=ResourceNotFoundError("missing"))
 
-    context = CriterionContext(
+    context = CriterionContext.with_runtime(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),

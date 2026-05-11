@@ -58,7 +58,7 @@ class MiniF2FBenchmark(Benchmark):
         super().__init__(
             name=name or "minif2f",
             description=description or "MiniF2F formal math proof benchmark (Lean 4, v2c)",
-            metadata=metadata,
+            metadata=dict(metadata or {}),
             data_dir=Path(data_dir) if data_dir else None,
             limit=limit,
             worker=worker or MiniF2FReactWorker(name="default", model=None),

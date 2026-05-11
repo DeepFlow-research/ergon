@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, Field
 
-from ergon_core.api._definition import from_definition_dict, to_definition_dict
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.sandbox.sandbox import Sandbox
+from ergon_core.core.domain.definitions import inflate_definition, serialize_definition
 from ergon_core.core.infrastructure.dependencies import check_packages
 
 if TYPE_CHECKING:
@@ -48,11 +48,11 @@ class Evaluator(BaseModel, ABC):
         evaluator_json: dict[str, Any],  # slopcop: ignore[no-typing-any]
     ) -> "Evaluator":
         """Reconstruct a concrete evaluator from persisted definition JSON."""
-        return from_definition_dict(evaluator_json)
+        return inflate_definition(evaluator_json)
 
     def to_definition(self) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Serialize this evaluator for persisted experiment definitions."""
-        return to_definition_dict(self)
+        return serialize_definition(self)
 
     @abstractmethod
     def criteria_for(self, task: Task) -> Iterable[Criterion]:
