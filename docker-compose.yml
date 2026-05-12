@@ -115,6 +115,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # Without this, ``docker compose up --wait`` only waits for Postgres.
+    # Uvicorn + ``--reload`` can still be importing when CI starts Playwright,
+    # so ``GET /api/health`` in the dashboard sees a failing ``ergon_api``
+    # probe and returns 503 (see ``ergon-dashboard/tests/e2e/health.spec.ts``).
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health >/dev/null || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
     command: >
       uvicorn ergon_cli.api_app:app
       --host 0.0.0.0 --port 9000 --reload

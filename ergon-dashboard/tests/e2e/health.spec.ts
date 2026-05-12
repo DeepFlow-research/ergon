@@ -11,6 +11,20 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Health endpoint", () => {
   test("returns 200 with healthy status when build is fresh", async ({ request }) => {
+    // The dashboard health probe calls the Ergon API; in CI the API
+    // container can lag behind ``docker compose --wait`` (which only
+    // waited for Postgres before we added an API healthcheck). Poll so
+    // the test is stable even if the API is briefly slow to accept HTTP.
+    await expect
+      .poll(
+        async () => {
+          const res = await request.get("/api/health");
+          return res.status();
+        },
+        { timeout: 60_000 },
+      )
+      .toBe(200);
+
     const res = await request.get("/api/health");
     expect(res.status()).toBe(200);
 

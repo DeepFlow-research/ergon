@@ -211,6 +211,18 @@ test("run debugger panels can be resized and persist across reloads", async ({ p
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
   await expect(page.getByTestId("timeline-region")).toBeVisible();
 
+  // ``toBeVisible`` can pass before react-resizable-panels has laid out
+  // non-zero geometry; ``boundingBox()`` then returns null and the drag
+  // math fails. Wait for real layout (CI Chromium can be slower than local).
+  await expect
+    .poll(async () => {
+      const region = await page.getByTestId("timeline-region").boundingBox();
+      const handle = await page.getByTestId("timeline-resize-handle").boundingBox();
+      if (region == null || handle == null) return 0;
+      return Math.min(region.height, handle.height);
+    })
+    .toBeGreaterThan(4);
+
   const timelineBefore = await page.getByTestId("timeline-region").boundingBox();
   const timelineHandle = page.getByTestId("timeline-resize-handle");
   const timelineHandleBox = await timelineHandle.boundingBox();
@@ -233,6 +245,15 @@ test("run debugger panels can be resized and persist across reloads", async ({ p
 
   await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
   await expect(page.getByTestId("workspace-region")).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const region = await page.getByTestId("workspace-region").boundingBox();
+      const handle = await page.getByTestId("workspace-resize-handle").boundingBox();
+      if (region == null || handle == null) return 0;
+      return Math.min(region.width, handle.width);
+    })
+    .toBeGreaterThan(4);
 
   const workspaceBefore = await page.getByTestId("workspace-region").boundingBox();
   const workspaceHandle = page.getByTestId("workspace-resize-handle");
