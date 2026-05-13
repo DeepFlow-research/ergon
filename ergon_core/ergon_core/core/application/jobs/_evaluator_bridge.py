@@ -49,6 +49,8 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 
+# TODO(PR 5): delete with the module; consumers read evaluator instance
+# and binding metadata directly off `task.evaluators[i]`.
 class BoundEvaluator(BaseModel):
     """The 4-tuple PR 4 needs from the multi-hop evaluator lookup.
 
@@ -74,6 +76,8 @@ class BoundEvaluator(BaseModel):
     evaluator_type: str
 
 
+# TODO(PR 5): delete with the module; the call site collapses to
+# `evaluator = task.evaluators[payload.evaluator_index]`.
 def resolve_evaluator(
     session: Session,
     *,

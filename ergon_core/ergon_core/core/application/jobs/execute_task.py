@@ -497,6 +497,8 @@ async def run_execute_task_job(
         # `terminate_sandbox_by_id` helper itself is on the PR 11 Δ.7
         # deletion list once nothing else imports it.
         if task_sandbox_id is not None:
+            # TODO(PR 5 or 6): swap for `await lifecycle_hub.release(sandbox)`
+            # once the hub primitive lands; same ownership boundary, cleaner API.
             termination = await terminate_sandbox_by_id(task_sandbox_id)
             logger.info(
                 "task-execute sandbox cleanup sandbox_id=%s terminated=%s reason=%s",
