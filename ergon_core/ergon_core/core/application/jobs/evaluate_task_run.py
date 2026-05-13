@@ -1,26 +1,32 @@
 """Per-evaluator Inngest function — thin id-only payload, run-tier reads.
 
-PR 4 reshape: ``evaluate_task_run`` takes a thin ``TaskEvaluateRequest``
-(``run_id`` + ``task_id`` + ``execution_id`` + ``evaluator_index``)
-and reloads everything else through the run-tier read boundary:
+Receives one ``TaskEvaluateRequest`` per evaluator from the
+orchestrator's `asyncio.gather` (see `execute_task._fan_out_evaluators`).
+The payload only carries identity (``run_id`` + ``task_id`` +
+``execution_id`` + ``evaluator_index``); everything else is
+reconstructed locally from the run-tier read boundary:
 
-- execution row + stamped ``sandbox_id`` via ``session.get(RunTaskExecution)``
-- typed Task view via ``WorkflowGraphRepository.node(..., sandbox_id=...)``
-- persisted ``WorkerOutput`` via ``WorkerOutputRepository.load``
-- evaluator instance via the PR 4 ``_evaluator_bridge`` (TODO(PR 5):
-  drop the bridge once ``task.evaluators`` is object-bound)
+- execution row + stamped ``sandbox_id`` ← ``session.get(RunTaskExecution)``
+- typed Task view ← ``WorkflowGraphRepository.node(..., sandbox_id=...)``
+- persisted ``WorkerOutput`` ← ``WorkerOutputRepository.load``
+- evaluator instance ← `_evaluator_bridge.resolve_evaluator` (PR 4-only
+  multi-hop lookup; PR 5 collapses it to `task.evaluators[i]` once the
+  Task carries `Evaluator` instances directly — see
+  `_evaluator_bridge.py` module docstring for the lift plan)
 
-The criterion runner is ``EvaluationService.evaluate_inline`` — no
-``CriterionExecutor`` Protocol on this path. The Inngest retry unit
-shifts from "per criterion ``step.run``" to "per evaluator
-``step.invoke``" because the orchestrator (``execute_task``) now
-fans out one Inngest invocation per evaluator.
+Criteria run inline via ``EvaluationService.evaluate_inline``: no
+``CriterionExecutor`` Protocol, no per-criterion ``ctx.step.run``.
+The Inngest retry unit is now the whole evaluator, because the
+orchestrator already gives one ``step.invoke`` per evaluator via
+the synchronous-fanout boundary in `execute_task`.
 
-Sandbox lifetime: the eval worker does **not** terminate or detach
-sandboxes. ``execute_task``'s ``try/finally`` owns external sandbox
-lifetime through the orchestrator's ``asyncio.gather``. PR 5 adds
-``task.sandbox.detach()`` for the local handle once ``Sandbox`` is a
-real ABC.
+Sandbox lifetime: this function **never** terminates or detaches a
+sandbox. `execute_task`'s `try/finally` owns external sandbox
+lifetime end-to-end (release happens after every fan-out invoke
+returns). PR 5 (Task 4c § Step 1) adds an eval-side
+``await task.sandbox.detach()`` once `Sandbox` exists as a real ABC,
+to release the *local* `_runtime` handle — the external sandbox stays
+owned by the orchestrator.
 """
 
 import logging

@@ -1,31 +1,40 @@
-"""Transitional evaluator-resolution bridge for the PR 4 eval body.
+"""Picks the i-th evaluator for a task during the PR 4 → PR 5 window.
 
-TODO(PR 5): delete this module. PR 5 binds evaluators directly to the
-``Task`` (``task.evaluators: tuple[Evaluator, ...]``); once that lands,
-``evaluate_task_run`` picks ``task.evaluators[index]`` and the
-ComponentCatalog / DefinitionRepository code path goes away entirely.
+**Why this module exists.** The v2 final shape is
+``evaluator = task.evaluators[i]`` — `Task` carries fully-constructed
+`Evaluator` *instances* directly. That field lands in **PR 5**
+(`06-pr-05-object-bound-api.md` Task 2). PR 4 is the PR before that:
+`Task` still only carries `evaluator_binding_keys: tuple[str, ...]`
+(opaque strings), so resolving an evaluator from an index requires a
+multi-hop lookup. This module is the multi-hop lookup, kept in one
+named place so it's grep-able and deletable.
 
-This module exists because PR 4 lands the synchronous-fanout
-invariant (orchestrator-bounded sandbox lifetime) against the *current*
-codebase, where ``Task`` still only carries ``evaluator_binding_keys:
-tuple[str, ...]``. To resolve the i-th evaluator we walk:
+**What the real shape will look like in PR 5:**
 
-    1. ``task.evaluator_binding_keys[i]`` → binding key
+    evaluator = task.evaluators[payload.evaluator_index]
+
+**What this module does today, between PR 4 and PR 5:**
+
+    1. ``task.evaluator_binding_keys[i]`` → binding key (string)
     2. ``RunRecord.workflow_definition_id`` → definition id
-    3. ``ExperimentDefinitionEvaluator`` row for (definition_id, binding_key)
-       → ``evaluator_type`` (slug) + persistence id
+    3. ``ExperimentDefinitionEvaluator`` row for
+       ``(definition_id, binding_key)`` → ``evaluator_type`` slug +
+       persistence id
     4. ``ComponentCatalogService.resolve_evaluator(slug)`` → class
-    5. ``cls(name=binding_key)`` → instance
+    5. ``cls(name=binding_key)`` → live instance
 
-This whole tower is replaced by ``task.evaluators[i]`` in PR 5.
+Steps 1–5 collapse to one attribute access (`task.evaluators[i]`)
+once PR 5 lands.
 
-The bridge intentionally lives in a *sibling* module to
-``evaluate_task_run.py`` so the architecture guard
-``test_evaluate_task_run_uses_thin_payload_and_run_tier_read`` keeps
-passing: the guard checks the eval job's body for definition-tier
-identifiers — putting them in this sibling module instead of in the
-job body satisfies the guard without losing the wiring during the
-transition.
+**Why a sibling module instead of inline.** PR 4's architecture
+guard `test_evaluate_task_run_uses_thin_payload_and_run_tier_read`
+checks the *body* of `evaluate_task_run.py` for definition-tier
+identifiers (`DefinitionRepository`, `ComponentCatalogService`,
+definition table classes). Keeping the multi-hop lookup in a sibling
+file leaves the eval job body matching its v2 shape while preserving
+the wiring needed to run today. PR 5 Task 4c § "Retire
+`_evaluator_bridge.py`" deletes this file — `git rm` the module,
+inline `task.evaluators[i]` at the one call site.
 """
 
 from uuid import UUID
@@ -41,13 +50,20 @@ from sqlmodel import Session, select
 
 
 class BoundEvaluator(BaseModel):
-    """Result of resolving the i-th evaluator for a task at PR 4.
+    """The 4-tuple PR 4 needs from the multi-hop evaluator lookup.
 
-    Carries both the live ``Evaluator`` instance and the persistence
+    Holds the live ``Evaluator`` instance plus the persistence
     identifiers (``evaluator_id``, ``binding_key``, ``evaluator_type``)
-    the persistence layer needs for ``RunTaskEvaluation`` rows. PR 5
-    folds all of this into ``task.evaluators[i]`` (the evaluator
-    instance) plus identifiers carried implicitly by the Task snapshot.
+    that ``RunTaskEvaluation`` rows need at insertion time. In v1 those
+    identifiers were passed through the wire payload — that's the
+    multi-field ``EvaluateTaskRunRequest`` PR 4 retired. Now that the
+    wire payload is thin (`TaskEvaluateRequest`), the receiver has to
+    *reconstruct* the same identifiers on its side; this DTO is what
+    the bridge returns to the eval job.
+
+    In PR 5 the eval body picks ``task.evaluators[i]`` directly and
+    reads ``evaluator_id`` / ``binding_key`` from the Task snapshot,
+    at which point this class goes away with the module.
     """
 
     model_config = {"frozen": True, "arbitrary_types_allowed": True}
@@ -65,7 +81,12 @@ def resolve_evaluator(
     task: Task,
     evaluator_index: int,
 ) -> BoundEvaluator:
-    """Pick the i-th evaluator from a task's binding keys.
+    """PR 4-only multi-hop replacement for ``task.evaluators[i]``.
+
+    Walks ``evaluator_binding_keys`` → ``ExperimentDefinitionEvaluator``
+    → ``ComponentCatalogService.resolve_evaluator`` → instance, plus
+    the persistence ids the legacy wire payload used to carry. PR 5's
+    object-bound `Task.evaluators` makes every hop go away.
 
     Loud failure modes:
 

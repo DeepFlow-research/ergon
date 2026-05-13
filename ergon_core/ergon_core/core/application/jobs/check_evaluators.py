@@ -1,25 +1,37 @@
-"""Legacy ``check_evaluators`` handler. Replaced by synchronous fanout
-in PR 4.
+"""Inert stub of the legacy `check_evaluators` Inngest function.
 
-Pre-PR-4, this function listened on ``task/completed`` and (a) invoked
-``evaluate_task_run`` per evaluator and (b) terminated the sandbox.
-Both responsibilities have moved into ``execute_task.py``'s
-``try/finally`` so the sandbox is released by the same job that
-acquired it.
+**Status:** unregistered with Inngest (see
+`core/infrastructure/inngest/registry.py`), zero production callers.
+The file only exists so in-flight worktrees from before PR 4 can
+still `import` it without `ImportError` while they rebase.
 
-The module stays importable until PR 11 deletes it so worktrees that
-have not yet rebased can still load it without ImportError. The
-Inngest function is no longer registered with ``ALL_FUNCTIONS`` (see
-``core/infrastructure/inngest/registry.py``).
+**Why it was retired.** Pre-PR-4 this job listened on `task/completed`
+and did two things: (1) invoked `evaluate_task_run` once per evaluator
+(fire-and-forget) and (2) called `terminate_sandbox_by_id`. Step 2
+ran in a *sibling* Inngest function from the one that acquired the
+sandbox, so under retry replay the sandbox could be terminated while
+eval workers were still running against it — the v1 lifecycle leak.
+PR 4 fixes that by moving both responsibilities into
+`execute_task.py`'s single `try/finally`:
 
-TODO(PR 11): delete this file. PR 4 unhooks the Inngest registration
-and migrates every behavior; PR 11 drops the source.
+  * fanout: `_fan_out_evaluators` → `ctx.step.invoke` + `asyncio.gather`
+  * release: `terminate_sandbox_by_id` in the orchestrator's `finally`
+
+External sandbox lifetime is now bounded by the same function that
+acquired the sandbox, end of story.
+
+**Deletion gate.** PR 11 (see RFC `09-implementation-plan` Δ.7
+deletion list) deletes this file along with `EvaluateTaskRunRequest`
+(the legacy multi-field payload), the `CriterionExecutor` Protocol,
+and `terminate_sandbox_by_id`. No new code should land that touches
+this module — if you find yourself wanting to import from it, route
+through the orchestrator instead.
 """
 
 from typing import Any
 
-from ergon_core.core.application.jobs.models import EvaluatorsResult
 from ergon_core.core.application.events.task_events import TaskCompletedEvent
+from ergon_core.core.application.jobs.models import EvaluatorsResult
 
 
 async def run_check_evaluators_job(
@@ -28,12 +40,13 @@ async def run_check_evaluators_job(
     *,
     evaluate_task_run_function: Any,
 ) -> EvaluatorsResult:
-    """Inert stub. The synchronous fanout in ``execute_task`` makes
-    this dispatch obsolete; callers should not reach this path because
-    the function is unregistered with Inngest.
+    """Returns a zero-evaluator result without doing anything.
 
-    Kept as a callable so ad-hoc imports/tests don't fail loudly during
-    the PR 4 → PR 11 transition.
+    Reached only by ad-hoc tests/imports during the PR 4 → PR 11
+    transition — the Inngest dispatcher will never call this because
+    the function is not in `ALL_FUNCTIONS`. Returning a real value
+    (instead of raising) keeps stale callers green so the deletion
+    in PR 11 is purely mechanical.
     """
 
     del ctx, evaluate_task_run_function

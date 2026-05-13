@@ -137,12 +137,18 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
             },
         )
 
-    # PR 4: persist the terminal WorkerOutput and stamp the sandbox_id
-    # onto the execution row BEFORE the orchestrator fans out evaluators.
-    # Per-evaluator Inngest workers reload both via the run-tier read
-    # boundary (`WorkerOutputRepository.load` and
-    # `graph_repo.node(..., sandbox_id=...)`), so the writes must
-    # commit before the fanout.
+    # Persist worker output + stamp sandbox_id BEFORE returning to the
+    # orchestrator. The orchestrator's next step is the per-evaluator
+    # fanout (`execute_task._fan_out_evaluators`); each eval worker
+    # receives only a thin `TaskEvaluateRequest` and reloads everything
+    # else from the run-tier read boundary:
+    #
+    #   WorkerOutput      ← WorkerOutputRepository.load(execution_id)
+    #   live sandbox_id   ← session.get(RunTaskExecution, ...).sandbox_id
+    #                       (then fed to graph_repo.node(..., sandbox_id=))
+    #
+    # Both reads happen *after* the orchestrator's gather starts, so
+    # both writes have to commit before this function returns.
     with get_session() as session:
         await WorkerOutputRepository().persist(
             session,

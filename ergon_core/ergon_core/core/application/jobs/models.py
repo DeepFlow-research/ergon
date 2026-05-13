@@ -60,11 +60,28 @@ class PersistOutputsRequest(InngestEventContract):
 
 
 class EvaluateTaskRunRequest(InngestEventContract):
-    """Legacy v1 multi-field evaluate-task-run payload.
+    """Legacy v1 multi-field `task/evaluate` payload — kept importable
+    only so pre-PR-4 worktrees can still load this module.
 
-    TODO(PR 11): delete. PR 4 reshaped `evaluate_task_run` to take
-    `TaskEvaluateRequest` (id-only) instead. The class stays
-    importable as a forwarding shim until the cleanup PR.
+    **Live status:** no production sender, no production receiver.
+    The Inngest function on `task/evaluate` was switched to validate
+    against `TaskEvaluateRequest` in PR 4 (see
+    `core/infrastructure/inngest/handlers/evaluate_task_run.py`).
+    Sending an event with this payload shape into Inngest now fails
+    validation at the handler boundary.
+
+    **Why the class still exists.** A few in-flight branches (and the
+    pre-PR-4 dashboard fixtures) still `import EvaluateTaskRunRequest`
+    at module load time. Deleting the class right now would break
+    `import` on those branches before they rebase. So PR 4 retired
+    every code path that *uses* it; PR 11 deletes the class itself.
+
+    **Why it's not the wire shape any more.** The new contract
+    (`TaskEvaluateRequest`) is id-only: every other piece of state
+    (`task_config`, `sandbox_id`, `worker_output`, evaluator instance)
+    is recovered by the receiver via persisted-state lookups, so
+    retries/replays are trivially correct — the payload carries
+    identity, the state lives in the database.
     """
 
     model_config = {"extra": "allow"}
@@ -83,16 +100,22 @@ class EvaluateTaskRunRequest(InngestEventContract):
 
 
 class TaskEvaluateRequest(InngestEventContract):
-    """Thin id-only payload for the per-evaluator Inngest function.
+    """v2 wire shape for `task/evaluate`. The id-only payload — every
+    other piece of state is reloaded from persistence by the receiver.
 
-    Every other piece of state — task config, sandbox_id,
-    worker_output, evaluator instance — is recovered by the receiver
-    via persisted-state lookups. This keeps retries / replays
-    trivially correct: the payload is just identity, the state lives
-    in the database.
+    Carried fields:
+        run_id          identifies the run (for `RunRecord` lookups)
+        task_id         identifies the task within the run
+        execution_id    identifies the specific worker execution being
+                        evaluated; also the join key to the persisted
+                        WorkerOutput and stamped sandbox_id
+        evaluator_index 0-based index into `task.evaluator_binding_keys`
+                        (PR 4) / `task.evaluators` (PR 5)
 
-    Δ.4: replaces `EvaluateTaskRunRequest` as the wire shape of the
-    per-evaluator fanout target.
+    Sent by `execute_task._fan_out_evaluators` (one event per
+    evaluator, via `asyncio.gather` over `ctx.step.invoke`). Received
+    by `run_evaluate_task_run_job`, which reloads everything else
+    through the run-tier read boundary.
     """
 
     model_config = {"frozen": True}

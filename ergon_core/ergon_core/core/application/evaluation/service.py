@@ -169,18 +169,25 @@ class EvaluationService:
     ) -> EvaluationServiceResult:
         """Run every criterion inline against a single ``CriterionContext``.
 
-        PR 4's synchronous-fanout reshape moves the Inngest function
-        boundary from "one ``step.run`` per criterion" to "one
-        ``step.invoke`` per evaluator". Inside the per-evaluator
-        function we no longer need the ``CriterionExecutor`` indirection
-        — we just iterate ``evaluator.criteria_for(task)`` and await
-        ``criterion.evaluate(context)`` directly. The Inngest retry
-        unit is now the whole evaluator (the orchestrator fanout
-        already gives per-evaluator step IDs).
+        **Why this method exists alongside `evaluate(...)`.** v1 wrapped
+        each criterion in its own ``ctx.step.run`` boundary via
+        ``CriterionExecutor`` so a flaky single criterion could retry
+        without re-running its peers. PR 4 widened the Inngest retry
+        unit from "per criterion" to "per evaluator" by giving each
+        evaluator its own ``ctx.step.invoke`` at the orchestrator
+        boundary (see `execute_task._fan_out_evaluators`). With retry
+        granularity already living at the evaluator level, the
+        per-criterion ``step.run`` indirection becomes dead weight, so
+        this method just iterates ``evaluator.criteria_for(task)`` and
+        awaits ``criterion.evaluate(context)`` directly.
 
-        TODO(PR 11): collapse this into ``evaluate(...)`` once nothing
-        imports the legacy multi-argument signature, and delete
-        ``CriterionExecutor`` + ``InngestCriterionExecutor``.
+        **Why both methods exist during the transition.** The legacy
+        ``evaluate(task_context, evaluator, task, benchmark_name)``
+        still has callers in tests and benchmarks that haven't been
+        migrated yet. PR 11 (Δ.7 deletion list) collapses the two by
+        deleting the legacy signature, the ``CriterionExecutor``
+        Protocol, and ``InngestCriterionExecutor`` together — at that
+        point this method can be renamed back to ``evaluate``.
         """
 
         task = context.task
