@@ -101,7 +101,7 @@ fixes each:
 
 - Modify: `docs/rfcs/active/2026-05-11-authoring-api-redesign-v2/07-test-strategy.md`
 
-- [ ] **Step 1: Add the standard section**
+- [x] **Step 1: Add the standard section**
 
 Add a new section to `07-test-strategy.md` after § 0 documenting the
 10 rules — see Task 1 Step 2 of `07-test-strategy.md` update. The
@@ -114,7 +114,7 @@ messages.
 
 - Create: `ergon_core/tests/unit/architecture/test_repository_layer_conventions.py`
 
-- [ ] **Step 1: Write the guard file**
+- [x] **Step 1: Write the guard file**
 
 ```python
 """Repository layer conventions — see 07-test-strategy.md § Repository
@@ -289,7 +289,7 @@ def test_repository_does_not_import_infrastructure(cls: type) -> None:
     )
 ```
 
-- [ ] **Step 2: Run the guard**
+- [x] **Step 2: Run the guard**
 
 ```bash
 uv run pytest ergon_core/tests/unit/architecture/test_repository_layer_conventions.py -q
@@ -307,7 +307,7 @@ Task 5 below).
 
 - Create: `ergon_core/tests/unit/architecture/test_repository_companion_files.py`
 
-- [ ] **Step 1: Write the guard file**
+- [x] **Step 1: Write the guard file**
 
 ```python
 """Repository package companion files — see 07-test-strategy.md §
@@ -398,7 +398,7 @@ def test_repository_file_does_not_define_dtos(pkg: Path) -> None:
         )
 ```
 
-- [ ] **Step 2: Run the guard**
+- [x] **Step 2: Run the guard**
 
 ```bash
 uv run pytest ergon_core/tests/unit/architecture/test_repository_companion_files.py -q
@@ -411,7 +411,7 @@ Expected violators (each gets an xfail marker in Step 3):
 - `telemetry/`: `test_repository_file_does_not_define_dtos` fails —
   `CreateTaskEvaluation` lives in `repositories.py`.
 
-- [ ] **Step 3: Add the xfail markers**
+- [x] **Step 3: Add the xfail markers**
 
 Wrap each violator case via parametrize-id targeting:
 
@@ -433,7 +433,7 @@ Implement the marker application via a pytest hook in the same file
 
 - Create: `ergon_core/tests/unit/architecture/test_no_dead_repository_methods.py`
 
-- [ ] **Step 1: Write the guard file**
+- [x] **Step 1: Write the guard file**
 
 ```python
 """Dead-method audit on the repository layer.
