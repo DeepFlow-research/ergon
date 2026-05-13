@@ -67,7 +67,7 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
         ],
     )
 
-    await service.evaluate(
+    await service.evaluate_legacy(
         TaskEvaluationContext(
             run_id=uuid4(),
             task_input="",

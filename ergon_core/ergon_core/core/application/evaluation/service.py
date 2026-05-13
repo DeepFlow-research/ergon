@@ -129,15 +129,31 @@ class EvaluationService:
         finally:
             session.close()
 
-    async def evaluate(
+    async def evaluate_legacy(
         self,
         task_context: TaskEvaluationContext,
         evaluator: Evaluator,
         task: Task,
         benchmark_name: str,
     ) -> EvaluationServiceResult:
+        """v1 entry point — held only for tests still exercising the
+        executor-based signature.
+
+        **Status.** Zero production callers as of PR 4. The only
+        remaining caller is
+        ``tests/unit/runtime/test_rubric_evaluation_service.py``,
+        which specifically tests that an injected ``CriterionExecutor``
+        receives the expected ``CriterionSpec``s. Production code uses
+        the v2 ``evaluate`` (below).
+
+        **Deletion gate.** PR 11 (Δ.7) deletes this method together
+        with the ``CriterionExecutor`` Protocol and
+        ``InngestCriterionExecutor`` — at which point the executor-spec
+        test goes too. Don't add new callers.
+        """
+
         if self.criterion_executor is None:
-            raise RuntimeError("EvaluationService.evaluate requires a criterion executor")
+            raise RuntimeError("EvaluationService.evaluate_legacy requires a criterion executor")
         criteria = list(evaluator.criteria_for(task))
         specs = [
             CriterionSpec(
@@ -161,33 +177,25 @@ class EvaluationService:
             specs=specs,
         )
 
-    async def evaluate_inline(
+    async def evaluate(
         self,
         *,
         context: CriterionContext,
         evaluator: Evaluator,
     ) -> EvaluationServiceResult:
-        """Run every criterion inline against a single ``CriterionContext``.
+        """Run an evaluator against a single ``CriterionContext``.
 
-        **Why this method exists alongside `evaluate(...)`.** v1 wrapped
-        each criterion in its own ``ctx.step.run`` boundary via
-        ``CriterionExecutor`` so a flaky single criterion could retry
-        without re-running its peers. PR 4 widened the Inngest retry
-        unit from "per criterion" to "per evaluator" by giving each
-        evaluator its own ``ctx.step.invoke`` at the orchestrator
-        boundary (see `execute_task._fan_out_evaluators`). With retry
-        granularity already living at the evaluator level, the
-        per-criterion ``step.run`` indirection becomes dead weight, so
-        this method just iterates ``evaluator.criteria_for(task)`` and
-        awaits ``criterion.evaluate(context)`` directly.
+        The v2 evaluation entry point. Iterates
+        ``evaluator.criteria_for(context.task)`` and awaits
+        ``criterion.evaluate(context)`` on each — there's no
+        ``CriterionExecutor`` indirection because the Inngest retry
+        boundary already lives one level up: the orchestrator
+        (``execute_task._fan_out_evaluators``) gives each evaluator
+        its own ``ctx.step.invoke``, so retries replay whole evaluators,
+        not individual criteria.
 
-        **Why both methods exist during the transition.** The legacy
-        ``evaluate(task_context, evaluator, task, benchmark_name)``
-        still has callers in tests and benchmarks that haven't been
-        migrated yet. PR 11 (Δ.7 deletion list) collapses the two by
-        deleting the legacy signature, the ``CriterionExecutor``
-        Protocol, and ``InngestCriterionExecutor`` together — at that
-        point this method can be renamed back to ``evaluate``.
+        Sibling method ``evaluate_legacy`` keeps the v1 executor-based
+        signature alive for tests that exercise it; PR 11 deletes it.
         """
 
         task = context.task

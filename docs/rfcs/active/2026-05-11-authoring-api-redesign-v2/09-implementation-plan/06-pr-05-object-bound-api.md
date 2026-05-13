@@ -781,7 +781,7 @@ Approach" for the full catalogue):
 | Bridge introduced by PR 4 | Where it lived | PR 5 replacement |
 | --- | --- | --- |
 | `_evaluator_bridge.resolve_evaluator` | `core/application/jobs/_evaluator_bridge.py` | `task.evaluators[index]` (lifted in step 3 below) |
-| `EvaluationService.evaluate_inline(context, evaluator)` | `core/application/evaluation/service.py` (additive, alongside the legacy `evaluate(...)` method) | unchanged at PR 5 — PR 11 deletes the old `evaluate(...)` and the `CriterionExecutor` Protocol once nothing imports either |
+| `EvaluationService.evaluate(*, context, evaluator)` (the v2 entry point; legacy executor-based entry was renamed to `evaluate_legacy` in PR 4) | `core/application/evaluation/service.py` | unchanged at PR 5 — PR 11 deletes `evaluate_legacy`, the `CriterionExecutor` Protocol, and `InngestCriterionExecutor` together |
 | `terminate_sandbox_by_id` called from `worker_execute`'s `finally` | `core/infrastructure/sandbox/lifecycle.py` (existing helper) | optional at PR 5 — when `lifecycle_hub` lands, swap the call site to `lifecycle_hub.release(sandbox)`; if PR 5 doesn't add the hub, leave it for the PR that does |
 
 **`_DetachableSandboxBridge` is *not* in PR 4.** The PR 4 plan

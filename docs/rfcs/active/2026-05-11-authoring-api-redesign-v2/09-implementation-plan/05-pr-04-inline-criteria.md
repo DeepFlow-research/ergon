@@ -41,7 +41,7 @@ greppable bridge that PR 5 deletes:
 | Bridge | Location | Replaced by (PR 5) |
 | --- | --- | --- |
 | `_evaluator_bridge.resolve_evaluator(session, *, run_id, task, evaluator_index)` | `core/application/jobs/_evaluator_bridge.py` | `task.evaluators[index]` after PR 5 Task 2 lands object-bound evaluators |
-| `EvaluationService.evaluate_inline(context, evaluator)` | additive sibling of the existing `evaluate(...)` | PR 11 deletes the old `evaluate(task_context, evaluator, task, benchmark_name)` and the `CriterionExecutor` Protocol once nothing imports either |
+| `EvaluationService.evaluate(*, context, evaluator)` — the v2 entry point; the v1 executor-based entry point gets renamed to `evaluate_legacy` to make the dying code carry the awkward name instead of the living code | `core/application/evaluation/service.py` (sibling of `evaluate_legacy`) | PR 11 deletes `evaluate_legacy`, the `CriterionExecutor` Protocol, and `InngestCriterionExecutor` together; `evaluate` keeps the name |
 | `terminate_sandbox_by_id(sandbox_id)` called directly inside `worker_execute`'s `finally` (instead of `lifecycle_hub.release(sandbox)`) | existing `core/infrastructure/sandbox/lifecycle.py` helper | when `lifecycle_hub` lands, swap the call site (no API rename needed) |
 | Sandbox **acquisition** stays in the existing `sandbox_setup` Inngest function — `worker_execute` does **not** absorb sandbox creation. The orchestrator `execute_task_fn` still invokes `sandbox_setup_fn` first, then `worker_execute_fn` with a stamped `sandbox_id`. `worker_execute`'s `try/finally` only owns the *release* side. | `core/application/jobs/execute_task.py` unchanged | PR 5/6 can either lift release into `lifecycle_hub` or fully merge `sandbox_setup` into `worker_execute` |
 

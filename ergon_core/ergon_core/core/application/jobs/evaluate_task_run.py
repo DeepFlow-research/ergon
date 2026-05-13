@@ -14,7 +14,7 @@ reconstructed locally from the run-tier read boundary:
   Task carries `Evaluator` instances directly — see
   `_evaluator_bridge.py` module docstring for the lift plan)
 
-Criteria run inline via ``EvaluationService.evaluate_inline``: no
+Criteria run inline via ``EvaluationService.evaluate``: no
 ``CriterionExecutor`` Protocol, no per-criterion ``ctx.step.run``.
 The Inngest retry unit is now the whole evaluator, because the
 orchestrator already gives one ``step.invoke`` per evaluator via
@@ -108,7 +108,7 @@ async def run_evaluate_task_run_job(
     )
 
     try:
-        service_result = await _evaluation_persistence.evaluate_inline(
+        service_result = await _evaluation_persistence.evaluate(
             context=context,
             evaluator=bound.evaluator,
         )
