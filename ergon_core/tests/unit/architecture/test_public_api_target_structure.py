@@ -23,7 +23,12 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "ScoreScale",
         "CriterionEvidence",
         "EvidenceMessage",
+        # PR 5 — object-bound authoring surface.
+        "Evaluator",
         "Rubric",
+        "Sandbox",
+        "SandboxRuntime",
+        "SandboxNotLiveError",
         "TaskEvaluationResult",
         "CriterionCheckError",
         "ComponentRegistry",
@@ -38,7 +43,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "CriterionObservation",
         "CriterionObservationMessage",
         "CriteriaCheckError",
-        "Experiment",
+        # ``WorkerSpec`` is still alive in core.domain until PR 11.
         "WorkerSpec",
         "PersistedExperimentDefinition",
         "DefinitionHandle",
