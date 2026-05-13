@@ -40,11 +40,21 @@ greppable bridge that PR 5 deletes:
 
 | Bridge | Location | Replaced by (PR 5) |
 | --- | --- | --- |
-| `_DetachableSandboxBridge` | `core/infrastructure/sandbox/runtime.py` | `Sandbox.detach()` base method — see PR 5 Task 4c |
-| `_evaluator_bridge.resolve_evaluator(session, task, evaluator_index)` | `core/application/jobs/_evaluator_bridge.py` | `task.evaluators[index]` after PR 5 Task 2 lands object-bound evaluators |
+| `_evaluator_bridge.resolve_evaluator(session, *, run_id, task, evaluator_index)` | `core/application/jobs/_evaluator_bridge.py` | `task.evaluators[index]` after PR 5 Task 2 lands object-bound evaluators |
 | `EvaluationService.evaluate_inline(context, evaluator)` | additive sibling of the existing `evaluate(...)` | PR 11 deletes the old `evaluate(task_context, evaluator, task, benchmark_name)` and the `CriterionExecutor` Protocol once nothing imports either |
 | `terminate_sandbox_by_id(sandbox_id)` called directly inside `worker_execute`'s `finally` (instead of `lifecycle_hub.release(sandbox)`) | existing `core/infrastructure/sandbox/lifecycle.py` helper | when `lifecycle_hub` lands, swap the call site (no API rename needed) |
 | Sandbox **acquisition** stays in the existing `sandbox_setup` Inngest function — `worker_execute` does **not** absorb sandbox creation. The orchestrator `execute_task_fn` still invokes `sandbox_setup_fn` first, then `worker_execute_fn` with a stamped `sandbox_id`. `worker_execute`'s `try/finally` only owns the *release* side. | `core/application/jobs/execute_task.py` unchanged | PR 5/6 can either lift release into `lifecycle_hub` or fully merge `sandbox_setup` into `worker_execute` |
+
+**`_DetachableSandboxBridge` (Task 4) is intentionally *not* introduced
+at PR 4.** The plan code expected `sandbox._runtime` on a `Sandbox`
+ABC that doesn't exist yet — and would not exist in PR 4 either,
+since `task.sandbox` is a PR 5 field. Adding the bridge in PR 4 would
+just be a class no caller can invoke. PR 5 introduces `Sandbox`,
+`task.sandbox`, the `_runtime` attach, and `Sandbox.detach()` in one
+coherent change. PR 4 simply omits the eval-side `detach()` call —
+the orchestrator's `try/finally` already bounds external-sandbox
+lifetime via `terminate_sandbox_by_id`, so the eval worker has
+nothing to release locally.
 
 **Why bridges instead of waiting for PR 5:** the v1 release-in-sibling-
 job bug is a correctness problem (eval workers can run against a

@@ -780,43 +780,51 @@ Approach" for the full catalogue):
 
 | Bridge introduced by PR 4 | Where it lived | PR 5 replacement |
 | --- | --- | --- |
-| `_DetachableSandboxBridge` | `core/infrastructure/sandbox/runtime.py` | `Sandbox.detach()` base method (lifted in steps 1–2 below) |
 | `_evaluator_bridge.resolve_evaluator` | `core/application/jobs/_evaluator_bridge.py` | `task.evaluators[index]` (lifted in step 3 below) |
 | `EvaluationService.evaluate_inline(context, evaluator)` | `core/application/evaluation/service.py` (additive, alongside the legacy `evaluate(...)` method) | unchanged at PR 5 — PR 11 deletes the old `evaluate(...)` and the `CriterionExecutor` Protocol once nothing imports either |
 | `terminate_sandbox_by_id` called from `worker_execute`'s `finally` | `core/infrastructure/sandbox/lifecycle.py` (existing helper) | optional at PR 5 — when `lifecycle_hub` lands, swap the call site to `lifecycle_hub.release(sandbox)`; if PR 5 doesn't add the hub, leave it for the PR that does |
 
-### Step 1: Replace bridge calls with the base method (sandbox detach)
+**`_DetachableSandboxBridge` is *not* in PR 4.** The PR 4 plan
+originally specified it, but the bridge could not have a real caller
+without `task.sandbox` and a sandbox `_runtime` — both PR 5 fields.
+PR 5 adds `Sandbox`, `task.sandbox`, the `_runtime` attach, and
+`Sandbox.detach()` in one coherent change; the steps below introduce
+`Sandbox.detach()` from scratch instead of "lifting" a bridge.
 
-PR 4 introduced `_DetachableSandboxBridge` as a stub so the reshaped
-`evaluate_task_run` could compile before `Sandbox.detach()` existed.
-Now that `Sandbox` is a real ABC, lift the bridge logic into the
-base-class method (already defined in Task 1 Step 2 above) and delete
-the bridge.
+### Step 1: Wire `Sandbox.detach()` into `evaluate_task_run`
+
+PR 4 deliberately omitted the eval-side `detach()` call because no
+`task.sandbox` existed to call it on. Now that `Sandbox` is a real
+ABC and `task.sandbox` is bound (Task 1 + Task 2 above), wire the
+detach call into the eval body so the local `_runtime` handle is
+released as soon as criteria finish — the external sandbox stays
+alive (the orchestrator's `try/finally` owns termination).
 
 **Files:**
 
 - Modify: `ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py`
 - Delete: `ergon_core/ergon_core/core/infrastructure/sandbox/runtime.py:_DetachableSandboxBridge`
 
-- [ ] **Step 1: Replace bridge calls with the base method**
+- [ ] **Step 1: Add the detach call to the eval body**
 
 ```python
-# Before (PR 4):
-await _DetachableSandboxBridge.detach(task.sandbox)
-
 # After (PR 5):
 await task.sandbox.detach()
 ```
 
-- [ ] **Step 2: Delete the bridge class**
+Place it on both the success and failure paths in
+`evaluate_task_run.py` so the local `_runtime` is always released —
+the orchestrator's `terminate_sandbox_by_id` keeps owning the external
+sandbox.
 
-`git rm` the bridge or delete the symbol. Run:
+- [ ] **Step 2: Verify no stale bridge references**
 
 ```bash
 rg "_DetachableSandboxBridge" ergon_core ergon_builtins
 ```
 
-Expected: empty.
+Expected: empty (the bridge was never introduced — confirm nothing
+attempted to import it).
 
 ### Step 3: Retire `_evaluator_bridge.py`
 
