@@ -1,19 +1,32 @@
 """Inngest function: task execution orchestrator.
 
-Prepares a task, invokes sandbox/worker/persist child functions, then
-finalizes. Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
+Prepares a task, invokes sandbox/worker/persist child functions, fans
+out per-evaluator invocations of ``evaluate_task_run``, then finalizes.
+Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
+
+PR 4 reshape: this function now owns the synchronous-fanout invariant.
+After ``persist_outputs`` succeeds and before emitting
+``task/completed``, the orchestrator awaits ``asyncio.gather(*[
+ctx.step.invoke("eval-{i}", evaluate_task_run, TaskEvaluateRequest(...))
+])``. The whole pipeline is wrapped in ``try/finally``; the ``finally``
+calls ``terminate_sandbox_by_id``. The v1 lifecycle leak (release in a
+sibling ``check_evaluators`` job) is fixed because external-sandbox
+lifetime is now bounded by this function's gather.
 """
 
+import asyncio
 import logging
 import traceback
 from datetime import UTC, datetime
 from typing import Any
 
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.jobs.models import (
     PersistOutputsRequest,
     PersistOutputsResult,
     SandboxReadyResult,
     SandboxSetupRequest,
+    TaskEvaluateRequest,
     TaskExecuteResult,
     WorkerExecuteJobRequest,
     WorkerExecuteJobResult,
@@ -27,6 +40,7 @@ from ergon_core.core.application.workflows.orchestration import (
 )
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, NonRetriableError
+from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.events.task_events import (
@@ -120,6 +134,54 @@ async def _run_worker(
     )
 
 
+async def _fan_out_evaluators(
+    ctx: Any,
+    payload: TaskReadyEvent,
+    prepared: PreparedTaskExecution,
+    evaluate_task_run_function: Any,
+) -> None:
+    """Synchronously fan out per-evaluator Inngest invocations.
+
+    PR 4's headline invariant. ``ctx.step.invoke`` returns a coroutine
+    that resolves when the invoked function returns; awaiting them all
+    via ``asyncio.gather`` keeps the orchestrator suspended (and the
+    sandbox alive) until every evaluator finishes.
+
+    The function loads the task view from the run-tier read boundary
+    (no ``sandbox_id`` here — the orchestrator side doesn't need a
+    live ``_runtime`` handle on the inflated Task), reads the number
+    of evaluators from ``task.evaluator_binding_keys``, and emits one
+    invocation per index with a thin ``TaskEvaluateRequest`` payload.
+    """
+
+    canonical_task_id = payload.task_id or prepared.node_id
+    with get_session() as session:
+        view = await WorkflowGraphRepository().node(
+            session,
+            run_id=payload.run_id,
+            task_id=canonical_task_id,
+        )
+    evaluator_count = len(view.task.evaluator_binding_keys)
+    if evaluator_count == 0:
+        return
+
+    await asyncio.gather(
+        *[
+            ctx.step.invoke(
+                f"eval-{i}",
+                function=evaluate_task_run_function,
+                data=TaskEvaluateRequest(
+                    run_id=payload.run_id,
+                    task_id=canonical_task_id,
+                    execution_id=prepared.execution_id,
+                    evaluator_index=i,
+                ).model_dump(mode="json"),
+            )
+            for i in range(evaluator_count)
+        ]
+    )
+
+
 async def _persist_outputs(
     ctx: Any,
     payload: TaskReadyEvent,
@@ -196,6 +258,7 @@ async def run_execute_task_job(
     sandbox_setup_function: Any,
     worker_execute_function: Any,
     persist_outputs_function: Any,
+    evaluate_task_run_function: Any,
 ) -> TaskExecuteResult:
     logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)
@@ -259,6 +322,12 @@ async def run_execute_task_job(
         persist_result = await _persist_outputs(
             ctx, payload, prepared, sandbox_result, persist_outputs_function
         )
+
+        # PR 4 synchronous fanout. The gather keeps the sandbox alive
+        # through every per-evaluator Inngest invocation; the orchestrator
+        # cannot reach the `finally` (sandbox termination) until all
+        # evaluators return.
+        await _fan_out_evaluators(ctx, payload, prepared, evaluate_task_run_function)
 
         await svc.finalize_success(
             FinalizeTaskExecutionCommand(
@@ -382,3 +451,20 @@ async def run_execute_task_job(
             )
 
         raise NonRetriableError(message=error_msg) from exc
+
+    finally:
+        # PR 4 sandbox-release ownership. The orchestrator owns external
+        # sandbox lifetime: anything past sandbox-setup terminates here
+        # regardless of which path raised. Eval workers ran inside the
+        # synchronous gather above, so the sandbox is still alive when
+        # we reach this `finally`. The v1 sibling-job release path
+        # (`check_evaluators._terminate_sandbox`) is unregistered by
+        # Task 5; this block is the only termination point now.
+        if task_sandbox_id is not None:
+            termination = await terminate_sandbox_by_id(task_sandbox_id)
+            logger.info(
+                "task-execute sandbox cleanup sandbox_id=%s terminated=%s reason=%s",
+                termination.sandbox_id,
+                termination.terminated,
+                termination.reason,
+            )
