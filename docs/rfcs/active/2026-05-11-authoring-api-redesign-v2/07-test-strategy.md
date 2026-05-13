@@ -20,6 +20,8 @@
 | Layer | Owns | Runs | Failure means |
 |---|---|---|---|
 | **Architecture guards** | "no module imports X"; "every public class has Y"; "deleted symbols are deleted" | unit suite, on every PR | a structural rule was violated |
+| **XFail ledgers (executable program)** | landing-PR-keyed `xfail(strict=True)` cases for every v2 invariant and every v1 dead path; markers removed by the PR that lands the invariant | unit suite, on every PR | an invariant landed early without ledger update (XPASS) or regressed (FAIL) |
+| **Walkthrough smoketests (observable effects)** | unit-level effect tests that drive a public entry point and assert resulting DB/event state matches the spec — outcomes only, never call-graph mocks | unit suite, on every PR | spec drifted from behaviour at the unit level |
 | **Walkthrough integration** | end-to-end flow from author code through worker_execute to terminal state matches the canonical `04-walkthrough.md` step-by-step | integration suite, on every PR | runtime behaviour drifted from the spec |
 | **Regression net (v1 audit)** | every concrete bug class the v1 audit found has a test that fails when reintroduced | unit suite | the same v1 bug is back |
 | **Standard unit + integration tests** | per-module behavior of `prepare_run`, `worker_execute`, `WorkerContext`, etc. | unit + integration | normal regression |
@@ -27,6 +29,181 @@
 Standard tests are out of scope for this doc — they're the same kind
 the v1 implementation already had. This doc focuses on the layers v1
 was *missing* that allowed drift to ship.
+
+## §0 — The four-file ledger pattern
+
+The v2 implementation program is encoded as four executable ledger files
+landed in PR 0 and PR 1 alongside the existing transition guard. Each
+later PR removes the appropriate `xfail` markers as it lands its
+invariant; PR 11 verifies that all four ledgers are empty of pending
+markers. Together they act as the machine-readable twin of the prose PR
+plan in [`09-implementation-plan/`](09-implementation-plan/).
+
+| File | Lands in | Asserts | Marker scheme |
+|---|---|---|---|
+| [`test_v2_transition_ledger.py`](09-implementation-plan/01-pr-00-transition-ledger.md) | PR 0 | Old symbols are still allowed (negative) | One row per symbol with `owner_pr` / `deletion_pr` |
+| [`test_v2_final_state_ledger.py`](09-implementation-plan/01-pr-00-transition-ledger.md) | PR 0 | v2 invariants must hold at the end (positive) | `pytest.mark.xfail(reason="PR N", strict=True)` — markers in `_XFAIL_BY_NAME` |
+| [`test_dead_path_audit.py`](09-implementation-plan/01-pr-00-transition-ledger.md) | PR 0 | v1 dead paths stay callerless until deleted | `pytest.mark.xfail(strict=True)` — markers in `_XFAIL_BY_SYMBOL` |
+| [`test_repository_layer_conventions.py`](09-implementation-plan/01b-pr-0-5-repository-standard.md) | PR 0.5 | Repository class/file/method shape per § 0.5 | `pytest_collection_modifyitems` applies markers from `_KNOWN_VIOLATORS` |
+| [`test_repository_companion_files.py`](09-implementation-plan/01b-pr-0-5-repository-standard.md) | PR 0.5 | `errors.py` + DTO location per § 0.5 | Same |
+| [`test_no_dead_repository_methods.py`](09-implementation-plan/01b-pr-0-5-repository-standard.md) | PR 0.5 | Every public repo method has a production caller | `pytest.mark.xfail` — markers in `_KNOWN_UNUSED_FOR_NOW` |
+| [`test_walkthrough_smoketest.py`](09-implementation-plan/02-pr-01-run-tier-task-snapshot.md) | PR 1 | Observable effects of the v2 happy path | `pytest.mark.xfail` per case, removed by landing PR |
+| [`test_identity_invariants.py`](09-implementation-plan/02-pr-01-run-tier-task-snapshot.md) | PR 1 | `task_id`/`execution_id`/`sandbox_id` flow per §2 | `pytest.mark.xfail` per case, removed by landing PR |
+
+**`strict=True` is load-bearing.** It surfaces unexpected passes — if a
+refactor lands an invariant ahead of its scheduled PR, the ledger fails
+and the author must update the marker dict in the same commit. Without
+`strict`, drift between code and ledger is silent.
+
+**Why effect-based smoketests, not call-graph mocks.** The audit failure
+mode v1 hit ("this helper was supposed to be called, wasn't") is
+tempting to catch with `mock.assert_called_with(...)` tests. We
+deliberately don't. Call-graph mocks test how code is structured, not
+whether it works; the moment someone extracts a helper or moves logic
+between layers, the test breaks even though behaviour is unchanged.
+Effect-based smoketests drive the public entry point and observe the
+resulting database / event-bus state — they survive refactors, and they
+read like prose for an engineer learning the topology.
+
+**Why xfail(strict=True), not skip or markers-as-todo.** A skipped
+test provides no signal until someone manually unskips it; an
+`xfail(strict=True)` is *active* — every CI run rechecks whether the
+invariant has been satisfied early, and an unexpected pass fails the
+build. The ledger is the v2 program's progress meter, automated.
+
+**The completion bar.** The v2 program is complete when both
+`_XFAIL_BY_NAME` and `_XFAIL_BY_SYMBOL` are empty dicts and every case
+in the walkthrough smoketest and identity invariants is unmarked. PR 11
+adds two explicit assertions
+(`test_no_v2_invariants_are_still_xfailed`,
+`test_no_dead_paths_are_still_xfailed`) that fail the build until both
+dicts are empty.
+
+## §0.5 — Repository layer standard
+
+Every data-access repository in `ergon_core/core/**` follows the same
+file layout and naming conventions. The standard is enforced by three
+architecture-guard tests that land in **PR 0.5**
+(`01b-pr-0-5-repository-standard.md`); subsequent PRs flip the xfails
+for the current violators.
+
+### Package shape
+
+```
+<package>/
+    __init__.py       # explicit __all__ re-exports
+    repository.py     # the Repository class(es); data access only
+    models.py         # SQLModel tables + Pydantic request/response DTOs
+    errors.py         # custom exception classes (only if package raises)
+    service.py        # optional: use-case orchestrator composing repo calls
+```
+
+### The 10 rules
+
+1. **Class name ends with `Repository`** (e.g. `WorkflowGraphRepository`,
+   not `GraphRepo` or `Graph`).
+2. **File is `repository.py` (singular)**, even when multiple Repository
+   classes share a file. The current `telemetry/repositories.py` is a
+   known violator fixed by PR 1.
+3. **Methods take `session` as the first non-self positional arg.**
+   Consistent across the codebase already; the rule pins it.
+4. **Write methods are async; reads may be sync.** Write-prefix
+   heuristic: methods starting with `add_`, `update_`, `remove_`,
+   `delete_`, `set_`, `create_`, `append_`, `insert_`, `persist_` are
+   writes. Async reads are required only when the method performs
+   genuine I/O — `graph_repo.node` after PR 5 attaches a live sandbox,
+   which is the textbook case.
+5. **Repositories never call `session.commit()`.** Transactions belong
+   to the caller (the service or job body), not the data layer.
+6. **Repositories never import from `core.infrastructure.*`.** The
+   data layer stays framework-agnostic so it can be reused in training
+   pipelines, replay systems, and test harnesses that don't run inside
+   Inngest. See `graph/errors.py` docstring for the rationale.
+7. **Repositories return typed views or domain objects, never
+   `dict[str, Any]`.** The boundary type for serialized JSON is
+   `TaskDefinitionJson = dict[str, JsonValue]` (see PR 2); after
+   inflation, the repo returns the typed Pydantic object.
+8. **Custom exceptions live in `errors.py`.** If any file in the
+   package raises something beyond stdlib, `errors.py` must exist.
+   Generic `raise ValueError(...)` in a repo is a typed-error gap
+   — callers can't catch specifically. The current
+   `experiments/repository.py` raises `ValueError`; PR 7 fixes it.
+9. **Request/response DTOs (Pydantic BaseModels) live in `models.py`,
+   not in `repository.py`.** The current `telemetry/repositories.py`
+   defines `CreateTaskEvaluation` inline; PR 4 moves it.
+10. **Every public Repository method must have a non-test production
+    caller.** The dead-method audit catches v1's `Worker.from_buffer`
+    failure mode scoped to the layer where it matters.
+
+### Why scope dead-code detection to the repository layer
+
+Tree-wide dead-code tooling (e.g. `vulture`) has decent precision but
+trips repeatedly on Inngest functions registered by string, Pydantic
+validators (`@field_validator`, `@model_serializer`), pytest fixtures,
+and dynamic dispatch. The signal-to-noise tanks and the whitelist
+drifts.
+
+A hand-rolled "every public Repository method has a production caller"
+test is scoped tightly to the layer where the v1 audit found real dead
+helpers. It catches 80% of the value at 10% of the cost. If we later
+want broader dead-code detection, a focused `vulture` config + `ruff`
+rules is the path — but that's a separate decision.
+
+## §0.6 — No type-checker circumventors
+
+The v2 program treats type-laundering as a code smell. Three patterns
+are banned in production code under `ergon_core`, `ergon_builtins`,
+`ergon_cli`:
+
+1. **`getattr(obj, "attribute_name", default)`** — string-based
+   attribute access the type checker cannot reason about. If the
+   attribute might not exist, the typing contract is wrong, not the
+   call site. Fix the source: add the field with a typed default, or
+   wrap the foreign object in a `Protocol`.
+
+2. **`hasattr(obj, "attribute_name")`** — same shape, same reasoning.
+   Use `isinstance(obj, SomeProtocol)` or split call sites by type.
+
+3. **Untyped `dict.get("key")` chains for *structured* values** — e.g.
+   `created_by=str(d.get("x")) if "x" in d else None`. If the framework
+   cares about the field, it belongs as a first-class typed model
+   field. `dict[str, Any]` metadata is for opaque user-provided
+   payloads, not for fields the framework reads.
+
+### Narrow exemptions (each requires a `# typing:` comment)
+
+- **Dynamic qualname walking.** The `_import_component(path)` helper
+  walks a string like `"module.sub:Class.Inner"` to resolve a class.
+  The `getattr(obj, part)` call inside the walk is genuinely
+  string-based because the path components are user-controlled
+  discriminator values. Each line carries a
+  `# typing: dynamic qualname walk` comment.
+
+- **External library type-erasure boundaries.** When the foreign object
+  comes from a third-party SDK whose interface we don't control (e2b
+  `AsyncSandbox`, etc.), wrap it in a `Protocol` defined in
+  `ergon_core/api/...` and pass *typed* objects across our layers. A
+  `getattr` on the raw SDK object inside the wrapper is acceptable
+  with a `# typing: <library> SDK boundary` comment.
+
+- **Test code asserting symbol absence.** `assert not hasattr(Cls, "x")`
+  in the dead-symbol guards is the load-bearing form of "this symbol
+  is gone." Tests are exempt by path.
+
+### Architecture guard
+
+`ergon_core/tests/unit/architecture/test_no_type_circumventors.py`
+lands in PR 0 (alongside the transition / final-state ledgers) and
+greps production code for `getattr(` and `hasattr(`. Each hit must be
+either:
+
+- Inside a test file (path-exempt).
+- Adjacent to a `# typing:` comment naming the exemption category.
+- In `_KNOWN_EXEMPTIONS` with a one-line justification and a landing
+  PR (mirror of `_XFAIL_BY_NAME`).
+
+PR 11 asserts `_KNOWN_EXEMPTIONS` is empty of "to be removed" entries
+— only the truly-legitimate exemptions remain.
 
 ## §1 — Architecture-guard tests
 
@@ -98,12 +275,17 @@ DELETED_SYMBOLS = {
     "_persist_single_sample_workflow_definition": "function",
     "Worker.from_buffer": "classmethod",
     "CriterionExecutor": "Protocol",
+    "InngestCriterionExecutor": "Protocol",
     "_prepare_definition": "function",
     "definition_task_id": "column",                 # checked via Alembic schema
     "ExperimentRecord": "ORM class",                # checked via SQLAlchemy registry
-    "EvaluateTaskRunRequest": "dataclass",
-    "evaluate_task_run": "Inngest function",
+    "EvaluateTaskRunRequest": "dataclass",          # replaced by TaskEvaluateRequest
     "terminate_sandbox_by_id": "function",
+}
+# evaluate_task_run is intentionally NOT here — it survives reshaped per Δ.4.
+KEPT_RESHAPED_SYMBOLS = {
+    "evaluate_task_run": "Inngest function (thin id-only payload)",
+    "TaskEvaluateRequest": "payload class",
 }
 
 def test_deleted_symbols_stay_deleted() -> None:
@@ -137,21 +319,39 @@ def test_cli_define_does_not_write_to_saved_specs() -> None:
     """
 ```
 
-### `test_inngest_no_evaluate_task_run.py` — the unified worker_execute
+### `test_inngest_evaluate_task_run_thin_payload.py` — fanout shape
 
-Enforces [`06-inngest-event-contracts.md`](06-inngest-event-contracts.md):
+Enforces [`06-inngest-event-contracts.md`](06-inngest-event-contracts.md)
+Δ.4 / Δ.5. The Inngest function registry **must** contain a function
+handling `task/evaluate` events, and it must use the thin `TaskEvaluateRequest`
+payload (not v1's `EvaluateTaskRunRequest`):
 
 ```python
-def test_no_separate_evaluate_task_run_function() -> None:
-    """The Inngest function registry must not contain any function
-    handling task/evaluate events. Criteria run inline in
-    worker_execute (per 03-runtime.md and 06-inngest-event-contracts.md
-    Δ.4)."""
+def test_evaluate_task_run_is_registered_with_thin_payload() -> None:
+    """The per-evaluator fanout target survives in v2 per Δ.4. It must
+    be registered, and its payload must be the id-only TaskEvaluateRequest.
+    """
     from ergon_core.runtime.inngest import registered_functions
-    assert "task/evaluate" not in {f.event for f in registered_functions}
-    assert "EvaluateTaskRunRequest" not in {f.payload_type.__name__
-                                            for f in registered_functions
-                                            if f.payload_type is not None}
+    events = {f.event for f in registered_functions}
+    assert "task/evaluate" in events, (
+        "evaluate_task_run must remain registered — see Δ.4 in "
+        "08-decisions-log.md"
+    )
+    payload_types = {f.payload_type.__name__ for f in registered_functions
+                     if f.payload_type is not None}
+    assert "TaskEvaluateRequest" in payload_types
+    assert "EvaluateTaskRunRequest" not in payload_types  # v1 payload deleted
+
+
+def test_worker_execute_fans_out_via_step_invoke() -> None:
+    """Static check on worker_execute.py: must use ctx.step.invoke to
+    fan out to evaluate_task_run, wrapped in asyncio.gather, with the
+    sandbox release in finally."""
+    body = read_source("ergon_core/core/application/jobs/worker_execute.py")
+    assert "ctx.step.invoke" in body
+    assert "evaluate_task_run" in body
+    assert "asyncio.gather" in body
+    assert "finally:" in body
 ```
 
 ### `test_sandbox_release_path.py` — the lifecycle owner
@@ -292,7 +492,7 @@ def test_sandbox_released_after_inline_criteria() -> None:
     sandbox at all. The release happened on a separate cleanup path
     that ran on every event-fire including ones that should not have
     released. v2: sandbox released in worker_execute's finally,
-    after inline criteria."""
+    after the synchronous fanout's asyncio.gather returns."""
 
 def test_worker_has_no_from_buffer_constructor() -> None:
     """v1 had Worker.from_buffer(buffer: bytes) for protocol-buffer

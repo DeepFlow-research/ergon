@@ -310,19 +310,36 @@ context = WorkerContext._for_job(
 
 try:
     # ── 5. Run the worker. ──
-    async for chunk in worker.execute(task=task, context=context, sandbox=sandbox):
+    async for chunk in worker.execute(task=task, context=context):
         await persist_event(chunk)
+    await persist_worker_output(execution_id=payload.execution_id, output=worker_output)
 
-    # ── 6. Run criteria for this task. Criteria see the same sandbox. ──
-    for rubric in task.evaluators:
-        for weighted in rubric.criteria:
-            outcome = await weighted.criterion.evaluate(
-                task=task, worker_output=worker_output,
-                context=crit_ctx, sandbox=sandbox,
-            )
-            await persist_outcome(outcome, weight=weighted.weight)
+    # ── 6. Synchronously fan out one Inngest invocation per evaluator.
+    #     Each ctx.step.invoke suspends worker_execute until that
+    #     evaluate_task_run invocation returns, so the sandbox stays
+    #     alive throughout. The payload is id-only; the eval worker
+    #     reloads task state via the same graph_repo.node call we used
+    #     in stage 4, this time passing sandbox_id so task.sandbox is
+    #     re-attached live in the eval worker's process. ──
+    await asyncio.gather(*[
+        ctx.step.invoke(
+            f"eval-{i}",
+            evaluate_task_run,
+            TaskEvaluateRequest(
+                run_id=payload.run_id,
+                task_id=node.task_id,
+                execution_id=payload.execution_id,
+                evaluator_index=i,
+            ),
+        )
+        for i in range(len(task.evaluators))
+    ])
 finally:
-    # ── 7. Settle the task; tear down sandbox; mark dependents unblocked. ──
+    # ── 7. Settle the task; tear down sandbox; mark dependents unblocked.
+    #     Release runs only after every step.invoke has returned. Eval
+    #     workers never reach this branch — they only call sandbox.detach(),
+    #     dropping their local _runtime while leaving the external
+    #     sandbox alive for any sibling invocation still running. ──
     await lifecycle_hub.release(sandbox)   # calls sandbox.terminate()
 ```
 
@@ -599,7 +616,7 @@ ergon/
 │   │   │   ├── inngest/handlers/
 │   │   │   │   ├── worker_execute.py                          # MODIFY: payload reshape — add definition_id, drop node_id [P3]
 │   │   │   │   ├── persist_outputs.py                         # MODIFY: composite (run_id, task_id) refs [P3]
-│   │   │   │   ├── evaluate_task_run.py                       # MODIFY: pass sandbox to Criterion.evaluate directly [P4]
+│   │   │   │   ├── evaluate_task_run.py                       # MODIFY: thin id-only payload, reload via graph_repo.node(..., sandbox_id=...), call criterion.evaluate directly, detach in finally [P4]
 │   │   │   │   ├── cleanup_cancelled_task.py                  # MODIFY: composite-FK refs [P3]
 │   │   │   │   └── cancel_orphan_subtasks.py                  # MODIFY: composite-FK refs [P3]
 │   │   │   └── sandbox/

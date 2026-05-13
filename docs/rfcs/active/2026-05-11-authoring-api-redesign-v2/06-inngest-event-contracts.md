@@ -6,7 +6,7 @@
 >
 > Supersedes v1's [`05-migration.md` §14.B "Inngest payloads"](../2026-05-08-authoring-api-redesign/05-migration.md).
 > The headline difference: **one Inngest function per task, not two**.
-> See [`03-runtime.md`](03-runtime.md) "Inline criteria" for why.
+> See [`03-runtime.md`](03-runtime.md) "Synchronous fanout" for why.
 >
 > See [`04-walkthrough.md`](04-walkthrough.md) for the trace of these
 > events firing in order, and
@@ -116,8 +116,12 @@ Decoupling means restart-task / requeue logic only has to fire
 
 ### `task/worker-execute`
 
-The unified work event. **Replaces v1's `task/worker-execute` +
-`task/evaluate` pair.**
+The orchestrator event. Reshapes v1's pair: `worker_execute` is still
+one Inngest function per task, but it now **synchronously invokes**
+`evaluate_task_run` once per evaluator via `ctx.step.invoke`. Eval
+runs as a separate Inngest function (own retry, own concurrency cap,
+own observability slug); the parent `gather`s on every invocation
+before releasing the sandbox.
 
 | Property | Value |
 |---|---|
@@ -125,7 +129,7 @@ The unified work event. **Replaces v1's `task/worker-execute` +
 | **Consumer** | `worker_execute` Inngest function |
 | **Idempotency key** | `(run_id, task_id, execution_id)` |
 | **Retries** | up to N (configurable per task; default 1 — workers are expensive) |
-| **Side effects on consume** | (1) acquire sandbox via `SandboxLifecycleHub`; (2) run `worker.execute()`; (3) run all `task.evaluators` inline; (4) release sandbox; (5) write `task_executions` row; (6) fire `task/completed` or `task/failed` |
+| **Side effects on consume** | (1) acquire sandbox via `SandboxLifecycleHub` and stamp `sandbox_id` onto `run_task_executions`; (2) run `worker.execute()`; (3) persist `worker_output` to `run_graph_nodes`; (4) `asyncio.gather(*[ctx.step.invoke(evaluate_task_run, …) for each evaluator])` — sandbox stays alive through gather; (5) release sandbox in `finally` after gather returns; (6) fire `task/completed` or `task/failed` |
 
 ```python
 class TaskWorkerExecutePayload(BaseModel):
@@ -136,46 +140,59 @@ class TaskWorkerExecutePayload(BaseModel):
 ```
 
 The function body is the canonical sequence in
-[`03-runtime.md` "Inline criteria"](03-runtime.md). Concretely:
+[`03-runtime.md` "Synchronous fanout"](03-runtime.md). Concretely:
 
 ```python
 @inngest_function(event="task/worker-execute", retries=N, concurrency=...)
-async def worker_execute(event: TaskWorkerExecutePayload) -> None:
-    node = graph_repo.node(session, run_id=event.run_id, task_id=event.task_id)
+async def worker_execute(ctx, event: TaskWorkerExecutePayload) -> None:
+    node = await graph_repo.node(session, run_id=event.run_id, task_id=event.task_id)
     task = node.task
 
     sandbox = await lifecycle_hub.acquire(
         task.sandbox, run_id=event.run_id, task_id=event.task_id,
     )
+    # Stamp sandbox_id onto the execution row so eval workers can attach.
+    await task_execution_repo.set_sandbox_id(
+        execution_id=event.execution_id, sandbox_id=sandbox.sandbox_id,
+    )
     try:
-        ctx = WorkerContext._for_job(
+        worker_ctx = WorkerContext._for_job(
             run_id=event.run_id, task_id=event.task_id,
             execution_id=event.execution_id,
             definition_id=event.definition_id,
             task_mgmt=..., task_inspect=..., resource_repo=...,
         )
         final_output: WorkerOutput | None = None
-        async for chunk in task.worker.execute(task, context=ctx, sandbox=sandbox):
+        async for chunk in task.worker.execute(task, context=worker_ctx):
             if isinstance(chunk, WorkerOutput):
                 final_output = chunk
             await graph_repo.persist_stream_chunk(
                 run_id=event.run_id, task_id=event.task_id,
                 execution_id=event.execution_id, chunk=chunk,
             )
-
-        criterion_ctx = CriterionContext(
-            task=task, worker_result=final_output,
-            run_id=event.run_id, execution_id=event.execution_id,
+        await graph_repo.persist_worker_output(
+            run_id=event.run_id, task_id=event.task_id,
+            execution_id=event.execution_id, output=final_output,
         )
-        for evaluator in task.evaluators:
-            outcome = await evaluator.evaluate(
-                task=task, worker_output=final_output,
-                context=criterion_ctx, sandbox=sandbox,
+
+        # Synchronous fanout: each ctx.step.invoke suspends the parent
+        # until that eval invocation returns. asyncio.gather lets all
+        # evals run in parallel against the same live external sandbox.
+        # The sandbox stays alive through gather because the parent is
+        # still in its try block.
+        await asyncio.gather(*[
+            ctx.step.invoke(
+                f"eval-{i}",
+                evaluate_task_run,
+                TaskEvaluateRequest(
+                    run_id=event.run_id,
+                    task_id=event.task_id,
+                    execution_id=event.execution_id,
+                    evaluator_index=i,
+                ),
             )
-            await graph_repo.persist_evaluation(
-                run_id=event.run_id, task_id=event.task_id,
-                execution_id=event.execution_id, outcome=outcome,
-            )
+            for i in range(len(task.evaluators))
+        ])
 
         await graph_repo.mark_task_succeeded(
             run_id=event.run_id, task_id=event.task_id,
@@ -196,13 +213,70 @@ async def worker_execute(event: TaskWorkerExecutePayload) -> None:
         ))
         raise            # let Inngest see the failure for retry/observability
     finally:
+        # Always reached — sandbox release is bounded by this function's
+        # lifetime, never delegated to a sibling job. Eval workers only
+        # attach/detach; only the orchestrator terminates.
         await lifecycle_hub.release(sandbox)
 ```
 
-There is **no** separate `evaluate_task_run` Inngest function and no
-`EvaluateTaskRunRequest` payload. The evaluation loop is part of
-`worker_execute`'s body, runs in the same process, against the same
-live sandbox, before the sandbox is released.
+### `task/evaluate`
+
+Per-evaluator fanout target. Receives a thin id-only payload; reloads
+task state via the same `graph_repo.node(...)` the orchestrator used.
+
+| Property | Value |
+|---|---|
+| **Producer** | `worker_execute` via `ctx.step.invoke` |
+| **Consumer** | `evaluate_task_run` Inngest function |
+| **Idempotency key** | `(run_id, task_id, execution_id, evaluator_index)` |
+| **Retries** | up to 3 (judge LLMs are flaky; per-function retry is the point of keeping the fanout) |
+| **Concurrency** | function-level cap (e.g. 50) for global eval throttling independent of `worker_execute` concurrency |
+| **Side effects on consume** | (1) load task via `graph_repo.node` with `sandbox_id` from execution row, producing a Task with live `_runtime` attached; (2) pick `task.evaluators[payload.evaluator_index]`; (3) load `worker_output` from `run_graph_nodes`; (4) call `evaluator.evaluate(task, worker_output)`; (5) persist outcome; (6) detach (drop local `_runtime`, never terminate the external sandbox) |
+
+```python
+class TaskEvaluateRequest(BaseModel):
+    run_id: UUID
+    task_id: UUID
+    execution_id: UUID
+    evaluator_index: int                      # position in task.evaluators
+```
+
+Note what is **not** in the payload: `sandbox_id` (read off
+`run_task_executions`), `evaluator_type` / `binding_key` (recovered
+from `task.evaluators[index]`), `task_payload` (carried in
+`task_json`), `worker_output` (loaded from `run_graph_nodes`). The
+payload is identifiers only; everything else is a side-channel lookup
+against persisted state, which means restart and retry are trivially
+correct.
+
+```python
+@inngest_function(event="task/evaluate", retries=3, concurrency=50)
+async def evaluate_task_run(ctx, event: TaskEvaluateRequest) -> None:
+    execution = await task_execution_repo.get(event.execution_id)
+    node = await graph_repo.node(
+        session,
+        run_id=event.run_id,
+        task_id=event.task_id,
+        sandbox_id=execution.sandbox_id,      # makes task.sandbox live
+    )
+    task = node.task
+    output = await graph_repo.load_worker_output(
+        run_id=event.run_id, task_id=event.task_id,
+        execution_id=event.execution_id,
+    )
+    evaluator = task.evaluators[event.evaluator_index]
+
+    try:
+        outcome = await evaluator.evaluate(task=task, worker_output=output)
+        await graph_repo.persist_evaluation(
+            run_id=event.run_id, task_id=event.task_id,
+            execution_id=event.execution_id, outcome=outcome,
+        )
+    finally:
+        # Drop the local _runtime handle. The external sandbox keeps
+        # running — termination is the orchestrator's job.
+        await task.sandbox.detach()
+```
 
 ### `task/completed`
 
@@ -367,9 +441,9 @@ the surplus and processes them as workers free up. No code in the
 
 | v1 | v2 | Why |
 |---|---|---|
-| `task/worker-execute` + `task/evaluate` (separate functions) | `task/worker-execute` only (criteria run inline) | Audit found split produced sandbox-handoff complexity & leaks for no measurable parallelism gain |
-| `EvaluateTaskRunRequest` payload | (deleted) | No second handler exists |
-| `evaluate_task_run.py` Inngest module | (deleted) | Same |
+| `task/worker-execute` + `task/evaluate` (fire-and-forget; release in `check_evaluators`) | `task/worker-execute` orchestrates + `task/evaluate` via synchronous `ctx.step.invoke` + release in orchestrator's `finally` | Audit's finding was the **lifecycle**, not the topology: fire-and-forget eval lost sandbox ownership. Synchronous fanout fixes that without giving up Inngest-level retry/concurrency/observability for eval. |
+| `EvaluateTaskRunRequest` payload (definition-coupled, multi-field) | `TaskEvaluateRequest` (id-only: `run_id, task_id, execution_id, evaluator_index`) | Thin contract; everything else side-channels from persisted state |
+| `evaluate_task_run.py` Inngest module (definition-row reader, registry-driven) | `evaluate_task_run.py` reshaped (run-tier reader via `graph_repo.node`, no registry) | Same function name and slug; reshaped body |
 | `run/cleanup` as an event | folded into `workflow/completed`'s consumer | Same handler, no need for a separate event |
 | `terminate_sandbox_by_id(sandbox_id)` (no-op stub) | (deleted) | `SandboxLifecycleHub.release(sandbox)` is the canonical path; no string-id-keyed termination needed |
 

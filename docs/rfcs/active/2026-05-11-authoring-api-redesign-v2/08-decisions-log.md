@@ -77,42 +77,78 @@ performance).
 
 **Encoded in.** [`02-persistence-layer.md` §5](02-persistence-layer.md).
 
-### Δ.4 — Single `worker_execute` job; criteria run inline
+### Δ.4 — Synchronous fanout with thin payload contract
 
-**Decision.** One Inngest function per task: `worker_execute`. It
-runs the worker, runs all `task.evaluators` inline in the same
-process against the same live sandbox, and releases the sandbox.
-There is no separate `evaluate_task_run` Inngest function.
+**Decision.** Two Inngest function shapes per task: an orchestrator
+(`worker_execute`, one per task) and a per-evaluator worker
+(`evaluate_task_run`, one per evaluator). The orchestrator does
+`await asyncio.gather(*[ctx.step.invoke(evaluate_task_run, …) for i in
+range(len(task.evaluators))])` — synchronous fanout. Eval payload is
+`(run_id, task_id, execution_id, evaluator_index)` only; everything
+else (task config, sandbox_id, worker_output, evaluator instance) is
+recovered from persisted state via the same `graph_repo.node(...)`
+the orchestrator used. The live sandbox is rebuilt on the eval side
+via `Sandbox.from_definition(sandbox_json, sandbox_id=...)`, which
+attaches a fresh local `_runtime` to the same external sandbox.
 
-**Rationale.** v1's split into `worker_execute` + `evaluate_task_run`
-was motivated by parallelism (criteria could run while the next
-worker started) but the audit found the parallelism never paid off:
-criteria for one task are typically O(1) and fast, while the split
-forced sandbox-handoff plumbing across processes that produced the
-lifecycle leaks recorded in the audit. The walkthrough always
-specified inline criteria implicitly; v2 makes it explicit.
+**Rationale.** The v1 audit's finding was a **lifecycle** problem
+(sandbox release in a sibling job; cleanup masking the leak), not a
+**topology** problem. The first cut of v2 read the audit as
+"eliminate the second Inngest function" and proposed inline criteria,
+which would have given up Inngest's per-function retry,
+per-function concurrency cap, and per-function observability slug —
+all of which the project's debug workflow relies on (CLAUDE.md
+documents Inngest GraphQL function-failure queries as the primary
+telemetry). Synchronous fanout keeps the operational properties while
+fixing the lifecycle: the orchestrator's `try/finally` bounds sandbox
+lifetime, eval workers only attach/detach, and the gather guarantees
+the sandbox is alive for every eval invocation. The thin payload
+contract follows from making eval re-read state via `graph_repo.node`
+rather than receiving denormalized fields — which means restart,
+retry, and replay all become trivially correct.
 
-**Encoded in.** [`03-runtime.md` "Inline criteria"](03-runtime.md);
-[`06-inngest-event-contracts.md`](06-inngest-event-contracts.md);
-guarded by a test in [`07-test-strategy.md`](07-test-strategy.md) §1.
+**Rejected alternative — pure inline criteria.** Earlier draft of
+this RFC. Operational properties (retry / concurrency / observability
+per-eval) lost; debug workflow degraded. Rejected when the second
+look showed synchronous fanout could fix the lifecycle without giving
+up those properties.
 
-### Δ.5 — Cross-job sandbox lifetime, single owner
+**Rejected alternative — durable lifecycle hub with reference
+counting.** Would allow asynchronous (fire-and-forget) eval fanout
+with a durable coordinator releasing the sandbox after every eval
+completes. v1 had a primitive version of this; the lifecycle was
+hard to test under retry/replay. Synchronous fanout is the same
+operational behavior with a much simpler invariant (sandbox alive
+iff the orchestrator is in its try block) and no new durable service.
+
+**Encoded in.** [`03-runtime.md` "Synchronous fanout"](03-runtime.md);
+[`06-inngest-event-contracts.md`](06-inngest-event-contracts.md)
+`task/worker-execute` and `task/evaluate`; guarded by a test in
+[`07-test-strategy.md`](07-test-strategy.md) §1.
+
+### Δ.5 — Cross-job sandbox lifetime, single owner, bounded by parent's try/finally
 
 **Decision.** `worker_execute` is the sole sandbox-lifetime owner for
 each `(run_id, task_id)`. `acquire` happens at the top, `release`
-happens in the `finally` block after worker + inline criteria
-complete. The `run/cleanup` Inngest function (now folded into
-`workflow/completed`'s consumer) is a backstop sweep, never the
-primary release path.
+happens in the `finally` block after `asyncio.gather` returns. Eval
+workers only **attach** (build a process-local `_runtime` handle to
+the same external sandbox via `Sandbox.from_definition(...,
+sandbox_id=...)`) and **detach** (drop the local handle in `finally`,
+never terminate the external sandbox). The `run/cleanup` Inngest
+function is a backstop sweep, never the primary release path.
 
-**Rationale.** v1 split `acquire` into `worker_execute` and `release`
-into a separate cleanup path that fired on multiple events; the
-result was sandbox leaks when an event sequence diverged from the
-expected order. v2's invariant — "exactly one acquire, exactly one
-release, both in `worker_execute`" — is testable as a static
-property of the source code.
+**Rationale.** v1 split acquire into `worker_execute` and release
+into a sibling cleanup path; the result was sandbox leaks when the
+event sequence diverged. v2's invariant — "exactly one acquire,
+exactly one release, both in `worker_execute`'s try/finally; eval
+workers may attach but never terminate" — is testable as both a
+static property (grep `worker_execute.py` for the acquire/release
+calls) and a runtime property (the walkthrough's eval-before-release
+ordering assertion). The synchronous gather is what makes the bound
+hold: the orchestrator cannot reach its `finally` until every eval
+has returned, so the sandbox is guaranteed alive throughout.
 
-**Encoded in.** [`03-runtime.md` "Inline criteria"](03-runtime.md);
+**Encoded in.** [`03-runtime.md` "Synchronous fanout"](03-runtime.md);
 guarded by a test in [`07-test-strategy.md`](07-test-strategy.md) §1.
 
 ### Δ.6 — Schema reset, not incremental drops
@@ -143,9 +179,13 @@ deprecated, none get a transition window, none survive in any form):
 - `_prepare_definition` — runtime helper, parallel to `_prepare_graph_native`
 - `definition_task_id` column on `run_graph_nodes` — duplicates `task_id`
 - `ExperimentRecord` ORM class + table — collapsed (Δ.1)
-- `EvaluateTaskRunRequest` dataclass — replaced by inline criteria (Δ.4)
-- `evaluate_task_run` Inngest function module — same
+- `InngestCriterionExecutor` and the `CriterionExecutor` Protocol — reshaped `evaluate_task_run` calls `criterion.evaluate(...)` directly with no executor indirection
 - `terminate_sandbox_by_id` — no-op stub
+
+**Kept and reshaped (not deleted) — see Δ.4:**
+
+- `evaluate_task_run` Inngest function — survives as the per-evaluator fanout target; body is rewritten to read run-tier state via `graph_repo.node` and attach the sandbox by id, not as a v1 deletion candidate
+- `EvaluateTaskRunRequest` payload class — replaced by `TaskEvaluateRequest` (id-only); the v1 dataclass is deleted but the *role* survives
 
 **Rationale.** Per-symbol justifications in the v1 audit. The common
 thread: each was either a parallel non-functional path, an unused
