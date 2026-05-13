@@ -1,5 +1,6 @@
 """Single front-door service for task evaluation workflow."""
 
+from datetime import datetime
 from uuid import UUID
 
 from ergon_core.api.benchmark import Task
@@ -328,6 +329,8 @@ class EvaluationService:
 
 
 def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str | None) -> str:
+    # TODO: inline to fix Locality of behavior violation
+    # also investigate if this is even needed, seems messy.
     if error is not None:
         return "errored"
     if skipped_reason is not None:
@@ -335,7 +338,12 @@ def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str |
     return "passed" if passed else "failed"
 
 
-def _summary_max_score(result, specs) -> float:
+def _summary_max_score(
+    result: TaskEvaluationResult,
+    specs: list[CriterionSpec],
+) -> float:
+    # TODO: inline to fix Locality of behavior violation
+    # also investigate if this is even needed, seems messy.
     if result.metadata.get("score_scale") == "normalized_0_1":
         return 1.0
     return sum(s.max_score for s in specs) if specs else 1.0
@@ -409,7 +417,7 @@ def build_dashboard_evaluation_dto(
     run_id: UUID,
     task_id: UUID,
     total_score: float,
-    created_at,
+    created_at: datetime,
     summary: EvaluationSummary,
 ) -> RunTaskEvaluationDto:
     criterion_results = [

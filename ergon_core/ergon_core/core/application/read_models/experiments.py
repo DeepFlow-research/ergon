@@ -7,7 +7,7 @@ from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
 from pydantic import BaseModel, Field
-from sqlmodel import select
+from sqlmodel import Session, select
 
 
 class ExperimentStatusCountsDto(BaseModel):
@@ -110,7 +110,7 @@ class ExperimentReadService:
 
 
 def _summary(
-    session,
+    session: Session,
     experiment: ExperimentRecord,
     *,
     runs: list[RunRecord] | None = None,
@@ -133,7 +133,7 @@ def _summary(
     )
 
 
-def _run_count(session, experiment_id: UUID) -> int:
+def _run_count(session: Session, experiment_id: UUID) -> int:
     return len(
         list(session.exec(select(RunRecord.id).where(RunRecord.experiment_id == experiment_id)))
     )
@@ -163,7 +163,7 @@ def _run_row(run: RunRecord, *, total_tasks: int | None = None) -> ExperimentRun
     )
 
 
-def _task_counts_by_run(session, run_ids: list[UUID]) -> dict[UUID, int]:
+def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, int]:
     return {
         run_id: len(
             list(session.exec(select(RunGraphNode.id).where(RunGraphNode.run_id == run_id)))

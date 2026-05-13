@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 # Root-logger handler so ``logger.exception`` / ``logger.error`` from
@@ -47,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("starting ensure_db...")
     ensure_db()
     logger.info("ensure_db done, initializing RolloutService...")

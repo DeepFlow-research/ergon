@@ -22,12 +22,3 @@ def render_table(headers: list[str], rows: list[list[str]]) -> None:
             for i, cell in enumerate(row)
         )
         print(line)
-
-
-def render_run_result(persisted) -> None:
-    print(f"Definition ID: {persisted.definition_id}")
-    print(f"Benchmark:     {persisted.benchmark_type}")
-    print(f"Workers:       {persisted.worker_bindings}")
-    print(f"Evaluators:    {persisted.evaluator_bindings}")
-    print(f"Instances:     {persisted.instance_count}")
-    print(f"Tasks:         {persisted.task_count}")

@@ -40,7 +40,9 @@ def define_experiment(request: ExperimentDefineRequest) -> ExperimentDefineResul
 
 
 @router.post("/{experiment_id}/run", response_model=ExperimentRunResult, status_code=202)
-async def run_experiment(experiment_id: UUID, request: ExperimentRunRequest | None = None):
+async def run_experiment(
+    experiment_id: UUID, request: ExperimentRunRequest | None = None
+) -> ExperimentRunResult:
     launch_request = request or ExperimentRunRequest(experiment_id=experiment_id)
     if launch_request.experiment_id != experiment_id:
         raise HTTPException(status_code=400, detail="experiment_id mismatch")

@@ -36,7 +36,11 @@ BUDGET = SuppressionCounts(
     # walk introduced by PR 2 of the v2 authoring redesign. The getattr
     # is genuinely dynamic (resolves a class from a user-controlled
     # discriminator string); no static alternative exists.
-    slopcop_ignore=223,
+    # +3 for MiniF2FToolkit.__init__ parameters (sandbox, sandbox_run_skill,
+    # ask_stakeholder_fn): the v1 benchmark surface deliberately accepts
+    # heterogeneous sandbox/skill types — typed as `Any` matching the
+    # existing `_minif2f_run_skill` pattern. Reviewed in PR 4.5.
+    slopcop_ignore=226,
     noqa=2,
     type_ignore=64,
 )

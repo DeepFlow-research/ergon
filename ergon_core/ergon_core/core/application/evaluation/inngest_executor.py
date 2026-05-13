@@ -1,5 +1,6 @@
 """Inngest-backed criterion executor: runs criteria in parallel via step.run."""
 
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from functools import partial
 from typing import TYPE_CHECKING
@@ -43,7 +44,7 @@ class InngestCriterionExecutor:
         evaluator_id: UUID,
         sandbox_manager: "BaseSandboxManager",
         trace_sink: TraceSink | None = None,
-    ):
+    ) -> None:
         self.ctx = ctx
         self.task_id = task_id
         self.execution_id = execution_id
@@ -58,7 +59,7 @@ class InngestCriterionExecutor:
         benchmark_name: str,
         criteria: list[CriterionSpec],
     ) -> list[CriterionOutcome]:
-        def make_step(spec: CriterionSpec):
+        def make_step(spec: CriterionSpec) -> Callable[[], Awaitable[CriterionOutcome]]:
             async def run_criterion() -> CriterionOutcome:
                 span_start = datetime.now(UTC)
                 criterion_context = EngineCriterionContext(

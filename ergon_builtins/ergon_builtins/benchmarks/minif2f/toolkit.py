@@ -9,13 +9,12 @@ Provides Pydantic response models and a ``MiniF2FToolkit`` that produces
 """
 
 import re
+from collections.abc import Callable
+from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field
-
-try:
-    from pydantic_ai.tools import Tool
-except ImportError:
-    Tool = None  # type: ignore[assignment,misc]
+from pydantic_ai.tools import Tool
 
 from ergon_builtins.benchmarks.minif2f.constants import LEAN_CMD, LEAN_CMD_PREFIX
 
@@ -157,10 +156,15 @@ class MiniF2FToolkit:
     def __init__(
         self,
         *,
-        sandbox,
-        sandbox_run_skill,
-        run_id,
-        ask_stakeholder_fn=None,
+        # `sandbox` and `sandbox_run_skill` use `Any` deliberately —
+        # the v1 benchmark surface accepts both the live e2b
+        # `AsyncSandbox` and lighter test doubles. The `_minif2f_run_skill`
+        # helper in `worker_factory.py` already types its closure return
+        # as `Any` (see slopcop ignore there); we mirror the same bound.
+        sandbox: Any,  # slopcop: ignore[no-typing-any]
+        sandbox_run_skill: Callable[..., Any],  # slopcop: ignore[no-typing-any]
+        run_id: UUID,
+        ask_stakeholder_fn: Callable[..., Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
         self._sandbox = sandbox
         self._ask = ask_stakeholder_fn
