@@ -69,7 +69,7 @@ but the call inside it is awaited.
 
 - Modify: `ergon_core/ergon_core/core/application/workflows/orchestration.py`
 
-- [ ] **Step 1: Keep transitional identity fields but make `task_id` canonical**
+- [x] **Step 1: Keep transitional identity fields but make `task_id` canonical**
 
 Update `PreparedTaskExecution` to include:
 
@@ -98,7 +98,7 @@ During transition, `task_id` is `definition_task_id` for static nodes and
 
 - Modify: `ergon_core/ergon_core/core/application/tasks/execution.py`
 
-- [ ] **Step 1: Change `prepare` branch order**
+- [x] **Step 1: Change `prepare` branch order**
 
 Replace:
 
@@ -114,7 +114,7 @@ with:
 return await self._prepare_run_node(command)
 ```
 
-- [ ] **Step 2: Add `_prepare_run_node`**
+- [x] **Step 2: Add `_prepare_run_node`**
 
 ```python
 async def _prepare_run_node(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
@@ -182,7 +182,7 @@ async def _prepare_run_node(self, command: PrepareTaskExecutionCommand) -> Prepa
     )
 ```
 
-- [ ] **Step 3: Rename old method**
+- [x] **Step 3: Rename old method**
 
 Rename `_prepare_definition` to `_prepare_legacy_definition` and leave it
 unused. PR 11 deletes it. Keeping the method available makes rollback
@@ -194,7 +194,7 @@ explicit during this PR.
 
 - Modify: `ergon_core/ergon_core/core/application/jobs/worker_execute.py`
 
-- [ ] **Step 1: Remove direct definition imports**
+- [x] **Step 1: Remove direct definition imports**
 
 Delete these imports from the job:
 
@@ -210,7 +210,7 @@ Add:
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 ```
 
-- [ ] **Step 2: Replace task construction block**
+- [x] **Step 2: Replace task construction block**
 
 Replace the current block that builds `worker`, `node`, `task_payload`, and
 `Task(...)` with:
@@ -255,7 +255,7 @@ present.
 
 - Create: `ergon_core/tests/unit/architecture/test_runtime_read_boundaries.py`
 
-- [ ] **Step 1: Add guard**
+- [x] **Step 1: Add guard**
 
 ```python
 from pathlib import Path
@@ -273,7 +273,7 @@ def test_worker_execute_does_not_read_definition_repository() -> None:
     assert "ExperimentDefinitionTask" not in text
 ```
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 ```bash
 uv run pytest ergon_core/tests/unit/architecture/test_runtime_read_boundaries.py \
@@ -291,7 +291,7 @@ uv run pytest ergon_core/tests/unit/architecture/test_runtime_read_boundaries.py
 This PR flips the worker-execute run-tier-only invariant green. Three
 ledger entries must drop their xfail markers in this commit:
 
-- [ ] **Step 1: Remove `worker_execute_imports_only_run_tier` from `_XFAIL_BY_NAME`**
+- [x] **Step 1: Remove `worker_execute_imports_only_run_tier` from `_XFAIL_BY_NAME`**
 
 In `test_v2_final_state_ledger.py`, delete the line:
 
@@ -299,7 +299,7 @@ In `test_v2_final_state_ledger.py`, delete the line:
 "worker_execute_imports_only_run_tier": "PR 3 flips worker_execute to run-tier",
 ```
 
-- [ ] **Step 2: Remove `_prepare_definition` from the dead-path xfails**
+- [x] **Step 2: Remove `_prepare_definition` from the dead-path xfails**
 
 In `test_dead_path_audit.py`, delete the line:
 
@@ -310,14 +310,14 @@ In `test_dead_path_audit.py`, delete the line:
 (`_prepare_legacy_definition` stays xfailed until PR 11 deletes the
 renamed body.)
 
-- [ ] **Step 3: Flip `test_worker_execute_reads_task_from_run_tier_only`**
+- [x] **Step 3: Flip `test_worker_execute_reads_task_from_run_tier_only`**
 
 In `test_walkthrough_smoketest.py`, remove the decorator and replace the
 `pytest.fail(...)` body with the real assertion. Use a session spy that
 records the ORM classes touched during a `worker_execute` invocation;
 assert no definition-tier class appears.
 
-- [ ] **Step 4: Run the ledgers**
+- [x] **Step 4: Run the ledgers**
 
 ```bash
 uv run pytest \

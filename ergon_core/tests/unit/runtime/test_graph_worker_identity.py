@@ -200,11 +200,24 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
     session = _session()
     definition_id = _definition_with_worker(session, worker_type="minif2f-react")
     run_id = _run(session, definition_id=definition_id, model_target="stub:constant")
+    # PR 2 contract: every RunGraphNode must carry a `task_json`
+    # snapshot with a `_type` discriminator. Dynamic-spawn tests in
+    # PR 9 will use `task.model_dump(...)` directly; in the meantime
+    # this fixture uses a TaskSpec-shaped bridge snapshot (matching
+    # what PR 1's `_definition_task_snapshot` writes for static tasks)
+    # so `graph_repo.node` can inflate the typed view.
     node = RunGraphNode(
         run_id=run_id,
         instance_key="sample-1",
         task_slug="dynamic-leaf",
         description="Dynamic specialist task",
+        task_json={
+            "_type": "ergon_core.api.benchmark.task:TaskSpec",
+            "task_slug": "dynamic-leaf",
+            "instance_key": "sample-1",
+            "description": "Dynamic specialist task",
+        },
+        is_dynamic=True,
         status=TaskExecutionStatus.PENDING,
         assigned_worker_slug="swebench-react",
         parent_node_id=None,
