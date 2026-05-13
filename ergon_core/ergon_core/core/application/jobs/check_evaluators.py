@@ -14,7 +14,7 @@ eval workers were still running against it — the v1 lifecycle leak.
 PR 4 fixes that by moving both responsibilities into
 `execute_task.py`'s single `try/finally`:
 
-  * fanout: `_fan_out_evaluators` → `ctx.step.invoke` + `asyncio.gather`
+  * fanout: `_fan_out_evaluators` → `ctx.group.parallel(partial(ctx.step.invoke, ...))`
   * release: `terminate_sandbox_by_id` in the orchestrator's `finally`
 
 External sandbox lifetime is now bounded by the same function that
@@ -28,7 +28,13 @@ this module — if you find yourself wanting to import from it, route
 through the orchestrator instead.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # See `execute_task.py` for the boundary rationale.
+    import inngest
 
 from ergon_core.core.application.events.task_events import TaskCompletedEvent
 from ergon_core.core.application.jobs.models import EvaluatorsResult
@@ -37,10 +43,10 @@ from ergon_core.core.application.jobs.models import EvaluatorsResult
 # TODO(PR 11): delete the file (and the matching Inngest handler module
 # under `core/infrastructure/inngest/handlers/`).
 async def run_check_evaluators_job(
-    ctx: Any,
+    ctx: inngest.Context,
     payload: TaskCompletedEvent,
     *,
-    evaluate_task_run_function: Any,
+    evaluate_task_run_function: inngest.Function,
 ) -> EvaluatorsResult:
     """Returns a zero-evaluator result without doing anything.
 

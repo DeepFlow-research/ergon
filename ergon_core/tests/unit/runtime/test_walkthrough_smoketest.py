@@ -173,7 +173,7 @@ def test_worker_execute_emits_one_evaluate_invocation_per_evaluator() -> None:
 
     PR 4 moved the fanout from the sibling ``check_evaluators`` Inngest
     function into the orchestrator (``execute_task``), so the
-    ``ctx.step.invoke`` / ``asyncio.gather`` shape lives in
+    ``ctx.step.invoke`` / ``ctx.group.parallel`` shape lives in
     ``execute_task.py`` (see PR 4 plan § "Implementation Note —
     Bridge-Everything Approach" for the orchestrator-location
     rationale). The behavioural test (one invoke per evaluator, no
@@ -187,7 +187,9 @@ def test_worker_execute_emits_one_evaluate_invocation_per_evaluator() -> None:
     root = Path(__file__).resolve().parents[4]
     text = (root / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
     assert "ctx.step.invoke" in text
-    assert "asyncio.gather" in text
+    assert "ctx.group.parallel" in text, (
+        "Use the Inngest-native parallel-step primitive, not `asyncio.gather`."
+    )
     assert 'f"eval-' in text, "fanout step IDs must include the evaluator index"
     assert "evaluate_task_run_function" in text, (
         "execute_task must invoke evaluate_task_run as a child function"
@@ -210,14 +212,14 @@ def test_evaluate_task_run_payload_is_id_only() -> None:
 
 def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     """Δ.5: orchestrator's try/finally bounds sandbox lifetime through
-    gather.
+    the parallel fanout.
 
     PR 4 lifts sandbox termination from the sibling
     ``check_evaluators`` job into the orchestrator's ``finally``. The
-    textual guard ensures the gather (eval fanout) is upstream of
-    ``terminate_sandbox_by_id`` and that the termination only happens
-    inside a ``finally`` block — i.e. the only termination path is
-    bounded by the gather.
+    textual guard ensures the parallel fanout (`ctx.group.parallel`)
+    is upstream of ``terminate_sandbox_by_id`` and that the
+    termination only happens inside a ``finally`` block — i.e. the
+    only termination path is bounded by the parallel fan-out.
     """
 
     from pathlib import Path
@@ -226,14 +228,14 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     text = (root / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
     finally_idx = text.find("finally:")
     terminate_idx = text.find("terminate_sandbox_by_id(task_sandbox_id)")
-    gather_idx = text.find("asyncio.gather")
+    parallel_idx = text.find("ctx.group.parallel")
     assert finally_idx != -1, "orchestrator must wrap sandbox release in try/finally"
     assert terminate_idx != -1, "orchestrator must terminate sandbox in its finally"
     assert finally_idx < terminate_idx, (
         "terminate_sandbox_by_id(task_sandbox_id) must live inside the finally block"
     )
-    assert gather_idx != -1 and gather_idx < finally_idx, (
-        "asyncio.gather over evaluator invokes must run before the finally"
+    assert parallel_idx != -1 and parallel_idx < finally_idx, (
+        "ctx.group.parallel over evaluator invokes must run before the finally"
     )
 
 

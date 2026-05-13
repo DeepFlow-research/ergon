@@ -244,12 +244,17 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     ).read_text()
     fanout_start = orchestrator.find("def _fan_out_evaluators")
     assert fanout_start != -1, "fanout helper must exist on the orchestrator"
-    fanout_body = orchestrator[fanout_start : fanout_start + 2000]
+    # Slice until the next top-level `def `; the docstring length isn't
+    # stable across edits so a fixed-width slice would miss the body.
+    next_def = orchestrator.find("\ndef ", fanout_start + 1)
+    fanout_body = (
+        orchestrator[fanout_start:next_def] if next_def != -1 else orchestrator[fanout_start:]
+    )
     assert "execution_id=prepared.execution_id" in fanout_body, (
         "every per-evaluator invoke must share prepared.execution_id"
     )
     assert "evaluator_index=i" in fanout_body, (
-        "evaluator_index must vary across the gather (one execution, many indices)"
+        "evaluator_index must vary across the parallel fanout (one execution, many indices)"
     )
 
     # (c) a retry mints a new execution_id — the attempt counter on

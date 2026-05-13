@@ -76,7 +76,10 @@ def test_execute_task_fans_out_via_step_invoke() -> None:
     body = (ROOT / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
     assert "ctx.step.invoke" in body
     assert "evaluate_task_run_function" in body
-    assert "asyncio.gather" in body
+    assert "ctx.group.parallel" in body, (
+        "Use Inngest-native `ctx.group.parallel` for the fan-out, not "
+        "`asyncio.gather` over `step.invoke` coroutines."
+    )
     assert "finally:" in body
     assert "terminate_sandbox_by_id" in body, (
         "sandbox termination must live inside the orchestrator now; PR 11 "

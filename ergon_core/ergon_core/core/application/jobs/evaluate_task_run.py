@@ -29,9 +29,16 @@ to release the *local* `_runtime` handle — the external sandbox stays
 owned by the orchestrator.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # See `execute_task.py` for the boundary rationale (this module
+    # honors the same `application/jobs/*.py` import policy).
+    import inngest
 
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.core.application.evaluation.service import EvaluationService
@@ -41,6 +48,7 @@ from ergon_core.core.application.jobs.models import (
     EvaluateTaskRunResult,
     TaskEvaluateRequest,
 )
+from ergon_core.core.application.tasks.repository import WorkerOutputRepository
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.infrastructure.tracing import (
@@ -50,14 +58,13 @@ from ergon_core.core.infrastructure.tracing import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-from ergon_core.core.application.tasks.repository import WorkerOutputRepository
 
 logger = logging.getLogger(__name__)
 _evaluation_persistence = EvaluationService()
 
 
 async def run_evaluate_task_run_job(
-    ctx: Any,
+    ctx: inngest.Context,
     payload: TaskEvaluateRequest,
 ) -> EvaluateTaskRunResult:
     """Per-evaluator fanout target. Thin id-only payload."""
