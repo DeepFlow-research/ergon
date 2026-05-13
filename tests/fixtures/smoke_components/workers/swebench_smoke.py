@@ -6,6 +6,7 @@ probe run exercises compile + execute + assertion pass.
 """
 
 import json
+from typing import ClassVar
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
 from tests.fixtures.smoke_components.smoke_base.leaf_base import BaseSmokeLeafWorker
@@ -34,9 +35,9 @@ if __name__ == "__main__":
 class SweBenchSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
     """Happy-path parent for the swebench-verified leg."""
 
-    type_slug = "swebench-smoke-worker"
-    leaf_slug = "swebench-smoke-leaf"
-    RECURSIVE_WORKER_SLUG = "swebench-smoke-recursive-worker"
+    type_slug: ClassVar[str] = "swebench-smoke-worker"
+    leaf_slug: ClassVar[str] = "swebench-smoke-leaf"
+    RECURSIVE_WORKER_SLUG: ClassVar[str] = "swebench-smoke-recursive-worker"
 
 
 class SweBenchSubworker:
@@ -66,27 +67,27 @@ class SweBenchSubworker:
 class SweBenchSmokeLeafWorker(BaseSmokeLeafWorker):
     """Registered leaf that delegates to ``SweBenchSubworker``."""
 
-    type_slug = "swebench-smoke-leaf"
-    subworker_cls = SweBenchSubworker
+    type_slug: ClassVar[str] = "swebench-smoke-leaf"
+    subworker_cls: ClassVar[type] = SweBenchSubworker
 
 
 class SweBenchRecursiveSmokeWorker(RecursiveSmokeWorkerBase):
     """Nested ``l_2`` worker that delegates nested leaves to SWE-Bench."""
 
-    type_slug = "swebench-smoke-recursive-worker"
-    leaf_slug = "swebench-smoke-leaf"
+    type_slug: ClassVar[str] = "swebench-smoke-recursive-worker"
+    leaf_slug: ClassVar[str] = "swebench-smoke-leaf"
 
 
 class SweBenchFailingLeafWorker(FailingSmokeLeafMixin, BaseSmokeLeafWorker):
     """Registered leaf that fails after partial work."""
 
-    type_slug = "swebench-smoke-leaf-failing"
-    subworker_cls = AlwaysFailSubworker
+    type_slug: ClassVar[str] = "swebench-smoke-leaf-failing"
+    subworker_cls: ClassVar[type] = AlwaysFailSubworker
 
 
 class SweBenchSadPathSmokeWorker(SadPathSmokeWorkerMixin, SmokeWorkerBase):
     """Parent that routes ``l_2`` to the failing leaf."""
 
-    type_slug = "swebench-sadpath-smoke-worker"
-    leaf_slug = "swebench-smoke-leaf"
-    FAILING_LEAF_SLUG = "swebench-smoke-leaf-failing"
+    type_slug: ClassVar[str] = "swebench-sadpath-smoke-worker"
+    leaf_slug: ClassVar[str] = "swebench-smoke-leaf"
+    FAILING_LEAF_SLUG: ClassVar[str] = "swebench-smoke-leaf-failing"

@@ -9,8 +9,10 @@ is the sum of all positive weights, and *min_possible* is the sum of all
 negative weights.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from typing import ClassVar
+
+from pydantic import model_validator
 
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import Criterion, CriterionOutcome
@@ -32,20 +34,22 @@ class ResearchRubricsRubric(Rubric):
     """
 
     type_slug: ClassVar[str] = "researchrubrics-rubric"
+    name: str = "researchrubrics-rubric"
+    # Authoring-time rubric criteria carried as data. The compiled
+    # ``criteria`` tuple (Criterion instances) is materialised in the
+    # post-init validator below and excluded from serialization — only
+    # the authored RubricCriterion data round-trips.
+    rubric_criteria: tuple[RubricCriterion, ...] = ()
 
-    def __init__(
-        self,
-        *,
-        name: str = "researchrubrics-rubric",
-        rubric_criteria: Sequence[RubricCriterion] = (),
-    ) -> None:
-        criteria = build_criteria_from_rubrics(list(rubric_criteria))
-        super().__init__(name=name, criteria=criteria)
-        self._rubric_criteria = tuple(rubric_criteria)
+    @model_validator(mode="after")
+    def _materialise_criteria(self) -> "ResearchRubricsRubric":
+        if self.rubric_criteria and not self.criteria:
+            self.criteria = tuple(build_criteria_from_rubrics(list(self.rubric_criteria)))
+        return self
 
     def criteria_for(self, task: Task) -> Iterable[Criterion]:
         """Build task-specific LLM-judge criteria from the task payload."""
-        if self._rubric_criteria:
+        if self.rubric_criteria:
             return self.criteria
 
         payload = ResearchRubricsTaskPayload.model_validate(task.task_payload.model_dump())

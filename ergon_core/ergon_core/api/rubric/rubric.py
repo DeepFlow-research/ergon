@@ -1,7 +1,9 @@
 """Public fixed-criteria rubric implementation."""
 
-from collections.abc import Iterable, Mapping
-from typing import Any
+from collections.abc import Iterable
+from typing import ClassVar
+
+from pydantic import Field
 
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.criterion.criterion import Criterion
@@ -13,15 +15,17 @@ from ergon_core.api.rubric.results import TaskEvaluationResult
 class Rubric(Evaluator):
     """Concrete evaluator with a fixed criteria list."""
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        criteria: Iterable[Criterion],
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(name=name, metadata=metadata)
-        self.criteria: tuple[Criterion, ...] = tuple(criteria)
+    type_slug: ClassVar[str] = "rubric"
+
+    # Criteria are arbitrary types (each ``Criterion`` is a plain ABC,
+    # not a Pydantic BaseModel — its config lives in subclass
+    # ``__init__``). ``arbitrary_types_allowed`` on the ``Evaluator``
+    # base permits this. ``exclude=True`` keeps criteria out of
+    # ``model_dump`` because Criterion instances are not JSON-
+    # serializable; subclass defaults rebuild the list on
+    # ``model_validate``. PR 11 may tighten criteria to Pydantic too
+    # once every criterion subclass is migrated.
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple, exclude=True)
 
     def criteria_for(self, task: Task) -> Iterable[Criterion]:
         return self.criteria
@@ -56,7 +60,7 @@ class Rubric(Evaluator):
             criterion_results=results,
         )
 
-    def validate(self) -> None:
-        super().validate()
+    def validate_runtime_deps(self) -> None:
+        super().validate_runtime_deps()
         for criterion in self.criteria:
             criterion.validate()

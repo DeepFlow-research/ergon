@@ -1,7 +1,7 @@
 """MiniF2F worker factories."""
 
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID
 
 from ergon_core.api import Task, WorkerContext, WorkerStreamItem
@@ -38,16 +38,9 @@ def _minif2f_run_skill(sandbox: Any) -> Any:  # slopcop: ignore[no-typing-any]
 class MiniF2FReactWorker(ReActWorker):
     """ReAct worker wired to the live MiniF2F sandbox at execution time."""
 
-    type_slug = "minif2f-react"
-
-    def __init__(self, *, name: str, model: str | None) -> None:
-        super().__init__(
-            name=name,
-            model=model,
-            tools=[],
-            system_prompt=MINIF2F_SYSTEM_PROMPT,
-            max_iterations=30,
-        )
+    type_slug: ClassVar[str] = "minif2f-react"
+    system_prompt: str | None = MINIF2F_SYSTEM_PROMPT
+    max_iterations: int = 30
 
     async def execute(
         self,
