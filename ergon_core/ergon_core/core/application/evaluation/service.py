@@ -129,6 +129,8 @@ class EvaluationService:
         finally:
             session.close()
 
+    # TODO(PR 11): delete this method together with `CriterionExecutor`
+    # and `InngestCriterionExecutor` (Δ.7 deletion list).
     async def evaluate_legacy(
         self,
         task_context: TaskEvaluationContext,

@@ -34,6 +34,8 @@ from ergon_core.core.application.events.task_events import TaskCompletedEvent
 from ergon_core.core.application.jobs.models import EvaluatorsResult
 
 
+# TODO(PR 11): delete the file (and the matching Inngest handler module
+# under `core/infrastructure/inngest/handlers/`).
 async def run_check_evaluators_job(
     ctx: Any,
     payload: TaskCompletedEvent,

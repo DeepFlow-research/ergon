@@ -59,6 +59,8 @@ class PersistOutputsRequest(InngestEventContract):
     sandbox_slug: str | None = None
 
 
+# TODO(PR 11): delete; no production sender or receiver since PR 4
+# (Δ.7 deletion list).
 class EvaluateTaskRunRequest(InngestEventContract):
     """Legacy v1 multi-field `task/evaluate` payload — kept importable
     only so pre-PR-4 worktrees can still load this module.
