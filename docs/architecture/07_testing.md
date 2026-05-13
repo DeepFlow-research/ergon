@@ -147,6 +147,10 @@ Per-env spec is a 3-line file that delegates to the shared factory at `ergon-das
 
 Required `data-testid` attributes: `run-status`, `task-node-{slug}` (one per `EXPECTED_SUBTASK_SLUGS`), `graph-canvas`, `cohort-run-row`, `cohort-env-label`.
 
+### 6.1 Dashboard harness job (`ci-fast.yml` → `frontend-e2e`)
+
+This job runs `docker compose up -d --wait postgres api inngest-dev`, then `pnpm -C ergon-dashboard run e2e` (Playwright starts `pnpm dev:test` locally). The dashboard route `GET /api/health` probes the Ergon API (`GET /cohorts?limit=1`), so Compose `--wait` must not return until the API process is actually serving HTTP. The **`api`** service therefore carries a **Docker `healthcheck`** that curls `http://127.0.0.1:9000/health` inside the container; without it, only Postgres had a healthcheck and CI could hit `/api/health` while Uvicorn was still importing, yielding **503**. Playwright specs that drag `react-resizable-panels` separators poll for non-null `boundingBox()` after `toBeVisible` because layout geometry can trail visibility in headless Chromium.
+
 ## 7. CI workflow
 
 [`.github/workflows/e2e-benchmarks.yml`](../../.github/workflows/e2e-benchmarks.yml):

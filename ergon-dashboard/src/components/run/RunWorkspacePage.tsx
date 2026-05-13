@@ -463,6 +463,7 @@ export function RunWorkspacePage({
                 <>
                   <Separator
                     id="workspace-resize-handle"
+                    data-testid="workspace-resize-handle"
                     className="group relative z-30 w-3 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-[var(--accent-soft)] data-[separator=drag]:bg-[var(--accent-soft)]"
                     aria-label="Resize task workspace"
                   >
@@ -502,6 +503,7 @@ export function RunWorkspacePage({
             <>
               <Separator
                 id="timeline-resize-handle"
+                data-testid="timeline-resize-handle"
                 className="group relative z-30 h-3 shrink-0 cursor-row-resize bg-transparent transition-colors hover:bg-[var(--accent-soft)] data-[separator=drag]:bg-[var(--accent-soft)]"
                 aria-label="Resize trace timeline"
               >
