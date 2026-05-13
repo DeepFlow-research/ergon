@@ -1,99 +1,44 @@
-"""Check and dispatch evaluators for a completed task.
+"""Legacy ``check_evaluators`` handler. Replaced by synchronous fanout
+in PR 4.
 
-Triggered by task/completed in parallel with task_propagate.
-Reads evaluator bindings from definition tables, then invokes
-evaluate_task_run per evaluator. Terminates the sandbox after
-all evaluations complete.
+Pre-PR-4, this function listened on ``task/completed`` and (a) invoked
+``evaluate_task_run`` per evaluator and (b) terminated the sandbox.
+Both responsibilities have moved into ``execute_task.py``'s
+``try/finally`` so the sandbox is released by the same job that
+acquired it.
+
+The module stays importable until PR 11 deletes it so worktrees that
+have not yet rebased can still load it without ImportError. The
+Inngest function is no longer registered with ``ALL_FUNCTIONS`` (see
+``core/infrastructure/inngest/registry.py``).
+
+TODO(PR 11): delete this file. PR 4 unhooks the Inngest registration
+and migrates every behavior; PR 11 drops the source.
 """
 
-import logging
 from typing import Any
 
-from ergon_core.core.application.evaluation.models import (
-    DispatchEvaluatorsCommand,
-)
-from ergon_core.core.application.evaluation.service import (
-    EvaluationService,
-)
-from ergon_core.core.application.jobs.models import EvaluateTaskRunRequest
-from ergon_core.core.application.jobs.models import EvaluateTaskRunResult, EvaluatorsResult
-from ergon_core.core.application.events.task_events import (
-    TaskCompletedEvent,
-)
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
-
-logger = logging.getLogger(__name__)
+from ergon_core.core.application.jobs.models import EvaluatorsResult
+from ergon_core.core.application.events.task_events import TaskCompletedEvent
 
 
-async def run_check_evaluators_job(
+async def run_check_evaluators_job(  # slopcop: ignore[no-broad-except]
     ctx: Any,
     payload: TaskCompletedEvent,
     *,
     evaluate_task_run_function: Any,
 ) -> EvaluatorsResult:
-    if payload.node_id is None:
-        await _terminate_sandbox(payload.sandbox_id)
-        return EvaluatorsResult(
-            task_id=None,
-            evaluators_found=0,
-            evaluators_run=0,
-        )
+    """Inert stub. The synchronous fanout in ``execute_task`` makes
+    this dispatch obsolete; callers should not reach this path because
+    the function is unregistered with Inngest.
 
-    dispatch_service = EvaluationService()
-    dispatch = dispatch_service.prepare_dispatch(
-        DispatchEvaluatorsCommand(
-            run_id=payload.run_id,
-            definition_id=payload.definition_id,
-            node_id=payload.node_id,
-            task_id=payload.task_id,
-            execution_id=payload.execution_id,
-        )
-    )
+    Kept as a callable so ad-hoc imports/tests don't fail loudly during
+    the PR 4 → PR 11 transition.
+    """
 
-    if not dispatch.valid_evaluators:
-        await _terminate_sandbox(payload.sandbox_id)
-        return EvaluatorsResult(
-            task_id=payload.task_id,
-            evaluators_found=dispatch.evaluators_found,
-            evaluators_run=0,
-        )
-
-    scores: list[float | None] = []
-    for evaluator_payload in dispatch.valid_evaluators:
-        result: EvaluateTaskRunResult = await ctx.step.invoke(
-            f"evaluate-{evaluator_payload.evaluator_binding_key}",
-            function=evaluate_task_run_function,
-            data=EvaluateTaskRunRequest(
-                run_id=payload.run_id,
-                definition_id=payload.definition_id,
-                node_id=payload.node_id,
-                task_id=payload.task_id,
-                execution_id=payload.execution_id,
-                evaluator_id=evaluator_payload.evaluator_id,
-                evaluator_binding_key=evaluator_payload.evaluator_binding_key,
-                evaluator_type=evaluator_payload.evaluator_type,
-                agent_reasoning=evaluator_payload.agent_reasoning,
-                sandbox_id=payload.sandbox_id,
-            ).model_dump(),
-        )
-        scores.append(result.score)
-
-    await _terminate_sandbox(payload.sandbox_id)
-
+    del ctx, evaluate_task_run_function
     return EvaluatorsResult(
         task_id=payload.task_id,
-        evaluators_found=dispatch.evaluators_found,
-        evaluators_run=len(dispatch.valid_evaluators),
-        scores=scores,
-    )
-
-
-async def _terminate_sandbox(sandbox_id: str) -> None:
-    """Terminate the task's sandbox through the provider lifecycle boundary."""
-    result = await terminate_sandbox_by_id(sandbox_id)
-    logger.info(
-        "Evaluator sandbox cleanup sandbox_id=%s terminated=%s reason=%s",
-        result.sandbox_id,
-        result.terminated,
-        result.reason,
+        evaluators_found=0,
+        evaluators_run=0,
     )

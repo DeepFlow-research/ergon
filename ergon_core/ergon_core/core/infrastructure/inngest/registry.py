@@ -7,9 +7,12 @@ from ergon_core.core.infrastructure.inngest.handlers.cancel_orphan_subtasks impo
     block_descendants_on_failed_fn,
     cancel_orphans_on_cancelled_fn,
 )
-from ergon_core.core.infrastructure.inngest.handlers.check_evaluators import (
-    check_and_run_evaluators,
-)
+
+# PR 4: `check_evaluators` is no longer registered with Inngest. The
+# orchestrator (`execute_task`) now fans out per-evaluator
+# invocations synchronously and owns sandbox release in its
+# try/finally. The handler module remains importable until PR 11
+# deletes it. TODO(PR 11): drop the file and its handler entirely.
 from ergon_core.core.infrastructure.inngest.handlers.cleanup_cancelled_task import (
     cleanup_cancelled_task_fn,
 )
@@ -37,7 +40,6 @@ ALL_FUNCTIONS = [
     sandbox_setup_fn,
     worker_execute_fn,
     persist_outputs_fn,
-    check_and_run_evaluators,
     evaluate_task_run,
     block_descendants_on_failed_fn,
     cancel_orphans_on_cancelled_fn,

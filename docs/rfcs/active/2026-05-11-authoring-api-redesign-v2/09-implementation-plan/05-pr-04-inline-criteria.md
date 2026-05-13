@@ -56,6 +56,25 @@ the orchestrator's `try/finally` already bounds external-sandbox
 lifetime via `terminate_sandbox_by_id`, so the eval worker has
 nothing to release locally.
 
+**Orchestrator location — `execute_task`, not `worker_execute`.** The
+plan code shows `worker_execute` owning `acquire`/`release` and the
+fanout. In our codebase `worker_execute` runs *between*
+`sandbox_setup` and `persist_outputs` — both are sibling Inngest
+functions invoked by `execute_task`. Putting the release in
+`worker_execute`'s `finally` would terminate the sandbox before
+`persist_outputs` runs (file uploads need the sandbox alive).
+
+PR 4 therefore lifts the synchronous fanout + release into
+`execute_task.py`'s `try/finally` instead. `worker_execute` only:
+(a) persists the terminal `WorkerOutput` via `WorkerOutputRepository`
+and (b) stamps `sandbox_id` on the execution row via
+`TaskExecutionRepository.set_sandbox_id`. The orchestrator's `finally`
+calls `terminate_sandbox_by_id(sandbox_id)` after the gather, and
+the `check_evaluators` Inngest function is unregistered. The
+Task 6 architecture guards target `execute_task.py` accordingly
+(the file where the fanout actually lives) — same invariant, more
+accurate location.
+
 **Why bridges instead of waiting for PR 5:** the v1 release-in-sibling-
 job bug is a correctness problem (eval workers can run against a
 terminated sandbox under retry). Landing the orchestrator-owned

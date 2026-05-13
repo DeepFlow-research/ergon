@@ -15,6 +15,10 @@ from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.api.worker.worker import Worker
 from ergon_core.core.application.components.catalog import ComponentCatalogService
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.tasks.repository import (
+    TaskExecutionRepository,
+    WorkerOutputRepository,
+)
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
@@ -132,6 +136,25 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
                 "context": {},
             },
         )
+
+    # PR 4: persist the terminal WorkerOutput and stamp the sandbox_id
+    # onto the execution row BEFORE the orchestrator fans out evaluators.
+    # Per-evaluator Inngest workers reload both via the run-tier read
+    # boundary (`WorkerOutputRepository.load` and
+    # `graph_repo.node(..., sandbox_id=...)`), so the writes must
+    # commit before the fanout.
+    with get_session() as session:
+        await WorkerOutputRepository().persist(
+            session,
+            execution_id=payload.execution_id,
+            output=output,
+        )
+        await TaskExecutionRepository().set_sandbox_id(
+            session,
+            execution_id=payload.execution_id,
+            sandbox_id=payload.sandbox_id,
+        )
+        session.commit()
 
     sink = get_trace_sink()
     sink.emit_span(
