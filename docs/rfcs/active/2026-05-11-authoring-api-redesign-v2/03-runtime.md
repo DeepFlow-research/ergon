@@ -27,11 +27,13 @@ The framework calls them through the `SandboxLifecycleHub` (defined in
 the next section) so retries, quotas, and shutdown work correctly:
 
 ```python
-# Inside worker_execute (the canonical path — single Inngest function):
+# Inside worker_execute (the canonical path — orchestrator function):
 sandbox = await lifecycle_hub.acquire(task.sandbox, run_id=run_id, task_id=task_id)
 # acquire(...) calls task.sandbox.provision() (or reattaches an existing
 # live sandbox on a retry — see below). After it returns, task.sandbox
-# IS sandbox (same instance, _runtime now attached).
+# IS sandbox (same instance, _runtime now attached). The persisted
+# run_task_executions row gets sandbox_id stamped onto it so eval
+# workers can re-attach.
 try:
     # 1. Run the worker. Collect the terminal WorkerOutput from the stream.
     final_output: WorkerOutput | None = None
@@ -39,22 +41,36 @@ try:
         if isinstance(chunk, WorkerOutput):
             final_output = chunk
         yield chunk
+    await graph_repo.persist_worker_output(
+        run_id=run_id, task_id=task_id,
+        execution_id=execution_id, output=final_output,
+    )
 
-    # 2. Run all evaluators inline — same job, same sandbox, same process.
-    #    The evaluators have full sandbox access for filesystem reads /
-    #    command execution, exactly like the worker did.
-    for evaluator in task.evaluators:
-        outcome = await evaluator.evaluate(
-            task=task, worker_output=final_output,
-            context=criterion_ctx, sandbox=sandbox,
+    # 2. Fan out one Inngest invocation per evaluator. The parent SUSPENDS
+    #    until every invocation returns — sandbox stays alive through
+    #    gather. Each evaluate_task_run gets a thin id-only payload; the
+    #    eval worker re-loads task via the same graph_repo.node(...) and
+    #    re-attaches the sandbox by sandbox_id read off the execution row.
+    await asyncio.gather(*[
+        ctx.step.invoke(
+            f"eval-{i}",
+            evaluate_task_run,
+            TaskEvaluateRequest(
+                run_id=run_id,
+                task_id=task_id,
+                execution_id=execution_id,
+                evaluator_index=i,
+            ),
         )
-        await graph_repo.persist_evaluation(
-            run_id=run_id, task_id=task_id, outcome=outcome,
-        )
+        for i in range(len(task.evaluators))
+    ])
 finally:
-    # 3. Release once worker + inline criteria are both done. This
-    #    `worker_execute` job is the sole sandbox-lifetime owner for
-    #    `(run_id, task_id)`; there is no other release path.
+    # 3. Release once gather has returned. This worker_execute job is
+    #    the sole acquirer/releaser for (run_id, task_id); eval workers
+    #    only ATTACH (build a local _runtime handle to the same external
+    #    sandbox) and DETACH (drop the local handle, never terminate).
+    #    Sandbox lifetime is bounded by this try/finally — never crosses
+    #    job boundaries unsupervised.
     await lifecycle_hub.release(sandbox)
 ```
 
@@ -64,37 +80,47 @@ each subclass implements; the hub is the single framework caller of
 them. If you're writing a new sandbox subclass you implement
 `provision()`; you don't think about the hub.
 
-### Inline criteria, single job, single sandbox owner `[v2: clarified]`
+### Synchronous fanout, single sandbox owner `[v2: clarified]`
 
 The snippet above is canonical. Three properties of the v2 design lock
 in:
 
-1. **One Inngest function per task: `worker_execute`.** It runs the
-   worker, runs all evaluators inline, and releases the sandbox.
-   There is **no separate `evaluate_task_run` Inngest function**, no
-   separate `EvaluateTaskRunRequest` event, no second handler module.
-   The full event taxonomy is specified in
+1. **Two Inngest function shapes per task: an orchestrator
+   (`worker_execute`) and a per-evaluator worker
+   (`evaluate_task_run`).** The orchestrator is one event per task;
+   evaluators fan out one event per evaluator. The orchestrator
+   suspends on `asyncio.gather(*[ctx.step.invoke(...)])` until every
+   eval invocation returns. The full event taxonomy is specified in
    [`06-inngest-event-contracts.md`](06-inngest-event-contracts.md).
-2. **Worker-execute is the sole sandbox-lifetime owner for
+2. **`worker_execute` is the sole sandbox-lifetime owner for
    `(run_id, task_id)`.** `acquire` happens once at the top, `release`
-   happens once in `finally` after both worker and inline criteria
-   complete. The `run/cleanup` Inngest function exists strictly as a
-   shutdown / failure-recovery backstop — it sweeps live sandboxes a
-   crashed pod left behind, but it is **never** the primary release
-   path for a successful task.
-3. **Criteria see the same sandbox state the worker last left.** No
-   serialisation/deserialisation of intermediate state, no sandbox
-   handoff across processes. A criterion can `cat` the file the worker
-   just wrote, run a verification command, or inspect any sandbox
-   resource — same `_runtime`, same filesystem, same process.
+   happens once in `finally` after `gather` returns. Eval workers only
+   *attach* (build a local `_runtime` handle to the same external
+   sandbox via `Sandbox.from_definition(json, sandbox_id=...)`) and
+   *detach* (drop the local handle, never terminate). The `run/cleanup`
+   Inngest function is a shutdown / failure-recovery backstop — it
+   sweeps live sandboxes a crashed pod left behind, but is **never**
+   the primary release path for a successful task.
+3. **Evaluators see the same external sandbox the worker used.**
+   Sandbox state is shared because the external sandbox (e.g. e2b cloud
+   sandbox) is a single live resource keyed by `sandbox_id`; the local
+   `_runtime` handles are per-process reconnections to it, not copies.
+   An evaluator can `cat` the file the worker wrote, run a verification
+   command, or inspect any sandbox resource — same filesystem, same
+   process *on the sandbox side*, two Python processes on the Ergon
+   side.
 
-This is a deliberate v2 simplification of v1's split. v1 fan-out'd
-criteria evaluation into a separate Inngest function for parallelism;
-the audit found the parallelism never paid off (criteria for one task
-are typically O(1) and fast) and the split forced sandbox-handoff
-gymnastics that produced the lifecycle leaks the audit logged. The
-walkthrough always specified "criteria run inside `worker.execute()`"
-implicitly; v2 makes the framework-side execution explicit and matches.
+This is a deliberate v2 reshape of v1's split, not a collapse of it.
+v1 fan-out'd criteria evaluation into a separate Inngest function but
+got the lifecycle wrong: release lived in `check_evaluators`, a
+sibling job, and per-run cleanup masked the leak. v2 keeps the fanout
+(retaining Inngest's per-function retry, concurrency cap, and
+observability) and fixes the lifecycle (single owner, bounded by the
+orchestrator's `try/finally`, sandbox guaranteed alive through the
+`gather`). The reason v1's split looked like it had to go was the
+audit's lifecycle finding — that finding is resolved by the
+synchronous-fanout shape without giving up the operational properties
+of separate Inngest functions.
 
 The audit decision and the rejected alternatives are recorded in
 [`08-decisions-log.md`](08-decisions-log.md) "Locked decisions

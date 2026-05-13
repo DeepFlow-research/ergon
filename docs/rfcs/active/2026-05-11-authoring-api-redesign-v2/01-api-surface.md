@@ -117,9 +117,11 @@ ergon_core/ergon_core/api/
 │
 ├── criterion/
 │   ├── __init__.py                  # MODIFY — re-export new shapes
-│   ├── criterion.py                 # MODIFY — Criterion(BaseModel, ABC): evaluate(..., sandbox: Sandbox) [P4];
+│   ├── criterion.py                 # MODIFY — Criterion(BaseModel, ABC): keeps v1 evaluate(context) signature;
+│   │                                #   sandbox accessed via context.task.sandbox [LOCKED — see § Criterion class signature];
 │   │                                #   from_definition classmethod [P1]
-│   ├── context.py                   # MODIFY — CriterionContext becomes a pure data carrier [P4: proxies dropped]
+│   ├── context.py                   # MODIFY — CriterionContext becomes a pure data carrier [P4: runtime proxies dropped;
+│   │                                #   sandbox proxies live on Sandbox itself]
 │   └── results.py                   # unchanged — CriterionOutcome / EvidenceMessage / etc.
 │
 ├── rubric/
@@ -279,8 +281,8 @@ Five user-facing types, no Spec siblings, no central registry:
 | `Benchmark` | subclass | task generator, payload type | — | (definition-time only) |
 | `Task` | instance | slug, description, payload, **worker**, **sandbox**, **evaluators**, deps | `_task_id` (set by runtime, read via `task.task_id` property) | (it's the thing passed) |
 | `Sandbox` | subclass + instance (`LeanSandbox(...)`, `PythonSandbox(...)`) | env, timeout, requires_network + subclass-specific config (e.g. `lean_version`) | `_runtime` (set after `provision()`; backs `run_command` / `read_file` / etc.) | (provisioned by framework, passed into `execute` / `evaluate`) |
-| `Worker` | instance | name, model, strategy config (prompt, max_iter…) | — (pure config + behavior) | `task`, `context`, `sandbox` |
-| `Criterion` | instance | slug, description | — (pure config + behavior) | `task`, `worker_output`, `context`, `sandbox` |
+| `Worker` | instance | name, model, strategy config (prompt, max_iter…) | — (pure config + behavior) | `task`, `context` (sandbox is `task.sandbox`) |
+| `Criterion` | instance | slug, description | — (pure config + behavior) | `context: CriterionContext` (carries `task`, `worker_result`; sandbox is `context.task.sandbox`) |
 | `Rubric` | instance (or subclass) | criteria + weights + aggregation | — | `task`, criterion outcomes |
 
 ## The unifying pattern: one class per concept, runtime as `PrivateAttr`
@@ -838,7 +840,14 @@ class Experiment(BaseModel):
     model_config = {"frozen": False, "arbitrary_types_allowed": True}
 
     benchmark: Benchmark
-    metadata:    Mapping[str, Any] = Field(default_factory=dict)
+    name: str | None = None
+    description: str | None = None
+    # First-class authoring-metadata fields. Anything the framework
+    # *reads* (dashboard listing, audit, denormalized indexed columns
+    # per 02-persistence-layer.md §3) lives here, not in `metadata`.
+    # `metadata` is for opaque author-provided tags only.
+    created_by: str | None = None
+    metadata: Mapping[str, Any] = Field(default_factory=dict)
 
     _persisted: DefinitionHandle | None = PrivateAttr(default=None)
 
@@ -1015,8 +1024,103 @@ file/command methods. v2's split:
 The split preserves "Sandbox = per-sandbox filesystem and process
 runtime" as the base contract, with `RunResourceRepository` owning the
 run-tier content store. Criteria that need both reach for both —
-`Sandbox` via the `sandbox` parameter of `evaluate()`, repo via
-`context.resources(...)` or direct import.
+`Sandbox` via `context.task.sandbox` (live in the eval worker per Δ.5),
+repo via `context.resources(...)` or direct import.
+
+## Criterion class signature — locked `[v2: locked]`
+
+The `Criterion.evaluate(...)` method keeps the v1 signature unchanged.
+The earlier `[P4]` annotation on `criterion.py` in the file-tree
+section ("evaluate(..., sandbox: Sandbox)") is **superseded** by this
+lock — the sandbox flows in via `context.task.sandbox`, not as a
+separate positional parameter. Rationale:
+
+- The object-bound `Task` (Foundational change A) makes `task.sandbox`
+  the canonical place to find the sandbox at evaluation time.
+- Per Δ.5, the eval worker's `Sandbox.from_definition(sandbox_id=...)`
+  call attaches a live `_runtime` to `task.sandbox` before
+  `criterion.evaluate(context)` runs, so `context.task.sandbox.run_command(...)`
+  is the live IO entry point.
+- Keeping the v1 single-arg signature avoids a churn-cascade across
+  every in-tree criterion subclass.
+
+### Signature
+
+```python
+from ergon_core.api.criterion.context import CriterionContext
+from ergon_core.api.criterion.results import CriterionOutcome
+
+
+class Criterion(BaseModel, ABC):
+    """Atomic evaluation unit.
+
+    Subclasses override `evaluate` and access the live sandbox via
+    `context.task.sandbox` (a `Sandbox` instance with its `_runtime`
+    attached by the eval worker's reconnect-by-sandbox_id call).
+    """
+
+    type_slug: ClassVar[str]
+    required_packages: ClassVar[list[str]] = []
+
+    @abstractmethod
+    async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
+        """Run one atomic evaluation against the provided context.
+
+        `context.task` carries the inflated Task with a live sandbox
+        attached (per Δ.5). `context.worker_result` carries the
+        WorkerOutput from the just-finished worker run.
+        """
+        ...
+
+    @classmethod
+    def from_definition(cls, criterion_json: TaskDefinitionJson) -> "Criterion":
+        """Reconstruct a concrete Criterion subclass from its persisted
+        JSON via the `_type` discriminator. Raises `ValueError` if
+        `_type` is missing or non-string."""
+        ...
+```
+
+### CriterionContext shape (v2)
+
+`CriterionContext` becomes a **pure data carrier** — its v1 runtime
+proxy methods (`run_command`, `read_resource`, `write_file`, …) are
+dropped. The sandbox proxies move to `Sandbox` itself (per the
+capability surface lock). `CriterionContext` carries:
+
+```python
+class CriterionContext(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    run_id: UUID
+    task_id: UUID
+    execution_id: UUID
+    task: Task                 # task.sandbox is live in the eval worker
+    worker_result: WorkerOutput
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    # _runtime PrivateAttr is gone — sandbox proxies live on Sandbox.
+```
+
+`sandbox_id` is no longer a separate field — it's available as
+`context.task.sandbox.sandbox_id` once the runtime is attached.
+
+### What this kills
+
+- `CriterionRuntime` Protocol and its `with_runtime(...)` constructor on
+  `CriterionContext` (replaced by sandbox proxies on `Sandbox`).
+- The `sandbox: Sandbox` positional parameter that the file-tree
+  `[P4]` annotation hinted at — same access via `context.task.sandbox`.
+- The earlier reading of `02-persistence-layer.md` and
+  `06-inngest-event-contracts.md` pseudocode that suggested
+  `evaluator.evaluate(task=..., worker_output=...)` as a positional-arg
+  form. Reconciled: the EvaluationService internally constructs a
+  `CriterionContext` and calls `criterion.evaluate(context)`.
+
+### How `Rubric.evaluate` interacts
+
+`Rubric` (an `Evaluator` subclass) iterates its `criteria`, calls each
+`criterion.evaluate(context)`, and aggregates the `CriterionOutcome`
+results into an `EvaluatorResult`. The Rubric.evaluate signature is the
+same shape: `async def evaluate(self, context: CriterionContext) -> EvaluatorResult`.
 
 ## Worker / Criterion non-pydantic runtime state — locked `[v2: locked]` (Q25)
 

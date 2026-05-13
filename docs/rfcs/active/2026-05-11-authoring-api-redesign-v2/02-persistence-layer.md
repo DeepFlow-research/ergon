@@ -33,12 +33,35 @@ project conventions converge on this:
 ```python
 # In ergon_core.api — base classes carry the convention:
 
+from pydantic import JsonValue
+
+
+type TaskDefinitionJson = dict[str, JsonValue]
+"""Serialized form of a Task/Worker/Sandbox/etc — `_type`-discriminated
+JSON written to `run_graph_nodes.task_json` and the matching definition
+columns. Field names are NOT enforced by the type (the discriminator
+dispatch in `from_definition` does that). The value side IS typed via
+pydantic's `JsonValue`, so sticking a `datetime` or `UUID` object into
+the snapshot fails at typecheck time instead of at JSON-serialization
+time. The alias is the named boundary every `from_definition`
+classmethod accepts."""
+
+
 class Worker(BaseModel, ABC):
     @classmethod
-    def from_definition(cls, worker_json: dict[str, Any]) -> "Worker":
+    def from_definition(cls, worker_json: TaskDefinitionJson) -> "Worker":
         """Reconstruct a concrete Worker subclass from its persisted JSON.
-        Discovers the subclass via the `_type` discriminator."""
-        WorkerCls = import_component_string(worker_json["_type"])
+        Discovers the subclass via the `_type` discriminator. Raises
+        `ValueError` if `_type` is missing or non-string — there is no
+        soft-default to a base class, because doing so would silently
+        produce the wrong Worker subclass at runtime."""
+        worker_type = worker_json.get("_type")
+        if not isinstance(worker_type, str):
+            raise ValueError(
+                f"Worker snapshot is missing the required `_type` "
+                f"discriminator (got {type(worker_type).__name__})."
+            )
+        WorkerCls = import_component_string(worker_type)
         return WorkerCls.model_validate(worker_json)
 
 class Task(BaseModel, Generic[PayloadT]):
@@ -56,7 +79,7 @@ class Task(BaseModel, Generic[PayloadT]):
     @classmethod
     def from_definition(
         cls,
-        task_json: dict[str, Any],
+        task_json: TaskDefinitionJson,
         *,
         task_id: UUID,
     ) -> "Task":
@@ -69,8 +92,18 @@ class Task(BaseModel, Generic[PayloadT]):
         Framework-internal: only the graph repository calls this (see
         `RunGraphNodeView` below). Author code constructs `Task(...)`
         directly and never touches `from_definition`.
+
+        Raises `ValueError` if `_type` is missing or non-string — there
+        is no soft-default to base `Task`, because doing so would
+        silently drop the authored worker/sandbox/evaluator bindings.
         """
-        TaskCls = import_component_string(task_json["_type"])
+        task_type = task_json.get("_type")
+        if not isinstance(task_type, str):
+            raise ValueError(
+                f"Task snapshot is missing the required `_type` "
+                f"discriminator (got {type(task_type).__name__})."
+            )
+        TaskCls = import_component_string(task_type)
         instance = TaskCls.model_validate(task_json)
         # PrivateAttr on a non-frozen BaseModel is settable directly;
         # object.__setattr__ kept for symmetry with frozen-Sandbox patterns.
@@ -79,19 +112,32 @@ class Task(BaseModel, Generic[PayloadT]):
 
 class Sandbox(BaseModel, ABC):
     @classmethod
-    def from_definition(cls, sandbox_json: dict[str, Any]) -> "Sandbox":
-        SandboxCls = import_component_string(sandbox_json["_type"])
+    def from_definition(cls, sandbox_json: TaskDefinitionJson) -> "Sandbox":
+        sandbox_type = sandbox_json.get("_type")
+        if not isinstance(sandbox_type, str):
+            raise ValueError(
+                f"Sandbox snapshot is missing the required `_type` "
+                f"discriminator (got {type(sandbox_type).__name__})."
+            )
+        SandboxCls = import_component_string(sandbox_type)
         return SandboxCls.model_validate(sandbox_json)
 
 # Same shape on Criterion, Rubric, Benchmark.
 ```
 
-`from_definition` takes a `dict` (the JSON from the row), **not** the
-typed row itself — that would create an `api → persistence` dependency
-in the wrong direction. It should not take a worker/evaluator pool:
-those objects are part of `Task` itself now. The guideline: after
-`from_definition`, no field on the returned object should still be a
-"go look this up over there" reference.
+`from_definition` takes a `TaskDefinitionJson` (the JSON from the row),
+**not** the typed row itself — that would create an `api → persistence`
+dependency in the wrong direction. It should not take a
+worker/evaluator pool: those objects are part of `Task` itself now. The
+guideline: after `from_definition`, no field on the returned object
+should still be a "go look this up over there" reference.
+
+The boundary type is `dict[str, JsonValue]`, not a Pydantic model and
+not a `TypedDict`. The shape *after* discriminator dispatch lives on
+the concrete subclass; mirroring it in a parallel typed structure
+would duplicate the schema and rot. The boundary type asserts only
+what's honest at the boundary: "JSON, value-side typed, shape TBD by
+the discriminator."
 
 There is **no `_materialize` classmethod** on `Task` (or any other
 class). `from_definition` is the single framework-internal entry
@@ -100,8 +146,8 @@ runtime instance." This avoids the two-step `model_validate` →
 `_materialize` shape an earlier draft had, where it was unclear which
 method owned identity binding.
 
-The job body shouldn't see a `dict[str, Any]` though — the repo is the
-bridge, and it returns *fully inflated typed objects*, never raw JSON.
+The job body shouldn't see a `TaskDefinitionJson` either — the repo is
+the bridge, and it returns *fully inflated typed objects*, never raw JSON.
 The graph repo returns a typed `RunGraphNodeView` with the `Task` already
 inflated:
 
@@ -140,7 +186,7 @@ worker = task.worker
 `Task.from_definition` is called *once*, *inside* `graph_repo.node(...)`,
 and never appears in the job body. It's a framework-internal classmethod
 (authors construct via `Task(...)`, not via `from_definition`) — the
-`dict[str, Any]` parameter is honest about being the typing boundary
+`TaskDefinitionJson` parameter is honest about being the typing boundary
 between PG's untyped JSON column and the typed authoring hierarchy, and
 that boundary lives entirely inside the repo. No `session.get` in sight;
 no `import_component_string` in sight; no binding-key chase at the
