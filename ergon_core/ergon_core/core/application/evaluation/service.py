@@ -4,6 +4,7 @@ from uuid import UUID
 
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionEvaluator,
@@ -155,6 +156,49 @@ class EvaluationService:
             benchmark_name=benchmark_name,
             criteria=specs,
         )
+        return EvaluationServiceResult(
+            result=evaluator.aggregate_task(task, criterion_results),
+            specs=specs,
+        )
+
+    async def evaluate_inline(
+        self,
+        *,
+        context: CriterionContext,
+        evaluator: Evaluator,
+    ) -> EvaluationServiceResult:
+        """Run every criterion inline against a single ``CriterionContext``.
+
+        PR 4's synchronous-fanout reshape moves the Inngest function
+        boundary from "one ``step.run`` per criterion" to "one
+        ``step.invoke`` per evaluator". Inside the per-evaluator
+        function we no longer need the ``CriterionExecutor`` indirection
+        — we just iterate ``evaluator.criteria_for(task)`` and await
+        ``criterion.evaluate(context)`` directly. The Inngest retry
+        unit is now the whole evaluator (the orchestrator fanout
+        already gives per-evaluator step IDs).
+
+        TODO(PR 11): collapse this into ``evaluate(...)`` once nothing
+        imports the legacy multi-argument signature, and delete
+        ``CriterionExecutor`` + ``InngestCriterionExecutor``.
+        """
+
+        task = context.task
+        criteria = list(evaluator.criteria_for(task))
+        specs = [
+            CriterionSpec(
+                criterion=c,
+                criterion_idx=i,
+                max_score=c.score_spec.max_score,
+                stage_idx=0,
+                stage_name="default",
+                aggregation_weight=c.weight,
+            )
+            for i, c in enumerate(criteria)
+        ]
+        criterion_results: list[CriterionOutcome] = []
+        for c in criteria:
+            criterion_results.append(await c.evaluate(context))
         return EvaluationServiceResult(
             result=evaluator.aggregate_task(task, criterion_results),
             specs=specs,
