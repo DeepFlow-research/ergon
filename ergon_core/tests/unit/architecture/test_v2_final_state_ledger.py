@@ -78,11 +78,13 @@ def _assert_evaluate_task_run_takes_thin_payload() -> None:
 
     import inspect
 
-    from ergon_core.core.application.jobs.evaluate_task_run import evaluate_task_run
+    from ergon_core.core.application.jobs.evaluate_task_run import (
+        run_evaluate_task_run_job,
+    )
 
-    sig = inspect.signature(evaluate_task_run)
+    sig = inspect.signature(run_evaluate_task_run_job)
     assert "TaskEvaluateRequest" in repr(sig), (
-        "evaluate_task_run must take TaskEvaluateRequest after PR 4's reshape"
+        "run_evaluate_task_run_job must take TaskEvaluateRequest after PR 4's reshape"
     )
 
 
@@ -206,8 +208,8 @@ FINAL_STATE_ASSERTIONS: tuple[FinalStateAssertion, ...] = (
 # invariant green ahead of its landing PR, CI fails and the ledger gets
 # the update at the same time.
 _XFAIL_BY_NAME: dict[str, str] = {
-    "evaluate_task_run_uses_thin_payload": "PR 4 reshapes evaluate_task_run",
-    "check_evaluators_is_unregistered": "PR 4 removes check_evaluators dispatch",
+    # PR 4 landed: evaluate_task_run takes TaskEvaluateRequest, and the
+    # legacy `check_evaluators` Inngest function is unregistered.
     # task_has_no_model_post_init: already holds today (v1 Task has no
     # model_post_init); the assertion ensures PR 5's v2 Task keeps it
     # that way. Tested every run, no xfail needed.

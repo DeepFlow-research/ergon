@@ -168,36 +168,73 @@ def test_worker_execute_reads_task_from_run_tier_only() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="PR 4: synchronous fanout via ctx.step.invoke",
-    strict=True,
-)
 def test_worker_execute_emits_one_evaluate_invocation_per_evaluator() -> None:
-    """PR 4 invariant: synchronous fanout via ctx.step.invoke."""
+    """PR 4 invariant: synchronous fanout via ctx.step.invoke.
 
-    pytest.fail("requires PR 4's fanout shape")
+    PR 4 moved the fanout from the sibling ``check_evaluators`` Inngest
+    function into the orchestrator (``execute_task``), so the
+    ``ctx.step.invoke`` / ``asyncio.gather`` shape lives in
+    ``execute_task.py`` (see PR 4 plan § "Implementation Note —
+    Bridge-Everything Approach" for the orchestrator-location
+    rationale). The behavioural test (one invoke per evaluator, no
+    invokes when there are zero evaluator bindings) lives in
+    ``test_execute_task_evaluator_fanout.py``; this textual guard
+    catches regressions of the fanout shape itself.
+    """
+
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    text = (root / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
+    assert "ctx.step.invoke" in text
+    assert "asyncio.gather" in text
+    assert 'f"eval-' in text, "fanout step IDs must include the evaluator index"
+    assert "evaluate_task_run_function" in text, (
+        "execute_task must invoke evaluate_task_run as a child function"
+    )
 
 
-@pytest.mark.xfail(
-    reason="PR 4: TaskEvaluateRequest is the thin id-only payload",
-    strict=True,
-)
 def test_evaluate_task_run_payload_is_id_only() -> None:
     """PR 4 invariant: TaskEvaluateRequest has exactly four fields:
     run_id, task_id, execution_id, evaluator_index."""
 
-    pytest.fail("requires PR 4's TaskEvaluateRequest")
+    from ergon_core.core.application.jobs.models import TaskEvaluateRequest
+
+    assert set(TaskEvaluateRequest.model_fields) == {
+        "run_id",
+        "task_id",
+        "execution_id",
+        "evaluator_index",
+    }
 
 
-@pytest.mark.xfail(
-    reason="PR 4: orchestrator try/finally bounds sandbox lifetime through gather",
-    strict=True,
-)
 def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     """Δ.5: orchestrator's try/finally bounds sandbox lifetime through
-    gather."""
+    gather.
 
-    pytest.fail("requires PR 4's lifecycle ownership")
+    PR 4 lifts sandbox termination from the sibling
+    ``check_evaluators`` job into the orchestrator's ``finally``. The
+    textual guard ensures the gather (eval fanout) is upstream of
+    ``terminate_sandbox_by_id`` and that the termination only happens
+    inside a ``finally`` block — i.e. the only termination path is
+    bounded by the gather.
+    """
+
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    text = (root / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
+    finally_idx = text.find("finally:")
+    terminate_idx = text.find("terminate_sandbox_by_id(task_sandbox_id)")
+    gather_idx = text.find("asyncio.gather")
+    assert finally_idx != -1, "orchestrator must wrap sandbox release in try/finally"
+    assert terminate_idx != -1, "orchestrator must terminate sandbox in its finally"
+    assert finally_idx < terminate_idx, (
+        "terminate_sandbox_by_id(task_sandbox_id) must live inside the finally block"
+    )
+    assert gather_idx != -1 and gather_idx < finally_idx, (
+        "asyncio.gather over evaluator invokes must run before the finally"
+    )
 
 
 @pytest.mark.xfail(

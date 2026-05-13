@@ -18,9 +18,7 @@ from ergon_core.core.infrastructure.inngest.contracts import (
     output_type=EvaluateTaskRunResult,
 )
 async def evaluate_task_run(ctx: inngest.Context) -> EvaluateTaskRunResult:
-    return await run_evaluate_task_run_job(
-        ctx, TaskEvaluateRequest.model_validate(ctx.event.data)
-    )
+    return await run_evaluate_task_run_job(ctx, TaskEvaluateRequest.model_validate(ctx.event.data))
 
 
 __all__ = ["evaluate_task_run"]
