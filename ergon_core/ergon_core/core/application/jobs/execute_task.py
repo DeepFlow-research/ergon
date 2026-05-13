@@ -4,14 +4,36 @@ Prepares a task, invokes sandbox/worker/persist child functions, fans
 out per-evaluator invocations of ``evaluate_task_run``, then finalizes.
 Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
 
-PR 4 reshape: this function now owns the synchronous-fanout invariant.
-After ``persist_outputs`` succeeds and before emitting
-``task/completed``, the orchestrator awaits ``asyncio.gather(*[
-ctx.step.invoke("eval-{i}", evaluate_task_run, TaskEvaluateRequest(...))
-])``. The whole pipeline is wrapped in ``try/finally``; the ``finally``
-calls ``terminate_sandbox_by_id``. The v1 lifecycle leak (release in a
-sibling ``check_evaluators`` job) is fixed because external-sandbox
-lifetime is now bounded by this function's gather.
+**Sandbox lifetime ownership.** This function — not ``worker_execute``
+— is the orchestrator that wraps the *entire* sandbox lifetime in a
+single ``try/finally``. The flow is:
+
+    sandbox-setup    →  acquires external sandbox, returns sandbox_id
+    worker-execute   →  runs the worker against the sandbox
+    persist-outputs  →  uploads artifacts (still needs the sandbox)
+    _fan_out_evaluators
+                     →  asyncio.gather(ctx.step.invoke(...)) per evaluator
+                        each evaluator reattaches to the sandbox by id
+    [emit task/completed]
+    finally: terminate_sandbox_by_id(...)
+
+The gather is what makes the invariant work: the orchestrator cannot
+reach the `finally` until every per-evaluator `step.invoke` returns,
+so the external sandbox is guaranteed alive throughout evaluation
+*and* guaranteed terminated immediately after. Pre-PR-4, termination
+lived in a sibling Inngest function (`check_evaluators`) that fired on
+`task/completed` — under retry replay that sibling could terminate the
+sandbox while eval workers were still running against it. PR 4
+collapses both responsibilities into this one `try/finally`.
+
+**Why the orchestrator is `execute_task`, not `worker_execute`** (the
+PR 4 plan code put fanout in `worker_execute`): in our codebase
+`worker_execute` runs *between* `sandbox_setup` and `persist_outputs`
+as sibling Inngest functions, so terminating in
+`worker_execute.finally` would kill the sandbox before
+`persist_outputs` could upload artifacts. See PR 4 plan
+`05-pr-04-inline-criteria.md` § "Implementation Note —
+Bridge-Everything Approach" for the location rationale.
 """
 
 import asyncio
@@ -142,16 +164,21 @@ async def _fan_out_evaluators(
 ) -> None:
     """Synchronously fan out per-evaluator Inngest invocations.
 
-    PR 4's headline invariant. ``ctx.step.invoke`` returns a coroutine
-    that resolves when the invoked function returns; awaiting them all
-    via ``asyncio.gather`` keeps the orchestrator suspended (and the
-    sandbox alive) until every evaluator finishes.
+    This is PR 4's headline invariant. ``ctx.step.invoke`` returns a
+    coroutine that resolves when the invoked function returns;
+    awaiting them all via ``asyncio.gather`` keeps the orchestrator
+    (and therefore the external sandbox — see the
+    ``terminate_sandbox_by_id`` call in the ``finally`` of
+    ``run_execute_task_job``) alive until every evaluator finishes.
 
-    The function loads the task view from the run-tier read boundary
-    (no ``sandbox_id`` here — the orchestrator side doesn't need a
-    live ``_runtime`` handle on the inflated Task), reads the number
-    of evaluators from ``task.evaluator_binding_keys``, and emits one
-    invocation per index with a thin ``TaskEvaluateRequest`` payload.
+    Evaluator count comes from ``task.evaluator_binding_keys`` today.
+    In PR 5 it comes from ``len(task.evaluators)`` — the loop body
+    stays the same, only the source of the bound list changes (see
+    `06-pr-05-object-bound-api.md` Task 2). We load the task view
+    without ``sandbox_id=`` here because the orchestrator side doesn't
+    need a live ``_runtime`` handle on the inflated Task; the eval
+    workers each call ``graph_repo.node(..., sandbox_id=...)`` on their
+    own side to attach.
     """
 
     canonical_task_id = payload.task_id or prepared.node_id
@@ -453,13 +480,22 @@ async def run_execute_task_job(
         raise NonRetriableError(message=error_msg) from exc
 
     finally:
-        # PR 4 sandbox-release ownership. The orchestrator owns external
-        # sandbox lifetime: anything past sandbox-setup terminates here
-        # regardless of which path raised. Eval workers ran inside the
-        # synchronous gather above, so the sandbox is still alive when
-        # we reach this `finally`. The v1 sibling-job release path
-        # (`check_evaluators._terminate_sandbox`) is unregistered by
-        # Task 5; this block is the only termination point now.
+        # Orchestrator-owned sandbox release. Everything past
+        # sandbox-setup terminates here regardless of which path raised
+        # — eval workers ran inside the synchronous gather above, so
+        # the sandbox is still alive at this point. The v1 release
+        # site lived in a *sibling* Inngest function
+        # (`check_evaluators._terminate_sandbox`), which could
+        # terminate while eval workers were still running under retry
+        # replay; PR 4 fixes that bug by moving release into the same
+        # function that acquired the sandbox.
+        #
+        # Forward shape: when `lifecycle_hub` lands (PR 5 or 6,
+        # depending on how the Sandbox ABC settles), this call site
+        # becomes ``await lifecycle_hub.release(sandbox)`` — same
+        # ownership boundary, prettier API. The
+        # `terminate_sandbox_by_id` helper itself is on the PR 11 Δ.7
+        # deletion list once nothing else imports it.
         if task_sandbox_id is not None:
             termination = await terminate_sandbox_by_id(task_sandbox_id)
             logger.info(
