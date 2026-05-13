@@ -13,7 +13,7 @@ import pytest
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.api.benchmark import Task
+from ergon_core.test_support.task_factory import task_with_id
 
 
 def _make_eval_context(
@@ -24,8 +24,8 @@ def _make_eval_context(
         run_id=uuid4(),
         task_id=uuid4(),
         execution_id=uuid4(),
-        task=Task(
-            task_id=uuid4(),
+        task=task_with_id(
+            uuid4(),
             task_slug="test",
             instance_key="default",
             description="What is quantum computing?",

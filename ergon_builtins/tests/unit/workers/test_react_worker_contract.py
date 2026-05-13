@@ -8,6 +8,7 @@ import pytest
 from ergon_builtins.workers.baselines.react_worker import ReActWorker, _worker_output_from_chunks
 from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput
+from ergon_core.test_support.task_factory import task_with_id
 from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
@@ -168,8 +169,8 @@ class _DepsWorker(ReActWorker):
 
 
 def _minimal_task() -> Task:
-    return Task(
-        task_id=UUID(int=6),
+    return task_with_id(
+        UUID(int=6),
         task_slug="unit-task",
         instance_key="unit-instance",
         description="Unit task",

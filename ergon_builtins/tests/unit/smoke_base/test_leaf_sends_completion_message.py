@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from ergon_core.api import Task
+from ergon_core.test_support.task_factory import task_with_id
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug
 from ergon_core.core.infrastructure.sandbox.manager import AsyncSandbox
 from ergon_core.core.application.communication.models import CreateMessageRequest
@@ -135,7 +135,7 @@ async def test_send_completion_message_not_called_when_subworker_raises(
         subworker_cls = _FailingSubworker
 
     leaf = _FailingLeaf(name="unit-test", model=None)
-    task = Task(task_id=uuid4(), task_slug="l_fail", instance_key="default", description="x")
+    task = task_with_id(uuid4(), task_slug="l_fail", instance_key="default", description="x")
 
     with pytest.raises(RuntimeError, match="sad-path"):
         async for _ in leaf.execute(task, context=_context()):

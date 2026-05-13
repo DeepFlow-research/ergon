@@ -80,12 +80,15 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
             instance_key = instance_row.instance_key
 
     task = Task[BaseModel](
-        task_id=payload.node_id,
         task_slug=payload.task_slug,
         instance_key=instance_key,
         description=payload.task_description,
         task_payload=task_payload or EmptyTaskPayload(),
     )
+    # TODO(PR 3): replace this whole block (task construction + the
+    # task_id rebind below) with `view = await graph_repo.node(session,
+    # run_id=payload.run_id, task_id=payload.task_id); task = view.task`.
+    task._task_id = payload.node_id
 
     worker_context = WorkerContext(
         run_id=payload.run_id,

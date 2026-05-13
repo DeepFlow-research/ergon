@@ -6,7 +6,7 @@ import pytest
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
-from ergon_core.api.benchmark import Task
+from ergon_core.test_support.task_factory import task_with_id
 from ergon_core.core.application.evaluation.models import (
     CriterionSpec,
     TaskEvaluationContext,
@@ -72,8 +72,8 @@ async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) 
             task_input="input",
             agent_reasoning="output",
         ),
-        Task(
-            task_id=uuid4(),
+        task_with_id(
+            uuid4(),
             task_slug="task",
             instance_key="default",
             description="input",

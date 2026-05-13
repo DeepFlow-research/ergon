@@ -88,12 +88,15 @@ async def run_evaluate_task_run_job(
 
     task_payload = task_row.task_payload_as(benchmark_cls.task_payload_model)
     task = Task[BaseModel](
-        task_id=node_id,
         task_slug=task_row.task_slug,
         instance_key=instance_row.instance_key,
         description=task_input,
         task_payload=task_payload or EmptyTaskPayload(),
     )
+    # TODO(PR 4): replace this whole block with `view = await
+    # graph_repo.node(session, run_id=..., task_id=..., sandbox_id=
+    # execution.sandbox_id); task = view.task`.
+    task._task_id = node_id
 
     service = EvaluationService(criterion_executor=executor)
     try:
