@@ -12,19 +12,21 @@ single ``try/finally``. The flow is:
     worker-execute   →  runs the worker against the sandbox
     persist-outputs  →  uploads artifacts (still needs the sandbox)
     _fan_out_evaluators
-                     →  asyncio.gather(ctx.step.invoke(...)) per evaluator
-                        each evaluator reattaches to the sandbox by id
+                     →  ctx.group.parallel(partial(ctx.step.invoke, …))
+                        per evaluator; each evaluator reattaches to
+                        the sandbox by id
     [emit task/completed]
     finally: terminate_sandbox_by_id(...)
 
-The gather is what makes the invariant work: the orchestrator cannot
-reach the `finally` until every per-evaluator `step.invoke` returns,
-so the external sandbox is guaranteed alive throughout evaluation
-*and* guaranteed terminated immediately after. Pre-PR-4, termination
-lived in a sibling Inngest function (`check_evaluators`) that fired on
-`task/completed` — under retry replay that sibling could terminate the
-sandbox while eval workers were still running against it. PR 4
-collapses both responsibilities into this one `try/finally`.
+The `ctx.group.parallel` await is what makes the invariant work: the
+orchestrator cannot reach the `finally` until every per-evaluator
+`step.invoke` returns, so the external sandbox is guaranteed alive
+throughout evaluation *and* guaranteed terminated immediately after.
+Pre-PR-4, termination lived in a sibling Inngest function
+(`check_evaluators`) that fired on `task/completed` — under retry
+replay that sibling could terminate the sandbox while eval workers
+were still running against it. PR 4 collapses both responsibilities
+into this one `try/finally`.
 
 **Why the orchestrator is `execute_task`, not `worker_execute`** (the
 PR 4 plan code put fanout in `worker_execute`): in our codebase
@@ -36,11 +38,22 @@ as sibling Inngest functions, so terminating in
 Bridge-Everything Approach" for the location rationale.
 """
 
-import asyncio
+from __future__ import annotations
+
 import logging
 import traceback
 from datetime import UTC, datetime
-from typing import Any
+from functools import partial
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # The architectural boundary `test_inngest_jobs_and_handlers_stay_split`
+    # forbids application/jobs/*.py from importing `inngest` at runtime —
+    # the infrastructure handlers own the framework coupling. Typing
+    # cross-boundary symbols (`inngest.Context`, `inngest.Function`)
+    # through TYPE_CHECKING keeps annotations precise without giving
+    # this module a runtime dependency on the SDK.
+    import inngest
 
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.jobs.models import (
@@ -81,7 +94,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _prepare_execution(
-    ctx: Any,
+    ctx: inngest.Context,
     svc: TaskExecutionService,
     payload: TaskReadyEvent,
 ) -> PreparedTaskExecution:
@@ -99,10 +112,10 @@ async def _prepare_execution(
 
 
 async def _setup_sandbox(
-    ctx: Any,
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
-    sandbox_setup_function: Any,
+    sandbox_setup_function: inngest.Function,
 ) -> SandboxReadyResult:
     # Dynamic subtasks have no static task_id. Use node_id as the sandbox key
     # so each subtask gets its own isolated sandbox slot in the manager registry.
@@ -130,11 +143,11 @@ def _sandbox_slug_for_run(run_id) -> str | None:
 
 
 async def _run_worker(
-    ctx: Any,
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
-    worker_execute_function: Any,
+    worker_execute_function: inngest.Function,
 ) -> WorkerExecuteJobResult:
     return await ctx.step.invoke(
         "worker-execute",
@@ -157,19 +170,26 @@ async def _run_worker(
 
 
 async def _fan_out_evaluators(
-    ctx: Any,
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
-    evaluate_task_run_function: Any,
+    evaluate_task_run_function: inngest.Function,
 ) -> None:
     """Synchronously fan out per-evaluator Inngest invocations.
 
-    This is PR 4's headline invariant. ``ctx.step.invoke`` returns a
-    coroutine that resolves when the invoked function returns;
-    awaiting them all via ``asyncio.gather`` keeps the orchestrator
-    (and therefore the external sandbox — see the
-    ``terminate_sandbox_by_id`` call in the ``finally`` of
-    ``run_execute_task_job``) alive until every evaluator finishes.
+    This is PR 4's headline invariant. The orchestrator suspends on
+    `ctx.group.parallel(...)` until every per-evaluator
+    `ctx.step.invoke(...)` returns; once it resumes, control falls
+    through to the `finally` block in ``run_execute_task_job`` and
+    the external sandbox is terminated. Same shape as
+    `InngestCriterionExecutor.execute_all` (the v1 per-criterion
+    parallelism), just lifted one level up to per-evaluator.
+
+    ``ctx.group.parallel`` over a tuple of ``partial(ctx.step.invoke, ...)``
+    is the Inngest-native parallelism primitive. Using
+    ``asyncio.gather`` over `step.invoke` coroutines bypasses the
+    SDK's parallel-step bookkeeping and isn't guaranteed to give
+    proper parallelism.
 
     Evaluator count comes from ``task.evaluator_binding_keys`` today.
     In PR 5 it comes from ``len(task.evaluators)`` — the loop body
@@ -192,9 +212,10 @@ async def _fan_out_evaluators(
     if evaluator_count == 0:
         return
 
-    await asyncio.gather(
-        *[
-            ctx.step.invoke(
+    await ctx.group.parallel(
+        tuple(
+            partial(
+                ctx.step.invoke,
                 f"eval-{i}",
                 function=evaluate_task_run_function,
                 data=TaskEvaluateRequest(
@@ -205,16 +226,16 @@ async def _fan_out_evaluators(
                 ).model_dump(mode="json"),
             )
             for i in range(evaluator_count)
-        ]
+        )
     )
 
 
 async def _persist_outputs(
-    ctx: Any,
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
     sandbox_result: SandboxReadyResult,
-    persist_outputs_function: Any,
+    persist_outputs_function: inngest.Function,
 ) -> PersistOutputsResult:
     output_task_key = payload.task_id or prepared.node_id
     return await ctx.step.invoke(
@@ -279,13 +300,13 @@ async def _emit_task_failed(
 # would duplicate on retry. Failure propagates via TaskFailedEvent.
 # Concurrency bounded by E2B sandbox quota and Postgres connection pool.
 async def run_execute_task_job(
-    ctx: Any,
+    ctx: inngest.Context,
     payload: TaskReadyEvent,
     *,
-    sandbox_setup_function: Any,
-    worker_execute_function: Any,
-    persist_outputs_function: Any,
-    evaluate_task_run_function: Any,
+    sandbox_setup_function: inngest.Function,
+    worker_execute_function: inngest.Function,
+    persist_outputs_function: inngest.Function,
+    evaluate_task_run_function: inngest.Function,
 ) -> TaskExecuteResult:
     logger.info("task-execute run_id=%s task_id=%s", payload.run_id, payload.task_id)
     span_start = datetime.now(UTC)
@@ -350,10 +371,10 @@ async def run_execute_task_job(
             ctx, payload, prepared, sandbox_result, persist_outputs_function
         )
 
-        # PR 4 synchronous fanout. The gather keeps the sandbox alive
-        # through every per-evaluator Inngest invocation; the orchestrator
-        # cannot reach the `finally` (sandbox termination) until all
-        # evaluators return.
+        # Synchronous fanout. `ctx.group.parallel` keeps the sandbox
+        # alive through every per-evaluator Inngest invocation; the
+        # orchestrator cannot reach the `finally` (sandbox termination)
+        # until all evaluators return.
         await _fan_out_evaluators(ctx, payload, prepared, evaluate_task_run_function)
 
         await svc.finalize_success(
@@ -482,7 +503,7 @@ async def run_execute_task_job(
     finally:
         # Orchestrator-owned sandbox release. Everything past
         # sandbox-setup terminates here regardless of which path raised
-        # — eval workers ran inside the synchronous gather above, so
+        # — eval workers ran inside `ctx.group.parallel` above, so
         # the sandbox is still alive at this point. The v1 release
         # site lived in a *sibling* Inngest function
         # (`check_evaluators._terminate_sandbox`), which could

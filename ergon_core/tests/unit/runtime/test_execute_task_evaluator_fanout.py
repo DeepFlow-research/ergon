@@ -11,21 +11,35 @@ strictly before sandbox termination.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from types import SimpleNamespace
-from typing import Any
+from typing import cast
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import inngest
 import pytest
 
 from ergon_core.core.application.events.task_events import TaskReadyEvent
 from ergon_core.core.application.jobs import execute_task as execute_task_module
+from ergon_core.core.application.jobs.models import (
+    PersistOutputsResult,
+    SandboxReadyResult,
+    WorkerExecuteJobResult,
+)
+from ergon_core.core.application.tasks.execution import TaskExecutionService
 from ergon_core.core.application.workflows.orchestration import PreparedTaskExecution
 from ergon_core.core.infrastructure.sandbox.lifecycle import (
     SandboxTerminationReason,
     SandboxTerminationResult,
 )
+
+# A typed stand-in for any `inngest.Function` the orchestrator would
+# normally hand to `ctx.step.invoke(function=...)`. The fakes below
+# never read it — `cast` here just satisfies the strongly-typed
+# kwargs on `run_execute_task_job` without bringing real Inngest
+# function objects into the unit test.
+_FAKE_FN = cast(inngest.Function, object())
 
 
 class _OrderedFakeCtx:
@@ -38,14 +52,28 @@ class _OrderedFakeCtx:
             run=self._run,
         )
 
-    async def _invoke(self, step_id: str, *, function: Any, data: Any) -> Any:
+    async def _invoke(
+        self,
+        step_id: str,
+        *,
+        function: inngest.Function,
+        data: dict[str, object],
+    ) -> object:
+        # Return is polymorphic across step.invoke call sites
+        # (SandboxReadyResult, WorkerExecuteJobResult, EvaluateTaskRunResult,
+        # ...) — `object` is the honest bound for a test fake that
+        # impersonates all of them. The tests below don't read the return.
         del function, data
         self._ordering.append(f"invoke:{step_id}")
-        # Mimic Inngest's invoke return: the function's output type.
-        # Tests below don't read the return value beyond presence.
         return SimpleNamespace(sandbox_id="sbx-test", output_dir=None, success=True)
 
-    async def _run(self, step_id: str, fn, *, output_type=None):
+    async def _run(
+        self,
+        step_id: str,
+        fn: Callable[[], Awaitable[object]],
+        *,
+        output_type: type | None = None,
+    ) -> object:
         del output_type
         self._ordering.append(f"run:{step_id}")
         return await fn()
@@ -99,37 +127,69 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
     prepared = _prepared(execution_id, node_id)
     payload = _ready_event(run_id, definition_id, task_id, node_id)
 
-    async def fake_prepare(_ctx, _svc, _payload):
+    async def fake_prepare(
+        _ctx: inngest.Context,
+        _svc: TaskExecutionService,
+        _payload: TaskReadyEvent,
+    ) -> PreparedTaskExecution:
         ordering.append("prepare")
         return prepared
 
-    async def fake_setup_sandbox(_ctx, _payload, _prepared, _fn):
+    async def fake_setup_sandbox(
+        _ctx: inngest.Context,
+        _payload: TaskReadyEvent,
+        _prepared: PreparedTaskExecution,
+        _fn: inngest.Function,
+    ) -> SandboxReadyResult:
         ordering.append("invoke:sandbox-setup")
-        return SimpleNamespace(sandbox_id="sbx-test", output_dir=None)
+        return SandboxReadyResult(sandbox_id="sbx-test", output_dir=None)
 
-    async def fake_run_worker(_ctx, _payload, _prepared, _sandbox, _fn):
+    async def fake_run_worker(
+        _ctx: inngest.Context,
+        _payload: TaskReadyEvent,
+        _prepared: PreparedTaskExecution,
+        _sandbox: SandboxReadyResult,
+        _fn: inngest.Function,
+    ) -> WorkerExecuteJobResult:
         ordering.append("invoke:worker-execute")
-        return SimpleNamespace(
+        return WorkerExecuteJobResult(
             success=True,
             final_assistant_message="ok",
             error=None,
             error_json=None,
         )
 
-    async def fake_persist_outputs(_ctx, _payload, _prepared, _sandbox, _fn):
+    async def fake_persist_outputs(
+        _ctx: inngest.Context,
+        _payload: TaskReadyEvent,
+        _prepared: PreparedTaskExecution,
+        _sandbox: SandboxReadyResult,
+        _fn: inngest.Function,
+    ) -> PersistOutputsResult:
         ordering.append("invoke:persist-outputs")
-        return SimpleNamespace(outputs_count=0)
+        return PersistOutputsResult(outputs_count=0)
 
-    async def fake_emit_completed(_payload, _prepared, _sandbox_id):
+    async def fake_emit_completed(
+        _payload: TaskReadyEvent,
+        _prepared: PreparedTaskExecution,
+        _sandbox_id: str,
+    ) -> None:
         ordering.append("emit:task/completed")
 
-    # Two evaluators bound on the task so the gather sees a real fanout.
+    # Two evaluators bound on the task so the parallel fanout sees real work.
     view_task = SimpleNamespace(evaluator_binding_keys=("a", "b"))
     view = SimpleNamespace(task=view_task)
     repo = SimpleNamespace(node=AsyncMock(return_value=view))
 
-    async def fake_fanout(ctx, payload, prepared, eval_fn):
-        # Use the real implementation but bypass the session machinery.
+    async def fake_fanout(
+        ctx: inngest.Context,
+        payload: TaskReadyEvent,
+        prepared: PreparedTaskExecution,
+        eval_fn: inngest.Function,
+    ) -> None:
+        del payload, prepared
+        # Use the real call shape but bypass the session machinery so we
+        # don't need a populated database — just count the invokes.
         for i in range(len(view_task.evaluator_binding_keys)):
             await ctx.step.invoke(
                 f"eval-{i}",
@@ -163,14 +223,13 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
     monkeypatch.setattr(execute_task_module, "terminate_sandbox_by_id", fake_terminate)
     monkeypatch.setattr(execute_task_module.WorkflowGraphRepository, "node", repo.node)
 
-    sentinel = object()
     result = await execute_task_module.run_execute_task_job(
         ctx,
         payload,
-        sandbox_setup_function=sentinel,
-        worker_execute_function=sentinel,
-        persist_outputs_function=sentinel,
-        evaluate_task_run_function=sentinel,
+        sandbox_setup_function=_FAKE_FN,
+        worker_execute_function=_FAKE_FN,
+        persist_outputs_function=_FAKE_FN,
+        evaluate_task_run_function=_FAKE_FN,
     )
 
     assert result.success is True
@@ -199,24 +258,50 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
     prepared = _prepared(uuid4(), uuid4())
     payload = _ready_event(run_id, uuid4(), uuid4(), prepared.node_id)
 
-    async def fake_prepare(_ctx, _svc, _payload):
+    async def fake_prepare(
+        _ctx: inngest.Context,
+        _svc: TaskExecutionService,
+        _payload: TaskReadyEvent,
+    ) -> PreparedTaskExecution:
         return prepared
 
-    async def fake_setup_sandbox(_ctx, _payload, _prepared, _fn):
-        return SimpleNamespace(sandbox_id="sbx-fail", output_dir=None)
+    async def fake_setup_sandbox(
+        _ctx: inngest.Context,
+        _payload: TaskReadyEvent,
+        _prepared: PreparedTaskExecution,
+        _fn: inngest.Function,
+    ) -> SandboxReadyResult:
+        return SandboxReadyResult(sandbox_id="sbx-fail", output_dir=None)
 
-    async def fake_run_worker(_ctx, _payload, _prepared, _sandbox, _fn):
-        return SimpleNamespace(
+    async def fake_run_worker(
+        _ctx: inngest.Context,
+        _payload: TaskReadyEvent,
+        _prepared: PreparedTaskExecution,
+        _sandbox: SandboxReadyResult,
+        _fn: inngest.Function,
+    ) -> WorkerExecuteJobResult:
+        return WorkerExecuteJobResult(
             success=False,
             final_assistant_message=None,
             error="boom",
             error_json={"message": "boom"},
         )
 
-    async def fake_persist_outputs(_ctx, _payload, _prepared, _sandbox, _fn):
-        return SimpleNamespace(outputs_count=0)
+    async def fake_persist_outputs(
+        _ctx: inngest.Context,
+        _payload: TaskReadyEvent,
+        _prepared: PreparedTaskExecution,
+        _sandbox: SandboxReadyResult,
+        _fn: inngest.Function,
+    ) -> PersistOutputsResult:
+        return PersistOutputsResult(outputs_count=0)
 
-    async def fake_emit_failed(_payload, _prepared, _error, _sandbox_id):
+    async def fake_emit_failed(
+        _payload: TaskReadyEvent,
+        _prepared: PreparedTaskExecution,
+        _error: str,
+        _sandbox_id: str | None,
+    ) -> None:
         ordering.append("emit:task/failed")
 
     async def fake_terminate(sandbox_id: str) -> SandboxTerminationResult:
@@ -239,14 +324,13 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
     )
     monkeypatch.setattr(execute_task_module, "terminate_sandbox_by_id", fake_terminate)
 
-    sentinel = object()
     result = await execute_task_module.run_execute_task_job(
         ctx,
         payload,
-        sandbox_setup_function=sentinel,
-        worker_execute_function=sentinel,
-        persist_outputs_function=sentinel,
-        evaluate_task_run_function=sentinel,
+        sandbox_setup_function=_FAKE_FN,
+        worker_execute_function=_FAKE_FN,
+        persist_outputs_function=_FAKE_FN,
+        evaluate_task_run_function=_FAKE_FN,
     )
     assert result.success is False
     assert "terminate" in ordering, "sandbox must terminate on the failure path too"
