@@ -210,6 +210,8 @@ class RunTaskExecution(SQLModel, table=True):
     final_assistant_message: str | None = None
     output_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     error_json: dict | None = Field(default=None, sa_column=Column(JSON))
+    sandbox_id: str | None = None
+    worker_output_json: dict | None = Field(default=None, sa_column=Column(JSON))
 
     # -- JSON accessor: output_json --
 

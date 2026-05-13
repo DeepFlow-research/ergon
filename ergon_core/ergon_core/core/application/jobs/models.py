@@ -60,6 +60,13 @@ class PersistOutputsRequest(InngestEventContract):
 
 
 class EvaluateTaskRunRequest(InngestEventContract):
+    """Legacy v1 multi-field evaluate-task-run payload.
+
+    TODO(PR 11): delete. PR 4 reshaped `evaluate_task_run` to take
+    `TaskEvaluateRequest` (id-only) instead. The class stays
+    importable as a forwarding shim until the cleanup PR.
+    """
+
     model_config = {"extra": "allow"}
     name: ClassVar[str] = "task/evaluate"
 
@@ -73,6 +80,28 @@ class EvaluateTaskRunRequest(InngestEventContract):
     evaluator_type: str
     agent_reasoning: str | None = None
     sandbox_id: str | None = None
+
+
+class TaskEvaluateRequest(InngestEventContract):
+    """Thin id-only payload for the per-evaluator Inngest function.
+
+    Every other piece of state — task config, sandbox_id,
+    worker_output, evaluator instance — is recovered by the receiver
+    via persisted-state lookups. This keeps retries / replays
+    trivially correct: the payload is just identity, the state lives
+    in the database.
+
+    Δ.4: replaces `EvaluateTaskRunRequest` as the wire shape of the
+    per-evaluator fanout target.
+    """
+
+    model_config = {"frozen": True}
+    name: ClassVar[str] = "task/evaluate"
+
+    run_id: UUID
+    task_id: UUID
+    execution_id: UUID
+    evaluator_index: int
 
 
 class WorkflowStartResult(BaseModel):
@@ -181,6 +210,7 @@ WorkerExecuteJobResult = WorkerExecuteResult
 __all__ = [
     "EvaluateTaskRunRequest",
     "EvaluateTaskRunResult",
+    "TaskEvaluateRequest",
     "EvaluatorsResult",
     "PersistOutputsRequest",
     "PersistOutputsResult",
