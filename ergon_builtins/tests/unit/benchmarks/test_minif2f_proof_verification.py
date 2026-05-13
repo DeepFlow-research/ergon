@@ -19,11 +19,12 @@ from ergon_core.core.application.evaluation.protocols import CommandResult
 from ergon_core.core.application.evaluation.criterion_runtime import (
     ResourceNotFoundError,
 )
+from ergon_core.test_support.task_factory import task_with_id
 
 
 def _make_task() -> Task:
-    return Task(
-        task_id=uuid4(),
+    return task_with_id(
+        uuid4(),
         task_slug="t1",
         instance_key="default",
         description="theorem t : True := by trivial",

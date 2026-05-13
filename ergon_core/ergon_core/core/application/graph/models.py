@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
+from ergon_core.api.benchmark import Task
 from ergon_core.core.persistence.graph.status_conventions import NodeStatus
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
@@ -251,3 +252,36 @@ GraphMutationValue = Annotated[
     | AnnotationDeletedMutation,
     Field(discriminator="mutation_type"),
 ]
+
+
+# ---------------------------------------------------------------------------
+# RunGraphNodeView (PR 2 — typed run-node boundary)
+# ---------------------------------------------------------------------------
+
+
+class RunGraphNodeView(BaseModel):
+    """Typed view of one ``run_graph_nodes`` row + its inflated Task.
+
+    PR 2's run-tier read boundary: the job body receives this view from
+    ``WorkflowGraphRepository.node`` instead of raw JSON. The Task is
+    already inflated via ``Task.from_definition`` so callers downstream
+    of the repo never see ``dict[str, Any]``.
+
+    Carries both ``node_id`` and ``task_id`` during the v2 transition;
+    PR 11 removes ``node_id`` once ``(run_id, task_id)`` is the only
+    canonical identity.
+    """
+
+    model_config = {"frozen": True, "arbitrary_types_allowed": True}
+
+    run_id: RunId
+    task_id: UUID
+    # Transitional fields — kept during the v2 stack so downstream
+    # consumers that still read these can flip incrementally. PR 11
+    # collapses identity to `(run_id, task_id)` only.
+    node_id: NodeId  # TODO(PR 11): drop; task_id is the canonical id
+    definition_task_id: DefinitionId | None  # TODO(PR 11): drop with the column
+    parent_node_id: NodeId | None  # TODO(PR 11): rename to parent_task_id
+    status: str
+    task: Task
+    is_dynamic: bool = False

@@ -32,7 +32,11 @@ class SuppressionCounts(NamedTuple):
 # Keep this baseline equal to the current repository count. Lower it as cleanup
 # lands; raise it only when a new suppression is explicitly reviewed.
 BUDGET = SuppressionCounts(
-    slopcop_ignore=222,
+    # +1 for ergon_core/api/benchmark/task.py:_import_component qualname
+    # walk introduced by PR 2 of the v2 authoring redesign. The getattr
+    # is genuinely dynamic (resolves a class from a user-controlled
+    # discriminator string); no static alternative exists.
+    slopcop_ignore=223,
     noqa=2,
     type_ignore=64,
 )

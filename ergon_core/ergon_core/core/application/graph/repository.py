@@ -35,6 +35,7 @@ from ergon_core.core.application.graph.errors import (
     EdgeNotFoundError,
     NodeNotFoundError,
 )
+from ergon_core.api.benchmark import Task
 from ergon_core.core.application.graph.models import (
     AnnotationDeletedMutation,
     AnnotationSetMutation,
@@ -51,6 +52,7 @@ from ergon_core.core.application.graph.models import (
     NodeFieldChangedMutation,
     NodeRemovedMutation,
     NodeStatusChangedMutation,
+    RunGraphNodeView,
     WorkflowGraphDto,
 )
 from ergon_core.core.shared.utils import utcnow
@@ -281,6 +283,57 @@ class WorkflowGraphRepository:
         )
 
     # ── Node operations ─────────────────────────────────────
+
+    async def node(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        task_id: UUID,
+        sandbox_id: str | None = None,
+    ) -> RunGraphNodeView:
+        """Inflate a typed RunGraphNodeView from `run_graph_nodes.task_json`.
+
+        PR 2's run-tier read boundary: the repo reads the run-tier
+        ``task_json`` column ONLY and reconstructs a typed Task via
+        ``Task.from_definition``. The job body downstream receives a
+        ``RunGraphNodeView`` with the Task already inflated — no raw
+        JSON, no definition-tier reads.
+
+        Async because ``Task.from_definition`` is async (PR 2 locks
+        this signature; PR 5 actually awaits in the body once Sandbox
+        reconstruction lands).
+
+        The OR predicate ``(id == task_id) | (definition_task_id ==
+        task_id)`` is transitional. PR 11 collapses the lookup to
+        ``(run_id, task_id)`` exact-match after schema finalization.
+        """
+
+        row = session.exec(
+            select(RunGraphNode).where(
+                RunGraphNode.run_id == run_id,
+                (RunGraphNode.id == task_id) | (RunGraphNode.definition_task_id == task_id),
+            )
+        ).first()
+        if row is None:
+            raise NodeNotFoundError(task_id, run_id=run_id)
+
+        canonical_task_id = row.definition_task_id or row.id
+        task = await Task.from_definition(
+            row.task_json,
+            task_id=canonical_task_id,
+            sandbox_id=sandbox_id,
+        )
+        return RunGraphNodeView(
+            run_id=row.run_id,
+            task_id=canonical_task_id,
+            node_id=row.id,
+            definition_task_id=row.definition_task_id,
+            parent_node_id=row.parent_node_id,
+            status=row.status,
+            task=task,
+            is_dynamic=row.is_dynamic,
+        )
 
     async def add_node(  # slopcop: ignore[max-function-params]
         self,

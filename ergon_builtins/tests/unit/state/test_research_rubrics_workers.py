@@ -27,6 +27,7 @@ from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
 )
 from ergon_core.api.benchmark import Task
 from ergon_core.api.worker import WorkerContext, WorkerStreamItem
+from ergon_core.test_support.task_factory import task_with_id
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -44,8 +45,8 @@ def _make_context(*, with_node_id: bool = True) -> WorkerContext:
 
 
 def _make_task() -> Task:
-    return Task(
-        task_id=uuid4(),
+    return task_with_id(
+        uuid4(),
         task_slug="test-task",
         instance_key="default",
         description="Test research question",
