@@ -11,13 +11,12 @@ import traceback
 from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
 
-from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.api.worker.worker import Worker
 from ergon_core.core.application.components.catalog import ComponentCatalogService
-from ergon_core.core.application.experiments.repository import DefinitionRepository
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
-from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
@@ -28,9 +27,28 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
     worker_execute_context,
 )
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+
+def _worker_from_payload_bridge(payload: WorkerExecuteJobRequest) -> Worker:
+    """PR 3 transitional bridge: construct a worker from the legacy
+    registry using the worker_type / assigned_worker_slug / model_target
+    fields the PR 3 PreparedTaskExecution still carries.
+
+    TODO(PR 5): once `Task` carries the worker as `task.worker`
+    (object-bound), delete this bridge and read the worker directly off
+    the inflated Task.
+    """
+
+    catalog = ComponentCatalogService()
+    with get_session() as session:
+        return catalog.build_worker(
+            session,
+            slug=payload.worker_type,
+            name=payload.assigned_worker_slug,
+            model=payload.model_target,
+        )
 
 
 async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExecuteJobResult:
@@ -51,44 +69,21 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
             sandbox_id=payload.sandbox_id,
         )
 
-    catalog = ComponentCatalogService()
-    task_payload = None
-    instance_key = str(payload.node_id)
+    # PR 3: read the typed run-tier view instead of rebuilding Task
+    # from definition rows. No definition-tier repository, no component
+    # catalog, no raw graph row read in this job — all of that lives
+    # inside `graph_repo.node`.
     with get_session() as session:
-        worker = catalog.build_worker(
+        view = await WorkflowGraphRepository().node(
             session,
-            slug=payload.worker_type,
-            name=payload.assigned_worker_slug,
-            model=payload.model_target,
+            run_id=payload.run_id,
+            task_id=payload.task_id or payload.node_id,
         )
-        node = session.get(RunGraphNode, payload.node_id)
-        if node is None:
-            raise ContractViolationError(
-                f"RunGraphNode {payload.node_id} not found",
-                run_id=payload.run_id,
-                task_id=payload.task_id,
-                execution_id=payload.execution_id,
-                sandbox_id=payload.sandbox_id,
-            )
-        if node.definition_task_id is not None:
-            task_row, instance_row = DefinitionRepository().task_with_instance(
-                session,
-                node.definition_task_id,
-            )
-            benchmark_cls = catalog.resolve_benchmark(session, payload.benchmark_type)
-            task_payload = task_row.task_payload_as(benchmark_cls.task_payload_model)
-            instance_key = instance_row.instance_key
+    task = view.task
 
-    task = Task[BaseModel](
-        task_slug=payload.task_slug,
-        instance_key=instance_key,
-        description=payload.task_description,
-        task_payload=task_payload or EmptyTaskPayload(),
-    )
-    # TODO(PR 3): replace this whole block (task construction + the
-    # task_id rebind below) with `view = await graph_repo.node(session,
-    # run_id=payload.run_id, task_id=payload.task_id); task = view.task`.
-    task._task_id = payload.node_id
+    # TODO(PR 5): replace `_worker_from_payload_bridge(payload)` with
+    # `task.worker` once Worker is object-bound on the Task snapshot.
+    worker = _worker_from_payload_bridge(payload)
 
     worker_context = WorkerContext(
         run_id=payload.run_id,

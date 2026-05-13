@@ -64,29 +64,30 @@ class PrepareTaskExecutionCommand(BaseModel):
 class PreparedTaskExecution(BaseModel):
     """Output of ``TaskExecutionService.prepare``.
 
-    ``node_id`` is the runtime task identity (= ``RunGraphNode.id``);
-    always non-null because every task execution is attached to a
-    graph node.  ``definition_task_id`` is the optional FK to the
-    static ``ExperimentDefinitionTask`` row — null for dynamically
-    spawned subtasks which have no compile-time declaration.  This
-    split replaces the earlier ``task_id: UUID`` field, which was dead
-    downstream (never read) but required a non-null value that
-    dynamic-subtask preparation could not provide, crashing on the
-    Pydantic boundary.  See docs/bugs/open/2026-04-23-inngest-function-failures.md § A.
+    PR 3 of the v2 redesign reintroduced ``task_id`` as the canonical
+    runtime identity carried forward from the run-graph view. During
+    the transition, ``task_id`` equals ``definition_task_id`` for
+    static nodes and ``node_id`` for dynamic nodes.
+
+    TODO(PR 11): drop ``node_id``, ``definition_task_id``,
+    ``worker_type``, ``model_target``, and ``assigned_worker_slug``
+    once identity collapses to ``task_id`` and ``task.worker`` carries
+    the worker config (per Δ.7).
     """
 
     model_config = {"frozen": True}
 
     run_id: UUID
     definition_id: UUID
+    task_id: UUID
     node_id: UUID
     definition_task_id: UUID | None = None
     task_slug: str
     task_description: str
     benchmark_type: str
-    assigned_worker_slug: str
-    worker_type: str
-    model_target: str
+    assigned_worker_slug: str | None = None
+    worker_type: str | None = None
+    model_target: str | None = None
     execution_id: UUID
     skipped: bool = False
     skip_reason: str | None = None
