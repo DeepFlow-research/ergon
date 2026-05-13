@@ -167,6 +167,12 @@ class WorkflowGraphRepository:
                     instance_key=instance_key_by_id[task.instance_id],
                     task_slug=task.task_slug,
                     description=task.description,
+                    task_json=_definition_task_snapshot(
+                        task,
+                        instance_key=instance_key_by_id[task.instance_id],
+                        assigned_worker_slug=worker_by_task.get(task.id),
+                    ),
+                    is_dynamic=False,
                     status=initial_node_status,
                     assigned_worker_slug=worker_by_task.get(task.id),
                     created_at=now,
@@ -288,12 +294,20 @@ class WorkflowGraphRepository:
         assigned_worker_slug: str | None = None,
         parent_node_id: UUID | None = None,
         level: int = 0,
+        task_json: dict | None = None,
+        is_dynamic: bool = True,
         meta: MutationMeta,
     ) -> GraphNodeDto:
         """Create a graph node. Writes the containment columns directly.
 
         parent_node_id and level are set at creation time and never change.
         The caller (TaskManagementService) computes level = parent.level + 1.
+
+        ``task_json`` and ``is_dynamic`` carry the run-tier task snapshot
+        and the static-vs-dynamic discriminator. Defaults reflect the
+        common caller: a dynamic-spawn site producing a graph-native
+        task. Static callers (``initialize_from_definition``) pass
+        ``is_dynamic=False`` explicitly with the bridge snapshot.
         """
         now = utcnow()
         node = RunGraphNode(
@@ -301,6 +315,8 @@ class WorkflowGraphRepository:
             instance_key=instance_key,
             task_slug=task_slug,
             description=description,
+            task_json=task_json or {},
+            is_dynamic=is_dynamic,
             status=status,
             assigned_worker_slug=assigned_worker_slug,
             parent_node_id=parent_node_id,
@@ -1025,6 +1041,35 @@ def _edge_snapshot(edge: RunGraphEdge) -> EdgeAddedMutation:
         target_node_id=edge.target_node_id,
         status=edge.status,
     )
+
+
+def _definition_task_snapshot(
+    task: ExperimentDefinitionTask,
+    *,
+    instance_key: str,
+    assigned_worker_slug: str | None,
+) -> dict:
+    """Build the PR 1 bridge snapshot for a static run-graph node.
+
+    The shape mirrors v1's `TaskSpec` JSON so existing readers keep
+    working through the transition. PR 5 replaces this with the
+    object-bound `Task` JSON shape; PR 11 deletes the `_legacy` block.
+    """
+
+    return {
+        "_type": "ergon_core.api.benchmark.task:TaskSpec",
+        "task_slug": task.task_slug,
+        "instance_key": instance_key,
+        "description": task.description,
+        "parent_task_slug": None,
+        "dependency_task_slugs": (),
+        "evaluator_binding_keys": (),
+        "task_payload": task.task_payload_json,
+        "_legacy": {
+            "assigned_worker_slug": assigned_worker_slug,
+            "definition_task_id": str(task.id),
+        },
+    }
 
 
 def _is_acyclic(edges: list[RunGraphEdge]) -> bool:

@@ -513,7 +513,7 @@ def test_persistence_layer_does_not_expose_domain_query_bag_or_runtime_context_s
 
 
 def test_telemetry_repository_is_row_storage_not_evaluation_summary_service() -> None:
-    repository_path = ROOT / "ergon_core/ergon_core/core/persistence/telemetry/repositories.py"
+    repository_path = ROOT / "ergon_core/ergon_core/core/persistence/telemetry/repository.py"
     text = repository_path.read_text()
 
     assert "refresh_run_evaluation_summary" not in text
