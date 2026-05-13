@@ -19,7 +19,7 @@ class ExperimentValidationService:
         for spec in experiment.workers.values():
             spec.validate_spec()
         for evaluator in experiment.evaluators.values():
-            evaluator.validate()
+            evaluator.validate_runtime_deps()
 
         _validate_required_evaluators(experiment.benchmark, experiment.evaluators)
         task_slugs_by_instance = _validate_instances(

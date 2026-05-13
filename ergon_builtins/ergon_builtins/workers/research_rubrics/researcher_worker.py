@@ -85,29 +85,18 @@ class ResearchRubricsResearcherWorker(ReActWorker):
     """
 
     type_slug: ClassVar[str] = "researchrubrics-researcher"
+    system_prompt: str | None = _RESEARCHER_SYSTEM_PROMPT
+    max_iterations: int = 60
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        model: str | None,
-    ) -> None:
-        super().__init__(
-            name=name,
-            model=model,
-            tools=[],
-            system_prompt=_RESEARCHER_SYSTEM_PROMPT,
-            max_iterations=60,
-        )
-        self._agent_deps = AgentToolBudgetDeps(
+    def build_agent_deps(self, context: WorkerContext) -> AgentToolBudgetDeps:
+        # See ResearchRubricsWorkflowCliReActWorker.build_agent_deps for
+        # the per-execute budget-lifetime rationale.
+        return AgentToolBudgetDeps(
             tool_budget=AgentToolBudgetState(
                 max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
                 max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
             ),
         )
-
-    def build_agent_deps(self, context: WorkerContext) -> AgentToolBudgetDeps:
-        return self._agent_deps
 
     async def execute(
         self,
@@ -151,12 +140,8 @@ class ResearchRubricsResearcherWorker(ReActWorker):
         )
         graph_tools = graph_toolkit.build_tools()
 
-        self._agent_deps = AgentToolBudgetDeps(
-            tool_budget=AgentToolBudgetState(
-                max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
-                max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
-            ),
-        )
+        # AgentToolBudgetDeps is constructed by build_agent_deps below,
+        # not stored as instance state — the budget is per-execute().
         self.tools = [*rr_tools, *graph_tools]
 
         async for chunk in super().execute(task, context=context):

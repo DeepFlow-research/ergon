@@ -15,7 +15,7 @@ from ergon_core.api.criterion import Criterion
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.rubric import Rubric, TaskEvaluationResult
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -109,38 +109,38 @@ class StagedRubric(Rubric):
     """
 
     type_slug: ClassVar[str] = "gdpeval-staged-rubric"
+    name: str = "gdpeval-staged-rubric"
+    category_name: str
+    max_total_score: float
+    stages: list[EvaluationStage] = Field(default_factory=list)
+    rationale: str | None = None
+    # ``_criterion_stage_map`` is rebuilt from ``stages`` by the post-init
+    # validator below; carrying it as a PrivateAttr keeps it out of the
+    # model surface (it's a denormalisation of ``stages``, not authored
+    # config). ``criteria`` defaults are also materialised there.
+    _criterion_stage_map: dict[str, int] = PrivateAttr(default_factory=dict)
 
-    def __init__(
-        self,
-        *,
-        category_name: str,
-        max_total_score: float,
-        stages: list[EvaluationStage],
-        rationale: str | None = None,
-        name: str = "gdpeval-staged-rubric",
-    ) -> None:
+    @model_validator(mode="after")
+    def _materialise_stage_state(self) -> "StagedRubric":
         all_criteria: list[Criterion] = []
         criterion_stage_map: dict[str, int] = {}
-
-        for stage_idx, stage in enumerate(stages):
+        for stage_idx, stage in enumerate(self.stages):
             for criterion in stage.criteria:
                 all_criteria.append(criterion)
                 criterion_stage_map[criterion.slug] = stage_idx
-
-        super().__init__(name=name, criteria=all_criteria)
-
-        self.category_name = category_name
-        self.max_total_score = max_total_score
-        self.stages = list(stages)
-        self.rationale = rationale
+        # ``criteria`` is excluded from serialization on the Rubric base;
+        # set on first build so ``criteria_for`` returns the right list.
+        if not self.criteria:
+            self.criteria = tuple(all_criteria)
         self._criterion_stage_map = criterion_stage_map
 
-        total_stage_max = sum(s.max_points for s in stages)
-        if total_stage_max > max_total_score:
+        total_stage_max = sum(s.max_points for s in self.stages)
+        if total_stage_max > self.max_total_score:
             raise ValueError(
                 f"Sum of stage max_points ({total_stage_max}) exceeds "
-                f"max_total_score ({max_total_score})"
+                f"max_total_score ({self.max_total_score})"
             )
+        return self
 
     # -- Rubric interface overrides ----------------------------------------
 
@@ -202,8 +202,8 @@ class StagedRubric(Rubric):
             metadata=metadata,
         )
 
-    def validate(self) -> None:
-        super().validate()
+    def validate_runtime_deps(self) -> None:
+        super().validate_runtime_deps()
         if not self.stages:
             raise ValueError("StagedRubric must have at least one stage")
         for stage in self.stages:

@@ -11,6 +11,7 @@ the RL training loop.
 
 import random
 from collections.abc import AsyncGenerator
+from typing import ClassVar
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.core.domain.generation.context_parts import (
@@ -24,15 +25,8 @@ from ergon_core.core.domain.generation.context_parts import (
 
 
 class TrainingStubWorker(Worker):
-    type_slug = "training-stub"
-
-    def __init__(
-        self,
-        *,
-        name: str = "training-stub",
-        model: str | None,
-    ) -> None:
-        super().__init__(name=name, model=model)
+    type_slug: ClassVar[str] = "training-stub"
+    name: str = "training-stub"
 
     async def execute(
         self,
