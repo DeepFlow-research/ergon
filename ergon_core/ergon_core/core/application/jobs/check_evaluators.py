@@ -28,13 +28,7 @@ this module — if you find yourself wanting to import from it, route
 through the orchestrator instead.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    # See `execute_task.py` for the boundary rationale.
-    import inngest
+import inngest
 
 from ergon_core.core.application.events.task_events import TaskCompletedEvent
 from ergon_core.core.application.jobs.models import EvaluatorsResult
