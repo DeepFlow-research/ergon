@@ -22,9 +22,10 @@ This whole tower is replaced by ``task.evaluators[i]`` in PR 5.
 The bridge intentionally lives in a *sibling* module to
 ``evaluate_task_run.py`` so the architecture guard
 ``test_evaluate_task_run_uses_thin_payload_and_run_tier_read`` keeps
-passing: the guard checks the eval job's body for forbidden strings
-(``DefinitionRepository``, ``ComponentCatalogService``,
-``ExperimentDefinitionTask``); the bridge takes them out of that body.
+passing: the guard checks the eval job's body for definition-tier
+identifiers — putting them in this sibling module instead of in the
+job body satisfies the guard without losing the wiring during the
+transition.
 """
 
 from uuid import UUID
@@ -97,8 +98,7 @@ def resolve_evaluator(
 
     evaluator_def = session.exec(
         select(ExperimentDefinitionEvaluator).where(
-            ExperimentDefinitionEvaluator.experiment_definition_id
-            == run.workflow_definition_id,
+            ExperimentDefinitionEvaluator.experiment_definition_id == run.workflow_definition_id,
             ExperimentDefinitionEvaluator.binding_key == binding_key,
         )
     ).first()

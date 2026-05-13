@@ -8,11 +8,11 @@ from ergon_core.core.infrastructure.inngest.handlers.cancel_orphan_subtasks impo
     cancel_orphans_on_cancelled_fn,
 )
 
-# PR 4: `check_evaluators` is no longer registered with Inngest. The
-# orchestrator (`execute_task`) now fans out per-evaluator
-# invocations synchronously and owns sandbox release in its
-# try/finally. The handler module remains importable until PR 11
-# deletes it. TODO(PR 11): drop the file and its handler entirely.
+# The legacy per-evaluator dispatch handler is no longer registered
+# with Inngest. The orchestrator (``execute_task``) now fans out
+# per-evaluator invocations synchronously and owns sandbox release in
+# its try/finally. The handler module remains importable until the
+# cleanup PR deletes the file (see Δ.7 deletion list).
 from ergon_core.core.infrastructure.inngest.handlers.cleanup_cancelled_task import (
     cleanup_cancelled_task_fn,
 )

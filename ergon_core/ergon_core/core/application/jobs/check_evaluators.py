@@ -22,7 +22,7 @@ from ergon_core.core.application.jobs.models import EvaluatorsResult
 from ergon_core.core.application.events.task_events import TaskCompletedEvent
 
 
-async def run_check_evaluators_job(  # slopcop: ignore[no-broad-except]
+async def run_check_evaluators_job(
     ctx: Any,
     payload: TaskCompletedEvent,
     *,

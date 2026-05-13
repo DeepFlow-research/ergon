@@ -13,11 +13,11 @@ and reloads everything else through the run-tier read boundary:
 The criterion runner is ``EvaluationService.evaluate_inline`` — no
 ``CriterionExecutor`` Protocol on this path. The Inngest retry unit
 shifts from "per criterion ``step.run``" to "per evaluator
-``step.invoke``" because the orchestrator (``worker_execute``) now
+``step.invoke``" because the orchestrator (``execute_task``) now
 fans out one Inngest invocation per evaluator.
 
 Sandbox lifetime: the eval worker does **not** terminate or detach
-sandboxes. ``worker_execute``'s ``try/finally`` owns external sandbox
+sandboxes. ``execute_task``'s ``try/finally`` owns external sandbox
 lifetime through the orchestrator's ``asyncio.gather``. PR 5 adds
 ``task.sandbox.detach()`` for the local handle once ``Sandbox`` is a
 real ABC.
@@ -146,9 +146,7 @@ async def run_evaluate_task_run_job(
     get_trace_sink().emit_span(
         CompletedSpan(
             name="evaluation.task",
-            context=evaluation_task_context(
-                run_id, view.node_id, execution_id, bound.evaluator_id
-            ),
+            context=evaluation_task_context(run_id, view.node_id, execution_id, bound.evaluator_id),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
