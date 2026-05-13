@@ -1,9 +1,10 @@
 """Sandbox lifecycle/event sink abstractions."""
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.infrastructure.dashboard.provider import DashboardEmitter
 
 
 @runtime_checkable
@@ -79,7 +80,7 @@ class NoopSandboxEventSink:
 class DashboardEmitterSandboxEventSink:
     """Adapter that forwards sandbox events to the dashboard emitter."""
 
-    def __init__(self, emitter: Any):  # slopcop: ignore[no-typing-any]
+    def __init__(self, emitter: DashboardEmitter) -> None:
         self._emitter = emitter
 
     async def sandbox_created(

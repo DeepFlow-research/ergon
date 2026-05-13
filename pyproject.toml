@@ -44,8 +44,14 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["C9"]
-# C901: function/method is too complex (McCabe cyclomatic complexity)
+select = [
+    "C9",     # McCabe cyclomatic complexity (C901)
+    "ANN001", # missing type annotation for function argument
+    "ANN201", # missing return type annotation for public function
+    "ANN202", # missing return type annotation for private function
+    "ANN204", # missing return type annotation for special method (__init__, __new__, ...)
+    "ANN206", # missing return type annotation for classmethod
+]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
@@ -53,7 +59,7 @@ max-complexity = 10
 [tool.ruff.lint.per-file-ignores]
 # Pre-existing complexity debt — tracked for future refactor PRs, not introduced now.
 # main (13): spike script, not library code
-"scripts/**" = ["C901"]
+"scripts/**" = ["C901", "ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
 # persist_definition (28): orchestrates full experiment graph persistence in one method
 "ergon_core/ergon_core/core/application/experiments/definition_writer.py" = ["C901"]
 # extract_agent_trajectories (13), _extract_trajectories (11)
@@ -65,6 +71,16 @@ max-complexity = 10
 "ergon_builtins/ergon_builtins/evaluators/criteria/file_check.py" = ["C901"]
 # _messages_to_text (12): converts PydanticAI message union to chat-template string
 "ergon_builtins/ergon_builtins/models/transformers_backend.py" = ["C901"]
+
+# ANN per-file ignores. Tests and migrations have ~376 pre-existing
+# violations that aren't worth fixing in this PR — production code
+# (~42 hits) is fixed inline. Production ANN coverage is enforced
+# everywhere except these directories. Drain pattern: when a test
+# file is touched in a future PR, drop its ignores at the same time.
+"tests/**" = ["ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
+"**/tests/**" = ["ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
+"**/migrations/**" = ["ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
+"ergon_core/ergon_core/test_support/**" = ["ANN001", "ANN201", "ANN202", "ANN204", "ANN206"]
 
 [tool.slopcop]
 # Per-rule excludes only when a rule is wrong for the whole repo (do not disable no-print / no-typing-any globally).

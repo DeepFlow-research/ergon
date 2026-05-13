@@ -31,7 +31,10 @@ from ergon_core.core.persistence.telemetry.models import (
     TrainingSession,
 )
 from ergon_core.core.application.graph.models import GraphMutationRecordDto
-from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
+from ergon_core.core.application.evaluation.scoring import (
+    EvaluationScoreSummary,
+    aggregate_evaluation_scores,
+)
 from ergon_core.core.application.read_models.run_snapshot import (
     _build_communication_threads,
     _build_task_map,
@@ -341,9 +344,12 @@ class RunReadService:
         ]
 
 
-def _display_run_score(score_summary) -> float | None:
+def _display_run_score(score_summary: EvaluationScoreSummary) -> float | None:
+    # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.
     return score_summary.normalized_score
 
 
 def _blob_root() -> Path:
-    return Path(os.environ.get("ERGON_BLOB_ROOT", "/var/ergon/blob")).resolve()
+    return (
+        Path(os.environ.get("ERGON_BLOB_ROOT", "/var/ergon/blob")).resolve()
+    )  # TODO: this should be set in pydantic-settings, not with this os fallback we dont ever set

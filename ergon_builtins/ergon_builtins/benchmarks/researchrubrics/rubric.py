@@ -13,7 +13,7 @@ from collections.abc import Iterable, Sequence
 from typing import ClassVar
 
 from ergon_core.api.benchmark import Task
-from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.criterion import Criterion, CriterionOutcome
 from ergon_core.api.rubric import Rubric, TaskEvaluationResult
 
 from ergon_builtins.benchmarks.researchrubrics.criteria import build_criteria_from_rubrics
@@ -43,7 +43,7 @@ class ResearchRubricsRubric(Rubric):
         super().__init__(name=name, criteria=criteria)
         self._rubric_criteria = tuple(rubric_criteria)
 
-    def criteria_for(self, task: Task):
+    def criteria_for(self, task: Task) -> Iterable[Criterion]:
         """Build task-specific LLM-judge criteria from the task payload."""
         if self._rubric_criteria:
             return self.criteria

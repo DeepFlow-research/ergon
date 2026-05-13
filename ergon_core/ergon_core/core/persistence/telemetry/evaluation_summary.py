@@ -5,7 +5,7 @@ Both the write side (evaluate_task_run.py) and read side (runs.py)
 use this model — no untyped dict access.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -41,7 +41,10 @@ class CriterionOutcomeEntry(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _populate_criterion_slug(cls, data):
+    def _populate_criterion_slug(cls, data: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        # TODO: normalise slug name to remov this hack
+        # See note on `_populate_slug_name` in api/criterion/results.py:
+        # Pydantic `before` validators are typed as `Any` by Pydantic itself.
         if isinstance(data, dict) and "criterion_slug" not in data:
             name = data.get("criterion_name")
             if isinstance(name, str):
