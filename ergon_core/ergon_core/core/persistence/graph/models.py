@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
-from sqlalchemy import JSON, Column, DateTime, Index
+from sqlalchemy import JSON, Boolean, Column, DateTime, Index
 from sqlmodel import Field, SQLModel
 
 GraphTargetType = Literal["node", "edge"]
@@ -65,6 +65,29 @@ class RunGraphNode(SQLModel, table=True):
         ),
     )
     description: str
+
+    task_json: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default="{}"),
+        description=(
+            "Run-tier snapshot of the authored Task. Static nodes copy "
+            "this from experiment_definition_tasks at prepare-run time; "
+            "dynamic nodes write it directly at spawn time. PR 11 makes "
+            "the column NOT NULL with no default once every writer "
+            "populates it explicitly."
+        ),
+    )
+
+    is_dynamic: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default="false"),
+        description=(
+            "True when this node was spawned during a run (no row in "
+            "experiment_definition_tasks). Denormalized at insert time "
+            "per 02-persistence-layer.md §5 so the static-vs-dynamic "
+            "discriminator avoids a join."
+        ),
+    )
 
     status: str = Field(
         index=True,
