@@ -29,16 +29,10 @@ to release the *local* `_runtime` handle — the external sandbox stays
 owned by the orchestrator.
 """
 
-from __future__ import annotations
-
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    # See `execute_task.py` for the boundary rationale (this module
-    # honors the same `application/jobs/*.py` import policy).
-    import inngest
+import inngest
 
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.core.application.evaluation.service import EvaluationService

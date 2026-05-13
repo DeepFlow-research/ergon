@@ -135,7 +135,7 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
         ordering.append("prepare")
         return prepared
 
-    async def fake_setup_sandbox(
+    async def fake_invoke_sandbox_setup(
         _ctx: inngest.Context,
         _payload: TaskReadyEvent,
         _prepared: PreparedTaskExecution,
@@ -144,7 +144,7 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
         ordering.append("invoke:sandbox-setup")
         return SandboxReadyResult(sandbox_id="sbx-test", output_dir=None)
 
-    async def fake_run_worker(
+    async def fake_invoke_worker_execute(
         _ctx: inngest.Context,
         _payload: TaskReadyEvent,
         _prepared: PreparedTaskExecution,
@@ -159,7 +159,7 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
             error_json=None,
         )
 
-    async def fake_persist_outputs(
+    async def fake_invoke_persist_outputs(
         _ctx: inngest.Context,
         _payload: TaskReadyEvent,
         _prepared: PreparedTaskExecution,
@@ -214,9 +214,9 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
     )
 
     monkeypatch.setattr(execute_task_module, "_prepare_execution", fake_prepare)
-    monkeypatch.setattr(execute_task_module, "_setup_sandbox", fake_setup_sandbox)
-    monkeypatch.setattr(execute_task_module, "_run_worker", fake_run_worker)
-    monkeypatch.setattr(execute_task_module, "_persist_outputs", fake_persist_outputs)
+    monkeypatch.setattr(execute_task_module, "_invoke_sandbox_setup", fake_invoke_sandbox_setup)
+    monkeypatch.setattr(execute_task_module, "_invoke_worker_execute", fake_invoke_worker_execute)
+    monkeypatch.setattr(execute_task_module, "_invoke_persist_outputs", fake_invoke_persist_outputs)
     monkeypatch.setattr(execute_task_module, "_emit_task_completed", fake_emit_completed)
     monkeypatch.setattr(execute_task_module, "_fan_out_evaluators", fake_fanout)
     monkeypatch.setattr(execute_task_module, "TaskExecutionService", lambda: svc)
@@ -265,7 +265,7 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
     ) -> PreparedTaskExecution:
         return prepared
 
-    async def fake_setup_sandbox(
+    async def fake_invoke_sandbox_setup(
         _ctx: inngest.Context,
         _payload: TaskReadyEvent,
         _prepared: PreparedTaskExecution,
@@ -273,7 +273,7 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
     ) -> SandboxReadyResult:
         return SandboxReadyResult(sandbox_id="sbx-fail", output_dir=None)
 
-    async def fake_run_worker(
+    async def fake_invoke_worker_execute(
         _ctx: inngest.Context,
         _payload: TaskReadyEvent,
         _prepared: PreparedTaskExecution,
@@ -287,7 +287,7 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
             error_json={"message": "boom"},
         )
 
-    async def fake_persist_outputs(
+    async def fake_invoke_persist_outputs(
         _ctx: inngest.Context,
         _payload: TaskReadyEvent,
         _prepared: PreparedTaskExecution,
@@ -313,9 +313,9 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
         )
 
     monkeypatch.setattr(execute_task_module, "_prepare_execution", fake_prepare)
-    monkeypatch.setattr(execute_task_module, "_setup_sandbox", fake_setup_sandbox)
-    monkeypatch.setattr(execute_task_module, "_run_worker", fake_run_worker)
-    monkeypatch.setattr(execute_task_module, "_persist_outputs", fake_persist_outputs)
+    monkeypatch.setattr(execute_task_module, "_invoke_sandbox_setup", fake_invoke_sandbox_setup)
+    monkeypatch.setattr(execute_task_module, "_invoke_worker_execute", fake_invoke_worker_execute)
+    monkeypatch.setattr(execute_task_module, "_invoke_persist_outputs", fake_invoke_persist_outputs)
     monkeypatch.setattr(execute_task_module, "_emit_task_failed", fake_emit_failed)
     monkeypatch.setattr(
         execute_task_module,

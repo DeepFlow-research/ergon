@@ -367,17 +367,60 @@ def test_read_context_and_resource_modules_stay_in_application_layout() -> None:
 
 
 def _inngest_job_boundary_offenders(core_root: Path) -> list[str]:
+    """The split between `application/jobs` (business logic) and
+    `infrastructure/inngest/handlers` (framework wiring) used to forbid
+    `import inngest` in jobs entirely. That was a fig leaf: jobs reach
+    into Inngest's API via `ctx.step.invoke` / `ctx.group.parallel` /
+    etc., so they're already coupled in spirit. PR 4 admits the
+    coupling and allows `import inngest` in jobs *for typing only* —
+    `inngest.Context` and `inngest.Function` as parameter types.
+
+    Still forbidden in jobs (these are the real coupling concerns the
+    split was meant to prevent — handler-layer ownership of decorators,
+    contracts, and runtime symbols):
+
+    - `@inngest_client.create_function(...)` decorators
+    - imports from `infrastructure.inngest.handlers` (would create a
+      circular dependency once handlers import jobs)
+    - imports from `infrastructure.inngest.contracts` (jobs own their
+      models in `application/jobs/models.py`)
+    - any `inngest.<runtime-symbol>` usage other than as a type
+      annotation
+    """
+
     allowed_job_infrastructure_imports = (
         "from ergon_core.core.infrastructure.inngest.client import",
         "from ergon_core.core.infrastructure.inngest.errors import",
+    )
+
+    # Runtime symbols on the `inngest` package whose use inside a job
+    # would re-introduce the coupling we're trying to keep in handlers.
+    # `inngest.Context` and `inngest.Function` are explicitly allowed
+    # (they're types, used only in annotations).
+    forbidden_runtime_inngest_symbols = (
+        "inngest.NonRetriableError",
+        "inngest.RetryAfterError",
+        "inngest.TriggerEvent",
+        "inngest.TriggerCron",
+        "inngest.Inngest",
+        "inngest.create_function",
     )
 
     offenders: list[str] = []
     for path in (core_root / "application" / "jobs").glob("*.py"):
         text = path.read_text()
         lines = text.splitlines()
-        if any(line == "import inngest" or line.startswith("from inngest ") for line in lines):
-            offenders.append(f"{path.relative_to(ROOT)} imports inngest directly")
+        if any(line.startswith("from inngest ") for line in lines):
+            offenders.append(
+                f"{path.relative_to(ROOT)} uses `from inngest import ...`; "
+                "type annotations should reference `inngest.Context` / `inngest.Function` via the module-level import"
+            )
+        for symbol in forbidden_runtime_inngest_symbols:
+            if symbol in text:
+                offenders.append(
+                    f"{path.relative_to(ROOT)} uses runtime symbol {symbol!r}; "
+                    "this belongs in the infrastructure handler layer"
+                )
         if "@inngest_client.create_function" in text:
             offenders.append(f"{path.relative_to(ROOT)} owns an Inngest decorator")
         if "ergon_core.core.infrastructure.inngest.handlers" in text:

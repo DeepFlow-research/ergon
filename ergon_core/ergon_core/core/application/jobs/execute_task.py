@@ -38,22 +38,13 @@ as sibling Inngest functions, so terminating in
 Bridge-Everything Approach" for the location rationale.
 """
 
-from __future__ import annotations
-
 import logging
 import traceback
 from datetime import UTC, datetime
 from functools import partial
-from typing import TYPE_CHECKING
+from uuid import UUID
 
-if TYPE_CHECKING:
-    # The architectural boundary `test_inngest_jobs_and_handlers_stay_split`
-    # forbids application/jobs/*.py from importing `inngest` at runtime —
-    # the infrastructure handlers own the framework coupling. Typing
-    # cross-boundary symbols (`inngest.Context`, `inngest.Function`)
-    # through TYPE_CHECKING keeps annotations precise without giving
-    # this module a runtime dependency on the SDK.
-    import inngest
+import inngest
 
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.jobs.models import (
@@ -111,7 +102,7 @@ async def _prepare_execution(
     return await ctx.step.run("prepare-execution", _prepare, output_type=PreparedTaskExecution)
 
 
-async def _setup_sandbox(
+async def _invoke_sandbox_setup(
     ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
@@ -128,12 +119,12 @@ async def _setup_sandbox(
             definition_id=payload.definition_id,
             task_id=sandbox_task_key,
             benchmark_type=prepared.benchmark_type,
-            sandbox_slug=_sandbox_slug_for_run(payload.run_id),
+            sandbox_slug=_load_sandbox_slug(payload.run_id),
         ).model_dump(),
     )
 
 
-def _sandbox_slug_for_run(run_id) -> str | None:
+def _load_sandbox_slug(run_id: UUID) -> str | None:
     session = get_session()
     try:
         run = session.get(RunRecord, run_id)
@@ -142,7 +133,7 @@ def _sandbox_slug_for_run(run_id) -> str | None:
         session.close()
 
 
-async def _run_worker(
+async def _invoke_worker_execute(
     ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
@@ -230,7 +221,7 @@ async def _fan_out_evaluators(
     )
 
 
-async def _persist_outputs(
+async def _invoke_persist_outputs(
     ctx: inngest.Context,
     payload: TaskReadyEvent,
     prepared: PreparedTaskExecution,
@@ -249,7 +240,7 @@ async def _persist_outputs(
             sandbox_id=sandbox_result.sandbox_id,
             output_dir=sandbox_result.output_dir,
             benchmark_type=prepared.benchmark_type,
-            sandbox_slug=_sandbox_slug_for_run(payload.run_id),
+            sandbox_slug=_load_sandbox_slug(payload.run_id),
         ).model_dump(),
     )
 
@@ -333,7 +324,7 @@ async def run_execute_task_job(
                 task_id=payload.task_id,
             )
 
-        sandbox_result = await _setup_sandbox(ctx, payload, prepared, sandbox_setup_function)
+        sandbox_result = await _invoke_sandbox_setup(ctx, payload, prepared, sandbox_setup_function)
         if not sandbox_result.sandbox_id:
             raise ContractViolationError(
                 "sandbox-setup returned empty sandbox_id",
@@ -342,12 +333,14 @@ async def run_execute_task_job(
             )
         task_sandbox_id = sandbox_result.sandbox_id
 
-        worker_result = await _run_worker(
+        worker_result = await _invoke_worker_execute(
             ctx, payload, prepared, sandbox_result, worker_execute_function
         )
 
         if not worker_result.success:
-            await _persist_outputs(ctx, payload, prepared, sandbox_result, persist_outputs_function)
+            await _invoke_persist_outputs(
+                ctx, payload, prepared, sandbox_result, persist_outputs_function
+            )
             error_msg = worker_result.error or "Worker execution failed"
             await svc.finalize_failure(
                 FailTaskExecutionCommand(
@@ -367,7 +360,7 @@ async def run_execute_task_job(
                 error=error_msg,
             )
 
-        persist_result = await _persist_outputs(
+        persist_result = await _invoke_persist_outputs(
             ctx, payload, prepared, sandbox_result, persist_outputs_function
         )
 
