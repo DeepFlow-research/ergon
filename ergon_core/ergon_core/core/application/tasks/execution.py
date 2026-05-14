@@ -132,6 +132,14 @@ class TaskExecutionService:
             )
             session.add(execution)
             session.flush()
+            # Snapshot ORM-derived scalars before commit. SQLAlchemy's
+            # `expire_on_commit=True` default expires every loaded
+            # instance on commit, and `with get_session() as session:`
+            # closes the session immediately after — so the post-commit
+            # reads of `definition.benchmark_type` / `execution.id`
+            # below would raise DetachedInstanceError.
+            benchmark_type = definition.benchmark_type
+            execution_id = execution.id
             await self._graph_repo.update_node_status(
                 session,
                 run_id=command.run_id,
@@ -139,7 +147,7 @@ class TaskExecutionService:
                 new_status=graph_status.RUNNING,
                 meta=MutationMeta(
                     actor="task-execution-service",
-                    reason=f"prepare: execution {execution.id}",
+                    reason=f"prepare: execution {execution_id}",
                 ),
             )
             session.commit()
@@ -161,11 +169,11 @@ class TaskExecutionService:
             definition_task_id=view.definition_task_id,
             task_slug=view.task.task_slug,
             task_description=view.task.description,
-            benchmark_type=definition.benchmark_type,
+            benchmark_type=benchmark_type,
             assigned_worker_slug=assigned_worker_slug,
             worker_type=worker_type,
             model_target=model_target,
-            execution_id=execution.id,
+            execution_id=execution_id,
         )
 
     def _resolve_worker_config(
