@@ -208,7 +208,15 @@ class _ManagerBackedSandboxRuntime:
         return await self._manager.list_files(self._sandbox_key, path)
 
     async def close(self) -> None:
+        # Terminate external sandbox AND drop local handle.
         await self._manager.terminate(self._sandbox_key, reason="completed")
+
+    async def close_local(self) -> None:
+        # Drop the local gRPC/TCP connection only; the external sandbox keeps
+        # running so sibling eval workers and the orchestrator's final
+        # terminate() can still reach it. e2b's AsyncSandbox.close() does
+        # exactly this — it closes the stream without sending a kill signal.
+        await self._sandbox.close()
 ```
 
 The adapter deliberately calls `_sandbox.commands.run` and

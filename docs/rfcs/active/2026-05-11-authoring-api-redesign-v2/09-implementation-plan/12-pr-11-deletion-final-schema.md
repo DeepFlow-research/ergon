@@ -217,6 +217,99 @@ walkthrough/regression tests.
 
 Expected: only docs and deleted-symbol tests contain hits.
 
+## Task 1.3: Shrink `CriterionContext` To A Pure Data Carrier
+
+**Deferred from PR 5.** The PR 5 plan specified removing the 12 runtime
+proxy methods from `CriterionContext` alongside the `_runtime` PrivateAttr
+and `sandbox_id` field. This was not done — criteria in PRs 6, 10a, 10b,
+10c still call `context.run_command(...)` via the legacy proxy. PR 11
+does the removal once every criterion body has been migrated to
+`context.task.sandbox.run_command(...)`.
+
+**Files:**
+
+- Modify: `ergon_core/ergon_core/api/criterion/context.py`
+
+- [ ] **Step 1: Confirm every criterion caller uses `context.task.sandbox` not `context.run_command`**
+
+```bash
+rg "context\.run_command\|context\.write_file\|context\.read_resource\|context\.upload_files\|context\.ensure_sandbox\|context\.execute_code\|context\.cleanup\|context\.list_resources\|context\.get_all_files" ergon_core ergon_builtins
+```
+
+Expected: zero production hits (only docs/tests).
+
+- [ ] **Step 2: Remove proxy methods and legacy private attrs from `CriterionContext`**
+
+Delete from `ergon_core/ergon_core/api/criterion/context.py`:
+- `_runtime: CriterionRuntime | None` PrivateAttr and all blocks that set it
+- `sandbox_id: str | None` field
+- `with_runtime(...)` classmethod
+- `has_runtime` property
+- `runtime` property
+- `_require_runtime()` method
+- All proxy methods: `ensure_sandbox`, `upload_files`, `write_file`, `run_command`, `execute_code`, `cleanup`, `read_resource`, `read_resource_by_id`, `list_resources`, `get_all_files_for_task`, `list_output_files`
+
+The resulting class is a pure data carrier:
+
+```python
+class CriterionContext(BaseModel):
+    task: Task
+    worker_result: WorkerOutput
+    run_id: UUID
+    execution_id: UUID
+```
+
+- [ ] **Step 3: Remove `CriterionRuntime` import from `context.py`**
+
+After Step 2, `CriterionRuntime` has no callers in `context.py`. Remove the import.
+Check it has no remaining callers in production:
+
+```bash
+rg "CriterionRuntime" ergon_core ergon_builtins ergon_cli
+```
+
+Expected: zero production hits.
+
+## Task 1.4: Add `Criterion.from_definition` Classmethod
+
+**Deferred from PR 5.** `Task.from_definition`'s object-bound evaluators
+path routes rubric-shaped evaluator JSON through `Evaluator.from_definition`,
+which handles `Rubric` subclasses fine (`criteria` are `exclude=True` so
+they don't appear in the JSON and don't need deserialization). However,
+bare `Criterion` subclasses that might be stored directly as evaluators
+would have no `from_definition` entry point. Add it so the pattern is
+complete and consistent before the PR 11 audit.
+
+**Files:**
+
+- Modify: `ergon_core/ergon_core/api/criterion/criterion.py`
+
+- [ ] **Step 1: Add `from_definition` classmethod**
+
+```python
+@classmethod
+def from_definition(cls, criterion_json: TaskDefinitionJson) -> "Criterion":
+    """Reconstruct a Criterion subclass from ``_type``-discriminated JSON.
+
+    Mirrors Worker.from_definition / Sandbox.from_definition. Called by
+    Task.from_definition when an evaluator entry resolves to a bare
+    Criterion subclass (not a Rubric).
+    """
+    criterion_type = criterion_json.get("_type")
+    if not isinstance(criterion_type, str):
+        raise ValueError(
+            f"Criterion snapshot is missing the required `_type` discriminator "
+            f"(got {type(criterion_type).__name__}). Every persisted criterion "
+            f"must carry `_type`."
+        )
+    CriterionCls = import_component(criterion_type)
+    return cast("Criterion", CriterionCls.model_validate(criterion_json))
+```
+
+Note: this requires `Criterion` to be a Pydantic `BaseModel`. If it isn't
+yet at PR 11 time, defer to a dedicated "Criterion Pydantic migration" PR
+and leave a `TODO(PR N)` comment here instead.
+
 ## Task 1.5: Retire The Legacy Worker Fallback
 
 After PR 10c lands, no benchmark builtin still returns `TaskSpec`, so
