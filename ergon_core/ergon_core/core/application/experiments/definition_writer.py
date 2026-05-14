@@ -7,6 +7,7 @@ BoundExperiment intermediate, no constructor_state() serialisation.
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from ergon_core.api.benchmark import Task, TaskSpec
 from ergon_core.api.rubric import Rubric
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.shared.json_types import JsonObject
@@ -27,6 +28,31 @@ from sqlalchemy.exc import SQLAlchemyError
 if TYPE_CHECKING:
     from ergon_core.core.domain.experiments import Experiment
     from ergon_core.api.criterion import Criterion
+
+
+def _task_to_definition_json(task: Task | TaskSpec) -> JsonObject:
+    """Snapshot a benchmark-returned task as ``_type``-discriminated JSON.
+
+    Two shapes are written, distinguished by the ``_type`` discriminator:
+
+    - ``Task`` instances (PR 5+ object-bound) → full
+      ``model_dump(mode="json")`` carrying ``_type``, scalar fields,
+      and any inlined ``worker``/``sandbox``/``evaluators`` snapshots.
+    - ``TaskSpec`` instances (PR 1 legacy) → flat fields plus a
+      ``_type`` pointing at ``TaskSpec`` and a ``_legacy: True`` marker
+      so ``Task.from_definition`` takes the bridge branch.
+
+    Named ``_task_to_definition_json`` so PR 11 can grep-and-delete it
+    as a single symbol once only ``Task`` remains.
+    """
+
+    if isinstance(task, Task):
+        return task.model_dump(mode="json")
+    return {
+        "_type": "ergon_core.api.benchmark.task:TaskSpec",
+        **task.model_dump(mode="json"),
+        "_legacy": True,
+    }
 
 
 def _criterion_snapshot_name(criterion: "Criterion") -> str:
@@ -130,6 +156,7 @@ class _ExperimentDefinitionWriter:
                     task_slug=task.task_slug,
                     description=task.description,
                     task_payload_json=task.task_payload.model_dump(mode="json"),
+                    task_json=_task_to_definition_json(task),
                     created_at=now,
                 )
                 task_rows_by_key[(instance_key, task.task_slug)] = task_row

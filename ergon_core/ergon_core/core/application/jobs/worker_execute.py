@@ -12,8 +12,6 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
 
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
-from ergon_core.api.worker.worker import Worker
-from ergon_core.core.application.components.catalog import ComponentCatalogService
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.tasks.repository import (
     TaskExecutionRepository,
@@ -23,7 +21,10 @@ from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emit
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
-from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
+from ergon_core.core.infrastructure.inngest.errors import (
+    ConfigurationError,
+    ContractViolationError,
+)
 from ergon_core.core.application.jobs.models import WorkerExecuteJobRequest
 from ergon_core.core.application.jobs.models import WorkerExecuteJobResult
 from ergon_core.core.infrastructure.tracing import (
@@ -33,26 +34,6 @@ from ergon_core.core.infrastructure.tracing import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _worker_from_payload_bridge(payload: WorkerExecuteJobRequest) -> Worker:
-    """PR 3 transitional bridge: construct a worker from the legacy
-    registry using the worker_type / assigned_worker_slug / model_target
-    fields the PR 3 PreparedTaskExecution still carries.
-
-    TODO(PR 5): once `Task` carries the worker as `task.worker`
-    (object-bound), delete this bridge and read the worker directly off
-    the inflated Task.
-    """
-
-    catalog = ComponentCatalogService()
-    with get_session() as session:
-        return catalog.build_worker(
-            session,
-            slug=payload.worker_type,
-            name=payload.assigned_worker_slug,
-            model=payload.model_target,
-        )
 
 
 async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExecuteJobResult:
@@ -85,9 +66,28 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         )
     task = view.task
 
-    # TODO(PR 5): replace `_worker_from_payload_bridge(payload)` with
-    # `task.worker` once Worker is object-bound on the Task snapshot.
-    worker = _worker_from_payload_bridge(payload)
+    # PR 5 retires the v1 registry-slug bridge (which rebuilt a Worker
+    # from `payload.worker_type` / `payload.assigned_worker_slug` /
+    # `payload.model_target` on every run). `task.worker` is the
+    # object-bound v2 surface — the Task snapshot carries the worker
+    # config inline, and `Task.from_definition` re-inflates the right
+    # subclass via the `_type` discriminator.
+    #
+    # `task.worker` is nullable on the schema during the PR 5 → PR 11
+    # transition because legacy TaskSpec snapshots have no worker.
+    # The runtime guard here catches the case loudly — an unmigrated
+    # benchmark reaching the worker path would otherwise blow up
+    # several frames deeper inside `worker.execute(...)`.
+    worker = task.worker
+    if worker is None:
+        raise ConfigurationError(
+            f"Task {task.task_slug!r} has no bound worker; PR 5 requires "
+            "object-bound workers on every Task snapshot. Migrate the "
+            "benchmark to return Task instances with worker=... set.",
+            run_id=payload.run_id,
+            task_id=payload.task_id,
+        )
+    worker.validate_runtime_deps()
 
     worker_context = WorkerContext(
         run_id=payload.run_id,

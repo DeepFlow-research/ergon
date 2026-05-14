@@ -62,7 +62,12 @@ class BaseSmokeLeafWorker(Worker):
         model: str | None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
-        super().__init__(name=name, model=model, metadata=metadata)
+        # PR 5 converted Worker to a Pydantic BaseModel — `metadata` is
+        # now a non-nullable `dict[str, Any]` field with a
+        # `default_factory=dict`. Convert the legacy ``None`` sentinel
+        # into ``{}`` so callers that still pass ``metadata=None``
+        # (e.g. smoke unit tests) keep working.
+        super().__init__(name=name, model=model, metadata=dict(metadata) if metadata else {})
         self._last_result: SubworkerResult | None = None
 
     async def execute(

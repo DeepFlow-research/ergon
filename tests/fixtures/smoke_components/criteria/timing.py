@@ -34,8 +34,10 @@ class SmokePostRootTimingRubric(Rubric):
         name: str,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
+        # PR 5: Rubric is now a Pydantic BaseModel; `metadata` is a
+        # non-nullable `dict[str, Any]` field, so normalize None to {}.
         super().__init__(
             name=name,
-            criteria=[SmokePostRootTimingCriterion(slug="smoke-post-root-timing")],
-            metadata=metadata,
+            criteria=(SmokePostRootTimingCriterion(slug="smoke-post-root-timing"),),
+            metadata=dict(metadata) if metadata else {},
         )

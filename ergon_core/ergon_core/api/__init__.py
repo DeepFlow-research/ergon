@@ -15,7 +15,12 @@ from ergon_core.api.criterion import (
     EvidenceMessage,
     ScoreScale,
 )
-from ergon_core.api.errors import CriterionCheckError, SandboxNotLiveError
+from ergon_core.api.errors import (
+    CriterionCheckError,
+    SandboxKindMismatch,
+    SandboxNotLiveError,
+)
+from ergon_core.api.experiment import Experiment
 from ergon_core.api.registry import ComponentRegistry, registry
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
@@ -42,8 +47,10 @@ __all__ = [
     "EmptyTaskPayload",
     "Evaluator",
     "EvidenceMessage",
+    "Experiment",
     "Rubric",
     "Sandbox",
+    "SandboxKindMismatch",
     "SandboxNotLiveError",
     "SandboxRuntime",
     "ScoreScale",

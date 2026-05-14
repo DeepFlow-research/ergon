@@ -142,7 +142,7 @@ class ResearchRubricsResearcherWorker(ReActWorker):
 
         # AgentToolBudgetDeps is constructed by build_agent_deps below,
         # not stored as instance state — the budget is per-execute().
-        self.tools = [*rr_tools, *graph_tools]
+        self._tools = [*rr_tools, *graph_tools]
 
         async for chunk in super().execute(task, context=context):
             yield chunk

@@ -99,5 +99,5 @@ def test_minif2f_worker_defers_toolkit_until_execute() -> None:
     worker = worker_cls(name="minif2f-test", model=None)
 
     assert isinstance(worker, Worker)
-    assert worker.tools == []
+    assert worker._tools == []
     assert worker.max_iterations == 30

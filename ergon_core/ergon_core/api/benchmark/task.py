@@ -180,8 +180,7 @@ class Task(BaseModel, Generic[PayloadT]):
             # out, validate the Task scaffolding, then re-inflate each
             # nested component via its own ``from_definition``.
             scalar_fields = {
-                k: v for k, v in task_json.items()
-                if k not in {"worker", "sandbox", "evaluators"}
+                k: v for k, v in task_json.items() if k not in {"worker", "sandbox", "evaluators"}
             }
             instance = cast("Task", TaskCls.model_validate(scalar_fields))
 
@@ -210,8 +209,8 @@ class Task(BaseModel, Generic[PayloadT]):
                     f"carry one."
                 )
 
-            evaluators_json = task_json.get("evaluators") or ()
-            if evaluators_json:
+            evaluators_json = task_json.get("evaluators")
+            if isinstance(evaluators_json, list) and evaluators_json:
                 inflated: list[Evaluator] = []
                 for ev_json in evaluators_json:
                     if not isinstance(ev_json, dict):

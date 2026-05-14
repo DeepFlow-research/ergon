@@ -25,8 +25,10 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "EvidenceMessage",
         # PR 5 — object-bound authoring surface.
         "Evaluator",
+        "Experiment",
         "Rubric",
         "Sandbox",
+        "SandboxKindMismatch",
         "SandboxRuntime",
         "SandboxNotLiveError",
         "TaskEvaluationResult",

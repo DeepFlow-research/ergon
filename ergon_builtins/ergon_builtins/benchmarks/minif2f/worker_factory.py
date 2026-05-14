@@ -59,6 +59,6 @@ class MiniF2FReactWorker(ReActWorker):
             sandbox_run_skill=_minif2f_run_skill(sandbox),
             run_id=task.task_id,
         )
-        self.tools = list(toolkit.get_tools())
+        self._tools = list(toolkit.get_tools())
         async for item in super().execute(task, context=context):
             yield item

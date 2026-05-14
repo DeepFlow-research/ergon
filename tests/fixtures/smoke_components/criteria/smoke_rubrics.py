@@ -36,10 +36,13 @@ class ResearchRubricsSmokeRubric(Rubric):
         name: str,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
     ) -> None:
+        # PR 5: Rubric / Evaluator are Pydantic BaseModels; `metadata`
+        # is a non-nullable `dict[str, Any]` field. Normalize None to {}
+        # so legacy callers continue to work.
         super().__init__(
             name=name,
-            criteria=[ResearchRubricsSmokeCriterion(slug="researchrubrics-smoke")],
-            metadata=metadata,
+            criteria=(ResearchRubricsSmokeCriterion(slug="researchrubrics-smoke"),),
+            metadata=dict(metadata) if metadata else {},
         )
 
 
@@ -56,8 +59,8 @@ class MiniF2FSmokeRubric(Rubric):
     ) -> None:
         super().__init__(
             name=name,
-            criteria=[MiniF2FSmokeCriterion(slug="minif2f-smoke")],
-            metadata=metadata,
+            criteria=(MiniF2FSmokeCriterion(slug="minif2f-smoke"),),
+            metadata=dict(metadata) if metadata else {},
         )
 
 
@@ -74,6 +77,6 @@ class SweBenchSmokeRubric(Rubric):
     ) -> None:
         super().__init__(
             name=name,
-            criteria=[SweBenchSmokeCriterion(slug="swebench-smoke")],
-            metadata=metadata,
+            criteria=(SweBenchSmokeCriterion(slug="swebench-smoke"),),
+            metadata=dict(metadata) if metadata else {},
         )

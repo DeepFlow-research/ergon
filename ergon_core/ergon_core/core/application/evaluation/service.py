@@ -229,7 +229,7 @@ class EvaluationService:
         node_id: UUID,
         task_execution_id: UUID,
         definition_task_id: UUID | None,
-        evaluator_id: UUID,
+        binding_key: str,
         service_result: EvaluationServiceResult,
         evaluation_input: str | None = None,
     ) -> PersistedEvaluation:
@@ -237,6 +237,7 @@ class EvaluationService:
         result = service_result.result
         session = get_session()
         try:
+            evaluator_id = self.lookup_evaluator_id(session, run_id, binding_key)
             evaluation = self.telemetry_repo.create_task_evaluation(
                 session,
                 CreateTaskEvaluation(
@@ -275,13 +276,12 @@ class EvaluationService:
         node_id: UUID,
         task_execution_id: UUID,
         definition_task_id: UUID | None,
-        evaluator_id: UUID,
-        evaluator_name: str,
+        binding_key: str,
         exc: Exception,
     ) -> None:
         error_type = type(exc).__name__
         summary = EvaluationSummary(
-            evaluator_name=evaluator_name,
+            evaluator_name=binding_key,
             max_score=0.0,
             normalized_score=0.0,
             stages_evaluated=0,
@@ -290,6 +290,7 @@ class EvaluationService:
         )
         session = get_session()
         try:
+            evaluator_id = self.lookup_evaluator_id(session, run_id, binding_key)
             self.telemetry_repo.create_task_evaluation(
                 session,
                 CreateTaskEvaluation(
@@ -308,6 +309,46 @@ class EvaluationService:
             session.commit()
         finally:
             session.close()
+
+    def lookup_evaluator_id(
+        self,
+        session: Session,
+        run_id: UUID,
+        binding_key: str,
+    ) -> UUID:
+        """Resolve the ``ExperimentDefinitionEvaluator.id`` for a binding key.
+
+        PR 5 moved evaluator picking from the v1 wire payload (legacy
+        ``EvaluateTaskRunRequest`` carried the id) to ``task.evaluators[i]``
+        — the eval body no longer has the id, only the live ``Evaluator``
+        instance. The persistence layer needs the id for the FK on
+        ``run_task_evaluations.definition_evaluator_id``, so the lookup
+        happens here on the binding_key (which is ``evaluator.name`` on
+        an object-bound Evaluator and matches the column on
+        ``ExperimentDefinitionEvaluator``).
+
+        PR 11 may drop this lookup entirely by making the FK nullable
+        once object-bound is the only path.
+        """
+
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            raise ContractViolationError(
+                f"RunRecord {run_id} not found while resolving evaluator id"
+            )
+        evaluator_def = session.exec(
+            select(ExperimentDefinitionEvaluator).where(
+                ExperimentDefinitionEvaluator.experiment_definition_id
+                == run.workflow_definition_id,
+                ExperimentDefinitionEvaluator.binding_key == binding_key,
+            )
+        ).first()
+        if evaluator_def is None:
+            raise ContractViolationError(
+                f"No ExperimentDefinitionEvaluator for binding_key={binding_key!r} "
+                f"under definition {run.workflow_definition_id}"
+            )
+        return evaluator_def.id
 
     def _refresh_run_evaluation_summary(self, session: Session, run_id: UUID) -> None:
         run = session.get(RunRecord, run_id)

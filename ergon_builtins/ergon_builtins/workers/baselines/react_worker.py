@@ -58,20 +58,12 @@ class ReActWorker(Worker):
 
     system_prompt: str | None = None
     max_iterations: int = 10
-    # `tools` and `_seed_messages` are runtime-only state — they hold
+    # `_tools` and `_seed_messages` are runtime-only state — they hold
     # references to callables/pydantic-ai SDK objects that are not
     # round-trippable through model_dump/model_validate. PrivateAttr
     # keeps them out of the Pydantic field surface entirely.
     _tools: list[AgentTool] = PrivateAttr(default_factory=list)
     _seed_messages: list[ModelMessage] | None = PrivateAttr(default=None)
-
-    @property
-    def tools(self) -> list[AgentTool]:
-        return self._tools
-
-    @tools.setter
-    def tools(self, value: list[AgentTool]) -> None:
-        self._tools = value
 
     async def execute(
         self,
@@ -103,7 +95,7 @@ class ReActWorker(Worker):
             Agent(
                 model=resolved.model,
                 instructions=self.system_prompt or None,
-                tools=self.tools,
+                tools=self._tools,
                 output_type=_AgentOutput,
                 deps_type=cast(type[Any], deps_type),
             ),
@@ -194,6 +186,7 @@ def _latest_final_result_message(chunks: list[ContextPartChunk]) -> str:
             continue
         messages.append(str(part.args.get("final_assistant_message", "")))
     return messages[-1] if messages else ""
+
 
 def _format_task(task: Task) -> str:
     lines = [f"Task: {task.description}"]
