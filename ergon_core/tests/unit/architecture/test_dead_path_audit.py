@@ -206,7 +206,8 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
 _XFAIL_BY_SYMBOL: dict[str, str] = {
     "CriterionExecutor": "PR 11: Protocol pair deleted",
     "InngestCriterionExecutor": "PR 11: Protocol pair deleted",
-    "_worker_from_payload_bridge": "PR 5: task.worker replaces the bridge",
+    # PR 5 deleted `_worker_from_payload_bridge` — `task.worker` is the
+    # object-bound replacement (see Task 4b).
     "_prepare_legacy_graph_native": (
         "PR 3 renamed _prepare_graph_native to _prepare_legacy_graph_native; "
         "the method definition is still in the source file as transitional "

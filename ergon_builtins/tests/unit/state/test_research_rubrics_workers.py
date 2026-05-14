@@ -67,7 +67,7 @@ class TestResearcherWorker:
             model=None,
         )
         assert worker.type_slug == "researchrubrics-researcher"
-        assert worker.tools == []
+        assert worker._tools == []
 
     @pytest.mark.asyncio
     async def test_execute_builds_tools(self):
@@ -106,10 +106,10 @@ class TestResearcherWorker:
 
         # After execute, tools should be populated:
         # 6 research-rubrics tools + 6 graph tools = 12
-        assert len(worker.tools) == 12
+        assert len(worker._tools) == 12
 
         # Verify tool names include expected subsets
-        tool_names = {_tool_name(t) for t in worker.tools}
+        tool_names = {_tool_name(t) for t in worker._tools}
         assert "exa_search" in tool_names
         assert "exa_qa" in tool_names
         assert "exa_get_content" in tool_names
@@ -148,7 +148,7 @@ class TestResearcherWorker:
             async for turn in worker.execute(task, context=context):
                 turns.append(turn)
 
-        tool_names = {_tool_name(t) for t in worker.tools}
+        tool_names = {_tool_name(t) for t in worker._tools}
         assert worker.type_slug == "researchrubrics-workflow-cli-react"
         assert "workflow" in tool_names
 

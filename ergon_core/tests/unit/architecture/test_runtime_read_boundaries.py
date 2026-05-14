@@ -34,6 +34,29 @@ def test_worker_execute_does_not_read_definition_repository() -> None:
     )
 
 
+def test_worker_execute_uses_object_bound_worker() -> None:
+    """PR 5 retires the v1 worker-from-registry bridge.
+
+    The body must read the worker directly off ``task.worker`` (the
+    PR 5 object-bound field) — not via ``ComponentCatalogService`` or
+    the old ``_worker_from_payload_bridge`` helper. If either name
+    creeps back into the job body, the run-tier read boundary that
+    PR 3 set up has regressed.
+    """
+
+    text = (ROOT / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
+    assert "ComponentCatalogService" not in text, (
+        "worker_execute must read worker from `task.worker` only — "
+        "ComponentCatalogService imports recreate the registry-driven "
+        "runtime that PR 5 removed."
+    )
+    assert "_worker_from_payload_bridge" not in text, "PR 5 deletes the PR 3 worker payload bridge."
+    assert "task.worker" in text, (
+        "PR 5 binds the worker directly to the Task snapshot; "
+        "worker_execute must read it off `task.worker`."
+    )
+
+
 def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     """PR 4 textual guard: the `evaluate_task_run.py` body reads only
     from the run tier and only via the thin id-only payload."""
@@ -49,8 +72,8 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
 
     # No definition-tier reads.
     assert "DefinitionRepository" not in body, (
-        "evaluate_task_run must not load definition rows directly — the "
-        "PR 4 _evaluator_bridge module owns that until PR 5 lifts it."
+        "evaluate_task_run must not load definition rows directly — "
+        "definition reads belong in EvaluationService.lookup_evaluator_id."
     )
     assert "ExperimentDefinitionTask" not in body
     # No registry-based evaluator resolution inside the body.
@@ -59,6 +82,44 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     # Uses the same run-tier loader the orchestrator uses.
     assert "WorkflowGraphRepository" in body
     assert ".node(" in body
+
+
+def test_evaluate_task_run_uses_object_bound_evaluators() -> None:
+    """PR 5: the eval body dispatches on ``task.evaluators[index]``.
+
+    Retires the PR 4 ``_evaluator_bridge`` (was a sibling module
+    owning the multi-hop binding-key → ExperimentDefinitionEvaluator
+    → ComponentCatalogService lookup chain). PR 5's object-bound Task
+    snapshot carries Evaluator instances inline.
+    """
+
+    import ergon_core.core.application.jobs as jobs_pkg
+    from pathlib import Path
+
+    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
+    assert "task.evaluators[" in body, (
+        "PR 5 binds evaluators directly to the Task; the eval worker "
+        "must dispatch on task.evaluators[index]."
+    )
+    # Bridge module is gone.
+    jobs_dir = Path(jobs_pkg.__file__).parent
+    assert not (jobs_dir / "_evaluator_bridge.py").exists(), (
+        "PR 5 deletes the PR 4 evaluator-resolution bridge module."
+    )
+
+
+def test_evaluate_task_run_detaches_sandbox() -> None:
+    """PR 5: the eval body releases the local sandbox handle on the
+    way out so the gRPC stream / TCP connection doesn't leak. The
+    external sandbox stays running — the orchestrator (`execute_task`)
+    owns termination.
+    """
+
+    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
+    assert "task.sandbox.detach()" in body, (
+        "PR 5 wires Sandbox.detach() into the eval body's finally so "
+        "the local runtime handle is always released."
+    )
 
 
 def test_execute_task_fans_out_via_step_invoke() -> None:

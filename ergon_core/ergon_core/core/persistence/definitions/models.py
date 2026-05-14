@@ -183,6 +183,17 @@ class ExperimentDefinitionTask(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column("task_payload", JSON),
     )
+    # PR 5: full ``_type``-discriminated Task snapshot. The legacy
+    # ``task_payload_json`` carries only ``Task.task_payload`` (the
+    # benchmark-specific data); ``task_json`` is the complete object-
+    # bound Task (worker + sandbox + evaluators + scalar fields) that
+    # ``Task.from_definition`` reconstructs end-to-end. Additive in
+    # PR 5; PR 11 may collapse ``task_payload_json`` into ``task_json``
+    # once every reader migrates.
+    task_json: JsonObject = Field(
+        default_factory=dict,
+        sa_column=Column("task_json", JSON, nullable=False, server_default="{}"),
+    )
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
     # -- JSON accessor: task_payload --

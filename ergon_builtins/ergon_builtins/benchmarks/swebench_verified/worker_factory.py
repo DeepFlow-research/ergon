@@ -33,6 +33,6 @@ class SWEBenchReactWorker(ReActWorker):
                 "_install_dependencies) before worker-execute runs."
             )
         toolkit = SWEBenchToolkit(sandbox=sandbox, workdir="/workspace/repo")
-        self.tools = list(toolkit.get_tools())
+        self._tools = list(toolkit.get_tools())
         async for item in super().execute(task, context=context):
             yield item

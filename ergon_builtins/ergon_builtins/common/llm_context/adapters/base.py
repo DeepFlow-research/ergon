@@ -14,4 +14,3 @@ class TranscriptAdapter(Protocol[TranscriptT, ReplayT]):
     def build_chunks(self, transcript: TranscriptT) -> list[ContextPartChunk]:
         """Return ordered chunks extracted from a complete transcript."""
         ...
-

@@ -15,29 +15,37 @@ from ergon_core.core.domain.generation.context_parts import (
     ToolCallPart,
 )
 from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
+from pydantic_core import PydanticUndefined
 
 
 def test_no_adapter_kwarg() -> None:
-    sig = inspect.signature(ReActWorker.__init__)
-    assert "adapter" not in sig.parameters, (
-        "BenchmarkAdapter ABC is being deleted — ReActWorker must not accept an adapter kwarg."
+    # PR 5 converted ReActWorker to a Pydantic BaseModel — there is no
+    # hand-rolled __init__ anymore, so check model_fields instead.
+    assert "adapter" not in ReActWorker.model_fields, (
+        "BenchmarkAdapter ABC is being deleted — ReActWorker must not accept an adapter field."
     )
 
 
 @pytest.mark.parametrize(
     "kwarg",
-    ["name", "model", "tools", "system_prompt", "max_iterations"],
+    ["name", "model", "system_prompt", "max_iterations"],
 )
 def test_all_kwargs_required_and_keyword_only(kwarg: str) -> None:
-    sig = inspect.signature(ReActWorker.__init__)
-    param = sig.parameters[kwarg]
-    assert param.kind == inspect.Parameter.KEYWORD_ONLY, (
-        f"`{kwarg}` must be keyword-only; got {param.kind}"
+    # PR 5 converted ReActWorker to a Pydantic BaseModel; the
+    # hand-rolled __init__ is gone. Pydantic's auto-init is
+    # keyword-only by construction, so we only need to assert each
+    # field is declared. `name` and `model` have no default (required);
+    # `system_prompt` and `max_iterations` have defaults (the base
+    # contract is just that they exist on the model).
+    assert kwarg in ReActWorker.model_fields, (
+        f"`{kwarg}` must be declared on ReActWorker.model_fields"
     )
-    assert param.default is inspect.Parameter.empty, (
-        f"`{kwarg}` must have no default (RFC 2026-04-22 forbids nullable-with-default); "
-        f"got {param.default!r}"
-    )
+    field = ReActWorker.model_fields[kwarg]
+    if kwarg in {"name", "model"}:
+        assert field.default is PydanticUndefined, (
+            f"`{kwarg}` must have no default (RFC 2026-04-22 forbids nullable-with-default); "
+            f"got {field.default!r}"
+        )
 
 
 def test_construct_with_minimal_explicit_kwargs() -> None:

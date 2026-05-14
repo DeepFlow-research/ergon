@@ -1,8 +1,39 @@
 """Public API error types."""
 
+from uuid import UUID
+
 
 class DependencyError(Exception):
     """A component's required package is not installed."""
+
+
+class SandboxKindMismatch(TypeError):
+    """A task's worker requires a Sandbox subclass that task.sandbox isn't.
+
+    Raised at ``Experiment`` construction time by the public
+    sandbox-compatibility validator. The check uses
+    ``type(task.worker).requires_sandbox`` as the contract — if a
+    worker subclass narrows ``requires_sandbox`` (e.g.
+    ``LeanReActWorker.requires_sandbox = LeanSandbox``), the bound
+    ``task.sandbox`` must be an instance of that narrower type.
+    """
+
+    def __init__(
+        self,
+        *,
+        task_id: UUID,
+        component: str,
+        required: type,
+        actual: type,
+    ) -> None:
+        super().__init__(
+            f"Task {task_id}: {component} requires sandbox of type "
+            f"{required.__name__!r}, but got {actual.__name__!r}."
+        )
+        self.task_id = task_id
+        self.component = component
+        self.required = required
+        self.actual = actual
 
 
 class CriterionCheckError(Exception):

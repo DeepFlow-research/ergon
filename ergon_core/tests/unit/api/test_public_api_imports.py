@@ -25,10 +25,21 @@ def test_public_api_root_stays_authoring_scoped() -> None:
 
 
 def test_object_first_experiment_run_api_is_retired() -> None:
+    """v1 ``ExperimentRunHandle`` is gone; v1 ``Experiment`` (domain
+    class with ``workers`` / ``evaluators`` / ``assignments`` maps) is
+    replaced by the PR 5 ``Experiment`` (object-bound, no maps)."""
     public_api = importlib.import_module("ergon_core.api")
 
     assert not hasattr(public_api, "ExperimentRunHandle")
-    assert not hasattr(public_api, "Experiment")
+    # PR 5 reintroduces ``Experiment`` as the v2 object-bound authoring
+    # surface. Asserting structural distinctness from v1's domain
+    # ``Experiment`` (which had workers/evaluators/assignments maps).
+    assert hasattr(public_api, "Experiment")
+    experiment_cls = public_api.Experiment
+    assert "benchmark" in experiment_cls.model_fields
+    assert "workers" not in experiment_cls.model_fields
+    assert "evaluators" not in experiment_cls.model_fields
+    assert "assignments" not in experiment_cls.model_fields
 
 
 def test_core_api_app_imports_without_context_payload_cycle() -> None:

@@ -1,7 +1,7 @@
 """Public ``Worker`` ABC (Pydantic BaseModel) for v2 object-bound benchmarks."""
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
@@ -106,7 +106,10 @@ class Worker(BaseModel, ABC):
             raise DependencyError("\n".join(parts))
 
     @model_serializer(mode="wrap")
-    def _serialize_with_type_discriminator(self, handler):  # noqa: ANN001
+    def _serialize_with_type_discriminator(
+        self,
+        handler: Callable[["Worker"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
+    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Inject the ``_type`` discriminator on every dump.
 
         Worker subclasses dump as ``{..., "_type": "module:Qualname"}``
