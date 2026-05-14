@@ -109,8 +109,14 @@ ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_utils.py
   collapses identity, they're dead. The DTO simplifies to
   `run_id, definition_id, task_id, task_slug, task_description, benchmark_type, execution_id`.
 - Remove `_prepare_legacy_definition` from `TaskExecutionService`.
-- Remove `_worker_from_payload_bridge` from `worker_execute.py` (PR 5
-  already retires this; PR 11 confirms grep-empty).
+- Retire the legacy worker fallback chain. PR 5 retired the *in-body*
+  `_worker_from_payload_bridge` but kept a narrow legacy fallback at
+  `core/application/jobs/_legacy_worker_bridge.py` for unmigrated
+  benchmarks. PR 6 / PR 10a / PR 10b / PR 10c migrate the four builtins
+  (minif2f, swebench, researchrubrics, gdpeval) one by one — after
+  PR 10c, no benchmark still produces `TaskSpec`. PR 11 performs the
+  final deletion (see Task 1.5 below). The grep for
+  `_worker_from_payload_bridge` must come back empty.
 
 **Schema (run-tier collapse — composite PK `(run_id, task_id)`):**
 
@@ -210,6 +216,43 @@ Expected: hits in `jobs/evaluate_task_run.py` (the reshaped body),
 walkthrough/regression tests.
 
 Expected: only docs and deleted-symbol tests contain hits.
+
+## Task 1.5: Retire The Legacy Worker Fallback
+
+After PR 10c lands, no benchmark builtin still returns `TaskSpec`, so
+`_legacy_worker_bridge.legacy_worker_from_payload` has no remaining
+callers. PR 11 deletes the file and the `worker_execute` branch that
+invokes it.
+
+- [ ] **Step 1: Delete `_legacy_worker_bridge.py`**
+
+```bash
+git rm ergon_core/ergon_core/core/application/jobs/_legacy_worker_bridge.py
+```
+
+- [ ] **Step 2: Delete the `if worker is None:` fallback branch in `worker_execute.py`**
+
+Remove the `if worker is None:` block in
+`ergon_core/ergon_core/core/application/jobs/worker_execute.py` that
+imports `legacy_worker_from_payload` and assigns its return value to
+`worker`. After PR 10c, `task.worker` is always non-None for every
+benchmark; the branch is unreachable and the import is dead.
+
+- [ ] **Step 3: Drop the `_worker_from_payload_bridge` entry from the dead-path audit `_XFAIL_BY_SYMBOL`**
+
+In `ergon_core/tests/unit/architecture/test_dead_path_audit.py`, remove
+the `_worker_from_payload_bridge` entry from `_XFAIL_BY_SYMBOL`. This is
+folded into the "Empty `_XFAIL_BY_SYMBOL`" sweep in Task 4 Step 2 — call
+it out here so the deletion isn't lost when the dict is collapsed.
+
+Verify:
+
+```bash
+rg "_worker_from_payload_bridge|_legacy_worker_bridge|legacy_worker_from_payload" \
+  ergon_core ergon_builtins ergon_cli
+```
+
+Expected: only docs hits remain.
 
 ## Task 2: Reset Migration Chain
 

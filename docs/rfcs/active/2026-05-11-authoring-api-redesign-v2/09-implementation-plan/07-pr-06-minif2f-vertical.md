@@ -374,11 +374,23 @@ Invariant landed: one builtin proves the v2 authoring vertical.
 
 Bridge code introduced: manager-backed `LeanSandbox` runtime adapter.
 
-Old path still intentionally alive: other builtins, registry, base sandbox
-manager.
+Bridge code retired (partially):
+- MiniF2F tasks now carry `task.worker`/`task.sandbox` inline, so MiniF2F
+  runs no longer hit the `_legacy_worker_bridge` fallback that PR 5
+  Task 4b put on `worker_execute`. The fallback itself stays alive — it
+  still serves swebench, researchrubrics, and gdpeval until they migrate
+  in PR 10a/10b/10c. PR 11 deletes the fallback once every benchmark is
+  on object-bound `Task`.
 
-Deletion gate: PR 10 migrates all builtins; PR 11 deletes manager bridge.
+Old path still intentionally alive: other builtins, registry, base sandbox
+manager, `_legacy_worker_bridge.py`.
+
+Deletion gate: PR 10 migrates the remaining builtins; PR 11 deletes the
+manager bridge AND the legacy-worker fallback.
 
 Tests added or updated: MiniF2F definition JSON and builtin unit tests.
+Add a smoke check that MiniF2F's tasks carry a non-None `worker`/`sandbox`
+after `Task.from_definition`, so a future regression that re-emits
+TaskSpec snapshots fails loud.
 
 Modules owned by this PR: MiniF2F and builtin sandbox adapter.

@@ -21,10 +21,7 @@ from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emit
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
-from ergon_core.core.infrastructure.inngest.errors import (
-    ConfigurationError,
-    ContractViolationError,
-)
+from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.application.jobs.models import WorkerExecuteJobRequest
 from ergon_core.core.application.jobs.models import WorkerExecuteJobResult
 from ergon_core.core.infrastructure.tracing import (
@@ -66,27 +63,25 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         )
     task = view.task
 
-    # PR 5 retires the v1 registry-slug bridge (which rebuilt a Worker
-    # from `payload.worker_type` / `payload.assigned_worker_slug` /
-    # `payload.model_target` on every run). `task.worker` is the
-    # object-bound v2 surface — the Task snapshot carries the worker
-    # config inline, and `Task.from_definition` re-inflates the right
-    # subclass via the `_type` discriminator.
+    # PR 5 made `task.worker` the canonical source. `Task.from_definition`
+    # re-inflates the right Worker subclass via the `_type` discriminator
+    # when the snapshot is object-bound.
     #
-    # `task.worker` is nullable on the schema during the PR 5 → PR 11
-    # transition because legacy TaskSpec snapshots have no worker.
-    # The runtime guard here catches the case loudly — an unmigrated
-    # benchmark reaching the worker path would otherwise blow up
-    # several frames deeper inside `worker.execute(...)`.
+    # When `task.worker is None` we fell off the v2 path — the snapshot
+    # came from a TaskSpec-returning benchmark that hasn't been migrated
+    # yet (PR 6 migrates minif2f, PR 10a swebench, PR 10b researchrubrics,
+    # PR 10c gdpeval). The legacy fallback lives in a sibling module so
+    # the runtime-read architecture guard sees only `task.worker` in
+    # this body. See `_legacy_worker_bridge.py` for the deletion gate.
     worker = task.worker
     if worker is None:
-        raise ConfigurationError(
-            f"Task {task.task_slug!r} has no bound worker; PR 5 requires "
-            "object-bound workers on every Task snapshot. Migrate the "
-            "benchmark to return Task instances with worker=... set.",
-            run_id=payload.run_id,
-            task_id=payload.task_id,
+        # TODO(PR 11): delete this branch + the sibling module. See
+        # `_legacy_worker_bridge.py` docstring for the migration ledger.
+        from ergon_core.core.application.jobs._legacy_worker_bridge import (
+            legacy_worker_from_payload,
         )
+
+        worker = legacy_worker_from_payload(payload)
     worker.validate_runtime_deps()
 
     worker_context = WorkerContext(

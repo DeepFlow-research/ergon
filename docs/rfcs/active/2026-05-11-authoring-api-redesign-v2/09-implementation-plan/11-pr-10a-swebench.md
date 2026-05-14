@@ -434,9 +434,19 @@ Bridge code introduced: `SWEBenchSandbox` wraps the legacy
 `SWEBenchSandboxManager` via `ManagerBackedSandboxRuntime`; toolkit is
 Pydantic-serializable.
 
+Bridge code retired (partially):
+- SWEBench tasks now carry `task.worker`/`task.sandbox` inline, so
+  SWEBench runs no longer hit the `_legacy_worker_bridge` fallback that
+  PR 5 Task 4b put on `worker_execute`. The fallback itself stays alive
+  — it still serves researchrubrics and gdpeval until they migrate in
+  PR 10b/10c. PR 11 deletes the fallback once every benchmark is on
+  object-bound `Task`.
+
 Old path still intentionally alive: `swebench_verified/sandbox_manager.py`,
-registry registrations in `ergon_builtins/registry*.py`, and the
-unmigrated MiniF2F inline adapter (Step 1 above migrates it).
+registry registrations in `ergon_builtins/registry*.py`, the unmigrated
+MiniF2F inline adapter (Step 1 above migrates it), and
+`_legacy_worker_bridge.py` (still required by researchrubrics and
+gdpeval).
 
 Deletion gate: PR 11 deletes the manager file and registry registrations.
 PR 10c's cross-cutting cleanup verifies migrated benchmarks no longer

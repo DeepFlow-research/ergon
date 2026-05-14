@@ -34,26 +34,35 @@ def test_worker_execute_does_not_read_definition_repository() -> None:
     )
 
 
-def test_worker_execute_uses_object_bound_worker() -> None:
-    """PR 5 retires the v1 worker-from-registry bridge.
+def test_worker_execute_prefers_task_worker_over_legacy_bridge() -> None:
+    """PR 5 makes ``task.worker`` the canonical source.
 
-    The body must read the worker directly off ``task.worker`` (the
-    PR 5 object-bound field) — not via ``ComponentCatalogService`` or
-    the old ``_worker_from_payload_bridge`` helper. If either name
-    creeps back into the job body, the run-tier read boundary that
-    PR 3 set up has regressed.
+    The body must read the worker off ``task.worker`` first. A narrow
+    legacy fallback lives in a sibling module
+    (``_legacy_worker_bridge.py``) and only fires when
+    ``task.worker is None`` — i.e. when an unmigrated TaskSpec-returning
+    benchmark reaches this path. The body must NOT import
+    ``ComponentCatalogService`` directly or define an in-body
+    ``_worker_from_payload_bridge`` function; both belong in the
+    sibling. PR 11 (after PR 10c migrates the last benchmark) deletes
+    the sibling module and the ``if worker is None:`` branch.
     """
 
     text = (ROOT / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
     assert "ComponentCatalogService" not in text, (
-        "worker_execute must read worker from `task.worker` only — "
-        "ComponentCatalogService imports recreate the registry-driven "
-        "runtime that PR 5 removed."
+        "worker_execute body must not import the registry directly — "
+        "any legacy fallback lives in `_legacy_worker_bridge.py`."
     )
-    assert "_worker_from_payload_bridge" not in text, "PR 5 deletes the PR 3 worker payload bridge."
+    # The PR 3 in-body bridge name is gone; the PR 5 legacy fallback is
+    # a sibling-module function and must not appear as a module-level
+    # def here.
+    assert "def _worker_from_payload_bridge" not in text, (
+        "PR 5 retired the in-body bridge. The legacy fallback lives in a "
+        "sibling module, not as a top-level def in `worker_execute.py`."
+    )
     assert "task.worker" in text, (
         "PR 5 binds the worker directly to the Task snapshot; "
-        "worker_execute must read it off `task.worker`."
+        "`worker_execute` must read it off `task.worker`."
     )
 
 

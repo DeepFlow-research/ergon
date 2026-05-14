@@ -364,8 +364,17 @@ graphs; `JudgeCriterion` is a Pydantic-persistent criterion subclass.
 Bridge code introduced: `ResearchE2BSandbox` wraps the legacy manager
 via `ManagerBackedSandboxRuntime` (the shared adapter PR 10a created).
 
+Bridge code retired (partially):
+- ResearchRubrics tasks now carry `task.worker`/`task.sandbox` inline,
+  so ResearchRubrics runs no longer hit the `_legacy_worker_bridge`
+  fallback that PR 5 Task 4b put on `worker_execute`. The fallback
+  itself stays alive — it still serves gdpeval until it migrates in
+  PR 10c. PR 11 deletes the fallback once every benchmark is on
+  object-bound `Task`.
+
 Old path still intentionally alive: `researchrubrics/sandbox_manager.py`,
-registry registrations.
+registry registrations, and `_legacy_worker_bridge.py` (still required
+by gdpeval).
 
 Deletion gate: PR 11 deletes the manager file and registry registrations.
 PR 10c's cross-cutting cleanup verifies migrated benchmarks no longer

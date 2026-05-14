@@ -376,13 +376,24 @@ are slimmed to model-backend registrations only.
 Bridge code introduced: `GDPEvalSandbox` wraps the legacy manager via
 `ManagerBackedSandboxRuntime`.
 
+Bridge code retired (partially):
+- GDPEval tasks now carry `task.worker`/`task.sandbox` inline, so
+  GDPEval runs no longer hit the `_legacy_worker_bridge` fallback that
+  PR 5 Task 4b put on `worker_execute`. After PR 10c, no benchmark
+  still produces `TaskSpec` — the "must support" set for
+  `_legacy_worker_bridge.legacy_worker_from_payload` is empty. The
+  fallback file is not deleted here; PR 11 owns the `git rm` plus the
+  `if worker is None:` branch removal in `worker_execute.py`.
+
 Old path still intentionally alive: `gdpeval/sandbox.py`,
 `gdpeval/sandbox_utils.py`, slimmed `registry*.py` modules,
 `BaseSandboxManager`, all per-benchmark `sandbox_manager.py` files (kept
-until PR 11 deletes them in one sweep).
+until PR 11 deletes them in one sweep), and `_legacy_worker_bridge.py`
+(now unreachable from any benchmark, but the file stays until PR 11
+removes it together with the `worker_execute` fallback branch).
 
-Deletion gate: PR 11 deletes the registry modules and per-benchmark
-sandbox managers.
+Deletion gate: PR 11 deletes the registry modules, per-benchmark
+sandbox managers, and `_legacy_worker_bridge.py`.
 
 Tests added or updated: GDPEval definition JSON + reconstruction +
 no-registry architecture guard across all four migrated benchmarks.
