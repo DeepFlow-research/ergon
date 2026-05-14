@@ -31,10 +31,10 @@ bugs from production retry-replay traces to unit tests.
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
-from typing import cast
+from collections.abc import Callable, Sequence
+from typing import Any, cast
 
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_serializer
 
 from ergon_core.api._serialization import TaskDefinitionJson, import_component
 from ergon_core.api.errors import SandboxNotLiveError
@@ -52,6 +52,17 @@ class Sandbox(BaseModel, ABC):
     output_path: str = "/workspace/final_output/"
 
     _runtime: SandboxRuntime | None = PrivateAttr(default=None)
+
+    @model_serializer(mode="wrap")
+    def _serialize_with_type_discriminator(
+        self,
+        handler: Callable[["Sandbox"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
+    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Inject ``_type`` discriminator so the snapshot can round-trip through
+        ``Sandbox.from_definition`` without losing the concrete subclass."""
+        payload = handler(self)
+        payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
+        return payload
 
     # ── Author-implemented lifecycle hooks ─────────────────────────────
 
