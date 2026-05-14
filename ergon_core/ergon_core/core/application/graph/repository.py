@@ -361,6 +361,15 @@ class WorkflowGraphRepository:
         common caller: a dynamic-spawn site producing a graph-native
         task. Static callers (``initialize_from_definition``) pass
         ``is_dynamic=False`` explicitly with the bridge snapshot.
+
+        Dynamic-spawn callers (``TaskManagementService.add_subtask`` /
+        ``plan_subtasks`` / ``WorkflowService.add_task``) currently
+        spawn subtasks without an authored Task subclass, so they pass
+        no ``task_json``. We synthesise a ``TaskSpec``-shaped snapshot
+        here so PR 3's run-tier readers (``Task.from_definition``) can
+        re-inflate the node without crashing on a missing ``_type``
+        discriminator. PR 5 replaces this with the object-bound Task
+        snapshot once dynamic spawn callers carry one explicitly.
         """
         now = utcnow()
         node = RunGraphNode(
@@ -368,7 +377,13 @@ class WorkflowGraphRepository:
             instance_key=instance_key,
             task_slug=task_slug,
             description=description,
-            task_json=task_json or {},
+            task_json=task_json
+            or _dynamic_task_snapshot(
+                task_slug=task_slug,
+                instance_key=instance_key,
+                description=description,
+                assigned_worker_slug=assigned_worker_slug,
+            ),
             is_dynamic=is_dynamic,
             status=status,
             assigned_worker_slug=assigned_worker_slug,
@@ -1121,6 +1136,42 @@ def _definition_task_snapshot(
         "_legacy": {
             "assigned_worker_slug": assigned_worker_slug,
             "definition_task_id": str(task.id),
+        },
+    }
+
+
+def _dynamic_task_snapshot(
+    *,
+    task_slug: str,
+    instance_key: str,
+    description: str,
+    assigned_worker_slug: str | None,
+) -> dict:
+    """Build the PR 1 bridge snapshot for a dynamically-spawned subtask.
+
+    Dynamic-spawn callers (``add_subtask`` / ``plan_subtasks`` /
+    ``WorkflowService.add_task``) don't have an authored ``Task``
+    subclass at hand — the parent worker emits a slug + description +
+    worker assignment via the management API. PR 3's run-tier readers
+    still need a valid ``_type`` discriminator on every ``task_json``
+    or ``Task.from_definition`` raises. We emit a minimal ``TaskSpec``
+    snapshot so the run-graph node round-trips through the typed
+    reader. PR 5's object-bound API will replace this when dynamic
+    spawn callers carry a ``Task`` instance directly.
+    """
+
+    return {
+        "_type": "ergon_core.api.benchmark.task:TaskSpec",
+        "task_slug": task_slug,
+        "instance_key": instance_key,
+        "description": description,
+        "parent_task_slug": None,
+        "dependency_task_slugs": (),
+        "evaluator_binding_keys": (),
+        "task_payload": None,
+        "_legacy": {
+            "assigned_worker_slug": assigned_worker_slug,
+            "definition_task_id": None,
         },
     }
 
