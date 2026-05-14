@@ -3,6 +3,12 @@ from uuid import uuid4
 
 import pytest
 
+from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
+from ergon_builtins.benchmarks.minif2f.worker_factory import (
+    make_minif2f_rubric,
+    make_minif2f_worker,
+)
+from ergon_builtins.sandboxes.lean import LeanSandbox
 from ergon_core.api.benchmark.task import Task, TaskSpec
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
 from ergon_core.core.application.experiments.definition_writer import (
@@ -56,6 +62,36 @@ def test_task_to_definition_json_object_bound_shape() -> None:
     assert result["worker"]["_type"].endswith(":EchoWorker")
     assert result["sandbox"]["_type"].endswith(":EchoSandbox")
     assert isinstance(result["evaluators"], list)
+
+
+def test_minif2f_definition_json_has_v2_object_bound_shape() -> None:
+    """MiniF2F tasks persist with inline worker/sandbox/evaluators after PR 6."""
+    task = Task[MiniF2FTaskPayload](
+        task_slug="prove",
+        instance_key="sample-1",
+        description="Prove theorem sample-1.",
+        task_payload=MiniF2FTaskPayload(
+            name="sample-1",
+            informal_statement="Prove 1+1=2.",
+            formal_statement="theorem sample_1 : 1 + 1 = 2 := by",
+            header="import Mathlib\n",
+        ),
+        worker=make_minif2f_worker(),
+        sandbox=LeanSandbox(),
+        evaluators=(make_minif2f_rubric(),),
+    )
+    task_json = _task_to_definition_json(task)
+
+    assert task_json["worker"]["_type"].endswith(":ReActWorker")
+    assert task_json["worker"]["toolkit"]["_type"].endswith(":MiniF2FToolkit")
+    assert task_json["sandbox"]["_type"].endswith(":LeanSandbox")
+    assert task_json["evaluators"], "evaluators must persist"
+    assert all(ev.get("_type") for ev in task_json["evaluators"]), (
+        "every evaluator entry must carry a `_type` discriminator"
+    )
+    assert "_legacy" not in task_json, (
+        "MiniF2F is now object-bound; the _legacy bridge marker should be absent"
+    )
 
 
 @pytest.mark.asyncio

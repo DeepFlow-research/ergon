@@ -58,7 +58,7 @@ class Worker(BaseModel, ABC):
     # `model` is required (no default) — defaults hide sizing decisions
     # per RFC 2026-04-22. Subclasses that want a fixed model should set
     # it on the subclass, not on the base.
-    model: str | None #TODO: make not | None
+    model: str | None  # TODO: make not | None
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
     @abstractmethod
