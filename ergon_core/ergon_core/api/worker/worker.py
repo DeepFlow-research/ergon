@@ -9,13 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_serializer
 from ergon_core.api._serialization import TaskDefinitionJson, import_component
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.errors import DependencyError
+from ergon_core.api.sandbox.sandbox import Sandbox
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.infrastructure.dependencies import check_packages
-
-if TYPE_CHECKING:
-    from ergon_core.api.sandbox.sandbox import Sandbox
 
 WorkerStreamItem = ContextPartChunk | WorkerOutput
 
@@ -54,13 +52,13 @@ class Worker(BaseModel, ABC):
     # (e.g. ``LeanReActWorker.requires_sandbox = LeanSandbox``).
     # Validated at ``Experiment`` construction time — see
     # ``api/experiment.py:_validate_sandbox_compatibility``.
-    requires_sandbox: ClassVar[type["Sandbox"]]
+    requires_sandbox: ClassVar[type[Sandbox]] = Sandbox
 
     name: str
     # `model` is required (no default) — defaults hide sizing decisions
     # per RFC 2026-04-22. Subclasses that want a fixed model should set
     # it on the subclass, not on the base.
-    model: str | None
+    model: str | None #TODO: make not | None
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
     @abstractmethod

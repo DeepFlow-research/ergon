@@ -561,6 +561,31 @@ The rest are follow-up redesigns or known-limitations to document.
   is out of scope for v2's persistence/runtime cleanup. Land in a
   follow-up after v2 ships.
 
+## PR 5 implementation notes
+
+**`_type` serializers on `Task` and `Sandbox`.** The PR 5 plan specified
+`Worker` getting a `_type`-injecting `model_serializer` (documented in Task
+2b). The plan assumed `Task.model_dump()` and `Sandbox.model_dump()` would
+also carry `_type`, but never explicitly called out adding serializers to
+those classes. When the round-trip test was written it immediately surfaced
+that `_task_to_definition_json(Task(...))` produced JSON without `_type`,
+which would crash `Task.from_definition` on re-inflation. Both serializers
+were added in the PR 5 Task 5 commit. This is consistent with the `Worker`
+and `Evaluator` pattern; the plan just omitted calling it out explicitly.
+
+**`CriterionContext` proxy method removal deferred to PR 11.** The PR 5 plan
+(and `01-api-surface.md` §"CriterionContext shape (v2)") said PR 5 removes
+the 12 runtime proxy methods from `CriterionContext`, drops `_runtime`, and
+drops `sandbox_id`. This was not done — criteria in PRs 6/10a/10b/10c still
+use `context.run_command(...)` via the legacy proxy and need it to remain
+available during migration. PR 11 Task 1.3 does the removal once all
+criterion bodies have been migrated to `context.task.sandbox.run_command(...)`.
+
+**`Criterion.from_definition` deferred to PR 11.** Specified in the PR 5 plan,
+not landed. No current code path hits it — `Rubric.criteria` is
+`exclude=True` so criteria never appear in serialized JSON — but it's needed
+for completeness before PR 11's final audit. Added as PR 11 Task 1.4.
+
 ## Future work
 
 Deliberately deferred so this redesign can land cleanly without having
