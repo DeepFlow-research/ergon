@@ -1,10 +1,11 @@
 """Public benchmark-owned task type."""
 
 import logging
-from typing import TYPE_CHECKING, Generic, TypeVar, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_serializer
 
 # Framework-internal serialization helpers live in a sibling module so
 # the `class Task` definition is the first thing readers of this file
@@ -79,6 +80,17 @@ class Task(BaseModel, Generic[PayloadT]):
     evaluators: "tuple[Evaluator, ...]" = ()
 
     _task_id: UUID | None = PrivateAttr(default=None)
+
+    @model_serializer(mode="wrap")
+    def _serialize_with_type_discriminator(
+        self,
+        handler: Callable[["Task"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
+    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Inject ``_type`` discriminator so the snapshot can round-trip through
+        ``Task.from_definition`` without losing which Task subclass was used."""
+        payload = handler(self)
+        payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
+        return payload
 
     @property
     def task_id(self) -> UUID:
