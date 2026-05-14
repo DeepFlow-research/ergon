@@ -98,9 +98,16 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
         audit_note=("v1 CLI write to saved_specs; replaced by canonical persist_definition"),
     ),
     DeadPath(
-        symbol="_worker_from_payload_bridge",
-        landing_pr="PR 5",
-        audit_note=("PR 3 bridge; replaced by task.worker when object-bound API lands"),
+        symbol="legacy_worker_from_payload",
+        landing_pr="PR 11",
+        audit_note=(
+            "PR 3 in-body bridge (`_worker_from_payload_bridge`); PR 5 "
+            "moved the legacy fallback to `_legacy_worker_bridge.py` "
+            "(sibling module) and renamed the function to "
+            "`legacy_worker_from_payload` while benchmarks migrate. "
+            "PR 11 deletes both the sibling and the if-worker-is-None "
+            "branch in worker_execute."
+        ),
     ),
     DeadPath(
         symbol="_DetachableSandboxBridge",
@@ -206,8 +213,16 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
 _XFAIL_BY_SYMBOL: dict[str, str] = {
     "CriterionExecutor": "PR 11: Protocol pair deleted",
     "InngestCriterionExecutor": "PR 11: Protocol pair deleted",
-    # PR 5 deleted `_worker_from_payload_bridge` — `task.worker` is the
-    # object-bound replacement (see Task 4b).
+    # PR 5 moved the in-body bridge into `_legacy_worker_bridge.py`
+    # (sibling module) for the PR 5 → PR 10c window and renamed the
+    # function to `legacy_worker_from_payload`. It still has one
+    # caller — worker_execute's `if worker is None:` branch — so the
+    # symbol is on the deletion list but not yet callerless. PR 11
+    # Task 1.5 deletes both the sibling module and the branch.
+    "legacy_worker_from_payload": (
+        "PR 11 Task 1.5: deleted once every benchmark migrates to "
+        "object-bound Task (PR 6 / PR 10a / PR 10b / PR 10c)."
+    ),
     "_prepare_legacy_graph_native": (
         "PR 3 renamed _prepare_graph_native to _prepare_legacy_graph_native; "
         "the method definition is still in the source file as transitional "
