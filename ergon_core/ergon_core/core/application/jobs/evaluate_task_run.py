@@ -51,7 +51,7 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
 )
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric import Evaluator
@@ -95,18 +95,40 @@ async def run_evaluate_task_run_job(
             session,
             execution_id=execution_id,
         )
+        task = view.task
+        if task.evaluators:
+            if evaluator_index < 0 or evaluator_index >= len(task.evaluators):
+                raise ContractViolationError(
+                    f"evaluator_index {evaluator_index} out of range for task "
+                    f"{task.task_slug!r} (has {len(task.evaluators)} evaluators)",
+                    run_id=run_id,
+                    task_id=task_id,
+                    execution_id=execution_id,
+                )
+            evaluator = task.evaluators[evaluator_index]
+            binding_key = evaluator.name
+        else:
+            # TODO(PR 11): delete this branch + the sibling module. See
+            # `_legacy_evaluator_bridge.py` docstring for the migration ledger.
+            from ergon_core.core.application.jobs._legacy_evaluator_bridge import (
+                legacy_evaluator_from_binding,
+            )
 
-    task = view.task
-    if evaluator_index < 0 or evaluator_index >= len(task.evaluators):
-        raise ContractViolationError(
-            f"evaluator_index {evaluator_index} out of range for task "
-            f"{task.task_slug!r} (has {len(task.evaluators)} evaluators)",
-            run_id=run_id,
-            task_id=task_id,
-            execution_id=execution_id,
-        )
-    evaluator = task.evaluators[evaluator_index]
-    binding_key = evaluator.name
+            if evaluator_index < 0 or evaluator_index >= len(task.evaluator_binding_keys):
+                raise ContractViolationError(
+                    f"evaluator_index {evaluator_index} out of range for task "
+                    f"{task.task_slug!r} (has {len(task.evaluator_binding_keys)} "
+                    "evaluator binding keys)",
+                    run_id=run_id,
+                    task_id=task_id,
+                    execution_id=execution_id,
+                )
+            binding_key = task.evaluator_binding_keys[evaluator_index]
+            evaluator = legacy_evaluator_from_binding(
+                session,
+                run_id=run_id,
+                binding_key=binding_key,
+            )
 
     context = CriterionContext(
         run_id=run_id,
@@ -116,6 +138,26 @@ async def run_evaluate_task_run_job(
         worker_result=worker_output,
         sandbox_id=execution.sandbox_id,
     )
+    if task.sandbox is None:
+        # TODO(PR 11): delete this branch + the sibling module. The
+        # object-bound path attaches `_runtime` via `task.sandbox`;
+        # legacy TaskSpec snapshots have no `task.sandbox`, so the
+        # bridge constructs an equivalent runtime from the benchmark's
+        # sandbox manager. See `_legacy_evaluator_bridge.py` docstring.
+        from ergon_core.core.application.jobs._legacy_evaluator_bridge import (
+            legacy_inject_criterion_runtime,
+        )
+
+        with get_session() as _sess:
+            _run = _sess.get(RunRecord, run_id)
+            benchmark_type = _run.benchmark_type if _run is not None else ""
+        context = legacy_inject_criterion_runtime(
+            public_context=context,
+            benchmark_type=benchmark_type,
+            run_id=run_id,
+            task_id=task_id or task.task_id,
+            sandbox_id=execution.sandbox_id,
+        )
 
     try:
         return await _run_evaluation(
