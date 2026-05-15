@@ -84,12 +84,29 @@ class Task(BaseModel, Generic[PayloadT]):
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,
-        handler: Callable[["Task"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
+        handler: Callable[..., dict[str, Any]],  # slopcop: ignore[no-typing-any]
     ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
         """Inject ``_type`` discriminator so the snapshot can round-trip through
-        ``Task.from_definition`` without losing which Task subclass was used."""
+        ``Task.from_definition`` without losing which Task subclass was used.
+
+        Pydantic's ``handler`` serializes ``worker``/``sandbox``/``evaluators``
+        using the *declared* base-class schema (``Worker | None`` etc.), which
+        drops subclass-specific fields (e.g. ``ReActWorker.toolkit``).  We
+        re-serialize those three fields directly via the runtime objects'
+        own ``model_dump`` so their full subclass schemas are used.
+        """
         payload = handler(self)
         payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
+        # TODO(PR 11): once PR 11 makes `worker` and `sandbox` non-
+        # nullable on the object-bound path, drop the `is not None`
+        # guards (the legacy TaskSpec-bridge branch in `from_definition`
+        # is what produces None values today; PR 11 deletes it).
+        if self.worker is not None:
+            payload["worker"] = self.worker.model_dump(mode="json")
+        if self.sandbox is not None:
+            payload["sandbox"] = self.sandbox.model_dump(mode="json")
+        if self.evaluators:
+            payload["evaluators"] = [ev.model_dump(mode="json") for ev in self.evaluators]
         return payload
 
     @property
