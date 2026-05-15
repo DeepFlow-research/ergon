@@ -13,6 +13,18 @@ guards that prevent deleted symbols from returning.
 **Tech Stack:** source deletion, SQLModel final schema, Alembic reset,
 architecture tests.
 
+> **Note: PR 6.5 already deleted several things this plan used to claim.**
+> Anything PR 6.5 (Phase 2 — "Kill `Experiment` Class") removed is **not**
+> in PR 11's deletion list anymore.  In particular:
+> - The public `Experiment` class (`ergon_core.api.experiment.Experiment`) — already gone.
+> - `ExperimentRecord` SQLModel + `experiments` table — already renamed to `BenchmarkDefinitionRecord` / `benchmark_definitions`.
+> - `persist_definition` function — already renamed to `persist_benchmark`.
+> - `ExperimentDefineRequest`, `define_benchmark_experiment`, `BUILTIN_EXPERIMENT_FACTORIES` — already deleted.
+> - CLI authoring commands (`ergon experiment define`, `ergon experiment run`) — already deleted.
+> - Top-level `ergon_builtins/sandboxes/` and `toolkits/` dirs — already deleted.
+>
+> What PR 11 still owns: the **domain** `Experiment` (different class — see below), `TaskSpec`, the per-benchmark `sandbox_manager.py` files, the per-benchmark `_legacy_workers.py` files (created by PR 6.5 / 10a / 10b / 10c specifically as PR 11 deletion targets), the legacy worker fallback chain, and the final schema/identity collapse.
+
 ---
 
 ## Files To Delete
@@ -66,17 +78,27 @@ confirm callerless before deleting.
   registration all survive. Only the v1 body was removed (in PR 4),
   not the file itself.
 
-Delete old sandbox manager files only after each benchmark has a typed
-sandbox subclass:
+Delete old sandbox manager files only after each benchmark has a typed sandbox subclass:
 
 ```text
 ergon_builtins/ergon_builtins/benchmarks/minif2f/sandbox_manager.py
 ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox_manager.py
 ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox_manager_support.py
 ergon_builtins/ergon_builtins/benchmarks/researchrubrics/sandbox_manager.py
-ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox.py
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_manager.py     # PR 10c renamed from sandbox.py
 ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_utils.py
 ```
+
+Delete per-benchmark `_legacy_workers.py` files (created by PR 6.5 / 10a / 10b / 10c specifically as PR 11 deletion targets — they hold the legacy worker classes that the v1 registry strings still resolve to):
+
+```text
+ergon_builtins/ergon_builtins/benchmarks/minif2f/_legacy_workers.py
+ergon_builtins/ergon_builtins/benchmarks/swebench_verified/_legacy_workers.py    # if PR 10a created one
+ergon_builtins/ergon_builtins/benchmarks/researchrubrics/_legacy_workers.py      # if PR 10b created one
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/_legacy_workers.py              # if PR 10c created one
+```
+
+(Some verticals may not have a `_legacy_workers.py` if their legacy worker block was already minimal.  Check before `git rm`.)
 
 ## Required Code Deletions
 
@@ -88,11 +110,10 @@ ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_utils.py
   grep-confirm the old name is gone from these callsites:
   `ergon_core.api.rubric.rubric.Rubric.validate`,
   `ergon_core.core.domain.experiments.validation`,
-  `ergon_core.core.application.experiments.definition_writer.persist_definition`,
+  `ergon_core.core.application.experiments.definition_writer.persist_benchmark`  # renamed by PR 6.5,
   `ergon_core.core.application.experiments.launch.launch_run`,
   `ergon_builtins.benchmarks.gdpeval.rubric`.
-- Remove the **domain** `Experiment` (`ergon_core.core.domain.experiments.Experiment`).
-  PR 5's public `Experiment` is the only `Experiment` after PR 11.
+- Remove the **domain** `Experiment` (`ergon_core.core.domain.experiments.Experiment`).  PR 6.5 deleted the public `Experiment` class; PR 11 deletes the remaining domain-layer class.  After PR 11, **there is no `Experiment` class anywhere** — the word survives only as a `str | None` column on `BenchmarkDefinitionRecord` (the "experiment tag" introduced by PR 6.5).
 - Remove `EvaluateTaskRunRequest` (the v1 multi-field payload). The
   replacement is `TaskEvaluateRequest` (id-only), already in use since
   PR 4.
@@ -134,8 +155,7 @@ ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_utils.py
   `RunTaskExecution.definition_task_id`.
 - Drop the matching columns on `RunTaskEvaluation`
   (`node_id`, `definition_task_id`).
-- Remove `ExperimentRecord` from telemetry models (table dropped by
-  schema reset in Task 2).
+- ~~Remove `ExperimentRecord` from telemetry models~~ — **already done by PR 6.5** (renamed to `BenchmarkDefinitionRecord`).  Task 2's schema reset uses the renamed model.
 
 **Inngest events:**
 
@@ -173,22 +193,26 @@ class RunGraphNode(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 ```
 
-`ExperimentDefinition` final metadata:
+`BenchmarkDefinitionRecord` final metadata (renamed from `ExperimentDefinition` by PR 6.5; PR 11 finalises field shape):
 
 ```python
-class ExperimentDefinition(SQLModel, table=True):
-    __tablename__ = "experiment_definitions"
+class BenchmarkDefinitionRecord(SQLModel, table=True):
+    __tablename__ = "benchmark_definitions"     # renamed by PR 6.5
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(index=True)
     description: str | None = None
     benchmark_type: str = Field(index=True)
     benchmark_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    experiment_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    experiment: str | None = Field(default=None, index=True)     # PR 6.5 added — the experiment-tag column
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_by: str | None = None
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 ```
+
+Notes for the schema reset:
+- The `experiment_json` field from the v1 shape is gone — there is no `Experiment` class to persist.  All metadata lives in `metadata_json` or directly in `benchmark_json`.
+- The `experiment: str | None` column is PR 6.5's tag for grouping related definitions (e.g. ablation studies).  It is **not** a foreign key — just an indexed string column.
 
 ## Task 1: Delete Symbols
 
@@ -581,7 +605,12 @@ DELETED_SYMBOLS = (
     "WorkerSpec",
     "ComponentRegistry",
     "saved_specs",
-    "ExperimentRecord",
+    "ExperimentRecord",                 # PR 6.5 renamed to BenchmarkDefinitionRecord
+    "ExperimentDefineRequest",          # PR 6.5 deleted
+    "BUILTIN_EXPERIMENT_FACTORIES",     # PR 6.5 deleted
+    "define_benchmark_experiment",      # PR 6.5 deleted
+    "persist_definition",               # PR 6.5 renamed to persist_benchmark
+    "class Experiment",                 # PR 6.5 deleted the public class; PR 11 deletes the domain class
     "definition_task_id",
     "EvaluateTaskRunRequest",
     "CriterionExecutor",
@@ -591,9 +620,13 @@ DELETED_SYMBOLS = (
 )
 # evaluate_task_run is intentionally NOT in DELETED_SYMBOLS. Per Δ.4 it
 # survives as the per-evaluator fanout target reshaped in PR 4.
+# persist_benchmark, BenchmarkDefinitionRecord, and the experiment string
+# column are also NOT deleted — they're PR 6.5's replacements.
 KEPT_RESHAPED_SYMBOLS = (
     "evaluate_task_run",
     "TaskEvaluateRequest",
+    "persist_benchmark",                # PR 6.5 introduced
+    "BenchmarkDefinitionRecord",        # PR 6.5 introduced
 )
 
 
