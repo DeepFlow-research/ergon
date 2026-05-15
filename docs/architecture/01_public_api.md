@@ -98,15 +98,17 @@ owned by that module.
   `list_resources()` + `read_resource()` themselves. The one method that is
   not about sandbox/I/O is a candidate for extraction if the surface
   continues to accumulate capabilities.
-- **`Experiment`** — **plain Python class**, deliberately not a Pydantic model,
-  because it is the declarative binding of `{benchmark, workers, evaluators,
-  assignments, metadata}` and the canonical import contributors rely on.
-  Constructor is keyword-only. `validate()` enforces the cross-type invariants
-  (binding-key coverage, unique task keys, graph-edge resolution, assignments
-  referencing real keys). `persist()` writes the immutable definition rows;
-  `run()` persists (if needed) and dispatches the Inngest flow. The
-  `from_single_worker` classmethod is the ergonomic path for the common
-  one-worker case.
+- **`persist_benchmark(benchmark, *, name, description, metadata, created_by, experiment) -> DefinitionHandle`** —
+  the v2 authoring entrypoint.  Replaces the deleted `Experiment` class
+  (PR 6.5 hard-deleted it; see
+  `docs/superpowers/brainstorms/2026-05-15-kill-experiment-class.md`).
+  Walks `benchmark.build_instances()` to validate sandbox/worker
+  compatibility, then persists the configured benchmark as a
+  `BenchmarkDefinitionRecord` row with a UUID handle.  The `experiment`
+  kwarg is a `str | None` grouping tag — two definitions with the same
+  `experiment="..."` belong to the same logical experiment.  It is NOT
+  a class — the word "experiment" survives in the vocabulary as a label,
+  not as an abstraction.
 
 ## control flow
 
@@ -339,6 +341,7 @@ this table; it is here only so contributors can find the files fast.
 | `Evaluator`, `Rubric` | `ergon_core/api/evaluator.py` |
 | `Criterion` | `ergon_core/api/criterion.py` |
 | `CriterionRuntime` | `ergon_core/api/criterion_runtime.py` |
-| `Experiment` | `ergon_core/api/experiment.py` |
+| `persist_benchmark` | `ergon_core/core/application/experiments/definition_writer.py` (re-exported from `ergon_core.api`) |
 | Composition examples | `ergon_cli/composition/__init__.py` |
 | Onboarding deps registry | `ergon_cli/onboarding/profile.py` |
+| Per-benchmark Python authoring example | `ergon_builtins/benchmarks/README.md` |

@@ -26,7 +26,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RunRecord,
 )
 from pydantic import BaseModel
@@ -39,7 +39,7 @@ class _EmptyPayload(BaseModel):
 
 
 def _session() -> Session:
-    _ = ExperimentRecord
+    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -60,7 +60,7 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
     run_id = uuid4()
     session.add_all(
         [
-            ExperimentRecord(
+            BenchmarkDefinitionRecord(
                 id=experiment_id,
                 name="identity",
                 benchmark_type="test",

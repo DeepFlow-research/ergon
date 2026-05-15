@@ -11,8 +11,6 @@ from ergon_core.core.application.read_models.experiments import (
     ExperimentSummaryDto,
 )
 from ergon_core.core.application.experiments.models import (
-    ExperimentDefineRequest,
-    ExperimentDefineResult,
     ExperimentRunRequest,
     ExperimentRunResult,
 )
@@ -32,11 +30,6 @@ def get_experiment(experiment_id: UUID) -> ExperimentDetailDto:
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Experiment {experiment_id} not found")
     return detail
-
-
-@router.post("/define", response_model=ExperimentDefineResult, status_code=201)
-def define_experiment(request: ExperimentDefineRequest) -> ExperimentDefineResult:
-    return ExperimentService().define_benchmark_experiment(request)
 
 
 @router.post("/{experiment_id}/run", response_model=ExperimentRunResult, status_code=202)

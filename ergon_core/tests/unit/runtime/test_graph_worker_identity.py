@@ -12,7 +12,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RunRecord,
     RunTaskExecution,
 )
@@ -37,7 +37,7 @@ class _Payload(BaseModel):
 
 
 def _session() -> Session:
-    _ = ExperimentRecord
+    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -104,7 +104,7 @@ def _run(
     experiment_id = uuid4()
     resolved_run_id = run_id or uuid4()
     session.add(
-        ExperimentRecord(
+        BenchmarkDefinitionRecord(
             id=experiment_id,
             name="worker identity",
             benchmark_type="minif2f",

@@ -95,7 +95,7 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
     DeadPath(
         symbol="_persist_single_sample_workflow_definition",
         landing_pr="PR 8",
-        audit_note=("v1 CLI write to saved_specs; replaced by canonical persist_definition"),
+        audit_note=("v1 CLI write to saved_specs; replaced by canonical persist_benchmark"),
     ),
     DeadPath(
         symbol="legacy_worker_from_payload",
@@ -234,7 +234,7 @@ _XFAIL_BY_SYMBOL: dict[str, str] = {
         "code for rollback. PR 11 deletes it."
     ),
     "terminate_sandbox_by_id": "PR 11: orchestrator owns release",
-    "_persist_single_sample_workflow_definition": "PR 8: CLI uses persist_definition",
+    "_persist_single_sample_workflow_definition": "PR 8: CLI uses persist_benchmark",
     # Inngest jobs absorbed into worker_execute by PR 4; deleted by PR 11
     "execute_task": "PR 11: worker_execute is the orchestrator",
     "sandbox_setup": "PR 11: worker_execute acquires inline",

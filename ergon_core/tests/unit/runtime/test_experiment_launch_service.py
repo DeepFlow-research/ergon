@@ -6,11 +6,11 @@ from ergon_core.core.application.experiments.models import ExperimentRunRequest,
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.application.experiments.service import ExperimentService
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
 
 
 class _FakeSession:
-    def __init__(self, experiment: ExperimentRecord) -> None:
+    def __init__(self, experiment: BenchmarkDefinitionRecord) -> None:
         self.experiment = experiment
 
     def __enter__(self) -> "_FakeSession":
@@ -20,7 +20,7 @@ class _FakeSession:
         return None
 
     def get(self, cls, row_id):
-        if cls is ExperimentRecord and row_id == self.experiment.id:
+        if cls is BenchmarkDefinitionRecord and row_id == self.experiment.id:
             return self.experiment
         return None
 
@@ -36,7 +36,7 @@ class _FakeSession:
 
 @pytest.mark.asyncio
 async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
-    experiment = ExperimentRecord(
+    experiment = BenchmarkDefinitionRecord(
         id=uuid4(),
         name="ci experiment",
         benchmark_type="ci-benchmark",
@@ -55,7 +55,7 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
     emitted: list[tuple] = []
 
     def workflow_factory(
-        experiment_record: ExperimentRecord,
+        experiment_record: BenchmarkDefinitionRecord,
         assignment: RunAssignment,
     ) -> DefinitionHandle:
         return DefinitionHandle(

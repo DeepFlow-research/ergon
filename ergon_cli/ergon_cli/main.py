@@ -39,74 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser.add_argument(
         "--force", action="store_true", help="Rebuild even if the template already exists"
     )
-    bench_run = bench_sub.add_parser(
-        "run", help="Define and run a benchmark experiment with explicit runtime choices"
-    )
-    bench_run.add_argument("slug", help="Benchmark slug")
-    bench_sample_group = bench_run.add_mutually_exclusive_group(required=True)
-    bench_sample_group.add_argument("--limit", type=int, default=None, help="Number of samples")
-    bench_sample_group.add_argument(
-        "--sample-id",
-        action="append",
-        default=None,
-        help="Specific benchmark sample id; can be repeated",
-    )
-    bench_run.add_argument("--name", default=None, help="Experiment name")
-    bench_run.add_argument("--cohort", default=None, help="Optional cohort/project folder")
-    bench_run.add_argument("--worker", required=True, help="Primary worker slug")
-    bench_run.add_argument("--model", required=True, help="Primary model target")
-    bench_run.add_argument("--evaluator", required=True, help="Evaluator slug")
-    bench_run.add_argument("--sandbox", required=True, help="Sandbox manager slug")
-    bench_run.add_argument(
-        "--extras",
-        action="append",
-        required=True,
-        help="Required dependency extra; repeat for multiple extras or pass 'none'",
-    )
-    bench_run.add_argument("--workflow", default="single", help="Workflow variant")
-    bench_run.add_argument(
-        "--max-questions", type=int, default=10, help="Max questions workers can ask"
-    )
 
     experiment = sub.add_parser("experiment", help="Experiment lifecycle")
     experiment_sub = experiment.add_subparsers(dest="experiment_action")
-    experiment_define = experiment_sub.add_parser("define", help="Define an experiment")
-    experiment_define.add_argument("benchmark_slug", help="Benchmark slug")
-    sample_group = experiment_define.add_mutually_exclusive_group(required=True)
-    sample_group.add_argument("--limit", type=int, default=None, help="Number of samples")
-    sample_group.add_argument(
-        "--sample-id",
-        action="append",
-        default=None,
-        help="Specific benchmark sample id; can be repeated",
-    )
-    experiment_define.add_argument("--name", default=None, help="Experiment name")
-    experiment_define.add_argument("--cohort", default=None, help="Optional cohort/project folder")
-    experiment_define.add_argument("--worker", required=True, help="Primary worker slug")
-    experiment_define.add_argument("--model", required=True, help="Primary model target")
-    experiment_define.add_argument("--evaluator", required=True, help="Evaluator slug")
-    experiment_define.add_argument("--sandbox", required=True, help="Sandbox manager slug")
-    experiment_define.add_argument(
-        "--extras",
-        action="append",
-        required=True,
-        help="Required dependency extra; repeat for multiple extras or pass 'none'",
-    )
-    experiment_define.add_argument("--workflow", default="single", help="Workflow variant")
-    experiment_define.add_argument(
-        "--max-questions",
-        type=int,
-        default=10,
-        help="Max questions workers can ask",
-    )
-    experiment_run = experiment_sub.add_parser("run", help="Run a defined experiment")
-    experiment_run.add_argument("experiment_id", help="Experiment UUID")
-    experiment_run.add_argument("--timeout", type=int, default=600, help="Timeout seconds")
-    experiment_run.add_argument(
-        "--no-wait",
-        action="store_true",
-        help="Do not wait for terminal runs",
-    )
     experiment_show = experiment_sub.add_parser("show", help="Show experiment detail")
     experiment_show.add_argument("experiment_id", help="Experiment UUID")
     experiment_list = experiment_sub.add_parser("list", help="List experiments")

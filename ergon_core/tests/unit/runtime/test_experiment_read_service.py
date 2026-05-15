@@ -5,7 +5,7 @@ import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
 from ergon_core.core.application.read_models import experiments as module
 from ergon_core.core.application.read_models.experiments import ExperimentReadService
 from sqlalchemy.pool import StaticPool
@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 @pytest.fixture()
 def session_factory():
-    _ = ExperimentRecord
+    _ = BenchmarkDefinitionRecord
     _ = ExperimentDefinitionTask
     _ = RunGraphNode
     engine = create_engine(
@@ -40,7 +40,7 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
 
     with session_factory() as session:
         session.add(
-            ExperimentRecord(
+            BenchmarkDefinitionRecord(
                 id=experiment_id,
                 name="ci experiment",
                 benchmark_type="ci-benchmark",
