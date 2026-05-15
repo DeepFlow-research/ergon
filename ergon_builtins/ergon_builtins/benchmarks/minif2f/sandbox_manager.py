@@ -12,7 +12,7 @@ from uuid import UUID
 
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
-from ergon_builtins.benchmarks.minif2f.sandbox.utils import (
+from ergon_builtins.benchmarks.minif2f.sandbox_template.utils import (
     REGISTRY_PATH,
     resolve_template,
 )

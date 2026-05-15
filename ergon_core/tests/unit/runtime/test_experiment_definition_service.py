@@ -1,11 +1,11 @@
 from collections.abc import Mapping, Sequence
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
-from ergon_builtins.benchmarks.minif2f.worker_factory import (
+from ergon_builtins.benchmarks.minif2f.workers import (
     make_minif2f_rubric,
     make_minif2f_worker,
 )
-from ergon_builtins.sandboxes.lean import LeanSandbox
+from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 from ergon_core.api.benchmark import Benchmark, Task
 from ergon_core.api.benchmark import TaskSpec
 from ergon_core.core.application.experiments import service as service_module

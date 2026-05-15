@@ -217,8 +217,11 @@ within the constraints the invariants below impose.
    trippable. Pattern: `ergon_builtins/benchmarks/minif2f/benchmark.py`.
 4. Implement `evaluator_requirements()` returning `()` — all binding is inline.
 5. Implement a `Sandbox` subclass if the benchmark needs a custom sandbox;
-   expose it from `ergon_builtins/sandboxes/`. Pattern:
-   `ergon_builtins/sandboxes/lean.py`.
+   colocate it with the benchmark at
+   `ergon_builtins/benchmarks/<slug>/sandbox.py`.  Pattern:
+   `ergon_builtins/benchmarks/minif2f/sandbox.py`.  (The top-level
+   `ergon_builtins/sandbox/` package is for cross-cutting adapter infra
+   reused across benchmarks — see `06_builtins.md` § cardinality matrix.)
 6. Register in the benchmark registry.
 7. Add an entry to `ergon_cli/onboarding/profile.py::BENCHMARK_DEPS`. Skipping
    this is the most common onboarding regression.

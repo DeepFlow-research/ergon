@@ -8,7 +8,7 @@ from types import NoneType
 from typing import Any, ClassVar, cast
 from uuid import UUID
 
-from ergon_builtins.toolkits.minif2f import MiniF2FToolkit
+from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,

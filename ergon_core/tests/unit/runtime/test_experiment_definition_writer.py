@@ -4,11 +4,11 @@ from uuid import uuid4
 import pytest
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FTaskPayload
-from ergon_builtins.benchmarks.minif2f.worker_factory import (
+from ergon_builtins.benchmarks.minif2f.workers import (
     make_minif2f_rubric,
     make_minif2f_worker,
 )
-from ergon_builtins.sandboxes.lean import LeanSandbox
+from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 from ergon_core.api.benchmark.task import Task, TaskSpec
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
 from ergon_core.core.application.experiments.definition_writer import (
