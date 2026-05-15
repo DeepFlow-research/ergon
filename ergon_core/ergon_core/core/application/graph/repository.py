@@ -174,7 +174,7 @@ class WorkflowGraphRepository:
                         task,
                         instance_key=instance_key_by_id[task.instance_id],
                         assigned_worker_slug=worker_by_task.get(task.id),
-                    ), #TODO: make sure this gets deleted
+                    ),  # TODO: make sure this gets deleted
                     is_dynamic=False,
                     status=initial_node_status,
                     assigned_worker_slug=worker_by_task.get(task.id),
