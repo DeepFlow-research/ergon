@@ -29,6 +29,10 @@ from ergon_core.core.infrastructure.inngest.handlers.propagate_execution import 
     propagate_task_fn,
 )
 from ergon_core.core.infrastructure.inngest.handlers.run_cleanup import run_cleanup_fn
+from ergon_core.core.infrastructure.inngest.handlers.sandbox_cleanup import (
+    sandbox_cleanup_on_completed_fn,
+    sandbox_cleanup_on_failed_fn,
+)
 from ergon_core.core.infrastructure.inngest.handlers.sandbox_setup import sandbox_setup_fn
 from ergon_core.core.infrastructure.inngest.handlers.start_workflow import start_workflow_fn
 from ergon_core.core.infrastructure.inngest.handlers.worker_execute import worker_execute_fn
@@ -48,4 +52,6 @@ ALL_FUNCTIONS = [
     cancel_orphans_on_cancelled_fn,
     cleanup_cancelled_task_fn,
     run_cleanup_fn,
+    sandbox_cleanup_on_completed_fn,
+    sandbox_cleanup_on_failed_fn,
 ]
