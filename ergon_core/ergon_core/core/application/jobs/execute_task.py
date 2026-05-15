@@ -4,9 +4,14 @@ Prepares a task, invokes sandbox/worker/persist child functions, fans
 out per-evaluator invocations of ``evaluate_task_run``, then finalizes.
 Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
 
-**Sandbox lifetime ownership.** This function — not ``worker_execute``
-— is the orchestrator that wraps the *entire* sandbox lifetime in a
-single ``try/finally``. The flow is:
+**Sandbox lifetime ownership.** This function owns the *acquisition*
+side of the sandbox lifecycle (via ``sandbox-setup``) and emits the
+*terminal* events (``task/completed`` / ``task/failed``) that gate
+cleanup.  The actual ``terminate_sandbox_by_id`` call lives in a
+sibling Inngest function — see
+``ergon_core/core/application/jobs/sandbox_cleanup.py``.
+
+The flow is:
 
     sandbox-setup    →  acquires external sandbox, returns sandbox_id
     worker-execute   →  runs the worker against the sandbox
@@ -15,18 +20,26 @@ single ``try/finally``. The flow is:
                      →  ctx.group.parallel(partial(ctx.step.invoke, …))
                         per evaluator; each evaluator reattaches to
                         the sandbox by id
-    [emit task/completed]
-    finally: terminate_sandbox_by_id(...)
+    emit task/completed   →  triggers sandbox_cleanup_on_completed_fn
+                              (sibling Inngest function, terminates sandbox)
 
-The `ctx.group.parallel` await is what makes the invariant work: the
-orchestrator cannot reach the `finally` until every per-evaluator
-`step.invoke` returns, so the external sandbox is guaranteed alive
-throughout evaluation *and* guaranteed terminated immediately after.
-Pre-PR-4, termination lived in a sibling Inngest function
-(`check_evaluators`) that fired on `task/completed` — under retry
-replay that sibling could terminate the sandbox while eval workers
-were still running against it. PR 4 collapses both responsibilities
-into this one `try/finally`.
+The ``ctx.group.parallel`` await keeps the sandbox alive through every
+per-evaluator invocation, so ``task/completed`` is only emitted after
+evaluators are done.  The sibling cleanup function then fires once
+and terminates the sandbox.
+
+**Why a sibling function, not an inline try/finally.** The original
+PR 4 layout used ``try/finally: terminate_sandbox_by_id(...)`` here.
+That pattern is incompatible with Inngest's step-replay model: each
+``await ctx.step.invoke(...)`` raises ``ResponseInterrupt`` (a
+``BaseException``) to suspend the coroutine, which fires the
+``finally`` clause — terminating the sandbox **before** the sub-
+function (worker_execute / evaluate_task_run) actually runs.  Smoke
+tests caught the bug as ``KeyError`` on ``manager.reconnect(sandbox_id)``
+from inside the worker body.  Moving termination to a sibling
+function gated on terminal events fixes it because those events are
+emitted only after the entire pipeline completes (success path) or
+after the failure handler runs (failure path) — no replay race.
 
 **Why the orchestrator is `execute_task`, not `worker_execute`** (the
 PR 4 plan code put fanout in `worker_execute`): in our codebase
@@ -66,7 +79,6 @@ from ergon_core.core.application.workflows.orchestration import (
 )
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError, NonRetriableError
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.events.task_events import (
@@ -493,30 +505,7 @@ async def run_execute_task_job(
 
         raise NonRetriableError(message=error_msg) from exc
 
-    finally:
-        # Orchestrator-owned sandbox release. Everything past
-        # sandbox-setup terminates here regardless of which path raised
-        # — eval workers ran inside `ctx.group.parallel` above, so
-        # the sandbox is still alive at this point. The v1 release
-        # site lived in a *sibling* Inngest function
-        # (`check_evaluators._terminate_sandbox`), which could
-        # terminate while eval workers were still running under retry
-        # replay; PR 4 fixes that bug by moving release into the same
-        # function that acquired the sandbox.
-        #
-        # Forward shape: when `lifecycle_hub` lands (PR 5 or 6,
-        # depending on how the Sandbox ABC settles), this call site
-        # becomes ``await lifecycle_hub.release(sandbox)`` — same
-        # ownership boundary, prettier API. The
-        # `terminate_sandbox_by_id` helper itself is on the PR 11 Δ.7
-        # deletion list once nothing else imports it.
-        if task_sandbox_id is not None:
-            # TODO(PR 5 or 6): swap for `await lifecycle_hub.release(sandbox)`
-            # once the hub primitive lands; same ownership boundary, cleaner API.
-            termination = await terminate_sandbox_by_id(task_sandbox_id)
-            logger.info(
-                "task-execute sandbox cleanup sandbox_id=%s terminated=%s reason=%s",
-                termination.sandbox_id,
-                termination.terminated,
-                termination.reason,
-            )
+    # Sandbox termination is owned by ``sandbox_cleanup`` (sibling Inngest
+    # functions gated on ``task/completed`` / ``task/failed``) — see the
+    # module docstring for why a ``try/finally`` here would terminate
+    # before sub-functions run.
