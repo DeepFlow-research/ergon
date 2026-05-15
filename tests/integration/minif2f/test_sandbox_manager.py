@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from ergon_builtins.benchmarks.minif2f.sandbox.utils import resolve_template
+from ergon_builtins.benchmarks.minif2f.sandbox_template.utils import resolve_template
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
@@ -42,7 +42,7 @@ def testresolve_template_falls_back_to_name_when_registry_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.minif2f.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.minif2f.sandbox_template.utils.REGISTRY_PATH",
         tmp_path / "does_not_exist.json",
     )
     assert resolve_template() == "ergon-minif2f-v1"
@@ -56,7 +56,7 @@ def testresolve_template_prefers_registry_template_id(
         json.dumps({"minif2f": {"template_id": "tmpl_abc123", "template_name": "ergon-minif2f-v1"}})
     )
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.minif2f.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.minif2f.sandbox_template.utils.REGISTRY_PATH",
         registry,
     )
     assert resolve_template() == "tmpl_abc123"
@@ -68,7 +68,7 @@ def testresolve_template_falls_back_on_malformed_registry(
     registry = tmp_path / "sandbox_templates.json"
     registry.write_text("{not valid json")
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.minif2f.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.minif2f.sandbox_template.utils.REGISTRY_PATH",
         registry,
     )
     assert resolve_template() == "ergon-minif2f-v1"
@@ -87,7 +87,7 @@ async def test_create_threads_template_kwarg_to_e2b_sdk(
     registry = tmp_path / "sandbox_templates.json"
     registry.write_text(json.dumps({"minif2f": {"template_id": "tmpl_pin_xyz"}}))
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.minif2f.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.minif2f.sandbox_template.utils.REGISTRY_PATH",
         registry,
     )
 
@@ -136,7 +136,7 @@ async def test_verify_setup_raises_when_lean_missing(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.minif2f.sandbox.utils.REGISTRY_PATH",
+        "ergon_builtins.benchmarks.minif2f.sandbox_template.utils.REGISTRY_PATH",
         tmp_path / "missing.json",
     )
 
