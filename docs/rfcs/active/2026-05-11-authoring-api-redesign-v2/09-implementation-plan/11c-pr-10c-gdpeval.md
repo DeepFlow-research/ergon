@@ -35,42 +35,65 @@ Conversion Recipe.
 **Create:**
 
 ```text
-ergon_builtins/ergon_builtins/sandboxes/gdpeval.py
-ergon_builtins/ergon_builtins/toolkits/gdpeval.py
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox.py             # was sandboxes/gdpeval.py
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/toolkit.py             # was toolkits/gdpeval.py
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/_tools.py              # runtime tool construction
 ergon_builtins/tests/unit/test_gdpeval_v2_definition.py
 ergon_builtins/tests/unit/architecture/test_object_bound_benchmarks_no_registry.py
+```
+
+**Rename:**
+
+```text
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/worker_factory.py
+    → ergon_builtins/ergon_builtins/benchmarks/gdpeval/workers.py
 ```
 
 **Modify:**
 
 ```text
 ergon_builtins/ergon_builtins/benchmarks/gdpeval/benchmark.py
-ergon_builtins/ergon_builtins/benchmarks/gdpeval/worker_factory.py
 ergon_builtins/ergon_builtins/benchmarks/gdpeval/rubric.py
 ergon_builtins/ergon_builtins/benchmarks/gdpeval/criteria.py
 ergon_builtins/ergon_builtins/registry.py
 ergon_builtins/ergon_builtins/registry_core.py
 ergon_builtins/ergon_builtins/registry_data.py
-ergon_cli/ergon_cli/commands/_registry.py        # add the slug factory
+ergon_builtins/ergon_builtins/benchmarks/README.md          # add GDPEval row
 ```
+
+**Note: no `ergon_cli/_registry.py` edit.**  PR 6.5 deleted `BUILTIN_EXPERIMENT_FACTORIES`.
 
 ## Task 1: Add `GDPEvalSandbox`
 
-GDPEval today has both `sandbox.py` and `sandbox_utils.py`. Move the
-provisioning entry point into the new subclass.
+GDPEval today has `sandbox.py` (the manager) and `sandbox_utils.py`.  The existing `sandbox.py` conflicts with the new `Sandbox` subclass file we want to create.  Rename the manager first to match the convention used by MiniF2F / SWEBench / ResearchRubrics:
+
+- [ ] **Step 0: Rename existing `sandbox.py` → `sandbox_manager.py`**
+
+```bash
+git mv ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox.py \
+       ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_manager.py
+```
+
+Update every import of `GDPEvalSandboxManager` to use the new path:
+
+```bash
+rg "from ergon_builtins.benchmarks.gdpeval.sandbox import" ergon_builtins ergon_core
+```
+
+Replace with `from ergon_builtins.benchmarks.gdpeval.sandbox_manager import GDPEvalSandboxManager`.
 
 - [ ] **Step 1: Create subclass**
 
-`ergon_builtins/ergon_builtins/sandboxes/gdpeval.py`:
+`ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox.py` (now free after Step 0):
 
 ```python
 from uuid import uuid4
 
 from ergon_core.api.sandbox import Sandbox
-from ergon_builtins.benchmarks.gdpeval.sandbox import (
+from ergon_builtins.benchmarks.gdpeval.sandbox_manager import (
     GDPEvalSandboxManager,
 )
-from ergon_builtins.sandboxes._manager_backed import (
+from ergon_builtins.sandbox._manager_backed import (
     ManagerBackedSandboxRuntime,
 )
 
@@ -106,12 +129,9 @@ add thin adapter methods at the manager — do not reshape the
 
 ## Task 2: Move Toolkit
 
-- [ ] **Step 1: Move toolkit**
+- [ ] **Step 1: Convert existing `toolkit.py` to Pydantic in place**
 
-```bash
-git mv ergon_builtins/ergon_builtins/benchmarks/gdpeval/toolkit.py \
-       ergon_builtins/ergon_builtins/toolkits/gdpeval.py
-```
+`toolkit.py` already lives at `benchmarks/gdpeval/toolkit.py` — no move needed.  Do not create `ergon_builtins/toolkits/gdpeval.py` (PR 6.5 deleted the top-level `toolkits/` dir).
 
 - [ ] **Step 2: Convert to Pydantic**
 
@@ -126,17 +146,21 @@ class GDPEvalToolkit(BaseModel):
     allow_shell: bool = False
 
     def tools(self, sandbox, task):
-        from ergon_builtins.toolkits._gdpeval_tools import build_tools
+        from ergon_builtins.benchmarks.gdpeval._tools import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)
 ```
+
+Move runtime tool construction into `benchmarks/gdpeval/_tools.py`.
 
 ## Task 3: Convert Worker Factory
 
 - [ ] **Step 1: Replace registry call**
 
+In `gdpeval/workers.py` (renamed from `worker_factory.py`):
+
 ```python
-from ergon_builtins.toolkits.gdpeval import GDPEvalToolkit
+from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 
 
@@ -154,6 +178,8 @@ def make_gdpeval_worker(
     )
 ```
 
+**Also: parameterise `GDPEvalBenchmark.__init__`** to accept `worker_factory` / `sandbox_factory` kwargs with defaults — mirror PR 6.5's MiniF2F pattern.
+
 ## Task 4: Convert Benchmark Tasks
 
 - [ ] **Step 1: Replace imports**
@@ -164,8 +190,8 @@ from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
 
 # Add:
 from ergon_core.api import Benchmark, BenchmarkRequirements, Task
-from ergon_builtins.sandboxes.gdpeval import GDPEvalSandbox
-from ergon_builtins.benchmarks.gdpeval.worker_factory import (
+from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandbox
+from ergon_builtins.benchmarks.gdpeval.workers import (
     make_gdpeval_worker,
 )
 from ergon_builtins.benchmarks.gdpeval.rubric import make_gdpeval_rubric
@@ -189,28 +215,32 @@ Task[GDPEvalTaskPayload](
 )
 ```
 
-## Task 5: Add CLI Factory Entry
+## Task 5: Add GDPEval To The Benchmarks Catalogue
 
 **Files:**
 
-- Modify: `ergon_cli/ergon_cli/commands/_registry.py`
+- Modify: `ergon_builtins/ergon_builtins/benchmarks/README.md` (created in PR 6.5 Task 20)
 
-- [ ] **Step 1: Register the GDPEval experiment factory**
+PR 6.5 killed `BUILTIN_EXPERIMENT_FACTORIES` and the CLI authoring route.  No CLI registry entry needed.
+
+- [ ] **Step 1: Add one row to the catalogue**
+
+```markdown
+| GDPEval | `ergon_builtins.benchmarks.gdpeval` | `make_gdpeval_worker` | `GDPEvalSandbox` |
+```
+
+- [ ] **Step 2: Add a Python authoring example**
 
 ```python
-from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
+from ergon_builtins.benchmarks.gdpeval import (
+    GDPEvalBenchmark,
+    make_gdpeval_worker,
+)
+from ergon_core.api import persist_benchmark, launch_run
 
-
-def _gdpeval() -> Experiment:
-    return Experiment(
-        benchmark=GDPEvalBenchmark(),
-        name="gdpeval",
-        description="GDPEval benchmark on object-bound API.",
-        metadata={"source": "builtins"},
-    )
-
-
-BUILTIN_EXPERIMENT_FACTORIES["gdpeval"] = _gdpeval
+benchmark = GDPEvalBenchmark(worker_factory=make_gdpeval_worker, limit=10)
+handle = persist_benchmark(benchmark, name="gdpeval-react", experiment="gdp-eval-2026")
+await launch_run(handle.definition_id)
 ```
 
 ## Task 6: Tests
@@ -221,26 +251,22 @@ Create `ergon_builtins/tests/unit/test_gdpeval_v2_definition.py`:
 
 ```python
 import pytest
-from ergon_core.api import Experiment
-from ergon_core.core.application.experiments.definition_writer import (
-    persist_definition,
-)
+from ergon_core.api import persist_benchmark
 from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
 
 
 @pytest.mark.asyncio
 async def test_gdpeval_persists_object_bound_task_json(session_factory):
     benchmark = GDPEvalBenchmark(limit=1)
-    experiment = Experiment(
-        benchmark=benchmark,
+
+    handle = persist_benchmark(
+        benchmark,
         name="gdpeval-smoke",
         metadata={"created_by": "test"},
     )
-
-    handle = persist_definition(experiment)
     with session_factory() as session:
         rows = session.exec(
-            "SELECT task_json FROM experiment_definition_tasks "
+            "SELECT task_json FROM benchmark_definition_tasks "      # table renamed in PR 6.5
             "WHERE definition_id = :d",
             {"d": handle.definition_id},
         ).all()
@@ -357,13 +383,11 @@ Expected: all green; no `TaskSpec`, `ComponentRegistry`, or
 ## Task 8: Commit
 
 ```bash
-git add ergon_builtins/ergon_builtins/sandboxes/gdpeval.py \
-        ergon_builtins/ergon_builtins/toolkits/gdpeval.py \
-        ergon_builtins/ergon_builtins/benchmarks/gdpeval/ \
+git add ergon_builtins/ergon_builtins/benchmarks/gdpeval/ \
+        ergon_builtins/ergon_builtins/benchmarks/README.md \
         ergon_builtins/ergon_builtins/registry*.py \
         ergon_builtins/tests/unit/test_gdpeval_v2_definition.py \
-        ergon_builtins/tests/unit/architecture/test_object_bound_benchmarks_no_registry.py \
-        ergon_cli/ergon_cli/commands/_registry.py
+        ergon_builtins/tests/unit/architecture/test_object_bound_benchmarks_no_registry.py
 git commit -m "feat(builtins): convert GDPEval + close out builtins migration (PR 10c)"
 ```
 

@@ -33,27 +33,36 @@ vertical; this PR adds one extra step (re-home judge criterion).
 **Create:**
 
 ```text
-ergon_builtins/ergon_builtins/sandboxes/research_e2b.py
-ergon_builtins/ergon_builtins/toolkits/research_rubrics.py
+ergon_builtins/ergon_builtins/benchmarks/researchrubrics/sandbox.py    # was sandboxes/research_e2b.py
+ergon_builtins/ergon_builtins/benchmarks/researchrubrics/toolkit.py    # was toolkits/research_rubrics.py
+ergon_builtins/ergon_builtins/benchmarks/researchrubrics/_tools.py     # runtime tool construction
 ergon_builtins/tests/unit/test_research_rubrics_v2_definition.py
+```
+
+**Rename:**
+
+```text
+ergon_builtins/ergon_builtins/benchmarks/researchrubrics/worker_factory.py
+    → ergon_builtins/ergon_builtins/benchmarks/researchrubrics/workers.py
 ```
 
 **Modify:**
 
 ```text
 ergon_builtins/ergon_builtins/benchmarks/researchrubrics/benchmark.py
-ergon_builtins/ergon_builtins/benchmarks/researchrubrics/worker_factory.py
 ergon_builtins/ergon_builtins/benchmarks/researchrubrics/rubric.py
 ergon_builtins/ergon_builtins/benchmarks/researchrubrics/criteria.py
 ergon_builtins/ergon_builtins/benchmarks/researchrubrics/judge_criterion.py
-ergon_cli/ergon_cli/commands/_registry.py        # add the slug factory
+ergon_builtins/ergon_builtins/benchmarks/README.md      # add ResearchRubrics row
 ```
+
+**Note: no `ergon_cli/_registry.py` edit.**  PR 6.5 deleted `BUILTIN_EXPERIMENT_FACTORIES`.  Discovery is via the README catalogue; authoring is Python-only.
 
 ## Task 1: Add `ResearchE2BSandbox`
 
 - [ ] **Step 1: Create the subclass**
 
-`ergon_builtins/ergon_builtins/sandboxes/research_e2b.py`:
+`ergon_builtins/ergon_builtins/benchmarks/researchrubrics/sandbox.py`:
 
 ```python
 from uuid import uuid4
@@ -62,7 +71,7 @@ from ergon_core.api.sandbox import Sandbox
 from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
     ResearchRubricsSandboxManager,
 )
-from ergon_builtins.sandboxes._manager_backed import (
+from ergon_builtins.sandbox._manager_backed import (
     ManagerBackedSandboxRuntime,
 )
 
@@ -98,10 +107,7 @@ If `ResearchRubricsSandboxManager` lacks `connect(sandbox_id=...)`,
 add it at the manager layer — the synchronous-fanout eval path
 requires reconnect-by-id on every builtin sandbox.
 
-The shared `ManagerBackedSandboxRuntime` is the one PR 10a landed at
-`ergon_builtins/sandboxes/_manager_backed.py`. If PR 10b lands first
-(rather than after 10a), create the adapter as Step 0 — see PR 10a's
-Task 1 Step 1 for the exact body.
+The shared `ManagerBackedSandboxRuntime` is the one PR 10a landed at `ergon_builtins/sandbox/_manager_backed.py` (singular `sandbox/`, top-level — PR 6.5 created the empty package).  If PR 10b lands first (rather than after 10a), create the adapter as Step 0 — see PR 10a's Task 1 Step 1 for the exact body.
 
 ## Task 2: Move Toolkit Helpers
 
@@ -109,8 +115,10 @@ Task 1 Step 1 for the exact body.
 
 ```bash
 git mv ergon_builtins/ergon_builtins/benchmarks/researchrubrics/toolkit_types.py \
-       ergon_builtins/ergon_builtins/toolkits/research_rubrics.py
+       ergon_builtins/ergon_builtins/benchmarks/researchrubrics/toolkit.py
 ```
+
+**Do NOT create `ergon_builtins/toolkits/`** — PR 6.5 deleted that top-level dir.  Toolkit lives alongside its benchmark.
 
 - [ ] **Step 2: Convert to Pydantic**
 
@@ -128,31 +136,32 @@ class ResearchRubricsToolkit(BaseModel):
     enable_web_browse: bool = True
 
     def tools(self, sandbox, task):
-        from ergon_builtins.toolkits._research_tools import build_tools
+        from ergon_builtins.benchmarks.researchrubrics._tools import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)
 ```
 
-Move runtime tool construction into `_research_tools.py`; the toolkit
-holds config only.
+Move runtime tool construction into `benchmarks/researchrubrics/_tools.py`; the toolkit holds config only.
 
 - [ ] **Step 3: Update importers**
 
 ```bash
 rg "from ergon_builtins.benchmarks.researchrubrics.toolkit_types import" \
   ergon_builtins ergon_core
+rg "from ergon_builtins.toolkits" \   # should be zero hits — PR 6.5 deleted the dir
+  ergon_builtins ergon_core
 ```
 
-Replace with `from ergon_builtins.toolkits.research_rubrics import ResearchRubricsToolkit`.
+Replace with `from ergon_builtins.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit`.
 
 ## Task 3: Convert Worker Factory
 
 - [ ] **Step 1: Replace registry call with constructor**
 
-In `researchrubrics/worker_factory.py`:
+In `researchrubrics/workers.py` (renamed from `worker_factory.py` — mirror PR 6.5's MiniF2F rename):
 
 ```python
-from ergon_builtins.toolkits.research_rubrics import ResearchRubricsToolkit
+from ergon_builtins.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 
 
@@ -169,6 +178,8 @@ def make_research_worker(
         toolkit=ResearchRubricsToolkit(),
     )
 ```
+
+**Also: parameterise `ResearchRubricsBenchmark.__init__`** to accept `worker_factory` / `sandbox_factory` kwargs with defaults — mirror the PR 6.5 MiniF2F pattern.  This makes the worker swap point real for Python authoring.
 
 ## Task 4: Re-Home Judge Criterion (Pydantic conversion)
 
@@ -222,8 +233,8 @@ from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
 
 # Add:
 from ergon_core.api import Benchmark, BenchmarkRequirements, Task
-from ergon_builtins.sandboxes.research_e2b import ResearchE2BSandbox
-from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
+from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
+from ergon_builtins.benchmarks.researchrubrics.workers import (
     make_research_worker,
 )
 from ergon_builtins.benchmarks.researchrubrics.rubric import (
@@ -251,32 +262,32 @@ Task[ResearchRubricsTaskPayload](
 )
 ```
 
-## Task 6: Add CLI Factory Entry
+## Task 6: Add ResearchRubrics To The Benchmarks Catalogue
 
 **Files:**
 
-- Modify: `ergon_cli/ergon_cli/commands/_registry.py`
+- Modify: `ergon_builtins/ergon_builtins/benchmarks/README.md` (created in PR 6.5 Task 20)
 
-- [ ] **Step 1: Register the ResearchRubrics experiment factory**
+PR 6.5 killed `BUILTIN_EXPERIMENT_FACTORIES` and the entire CLI authoring route.  No CLI registry entry needed.
 
-Following PR 8's dict-extension pattern:
+- [ ] **Step 1: Add one row to the catalogue**
+
+```markdown
+| ResearchRubrics | `ergon_builtins.benchmarks.researchrubrics` | `make_research_worker` | `ResearchE2BSandbox` |
+```
+
+- [ ] **Step 2: Add a Python authoring example**
 
 ```python
-from ergon_builtins.benchmarks.researchrubrics.benchmark import (
+from ergon_builtins.benchmarks.researchrubrics import (
     ResearchRubricsBenchmark,
+    make_research_worker,
 )
+from ergon_core.api import persist_benchmark, launch_run
 
-
-def _researchrubrics() -> Experiment:
-    return Experiment(
-        benchmark=ResearchRubricsBenchmark(),
-        name="researchrubrics",
-        description="Research Rubrics benchmark with LLM judge.",
-        metadata={"source": "builtins"},
-    )
-
-
-BUILTIN_EXPERIMENT_FACTORIES["researchrubrics"] = _researchrubrics
+benchmark = ResearchRubricsBenchmark(worker_factory=make_research_worker, limit=10)
+handle = persist_benchmark(benchmark, name="research-react", experiment="rr-eval-2026")
+await launch_run(handle.definition_id)
 ```
 
 ## Task 7: Tests
@@ -287,10 +298,7 @@ Create `ergon_builtins/tests/unit/test_research_rubrics_v2_definition.py`:
 
 ```python
 import pytest
-from ergon_core.api import Experiment
-from ergon_core.core.application.experiments.definition_writer import (
-    persist_definition,
-)
+from ergon_core.api import persist_benchmark
 from ergon_builtins.benchmarks.researchrubrics.benchmark import (
     ResearchRubricsBenchmark,
 )
@@ -299,16 +307,15 @@ from ergon_builtins.benchmarks.researchrubrics.benchmark import (
 @pytest.mark.asyncio
 async def test_research_rubrics_persists_object_bound_task_json(session_factory):
     benchmark = ResearchRubricsBenchmark(limit=1)
-    experiment = Experiment(
-        benchmark=benchmark,
+
+    handle = persist_benchmark(
+        benchmark,
         name="research-smoke",
         metadata={"created_by": "test"},
     )
-
-    handle = persist_definition(experiment)
     with session_factory() as session:
         rows = session.exec(
-            "SELECT task_json FROM experiment_definition_tasks "
+            "SELECT task_json FROM benchmark_definition_tasks "      # table renamed in PR 6.5
             "WHERE definition_id = :d",
             {"d": handle.definition_id},
         ).all()
@@ -348,11 +355,9 @@ uv run pytest ergon_builtins/tests/unit/test_research_rubrics_v2_definition.py -
 ## Task 8: Commit
 
 ```bash
-git add ergon_builtins/ergon_builtins/sandboxes/research_e2b.py \
-        ergon_builtins/ergon_builtins/toolkits/research_rubrics.py \
-        ergon_builtins/ergon_builtins/benchmarks/researchrubrics/ \
-        ergon_builtins/tests/unit/test_research_rubrics_v2_definition.py \
-        ergon_cli/ergon_cli/commands/_registry.py
+git add ergon_builtins/ergon_builtins/benchmarks/researchrubrics/ \
+        ergon_builtins/ergon_builtins/benchmarks/README.md \
+        ergon_builtins/tests/unit/test_research_rubrics_v2_definition.py
 git commit -m "feat(builtins): convert ResearchRubrics to object-bound Task (PR 10b)"
 ```
 
