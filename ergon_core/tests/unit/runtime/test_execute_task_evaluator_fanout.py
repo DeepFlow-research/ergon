@@ -29,10 +29,6 @@ from ergon_core.core.application.jobs.models import (
 )
 from ergon_core.core.application.tasks.execution import TaskExecutionService
 from ergon_core.core.application.workflows.orchestration import PreparedTaskExecution
-from ergon_core.core.infrastructure.sandbox.lifecycle import (
-    SandboxTerminationReason,
-    SandboxTerminationResult,
-)
 
 # A typed stand-in for any `inngest.Function` the orchestrator would
 # normally hand to `ctx.step.invoke(function=...)`. The fakes below
@@ -106,13 +102,21 @@ def _ready_event(run_id, definition_id, task_id, node_id) -> TaskReadyEvent:
 
 
 @pytest.mark.asyncio
-async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
+async def test_execute_task_emits_completed_strictly_after_eval_gather(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The orchestrator's ``finally`` must run after every per-evaluator
-    invoke returns. Ordering across the run must be:
-    sandbox-setup → worker-execute → persist-outputs → eval-0..N
-    → terminate_sandbox_by_id.
+    """``task/completed`` must be emitted after every per-evaluator
+    invoke returns.  Sibling ``sandbox-cleanup-on-completed`` Inngest
+    function (tested separately) terminates the sandbox in response.
+
+    Ordering across the run:
+        sandbox-setup → worker-execute → persist-outputs → eval-0..N
+        → emit:task/completed
+
+    The orchestrator no longer calls ``terminate_sandbox_by_id`` itself —
+    that would re-introduce the try/finally bug where Inngest's
+    ``ResponseInterrupt`` (raised by every suspended ``step.invoke``)
+    fires the ``finally`` clause before the sub-function actually runs.
     """
 
     ordering: list[str] = []
@@ -197,16 +201,6 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
                 data={"evaluator_index": i},
             )
 
-    termination_result = SandboxTerminationResult(
-        sandbox_id="sbx-test",
-        terminated=True,
-        reason=SandboxTerminationReason.TERMINATED,
-    )
-
-    async def fake_terminate(sandbox_id: str) -> SandboxTerminationResult:
-        ordering.append("terminate")
-        return termination_result
-
     finalize_success = AsyncMock()
     svc = SimpleNamespace(
         finalize_success=finalize_success,
@@ -220,7 +214,6 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
     monkeypatch.setattr(execute_task_module, "_emit_task_completed", fake_emit_completed)
     monkeypatch.setattr(execute_task_module, "_fan_out_evaluators", fake_fanout)
     monkeypatch.setattr(execute_task_module, "TaskExecutionService", lambda: svc)
-    monkeypatch.setattr(execute_task_module, "terminate_sandbox_by_id", fake_terminate)
     monkeypatch.setattr(execute_task_module.WorkflowGraphRepository, "node", repo.node)
 
     result = await execute_task_module.run_execute_task_job(
@@ -233,23 +226,27 @@ async def test_execute_task_releases_sandbox_strictly_after_eval_gather(
     )
 
     assert result.success is True
-    assert ordering.count("terminate") == 1, "sandbox must terminate exactly once"
-    terminate_idx = ordering.index("terminate")
+    # task/completed must be emitted exactly once and AFTER every eval invoke.
+    assert ordering.count("emit:task/completed") == 1
+    completed_idx = ordering.index("emit:task/completed")
     eval_indices = [i for i, name in enumerate(ordering) if name.startswith("invoke:eval-")]
     assert eval_indices, "the gather must invoke at least one evaluator"
-    assert all(i < terminate_idx for i in eval_indices), (
-        f"every eval invoke must precede terminate; got order={ordering}"
+    assert all(i < completed_idx for i in eval_indices), (
+        f"every eval invoke must precede emit:task/completed; got order={ordering}"
     )
-    # Final ordering shape sanity-check.
-    assert ordering.index("emit:task/completed") < terminate_idx
+    # The orchestrator must NOT terminate the sandbox inline — that's the
+    # sibling ``sandbox-cleanup-on-completed`` function's job, gated on
+    # the ``task/completed`` event.
+    assert "terminate" not in ordering
 
 
 @pytest.mark.asyncio
-async def test_execute_task_releases_sandbox_when_worker_fails(
+async def test_execute_task_emits_failed_when_worker_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The orchestrator's ``finally`` must still terminate when the
-    worker reports failure (no eval fanout in this path)."""
+    """On worker failure, the orchestrator emits ``task/failed`` (which
+    triggers ``sandbox-cleanup-on-failed`` to terminate the sandbox) and
+    does NOT terminate inline."""
 
     ordering: list[str] = []
     ctx = _OrderedFakeCtx(ordering)
@@ -304,14 +301,6 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
     ) -> None:
         ordering.append("emit:task/failed")
 
-    async def fake_terminate(sandbox_id: str) -> SandboxTerminationResult:
-        ordering.append("terminate")
-        return SandboxTerminationResult(
-            sandbox_id=sandbox_id,
-            terminated=True,
-            reason=SandboxTerminationReason.TERMINATED,
-        )
-
     monkeypatch.setattr(execute_task_module, "_prepare_execution", fake_prepare)
     monkeypatch.setattr(execute_task_module, "_invoke_sandbox_setup", fake_invoke_sandbox_setup)
     monkeypatch.setattr(execute_task_module, "_invoke_worker_execute", fake_invoke_worker_execute)
@@ -322,7 +311,6 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
         "TaskExecutionService",
         lambda: SimpleNamespace(finalize_success=AsyncMock(), finalize_failure=AsyncMock()),
     )
-    monkeypatch.setattr(execute_task_module, "terminate_sandbox_by_id", fake_terminate)
 
     result = await execute_task_module.run_execute_task_job(
         ctx,
@@ -333,7 +321,13 @@ async def test_execute_task_releases_sandbox_when_worker_fails(
         evaluate_task_run_function=_FAKE_FN,
     )
     assert result.success is False
-    assert "terminate" in ordering, "sandbox must terminate on the failure path too"
+    # task/failed must be emitted — it triggers the sibling
+    # ``sandbox-cleanup-on-failed`` Inngest function which terminates the
+    # sandbox.  The orchestrator no longer terminates inline.
+    assert "emit:task/failed" in ordering
+    assert "terminate" not in ordering, (
+        "orchestrator must NOT terminate inline; sibling function does it"
+    )
 
 
 __all__: Sequence[str] = ()
