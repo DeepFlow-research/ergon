@@ -5,7 +5,7 @@ from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -80,8 +80,8 @@ class ExperimentReadService:
         with get_session() as session:
             experiments = list(
                 session.exec(
-                    select(ExperimentRecord)
-                    .order_by(ExperimentRecord.created_at.desc())
+                    select(BenchmarkDefinitionRecord)
+                    .order_by(BenchmarkDefinitionRecord.created_at.desc())
                     .limit(limit)
                 ).all()
             )
@@ -89,7 +89,7 @@ class ExperimentReadService:
 
     def get_experiment(self, experiment_id: UUID) -> ExperimentDetailDto | None:
         with get_session() as session:
-            experiment = session.get(ExperimentRecord, experiment_id)
+            experiment = session.get(BenchmarkDefinitionRecord, experiment_id)
             if experiment is None:
                 return None
             runs = list(
@@ -111,7 +111,7 @@ class ExperimentReadService:
 
 def _summary(
     session: Session,
-    experiment: ExperimentRecord,
+    experiment: BenchmarkDefinitionRecord,
     *,
     runs: list[RunRecord] | None = None,
 ) -> ExperimentSummaryDto:

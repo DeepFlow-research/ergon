@@ -22,7 +22,7 @@ from ergon_core.core.persistence.shared.enums import (
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStatus,
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RolloutBatch,
     RunRecord,
     RunResource,
@@ -144,7 +144,7 @@ def test_task_execution_rejects_missing_static_or_dynamic_identity():
 
 
 def test_experiment_record_accepts_optional_cohort_and_required_name():
-    experiment = ExperimentRecord.model_validate(
+    experiment = BenchmarkDefinitionRecord.model_validate(
         {
             "name": "ci experiment",
             "benchmark_type": "ci-benchmark",

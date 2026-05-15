@@ -20,7 +20,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RunRecord,
 )
 from pydantic import BaseModel
@@ -33,9 +33,9 @@ class _EmptyPayload(BaseModel):
 
 
 def _session() -> Session:
-    # Ensure ExperimentRecord is imported so its table participates in
+    # Ensure BenchmarkDefinitionRecord is imported so its table participates in
     # create_all (same pattern as test_graph_worker_identity.py).
-    _ = ExperimentRecord
+    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -47,7 +47,7 @@ def _session() -> Session:
 
 def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tuple[UUID, UUID, UUID]:
     """Insert a minimal definition with one task and a backing
-    ExperimentRecord; return (experiment_id, definition_id, task_id)."""
+    BenchmarkDefinitionRecord; return (experiment_id, definition_id, task_id)."""
 
     experiment_id = uuid4()
     definition_id = uuid4()
@@ -55,7 +55,7 @@ def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tupl
     task_id = uuid4()
     session.add_all(
         [
-            ExperimentRecord(
+            BenchmarkDefinitionRecord(
                 id=experiment_id,
                 name="test-experiment",
                 benchmark_type="test",

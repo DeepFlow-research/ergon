@@ -20,7 +20,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -252,7 +252,9 @@ class RunReadService:
             if definition_id:
                 stmt = stmt.where(RunRecord.workflow_definition_id == definition_id)
             if cohort_id:
-                stmt = stmt.join(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort_id)
+                stmt = stmt.join(BenchmarkDefinitionRecord).where(
+                    BenchmarkDefinitionRecord.cohort_id == cohort_id
+                )
             stmt = stmt.order_by(RunRecord.created_at)
             runs = list(session.exec(stmt).all())
 

@@ -525,8 +525,17 @@ def test_experiment_lifecycle_has_one_front_door_service() -> None:
     service_text = service_path.read_text()
 
     assert "class ExperimentService" in service_text
-    for method_name in ("define_benchmark_experiment", "persist_definition", "run_experiment"):
+    # PR 6.5 Phase 2: define_benchmark_experiment deleted; persist_definition deleted from service.
+    for method_name in ("persist_benchmark", "run_experiment"):
         assert f"def {method_name}(" in service_text
+
+    # define_benchmark_experiment and persist_definition must be gone from service
+    assert "def define_benchmark_experiment(" not in service_text
+    assert "def persist_definition(" not in service_text
+
+    # module-level persist_benchmark lives in definition_writer
+    writer_path = ROOT / "ergon_core/ergon_core/core/application/experiments/definition_writer.py"
+    assert "def persist_benchmark(" in writer_path.read_text()
 
     forbidden_class_names = (
         "class ExperimentDefinitionService",
@@ -535,7 +544,7 @@ def test_experiment_lifecycle_has_one_front_door_service() -> None:
     )
     for path in (
         service_path,
-        ROOT / "ergon_core/ergon_core/core/application/experiments/definition_writer.py",
+        writer_path,
         ROOT / "ergon_core/ergon_core/core/application/experiments/launch.py",
     ):
         text = path.read_text()

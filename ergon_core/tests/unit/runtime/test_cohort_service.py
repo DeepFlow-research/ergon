@@ -2,12 +2,12 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
 from ergon_core.core.application.read_models.cohorts import ExperimentCohortService
 
 
-def _experiment(status: str = "running") -> ExperimentRecord:
-    return ExperimentRecord(
+def _experiment(status: str = "running") -> BenchmarkDefinitionRecord:
+    return BenchmarkDefinitionRecord(
         id=uuid4(),
         name="ci experiment",
         benchmark_type="ci-benchmark",

@@ -54,8 +54,14 @@ BUDGET = SuppressionCounts(
     # deleted with `_legacy_workers.py`, decrement `slopcop_ignore` by ~3
     # (the v1 legacy `Any` annotations) and update this comment to reflect
     # the post-PR-11 baseline.
-    slopcop_ignore=239,
-    noqa=3,
+    # +3 (PR 6.5): persist_benchmark module-level function adds 2×no-typing-any
+    # (metadata dict[str,Any]) in definition_writer.py and 1×no-typing-any +
+    # 1×guarded-function-import in service.py; net +3 after the deleted
+    # api/experiment.py contributed -1.
+    # +1 noqa (PR 6.5): noqa: C901 on persist_benchmark (complex by design,
+    # same as the persist_definition it supplements).
+    slopcop_ignore=242,
+    noqa=4,
     type_ignore=64,
 )
 

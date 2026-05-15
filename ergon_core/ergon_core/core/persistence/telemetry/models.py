@@ -43,14 +43,24 @@ class ExperimentCohortStatus(StrEnum):
 
 
 # ---------------------------------------------------------------------------
-# ExperimentRecord
+# BenchmarkDefinitionRecord  (renamed from ExperimentRecord in PR 6.5 Phase 2)
 # ---------------------------------------------------------------------------
 
 
-class ExperimentRecord(SQLModel, table=True):
-    """One launched experiment definition and sample selection."""
+class BenchmarkDefinitionRecord(SQLModel, table=True):
+    """One launched experiment definition and sample selection.
 
-    __tablename__ = "experiments"
+    Renamed from ``ExperimentRecord`` in PR 6.5 Phase 2.  The old name is kept
+    as a module-level alias below for transitional callers (PR 11 removes it).
+
+    The ``experiment`` field is an optional *experiment tag* string.  Multiple
+    ``BenchmarkDefinitionRecord`` rows that share the same ``experiment`` value
+    belong to the same logical experiment (e.g. a multi-arm study or a set of
+    re-runs sharing a common identifier).  ``None`` means the record is not
+    grouped into any named experiment.
+    """
+
+    __tablename__ = "benchmark_definitions"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     cohort_id: UUID | None = Field(
@@ -74,6 +84,15 @@ class ExperimentRecord(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
     started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
     completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
+    experiment: str | None = Field(
+        default=None,
+        index=True,
+        description=(
+            "Optional experiment tag.  Records that share the same tag belong "
+            "to the same logical experiment (e.g. a multi-arm study).  "
+            "None means the record is not grouped into any named experiment."
+        ),
+    )
 
     def parsed_sample_selection(self) -> JsonObject:
         return self.__class__._parse_json_object(
@@ -103,13 +122,17 @@ class ExperimentRecord(SQLModel, table=True):
         return data
 
     @model_validator(mode="after")
-    def _validate_fields(self) -> "ExperimentRecord":
+    def _validate_fields(self) -> "BenchmarkDefinitionRecord":
         self.__class__._parse_json_object(self.sample_selection_json, "sample_selection_json")
         self.__class__._parse_json_object(self.default_worker_team_json, "default_worker_team_json")
         self.__class__._parse_json_object(self.dependency_extras_json, "dependency_extras_json")
         self.__class__._parse_json_object(self.design_json, "design_json")
         self.__class__._parse_json_object(self.metadata_json, "metadata_json")
         return self
+
+
+# Transitional alias: PR 11 deletes this once all callers are migrated.
+ExperimentRecord = BenchmarkDefinitionRecord
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +144,7 @@ class RunRecord(SQLModel, table=True):
     __tablename__ = "runs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
+    experiment_id: UUID = Field(foreign_key="benchmark_definitions.id", index=True)
     workflow_definition_id: UUID = Field(
         foreign_key="experiment_definitions.id",
         index=True,
