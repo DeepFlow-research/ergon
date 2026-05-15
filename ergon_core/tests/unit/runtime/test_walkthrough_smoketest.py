@@ -211,31 +211,69 @@ def test_evaluate_task_run_payload_is_id_only() -> None:
 
 
 def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
-    """Δ.5: orchestrator's try/finally bounds sandbox lifetime through
-    the parallel fanout.
+    """Δ.5: sandbox release is bounded by the parallel evaluator fanout.
 
-    PR 4 lifts sandbox termination from the sibling
-    ``check_evaluators`` job into the orchestrator's ``finally``. The
-    textual guard ensures the parallel fanout (`ctx.group.parallel`)
-    is upstream of ``terminate_sandbox_by_id`` and that the
-    termination only happens inside a ``finally`` block — i.e. the
-    only termination path is bounded by the parallel fan-out.
+    PR 4's first attempt put ``terminate_sandbox_by_id`` directly in
+    the orchestrator's ``try/finally``.  That broke smoke tests because
+    Inngest's ``step.invoke`` raises ``ResponseInterrupt`` (a
+    ``BaseException``) to suspend the coroutine — which fires ``finally``
+    and terminates the sandbox *before* the suspended sub-function
+    actually runs.
+
+    The fix (post-PR-4): cleanup lives in a sibling Inngest function
+    (``sandbox_cleanup_on_completed_fn`` / ``sandbox_cleanup_on_failed_fn``)
+    triggered by the terminal task events.  ``execute_task`` emits
+    ``task/completed`` only AFTER ``_fan_out_evaluators`` returns, so
+    cleanup is still bounded by the parallel fanout — but via event
+    chaining instead of an inline ``finally``, which is what Inngest's
+    step-replay model actually supports.
+
+    This guard enforces the new shape:
+    - ``ctx.group.parallel`` (the evaluator fanout) exists in execute_task
+    - ``_emit_task_completed`` is called AFTER the fanout
+    - sandbox_cleanup module exists and is wired to ``task/completed`` +
+      ``task/failed``
+    - ``terminate_sandbox_by_id`` is no longer called from execute_task
     """
 
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[4]
-    text = (root / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
-    finally_idx = text.find("finally:")
-    terminate_idx = text.find("terminate_sandbox_by_id(task_sandbox_id)")
-    parallel_idx = text.find("ctx.group.parallel")
-    assert finally_idx != -1, "orchestrator must wrap sandbox release in try/finally"
-    assert terminate_idx != -1, "orchestrator must terminate sandbox in its finally"
-    assert finally_idx < terminate_idx, (
-        "terminate_sandbox_by_id(task_sandbox_id) must live inside the finally block"
+    execute_task_text = (
+        root / "ergon_core/ergon_core/core/application/jobs/execute_task.py"
+    ).read_text()
+    parallel_idx = execute_task_text.find("ctx.group.parallel")
+    emit_completed_idx = execute_task_text.find("_emit_task_completed(payload")
+    assert parallel_idx != -1, "orchestrator must use ctx.group.parallel for the evaluator fanout"
+    assert emit_completed_idx != -1, (
+        "orchestrator must call _emit_task_completed on the success path"
     )
-    assert parallel_idx != -1 and parallel_idx < finally_idx, (
-        "ctx.group.parallel over evaluator invokes must run before the finally"
+    assert parallel_idx < emit_completed_idx, (
+        "ctx.group.parallel must run BEFORE emit:task/completed so the "
+        "sibling cleanup function only fires after evaluators finish"
+    )
+    assert "terminate_sandbox_by_id(task_sandbox_id)" not in execute_task_text, (
+        "orchestrator must NOT call terminate_sandbox_by_id inline — "
+        "the sibling sandbox_cleanup function does it on terminal events"
+    )
+
+    cleanup_path = root / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
+    assert cleanup_path.exists(), "sandbox_cleanup job module must exist"
+    cleanup_text = cleanup_path.read_text()
+    assert "terminate_sandbox_by_id" in cleanup_text, (
+        "sandbox_cleanup must call terminate_sandbox_by_id"
+    )
+
+    handler_path = (
+        root / "ergon_core/ergon_core/core/infrastructure/inngest/handlers/sandbox_cleanup.py"
+    )
+    assert handler_path.exists(), "sandbox_cleanup Inngest handler module must exist"
+    handler_text = handler_path.read_text()
+    assert 'event="task/completed"' in handler_text, (
+        "sandbox_cleanup_on_completed_fn must trigger on task/completed"
+    )
+    assert 'event="task/failed"' in handler_text, (
+        "sandbox_cleanup_on_failed_fn must trigger on task/failed"
     )
 
 
