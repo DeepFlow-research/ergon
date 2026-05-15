@@ -60,7 +60,11 @@ class BenchmarkDefinitionRecord(SQLModel, table=True):
     grouped into any named experiment.
     """
 
-    __tablename__ = "benchmark_definitions"
+    # Class renamed to BenchmarkDefinitionRecord in PR 6.5; the physical
+    # table keeps its v1 name ("experiments") so the existing Alembic chain
+    # still applies cleanly.  PR 11 collapses the migration history into one
+    # v2 initial schema and is the place to rename the table itself (if at all).
+    __tablename__ = "experiments"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     cohort_id: UUID | None = Field(
@@ -144,7 +148,7 @@ class RunRecord(SQLModel, table=True):
     __tablename__ = "runs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    experiment_id: UUID = Field(foreign_key="benchmark_definitions.id", index=True)
+    experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
     workflow_definition_id: UUID = Field(
         foreign_key="experiment_definitions.id",
         index=True,
