@@ -1,11 +1,11 @@
 """MiniF2F v2 authoring shape: toolkit round-trip and task JSON assertions."""
 
-from ergon_builtins.benchmarks.minif2f.worker_factory import (
+from ergon_builtins.benchmarks.minif2f.workers import (
     make_minif2f_rubric,
     make_minif2f_worker,
 )
-from ergon_builtins.sandboxes.lean import LeanSandbox
-from ergon_builtins.toolkits.minif2f import MiniF2FToolkit
+from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
+from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 
 
 def test_minif2f_toolkit_round_trips_through_json() -> None:
@@ -68,3 +68,41 @@ def test_minif2f_task_json_has_correct_shape() -> None:
     assert "_legacy" not in task_json, (
         "MiniF2F is now object-bound; the _legacy bridge marker should be absent"
     )
+
+
+def test_minif2f_benchmark_accepts_custom_worker_factory(monkeypatch) -> None:
+    """The benchmark uses the worker_factory passed to its constructor.
+
+    Load-bearing assertion: factories are *called*, not stored as a class
+    attribute that defaults to them.  Without this test, a future refactor
+    could accidentally revert to hardcoding the default and the test suite
+    would still pass.
+    """
+    from unittest.mock import MagicMock
+
+    from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
+    from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem
+
+    sentinel_worker = make_minif2f_worker()
+    sentinel_worker.name = "sentinel"
+    factory = MagicMock(return_value=sentinel_worker)
+
+    # Stub out HF download so the test stays hermetic.
+    monkeypatch.setattr(
+        MiniF2FBenchmark,
+        "_load_problems",
+        lambda self: [
+            MiniF2FProblem(
+                name="x",
+                informal_statement="i",
+                formal_statement="theorem x : True := by",
+                header="import Mathlib\n",
+            )
+        ],
+    )
+
+    benchmark = MiniF2FBenchmark(worker_factory=factory, limit=1)
+    tasks = list(benchmark.build_instances().values())[0]
+
+    assert tasks[0].worker is sentinel_worker
+    factory.assert_called_once()

@@ -41,18 +41,19 @@ BUDGET = SuppressionCounts(
     # heterogeneous sandbox/skill types — typed as `Any` matching the
     # existing `_minif2f_run_skill` pattern. Reviewed in PR 4.5.
     # +13 (PR 6): MiniF2FToolkit.tools sandbox/task args typed Any (genuine
-    # circular import prevents static types); _minif2f_tools.py build_tools
-    # sandbox/task Any + 4×no-broad-except (tool fns must return error
-    # responses, not propagate); worker_factory.py _minif2f_run_skill/
-    # MiniF2FReactWorker Any args (v1 legacy surface); ReActWorker.execute
-    # return Any + no-broad-except (pydantic_ai agent output is dynamic).
+    # circular import prevents static types); benchmarks/minif2f/_tools.py
+    # build_tools sandbox/task Any + 4×no-broad-except (tool fns must return
+    # error responses, not propagate); benchmarks/minif2f/_legacy_workers.py
+    # _minif2f_run_skill / MiniF2FReactWorker Any args (v1 legacy surface);
+    # ReActWorker.execute return Any + no-broad-except (pydantic_ai agent
+    # output is dynamic).
     # +1 noqa: C901 for build_tools: closure-heavy tool builder, complexity
     # is structural not incidental; refactoring into sub-functions would
     # obscure the sandbox binding.
     # TODO(PR 11): when `_minif2f_run_skill` and `MiniF2FReactWorker` are
-    # deleted with `worker_factory.py`'s legacy block, decrement
-    # `slopcop_ignore` by ~3 (the v1 legacy `Any` annotations) and update
-    # this comment to reflect the post-PR-11 baseline.
+    # deleted with `_legacy_workers.py`, decrement `slopcop_ignore` by ~3
+    # (the v1 legacy `Any` annotations) and update this comment to reflect
+    # the post-PR-11 baseline.
     slopcop_ignore=239,
     noqa=3,
     type_ignore=64,

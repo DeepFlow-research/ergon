@@ -1,13 +1,13 @@
 """Runtime tool construction for MiniF2FToolkit.
 
-Kept in a sibling module so ``MiniF2FToolkit`` (in ``minif2f.py``) remains
+Kept in a sibling module so ``MiniF2FToolkit`` (in ``toolkit.py``) remains
 serializable: the Pydantic BaseModel carries only config; ``build_tools``
 constructs live ``pydantic_ai.tools.Tool`` instances bound to the sandbox.
 
 Import note: ``MiniF2FToolkit`` is only imported under ``TYPE_CHECKING`` to
-break the runtime cycle ``minif2f.py → _minif2f_tools.py → minif2f.py``.
-# reason: circular import — minif2f.py imports build_tools from this module;
-#         importing MiniF2FToolkit at runtime would re-enter minif2f.py
+break the runtime cycle ``toolkit.py → _tools.py → toolkit.py``.
+# reason: circular import — toolkit.py imports build_tools from this module;
+#         importing MiniF2FToolkit at runtime would re-enter toolkit.py
 #         before it finishes loading.
 """
 
@@ -22,7 +22,7 @@ from pydantic_ai.tools import Tool
 from ergon_builtins.benchmarks.minif2f.constants import LEAN_CMD, LEAN_CMD_PREFIX
 
 if TYPE_CHECKING:
-    from ergon_builtins.toolkits.minif2f import MiniF2FToolkit
+    from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 
 # TODO: we need to break these down into modules so we dont have helpers, core logic and response models in the same file.
 

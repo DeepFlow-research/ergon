@@ -1,4 +1,13 @@
-"""MiniF2F worker factories."""
+"""Legacy MiniF2F worker bridge — DELETED IN PR 11.
+
+This file exists solely so the ``"minif2f-react"`` registry slug
+still resolves for experiments persisted before PR 6.  Once PR 11
+retires the legacy registry fallback chain, delete this entire
+file along with ``sandbox_manager.py``.
+
+Do NOT import from this file in new code.  v2 callers use
+``workers.make_minif2f_worker()``.
+"""
 
 from collections.abc import AsyncGenerator
 from typing import Any, ClassVar
@@ -6,16 +15,10 @@ from uuid import UUID
 
 from ergon_core.api import Task, WorkerContext, WorkerStreamItem
 
-from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
-
-# TODO(PR 11): delete these two imports along with `MiniF2FReactWorker`
-# and `_minif2f_run_skill` below.  `sandbox_manager.py` itself is deleted
-# in PR 11; `benchmarks/minif2f/toolkit.py` (the legacy toolkit) likewise.
-from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
-from ergon_builtins.benchmarks.minif2f.toolkit import (
+from ergon_builtins.benchmarks.minif2f._legacy_toolkit import (
     MiniF2FToolkit as _LegacyMiniF2FToolkit,
 )
-from ergon_builtins.toolkits.minif2f import MiniF2FToolkit
+from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_builtins.workers.baselines.react_prompts import MINIF2F_SYSTEM_PROMPT
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 
@@ -84,22 +87,3 @@ class MiniF2FReactWorker(ReActWorker):
         self._tools = list(legacy_toolkit.get_tools())
         async for item in super().execute(task, context=context):
             yield item
-
-
-# ── v2 object-bound factories ──────────────────────────────────────────
-
-
-def make_minif2f_worker() -> ReActWorker:
-    """Return a serializable ReActWorker for MiniF2F (v2 authoring shape)."""
-    return ReActWorker(
-        name="solver",
-        model="openai:gpt-4o-mini",
-        system_prompt=MINIF2F_SYSTEM_PROMPT,
-        max_iterations=30,
-        toolkit=MiniF2FToolkit(),
-    )
-
-
-def make_minif2f_rubric() -> MiniF2FRubric:
-    """Return a serializable MiniF2FRubric for use as an inline evaluator."""
-    return MiniF2FRubric(name="minif2f-rubric")

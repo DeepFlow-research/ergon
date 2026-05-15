@@ -17,7 +17,7 @@ from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
-from ergon_builtins.benchmarks.minif2f.worker_factory import MiniF2FReactWorker
+from ergon_builtins.benchmarks.minif2f._legacy_workers import MiniF2FReactWorker
 from ergon_builtins.benchmarks.swebench_verified.benchmark import SweBenchVerifiedBenchmark
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
@@ -58,7 +58,7 @@ SANDBOX_MANAGERS: dict[str, type[BaseSandboxManager]] = {
 }
 
 SANDBOX_TEMPLATES: dict[str, Path] = {
-    "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox",
+    "minif2f": Path(__file__).parent / "benchmarks/minif2f/sandbox_template",
     "swebench-verified": Path(__file__).parent / "benchmarks/swebench_verified/sandbox",
 }
 

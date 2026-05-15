@@ -194,6 +194,21 @@ Benchmark loader → Task instances → Worker
   sizing decisions in a shared default and mask per-benchmark intent.
   Concrete workers declare their required construction contract; factories
   pass every kwarg explicitly.
+- **Per-benchmark code under top-level `sandboxes/` or `toolkits/`.**
+  A `LeanSandbox` is only useful inside MiniF2F; a `MiniF2FToolkit`
+  assumes `LeanSandbox`.  These belong in `benchmarks/minif2f/`, not in
+  cross-cutting top-level dirs that imply reuse that doesn't exist.  The
+  cardinality test: a file is cross-cutting only if N different benchmarks
+  would import it.  PR 6 introduced top-level `sandboxes/` / `toolkits/`
+  dirs; PR 6.5 deleted them and moved their contents into per-benchmark
+  subpackages.
+- **`<Benchmark>ReActWorker(ReActWorker)` subclasses.**  Making
+  per-benchmark worker subclasses costs N×M classes (N strategies ×
+  M benchmarks) and forces the agentic-loop logic to live in N subclasses
+  that all `super().execute()`.  The v2 pattern is: one worker class per
+  strategy in `workers/baselines/`, plus a per-benchmark factory function
+  in `benchmarks/<slug>/workers.py` that binds the strategy to the local
+  sandbox + toolkit + prompt.  Cost is N + M, not N × M.
 
 ## 7. Follow-ups
 
@@ -223,10 +238,39 @@ today and will be updated when an RFC lands and changes an invariant.
 | Always-available benchmark registry | `ergon_builtins/registry_core.py` |
 | Data-extra benchmark registry | `ergon_builtins/registry.py` |
 | Benchmark subpackages | `ergon_builtins/benchmarks/<slug>/` |
+| Per-benchmark Sandbox subclass | `ergon_builtins/benchmarks/<slug>/sandbox.py` |
+| Per-benchmark Toolkit config | `ergon_builtins/benchmarks/<slug>/toolkit.py` |
+| Per-benchmark worker factories | `ergon_builtins/benchmarks/<slug>/workers.py` |
+| Per-benchmark legacy (PR 11 deletes) | `ergon_builtins/benchmarks/<slug>/_legacy_workers.py` |
 | Cross-benchmark reference workers | `ergon_builtins/workers/baselines/` |
+| Cross-cutting sandbox-adapter infra | `ergon_builtins/sandbox/` |
 | Reusable Criterion primitives | `ergon_builtins/evaluators/criteria/` |
 | Reusable Rubric composites | `ergon_builtins/evaluators/rubrics/` |
-| v2 object-bound Sandbox subclasses | `ergon_builtins/sandboxes/` |
-| v2 serializable Toolkit configs | `ergon_builtins/toolkits/` |
 | Model backends | `ergon_builtins/models/` |
 | Onboarding deps dict | `ergon_cli/onboarding/profile.py` |
+
+## Cardinality and Colocation
+
+The file layout follows the actual coupling cardinalities between
+`Sandbox`, `Toolkit`, `Worker`, `Evaluator`, `Criterion`, and `Benchmark`:
+
+| Pair | Cardinality | Lives where |
+|------|-------------|-------------|
+| Benchmark ↔ Sandbox | 1↔1 (in practice) | `benchmarks/<slug>/sandbox.py` |
+| Sandbox ↔ Toolkit | 1↔N possible, 1↔1 in practice | `benchmarks/<slug>/toolkit.py` |
+| Toolkit ↔ Worker class | N↔M (loose) | Worker class in `workers/baselines/`; binding in `benchmarks/<slug>/workers.py` |
+| Worker class ↔ Benchmark | N↔1 (one ReActWorker, N benchmarks) | Worker class in `workers/baselines/` |
+| Evaluator ↔ Benchmark | 1↔1 (rubric); N↔M (reusable criteria) | Rubric in `benchmarks/<slug>/rubric.py`; benchmark-specific criteria in `benchmarks/<slug>/criteria/`; reusable criteria in top-level `evaluators/criteria/` |
+| Evaluator ↔ Sandbox | 1↔1 if agentic, 0 otherwise | Same as Evaluator ↔ Benchmark |
+
+**The test for "where does X live?":**
+
+- 1:1 with a benchmark → `benchmarks/<slug>/`
+- N:1 across benchmarks → top-level under its category
+
+`Sandbox` and `Toolkit` fail the test for cross-cutting (every concrete
+class is 1:1 with a benchmark); they live per-benchmark.  `ReActWorker`
+passes (one class powers every benchmark); it stays under
+`workers/baselines/`.  The shared manager-backed sandbox adapter passes
+(one adapter wraps every benchmark's `BaseSandboxManager` subclass until
+PR 11); it gets its own top-level home in `sandbox/` (singular).

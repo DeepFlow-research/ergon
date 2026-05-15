@@ -7,7 +7,7 @@ infrastructure is still the source of truth for sandbox lifecycle.
 Migration trajectory:
 
 - **PR 10a** extracts ``_ManagerBackedSandboxRuntime`` into
-  ``ergon_builtins/sandboxes/_manager_backed.py`` for reuse by
+  ``ergon_builtins/sandbox/_manager_backed.py`` for reuse by
   swebench / researchrubrics / gdpeval ``Sandbox`` subclasses.
 - **PR 11** deletes ``MiniF2FSandboxManager`` (and the rest of the
   per-benchmark manager files); ``provision()`` and ``_bind_runtime()``
@@ -60,7 +60,7 @@ class _E2BSandboxHandle(Protocol):
 
 
 # TODO(PR 10a): extract this class into a shared
-# `ergon_builtins/sandboxes/_manager_backed.py` so SWEBench /
+# `ergon_builtins/sandbox/_manager_backed.py` so SWEBench /
 # ResearchRubrics / GDPEval `Sandbox` subclasses can reuse it.
 # TODO(PR 11): rewrite or delete.  Once `BaseSandboxManager` subclasses
 # are gone, this adapter has nothing to wrap — `LeanSandbox.provision()`
