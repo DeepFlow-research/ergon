@@ -153,10 +153,22 @@ def _assert_run_turn_counts(run_id: UUID) -> None:
 def _assert_run_evaluation(run_id: UUID) -> None:
     """Exactly 2 root RunTaskEvaluation rows with score 1.0.
 
-    Retries for up to 30 s because the evaluator Inngest function fires
-    asynchronously after the root task reaches terminal state.  The second
-    evaluator is the root timing marker; both must be created after root
-    execution completed.
+    Retries for up to 30 s because the evaluator invocations land
+    asynchronously even though PR 4's ``execute_task`` fanout is
+    synchronous within the orchestrator. The second evaluator is the
+    root timing marker.
+
+    Note on ordering: pre-PR-4 the evaluator was a sibling Inngest
+    function triggered by ``task/completed``, so evaluations were
+    written strictly after ``RunTaskExecution.completed_at``. PR 4
+    moved fanout inside ``execute_task`` via ``ctx.group.parallel``
+    after ``persist_outputs`` returns, so evaluation rows are written
+    *before* ``finalize_success`` stamps ``completed_at``. The
+    ordering invariant the assertion enforces is now structural — the
+    orchestrator only fans out after worker output has been persisted
+    — and the temporal check against ``completed_at`` no longer
+    captures that. The retained checks (count, scores, snapshot DTOs)
+    cover the observable contract.
     """
     deadline = time.monotonic() + 30
     evaluations = []
@@ -171,15 +183,6 @@ def _assert_run_evaluation(run_id: UUID) -> None:
     assert len(evaluations) == 2, f"expected 2 root task evaluations, got {len(evaluations)}"
     scores = [evaluation.score for evaluation in evaluations]
     assert scores == [1.0, 1.0], f"expected two score 1.0 evaluations, got {scores}"
-    early = [
-        evaluation.created_at
-        for evaluation in evaluations
-        if evaluation.created_at < root_execution.completed_at
-    ]
-    assert not early, (
-        "root evaluations must be created after the root execution completes; "
-        f"early timestamps={early}, completed_at={root_execution.completed_at}"
-    )
     snapshot = require_run_snapshot(run_id)
     assert snapshot.final_score == 1.0
     snapshot_evaluations = list(snapshot.evaluations_by_task.values())
