@@ -11,7 +11,8 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
 )
-from sqlmodel import Session
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord
+from sqlmodel import Session, select
 
 
 class DefinitionRepository:
@@ -32,3 +33,27 @@ class DefinitionRepository:
         if instance is None:
             raise DefinitionInstanceNotFoundError(task.instance_id)
         return task, instance
+
+    def list_by_experiment_tag(
+        self,
+        session: Session,
+        tag: str,
+    ) -> list[BenchmarkDefinitionRecord]:
+        """List ``BenchmarkDefinitionRecord`` rows tagged with ``tag``.
+
+        The ``experiment`` column groups records into a named logical
+        experiment; this helper is the read side of that grouping.
+        """
+        stmt = select(BenchmarkDefinitionRecord).where(
+            BenchmarkDefinitionRecord.experiment == tag,
+        )
+        return list(session.exec(stmt).all())
+
+    def distinct_experiment_tags(self, session: Session) -> list[str]:
+        """Distinct non-null ``experiment`` tag values across all records."""
+        stmt = (
+            select(BenchmarkDefinitionRecord.experiment)
+            .where(BenchmarkDefinitionRecord.experiment.is_not(None))
+            .distinct()
+        )
+        return [row for row in session.exec(stmt).all() if row is not None]
