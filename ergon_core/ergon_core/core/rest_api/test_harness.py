@@ -27,7 +27,7 @@ from ergon_core.core.application.events.task_events import WorkflowStartedEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
 from ergon_core.core.application.experiments.service import (
-    ExperimentService,
+    run_experiment as _run_experiment,
 )
 from ergon_core.core.application.experiments.models import (
     ExperimentRunRequest,
@@ -472,10 +472,7 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
             s.refresh(bench_def)
             experiment_id = bench_def.id
 
-        experiment_service = ExperimentService()
-        launched = await experiment_service.run_experiment(
-            ExperimentRunRequest(experiment_id=experiment_id)
-        )
+        launched = await _run_experiment(ExperimentRunRequest(experiment_id=experiment_id))
         run_ids.extend(launched.run_ids)
 
     return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)
