@@ -238,10 +238,32 @@ from ergon_builtins.benchmarks.gdpeval import (
 )
 from ergon_core.api import persist_benchmark, launch_run
 
-benchmark = GDPEvalBenchmark(worker_factory=make_gdpeval_worker, limit=10)
-handle = persist_benchmark(benchmark, name="gdpeval-react", experiment="gdp-eval-2026")
+benchmark = GDPEvalBenchmark(
+    name="gdpeval-react",
+    metadata={"experiment": "gdp-eval-2026"},
+    worker_factory=make_gdpeval_worker,
+    limit=10,
+)
+handle = persist_benchmark(benchmark)
 await launch_run(handle.definition_id)
 ```
+
+## Task 5.5: Migrate The Matching Smoke Fixture (closes the gate)
+
+**Files:**
+
+- Modify: `tests/fixtures/smoke_components/benchmarks.py` — `GDPEvalSmokeBenchmark` (or whichever subclass exists; add one if not)
+
+PR 6 (minif2f), PR 10a (swebench), PR 10b (researchrubrics) each
+migrated their matching smoke-fixture row. PR 10c does the last one.
+After this step, **`tests/fixtures/smoke_components/benchmarks.py`
+imports `Task` (not `TaskSpec`) for every benchmark** — which is the
+prerequisite PR 11 needs to delete `TaskSpec` outright.
+
+- [ ] **Step 1: Add a concrete `GDPEvalSmokeTask(Task[...])` subclass**
+- [ ] **Step 2: Override `build_instances` to return that Task with `evaluators=(...)`** (mirror the prior three smoke-fixture migrations)
+- [ ] **Step 3: Sweep the file for any remaining `TaskSpec` references** — after this PR, the import line should drop `TaskSpec` entirely.
+- [ ] **Step 4: Update `_SingleTaskSmokeBenchmark` base class** — once every subclass overrides `build_instances`, the base's `TaskSpec`-shaped default can be deleted. Either delete the base method (preferred — each subclass owns its build) or convert it to raise `NotImplementedError`.
 
 ## Task 6: Tests
 
@@ -257,16 +279,16 @@ from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
 
 @pytest.mark.asyncio
 async def test_gdpeval_persists_object_bound_task_json(session_factory):
-    benchmark = GDPEvalBenchmark(limit=1)
-
-    handle = persist_benchmark(
-        benchmark,
+    benchmark = GDPEvalBenchmark(
         name="gdpeval-smoke",
-        metadata={"created_by": "test"},
+        metadata={"author": "test"},
+        limit=1,
     )
+
+    handle = persist_benchmark(benchmark)
     with session_factory() as session:
         rows = session.exec(
-            "SELECT task_json FROM benchmark_definition_tasks "      # table renamed in PR 6.5
+            "SELECT task_json FROM experiment_definition_tasks "
             "WHERE definition_id = :d",
             {"d": handle.definition_id},
         ).all()
@@ -400,24 +422,34 @@ are slimmed to model-backend registrations only.
 Bridge code introduced: `GDPEvalSandbox` wraps the legacy manager via
 `ManagerBackedSandboxRuntime`.
 
-Bridge code retired (partially):
-- GDPEval tasks now carry `task.worker`/`task.sandbox` inline, so
-  GDPEval runs no longer hit the `_legacy_worker_bridge` fallback that
-  PR 5 Task 4b put on `worker_execute`. After PR 10c, no benchmark
-  still produces `TaskSpec` — the "must support" set for
-  `_legacy_worker_bridge.legacy_worker_from_payload` is empty. The
-  fallback file is not deleted here; PR 11 owns the `git rm` plus the
-  `if worker is None:` branch removal in `worker_execute.py`.
+Bridge code retired (fully — after this PR's smoke-fixture migration):
+- GDPEval tasks now carry `task.worker`/`task.sandbox`/`task.evaluators`
+  inline, so GDPEval runs no longer hit either the
+  `_legacy_worker_bridge` fallback on `worker_execute` or the symmetric
+  `_legacy_evaluator_bridge` fallback on `evaluate_task_run`.
+- After PR 10c + the smoke-fixture migration in Task 6.5, **no
+  benchmark — production or smoke fixture — still produces `TaskSpec`**.
+  The "must support" sets for both `_legacy_worker_bridge` and
+  `_legacy_evaluator_bridge` are empty.
+- The two bridge files are not deleted here; PR 11 owns the `git rm`
+  plus the `if worker is None:` and `if not task.evaluators:` branch
+  removals in `worker_execute.py` and `evaluate_task_run.py`.
 
 Old path still intentionally alive: `gdpeval/sandbox.py`,
 `gdpeval/sandbox_utils.py`, slimmed `registry*.py` modules,
 `BaseSandboxManager`, all per-benchmark `sandbox_manager.py` files (kept
-until PR 11 deletes them in one sweep), and `_legacy_worker_bridge.py`
-(now unreachable from any benchmark, but the file stays until PR 11
-removes it together with the `worker_execute` fallback branch).
+until PR 11 deletes them in one sweep), `_legacy_worker_bridge.py`,
+and `_legacy_evaluator_bridge.py` (both unreachable from any benchmark
+after this PR, but the files stay until PR 11 removes them together
+with the matching fallback branches).
+
+Migrations: this PR adds **no Alembic migration** (code-only changes).
+Next free migration id is `aabbccdd0005` (PR 7 reserves `aabbccdd0004`;
+PR 10a / 10b do not add migrations).
 
 Deletion gate: PR 11 deletes the registry modules, per-benchmark
-sandbox managers, and `_legacy_worker_bridge.py`.
+sandbox managers, `_legacy_worker_bridge.py`, and
+`_legacy_evaluator_bridge.py`.
 
 Tests added or updated: GDPEval definition JSON + reconstruction +
 no-registry architecture guard across all four migrated benchmarks.

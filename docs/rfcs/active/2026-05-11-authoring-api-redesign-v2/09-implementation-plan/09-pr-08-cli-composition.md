@@ -29,17 +29,27 @@ ergon_cli/tests/unit/cli/test_run_cli.py        # tests for the new commands
 ergon_cli/ergon_cli/commands/experiment.py      # add show + list, after PR 6.5 deleted define/run
 ergon_cli/ergon_cli/__main__.py                 # register new subparsers
 ergon_cli/tests/unit/cli/test_experiment_cli.py # tests for show + list
-ergon_core/ergon_core/core/persistence/telemetry/repositories.py  # add small repo methods if needed (list_by_experiment, distinct_experiments)
+ergon_core/ergon_core/core/persistence/telemetry/repository.py  # add small repo methods if needed (list_by_experiment, distinct_experiments)
 ```
 
 ## Current State (after PR 6.5)
 
 After PR 6.5 lands:
 
-- `Experiment` class is gone.
-- `persist_benchmark(benchmark, *, name, experiment=None, metadata=None) -> DefinitionHandle` is the authoring API.
+- The public `Experiment` wrapper class is gone (PR 6.5).
+- `persist_benchmark(benchmark) -> DefinitionHandle` is the authoring API
+  (module-level function in `ergon_core.api`). Identity fields (``name``,
+  ``description``, ``metadata``) are read off the ``Benchmark`` instance
+  directly — no kwargs.
 - `BenchmarkDefinitionRecord` is the persisted row, with an `experiment: str | None` column.
 - The CLI has no `experiment define` / `experiment run` / `run <benchmark>` commands — those were deleted.
+- **Note on the `experiment` tag:** the `BenchmarkDefinitionRecord.experiment`
+  column exists for grouping definitions under a named experiment, but
+  there is **no `experiment` kwarg on `persist_benchmark`** today. Tagging
+  is currently a write-side-only column populated by the test harness;
+  if PR 8 needs CLI-driven tagging, this PR must add a wiring path (most
+  naturally a `Benchmark(experiment=...)` constructor kwarg matching the
+  `name`/`description`/`metadata` shape).
 - The CLI has `experiment` and `run` top-level subcommand groups registered but mostly empty after PR 6.5.
 
 Users currently kick off runs from Python.  They have no CLI way to check status or cancel.  This PR fills that gap.
@@ -224,7 +234,10 @@ After PR 6.5 deleted `handle_experiment_define` / `handle_experiment_run`, this 
       ensure_db()
       names = DefinitionRepository().distinct_experiments()
       if not names:
-          print("No experiments yet.  Tag definitions via persist_benchmark(..., experiment='...').")
+          print(
+              "No experiments yet.  Tag definitions by setting "
+              "`experiment` on the Benchmark (or via the cohort harness)."
+          )
           return 0
       for n in names:
           print(n)
@@ -419,8 +432,13 @@ After PR 6.5 deleted `handle_experiment_define` / `handle_experiment_run`, this 
   from ergon_core.api import persist_benchmark, launch_run
 
   async def main():
-      b = MiniF2FBenchmark(worker_factory=make_minif2f_worker, limit=1)
-      h = persist_benchmark(b, name='smoke', experiment='smoke-test')
+      b = MiniF2FBenchmark(
+          name='smoke',
+          metadata={'experiment': 'smoke-test'},
+          worker_factory=make_minif2f_worker,
+          limit=1,
+      )
+      h = persist_benchmark(b)
       print(f'DEFINITION_ID={h.definition_id}')
       await launch_run(h.definition_id)
 
@@ -455,7 +473,7 @@ No authoring path on the CLI; Python remains the only way to start a run."
 - All `pnpm run check:be` steps green.
 - All `pnpm run test:be:fast` tests pass (including new CLI tests).
 - Manual smoke (Task 7 Step 3) succeeds end-to-end.
-- `ergon experiment list` returns expected tags after `persist_benchmark(..., experiment=...)` calls.
+- `ergon experiment list` returns expected tags after definitions are persisted (the experiment tag is currently sourced via `Benchmark(metadata={"experiment": ...})` and read from `BenchmarkDefinitionRecord.experiment`; PR 8 may add a first-class `Benchmark(experiment=...)` kwarg).
 - `ergon run status <run-id>` returns expected status for a known run.
 
 ## What This PR Is NOT

@@ -285,10 +285,32 @@ from ergon_builtins.benchmarks.researchrubrics import (
 )
 from ergon_core.api import persist_benchmark, launch_run
 
-benchmark = ResearchRubricsBenchmark(worker_factory=make_research_worker, limit=10)
-handle = persist_benchmark(benchmark, name="research-react", experiment="rr-eval-2026")
+benchmark = ResearchRubricsBenchmark(
+    name="research-react",
+    metadata={"experiment": "rr-eval-2026"},
+    worker_factory=make_research_worker,
+    limit=10,
+)
+handle = persist_benchmark(benchmark)
 await launch_run(handle.definition_id)
 ```
+
+## Task 6.5: Migrate The Matching Smoke Fixture
+
+**Files:**
+
+- Modify: `tests/fixtures/smoke_components/benchmarks.py` — `ResearchRubricsSmokeBenchmark`
+- Modify: `tests/fixtures/smoke_components/criteria/smoke_rubrics.py` — `ResearchRubricsSmokeRubric`
+
+Symmetric with PR 10a's smoke-fixture migration. The production
+ResearchRubrics benchmark migrates to `Task` here, but the smoke
+fixture at `tests/fixtures/smoke_components/benchmarks.py` still uses
+`TaskSpec`. Migrate it in lockstep so `_legacy_evaluator_bridge` and
+`_legacy_worker_bridge` get one step closer to deletable.
+
+- [ ] **Step 1: Add `ResearchRubricsSmokeTask(Task[...])` concrete subclass**
+- [ ] **Step 2: Override `build_instances` to return that Task with `evaluators=(...)`** (mirror PR 6 minif2f + PR 10a swebench)
+- [ ] **Step 3: Migrate `ResearchRubricsSmokeRubric` to pure Pydantic** (drop custom `__init__`; use `model_validator(mode="after")` to build criteria)
 
 ## Task 7: Tests
 
@@ -306,16 +328,16 @@ from ergon_builtins.benchmarks.researchrubrics.benchmark import (
 
 @pytest.mark.asyncio
 async def test_research_rubrics_persists_object_bound_task_json(session_factory):
-    benchmark = ResearchRubricsBenchmark(limit=1)
-
-    handle = persist_benchmark(
-        benchmark,
+    benchmark = ResearchRubricsBenchmark(
         name="research-smoke",
-        metadata={"created_by": "test"},
+        metadata={"author": "test"},
+        limit=1,
     )
+
+    handle = persist_benchmark(benchmark)
     with session_factory() as session:
         rows = session.exec(
-            "SELECT task_json FROM benchmark_definition_tasks "      # table renamed in PR 6.5
+            "SELECT task_json FROM experiment_definition_tasks "
             "WHERE definition_id = :d",
             {"d": handle.definition_id},
         ).all()
@@ -372,14 +394,22 @@ via `ManagerBackedSandboxRuntime` (the shared adapter PR 10a created).
 Bridge code retired (partially):
 - ResearchRubrics tasks now carry `task.worker`/`task.sandbox` inline,
   so ResearchRubrics runs no longer hit the `_legacy_worker_bridge`
-  fallback that PR 5 Task 4b put on `worker_execute`. The fallback
-  itself stays alive — it still serves gdpeval until it migrates in
-  PR 10c. PR 11 deletes the fallback once every benchmark is on
-  object-bound `Task`.
+  fallback on `worker_execute`.
+- ResearchRubrics tasks also carry `task.evaluators` inline, so they no
+  longer hit the symmetric `_legacy_evaluator_bridge` fallback on
+  `evaluate_task_run`. (Particularly relevant here since ResearchRubrics
+  is judge-driven and lives on the eval side.)
+- Both fallbacks stay alive — they still serve gdpeval and any
+  unmigrated smoke fixtures until PR 10c migrates them. PR 11 deletes
+  both bridges once every benchmark is on object-bound `Task`.
 
 Old path still intentionally alive: `researchrubrics/sandbox_manager.py`,
-registry registrations, and `_legacy_worker_bridge.py` (still required
-by gdpeval).
+registry registrations, `_legacy_worker_bridge.py`, and
+`_legacy_evaluator_bridge.py` (the last two still required by gdpeval).
+
+Migrations: this PR adds **no Alembic migration** (the change is
+code-only). If a migration is needed, it claims `aabbccdd0005` (PR 7
+reserves `aabbccdd0004`; PR 10a does not add one).
 
 Deletion gate: PR 11 deletes the manager file and registry registrations.
 PR 10c's cross-cutting cleanup verifies migrated benchmarks no longer

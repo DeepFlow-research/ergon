@@ -21,6 +21,8 @@ from ergon_core.core.application.experiments.models import (
     ExperimentRunResult,
     RunAssignment,
 )
+from ergon_core.core.application.experiments.definition_writer import _ExperimentDefinitionWriter
+
 from ergon_core.core.application.workflows.runs import create_run
 from pydantic import BaseModel
 
@@ -114,10 +116,6 @@ def _persist_single_sample_workflow_definition(
     experiment: BenchmarkDefinitionRecord,
     assignment: RunAssignment,
 ) -> DefinitionHandle:
-    from ergon_core.core.application.experiments.definition_writer import (  # slopcop: ignore[guarded-function-import] -- reason: keep definition writing behind application launch plumbing
-        _ExperimentDefinitionWriter,
-    )
-
     benchmark_slug = _metadata_str(experiment, "benchmark_slug") or experiment.benchmark_type
     benchmark = _single_sample_benchmark(benchmark_slug, assignment.instance_key)
     worker_slug = _primary_worker_slug(assignment.worker_team)
