@@ -1,17 +1,25 @@
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from ergon_core.core.application.experiments import launch as launch_module
+from ergon_core.core.application.experiments.launch import launch_run
 from ergon_core.core.application.experiments.models import ExperimentRunRequest, RunAssignment
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.application.experiments.service import run_experiment
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
 
 
 class _FakeSession:
-    def __init__(self, experiment: BenchmarkDefinitionRecord) -> None:
+    def __init__(
+        self,
+        experiment: BenchmarkDefinitionRecord | None = None,
+        definition: ExperimentDefinition | None = None,
+    ) -> None:
         self.experiment = experiment
+        self.definition = definition
 
     def __enter__(self) -> "_FakeSession":
         return self
@@ -20,8 +28,18 @@ class _FakeSession:
         return None
 
     def get(self, cls, row_id):
-        if cls is BenchmarkDefinitionRecord and row_id == self.experiment.id:
+        if (
+            cls is BenchmarkDefinitionRecord
+            and self.experiment is not None
+            and row_id == self.experiment.id
+        ):
             return self.experiment
+        if (
+            cls is ExperimentDefinition
+            and self.definition is not None
+            and row_id == self.definition.id
+        ):
+            return self.definition
         return None
 
     def add(self, row) -> None:
@@ -102,3 +120,57 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
         {"extras": ["none"]},
     ]
     assert len(emitted) == 2
+
+
+@pytest.mark.asyncio
+async def test_launch_run_accepts_definition_id_without_experiment_record(monkeypatch):
+    """``launch_run`` materializes a run straight from ``ExperimentDefinition``.
+
+    The real DB write inside ``create_run`` is blocked by
+    ``RunRecord.experiment_id`` / ``RunRecord.instance_key`` NOT NULL
+    until PR 11 narrows the schema, so ``create_run`` is mocked here.
+    The orchestration around it (session lookup, emitter, result shape)
+    is still exercised end-to-end against the new definition-first path.
+    """
+
+    definition = ExperimentDefinition(
+        id=uuid4(),
+        benchmark_type="mini",
+        name="mini",
+        metadata_json={},
+    )
+    captured: dict = {}
+
+    def fake_create_run(handle, **kwargs):
+        captured["handle"] = handle
+        captured["kwargs"] = kwargs
+        return RunRecord(
+            id=uuid4(),
+            status=RunStatus.PENDING,
+            benchmark_type=handle.benchmark_type,
+            workflow_definition_id=kwargs.get("workflow_definition_id"),
+            worker_team_json=kwargs.get("worker_team_json") or {},
+        )
+
+    monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession(definition=definition))
+    monkeypatch.setattr(launch_module, "create_run", fake_create_run)
+
+    emitter = AsyncMock()
+    result = await launch_run(definition.id, emit_workflow_started=emitter)
+
+    # Orchestration: create_run was reached with the definition handle.
+    assert captured["handle"].definition_id == definition.id
+    assert captured["handle"].benchmark_type == "mini"
+    assert captured["kwargs"]["workflow_definition_id"] == definition.id
+    # PR 11 tracking: legacy NOT NULL columns are passed None for now.
+    assert captured["kwargs"]["experiment_id"] is None
+    assert captured["kwargs"]["instance_key"] is None
+
+    # Result shape mirrors the spec.
+    assert result.experiment_id == definition.id
+    assert result.workflow_definition_ids == [definition.id]
+    assert result.run_ids
+    assert len(result.run_ids) == 1
+
+    # Emitter was awaited with the new run id and the definition id.
+    emitter.assert_awaited_once_with(result.run_ids[0], definition.id)
