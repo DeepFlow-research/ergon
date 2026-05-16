@@ -49,7 +49,7 @@ def swebench_execution() -> tuple[UUID, UUID]:
     execution_id = uuid4()
 
     with get_session() as session:
-        defn = ExperimentDefinition(benchmark_type="swebench-verified")
+        defn = ExperimentDefinition(benchmark_type="swebench-verified", name="swebench-verified")
         session.add(defn)
         session.flush()
         session.refresh(defn)

@@ -188,6 +188,7 @@ class ExternalRunWriter:
         if self._definition is None:
             self._definition = ExperimentDefinition(
                 benchmark_type=f"imported:{self._source.dataset}",
+                name=f"imported:{self._source.dataset}",
                 metadata_json={
                     "imported": True,
                     "source_slug": self._source.dataset,
