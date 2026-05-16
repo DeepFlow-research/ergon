@@ -12,8 +12,8 @@ before the column flips to NOT NULL, which is consistent with the
 SQLModel field declaration ``name: str = Field(index=True)``. PR 11
 collapses the remaining dual-write paths once every reader migrates.
 
-Revision ID: aabbccdd0004
-Revises: aabbccdd0003
+Revision ID: aabbccdd0005
+Revises: aabbccdd0004
 Create Date: 2026-05-15
 """
 
@@ -22,8 +22,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "aabbccdd0004"
-down_revision = "aabbccdd0003"
+revision = "aabbccdd0005"
+down_revision = "aabbccdd0004"
 branch_labels = None
 depends_on = None
 

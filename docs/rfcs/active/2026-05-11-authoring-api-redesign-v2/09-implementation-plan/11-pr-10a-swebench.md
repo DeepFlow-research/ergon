@@ -540,8 +540,10 @@ two are still required by researchrubrics, gdpeval, and any unmigrated
 smoke fixtures).
 
 Migrations: this PR adds **no Alembic migration** (the SWEBench changes
-are code-only). The next free migration id is `aabbccdd0005`; reserve
-it for PR 10b if/when needed.
+are code-only). The next free migration id is `aabbccdd0006` (PR 6.5
+took `aabbccdd0004` for `add_experiment_tag`; PR 7 took `aabbccdd0005`
+for `definition_metadata_and_launch`); reserve it for PR 10b if/when
+needed.
 
 Deletion gate: PR 11 deletes the manager file and registry registrations.
 PR 10c's cross-cutting cleanup verifies migrated benchmarks no longer
