@@ -4,7 +4,10 @@ from argparse import Namespace
 import logging
 from uuid import UUID
 
+from ergon_core.core.application.experiments.repository import DefinitionRepository
 from ergon_core.core.application.read_models.experiments import ExperimentReadService
+from ergon_core.core.application.workflows.runs import latest_run_for_definition
+from ergon_core.core.persistence.shared.db import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,11 @@ async def handle_experiment(args: Namespace) -> int:
         return handle_experiment_show(args)
     if args.experiment_action == "list":
         return handle_experiment_list(args)
-    logger.error("Usage: ergon experiment {show|list}")
+    if args.experiment_action == "tags":
+        return handle_experiment_tags(args)
+    if args.experiment_action == "by-tag":
+        return handle_experiment_by_tag(args)
+    logger.error("Usage: ergon experiment {show|list|tags|by-tag}")
     return 1
 
 
@@ -73,6 +80,46 @@ def handle_experiment_list(args: Namespace) -> int:
             experiment.sample_count,
             experiment.run_count,
             "" if experiment.default_model_target is None else experiment.default_model_target,
+        )
+    return 0
+
+
+def handle_experiment_tags(args: Namespace) -> int:
+    _ensure_cli_logging()
+    with get_session() as session:
+        tags = DefinitionRepository().distinct_experiment_tags(session)
+    if not tags:
+        logger.info(
+            "No experiment tags yet.  Tag definitions by setting "
+            "`experiment` on the underlying record (cohort harness)."
+        )
+        return 0
+    for tag in tags:
+        logger.info("%s", tag)
+    return 0
+
+
+def handle_experiment_by_tag(args: Namespace) -> int:
+    _ensure_cli_logging()
+    with get_session() as session:
+        records = DefinitionRepository().list_by_experiment_tag(
+            session,
+            args.tag,
+        )
+    if not records:
+        logger.info("No definitions tagged with experiment=%r", args.tag)
+        return 0
+    logger.info("DEFINITION_ID\tNAME\tBENCHMARK\tSTATUS\tLATEST_RUN_STATUS")
+    for record in records:
+        latest = latest_run_for_definition(record.id)
+        latest_status = latest.status if latest else "no runs"
+        logger.info(
+            "%s\t%s\t%s\t%s\t%s",
+            record.id,
+            record.name,
+            record.benchmark_type,
+            record.status,
+            latest_status,
         )
     return 0
 
