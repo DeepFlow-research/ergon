@@ -37,7 +37,7 @@ WorkflowStartedEmitter = Callable[[UUID, UUID], Awaitable[None]]
 async def launch_run(
     definition_id: UUID,
     *,
-    metadata: Mapping[str, JsonValue] | None = None,
+    assignment_metadata: Mapping[str, JsonValue] | None = None,
     emit_workflow_started: WorkflowStartedEmitter | None = None,
 ) -> ExperimentRunResult:
     """Materialize a run directly from an ``ExperimentDefinition`` row.
@@ -46,6 +46,12 @@ async def launch_run(
     legacy ``BenchmarkDefinitionRecord`` lookup entirely — identity comes
     from ``ExperimentDefinition``. PR 11 narrows ``create_run`` so the
     ``experiment_id=None`` / ``instance_key=None`` calls land cleanly.
+
+    ``assignment_metadata`` flows into ``RunRecord.assignment_json`` — the
+    assignment-metadata column that historically holds arm-key style values
+    (e.g. ``{"arm_key": "default"}``). It is NOT a free-form launch metadata
+    bag; values land in the assignment column verbatim and downstream
+    consumers read them as assignment metadata.
     """
     emitter = emit_workflow_started or _emit_workflow_started
     with get_session() as session:
@@ -65,7 +71,7 @@ async def launch_run(
             model_target=None,
             sandbox_slug=None,
             dependency_extras_json={},
-            assignment_json=dict(metadata or {}),
+            assignment_json=dict(assignment_metadata or {}),
             seed=None,
         )
     await emitter(run.id, definition_id)
