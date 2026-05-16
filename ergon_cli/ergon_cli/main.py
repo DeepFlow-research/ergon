@@ -46,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
     experiment_show.add_argument("experiment_id", help="Experiment UUID")
     experiment_list = experiment_sub.add_parser("list", help="List experiments")
     experiment_list.add_argument("--limit", type=int, default=50, help="Number of experiments")
+    experiment_sub.add_parser("tags", help="List distinct experiment tags")
+    experiment_by_tag_parser = experiment_sub.add_parser(
+        "by-tag", help="List definitions for an experiment tag"
+    )
+    experiment_by_tag_parser.add_argument("tag", help="Experiment tag")
 
     run = sub.add_parser("run", help="Run management")
     run_sub = run.add_subparsers(dest="run_action")
@@ -56,8 +61,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Filter by status (pending, executing, completed, failed, cancelled)",
     )
+    run_list_parser.add_argument(
+        "--experiment",
+        default=None,
+        help="Filter by experiment tag (BenchmarkDefinitionRecord.experiment)",
+    )
     run_cancel_parser = run_sub.add_parser("cancel", help="Cancel a running experiment")
     run_cancel_parser.add_argument("run_id", help="Run ID (UUID) to cancel")
+    run_status_parser = run_sub.add_parser("status", help="Show status of one run")
+    run_status_parser.add_argument("run_id", help="Run ID (UUID)")
 
     ingest = sub.add_parser("ingest", help="Import public artifacts into Ergon")
     ingest_sub = ingest.add_subparsers(dest="ingest_action")
