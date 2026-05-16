@@ -28,6 +28,7 @@ class Benchmark(ABC):
             Any,  # slopcop: ignore[no-typing-any] -- public metadata bag accepts arbitrary JSON-like values
         ]
         | None = None,
+        created_by: str | None = None,
     ) -> None:
         self.name = name or self.__class__.__name__
         self.description = description or ""
@@ -35,6 +36,7 @@ class Benchmark(ABC):
             str,
             Any,  # slopcop: ignore[no-typing-any] -- preserves caller-supplied benchmark metadata values
         ] = dict(metadata or {})
+        self.created_by = created_by
 
     @abstractmethod
     def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel] | Task[BaseModel]]]:

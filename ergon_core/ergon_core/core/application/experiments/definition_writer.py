@@ -114,12 +114,12 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
     definition_id = uuid4()
 
     # -- definition row --
-    # TODO(PR 7 Task 2): source ``name`` / ``description`` / ``created_by``
-    # from the ``benchmark`` instance instead of mirroring ``benchmark_type``.
     definition_row = ExperimentDefinition(
         id=definition_id,
         benchmark_type=benchmark_type,
-        name=benchmark_type,
+        name=benchmark.name if benchmark.name is not None else benchmark_type,
+        description=benchmark.description,
+        created_by=benchmark.created_by,
         metadata_json=resolved_metadata,
         created_at=now,
     )
@@ -271,12 +271,14 @@ class _ExperimentDefinitionWriter:
         definition_id = uuid4()
 
         # -- definition row --
-        # TODO(PR 7 Task 2): source ``name`` / ``description`` / ``created_by``
-        # from the ``benchmark`` instance instead of mirroring ``benchmark_type``.
         definition_row = ExperimentDefinition(
             id=definition_id,
             benchmark_type=benchmark_type,
-            name=benchmark_type,
+            name=experiment.benchmark.name
+            if experiment.benchmark.name is not None
+            else benchmark_type,
+            description=experiment.benchmark.description,
+            created_by=experiment.benchmark.created_by,
             metadata_json=dict(experiment.metadata),
             created_at=now,
         )
