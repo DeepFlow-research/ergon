@@ -22,6 +22,14 @@ owned by that module.
   the evaluator binding keys it expects via `evaluator_requirements()`. Carries
   a `type_slug: ClassVar[str]` that is a keyed identifier across the CLI, the
   onboarding profile, and the benchmark registry — renames are breaking.
+  `Benchmark.__init__` accepts four keyword-only identity kwargs with sensible
+  defaults: `name: str | None = None` (collapses to the subclass name via
+  `or self.__class__.__name__`), `description: str | None = None` (collapses to
+  `""`), `metadata: Mapping[str, Any] | None = None` (copied into a fresh dict),
+  and `created_by: str | None = None` (PR 7; preserved as `None` when unset —
+  see the asymmetry note in `benchmark.py`). These four fields are exactly what
+  `persist_benchmark` reads off the instance to populate the corresponding
+  `experiment_definitions` columns; there is no separate config object.
   Two authoring shapes are supported:
   - **v1 (legacy):** `build_instances()` returns `TaskSpec` objects; the evaluator
     slot is declared via `evaluator_requirements()` and bound by the `Experiment`.
@@ -98,17 +106,19 @@ owned by that module.
   `list_resources()` + `read_resource()` themselves. The one method that is
   not about sandbox/I/O is a candidate for extraction if the surface
   continues to accumulate capabilities.
-- **`persist_benchmark(benchmark, *, name, description, metadata, created_by, experiment) -> DefinitionHandle`** —
+- **`persist_benchmark(benchmark: Benchmark) -> DefinitionHandle`** —
   the v2 authoring entrypoint.  Replaces the deleted `Experiment` class
   (PR 6.5 hard-deleted it; see
   `docs/superpowers/brainstorms/2026-05-15-kill-experiment-class.md`).
   Walks `benchmark.build_instances()` to validate sandbox/worker
-  compatibility, then persists the configured benchmark as a
-  `BenchmarkDefinitionRecord` row with a UUID handle.  The `experiment`
-  kwarg is a `str | None` grouping tag — two definitions with the same
-  `experiment="..."` belong to the same logical experiment.  It is NOT
-  a class — the word "experiment" survives in the vocabulary as a label,
-  not as an abstraction.
+  compatibility, then persists the configured benchmark as a definition
+  row with a UUID handle.  Identity (`name`, `description`, `metadata`,
+  `created_by`) is read directly off the `Benchmark` instance — the
+  former `*, name=..., description=..., metadata=..., created_by=...,
+  experiment=...` kwargs were dropped in PR 6.5's cleanup once the
+  `Experiment` wrapper went away.  Callers configure those fields by
+  passing them to `Benchmark.__init__` (see above); there is no
+  parallel config-object surface.
 
 ## control flow
 
