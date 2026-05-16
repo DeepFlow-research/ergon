@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.application.experiments import launch as launch_module
+from ergon_core.core.application.experiments import service as service_module
 from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 from ergon_core.core.application.experiments.launch import launch_run
 from ergon_core.core.application.experiments.models import ExperimentRunRequest, RunAssignment
@@ -96,6 +97,7 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
     async def fake_emit(run_id, definition_id):
         emitted.append((run_id, definition_id))
 
+    monkeypatch.setattr(service_module, "get_session", lambda: _FakeSession(experiment))
     monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession(experiment))
     monkeypatch.setattr(launch_module, "create_run", fake_create_run)
 
