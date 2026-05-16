@@ -66,7 +66,8 @@ ergon_builtins/ergon_builtins/benchmarks/swebench_verified/worker_factory.py
 ergon_builtins/ergon_builtins/benchmarks/swebench_verified/benchmark.py
 ergon_builtins/ergon_builtins/benchmarks/swebench_verified/rubric.py
 ergon_builtins/ergon_builtins/benchmarks/README.md                            # add SWEBench row
-ergon_core/tests/unit/runtime/test_experiment_definition_service.py
+ergon_core/tests/unit/runtime/test_definition_writer.py
+tests/fixtures/smoke_components/benchmarks.py            # migrate SweBenchSmokeBenchmark in lockstep
 ```
 
 **Note: no `ergon_cli/ergon_cli/commands/_registry.py` edit.**  PR 6.5 deleted `BUILTIN_EXPERIMENT_FACTORIES`; there is no CLI registry to add an entry to.  The benchmark is discoverable via the `benchmarks/README.md` catalogue and importable from Python.
@@ -356,12 +357,71 @@ from ergon_builtins.benchmarks.swebench_verified import (
 )
 from ergon_core.api import persist_benchmark, launch_run
 
-benchmark = SWEBenchVerifiedBenchmark(worker_factory=make_swebench_worker, limit=10)
-handle = persist_benchmark(benchmark, name="swebench-react", experiment="swebench-eval-2026")
+benchmark = SWEBenchVerifiedBenchmark(
+    name="swebench-react",
+    metadata={"experiment": "swebench-eval-2026"},
+    worker_factory=make_swebench_worker,
+    limit=10,
+)
+handle = persist_benchmark(benchmark)
 await launch_run(handle.definition_id)
 ```
 
 That's the entire "register the benchmark" workflow.  Users discover it via the README; they author runs via Python.
+
+## Task 5.5: Migrate The Matching Smoke Fixture
+
+**Files:**
+
+- Modify: `tests/fixtures/smoke_components/benchmarks.py` — `SweBenchSmokeBenchmark`
+- Modify (if needed): `tests/fixtures/smoke_components/criteria/smoke_rubrics.py` — `SweBenchSmokeRubric`
+
+PR 5's retirement of `_evaluator_bridge` + PR 6's object-bound migration
+created an asymmetry: the **production** SWEBench benchmark migrates to
+`Task` here, but the **smoke fixture** at
+`tests/fixtures/smoke_components/benchmarks.py` still uses `TaskSpec`.
+Both must move together or PR 11 cannot delete `TaskSpec`.
+
+- [ ] **Step 1: Add a concrete `SweBenchSmokeTask(Task[...])` subclass**
+
+Mirrors the named-subclass pattern from PR 6 minif2f. Avoids the
+parameterized-generic ``Task[X]`` discriminator that `import_component`
+cannot resolve via ``getattr(module, "Task[X]")``.
+
+- [ ] **Step 2: Override `build_instances` to return `Task`**
+
+```python
+class SweBenchSmokeTask(Task[SWEBenchTaskPayload]):
+    ...
+
+class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
+    ...
+
+    def build_instances(self) -> Mapping[str, Sequence[Task[SWEBenchTaskPayload]]]:
+        payload = SWEBenchTaskPayload.model_validate(self.task_payload)
+        task = SweBenchSmokeTask(
+            task_slug=self.task_slug,
+            instance_key="default",
+            description=self.task_description,
+            evaluator_binding_keys=("default", "post-root"),
+            task_payload=payload,
+            evaluators=(
+                SweBenchSmokeRubric(name="default"),
+                SmokePostRootTimingRubric(name="post-root"),
+            ),
+        )
+        return {"default": [task]}
+```
+
+- [ ] **Step 3: Migrate `SweBenchSmokeRubric` to pure Pydantic**
+
+The smoke rubric currently has a custom `__init__(self, *, name, metadata=None)`
+that's incompatible with Pydantic's `model_validate` (used by
+`Evaluator.from_definition`). Replace with the
+`Field(default_factory=tuple, exclude=True)` + `@model_validator(mode="after")`
+pattern (see `ergon_builtins/benchmarks/minif2f/rubric.py` for the
+exemplar). PR 6 did this for `MiniF2FSmokeRubric`; this step does the
+same for the swebench counterpart.
 
 ## Task 6: Tests
 
@@ -379,16 +439,16 @@ from ergon_builtins.benchmarks.swebench_verified.benchmark import (
 
 @pytest.mark.asyncio
 async def test_swebench_persists_object_bound_task_json(session_factory):
-    benchmark = SWEBenchVerifiedBenchmark(limit=1)
-
-    handle = persist_benchmark(
-        benchmark,
+    benchmark = SWEBenchVerifiedBenchmark(
         name="swebench-smoke",
-        metadata={"created_by": "test"},
+        metadata={"author": "test"},
+        limit=1,
     )
+
+    handle = persist_benchmark(benchmark)
     with session_factory() as session:
         rows = session.exec(
-            "SELECT task_json FROM benchmark_definition_tasks "      # table renamed in PR 6.5
+            "SELECT task_json FROM experiment_definition_tasks "
             "WHERE definition_id = :d",
             {"d": handle.definition_id},
         ).all()
@@ -429,7 +489,7 @@ async def test_swebench_task_json_round_trips_through_from_definition():
 
 ```bash
 uv run pytest ergon_builtins/tests/unit/test_swebench_v2_definition.py \
-  ergon_core/tests/unit/runtime/test_experiment_definition_service.py -q
+  ergon_core/tests/unit/runtime/test_definition_writer.py -q
 ```
 
 Expected: pass; persisted JSON includes object-bound `_type`s for
@@ -464,16 +524,24 @@ Pydantic-serializable.
 Bridge code retired (partially):
 - SWEBench tasks now carry `task.worker`/`task.sandbox` inline, so
   SWEBench runs no longer hit the `_legacy_worker_bridge` fallback that
-  PR 5 Task 4b put on `worker_execute`. The fallback itself stays alive
-  — it still serves researchrubrics and gdpeval until they migrate in
-  PR 10b/10c. PR 11 deletes the fallback once every benchmark is on
-  object-bound `Task`.
+  PR 5 Task 4b put on `worker_execute`.
+- SWEBench tasks also carry `task.evaluators` inline, so SWEBench runs
+  no longer hit the symmetric `_legacy_evaluator_bridge` fallback that
+  PR 5 (restored post-cleanup) put on `evaluate_task_run`.
+- Both fallbacks stay alive — they still serve researchrubrics, gdpeval,
+  and the matching smoke fixtures until they migrate in PR 10b/10c.
+  PR 11 deletes both bridges once every benchmark is on object-bound
+  `Task`.
 
 Old path still intentionally alive: `swebench_verified/sandbox_manager.py`,
-registry registrations in `ergon_builtins/registry*.py`, the unmigrated
-MiniF2F inline adapter (Step 1 above migrates it), and
-`_legacy_worker_bridge.py` (still required by researchrubrics and
-gdpeval).
+registry registrations in `ergon_builtins/registry*.py`,
+`_legacy_worker_bridge.py`, and `_legacy_evaluator_bridge.py` (the last
+two are still required by researchrubrics, gdpeval, and any unmigrated
+smoke fixtures).
+
+Migrations: this PR adds **no Alembic migration** (the SWEBench changes
+are code-only). The next free migration id is `aabbccdd0005`; reserve
+it for PR 10b if/when needed.
 
 Deletion gate: PR 11 deletes the manager file and registry registrations.
 PR 10c's cross-cutting cleanup verifies migrated benchmarks no longer

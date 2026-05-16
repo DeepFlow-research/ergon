@@ -203,9 +203,15 @@ with a fake worker, fake sandbox, and one rubric.
 - [ ] **Step 2: Persist and launch**
 
 ```python
-handle = persist_definition(experiment)
+handle = persist_benchmark(benchmark)
 result = await launch_run(handle.definition_id)
 ```
+
+(`persist_benchmark` is the module-level function in `ergon_core.api`;
+post PR 6.5 it takes a `Benchmark` instance directly — `name`,
+`description`, `metadata` come from `Benchmark.__init__`. The variable
+name `experiment` from earlier drafts of this plan should be `benchmark`
+throughout.)
 
 - [ ] **Step 3: Drive jobs synchronously**
 
@@ -223,45 +229,66 @@ assert sandbox_hub.acquire_count == 4
 assert sandbox_hub.release_count == 4
 
 # Release must happen AFTER every evaluate_task_run invocation completes.
-# The evaluation_log fixture captures evaluate_task_run.fn returns;
-# sandbox_hub.events captures hub-level acquire/release. For each task,
-# every eval invocation for that task must precede its sandbox release:
+# Sandbox release is now event-driven: `execute_task` emits
+# `task/completed` only after `_fan_out_evaluators` returns, and the
+# sibling `sandbox_cleanup_on_completed_fn` Inngest function calls
+# `terminate_sandbox_by_id` in response. Drive the test fixture to
+# observe both:
 for node in nodes:
     task_id = node.task.task_id
     n_evals = len(node.task.evaluators)
-    sandbox_id = node.execution.sandbox_id  # stamped by worker_execute
+    sandbox_id = node.execution.sandbox_id  # stamped by sandbox_setup
 
     eval_completions = [
         i for i, (kind, key) in enumerate(combined_log)
         if kind == "eval_complete" and key == task_id
     ]
-    release_pos = next(
+    completed_emit_pos = next(
         i for i, (kind, key) in enumerate(combined_log)
-        if kind == "release" and key == sandbox_id
+        if kind == "emit:task/completed" and key == task_id
+    )
+    sandbox_terminate_pos = next(
+        i for i, (kind, key) in enumerate(combined_log)
+        if kind == "sandbox_terminate" and key == sandbox_id
     )
 
     assert len(eval_completions) == n_evals, (
         f"task {node.task.task_slug}: expected {n_evals} eval completions, "
         f"got {len(eval_completions)}"
     )
+    # Every eval invocation must complete before task/completed is emitted.
     for eval_pos in eval_completions:
-        assert eval_pos < release_pos, (
-            f"task {node.task.task_slug}: sandbox released before an "
-            f"evaluate_task_run invocation completed"
+        assert eval_pos < completed_emit_pos, (
+            f"task {node.task.task_slug}: task/completed emitted before "
+            f"an evaluate_task_run invocation finished"
         )
+    # And sandbox termination must come AFTER task/completed (it's
+    # gated on the event by sandbox_cleanup_on_completed_fn).
+    assert completed_emit_pos < sandbox_terminate_pos, (
+        f"task {node.task.task_slug}: sandbox terminated before "
+        f"task/completed was emitted — the sibling cleanup function "
+        f"is firing too early"
+    )
 
 # Also: every step.invoke must have been awaited (synchronous fanout).
-step_invokes = inngest_driver.step_invocations_for_function("worker_execute")
+step_invokes = inngest_driver.step_invocations_for_function("execute_task")
 for invocation in step_invokes:
     n_evals = len(invocation.task.evaluators)
     assert len(invocation.step_invokes) == n_evals
     assert all(s.completed for s in invocation.step_invokes)
 ```
 
-The ordering check is the load-bearing v1-audit regression: in v1, sandbox
-release happened in `check_evaluators` before `evaluate_task_run` finished.
-The v2 fix is that release is gated on `asyncio.gather` over every
-`ctx.step.invoke(evaluate_task_run, ...)` — synchronous fanout.
+The ordering check is the load-bearing v1-audit regression: in v1,
+sandbox release happened in `check_evaluators` before
+`evaluate_task_run` finished. **PR 4's first attempt** put release in
+`execute_task`'s `try/finally` (which fired on every `step.invoke`
+suspension — broke smoke). **The shipped v2 fix** is event-driven:
+`execute_task` emits `task/completed` only after `_fan_out_evaluators`
+returns (synchronous fanout via `ctx.group.parallel`); the sibling
+`sandbox_cleanup_on_completed_fn` in
+`core/application/jobs/sandbox_cleanup.py` terminates the sandbox in
+response to that event. The PR 4 try/finally is **gone**; do not assert
+on it.
 
 ## Task 3: Required Variants
 
@@ -274,12 +301,12 @@ async def test_walkthrough_failure_cascade(
     sandbox_hub,
     inngest_driver,
 ):
-    experiment = walkthrough_factory(
+    benchmark = walkthrough_factory(
         # Override task-2's worker to raise; other tasks unchanged.
         overrides={"code": _FailingWorker(name="code", model=None)},
     )
 
-    handle = persist_definition(experiment)
+    handle = persist_benchmark(benchmark)
     result = await launch_run(handle.definition_id)
     await inngest_driver.run_until_terminal(result.run_ids[0])
 
@@ -311,11 +338,11 @@ async def test_walkthrough_dynamic_spawn(
     inngest_driver,
     session_factory,
 ):
-    experiment = walkthrough_factory(
+    benchmark = walkthrough_factory(
         overrides={"research": _SpawningWorker(name="research", model=None)},
     )
 
-    handle = persist_definition(experiment)
+    handle = persist_benchmark(benchmark)
     result = await launch_run(handle.definition_id)
     await inngest_driver.run_until_terminal(result.run_ids[0])
 
@@ -353,8 +380,8 @@ async def test_walkthrough_restart_after_success(
     inngest_driver,
     session_factory,
 ):
-    experiment = walkthrough_factory()
-    handle = persist_definition(experiment)
+    benchmark = walkthrough_factory()
+    handle = persist_benchmark(benchmark)
     result = await launch_run(handle.definition_id)
     await inngest_driver.run_until_terminal(result.run_ids[0])
 
@@ -431,7 +458,7 @@ def _production_grep(symbol: str) -> list[Path]:
 
 
 # 1. No ExperimentRecord table in the final v2 schema.
-def test_audit_no_experiment_records_table() -> None:
+def test_audit_no_legacy_experiment_records_table() -> None:
     engine = create_engine(os.environ["DATABASE_URL"])
     tables = set(inspect(engine).get_table_names())
     assert "experiment_records" not in tables
@@ -478,19 +505,40 @@ async def test_audit_dynamic_spawn_has_no_definition_row(
     assert after == before
 
 
-# 4. Sandbox released after all eval invocations complete (ordering check in walkthrough;
-#    this is the structural guard).
-def test_audit_sandbox_released_in_worker_execute_finally() -> None:
-    body = (
+# 4. Sandbox cleanup lives in a sibling Inngest function (PR 4 fix —
+#    the earlier draft of this guard expected an inline `try/finally`
+#    inside worker_execute or execute_task; that pattern fired
+#    `terminate_sandbox_by_id` on every Inngest `step.invoke` suspension
+#    because Inngest raises `ResponseInterrupt` (a `BaseException`) to
+#    suspend coroutines, which fires Python's `finally`. The shipped fix
+#    moves cleanup to a sibling function triggered by terminal events.)
+def test_audit_sandbox_cleanup_is_event_driven() -> None:
+    execute_task_body = (
         ROOT
-        / "ergon_core/ergon_core/core/application/jobs/worker_execute.py"
+        / "ergon_core/ergon_core/core/application/jobs/execute_task.py"
     ).read_text()
-    # The release call must live inside a `finally:` block in the same
-    # function that owns the acquire — not a separate job.
-    assert "finally:" in body
-    assert "release" in body.lower()
-    # And no separate evaluate_task_run dispatch survives:
-    assert "ctx.step.invoke" not in body or "evaluate_task_run" not in body
+    cleanup_body = (
+        ROOT
+        / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
+    ).read_text()
+    handler_body = (
+        ROOT
+        / "ergon_core/ergon_core/core/infrastructure/inngest/handlers/sandbox_cleanup.py"
+    ).read_text()
+
+    # execute_task must NOT terminate inline (the broken PR 4 try/finally).
+    assert "terminate_sandbox_by_id(task_sandbox_id)" not in execute_task_body, (
+        "execute_task must NOT call terminate_sandbox_by_id inline; "
+        "the sibling sandbox_cleanup function does it on terminal events."
+    )
+    # The sibling cleanup job must call terminate_sandbox_by_id.
+    assert "terminate_sandbox_by_id" in cleanup_body
+    # And its handlers must trigger on both terminal task events.
+    assert 'event="task/completed"' in handler_body
+    assert 'event="task/failed"' in handler_body
+    # Synchronous evaluator fanout still lives in execute_task.
+    assert "ctx.group.parallel" in execute_task_body
+    assert "evaluate_task_run" in execute_task_body
 
 
 # 5. evaluate_task_run is registered and uses the thin id-only payload.
@@ -559,10 +607,11 @@ def test_audit_deleted_symbol_absent(symbol: str) -> None:
     assert hits == [], f"{symbol} still appears in: {hits}"
 
 
-# 8. CLI define routes through persist_definition.
-def test_audit_cli_define_calls_persist_definition() -> None:
+# 8. CLI define routes through persist_benchmark (PR 6.5 renamed).
+def test_audit_cli_define_calls_persist_benchmark() -> None:
     body = (ROOT / "ergon_cli/ergon_cli/commands/experiment.py").read_text()
-    assert "persist_definition" in body
+    assert "persist_benchmark" in body
+    assert "persist_definition" not in body  # PR 6.5 renamed
     assert "define_benchmark_experiment" not in body
     assert "ExperimentDefineRequest" not in body
 ```

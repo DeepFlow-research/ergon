@@ -54,15 +54,16 @@ BUDGET = SuppressionCounts(
     # deleted with `_legacy_workers.py`, decrement `slopcop_ignore` by ~3
     # (the v1 legacy `Any` annotations) and update this comment to reflect
     # the post-PR-11 baseline.
-    # +1 (PR 6.5): persist_benchmark module-level function adds 1×no-typing-any
-    # (resolved_metadata dict[str,Any]) in definition_writer.py and
-    # 1×guarded-function-import in service.py (run_experiment lazy-imports
-    # launch.py); net +1 after the deleted api/experiment.py contributed -1
-    # and the post-cleanup removal of ExperimentService.persist_benchmark
-    # dropped 1×no-typing-any + 1×guarded-function-import.
+    # PR 6.5 net: persist_benchmark module-level function adds 1×no-typing-any
+    # (resolved_metadata dict[str,Any]) in definition_writer.py. The
+    # ExperimentService façade is gone (deleted persist_benchmark method
+    # contributed 1×no-typing-any + 1×guarded-function-import; the surviving
+    # module-level run_experiment hoists the launch import to top-level so
+    # no guarded-function-import is needed). api/experiment.py deletion
+    # contributed -1.
     # +1 noqa (PR 6.5): noqa: C901 on persist_benchmark (complex by design,
     # same as the persist_definition it supplements).
-    slopcop_ignore=238,
+    slopcop_ignore=236,
     noqa=4,
     type_ignore=64,
 )
