@@ -8,6 +8,7 @@ from ergon_core.core.application.experiments.repository import DefinitionReposit
 from ergon_core.core.application.workflows import runs as runs_module
 from ergon_core.core.application.workflows.runs import latest_run_for_definition
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
+from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
 from sqlalchemy.pool import StaticPool
@@ -23,6 +24,7 @@ from sqlmodel import Session, SQLModel, create_engine
 def session_factory():
     _ = BenchmarkDefinitionRecord
     _ = ExperimentDefinition
+    _ = RunGraphNode
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
