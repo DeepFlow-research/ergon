@@ -444,8 +444,9 @@ after this PR, but the files stay until PR 11 removes them together
 with the matching fallback branches).
 
 Migrations: this PR adds **no Alembic migration** (code-only changes).
-Next free migration id is `aabbccdd0005` (PR 7 reserves `aabbccdd0004`;
-PR 10a / 10b do not add migrations).
+Next free migration id is `aabbccdd0006` (PR 6.5 took `aabbccdd0004`
+for `add_experiment_tag`; PR 7 took `aabbccdd0005` for
+`definition_metadata_and_launch`; PR 10a / 10b do not add migrations).
 
 Deletion gate: PR 11 deletes the registry modules, per-benchmark
 sandbox managers, `_legacy_worker_bridge.py`, and
