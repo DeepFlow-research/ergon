@@ -43,9 +43,16 @@ cp .env.example .env
 ergon start            # thin wrapper for `docker compose up -d --wait`
 ergon doctor           # verify connectivity
 
-# Define and run an experiment
-ergon experiment define smoke_test --worker training-stub --model stub:constant --limit 1
-ergon experiment run <experiment-id>
+# Define and launch a benchmark run from Python (authoring is Python-only)
+# See ergon_builtins/ergon_builtins/benchmarks/README.md for an example.
+
+# Observe runs via the CLI
+ergon run list                          # list recent runs
+ergon run status <run-id>               # current state of one run
+ergon experiment list                   # list recent experiments
+ergon experiment show <UUID>            # full experiment detail
+ergon experiment tags                   # list distinct experiment-tag strings
+ergon experiment by-tag <tag>           # definitions sharing a tag, with latest run status
 
 # When you're done
 ergon stop             # `docker compose down`
