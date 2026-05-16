@@ -4,7 +4,7 @@ import pytest
 from ergon_core.core.application.experiments import launch as launch_module
 from ergon_core.core.application.experiments.models import ExperimentRunRequest, RunAssignment
 from ergon_core.core.domain.experiments import DefinitionHandle
-from ergon_core.core.application.experiments.service import ExperimentService
+from ergon_core.core.application.experiments.service import run_experiment
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
 
@@ -80,12 +80,11 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
     monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession(experiment))
     monkeypatch.setattr(launch_module, "create_run", fake_create_run)
 
-    service = ExperimentService(
+    result = await run_experiment(
+        ExperimentRunRequest(experiment_id=experiment.id),
         workflow_definition_factory=workflow_factory,
         emit_workflow_started=fake_emit,
     )
-
-    result = await service.run_experiment(ExperimentRunRequest(experiment_id=experiment.id))
 
     assert result.experiment_id == experiment.id
     assert result.run_ids == [run.id for run in created_runs]

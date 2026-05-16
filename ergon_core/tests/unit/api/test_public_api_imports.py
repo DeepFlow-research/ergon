@@ -38,9 +38,7 @@ def test_object_first_experiment_run_api_is_retired() -> None:
     import inspect
 
     sig = inspect.signature(public_api.persist_benchmark)
-    assert "benchmark" in sig.parameters
-    assert "name" in sig.parameters
-    assert "metadata" in sig.parameters
+    assert list(sig.parameters) == ["benchmark"]
 
 
 def test_core_api_app_imports_without_context_payload_cycle() -> None:

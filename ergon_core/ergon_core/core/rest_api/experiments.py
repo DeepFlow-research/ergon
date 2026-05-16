@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from ergon_core.core.application.experiments.service import (
-    ExperimentService,
+    run_experiment as _run_experiment,
 )
 from ergon_core.core.application.read_models.experiments import (
     ExperimentDetailDto,
@@ -39,4 +39,4 @@ async def run_experiment(
     launch_request = request or ExperimentRunRequest(experiment_id=experiment_id)
     if launch_request.experiment_id != experiment_id:
         raise HTTPException(status_code=400, detail="experiment_id mismatch")
-    return await ExperimentService().run_experiment(launch_request)
+    return await _run_experiment(launch_request)

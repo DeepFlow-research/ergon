@@ -92,19 +92,13 @@ def validate_sandbox_compatibility(benchmark: Benchmark) -> None:
                 )
 
 
-def persist_benchmark(  # noqa: C901
-    benchmark: Benchmark,
-    *,
-    name: str | None = None,
-    description: str | None = None,
-    metadata: dict[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    created_by: str | None = None,
-) -> DefinitionHandle:
+def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
     """Persist a configured Benchmark as a definition row.
 
-    Replaces ``persist_definition(experiment)`` from before PR 6.5.  The
-    ``Experiment`` wrapper class was deleted — every parameter that used
-    to live on the class is now a kwarg here.
+    Replaces ``persist_definition(experiment)`` from before PR 6.5. Identity
+    fields (``name``, ``description``, ``metadata``) are read off the
+    ``Benchmark`` instance directly — the ``Experiment`` wrapper that
+    used to carry them is gone.
 
     Validates sandbox/worker compatibility before any DB write.
     """
@@ -115,7 +109,7 @@ def persist_benchmark(  # noqa: C901
 
     # ---- 2. Identity fields & shared bookkeeping ---------------------
     benchmark_type: str = benchmark.type_slug
-    resolved_metadata: dict[str, Any] = dict(metadata or {})  # slopcop: ignore[no-typing-any]
+    resolved_metadata: dict[str, Any] = dict(benchmark.metadata)  # slopcop: ignore[no-typing-any]
     now = utcnow()
     definition_id = uuid4()
 
