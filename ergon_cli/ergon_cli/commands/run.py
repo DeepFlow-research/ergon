@@ -16,8 +16,10 @@ def handle_run(args: Namespace) -> int:
         return list_runs(args)
     elif args.run_action == "cancel":
         return cancel_run(args)
+    elif args.run_action == "status":
+        return status_run(args)
     else:
-        print("Usage: ergon run {list|cancel}")
+        print("Usage: ergon run {list|status|cancel}")
         return 1
 
 
@@ -67,4 +69,38 @@ def cancel_run(args: Namespace) -> int:
     print(f"  Status:  {run.status}")
     print("  Inngest: run/cancelled event sent (in-flight functions will be killed)")
     print("  Cleanup: run/cleanup event sent (sandbox teardown scheduled)")
+    return 0
+
+
+def status_run(args: Namespace) -> int:
+    ensure_db()
+    try:
+        run_id = UUID(args.run_id)
+    except ValueError:
+        print(f"Invalid UUID: {args.run_id}")
+        return 1
+
+    with get_session() as session:
+        run = session.get(RunRecord, run_id)
+        if run is None:
+            print(f"No run found with id {args.run_id}")
+            return 1
+
+    print(f"run_id:                 {run.id}")
+    print(f"status:                 {run.status}")
+    print(f"benchmark_type:         {run.benchmark_type}")
+    print(f"workflow_definition_id: {run.workflow_definition_id}")
+    print(f"instance_key:           {run.instance_key}")
+    if run.evaluator_slug is not None:
+        print(f"evaluator:              {run.evaluator_slug}")
+    if run.model_target is not None:
+        print(f"model:                  {run.model_target}")
+    created = run.created_at.strftime("%Y-%m-%d %H:%M:%S") if run.created_at else "-"
+    print(f"created_at:             {created}")
+    if run.started_at:
+        print(f"started_at:             {run.started_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    if run.completed_at:
+        print(f"completed_at:           {run.completed_at.strftime('%Y-%m-%d %H:%M:%S')}")
+    if run.error_message:
+        print(f"error:                  {run.error_message}")
     return 0
