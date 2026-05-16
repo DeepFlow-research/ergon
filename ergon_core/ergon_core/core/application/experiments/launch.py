@@ -23,6 +23,7 @@ from ergon_core.core.application.experiments.models import (
     RunAssignment,
 )
 from ergon_core.core.application.experiments.definition_writer import _ExperimentDefinitionWriter
+from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 
 from ergon_core.core.application.workflows.runs import create_run
 from pydantic import BaseModel
@@ -57,7 +58,7 @@ async def launch_run(
     with get_session() as session:
         definition = session.get(ExperimentDefinition, definition_id)
         if definition is None:
-            raise ValueError(f"ExperimentDefinition {definition_id} not found")
+            raise DefinitionNotFoundError(definition_id)
         run = create_run(
             DefinitionHandle(
                 definition_id=definition.id,

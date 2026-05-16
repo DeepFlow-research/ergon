@@ -46,11 +46,6 @@ _BASEMODEL_DEF_RE = re.compile(
 # shared conftest.py hook. Keys are (test_name, parametrize_id) tuples.
 _KNOWN_VIOLATORS: dict[tuple[str, str], str] = {
     (
-        "test_package_has_errors_py_if_repository_raises",
-        "ergon_core/ergon_core/core/application/experiments",
-    ): "PR 7: add experiments/errors.py with typed DefinitionNotFoundError "
-    "and replace ValueError raises.",
-    (
         "test_repository_file_does_not_define_dtos",
         "ergon_core/ergon_core/core/persistence/telemetry",
     ): "PR 4: move CreateTaskEvaluation to telemetry/models.py.",

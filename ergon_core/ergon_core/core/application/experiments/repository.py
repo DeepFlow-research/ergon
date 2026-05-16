@@ -2,6 +2,10 @@
 
 from uuid import UUID
 
+from ergon_core.core.application.experiments.errors import (
+    DefinitionInstanceNotFoundError,
+    DefinitionTaskNotFoundError,
+)
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -23,8 +27,8 @@ class DefinitionRepository:
     ) -> tuple[ExperimentDefinitionTask, ExperimentDefinitionInstance]:
         task = session.get(ExperimentDefinitionTask, task_id)
         if task is None:
-            raise ValueError(f"ExperimentDefinitionTask {task_id} not found")
+            raise DefinitionTaskNotFoundError(task_id)
         instance = session.get(ExperimentDefinitionInstance, task.instance_id)
         if instance is None:
-            raise ValueError(f"ExperimentDefinitionInstance {task.instance_id} not found")
+            raise DefinitionInstanceNotFoundError(task.instance_id)
         return task, instance
