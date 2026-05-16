@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 from ergon_core.core.application.experiments import launch as launch_module
+from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 from ergon_core.core.application.experiments.launch import launch_run
 from ergon_core.core.application.experiments.models import ExperimentRunRequest, RunAssignment
 from ergon_core.core.domain.experiments import DefinitionHandle
@@ -174,3 +175,17 @@ async def test_launch_run_accepts_definition_id_without_experiment_record(monkey
 
     # Emitter was awaited with the new run id and the definition id.
     emitter.assert_awaited_once_with(result.run_ids[0], definition.id)
+
+
+@pytest.mark.asyncio
+async def test_launch_run_raises_typed_error_when_definition_missing(monkeypatch):
+    """``launch_run`` raises ``DefinitionNotFoundError`` (not a generic
+    ``ValueError``) when the requested ``ExperimentDefinition`` row is
+    absent. Callers depend on the typed exception to differentiate
+    "missing definition" from other lookup failures without string-
+    matching the message — see 07-test-strategy.md Repository layer
+    standard rule 8."""
+
+    monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession())
+    with pytest.raises(DefinitionNotFoundError):
+        await launch_run(uuid4(), emit_workflow_started=AsyncMock())
