@@ -117,7 +117,7 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
     definition_row = ExperimentDefinition(
         id=definition_id,
         benchmark_type=benchmark_type,
-        name=benchmark.name if benchmark.name is not None else benchmark_type,
+        name=benchmark.name,
         description=benchmark.description,
         created_by=benchmark.created_by,
         metadata_json=resolved_metadata,
@@ -274,9 +274,7 @@ class _ExperimentDefinitionWriter:
         definition_row = ExperimentDefinition(
             id=definition_id,
             benchmark_type=benchmark_type,
-            name=experiment.benchmark.name
-            if experiment.benchmark.name is not None
-            else benchmark_type,
+            name=experiment.benchmark.name,
             description=experiment.benchmark.description,
             created_by=experiment.benchmark.created_by,
             metadata_json=dict(experiment.metadata),
