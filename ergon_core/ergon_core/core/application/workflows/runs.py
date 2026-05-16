@@ -117,7 +117,4 @@ def latest_run_for_definition(definition_id: UUID) -> RunRecord | None:
             .order_by(RunRecord.created_at.desc())
             .limit(1)
         )
-        result = session.exec(stmt).first()
-        if result is not None:
-            session.refresh(result)
-        return result
+        return session.exec(stmt).first()
