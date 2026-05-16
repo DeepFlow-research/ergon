@@ -4,7 +4,7 @@ from argparse import Namespace
 from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
 from ergon_core.core.application.workflows.runs import cancel_run as do_cancel
 from sqlmodel import select
 
@@ -30,11 +30,21 @@ def list_runs(args: Namespace) -> int:
         stmt = select(RunRecord).order_by(RunRecord.created_at.desc())  # type: ignore[attr-defined]
         if args.status:
             stmt = stmt.where(RunRecord.status == args.status)
+        if args.experiment:
+            stmt = stmt.join(
+                BenchmarkDefinitionRecord,
+                RunRecord.experiment_id == BenchmarkDefinitionRecord.id,  # type: ignore[invalid-argument-type]
+            ).where(BenchmarkDefinitionRecord.experiment == args.experiment)
         stmt = stmt.limit(args.limit)
         runs = list(session.exec(stmt).all())
 
     if not runs:
-        print("No runs found.")
+        parts = ["No runs found"]
+        if args.status:
+            parts.append(f"with status={args.status!r}")
+        if args.experiment:
+            parts.append(f"for experiment={args.experiment!r}")
+        print(" ".join(parts))
         return 0
 
     rows = []
