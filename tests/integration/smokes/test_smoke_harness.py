@@ -99,7 +99,7 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
 
     # ── Step 1: create an ExperimentDefinition via the ORM ──────────────────
     with get_session() as session:
-        defn = ExperimentDefinition(benchmark_type="ci-smoke-harness")
+        defn = ExperimentDefinition(benchmark_type="ci-smoke-harness", name="ci-smoke-harness")
         session.add(defn)
         session.commit()
         session.refresh(defn)

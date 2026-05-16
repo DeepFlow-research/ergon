@@ -61,6 +61,7 @@ def _definition_with_worker(
             ExperimentDefinition(
                 id=definition_id,
                 benchmark_type=benchmark_type,
+                name=benchmark_type,
                 metadata_json={},
             ),
             ExperimentDefinitionInstance(

@@ -60,6 +60,7 @@ def _execution_fixture(session: Session) -> tuple:
         ExperimentDefinition(
             id=definition_id,
             benchmark_type="unit",
+            name="unit",
             metadata_json={},
         )
     )
