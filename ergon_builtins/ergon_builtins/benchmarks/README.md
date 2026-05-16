@@ -77,8 +77,8 @@ for label, worker_factory in [
 
 The `experiment` argument is the optional grouping tag — definitions
 tagged with the same string belong to the same logical experiment.
-The CLI's `ergon experiment show <name>` command (PR 8) lists
-definitions in an experiment.
+Use `ergon experiment by-tag <tag>` (PR 8) to list all definitions
+sharing a tag and see their latest run status.
 
 ## Why no CLI authoring path?
 
@@ -102,3 +102,18 @@ for _, name, ispkg in pkgutil.iter_modules(benchmarks.__path__):
 ```
 
 Or just `ls ergon_builtins/ergon_builtins/benchmarks/`.
+
+## Observing runs via the CLI
+
+After persisting and launching a benchmark from Python, use the CLI to observe its state:
+
+- `ergon run status <run-id>` — current state of one run
+- `ergon run list [--status=S] [--experiment=<tag>]` — list runs, optionally filtered
+- `ergon experiment show <UUID>` — full experiment detail (UUID-based)
+- `ergon experiment list` — list recent experiments
+- `ergon experiment tags` — list distinct experiment-tag strings
+- `ergon experiment by-tag <tag>` — list definitions sharing a tag, with latest run status
+
+The `--experiment` filter and the `tags` / `by-tag` commands read the
+`BenchmarkDefinitionRecord.experiment` column, which is populated today
+only via the cohort harness.  All commands are read-only.
