@@ -24,6 +24,7 @@ from ergon_core.api.errors import (
 from ergon_core.api.registry import ComponentRegistry, registry
 from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
+from ergon_core.api.toolkit import Toolkit
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
 from ergon_core.api.worker import (
     SpawnedTaskHandle,
@@ -66,6 +67,7 @@ __all__ = [
     "Task",
     "TaskSpec",
     "TaskEvaluationResult",
+    "Toolkit",
     "Worker",
     "WorkerContext",
     "WorkerOutput",

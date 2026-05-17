@@ -39,6 +39,8 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "SandboxRuntime",
         "SandboxNotLiveError",
         "TaskEvaluationResult",
+        # PR 10 Prereq B — Toolkit base for authoring-time toolkit configs.
+        "Toolkit",
         "CriterionCheckError",
         "ComponentRegistry",
         "registry",
