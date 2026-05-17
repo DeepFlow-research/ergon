@@ -9,8 +9,10 @@ from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED, FAILED
+from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.tasks.models import SubtaskInfo
 from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.persistence.shared.db import get_session
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -25,8 +27,9 @@ class TaskInspectionService:
     to decide which subtasks to cancel, refine, or wait on.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, graph_repo: WorkflowGraphRepository | None = None) -> None:
         self._task_execution_repo = TaskExecutionRepository()
+        self._graph_repo = graph_repo or WorkflowGraphRepository()
 
     def list_subtasks(
         self,
@@ -65,6 +68,23 @@ class TaskInspectionService:
             )
         ).one()
         return self._hydrate(session, node)
+
+    async def descendant_ids(
+        self,
+        *,
+        run_id: UUID,
+        root_task_id: UUID,
+    ) -> frozenset[UUID]:
+        """Return all task_ids reachable as children/grandchildren of root_task_id."""
+
+        with get_session() as session:
+            rows = self._graph_repo.descendants_by_parent(
+                session,
+                run_id=run_id,
+                root_task_id=root_task_id,
+            )
+            # Collect IDs inside the session scope to avoid DetachedInstanceError.
+            return frozenset(row.id for row in rows)
 
     def _hydrate(self, session: Session, node: RunGraphNode) -> SubtaskInfo:
         """Build a SubtaskInfo from a RunGraphNode, attaching deps and output/error."""

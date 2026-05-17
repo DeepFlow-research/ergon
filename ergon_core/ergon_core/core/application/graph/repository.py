@@ -11,7 +11,7 @@ Those are the experiment layer's responsibility.
 
 import logging
 from collections import defaultdict
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -57,6 +57,7 @@ from ergon_core.core.application.graph.models import (
 )
 from ergon_core.core.shared.utils import utcnow
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlmodel import Session, col, select
 
 logger = logging.getLogger(__name__)
@@ -868,6 +869,55 @@ class WorkflowGraphRepository:
             ).all()
         )
         return [_to_node_dto(n) for n in rows]
+
+    def descendants_by_parent(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        root_task_id: UUID,
+    ) -> Sequence[RunGraphNode]:
+        """Return all RunGraphNode rows transitively reachable from
+        root_task_id via parent_node_id, NOT including the root itself.
+        """
+
+        # During the transition the canonical identity column is `id`
+        # (with `parent_node_id` pointing at parent.id). PR 11 renames to
+        # `task_id` / `parent_task_id`; update the column references in
+        # the same commit that does the rename.
+        cte_sql = text(
+            """
+            WITH RECURSIVE descendants AS (
+                SELECT id, parent_node_id, run_id
+                FROM run_graph_nodes
+                WHERE run_id = :run_id
+                  AND parent_node_id = :root_task_id
+
+                UNION ALL
+
+                SELECT child.id, child.parent_node_id, child.run_id
+                FROM run_graph_nodes AS child
+                JOIN descendants ON child.parent_node_id = descendants.id
+                WHERE child.run_id = :run_id
+            )
+            SELECT id FROM descendants
+            """
+        )
+        # Use session.execute (SQLAlchemy raw) rather than session.exec
+        # (SQLModel typed) because session.exec only accepts SelectBase, not
+        # raw TextClause. Use .hex (32-char no-dash) because SQLite stores
+        # UUID columns without dashes; PostgreSQL also accepts the no-dash
+        # form, so this works on both drivers.
+        result = session.execute(
+            cte_sql.bindparams(run_id=run_id.hex, root_task_id=root_task_id.hex)
+        ).all()
+        # The CTE returns raw hex strings from SQLite; convert back to UUID
+        # so the ORM lookup below uses the typed column binding correctly.
+        descendant_ids = [UUID(row[0]) for row in result]
+        if not descendant_ids:
+            return ()
+
+        return session.exec(select(RunGraphNode).where(RunGraphNode.id.in_(descendant_ids))).all()
 
     def get_mutations(
         self,
