@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field, model_validator
 
 JsonObject = dict[str, Any]  # slopcop: ignore[no-typing-any] -- public JSON-like metadata bag
 
+# TODO: this seems like abit of a grabbag of types, we should break this down into smaller files and modules (maybe, review.)
+
 
 class ScoreScale(BaseModel):
     """Criterion-local score range."""
@@ -61,6 +63,7 @@ class CriterionOutcome(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
+    # TODO: come up with some way to delete this validatior (its got "magic behaviour", this should enforce its being built properly (ie pick one of slug or name maybe, not both [probs slug])")
     def _populate_slug_name(cls, data: Any) -> Any:  # slopcop: ignore[no-typing-any]
         # `mode="before"` validators receive whatever shape Pydantic was
         # handed (dict, raw object, model instance). `Any` is the

@@ -36,7 +36,9 @@ class Evaluator(BaseModel, ABC):
 
     type_slug: ClassVar[str]
     required_packages: ClassVar[list[str]] = []
-    install_hint: ClassVar[str] = ""
+    install_hint: ClassVar[str] = (
+        ""  # TODO: this should not be "" default, make this just optional arg
+    )
 
     name: str
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
@@ -69,6 +71,7 @@ class Evaluator(BaseModel, ABC):
         EvaluatorCls = import_component(evaluator_type)
         return cast("Evaluator", EvaluatorCls.model_validate(evaluator_json))
 
+    # TODO: check if this is ever actually used, if not delete it
     def validate_runtime_deps(self) -> None:
         """Check that runtime dependencies are available.
 

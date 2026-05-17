@@ -29,6 +29,7 @@ class CriterionContext(BaseModel):
     _runtime: Annotated[CriterionRuntime | None, SkipValidation] = PrivateAttr(default=None)
 
     def __init__(self, **data: Any) -> None:  # slopcop: ignore[no-typing-any]
+        # TODO: find some way to kill this consturctor (this weakly typed smuggled the runtime in through the constructor, it should be a classmethod atleast, come up with cleaner way still)
         runtime = data.pop("runtime", None)
         super().__init__(**data)
         if runtime is not None:

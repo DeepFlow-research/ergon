@@ -25,7 +25,7 @@ class Benchmark(ABC):
         description: str | None = None,
         metadata: Mapping[
             str,
-            Any,  # slopcop: ignore[no-typing-any] -- public metadata bag accepts arbitrary JSON-like values
+            Any,  # slopcop: ignore[no-typing-any] -- public metadata bag accepts arbitrary JSON-like values # TODO: turn off slopcop for core package public api and remove all the slopcop ignores
         ]
         | None = None,
         created_by: str | None = None,
