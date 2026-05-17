@@ -117,7 +117,13 @@ class WorkerContext(BaseModel):
     ) -> SpawnedTaskHandle:
         """Spawn a child task under this context's task_id."""
 
-        return await self._task_mgmt.add_subtask(
+        if self.task_id is None:
+            raise RuntimeError(
+                "WorkerContext.spawn_task called from a context without "
+                "task_id; this is a v2-runtime bug."
+            )
+
+        return await self._task_mgmt.spawn_dynamic_task(
             run_id=self.run_id,
             parent_task_id=self.task_id,
             task=task,
