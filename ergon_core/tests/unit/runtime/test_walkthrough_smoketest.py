@@ -16,11 +16,18 @@ xfailed until their landing PRs.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import pytest
+from ergon_core.api.benchmark.task import Task
+from ergon_core.api.worker.context import WorkerContext
 from ergon_core.core.application.graph.models import MutationMeta
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.tasks import inspection as inspection_module
+from ergon_core.core.application.tasks import management as management_module
+from ergon_core.core.application.tasks.inspection import TaskInspectionService
+from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -32,6 +39,7 @@ from ergon_core.core.persistence.telemetry.models import (
     BenchmarkDefinitionRecord,
     RunRecord,
 )
+from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from pydantic import BaseModel
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -336,14 +344,115 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="PR 9: dynamic subtasks write only to run_graph_nodes",
-    strict=True,
-)
-def test_dynamic_spawn_writes_only_to_run_graph_nodes() -> None:
+class _SessionContext:
+    """Context-manager shim that wraps a pre-existing Session.
+
+    Used so service code calling ``get_session()`` reuses the test's
+    in-memory SQLite session rather than opening a new connection.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def __enter__(self) -> Session:
+        return self._session
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+def _patch_get_session_smoke(monkeypatch: pytest.MonkeyPatch, session: Session) -> None:
+    def ctx_factory() -> _SessionContext:
+        return _SessionContext(session)
+
+    monkeypatch.setattr(management_module, "get_session", ctx_factory)
+    monkeypatch.setattr(inspection_module, "get_session", ctx_factory)
+
+
+def _seed_parent_node(session: Session, *, run_id: UUID) -> RunGraphNode:
+    node = RunGraphNode(
+        run_id=run_id,
+        instance_key="sample-1",
+        task_slug="parent",
+        description="parent task",
+        status="RUNNING",
+        is_dynamic=False,
+        parent_node_id=None,
+        level=0,
+    )
+    session.add(node)
+    session.commit()
+    return node
+
+
+@pytest.mark.asyncio
+async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Δ.3 / PR 9 invariant: dynamic subtasks are graph-native."""
 
-    pytest.fail("requires PR 9's graph-native dynamic spawn")
+    # 1. In-memory SQLite with all tables.
+    _ = BenchmarkDefinitionRecord  # ensure telemetry models are registered
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+
+    # 2. Seed one parent graph node.
+    run_id = uuid4()
+    parent = _seed_parent_node(session, run_id=run_id)
+
+    # 3. Patch get_session so service writes stay in the test session.
+    _patch_get_session_smoke(monkeypatch, session)
+
+    task_mgmt = TaskManagementService(dashboard_emitter=MagicMock())
+    task_inspect = TaskInspectionService()
+    context = WorkerContext._for_job(
+        run_id=run_id,
+        task_id=parent.id,
+        execution_id=uuid4(),
+        definition_id=None,
+        sandbox_id="sandbox-smoke",
+        node_id=parent.id,
+        task_mgmt=task_mgmt,
+        task_inspect=task_inspect,
+        resource_repo=None,
+    )
+
+    nodes_before = session.exec(select(RunGraphNode)).all()
+    defs_before = session.exec(select(ExperimentDefinitionTask)).all()
+    assert len(nodes_before) == 1  # only the parent
+
+    # 4. Spawn a dynamic child task.
+    await context.spawn_task(
+        Task(
+            task_slug="child",
+            instance_key="sample-1",
+            description="dynamic child",
+            worker=EchoWorker(name="echo", model=None),
+            sandbox=EchoSandbox(),
+            evaluators=(),
+        )
+    )
+
+    # 5. Exactly one new run_graph_nodes row (is_dynamic=True); zero new
+    #    experiment_definition_tasks rows.
+    nodes_after = session.exec(select(RunGraphNode)).all()
+    defs_after = session.exec(select(ExperimentDefinitionTask)).all()
+
+    assert len(nodes_after) == len(nodes_before) + 1
+    assert len(defs_after) == len(defs_before) == 0
+
+    new_node = session.exec(
+        select(RunGraphNode).where(
+            RunGraphNode.run_id == run_id,
+            RunGraphNode.task_slug == "child",
+        )
+    ).one()
+    assert new_node.is_dynamic is True
 
 
 @pytest.mark.xfail(
