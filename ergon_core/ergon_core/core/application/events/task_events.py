@@ -8,11 +8,7 @@ from uuid import UUID
 
 from ergon_core.core.application.events.base import InngestEventContract
 
-# Production task execution emits real sandbox IDs. Test-support managers may
-# use sentinel IDs, but core event consumers must not parse or branch on those
-# sentinel formats. ``TaskFailedEvent.sandbox_id`` is ``str | None`` because a
-# task can fail before sandbox setup runs, in which case there really is no
-# sandbox.
+
 SandboxId = str
 
 

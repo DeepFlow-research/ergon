@@ -233,4 +233,5 @@ class CommunicationService:
         return thread
 
 
+# TODO: consider if we should have these object level singletons or lean more on proper dependency injection pattern for core
 communication_service = CommunicationService()

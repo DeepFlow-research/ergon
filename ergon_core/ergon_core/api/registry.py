@@ -6,6 +6,7 @@ Python classes/factories needed by runtime jobs. Packages such as
 startup; ``ergon_core`` never imports those packages to discover components.
 """
 
+# TODO: this seems like a hacky way to do this, and also maybe a victim to "doesn't make sense anymore in the v2 api. lets revisit"
 from collections.abc import Mapping
 from typing import Protocol, TypeVar, cast
 

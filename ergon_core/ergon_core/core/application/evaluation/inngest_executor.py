@@ -56,7 +56,7 @@ class InngestCriterionExecutor:
         self,
         task_context: TaskEvaluationContext,
         task: Task,
-        benchmark_name: str,
+        benchmark_name: str,  # TODO: dead arg here. also it probs shouldn't need this at all.
         criteria: list[CriterionSpec],
     ) -> list[CriterionOutcome]:
         def make_step(spec: CriterionSpec) -> Callable[[], Awaitable[CriterionOutcome]]:
@@ -92,7 +92,7 @@ class InngestCriterionExecutor:
 
                 agent_reasoning = (
                     "" if task_context.agent_reasoning is None else task_context.agent_reasoning
-                )
+                )  # TODO: "" fallback, bad! we need to not probs make task_context.agent_reasoning required and not optional (or if it is then make this also | None)
 
                 if isinstance(criterion, Criterion):
                     eval_ctx = PublicCriterionContext.with_runtime(

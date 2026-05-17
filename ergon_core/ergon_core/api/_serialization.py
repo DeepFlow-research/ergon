@@ -28,7 +28,9 @@ time. The alias is the named boundary every ``from_definition``
 classmethod accepts."""
 
 
-def import_component(path: str) -> type[Any]:
+def import_component(
+    path: str,
+) -> type[Any]:  # TODO: check if "Any" is correct, maybe we should be more specific?
     """Resolve a ``module:qualname`` string to a class.
 
     Used by every ``<Component>.from_definition`` classmethod to

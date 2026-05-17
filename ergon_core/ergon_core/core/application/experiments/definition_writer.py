@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from ergon_core.api.criterion import Criterion
 
 
+# TODO: we need a more consistent pattern for this (there is a repository for this module but this is a grab bag of logic I think is imported from elsewhere. lets consider some archetecture (should unit tests expect that repository objects are the only methods that can be called cross module?))
+# TODO: infact this module is a shining example oh how we've conflated "repository as object containing all the SQL views / reads/ rewrites with "domain logic repogisotry / constroller". this needs cleaning up.
 def _task_to_definition_json(task: Task | TaskSpec) -> JsonObject:
     """Snapshot a benchmark-returned task as ``_type``-discriminated JSON.
 

@@ -11,6 +11,8 @@ from ergon_core.api.criterion.results import CriterionOutcome
 from ergon_core.api.rubric.evaluator import Evaluator
 from ergon_core.api.rubric.results import TaskEvaluationResult
 
+# TODO: consider if this should actually live in the public api or should be moved to ergon builtins (I imagine probs it needs to be moved?)
+
 
 class Rubric(Evaluator):
     """Concrete evaluator with a fixed criteria list."""

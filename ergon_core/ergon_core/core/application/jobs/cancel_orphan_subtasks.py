@@ -12,8 +12,8 @@ Each function uses two durable steps:
 """
 
 import logging
-from typing import Any
 from uuid import UUID
+import inngest
 
 from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _cancel_orphans_for(
-    ctx: Any,
+    ctx: inngest.Context,
     *,
     run_id: UUID,
     definition_id: UUID,
@@ -67,7 +67,9 @@ async def _cancel_orphans_for(
     return len(scan_result["cancelled_node_ids"])
 
 
-async def run_block_descendants_on_failed_job(ctx: Any, payload: TaskFailedEvent) -> int:
+async def run_block_descendants_on_failed_job(
+    ctx: inngest.Context, payload: TaskFailedEvent
+) -> int:
     """When a parent fails, PENDING/READY containment descendants become BLOCKED.
 
     RUNNING descendants are not interrupted. Horizontal (edge-based) successor
@@ -91,7 +93,9 @@ async def run_block_descendants_on_failed_job(ctx: Any, payload: TaskFailedEvent
     return len(blocked)
 
 
-async def run_cancel_orphans_on_cancelled_job(ctx: Any, payload: TaskCancelledEvent) -> int:
+async def run_cancel_orphans_on_cancelled_job(
+    ctx: inngest.Context, payload: TaskCancelledEvent
+) -> int:
     logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.node_id)
     return await _cancel_orphans_for(
         ctx,

@@ -3,6 +3,7 @@
 from uuid import UUID
 
 
+# TODO: consider if these should be moved to the core package, they are not really errors in the public api sense? need to follow wider core convention for where we put errors (and enforce in unit tests)
 class DependencyError(Exception):
     """A component's required package is not installed."""
 

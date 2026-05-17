@@ -78,7 +78,9 @@ BUDGET = SuppressionCounts(
     # also picks up ``description: str = ""`` (slopcop:
     # no-str-empty-default) which previously lived on the two subclasses
     # that overrode it; net change is +2 across all touched files.
-    slopcop_ignore=244,
+    # PR 10 working-tree TODO sweep: +1 (one WIP TODO note appended to a
+    # line that already had a slopcop ignore).
+    slopcop_ignore=245,
     noqa=4,
     type_ignore=64,
 )

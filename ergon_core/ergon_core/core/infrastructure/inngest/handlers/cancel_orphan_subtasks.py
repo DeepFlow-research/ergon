@@ -1,5 +1,6 @@
 """Inngest adapters for descendant cancellation."""
 
+# TODO: when I said that jobs should die, each of these handles should probably become a module which owns its own logic and contracts? and maybe deserves some domain consolidation also
 import inngest
 
 from ergon_core.core.application.jobs.cancel_orphan_subtasks import (

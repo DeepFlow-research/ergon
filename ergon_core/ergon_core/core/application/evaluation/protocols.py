@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from ergon_core.core.application.resources import RunResourceView
 
 
+# TODO: these files aren't protocols! and we're mixing models and a real protocol
 class SandboxResult(BaseModel):
     """Result from sandbox code execution."""
 
@@ -42,6 +43,7 @@ class CommandResult(BaseModel):
     )
 
 
+# TODO: check if this should still exist post PR 11, delete if not
 class CriterionRuntime(Protocol):
     """Execution surface injected into a ``Criterion`` at evaluation time."""
 

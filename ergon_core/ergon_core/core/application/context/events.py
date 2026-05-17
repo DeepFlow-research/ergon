@@ -121,6 +121,7 @@ class ContextEventService:
 
         for listener in self._listeners:
             try:
+                # TODO: the return of this function should probably be a DTO detailing which of the listeners were actuallly called and which ones failed
                 await listener(event)
             except Exception:  # slopcop: ignore[no-broad-except]
                 logger.warning("Context event listener failed", exc_info=True)

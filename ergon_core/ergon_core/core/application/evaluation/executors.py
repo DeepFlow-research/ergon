@@ -10,6 +10,7 @@ from ergon_core.core.application.evaluation.models import (
 )
 
 
+# TODO: check if this even live anymore
 class CriterionExecutor(Protocol):
     """Executes a rubric's criteria according to some orchestration strategy."""
 

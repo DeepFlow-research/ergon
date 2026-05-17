@@ -61,6 +61,7 @@ class WorkerContext(BaseModel):
     # ``ergon_core.core.application.tasks.management`` which imports
     # ``from ergon_core.api.registry import registry``. Typing the
     # ``PrivateAttr`` with the real class would close that cycle.
+    # TODO: I'd quite like these typed as their "real objects," lets find some way to make that happen.
     _task_mgmt: Any = PrivateAttr(
         default=None
     )  # TaskManagementService — slopcop: ignore[no-typing-any]
@@ -81,9 +82,9 @@ class WorkerContext(BaseModel):
         definition_id: UUID | None,
         sandbox_id: str,
         node_id: UUID | None,
-        task_mgmt: Any,  # TaskManagementService — slopcop: ignore[no-typing-any]
-        task_inspect: Any,  # TaskInspectionService — slopcop: ignore[no-typing-any]
-        resource_repo: Any,  # RunResourceRepository — slopcop: ignore[no-typing-any]
+        task_mgmt: Any,  # TaskManagementService — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
+        task_inspect: Any,  # TaskInspectionService — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
+        resource_repo: Any,  # RunResourceRepository — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
     ) -> "WorkerContext":
         """Construct a ``WorkerContext`` with services injected.
 
@@ -102,9 +103,10 @@ class WorkerContext(BaseModel):
             sandbox_id=sandbox_id,
             node_id=node_id,
         )
-        object.__setattr__(instance, "_task_mgmt", task_mgmt)
-        object.__setattr__(instance, "_task_inspect", task_inspect)
-        object.__setattr__(instance, "_resource_repo", resource_repo)
+        instance._task_mgmt = task_mgmt
+        instance._task_inspect = task_inspect
+        instance._resource_repo = resource_repo
+
         return instance
 
     # ── facade methods ─────────────────────────────────────────────────
@@ -113,7 +115,9 @@ class WorkerContext(BaseModel):
         self,
         task: Task,
         *,
-        depends_on: tuple[UUID, ...] = (),
+        depends_on: tuple[
+            UUID, ...
+        ] = (),  # todo: consider if this should be required and not have a default
     ) -> SpawnedTaskHandle:
         """Spawn a child task under this context's task_id."""
 
@@ -130,7 +134,9 @@ class WorkerContext(BaseModel):
             depends_on=depends_on,
         )
 
-    async def cancel_task(self, task_id: UUID, *, reason: str = "") -> None:
+    async def cancel_task(
+        self, task_id: UUID, *, reason: str = ""
+    ) -> None:  # todo: make reason str | None not str = ""
         """Cancel a descendant task. Raises ``ContainmentViolation`` otherwise."""
 
         await self._assert_descendant(task_id)

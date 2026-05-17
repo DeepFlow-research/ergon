@@ -4,6 +4,7 @@ from ergon_core.api.registry import registry
 from pydantic import BaseModel, ConfigDict
 
 
+# TODO: this is supposed to die in PR 11
 class WorkerSpec(BaseModel):
     """Immutable descriptor for a worker binding in an Experiment."""
 

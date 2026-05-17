@@ -103,6 +103,7 @@ class Worker(BaseModel, ABC):
                 parts.append(f"Install with: {self.install_hint}")
             raise DependencyError("\n".join(parts))
 
+    # TODO: I'd quite like to find some way to kill these serializer methods, they are a bit of a hack and dont really fit in with the rest of the api
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,
