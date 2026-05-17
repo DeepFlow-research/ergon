@@ -16,6 +16,7 @@ from ergon_core.api.criterion import (
     ScoreScale,
 )
 from ergon_core.api.errors import (
+    ContainmentViolation,
     CriterionCheckError,
     SandboxKindMismatch,
     SandboxNotLiveError,
@@ -45,6 +46,7 @@ __all__ = [
     "Benchmark",
     "BenchmarkRequirements",
     "ComponentRegistry",
+    "ContainmentViolation",
     "Criterion",
     "CriterionCheckError",
     "CriterionContext",

@@ -17,6 +17,12 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "WorkerContext",
         "WorkerOutput",
         "WorkerStreamItem",
+        # PR 9 — dynamic subtasks: SpawnedTaskHandle is the return type
+        # of ``WorkerContext.spawn_task`` / ``.restart_task``;
+        # ContainmentViolation is raised by the curated single-target
+        # facade methods when a worker targets a task it does not own.
+        "SpawnedTaskHandle",
+        "ContainmentViolation",
         "Criterion",
         "CriterionContext",
         "CriterionOutcome",
@@ -71,7 +77,16 @@ def test_semantic_api_clusters_are_importable() -> None:
         "TaskSpec",
         "EmptyTaskPayload",
     ]
-    assert worker.__all__ == ["Worker", "WorkerContext", "WorkerOutput", "WorkerStreamItem"]
+    # PR 9 Task 1 added ``SpawnedTaskHandle`` to the worker cluster as
+    # the return type of ``WorkerContext.spawn_task`` and
+    # ``WorkerContext.restart_task``.
+    assert worker.__all__ == [
+        "SpawnedTaskHandle",
+        "Worker",
+        "WorkerContext",
+        "WorkerOutput",
+        "WorkerStreamItem",
+    ]
     assert criterion.__all__ == [
         "Criterion",
         "CriterionContext",

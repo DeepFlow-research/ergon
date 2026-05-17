@@ -13,6 +13,9 @@ from datetime import UTC, datetime
 
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.resources import RunResourceRepository
+from ergon_core.core.application.tasks.inspection import TaskInspectionService
+from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.application.tasks.repository import (
     TaskExecutionRepository,
     WorkerOutputRepository,
@@ -84,12 +87,16 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         worker = legacy_worker_from_payload(payload)
     worker.validate_runtime_deps()
 
-    worker_context = WorkerContext(
+    worker_context = WorkerContext._for_job(
         run_id=payload.run_id,
-        definition_id=payload.definition_id,
+        task_id=payload.task_id,
         execution_id=payload.execution_id,
+        definition_id=payload.definition_id,
         sandbox_id=payload.sandbox_id,
         node_id=payload.node_id,
+        task_mgmt=TaskManagementService(),
+        task_inspect=TaskInspectionService(),
+        resource_repo=RunResourceRepository(),
     )
 
     context_event_repo = ContextEventService()

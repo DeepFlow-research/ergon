@@ -46,6 +46,25 @@ class CriterionCheckError(Exception):
     """
 
 
+class ContainmentViolation(RuntimeError):
+    """Raised when a worker tries to act on a task it does not own.
+
+    PR 9 adds the curated single-target API on ``WorkerContext``
+    (``cancel_task`` / ``refine_task`` / ``restart_task`` /
+    ``get_task``). Those methods enforce containment: the target
+    ``task_id`` must be the context's own ``task_id`` or one of its
+    descendants. Targeting any other task in the run raises this.
+    """
+
+    def __init__(self, *, parent_task_id: UUID | None, target_task_id: UUID) -> None:
+        super().__init__(
+            f"Task {target_task_id} is not a descendant of {parent_task_id}; "
+            "WorkerContext can only mutate tasks it spawned or their descendants."
+        )
+        self.parent_task_id = parent_task_id
+        self.target_task_id = target_task_id
+
+
 class SandboxNotLiveError(RuntimeError):
     """Raised when a Sandbox method requiring a live runtime is called on a
     sandbox whose ``_runtime`` is ``None``.

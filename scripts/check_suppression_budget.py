@@ -63,7 +63,13 @@ BUDGET = SuppressionCounts(
     # contributed -1.
     # +1 noqa (PR 6.5): noqa: C901 on persist_benchmark (complex by design,
     # same as the persist_definition it supplements).
-    slopcop_ignore=236,
+    # +6 (PR 9 Task 2): WorkerContext injected services typed as ``Any``
+    # to break the api → core → api import cycle (TaskManagementService
+    # imports from ergon_core.api.registry). 3 PrivateAttr fields
+    # (_task_mgmt, _task_inspect, _resource_repo) + 3 _for_job kwargs
+    # mirror the same typing. PR 11 may collapse some of these once the
+    # service modules move out of the core ↔ api cycle.
+    slopcop_ignore=242,
     noqa=4,
     type_ignore=64,
 )
