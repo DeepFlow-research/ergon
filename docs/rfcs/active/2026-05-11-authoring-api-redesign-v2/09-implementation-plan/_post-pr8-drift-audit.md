@@ -16,17 +16,34 @@ PR proposes to do *as if* it were already done).
 
 | PR | Genuine drift verdict | Blocking? | Reconciliation effort |
 |----|----|----|----|
-| 9 (dynamic subtasks) | **MAJOR** | Yes — architectural assumption wrong | Medium — needs design decision |
+| 9 (dynamic subtasks) | **MAJOR** | Yes — frozen WorkerContext contradicts RFC | Medium — unfreeze + add PrivateAttr |
 | 10a (SWEBench) | **MINOR** | No — mostly "this is the work" | Light — one prerequisite extraction |
-| 10b (ResearchRubrics) | **MINOR-MEDIUM** | No, but depends on 10a + design call | Light + one design decision |
+| 10b (ResearchRubrics) | **MEDIUM** | Yes — Criterion base class wrong shape | Medium — micro-PR to convert ABC → BaseModel + ABC |
 | 10c (GDPEval) | **MINOR** | No — mostly "this is the work" | Light |
 | 11 (deletion gate) | **MINOR** | No — but only valid after 9/10a-c | Light — sync xfail names |
 | 12 (walkthrough CI) | **MAJOR** | Yes — missing infra | Medium — needs test driver + exports |
 
-Two plans need real reconciliation work before implementation (PR 9 and PR 12).
-The benchmark migration plans (10a/b/c) and deletion gate (11) are mostly fine
+Three plans need real reconciliation work before implementation:
+- **PR 9** — both design questions resolved (Path A: unfreeze `WorkerContext`).
+- **PR 10b** — design question resolved (Path A: `Criterion` becomes `BaseModel + ABC`).
+- **PR 12** — needs Inngest test driver scaffolding; no design call, just infra.
+
+The benchmark migration plans (10a/10c) and deletion gate (11) are mostly fine
 but have a handful of name/signature drift items that should be corrected
 in-place when each PR is picked up.
+
+### Design calls resolved against RFC (`/docs/rfcs/active/2026-05-11-authoring-api-redesign-v2/`)
+
+1. **PR 9 `WorkerContext` mutability** → RFC `03-runtime.md` (lines 299–313, 457–501)
+   and `01-api-surface.md` (lines 288–451): `WorkerContext(BaseModel)` with
+   `PrivateAttr` for `_task_mgmt` / `_task_inspect` / `_resource_repo`. **NOT
+   frozen.** Framework injects via `_for_job` classmethod using
+   `object.__setattr__`. The current `model_config = {"frozen": True}` is itself
+   drift that needs to be undone.
+2. **PR 10b `Criterion` base class** → RFC `01-api-surface.md` line 120 and lines
+   1030–1082: `class Criterion(BaseModel, ABC)`. Mandatory because all public
+   types follow the `_type`-discriminator serialization pattern. Current pure
+   ABC shape is drift; conversion needs to happen before PR 10b lands.
 
 ---
 
@@ -36,7 +53,7 @@ in-place when each PR is picked up.
 
 | Plan says | Reality |
 |---|---|
-| `WorkerContext` is mutable with injected `_task_mgmt` / `_task_inspect` services | `WorkerContext` is a **frozen Pydantic BaseModel** |
+| `WorkerContext` is mutable with injected `_task_mgmt` / `_task_inspect` services | `WorkerContext` is a **frozen Pydantic BaseModel** (`model_config = {"frozen": True}`) |
 | `WorkerContext.spawn_task(task, depends_on=()) → SpawnedTaskHandle` | Method doesn't exist; `SpawnedTaskHandle` doesn't exist |
 | `ContainmentViolation` error in `api/errors.py` | Doesn't exist |
 | `TaskManagementService.add_subtask(*, run_id, parent_task_id, task, depends_on)` | Actual signature: `add_subtask(session, command: AddSubtaskCommand)` — uses a command object |
@@ -44,26 +61,37 @@ in-place when each PR is picked up.
 | `WorkflowGraphRepository.descendants_by_parent(...)` | Method doesn't exist (the SQL CTE in the plan is correct but needs to be added) |
 | `TaskInspectionService.descendant_ids(...)` | Method doesn't exist |
 
-### Design decision required
+### Design decision — RESOLVED via RFC
 
-The plan's `WorkerContext.spawn_task(...)` API only works if `WorkerContext` is
-mutable or holds service references. Two paths:
+The RFC answers this. From `03-runtime.md` §"Worker runtime API: WorkerContext"
+(lines 299–313) and §"Framework-side WorkerContext construction" (lines 457–501),
+plus `01-api-surface.md` §"The unifying pattern: one class per concept, runtime
+as PrivateAttr" (lines 288–451):
 
-- **Path A:** Make `WorkerContext` mutable (breaks the frozen invariant, requires
-  Pydantic config change, opens question of thread-safety in worker bodies).
-- **Path B:** Keep `WorkerContext` immutable; provide spawn via a separate
-  `WorkerFacade`-style object passed alongside (cleaner, but the plan's API
-  shape needs a rewrite).
+> `WorkerContext(BaseModel)` has public fields `(run_id, task_id, execution_id,
+> definition_id)` and **PrivateAttr fields** `_task_mgmt`, `_task_inspect`,
+> `_resource_repo` holding service references. The framework explicitly injects
+> these via `object.__setattr__` in a `_for_job` classmethod.
+
+So **Path A** is the RFC-mandated direction: `WorkerContext` is a `BaseModel`
+with `PrivateAttr` for services, **not** frozen. The current frozen config is
+itself a drift item that needs to be removed.
 
 ### Reconciliation work before PR 9
 
-1. Pick A or B above; rewrite Task 2 / Task 2b / Task 3 of the plan accordingly.
-2. Drop the `Task.created_by` assumption — if dynamic spawns need spawner
+1. **Drop `model_config = {"frozen": True}`** from `WorkerContext` (it contradicts
+   the RFC). Add `PrivateAttr` fields for `_task_mgmt`, `_task_inspect`, and
+   `_resource_repo`.
+2. **Add `_for_job` classmethod** on `WorkerContext` that injects service
+   references via `object.__setattr__` (RFC's two-phase construction pattern).
+3. **Drop the `Task.created_by` assumption** — if dynamic spawns need spawner
    identity, record it on the graph node or audit metadata, not on Task.
-3. Add `WorkflowGraphRepository.descendants_by_parent` and
-   `TaskInspectionService.descendant_ids` as PR 9 tasks (the SQL CTE is fine).
-4. Decide whether `add_subtask` keeps the command-object pattern or accepts a
-   `Task` instance directly.
+4. **Add `WorkflowGraphRepository.descendants_by_parent`** and
+   **`TaskInspectionService.descendant_ids`** as PR 9 tasks (the SQL CTE in the
+   plan is fine; just needs to be implemented, not assumed-existing).
+5. **Resolve `add_subtask` signature drift** — either extend the command-object
+   pattern to accept a `Task` instance, or add a thin wrapper on `WorkerContext`
+   that builds the command. Plan should pick one and update Task 2 accordingly.
 
 ---
 
@@ -95,17 +123,48 @@ The audit flagged real drift items that affect plan correctness:
 
 | Plan says | Reality | Severity |
 |---|---|---|
-| `JudgeCriterion` becomes a Pydantic `Criterion` subclass with `judge_model` field | Base `Criterion` is an **ABC**, not a `BaseModel` — Pydantic conversion is blocked by base class | Major (design call) |
+| `JudgeCriterion` becomes a Pydantic `Criterion` subclass with `judge_model` field | Base `Criterion` is **pure ABC** (`class Criterion(ABC)`), not `BaseModel + ABC` | Real drift, design RESOLVED below |
 | `ResearchRubricsBenchmark.__init__` accepts `worker_factory`/`sandbox_factory`/`evaluator_factory` kwargs | Currently takes only `limit`/`name`/`description`/`metadata` | Real — needs adding in PR 10b |
 | Depends on PR 10a's `_ManagerBackedSandboxRuntime` adapter | Natural sequencing — not drift |
 
+### Design decision — RESOLVED via RFC
+
+The RFC answers this. From `01-api-surface.md` line 120 (file tree) and
+§"Criterion class signature — locked [v2: locked]" (lines 1030–1082):
+
+> ```python
+> class Criterion(BaseModel, ABC):
+>     type_slug: ClassVar[str]
+>     required_packages: ClassVar[list[str]] = []
+>
+>     @abstractmethod
+>     async def evaluate(self, context: CriterionContext) -> CriterionOutcome: ...
+>
+>     @classmethod
+>     def from_definition(cls, criterion_json: TaskDefinitionJson) -> "Criterion": ...
+> ```
+
+So **Path A** is the RFC-mandated direction: `Criterion` must be
+`class Criterion(BaseModel, ABC)` to support the `_type` discriminator
+serialization pattern used across all public types. The current pure-ABC shape
+is itself a drift item.
+
+This is **architectural** — it affects every existing `Criterion` subclass
+(rubric criteria, builtins, tests). It probably warrants its own micro-PR (or
+becomes Task 0 of PR 10b) rather than being snuck in as part of the
+`ResearchRubricsJudgeCriterion` work.
+
 ### Reconciliation work before PR 10b
 
-1. **Decide on `Criterion` base class.** Either:
-   - Keep `ResearchRubricsJudgeCriterion` as a regular subclass of the ABC `Criterion` (drop the Pydantic-model claim from the plan), or
-   - Convert `Criterion` itself to a `BaseModel` (architecture change — likely out of scope for PR 10b).
-2. Rewrite Task 4 ("Judge Criterion conversion") to match whichever path is chosen.
-3. Land PR 10a first (natural dependency).
+1. **Convert `Criterion` base from pure ABC to `class Criterion(BaseModel, ABC)`**.
+   Audit every existing subclass; most likely they all pass identity fields via
+   `__init__` today and will need to be converted to `BaseModel` field
+   declarations. Could be its own micro-PR before 10b lands.
+2. **Add factory kwargs** (`worker_factory`, `sandbox_factory`,
+   `evaluator_factory`) to `ResearchRubricsBenchmark.__init__` mirroring the
+   MiniF2F pattern.
+3. **Land PR 10a first** (natural dependency for the shared
+   `_ManagerBackedSandboxRuntime` adapter).
 
 ---
 
@@ -185,21 +244,31 @@ walkthrough) is sound; only the tooling layer is missing.
 
 ## Recommended order of operations
 
-Given current state of the world:
+Given current state of the world (and RFC-resolved design calls):
 
-1. **Before starting PR 9:** make the WorkerContext mutability decision (A vs
-   B above), then rewrite PR 9's Task 2 / 2b / 3 sections. ~30-60 minutes of
-   plan editing.
+1. **Before starting PR 9:** unfreeze `WorkerContext` and add `PrivateAttr` fields
+   for services (per RFC `03-runtime.md`). Then rewrite PR 9's Task 2 / 2b / 3
+   sections to match the unified pattern. ~30-60 minutes of plan editing.
 2. **Before starting PR 10a:** quick read of the plan's Task 1 to confirm the
    `_ManagerBackedSandboxRuntime` extraction is explicitly scoped to PR 10a
    (not assumed pre-existing). Likely no edit needed.
-3. **Before starting PR 10b:** decide whether `Criterion` becomes Pydantic
-   (architectural) or stays an ABC (rewrite Task 4 of plan).
+3. **Before starting PR 10b:** convert `Criterion` ABC → `BaseModel + ABC` per
+   RFC `01-api-surface.md` line 1054. This touches every existing subclass and
+   could be its own micro-PR ("PR 10b-prep" or "Task 0 of PR 10b"). Once done,
+   PR 10b's `JudgeCriterion` Pydantic conversion is a one-line subclass
+   declaration.
 4. **Before starting PR 10c:** same quick re-read as 10a; likely no edits.
-5. **Before starting PR 11:** sync xfail symbol names; drop completed items.
-   ~15 minutes.
-6. **Before starting PR 12:** scaffold the Inngest test driver. This is a
-   meaningful prerequisite — could be its own micro-PR or rolled into PR 12.
+5. **Before starting PR 11:** sync xfail symbol names; drop completed items
+   (`Worker.from_buffer`, `Worker.validate` rename). ~15 minutes.
+6. **Before starting PR 12:** scaffold the Inngest test driver and re-export
+   `launch_run` from `ergon_core.api`. This is a meaningful prerequisite —
+   could be its own micro-PR or rolled into PR 12.
 
-Net additional reconciliation work: ~2-4 hours total, mostly concentrated in
-PR 9 (design decision) and PR 12 (test driver scaffolding).
+Net additional reconciliation work: ~3-5 hours total, plus two micro-PRs that
+could land independently:
+- **micro-PR-A:** `Criterion` ABC → `BaseModel + ABC` (architectural prep for PR 10b).
+- **micro-PR-B:** Inngest test driver scaffolding + `launch_run` re-export (prep for PR 12).
+
+The `WorkerContext` unfreeze + `PrivateAttr` work fits naturally into PR 9
+itself rather than a separate micro-PR — it's part of the dynamic-spawning
+infrastructure.
