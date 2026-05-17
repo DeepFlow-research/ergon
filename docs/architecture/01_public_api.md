@@ -14,8 +14,13 @@ notice.
 ## core abstractions
 
 All public-surface Pydantic models are `frozen=True`; mutation is done through
-`model_copy(update=...)`. Every type below lives under `ergon_core/api/` and is
-owned by that module.
+`model_copy(update=...)`. The one deliberate exception is `WorkerContext`
+(unfrozen since PR 9) so the runtime can inject `TaskManagementService`,
+`TaskInspectionService`, and `RunResourceRepository` into `PrivateAttr` slots
+via `WorkerContext._for_job`; the facade methods (`spawn_task`, `cancel_task`,
+`refine_task`, `restart_task`, `subtasks`, `descendants`, `get_task`) then
+delegate to those services. Every type below lives under `ergon_core/api/`
+and is owned by that module.
 
 - **`Benchmark`** — abstract base. Produces work units via `build_instances()`
   (a mapping from `instance_key` to a sequence of `TaskSpec` or `Task`) and declares
@@ -170,7 +175,18 @@ within the constraints the invariants below impose.
 - **Public-API models are frozen.** Every Pydantic model under
   `ergon_core/api/` sets `frozen=True`. Mutation is done by `model_copy`. This
   lets the runtime cache, hash, and cross process boundaries without defensive
-  copies.
+  copies. The deliberate exception is `WorkerContext` (PR 9): it is non-frozen
+  so the runtime can inject service instances into `PrivateAttr` fields via
+  `_for_job`. The injected services are not part of the public contract; user
+  code only sees the facade methods.
+- **Worker spawn containment (PR 9).** `WorkerContext.spawn_task(task, *,
+  depends_on=())` writes a `run_graph_nodes` row with `is_dynamic=True` and
+  the full Task JSON snapshot — no synthetic `experiment_definition_tasks`
+  row. Lifecycle facade methods (`cancel_task`, `refine_task`, `restart_task`,
+  `get_task`) enforce containment: they raise `ContainmentViolation` if the
+  target task is not the worker's own task or a descendant. Containment is
+  evaluated against the live graph via `TaskInspectionService.descendant_ids`,
+  which walks `parent_node_id` with a recursive CTE.
 - **Workers MUST yield.** `Worker.execute()` yields at least one
   `GenerationTurn` per invocation, including stubs. The runtime uses turns as
   the unit of RL observation and of cancellation checkpointing; a silent
