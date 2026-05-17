@@ -22,6 +22,36 @@ PR 10c's cleanup is the only place ordering matters.
 
 ---
 
+## Post-PR-8 audit reconciliation
+
+The post-PR-8 drift audit (`_post-pr8-drift-audit.md`) assigned these items to
+this PR. The first one is **architectural and must land before Task 4** —
+either as a Task 0 inside this PR, or as a separate "Criterion micro-PR"
+that lands before PR 10b. The second is a real plan addition.
+
+1. **Convert `Criterion` base class from pure ABC to `BaseModel + ABC`.**
+   The RFC (`01-api-surface.md` lines 1030–1082) specifies
+   `class Criterion(BaseModel, ABC)` with `type_slug: ClassVar[str]`,
+   `required_packages: ClassVar[list[str]] = []`, and a `from_definition`
+   classmethod. Current code (`ergon_core/api/criterion/criterion.py`) has
+   pure `class Criterion(ABC)`. This conversion touches **every existing
+   `Criterion` subclass** across `ergon_core` and `ergon_builtins` —
+   subclasses currently pass identity fields via `__init__` and will need
+   to be converted to Pydantic field declarations. Task 4's
+   `JudgeCriterion(Criterion)` Pydantic conversion ONLY works once the base
+   class is `BaseModel`. Treat this as a prerequisite — add a **Task 0:
+   Criterion base class** at the start of this plan that does the base
+   conversion + subclass sweep, or extract it into a "PR 10b-prep" micro-PR
+   that lands first.
+
+2. **Add factory kwargs to `ResearchRubricsBenchmark.__init__`.** Current
+   constructor takes only `limit`/`name`/`description`/`metadata`. Plan
+   requires `worker_factory`, `sandbox_factory`, and `evaluator_factory`
+   kwargs (mirroring the MiniF2F pattern). Add these as part of Task 5
+   (Convert Benchmark Tasks).
+
+---
+
 ## Common Conversion Recipe
 
 See [`11-pr-10a-swebench.md`](11-pr-10a-swebench.md) § Common

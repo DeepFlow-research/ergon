@@ -5,6 +5,13 @@ remaining v2-stack plans (PR 9, 10a/b/c, 11, 12) still reflect the current
 state of the code, or whether they have drifted in the same way PR 8's plan
 had (which required ~290 lines of reconciliation before implementation).
 
+> **Reconciliation status:** each drift item below has been assigned to a
+> specific PR plan. Every plan in `10-pr-09-*.md` through `13-pr-12-*.md` now
+> has a `## Post-PR-8 audit reconciliation` section at the top listing the
+> items it owns. Implementers picking up any of those PRs should read that
+> section first — it patches over the drift before the existing task list
+> becomes safe to execute.
+
 **Methodology:** six parallel Explore agents, one per plan, each given the
 plan path plus a checklist of high-yield drift sources (file paths, class
 existence, sync/async signatures, public API shape, migration ids, deletion

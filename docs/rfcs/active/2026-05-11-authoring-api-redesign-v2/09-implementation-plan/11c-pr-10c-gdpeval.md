@@ -25,6 +25,33 @@ true once 10a, 10b, and 10c are all in.
 
 ---
 
+## Post-PR-8 audit reconciliation
+
+The post-PR-8 drift audit (`_post-pr8-drift-audit.md`) assigned these items to
+this PR. Each is a confirmation that an existing plan task scopes the work
+correctly — no architectural surprises.
+
+1. **`make_gdpeval_worker()` factory pattern.** Plan converts
+   `GDPEvalReactWorker` class (in `worker_factory.py`) into a
+   `make_gdpeval_worker()` factory function (in `workers.py`), mirroring the
+   MiniF2F pattern. Audit confirmed current code is class-based — this is
+   real PR 10c work.
+2. **Toolkit Pydantic conversion.** Plan converts `GDPEvalToolkit` from a
+   regular class (`__init__(sandbox_manager, task_id, run_id)`) into a
+   Pydantic `BaseModel`. Audit confirmed current code is regular-class with
+   non-serializable constructor params — this is real PR 10c work.
+3. **`GDPEvalSandbox(Sandbox)` subclass creation.** Audit confirmed the
+   subclass does NOT exist today (only `GDPEvalSandboxManager` exists).
+   Task 1 already covers this.
+4. **`GDPEvalBenchmark.__init__` factory kwargs.** Current constructor takes
+   only dataset/split/limit. Add `worker_factory`, `sandbox_factory`,
+   `evaluator_factory` kwargs as part of Task 4 (Convert Benchmark Tasks).
+5. **Smoke fixture row addition.** Audit confirmed GDPEval is missing from
+   `tests/fixtures/smoke_components/benchmarks.py`. Ensure this PR adds a
+   `GDPEvalSmokeTask` entry using the object-bound `Task[...]` shape.
+
+---
+
 ## Common Conversion Recipe
 
 See [`11-pr-10a-swebench.md`](11-pr-10a-swebench.md) § Common

@@ -17,6 +17,47 @@ Sandbox runtime, synchronous Inngest test driver.
 
 ---
 
+## Post-PR-8 audit reconciliation
+
+The post-PR-8 drift audit (`_post-pr8-drift-audit.md`) assigned these items to
+this PR. The first two are infrastructure prerequisites that probably warrant
+either a Task 0 inside this PR or a separate "PR 12-prep" micro-PR.
+
+1. **Re-export `launch_run` from `ergon_core.api`.** Plan imports
+   `from ergon_core.api import launch_run`; the function actually lives at
+   `ergon_core.core.application.experiments.launch.launch_run` and is NOT
+   re-exported from the public API package. Either add the re-export in
+   `ergon_core/api/__init__.py` OR update every plan reference to use the
+   internal import path. The re-export option is cleaner and matches the
+   `persist_benchmark` public-API placement.
+2. **Scaffold the synchronous Inngest test driver.** Plan assumes a driver
+   with `inngest_driver.run_until_terminal()`,
+   `step_invocations_for_function()`, `events_for()` methods exists.
+   Audit confirmed **no such driver exists** in the codebase. This is a
+   substantial prerequisite — needs research into Inngest's test-mode
+   client / `inngest.SDK()` and a wrapper layer in
+   `ergon_core/tests/integration/conftest.py`. Treat as Task 0 of this PR
+   OR extract into a "PR 12-prep" micro-PR. Either way, this MUST land
+   before Task 1 (Integration Fixtures) can be written.
+3. **Decide on `read_run()` vs `read_run_state()`.** Plan calls
+   `await read_run(run_id)`. Audit confirmed only `read_run_state()` exists.
+   Either alias the existing helper as `read_run` OR update the plan to use
+   the existing name. Pick whichever is more consistent with the wider
+   read-side helper naming.
+4. **Create `ergon_core/tests/integration/` directory.** Currently only
+   `ergon_core/tests/unit/` exists. This is a trivial mkdir + `__init__.py`,
+   but call it out explicitly so the first integration test commit doesn't
+   get blocked on a missing directory.
+5. **Verify CLI commands used in the walkthrough match the post-PR-8
+   surface.** Valid commands today: `ergon run status <id>`,
+   `ergon run list [--status] [--experiment]`, `ergon run cancel <id>`,
+   `ergon experiment show <UUID>`, `ergon experiment list`,
+   `ergon experiment tags`, `ergon experiment by-tag <tag>`. Audit any
+   `ergon experiment define` / `ergon experiment run` / `ergon run <benchmark>`
+   references — those are deleted commands.
+
+---
+
 ## Files
 
 **Create:**

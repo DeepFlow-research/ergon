@@ -24,6 +24,37 @@ cleanup that PR 10c executes.
 
 ---
 
+## Post-PR-8 audit reconciliation
+
+The post-PR-8 drift audit (`_post-pr8-drift-audit.md`) assigned these items to
+this PR. Most are confirmations that the existing tasks scope work correctly;
+one is a real prerequisite call-out.
+
+1. **Confirm shared adapter extraction is in scope.** Task 1 calls for moving
+   the `_ManagerBackedSandboxRuntime` adapter (currently inlined in
+   `ergon_builtins/benchmarks/minif2f/sandbox.py`) into a shared module at
+   `ergon_builtins/sandbox/_manager_backed.py`. The audit confirmed the
+   shared module does NOT exist yet, so the extraction is real PR 10a work
+   (not assumed-already-done). PRs 10b and 10c import from the shared module
+   on the assumption that PR 10a lands first.
+2. **Sandbox subdirectory rename.** Before creating
+   `ergon_builtins/benchmarks/swebench_verified/sandbox.py`, the existing
+   `swebench_verified/sandbox/` directory must be renamed (e.g.,
+   `git mv swebench_verified/sandbox swebench_verified/sandbox_template`) to
+   avoid module shadowing. Update all `sandbox.utils` imports to
+   `sandbox_template.utils`. Call this out as a prerequisite step in Task 1.
+3. **Worker factory pattern.** Plan renames
+   `swebench_verified/worker_factory.py` → `workers.py` and converts the
+   `SWEBenchReactWorker` class to a `make_swebench_worker()` factory
+   function. Audit confirmed current code is class-based — this is real
+   PR 10a work.
+4. **Toolkit Pydantic conversion.** Plan converts `SWEBenchToolkit` from a
+   regular class (`__init__(sandbox, workdir)`, `get_tools()`) into a
+   Pydantic `BaseModel` with a `tools(sandbox, task)` method. Audit
+   confirmed current code is regular-class — this is real PR 10a work.
+
+---
+
 ## Common Conversion Recipe
 
 Every vertical sub-PR (10a, 10b, 10c) follows the same template.  PR 6.5 fixed the file layout + killed the `Experiment` class, so this recipe assumes the post-PR-6.5 world:
