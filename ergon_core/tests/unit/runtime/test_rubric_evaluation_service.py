@@ -21,13 +21,6 @@ from ergon_core.core.application.evaluation.service import (
 class _Criterion(Criterion):
     type_slug = "test-criterion"
 
-    def __init__(self, *, slug: str, weight: float, max_score: float) -> None:
-        super().__init__(
-            slug=slug,
-            weight=weight,
-            score_spec=ScoreScale(max_score=max_score),
-        )
-
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         return CriterionOutcome(name=self.slug, score=self.score_spec.max_score, passed=True)
 
@@ -62,8 +55,8 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
     evaluator = Rubric(
         name="rubric",
         criteria=[
-            _Criterion(slug="positive", weight=2.0, max_score=2.0),
-            _Criterion(slug="negative", weight=-5.0, max_score=5.0),
+            _Criterion(slug="positive", weight=2.0, score_spec=ScoreScale(max_score=2.0)),
+            _Criterion(slug="negative", weight=-5.0, score_spec=ScoreScale(max_score=5.0)),
         ],
     )
 

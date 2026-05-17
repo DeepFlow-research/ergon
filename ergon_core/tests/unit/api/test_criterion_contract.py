@@ -1,6 +1,7 @@
 """Contracts for the public Criterion base class."""
 
 import pytest
+from pydantic import ValidationError
 
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext
@@ -19,7 +20,10 @@ class _Criterion(Criterion):
 
 
 def test_criterion_requires_slug_keyword() -> None:
-    with pytest.raises(TypeError):
+    # PR 10 Task 0: Criterion is a Pydantic BaseModel + ABC. Missing the
+    # required ``slug`` field raises ``ValidationError`` (Pydantic) rather
+    # than the v1 ``TypeError`` from a hand-rolled ``__init__``.
+    with pytest.raises(ValidationError):
         _Criterion(name="legacy-name")  # type: ignore[call-arg]
 
 

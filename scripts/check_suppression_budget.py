@@ -69,7 +69,16 @@ BUDGET = SuppressionCounts(
     # (_task_mgmt, _task_inspect, _resource_repo) + 3 _for_job kwargs
     # mirror the same typing. PR 11 may collapse some of these once the
     # service modules move out of the core ↔ api cycle.
-    slopcop_ignore=242,
+    # +2 (PR 10 Task 0): Criterion ABC → Pydantic BaseModel conversion.
+    # Concrete subclasses (CodeCheck, LLMJudge, ProofVerification,
+    # ResearchRubricsJudge) keep a thin ``__init__(**data: Any)`` shim that
+    # folds the legacy ``max_score`` / ``rubric`` kwargs into ``score_spec``
+    # so call sites stay compatible — Pydantic's underlying ``__init__``
+    # accepts ``Any``, so ``**data`` must match. The base ``Criterion``
+    # also picks up ``description: str = ""`` (slopcop:
+    # no-str-empty-default) which previously lived on the two subclasses
+    # that overrode it; net change is +2 across all touched files.
+    slopcop_ignore=244,
     noqa=4,
     type_ignore=64,
 )

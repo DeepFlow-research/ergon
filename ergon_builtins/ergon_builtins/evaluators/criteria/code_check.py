@@ -5,7 +5,7 @@ does simple template matching; full sandbox execution happens via
 InngestCriterionExecutor + DefaultCriterionRuntime.
 """
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
 
@@ -21,22 +21,14 @@ class CodeCheckCriterion(Criterion):
 
     type_slug: ClassVar[str] = "code-check"
 
-    def __init__(
-        self,
-        *,
-        slug: str,
-        code_template: str,
-        description: str = "",  # slopcop: ignore[no-str-empty-default]
-        weight: float = 1.0,
-        max_score: float = 1.0,
+    code_template: str
+
+    def __init__(  # slopcop: ignore[no-typing-any]
+        self, *, max_score: float | None = None, **data: Any
     ) -> None:
-        super().__init__(
-            slug=slug,
-            description=description or slug,
-            weight=weight,
-            score_spec=ScoreScale(max_score=max_score),
-        )
-        self.code_template = code_template
+        if max_score is not None and "score_spec" not in data:
+            data["score_spec"] = ScoreScale(max_score=max_score)
+        super().__init__(**data)
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         output = context.worker_result.output

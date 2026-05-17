@@ -7,7 +7,7 @@ writes it into the sandbox, and invokes the Lean compiler to verify the
 proof.
 """
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome, ScoreScale
 from ergon_core.core.application.evaluation.criterion_runtime import ResourceNotFoundError
@@ -47,24 +47,17 @@ class ProofVerificationCriterion(Criterion):
 
     type_slug: ClassVar[str] = "proof-verification"
 
-    def __init__(
-        self,
-        *,
-        slug: str = "proof_verification",
-        weight: float = 1.0,
-        max_score: float = 1.0,
-        problem_statement: str | None = None,
-        ground_truth_proof: str | None = None,
-        formal_system: str = "lean",
+    slug: str = "proof_verification"
+    problem_statement: str | None = None
+    ground_truth_proof: str | None = None
+    formal_system: str = "lean"
+
+    def __init__(  # slopcop: ignore[no-typing-any]
+        self, *, max_score: float | None = None, **data: Any
     ) -> None:
-        super().__init__(
-            slug=slug,
-            weight=weight,
-            score_spec=ScoreScale(max_score=max_score),
-        )
-        self.problem_statement = problem_statement
-        self.ground_truth_proof = ground_truth_proof
-        self.formal_system = formal_system
+        if max_score is not None and "score_spec" not in data:
+            data["score_spec"] = ScoreScale(max_score=max_score)
+        super().__init__(**data)
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         proof_data = await self._extract_proof(context)

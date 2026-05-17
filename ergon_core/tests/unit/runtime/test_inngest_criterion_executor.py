@@ -32,9 +32,8 @@ class _Ctx:
 class _Criterion(Criterion):
     type_slug = "test-criterion"
 
-    def __init__(self) -> None:
-        super().__init__(slug="criterion")
-        self.observed_runtime = False
+    slug: str = "criterion"
+    observed_runtime: bool = False
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         self.observed_runtime = context.has_runtime
