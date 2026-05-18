@@ -1,11 +1,4 @@
-"""Executable spec of the v2 final state.
-
-Each FinalStateAssertion is one architecture invariant that must hold once
-the v2 program is complete. Invariants that have not landed yet are marked
-xfail(strict=True) with their landing PR. Removing a marker is the
-landing-PR signal — CI will flag any case that passes without a marker
-(invariant landed early) or fails without a marker (invariant regressed).
-"""
+"""Executable spec of the v2 final state."""
 
 from __future__ import annotations
 
@@ -42,7 +35,6 @@ def _grep_production(symbol: str) -> list[str]:
 @dataclass(frozen=True)
 class FinalStateAssertion:
     name: str
-    landing_pr: str
     check: Callable[[], None]
     reason: str
 
@@ -88,10 +80,11 @@ def _assert_evaluate_task_run_takes_thin_payload() -> None:
     )
 
 
-def _assert_run_graph_node_has_no_task_id_column() -> None:
+def _assert_run_graph_node_uses_task_id_primary_key() -> None:
     from ergon_core.core.persistence.graph.models import RunGraphNode
 
-    assert "task_id" not in RunGraphNode.model_fields
+    assert "task_id" in RunGraphNode.model_fields
+    assert "id" not in RunGraphNode.model_fields
 
 
 def _assert_task_has_no_model_post_init() -> None:
@@ -136,94 +129,66 @@ def _assert_no_check_evaluators_registration() -> None:
 FINAL_STATE_ASSERTIONS: tuple[FinalStateAssertion, ...] = (
     FinalStateAssertion(
         name="worker_execute_imports_only_run_tier",
-        landing_pr="PR 3",
         check=_assert_no_definition_repository_in_worker_execute,
         reason="Δ.2: runtime reads only run-tier tables",
     ),
     FinalStateAssertion(
         name="evaluate_task_run_uses_thin_payload",
-        landing_pr="PR 4",
         check=_assert_evaluate_task_run_takes_thin_payload,
         reason="Δ.4: per-evaluator fanout takes TaskEvaluateRequest",
     ),
     FinalStateAssertion(
         name="check_evaluators_is_unregistered",
-        landing_pr="PR 4",
         check=_assert_no_check_evaluators_registration,
         reason="Δ.4: synchronous fanout replaces check_evaluators dispatch",
     ),
     FinalStateAssertion(
         name="task_has_no_model_post_init",
-        landing_pr="PR 5",
         check=_assert_task_has_no_model_post_init,
         reason="CLAUDE.md: no model_post_init in public API objects",
     ),
     FinalStateAssertion(
         name="materialize_dynamic_subtask_definition_is_gone",
-        landing_pr="PR 9",
         check=_assert_no_materialize_dynamic_subtask_definition,
         reason="Δ.3: dynamic subtasks are graph-native",
     ),
     FinalStateAssertion(
         name="prepare_definition_helper_is_removed",
-        landing_pr="PR 11",
         check=_assert_no_prepare_definition_method,
         reason="Δ.2: no fallback to definition-tier reads",
     ),
     FinalStateAssertion(
         name="criterion_executor_is_removed",
-        landing_pr="PR 11",
         check=_assert_no_criterion_executor,
         reason="Δ.7: deletion list",
     ),
     FinalStateAssertion(
         name="saved_specs_package_is_removed",
-        landing_pr="PR 11",
         check=_assert_no_saved_specs_package,
         reason="Δ.7: write-only package, no readers",
     ),
     FinalStateAssertion(
-        name="run_graph_node_has_no_task_id_column",
-        landing_pr="PR 11",
-        check=_assert_run_graph_node_has_no_task_id_column,
+        name="run_graph_node_uses_task_id_primary_key",
+        check=_assert_run_graph_node_uses_task_id_primary_key,
         reason="Δ.7 + identity model: task_id is the single canonical id",
     ),
     FinalStateAssertion(
         name="worker_from_buffer_is_removed",
-        landing_pr="PR 11",
         check=_assert_worker_from_buffer_is_gone,
         reason="Δ.7: dead constructor with no callers",
     ),
     FinalStateAssertion(
         name="terminate_sandbox_by_id_is_removed",
-        landing_pr="PR 11",
         check=_assert_terminate_sandbox_by_id_is_gone,
         reason="Δ.7: cleanup helper is deleted or replaced after sandbox_cleanup is canonical",
     ),
 )
 
 
-# When an assertion's landing PR merges, delete its entry from this dict.
-# strict=True surfaces unexpected passes — if a later refactor flips an
-# invariant green ahead of its landing PR, CI fails and the ledger gets
-# the update at the same time.
-_XFAIL_BY_NAME: dict[str, str] = {}
-
-
 def _cases() -> list:
-    cases = []
-    for assertion in FINAL_STATE_ASSERTIONS:
-        marks = []
-        reason = _XFAIL_BY_NAME.get(assertion.name)
-        if reason is not None:
-            marks.append(pytest.mark.xfail(reason=f"{assertion.landing_pr}: {reason}", strict=True))
-        cases.append(pytest.param(assertion, marks=marks, id=assertion.name))
-    return cases
+    return [pytest.param(assertion, id=assertion.name) for assertion in FINAL_STATE_ASSERTIONS]
 
 
 @pytest.mark.parametrize("assertion", _cases())
 def test_v2_final_state(assertion: FinalStateAssertion) -> None:
-    """One check per v2 invariant. Each is xfail(strict=True) until its
-    landing PR flips the marker off in `_XFAIL_BY_NAME`."""
-
     assertion.check()

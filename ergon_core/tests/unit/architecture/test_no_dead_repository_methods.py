@@ -6,9 +6,8 @@ repository layer rather than tree-wide because that's where v1's audit
 found real dead helpers — going wider has too much false-positive noise
 from Inngest registration, Pydantic decorators, etc.
 
-Methods that are PR-scheduled to land callers later (or to be deleted)
-are listed in `_KNOWN_UNUSED_FOR_NOW`, mirroring PR 0's
-`_XFAIL_BY_SYMBOL` pattern.
+No known-unused ledger is allowed; methods either have production callers
+or should be deleted.
 """
 
 from __future__ import annotations
@@ -56,24 +55,11 @@ def _grep_production_callers(pattern: str, exclude_path: Path | None = None) -> 
     return sorted(hits)
 
 
-# Methods that have no production callers AND are expected to gain one
-# (or be deleted) by a specific PR. Mirrors PR 0's _XFAIL_BY_SYMBOL.
-# Keys are "ClassName.method_name". The dict is populated from the
-# initial-run audit and drains as fix-PRs land. PR 11 asserts it's
-# empty.
-_KNOWN_UNUSED_FOR_NOW: dict[str, str] = {}
-
-
 def _cases() -> list:
-    cases = []
-    for cls, method in _all_public_methods():
-        marks = []
-        key = f"{cls.__name__}.{method}"
-        reason = _KNOWN_UNUSED_FOR_NOW.get(key)
-        if reason is not None:
-            marks.append(pytest.mark.xfail(reason=reason, strict=True))
-        cases.append(pytest.param(cls, method, marks=marks, id=key))
-    return cases
+    return [
+        pytest.param(cls, method, id=f"{cls.__name__}.{method}")
+        for cls, method in _all_public_methods()
+    ]
 
 
 @pytest.mark.parametrize("cls,method", _cases())
@@ -86,6 +72,5 @@ def test_repository_method_has_a_production_caller(cls: type, method: str) -> No
     callers = _grep_production_callers(f".{method}(", exclude_path=defining_file)
     assert callers, (
         f"{cls.__name__}.{method} has no production callers. "
-        "Either add a caller, delete the method, or add to "
-        "_KNOWN_UNUSED_FOR_NOW with the landing PR."
+        "Either add a caller or delete the method."
     )

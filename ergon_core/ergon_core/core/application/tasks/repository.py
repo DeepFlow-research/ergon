@@ -32,10 +32,6 @@ class TaskExecutionRepository:
         )
         return session.exec(stmt).first()
 
-    def latest_execution_id_for_node(self, session: Session, node_id: UUID) -> UUID | None:
-        execution = self.latest_for_node(session, node_id)
-        return None if execution is None else execution.id
-
     def list_children_of_execution(
         self,
         session: Session,

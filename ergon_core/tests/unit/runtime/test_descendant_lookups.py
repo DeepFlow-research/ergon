@@ -63,15 +63,15 @@ class TestDescendantsByParent:
         repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.id)
-        child2 = _node(session, run_id=run_id, slug="child2", parent_task_id=root.id)
-        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.id)
+        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.task_id)
+        child2 = _node(session, run_id=run_id, slug="child2", parent_task_id=root.task_id)
+        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.task_id)
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.id)
-        result_ids = {row.id for row in rows}
+        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.task_id)
+        result_ids = {row.task_id for row in rows}
 
-        assert result_ids == {child1.id, child2.id, grandchild.id}
+        assert result_ids == {child1.task_id, child2.task_id, grandchild.task_id}
 
     def test_does_not_include_root_or_sibling(self) -> None:
         """root and an unrelated sibling at run root level are excluded."""
@@ -80,16 +80,16 @@ class TestDescendantsByParent:
         repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.id)
+        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.task_id)
         sibling = _node(session, run_id=run_id, slug="sibling")  # no parent_task_id
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.id)
-        result_ids = {row.id for row in rows}
+        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.task_id)
+        result_ids = {row.task_id for row in rows}
 
-        assert root.id not in result_ids
-        assert sibling.id not in result_ids
-        assert child1.id in result_ids
+        assert root.task_id not in result_ids
+        assert sibling.task_id not in result_ids
+        assert child1.task_id in result_ids
 
     def test_returns_empty_when_root_has_no_children(self) -> None:
         """A leaf node returns ()."""
@@ -100,7 +100,7 @@ class TestDescendantsByParent:
         leaf = _node(session, run_id=run_id, slug="leaf")
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=leaf.id)
+        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=leaf.task_id)
         assert rows == ()
 
     def test_depth_greater_than_two(self) -> None:
@@ -110,16 +110,16 @@ class TestDescendantsByParent:
         repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
-        a = _node(session, run_id=run_id, slug="a", parent_task_id=root.id)
-        b = _node(session, run_id=run_id, slug="b", parent_task_id=a.id)
-        c = _node(session, run_id=run_id, slug="c", parent_task_id=b.id)
-        d = _node(session, run_id=run_id, slug="d", parent_task_id=c.id)
+        a = _node(session, run_id=run_id, slug="a", parent_task_id=root.task_id)
+        b = _node(session, run_id=run_id, slug="b", parent_task_id=a.task_id)
+        c = _node(session, run_id=run_id, slug="c", parent_task_id=b.task_id)
+        d = _node(session, run_id=run_id, slug="d", parent_task_id=c.task_id)
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.id)
-        result_ids = {row.id for row in rows}
+        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.task_id)
+        result_ids = {row.task_id for row in rows}
 
-        assert result_ids == {a.id, b.id, c.id, d.id}
+        assert result_ids == {a.task_id, b.task_id, c.task_id, d.task_id}
 
     def test_cross_run_isolation(self) -> None:
         """Nodes from a different run_id are not included."""
@@ -129,16 +129,16 @@ class TestDescendantsByParent:
         repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
-        child = _node(session, run_id=run_id, slug="child", parent_task_id=root.id)
-        # A node in another run that happens to point at root.id as parent
-        other = _node(session, run_id=other_run_id, slug="other", parent_task_id=root.id)
+        child = _node(session, run_id=run_id, slug="child", parent_task_id=root.task_id)
+        # A node in another run that happens to point at root.task_id as parent
+        other = _node(session, run_id=other_run_id, slug="other", parent_task_id=root.task_id)
         session.commit()
 
-        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.id)
-        result_ids = {row.id for row in rows}
+        rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.task_id)
+        result_ids = {row.task_id for row in rows}
 
-        assert result_ids == {child.id}
-        assert other.id not in result_ids
+        assert result_ids == {child.task_id}
+        assert other.task_id not in result_ids
 
 
 # ---------------------------------------------------------------------------
@@ -153,9 +153,9 @@ class TestTaskInspectionServiceDescendantIds:
         run_id = uuid4()
 
         root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.id)
-        child2 = _node(session, run_id=run_id, slug="child2", parent_task_id=root.id)
-        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.id)
+        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.task_id)
+        child2 = _node(session, run_id=run_id, slug="child2", parent_task_id=root.task_id)
+        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.task_id)
         session.commit()
 
         # Patch get_session in the inspection module to return the test session
@@ -164,10 +164,10 @@ class TestTaskInspectionServiceDescendantIds:
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService(graph_repo=repo)
 
-        result = await svc.descendant_ids(run_id=run_id, root_task_id=root.id)
+        result = await svc.descendant_ids(run_id=run_id, root_task_id=root.task_id)
 
         assert isinstance(result, frozenset)
-        assert result == frozenset({child1.id, child2.id, grandchild.id})
+        assert result == frozenset({child1.task_id, child2.task_id, grandchild.task_id})
 
     async def test_returns_empty_frozenset_when_no_children(
         self, monkeypatch: pytest.MonkeyPatch
@@ -184,7 +184,7 @@ class TestTaskInspectionServiceDescendantIds:
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService(graph_repo=repo)
 
-        result = await svc.descendant_ids(run_id=run_id, root_task_id=leaf.id)
+        result = await svc.descendant_ids(run_id=run_id, root_task_id=leaf.task_id)
 
         assert result == frozenset()
 
@@ -194,9 +194,9 @@ class TestTaskInspectionServiceDescendantIds:
         run_id = uuid4()
 
         root = _node(session, run_id=run_id, slug="root")
-        a = _node(session, run_id=run_id, slug="a", parent_task_id=root.id)
-        b = _node(session, run_id=run_id, slug="b", parent_task_id=a.id)
-        c = _node(session, run_id=run_id, slug="c", parent_task_id=b.id)
+        a = _node(session, run_id=run_id, slug="a", parent_task_id=root.task_id)
+        b = _node(session, run_id=run_id, slug="b", parent_task_id=a.task_id)
+        c = _node(session, run_id=run_id, slug="c", parent_task_id=b.task_id)
         session.commit()
 
         monkeypatch.setattr(inspection_module, "get_session", lambda: session)
@@ -204,6 +204,6 @@ class TestTaskInspectionServiceDescendantIds:
         repo = WorkflowGraphRepository()
         svc = TaskInspectionService(graph_repo=repo)
 
-        result = await svc.descendant_ids(run_id=run_id, root_task_id=root.id)
+        result = await svc.descendant_ids(run_id=run_id, root_task_id=root.task_id)
 
-        assert result == frozenset({a.id, b.id, c.id})
+        assert result == frozenset({a.task_id, b.task_id, c.task_id})

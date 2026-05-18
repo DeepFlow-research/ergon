@@ -40,6 +40,7 @@ from ergon_core.core.application.tasks.errors import (
     UnknownTaskSlugError,
 )
 from ergon_core.core.application.events.task_events import (
+    CancelCause,
     PropagationCancelCause,
     TaskCancelledEvent,
     TaskReadyEvent,
@@ -215,14 +216,11 @@ class TaskManagementService:
 
         if applied:
             definition_id = self._resolve_definition_id(session, command.run_id)
-            execution_id = self._task_execution_repo.latest_execution_id_for_node(
-                session, command.task_id
-            )
-            event = TaskCancelledEvent(
+            event = self._task_cancelled_event(
+                session,
                 run_id=command.run_id,
                 definition_id=definition_id,
                 task_id=command.task_id,
-                execution_id=execution_id,
                 cause="manager_decision",
             )
             await inngest_client.send(
@@ -273,11 +271,11 @@ class TaskManagementService:
                 transitioned.append(child.task_id)
 
         events = [
-            TaskCancelledEvent(
+            self._task_cancelled_event(
+                session,
                 run_id=run_id,
                 definition_id=definition_id,
                 task_id=nid,
-                execution_id=self._task_execution_repo.latest_execution_id_for_node(session, nid),
                 cause=cause,
             )
             for nid in transitioned
@@ -564,12 +562,11 @@ class TaskManagementService:
         )
 
         definition_id = self._resolve_definition_id(session, run_id)
-        execution_id = self._task_execution_repo.latest_execution_id_for_node(session, node_id)
-        event = TaskCancelledEvent(
+        event = self._task_cancelled_event(
+            session,
             run_id=run_id,
             definition_id=definition_id,
             task_id=node_id,
-            execution_id=execution_id,
             cause="downstream_invalidation",
         )
         await inngest_client.send(
@@ -638,6 +635,24 @@ class TaskManagementService:
                         reason="downstream_invalidation",
                     ),
                 )
+
+    def _task_cancelled_event(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        definition_id: UUID,
+        task_id: UUID,
+        cause: CancelCause,
+    ) -> TaskCancelledEvent:
+        execution = self._task_execution_repo.latest_for_node(session, task_id)
+        return TaskCancelledEvent(
+            run_id=run_id,
+            definition_id=definition_id,
+            task_id=task_id,
+            execution_id=None if execution is None else execution.id,
+            cause=cause,
+        )
 
     def _validate_plan(self, subtasks: list[SubtaskSpec]) -> None:
         """Check for duplicate slugs, unknown references, and cycles."""

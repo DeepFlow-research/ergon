@@ -1,18 +1,5 @@
 """MiniF2F benchmark for formal math proof verification."""
 
-# MiniF2FBenchmark is intentionally NOT re-exported here.  benchmark.py
-# imports LeanSandbox from ergon_builtins.benchmarks.minif2f.sandbox, and
-# sandbox.py imports MiniF2FSandboxManager from this package.  Eagerly
-# re-exporting MiniF2FBenchmark would complete a cycle:
-#   benchmarks/minif2f/sandbox.py → benchmarks.minif2f (here)
-#   → benchmark.py → benchmarks/minif2f/sandbox.py
-# All call sites that need MiniF2FBenchmark import it directly:
-#   from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
-#
-# TODO(PR 11): once `sandbox.py` no longer imports `MiniF2FSandboxManager`
-# (PR 11 deletes the manager and rewrites `provision()` to call E2B
-# directly), the cycle is broken and `MiniF2FBenchmark` can be added
-# back to the eager exports.
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,

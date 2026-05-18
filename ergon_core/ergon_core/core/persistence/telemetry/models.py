@@ -17,7 +17,7 @@ from ergon_core.core.persistence.shared.enums import (
     TrainingStatus,
 )
 from ergon_core.core.shared.utils import utcnow as _utcnow
-from pydantic import model_validator
+from pydantic import BaseModel, model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
 
@@ -339,6 +339,21 @@ class RunResource(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 # RunTaskEvaluation
 # ---------------------------------------------------------------------------
+
+
+class CreateTaskEvaluation(BaseModel):
+    """Command object for persisting a task evaluation row."""
+
+    model_config = {"frozen": True}
+
+    run_id: UUID
+    task_execution_id: UUID
+    task_id: UUID
+    definition_evaluator_id: UUID
+    score: float | None = None
+    passed: bool | None = None
+    feedback: str | None = None
+    summary_json: JsonObject | None = None
 
 
 class RunTaskEvaluation(SQLModel, table=True):

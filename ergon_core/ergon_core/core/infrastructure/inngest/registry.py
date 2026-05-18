@@ -5,11 +5,8 @@ Pass ALL_FUNCTIONS to inngest.serve() or the framework integration.
 **Notable omission:** the legacy per-evaluator dispatch handler that
 used to listen on `task/completed` is intentionally absent from this
 list. PR 4 moved both of its responsibilities (per-evaluator fanout
-and sandbox release) into `execute_task` — see
-`core/application/jobs/execute_task.py`'s module docstring for the
-new ownership boundary. The handler module stays importable for the
-PR 4 → PR 11 window so in-flight worktrees don't `ImportError` on
-rebase; the Δ.7 deletion list removes the file in the cleanup PR.
+and terminal sandbox release) to the current `execute_task` plus
+`sandbox_cleanup` ownership boundary.
 """
 
 from ergon_core.core.infrastructure.inngest.handlers.cancel_orphan_subtasks import (

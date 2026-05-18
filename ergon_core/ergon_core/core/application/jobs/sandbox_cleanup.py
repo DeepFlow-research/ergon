@@ -15,10 +15,8 @@ that listens for the terminal task events:
 - ``task/failed`` — emitted by ``execute_task`` on worker/evaluator
   failure or on prepare-error.  Evaluators don't run on the failure
   path, so the sandbox is safe to terminate immediately.
-
-Both events carry ``sandbox_id`` (nullable on ``task/failed`` for the
-pre-sandbox-setup error case).  The cleanup function is idempotent: a
-second termination for the same sandbox_id is a no-op
+Terminal events carry ``sandbox_id`` when a sandbox was acquired.  The
+cleanup function is idempotent: a second termination for the same sandbox_id is a no-op
 (``terminate_external_sandbox`` returns ``NOT_FOUND_OR_ALREADY_CLOSED``).
 
 This restores the v1 layout (separate function for sandbox cleanup) but

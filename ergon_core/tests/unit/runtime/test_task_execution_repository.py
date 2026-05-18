@@ -45,7 +45,7 @@ def _node(session: Session, run_id: UUID) -> UUID:
     )
     session.add(node)
     session.flush()
-    return node.id
+    return node.task_id
 
 
 def _execution(

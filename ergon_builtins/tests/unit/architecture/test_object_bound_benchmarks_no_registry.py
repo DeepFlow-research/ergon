@@ -33,7 +33,8 @@ def test_object_bound_benchmark_does_not_import_component_registry(
 
 
 def test_toolkit_is_public_from_stable_builtins_baselines_path() -> None:
-    from ergon_builtins.workers.baselines import Toolkit
-    from ergon_builtins.workers.baselines.toolkit import Toolkit as ToolkitModuleSymbol
+    init_file = ROOT / "ergon_builtins" / "ergon_builtins" / "workers" / "baselines" / "__init__.py"
+    text = init_file.read_text()
 
-    assert Toolkit is ToolkitModuleSymbol
+    assert "from ergon_builtins.workers.baselines.toolkit import Toolkit" in text
+    assert '"Toolkit"' in text

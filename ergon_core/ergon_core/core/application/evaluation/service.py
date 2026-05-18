@@ -14,9 +14,11 @@ from ergon_core.core.persistence.telemetry.evaluation_summary import (
     CriterionOutcomeEntry,
     EvaluationSummary,
 )
-from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.persistence.telemetry.repository import (
+from ergon_core.core.persistence.telemetry.models import (
     CreateTaskEvaluation,
+    RunRecord,
+)
+from ergon_core.core.persistence.telemetry.repository import (
     TelemetryRepository,
 )
 from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores

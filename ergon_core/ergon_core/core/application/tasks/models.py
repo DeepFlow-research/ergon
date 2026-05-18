@@ -180,6 +180,7 @@ class CleanupResult(BaseModel):
     run_id: RunId
     task_id: NodeId
     execution_id: UUID | None
+    sandbox_id: str | None = None
     sandbox_released: bool
     execution_row_updated: bool
 

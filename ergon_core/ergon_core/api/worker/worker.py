@@ -35,9 +35,8 @@ class Worker(BaseModel, ABC):
     # ``__init__`` patterns from before PR 5 (e.g. ``ReActWorker``'s
     # tools/system_prompt/max_iterations kwargs). Those flow into
     # ``__pydantic_extra__`` and round-trip through ``model_dump`` /
-    # ``model_validate`` like any other field. PR 11 will tighten this
-    # to ``extra="forbid"`` once every subclass has been migrated to
-    # explicit field declarations.
+    # ``model_validate`` like any other field while object-bound worker
+    # classes finish converging on explicit field declarations.
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         frozen=False,

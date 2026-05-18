@@ -85,18 +85,6 @@ def _public_methods(cls: type) -> Iterator[tuple[str, object]]:
         yield name, method
 
 
-# Known violators today, keyed by (test_name, parametrize_id) ->
-# "PR N: <fix>". `pytest_collection_modifyitems` applies xfail markers
-# from this dict at collection time so each known case is treated as
-# expected-to-fail with strict=True. The dict drains as fix-PRs land.
-_KNOWN_VIOLATORS: dict[tuple[str, str], str] = {}
-
-
-# The hook that applies these markers lives in conftest.py for reliable
-# collection-time discovery; it reads `_KNOWN_VIOLATORS` from each test
-# module by name.
-
-
 # --- Naming ------------------------------------------------------------
 
 
