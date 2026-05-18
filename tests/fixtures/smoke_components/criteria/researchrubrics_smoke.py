@@ -39,7 +39,7 @@ class ResearchRubricsSmokeCriterion(SmokeCriterionBase):
                 exec_ids = [
                     row.id
                     for row in session.exec(
-                        select(RunTaskExecution).where(RunTaskExecution.node_id == child.id),
+                        select(RunTaskExecution).where(RunTaskExecution.task_id == child.task_id),
                     ).all()
                 ]
                 if not exec_ids:

@@ -58,8 +58,8 @@ class SmokeWorkerBase(Worker):
         *,
         context: WorkerContext,
     ) -> AsyncGenerator[WorkerStreamItem, None]:
-        if context.node_id is None:
-            raise ValueError(f"{type(self).__name__} requires context.node_id")
+        if context.task_id is None:
+            raise ValueError(f"{type(self).__name__} requires context.task_id")
 
         # --- Turn 1: planning announcement (pre-service-call) -------------
         yield ContextPartChunk(
@@ -80,14 +80,14 @@ class SmokeWorkerBase(Worker):
                 session,
                 PlanSubtasksCommand(
                     run_id=RunId(context.run_id),
-                    parent_task_id=NodeId(context.node_id),
+                    parent_task_id=NodeId(context.task_id),
                     subtasks=specs,
                 ),
             )
 
         # --- Turn 2: plan result (post-service-call) ----------------------
         summary = "\n".join(
-            f"{slug}: planned (node_id={result.nodes[TaskSlug(slug)]})"
+            f"{slug}: planned (task_id={result.nodes[TaskSlug(slug)]})"
             for slug, _deps, _desc in SUBTASK_GRAPH
         )
         yield ContextPartChunk(
