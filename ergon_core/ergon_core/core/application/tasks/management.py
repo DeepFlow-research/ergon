@@ -901,7 +901,7 @@ class TaskManagementService:
             task_id=None,
             node_id=node_id,
         )
-        await inngest_client.send(
+        inngest_client.send_sync(
             inngest.Event(
                 name=TaskReadyEvent.name,
                 data=event.model_dump(mode="json"),
