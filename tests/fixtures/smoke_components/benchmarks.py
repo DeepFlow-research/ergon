@@ -16,6 +16,8 @@ from ergon_core.api.benchmark import (
     EmptyTaskPayload,
     Task,
 )
+from ergon_core.api.registry import registry
+from ergon_core.api.worker import Worker
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
 from tests.fixtures.smoke_components.sandbox import SmokePublicSandbox
@@ -70,9 +72,25 @@ class _SingleTaskSmokeBenchmark(Benchmark):
     task_description: ClassVar[str]
     task_payload: ClassVar[JsonObject] = {}
     task_payload_model = EmptyTaskPayload
+    default_worker_slug: ClassVar[str]
+
+    def __init__(
+        self,
+        *,
+        worker_slug: str | None = None,
+        model: str = "openai:gpt-4o",
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.worker_slug = worker_slug or self.default_worker_slug
+        self.model = model
 
     def evaluator_requirements(self) -> Sequence[str]:
         return ("default", "post-root")
+
+    def _make_worker(self) -> Worker:
+        worker_cls = registry.require_worker(self.worker_slug)
+        return worker_cls(name=self.worker_slug, model=self.model)
 
 
 class ResearchRubricsSmokeTask(Task[ResearchRubricsTaskPayload]):
@@ -98,6 +116,7 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
+    default_worker_slug: ClassVar[str] = "researchrubrics-smoke-worker"
     task_payload_model = ResearchRubricsTaskPayload
     task_slug: ClassVar[str] = "smoke-001"
     task_description: ClassVar[str] = "Write a short smoke-test research report."
@@ -135,8 +154,8 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
             task_slug=self.task_slug,
             instance_key="default",
             description=self.task_description,
-            evaluator_binding_keys=("default", "post-root"),
             task_payload=payload,
+            worker=self._make_worker(),
             sandbox=SmokePublicSandbox(),
             evaluators=(
                 ResearchRubricsSmokeRubric(name="default"),
@@ -169,6 +188,7 @@ class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
     """
 
     type_slug: ClassVar[str] = "minif2f"
+    default_worker_slug: ClassVar[str] = "minif2f-smoke-worker"
     task_payload_model = MiniF2FTaskPayload
     task_slug: ClassVar[str] = "mathd_algebra_478"
     task_description: ClassVar[str] = "Prove the smoke_trivial theorem in Lean."
@@ -197,8 +217,8 @@ class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
             task_slug=self.task_slug,
             instance_key="default",
             description=self.task_description,
-            evaluator_binding_keys=("default", "post-root"),
             task_payload=payload,
+            worker=self._make_worker(),
             sandbox=SmokePublicSandbox(),
             evaluators=(
                 MiniF2FSmokeRubric(name="default"),
@@ -231,6 +251,7 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
     """
 
     type_slug: ClassVar[str] = "swebench-verified"
+    default_worker_slug: ClassVar[str] = "swebench-smoke-worker"
     task_payload_model = SWEBenchTaskPayload
     task_slug: ClassVar[str] = "astropy__astropy-12907"
     task_description: ClassVar[str] = "Create the simple Python add() patch used by smoke tests."
@@ -265,8 +286,8 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
             task_slug=self.task_slug,
             instance_key="default",
             description=self.task_description,
-            evaluator_binding_keys=("default", "post-root"),
             task_payload=payload,
+            worker=self._make_worker(),
             sandbox=SmokePublicSandbox(),
             evaluators=(
                 SweBenchSmokeRubric(name="default"),
@@ -299,6 +320,7 @@ class GDPEvalSmokeBenchmark(_SingleTaskSmokeBenchmark):
     """
 
     type_slug: ClassVar[str] = "gdpeval"
+    default_worker_slug: ClassVar[str] = "gdpeval-smoke-worker"
     task_payload_model = GDPEvalTaskPayload
     task_slug: ClassVar[str] = "gdpeval-smoke-001"
     task_description: ClassVar[str] = "Process the reference documents and write outputs."
@@ -323,8 +345,8 @@ class GDPEvalSmokeBenchmark(_SingleTaskSmokeBenchmark):
             task_slug=self.task_slug,
             instance_key="default",
             description=self.task_description,
-            evaluator_binding_keys=("post-root",),
             task_payload=payload,
+            worker=self._make_worker(),
             sandbox=SmokePublicSandbox(),
             evaluators=(SmokePostRootTimingRubric(name="post-root"),),
         )

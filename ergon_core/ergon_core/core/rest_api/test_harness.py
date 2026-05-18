@@ -29,6 +29,7 @@ from ergon_core.core.application.read_models.cohorts import experiment_cohort_se
 from ergon_core.core.application.experiments.service import (
     run_experiment as _run_experiment,
 )
+from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.core.application.experiments.models import (
     ExperimentRunRequest,
 )
@@ -427,10 +428,11 @@ class SubmitCohortResponse(BaseModel):
 async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
     """Build + persist + dispatch N runs under one cohort.
 
-    Per-slot flow creates a ``BenchmarkDefinitionRecord`` directly (the v1
-    ``define_benchmark_experiment`` path was deleted in PR 6.5 Phase 2) and
-    then calls ``run_experiment``.  Slots submit sequentially — typical N ≤ 3,
-    so the parallel-gather savings are negligible.
+    Per-slot flow persists the object-bound smoke ``Benchmark`` into the
+    immutable ``ExperimentDefinition`` tables, then writes a same-id legacy
+    ``BenchmarkDefinitionRecord`` only as the cohort/dashboard compatibility
+    marker.  Slots submit sequentially — typical N ≤ 3, so the
+    parallel-gather savings are negligible.
     """
     cohort = experiment_cohort_service.resolve_or_create(
         name=body.cohort_key,
@@ -438,32 +440,38 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
         created_by="test-harness",
     )
 
-    benchmark_source = registry.require_benchmark(body.benchmark_slug)()
-    instances = benchmark_source.build_instances()
-    selected_keys = list(instances.keys())[: body.limit]
-    evaluator_bindings = _extra_evaluator_bindings(body.benchmark_slug)
-
     run_ids: list[UUID] = []
     for slot in body.slots:
-        design: dict = {}
-        if evaluator_bindings:
-            design["evaluator_bindings"] = evaluator_bindings
+        benchmark_source = registry.require_benchmark(body.benchmark_slug)(
+            metadata={
+                "benchmark_slug": body.benchmark_slug,
+                "source": "test-harness",
+                "_test_cohort": body.cohort_key,
+            },
+            created_by="test-harness",
+        )
+        setattr(benchmark_source, "worker_slug", slot.worker_slug)
+        setattr(benchmark_source, "model", body.model)
+        handle = persist_benchmark(benchmark_source)
+
         with Session(get_engine()) as s:
             bench_def = BenchmarkDefinitionRecord(
+                id=handle.definition_id,
                 cohort_id=cohort.id,
                 name=f"smoke:{body.benchmark_slug}",
                 benchmark_type=benchmark_source.type_slug,
-                sample_count=len(selected_keys),
-                sample_selection_json={"instance_keys": selected_keys},
+                sample_count=handle.instance_count,
+                sample_selection_json={"instance_keys": ["default"]},
                 default_worker_team_json={"primary": slot.worker_slug},
                 default_evaluator_slug=slot.evaluator_slug,
                 default_model_target=body.model,
                 sandbox_slug=body.sandbox_slug or body.benchmark_slug,
                 dependency_extras_json={"extras": list(body.dependency_extras)},
-                design_json=design,
+                design_json={},
                 metadata_json={
                     "benchmark_slug": body.benchmark_slug,
                     "source": "test-harness",
+                    "_test_cohort": body.cohort_key,
                 },
                 status="defined",
             )
@@ -476,12 +484,3 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
         run_ids.extend(launched.run_ids)
 
     return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)
-
-
-def _extra_evaluator_bindings(benchmark_slug: str) -> dict[str, str]:
-    benchmark = registry.require_benchmark(benchmark_slug)()
-    requirements = set(benchmark.evaluator_requirements())
-    if "post-root" not in requirements:
-        return {}
-    registry.require_evaluator("smoke-post-root-timing-criterion")
-    return {"post-root": "smoke-post-root-timing-criterion"}
