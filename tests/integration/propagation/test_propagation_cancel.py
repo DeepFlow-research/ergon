@@ -73,7 +73,7 @@ async def test_6_manager_decision_cancel_pending_node() -> None:
         node_a = make_node(session, run.id, task_slug="cancel-target", status="pending")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -137,7 +137,7 @@ async def test_6b_cancel_does_not_affect_already_terminal_node() -> None:
         node_a = make_node(session, run.id, task_slug="already-completed", status="completed")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:

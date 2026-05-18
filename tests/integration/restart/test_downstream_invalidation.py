@@ -55,14 +55,14 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
         make_edge(
             session,
             run.id,
-            source_task_id=node_a.id,
-            target_task_id=node_b.id,
+            source_task_id=node_a.task_id,
+            target_task_id=node_b.task_id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:
@@ -73,11 +73,11 @@ async def test_completed_successor_is_cancelled_by_invalidation() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                 )
 
-        assert node_b_id in result.invalidated_node_ids, (
-            f"Expected B in invalidated_node_ids; got {result.invalidated_node_ids!r}"
+        assert node_b_id in result.invalidated_task_ids, (
+            f"Expected B in invalidated_task_ids; got {result.invalidated_task_ids!r}"
         )
 
         with get_session() as session:
@@ -108,22 +108,22 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
         make_edge(
             session,
             run.id,
-            source_task_id=node_a.id,
-            target_task_id=node_b.id,
+            source_task_id=node_a.task_id,
+            target_task_id=node_b.task_id,
             status=EDGE_SATISFIED,
         )
         make_edge(
             session,
             run.id,
-            source_task_id=node_b.id,
-            target_task_id=node_c.id,
+            source_task_id=node_b.task_id,
+            target_task_id=node_c.task_id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
-        node_c_id = node_c.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
+        node_c_id = node_c.task_id
         session.commit()
 
     try:
@@ -134,11 +134,11 @@ async def test_pending_successor_is_cancelled_but_cascade_stops_there() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                 )
 
-        assert node_b_id in result.invalidated_node_ids, "B must be invalidated"
-        assert node_c_id not in result.invalidated_node_ids, (
+        assert node_b_id in result.invalidated_task_ids, "B must be invalidated"
+        assert node_c_id not in result.invalidated_task_ids, (
             "C must NOT be invalidated — cascade stops at non-terminal B"
         )
 
@@ -170,22 +170,22 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
         make_edge(
             session,
             run.id,
-            source_task_id=node_a.id,
-            target_task_id=node_b.id,
+            source_task_id=node_a.task_id,
+            target_task_id=node_b.task_id,
             status=EDGE_SATISFIED,
         )
         make_edge(
             session,
             run.id,
-            source_task_id=node_a.id,
-            target_task_id=node_c.id,
+            source_task_id=node_a.task_id,
+            target_task_id=node_c.task_id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
-        node_c_id = node_c.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
+        node_c_id = node_c.task_id
         session.commit()
 
     try:
@@ -196,12 +196,12 @@ async def test_failed_and_cancelled_successors_are_skipped() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                 )
 
-        assert result.invalidated_node_ids == [], (
+        assert result.invalidated_task_ids == [], (
             f"No nodes should be invalidated when all successors are FAILED/CANCELLED; "
-            f"got {result.invalidated_node_ids!r}"
+            f"got {result.invalidated_task_ids!r}"
         )
 
         with get_session() as session:
@@ -237,22 +237,22 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
         make_edge(
             session,
             run.id,
-            source_task_id=node_a.id,
-            target_task_id=node_b.id,
+            source_task_id=node_a.task_id,
+            target_task_id=node_b.task_id,
             status=EDGE_SATISFIED,
         )
         make_edge(
             session,
             run.id,
-            source_task_id=node_b.id,
-            target_task_id=node_c.id,
+            source_task_id=node_b.task_id,
+            target_task_id=node_c.task_id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
-        node_c_id = node_c.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
+        node_c_id = node_c.task_id
         session.commit()
 
     try:
@@ -263,12 +263,12 @@ async def test_cascade_invalidation_recurses_through_completed_chain() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                 )
 
-        assert set(result.invalidated_node_ids) == {node_b_id, node_c_id}, (
+        assert set(result.invalidated_task_ids) == {node_b_id, node_c_id}, (
             f"Both B and C must be invalidated in a full COMPLETED chain; "
-            f"got {result.invalidated_node_ids!r}"
+            f"got {result.invalidated_task_ids!r}"
         )
 
         with get_session() as session:

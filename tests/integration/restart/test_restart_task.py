@@ -59,14 +59,14 @@ async def test_restart_completed_node_becomes_pending_and_resets_edge() -> None:
         make_edge(
             session,
             run.id,
-            source_task_id=node_a.id,
-            target_task_id=node_b.id,
+            source_task_id=node_a.task_id,
+            target_task_id=node_b.task_id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
-        node_b_id = node_b.id
+        node_a_id = node_a.task_id
+        node_b_id = node_b.task_id
         session.commit()
 
     try:
@@ -77,11 +77,11 @@ async def test_restart_completed_node_becomes_pending_and_resets_edge() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                 )
 
         assert result.old_status == TaskExecutionStatus.COMPLETED
-        assert result.node_id == node_a_id
+        assert result.task_id == node_a_id
 
         with get_session() as session:
             assert get_node_status(session, node_a_id) == TaskExecutionStatus.PENDING, (
@@ -105,7 +105,7 @@ async def test_restart_failed_node_becomes_pending() -> None:
         node_a = make_node(session, run.id, task_slug="failed-task", status="failed")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -116,7 +116,7 @@ async def test_restart_failed_node_becomes_pending() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                 )
 
         assert result.old_status == TaskExecutionStatus.FAILED
@@ -135,7 +135,7 @@ async def test_restart_cancelled_node_becomes_pending() -> None:
         node_a = make_node(session, run.id, task_slug="cancelled-task", status=CANCELLED)
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -146,7 +146,7 @@ async def test_restart_cancelled_node_becomes_pending() -> None:
             with get_session() as session:
                 result = await svc.restart_task(
                     session,
-                    RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                    RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                 )
 
         assert result.old_status == CANCELLED
@@ -165,7 +165,7 @@ async def test_restart_pending_node_raises() -> None:
         node_a = make_node(session, run.id, task_slug="pending-task", status="pending")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -177,7 +177,7 @@ async def test_restart_pending_node_raises() -> None:
                 with pytest.raises(TaskNotTerminalError):
                     await svc.restart_task(
                         session,
-                        RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                        RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                     )
     finally:
         cleanup_run(run_id, defn_id)
@@ -192,7 +192,7 @@ async def test_restart_running_node_raises() -> None:
         node_a = make_node(session, run.id, task_slug="running-task", status="running")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -204,7 +204,7 @@ async def test_restart_running_node_raises() -> None:
                 with pytest.raises(TaskNotTerminalError):
                     await svc.restart_task(
                         session,
-                        RestartTaskCommand(run_id=run_id, node_id=node_a_id),
+                        RestartTaskCommand(run_id=run_id, task_id=node_a_id),
                     )
     finally:
         cleanup_run(run_id, defn_id)
@@ -219,7 +219,7 @@ async def test_refine_task_non_pending_node_succeeds() -> None:
         node_a = make_node(session, run.id, task_slug="refine-completed", status="completed")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -232,7 +232,7 @@ async def test_refine_task_non_pending_node_succeeds() -> None:
                     session,
                     RefineTaskCommand(
                         run_id=run_id,
-                        node_id=node_a_id,
+                        task_id=node_a_id,
                         new_description="Updated after restart",
                     ),
                 )
@@ -251,7 +251,7 @@ async def test_refine_task_running_node_raises() -> None:
         node_a = make_node(session, run.id, task_slug="refine-running", status="running")
         run_id = run.id
         defn_id = defn.id
-        node_a_id = node_a.id
+        node_a_id = node_a.task_id
         session.commit()
 
     try:
@@ -265,7 +265,7 @@ async def test_refine_task_running_node_raises() -> None:
                         session,
                         RefineTaskCommand(
                             run_id=run_id,
-                            node_id=node_a_id,
+                            task_id=node_a_id,
                             new_description="Should not update",
                         ),
                     )
