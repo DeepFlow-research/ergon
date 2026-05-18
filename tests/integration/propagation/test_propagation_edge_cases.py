@@ -42,8 +42,20 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
             session.delete(mut)
         for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
             session.delete(edge)
-        nodes = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
-        for nd in sorted(nodes, key=lambda node: node.level, reverse=True):
+        nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
+        ordered_nodes: list[RunGraphNode] = []
+        remaining = {node.id: node for node in nodes}
+        while remaining:
+            parent_ids = {
+                node.parent_task_id
+                for node in remaining.values()
+                if node.parent_task_id is not None
+            }
+            leaves = [node for node in remaining.values() if node.id not in parent_ids]
+            for node in leaves:
+                ordered_nodes.append(node)
+                remaining.pop(node.id)
+        for nd in ordered_nodes:
             session.delete(nd)
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
