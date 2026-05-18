@@ -122,9 +122,7 @@ async def test_builtin_tasks_round_trip_concrete_object_bound_components(
             if isinstance(original, Rubric) and original.criteria:
                 criteria_backed_rubrics += 1
                 assert rebuilt.criteria
-                assert [type(c) for c in rebuilt.criteria] == [
-                    type(c) for c in original.criteria
-                ]
+                assert [type(c) for c in rebuilt.criteria] == [type(c) for c in original.criteria]
     assert criteria_backed_rubrics >= 3
 
 

@@ -65,7 +65,6 @@ def import_component_subclass(
     imported = import_component(path)
     if not issubclass(imported, expected_base):
         raise TypeError(
-            f"{kind} _type {path!r} did not resolve to a "
-            f"{expected_base.__name__} subclass"
+            f"{kind} _type {path!r} did not resolve to a {expected_base.__name__} subclass"
         )
     return cast("type[T]", imported)

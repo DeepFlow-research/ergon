@@ -7,7 +7,7 @@ never round-trip through JSON.
 
 from typing import Any
 
-from ergon_core.api.toolkit import Toolkit
+from ergon_builtins.workers.baselines.toolkit import Toolkit
 
 
 class MiniF2FToolkit(Toolkit):

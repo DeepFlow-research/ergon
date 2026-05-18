@@ -15,7 +15,14 @@ from ergon_core.api.criterion import Criterion
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.rubric import Rubric, TaskEvaluationResult
-from pydantic import BaseModel, Field, PrivateAttr, field_serializer, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    PrivateAttr,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,8 +87,7 @@ class EvaluationStage(BaseModel):
     @classmethod
     def _rehydrate_criteria(cls, value: Any) -> list[Criterion]:  # slopcop: ignore[no-typing-any]
         return [
-            Criterion.from_definition(item) if isinstance(item, dict) else item
-            for item in value
+            Criterion.from_definition(item) if isinstance(item, dict) else item for item in value
         ]
 
     @model_validator(mode="after")

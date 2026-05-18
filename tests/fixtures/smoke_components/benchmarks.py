@@ -18,6 +18,7 @@ from ergon_core.api.benchmark import (
 )
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
+from tests.fixtures.smoke_components.sandbox import SmokePublicSandbox
 
 
 class ResearchRubricsTaskPayload(BaseModel):
@@ -90,10 +91,10 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
     Overrides ``build_instances`` to return a concrete
     ``ResearchRubricsSmokeTask`` with inline ``evaluators``, so the smoke
     fixture exercises the v2 object-bound path that the production
-    ResearchRubrics benchmark now uses.  Note: ``worker`` and ``sandbox``
-    stay ``None`` because the smoke harness owns sandbox lifecycle via
-    ``SmokeSandboxManager`` and resolves workers by registry slug — the
-    existing v1 dispatch is what we test.
+    ResearchRubrics benchmark now uses. ``sandbox`` uses the test-owned
+    public wrapper over ``SmokeSandboxManager`` so eval-side
+    ``Task.from_definition(..., sandbox_id=...)`` can attach a live
+    runtime without reaching E2B.
     """
 
     type_slug: ClassVar[str] = "researchrubrics"
@@ -136,6 +137,7 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
             description=self.task_description,
             evaluator_binding_keys=("default", "post-root"),
             task_payload=payload,
+            sandbox=SmokePublicSandbox(),
             evaluators=(
                 ResearchRubricsSmokeRubric(name="default"),
                 SmokePostRootTimingRubric(name="post-root"),
@@ -160,10 +162,10 @@ class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
     Overrides ``build_instances`` to return a concrete ``MiniF2FSmokeTask``
     with inline ``evaluators``, so the smoke fixture exercises the v2
     object-bound path that the production MiniF2F benchmark now uses.
-    Note: ``worker`` and ``sandbox`` stay ``None`` because the smoke
-    harness owns sandbox lifecycle via ``SmokeSandboxManager`` and
-    resolves workers by registry slug — the existing v1 dispatch is what
-    we test.
+    ``sandbox`` uses the test-owned public wrapper over
+    ``SmokeSandboxManager`` so eval-side
+    ``Task.from_definition(..., sandbox_id=...)`` can attach a live
+    runtime without reaching E2B.
     """
 
     type_slug: ClassVar[str] = "minif2f"
@@ -197,6 +199,7 @@ class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
             description=self.task_description,
             evaluator_binding_keys=("default", "post-root"),
             task_payload=payload,
+            sandbox=SmokePublicSandbox(),
             evaluators=(
                 MiniF2FSmokeRubric(name="default"),
                 SmokePostRootTimingRubric(name="post-root"),
@@ -221,9 +224,10 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
     Overrides ``build_instances`` to return a concrete ``SweBenchSmokeTask``
     with inline ``evaluators``, so the smoke fixture exercises the v2
     object-bound path that the production SWE-Bench benchmark now uses.
-    Note: ``worker`` and ``sandbox`` stay ``None`` because the smoke
-    harness owns sandbox lifecycle via ``SmokeSandboxManager`` and resolves
-    workers by registry slug — the existing v1 dispatch is what we test.
+    ``sandbox`` uses the test-owned public wrapper over
+    ``SmokeSandboxManager`` so eval-side
+    ``Task.from_definition(..., sandbox_id=...)`` can attach a live
+    runtime without reaching E2B.
     """
 
     type_slug: ClassVar[str] = "swebench-verified"
@@ -263,6 +267,7 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
             description=self.task_description,
             evaluator_binding_keys=("default", "post-root"),
             task_payload=payload,
+            sandbox=SmokePublicSandbox(),
             evaluators=(
                 SweBenchSmokeRubric(name="default"),
                 SmokePostRootTimingRubric(name="post-root"),
@@ -320,6 +325,7 @@ class GDPEvalSmokeBenchmark(_SingleTaskSmokeBenchmark):
             description=self.task_description,
             evaluator_binding_keys=("post-root",),
             task_payload=payload,
+            sandbox=SmokePublicSandbox(),
             evaluators=(SmokePostRootTimingRubric(name="post-root"),),
         )
         return {"default": [task]}

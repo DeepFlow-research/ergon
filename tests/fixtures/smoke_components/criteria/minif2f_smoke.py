@@ -70,16 +70,13 @@ class MiniF2FSmokeCriterion(SmokeCriterionBase):
         """Compile a trivial theorem.  Proves Lean + elan wrapper are
         wired up.  ``trivial`` proof term avoids Mathlib dependency so
         this runs fast even on a cold toolchain."""
-        if not context.has_runtime:
-            raise CriterionCheckError(
-                "minif2f sandbox health: CriterionRuntime not injected",
-            )
-        await context.ensure_sandbox()
-        await context.write_file(
+        await self._write_sandbox_file(
+            context,
             "/tmp/smoke_health.lean",
             HEALTH_THEOREM.encode("utf-8"),
         )
-        result = await context.run_command(
+        result = await self._run_sandbox_command(
+            context,
             "lean --check /tmp/smoke_health.lean",
             timeout=60,
         )

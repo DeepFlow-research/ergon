@@ -17,6 +17,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "WorkerContext",
         "WorkerOutput",
         "WorkerStreamItem",
+        "AwaitCompletionNotSupportedError",
         # PR 9 — dynamic subtasks: SpawnedTaskHandle is the return type
         # of ``WorkerContext.spawn_task`` / ``.restart_task``;
         # ContainmentViolation is raised by the curated single-target
@@ -39,8 +40,6 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "SandboxRuntime",
         "SandboxNotLiveError",
         "TaskEvaluationResult",
-        # PR 10 Prereq B — Toolkit base for authoring-time toolkit configs.
-        "Toolkit",
         "CriterionCheckError",
         "ComponentRegistry",
         "registry",
@@ -58,6 +57,9 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "WorkerSpec",
         "PersistedExperimentDefinition",
         "DefinitionHandle",
+        # Toolkit is a ReAct/builtins implementation detail, not a core
+        # authoring API concept.
+        "Toolkit",
     }
 
     assert set(public_api.__all__) == expected
@@ -83,6 +85,7 @@ def test_semantic_api_clusters_are_importable() -> None:
     # the return type of ``WorkerContext.spawn_task`` and
     # ``WorkerContext.restart_task``.
     assert worker.__all__ == [
+        "AwaitCompletionNotSupportedError",
         "SpawnedTaskHandle",
         "Worker",
         "WorkerContext",

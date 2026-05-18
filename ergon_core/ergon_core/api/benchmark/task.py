@@ -7,7 +7,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component, import_component_subclass
+from ergon_core.api._serialization import (
+    TaskDefinitionJson,
+    import_component,
+    import_component_subclass,
+)
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric.evaluator import Evaluator

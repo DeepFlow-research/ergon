@@ -106,6 +106,7 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         task_mgmt=TaskManagementService(),
         task_inspect=TaskInspectionService(),
         resource_repo=RunResourceRepository(),
+        session_factory=get_session,
     )
 
     context_event_repo = ContextEventService()

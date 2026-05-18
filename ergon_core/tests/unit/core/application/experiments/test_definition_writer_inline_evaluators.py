@@ -66,9 +66,7 @@ def test_persist_benchmark_writes_definition_rows_for_inline_evaluators(
     evaluators = session.exec(select(ExperimentDefinitionEvaluator)).all()
     bindings = session.exec(select(ExperimentDefinitionTaskEvaluator)).all()
 
-    assert [(row.binding_key, row.evaluator_type) for row in evaluators] == [
-        ("judge", "rubric")
-    ]
+    assert [(row.binding_key, row.evaluator_type) for row in evaluators] == [("judge", "rubric")]
     assert evaluators[0].experiment_definition_id == handle.definition_id
     assert evaluators[0].snapshot_json["name"] == "judge"
     assert evaluators[0].snapshot_json["_type"].endswith(":Rubric")

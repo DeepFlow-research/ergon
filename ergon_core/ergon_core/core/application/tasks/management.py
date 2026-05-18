@@ -181,6 +181,7 @@ class TaskManagementService:
         the full Task snapshot lives in run_graph_nodes.task_json with
         is_dynamic=True.
         """
+        dispatch: tuple[UUID, UUID, UUID] | None = None
         with get_session() as session:
             parent = self._graph_repo.get_node(session, run_id=run_id, node_id=parent_task_id)
             node = await self._graph_repo.add_node(
@@ -205,9 +206,20 @@ class TaskManagementService:
                     status=EDGE_PENDING,
                     meta=MutationMeta(actor="worker-context", reason="spawn dependency"),
                 )
+            node_id = node.id
+            if not depends_on:
+                definition_id = self._resolve_definition_id(session, run_id)
+                dispatch = (run_id, definition_id, node_id)
             session.commit()
 
-        return SpawnedTaskHandle(task_id=node.id)
+        if dispatch is not None:
+            await self._dispatch_task_ready(
+                run_id=dispatch[0],
+                definition_id=dispatch[1],
+                node_id=dispatch[2],
+            )
+
+        return SpawnedTaskHandle(task_id=node_id)
 
     # ── cancel_task ──────────────────────────────────────────
 

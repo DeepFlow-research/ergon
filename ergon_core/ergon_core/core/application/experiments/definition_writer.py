@@ -202,7 +202,10 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
                     f"Task {task.task_slug!r} has no assigned ID for evaluator binding"
                 )
             inline_names_for_task: set[str] = set()
-            for index, evaluator in enumerate(getattr(task, "evaluators", ())):
+            # typing: legacy-bridge
+            for index, evaluator in enumerate(
+                getattr(task, "evaluators", ())  # slopcop: ignore[no-hasattr-getattr]
+            ):
                 binding_key = evaluator.name or f"inline-{index}"
                 if binding_key in inline_names_for_task:
                     raise ValueError(

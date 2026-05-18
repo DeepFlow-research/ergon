@@ -3,7 +3,6 @@
 from uuid import uuid4
 
 import pytest
-from ergon_core.api.worker import WorkerContext
 from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -64,15 +63,6 @@ _NODE_ID_CASES = [
             definition_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
-        ),
-    ),
-    (
-        "WorkerContext",
-        lambda: WorkerContext(
-            run_id=uuid4(),
-            task_id=uuid4(),
-            execution_id=uuid4(),
-            sandbox_id="sbx-123",
         ),
     ),
 ]

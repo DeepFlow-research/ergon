@@ -9,14 +9,13 @@ from typing import Any, ClassVar, cast
 from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
-from ergon_core.api.toolkit import Toolkit
 from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ToolCallPart,
 )
 from ergon_core.core.application.context.events import ContextEventService
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, SerializeAsAny
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.tools import Tool
@@ -28,6 +27,7 @@ from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
 )
 from ergon_builtins.models.resolution import resolve_model_target
 from ergon_builtins.observability.pydantic_ai_logfire import configure_pydantic_ai_logfire
+from ergon_builtins.workers.baselines.toolkit import Toolkit
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class ReActWorker(Worker):
     # execute() builds live tools from toolkit.tools(task.sandbox, task)
     # rather than relying on a subclass to populate _tools before calling
     # super().execute().
-    toolkit: Toolkit | None = None
+    toolkit: SerializeAsAny[Toolkit] | None = None
     # `_tools` and `_seed_messages` are runtime-only state — they hold
     # references to callables/pydantic-ai SDK objects that are not
     # round-trippable through model_dump/model_validate. PrivateAttr

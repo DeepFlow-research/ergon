@@ -27,12 +27,13 @@ class Rubric(Evaluator):
 
     @field_validator("criteria", mode="before")
     @classmethod
-    def _rehydrate_criteria(cls, value: Any) -> tuple[Criterion, ...]:  # slopcop: ignore[no-typing-any]
+    def _rehydrate_criteria(
+        cls, value: Any
+    ) -> tuple[Criterion, ...]:  # slopcop: ignore[no-typing-any]
         if value is None:
             return ()
         return tuple(
-            Criterion.from_definition(item) if isinstance(item, dict) else item
-            for item in value
+            Criterion.from_definition(item) if isinstance(item, dict) else item for item in value
         )
 
     def criteria_for(self, task: Task) -> Iterable[Criterion]:

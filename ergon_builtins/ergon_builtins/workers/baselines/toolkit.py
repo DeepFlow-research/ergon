@@ -1,10 +1,9 @@
-"""Public Toolkit base — pydantic-serializable bundle of authoring config that
-lazily constructs runtime tools.
+"""Serializable toolkit config for builtin ReAct-style workers.
 
-Benchmarks subclass `Toolkit` to declare config fields (file paths,
-limits, etc.) and implement `tools(sandbox, task)` which builds the
-live `pydantic_ai` tool callables at worker-execute time. The
-config-side round-trips through `task_json`; runtime tools never do.
+Benchmark-specific toolkits subclass ``Toolkit`` to declare authoring-time
+config fields, then lazily build live runtime tools when a ``ReActWorker``
+executes. Toolkits are intentionally a builtins/ReAct concern, not a core
+authoring API concept.
 """
 
 from abc import ABC, abstractmethod

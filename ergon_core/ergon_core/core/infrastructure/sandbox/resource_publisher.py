@@ -205,14 +205,16 @@ class SandboxResourcePublisher:
     async def _list_sandbox_dir(self, path: str) -> list:
         """List directory entries (``EntryInfo`` from e2b).  Missing directory -> ``[]``."""
         try:
-            if hasattr(self._sandbox, "files"):
+            # typing: runtime-protocol
+            if hasattr(self._sandbox, "files"):  # slopcop: ignore[no-hasattr-getattr]
                 return await self._sandbox.files.list(path)
             return await self._sandbox.list_files(path)
         except FileNotFoundError:
             return []
 
     async def _read_sandbox_file(self, path: str) -> bytes | str:
-        if hasattr(self._sandbox, "files"):
+        # typing: runtime-protocol
+        if hasattr(self._sandbox, "files"):  # slopcop: ignore[no-hasattr-getattr]
             return await self._sandbox.files.read(
                 path,
                 request_timeout=30,
@@ -220,12 +222,14 @@ class SandboxResourcePublisher:
         return await self._sandbox.read_file(path)
 
     def _entry_name(self, entry: Any) -> str:  # slopcop: ignore[no-typing-any]
-        if hasattr(entry, "name"):
+        # typing: runtime-protocol
+        if hasattr(entry, "name"):  # slopcop: ignore[no-hasattr-getattr]
             return str(entry.name)
         return PurePosixPath(str(entry)).name
 
     def _entry_path(self, sandbox_dir: str, entry: Any) -> str:  # slopcop: ignore[no-typing-any]
-        if hasattr(entry, "name"):
+        # typing: runtime-protocol
+        if hasattr(entry, "name"):  # slopcop: ignore[no-hasattr-getattr]
             return f"{sandbox_dir.rstrip('/')}/{entry.name}"
         entry_path = str(entry)
         if entry_path.startswith("/"):

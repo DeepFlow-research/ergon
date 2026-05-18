@@ -41,6 +41,10 @@ def _make_context(*, with_node_id: bool = True) -> WorkerContext:
         execution_id=uuid4(),
         sandbox_id="fake-sandbox",
         node_id=uuid4() if with_node_id else None,
+        task_mgmt=object(),
+        task_inspect=object(),
+        resource_repo=object(),
+        session_factory=lambda: None,
     )
 
 

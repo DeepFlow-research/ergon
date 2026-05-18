@@ -28,6 +28,8 @@ from uuid import UUID
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext, CriterionOutcome
 from ergon_core.api.errors import CriterionCheckError
+from ergon_core.api.sandbox import Sandbox
+from ergon_core.core.application.evaluation.protocols import CommandResult
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.graph.status_conventions import COMPLETED
 from ergon_core.core.persistence.shared.db import get_session
@@ -288,3 +290,34 @@ class SmokeCriterionBase(Criterion):
         raise NotImplementedError(
             "Subclasses must implement env-specific sandbox health check",
         )
+
+    async def _write_sandbox_file(
+        self,
+        context: CriterionContext,
+        path: str,
+        content: bytes,
+    ) -> None:
+        sandbox = context.task.sandbox
+        if isinstance(sandbox, Sandbox) and sandbox.is_live:
+            await sandbox.write_file(path, content)
+            return
+        if context.has_runtime:
+            await context.ensure_sandbox()
+            await context.write_file(path, content)
+            return
+        raise CriterionCheckError("CriterionRuntime not injected and no live task sandbox attached")
+
+    async def _run_sandbox_command(
+        self,
+        context: CriterionContext,
+        command: str,
+        *,
+        timeout: int,
+    ) -> CommandResult:
+        sandbox = context.task.sandbox
+        if isinstance(sandbox, Sandbox) and sandbox.is_live:
+            return await sandbox.run_command(command, timeout=timeout)
+        if context.has_runtime:
+            await context.ensure_sandbox()
+            return await context.run_command(command, timeout=timeout)
+        raise CriterionCheckError("CriterionRuntime not injected and no live task sandbox attached")

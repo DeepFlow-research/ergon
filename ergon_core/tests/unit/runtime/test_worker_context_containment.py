@@ -9,7 +9,7 @@ PR 9 Tasks 2-3:
   ``WorkflowGraphRepository.node`` (is_dynamic=True + correct task_slug).
 - ``cancel_task`` enforces containment via ``_assert_descendant``,
   raising ``ContainmentViolation`` for non-descendants and routing
-  to ``_task_mgmt`` only for legitimate descendants.
+  to ``task_mgmt`` only for legitimate descendants.
 
 The other facade methods (``refine_task``, ``restart_task``, ``subtasks``,
 ``descendants``, ``get_task``) call kwarg-form service methods that the
@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import SpawnedTaskHandle
@@ -96,8 +96,12 @@ def _seed_node(
     return node
 
 
+class _DynamicTestTask(Task[EmptyTaskPayload]):
+    pass
+
+
 def _make_task() -> Task:
-    return Task(
+    return _DynamicTestTask(
         task_slug="child",
         instance_key="sample-1",
         description="spawned child",
@@ -136,7 +140,8 @@ def _build_context(
         node_id=task_id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
-        resource_repo=None,
+        resource_repo=object(),
+        session_factory=management_module.get_session,
     )
 
 
@@ -157,6 +162,8 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     _patch_get_session(monkeypatch, session)
 
     task_mgmt = TaskManagementService(dashboard_emitter=MagicMock())
+    task_mgmt._resolve_definition_id = MagicMock(return_value=uuid4())
+    task_mgmt._dispatch_task_ready = AsyncMock()
     task_inspect = TaskInspectionService()
     context = _build_context(
         run_id=run_id,
@@ -204,6 +211,8 @@ async def test_spawned_task_inflates_through_graph_repo_node(
     _patch_get_session(monkeypatch, session)
 
     task_mgmt = TaskManagementService(dashboard_emitter=MagicMock())
+    task_mgmt._resolve_definition_id = MagicMock(return_value=uuid4())
+    task_mgmt._dispatch_task_ready = AsyncMock()
     task_inspect = TaskInspectionService()
     context = _build_context(
         run_id=run_id,
@@ -267,8 +276,7 @@ async def test_worker_context_cancel_raises_on_non_descendant(
     # Descendant: routes to the (mocked) service exactly once with kwargs.
     await context.cancel_task(child.id)
 
-    task_mgmt.cancel_task.assert_awaited_once_with(
-        run_id=run_id,
-        task_id=child.id,
-        reason="",
-    )
+    args = task_mgmt.cancel_task.await_args.args
+    assert args[0] is session
+    assert args[1].run_id == run_id
+    assert args[1].node_id == child.id

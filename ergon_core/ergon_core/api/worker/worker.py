@@ -117,10 +117,4 @@ class Worker(BaseModel, ABC):
         """
         payload = handler(self)
         payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
-        toolkit = getattr(self, "toolkit", None)
-        if toolkit is not None:
-            from ergon_core.api.toolkit import Toolkit
-
-            if isinstance(toolkit, Toolkit):
-                payload["toolkit"] = toolkit.model_dump(mode="json")
         return payload

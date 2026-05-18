@@ -52,10 +52,14 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     monkeypatch.setattr(module, "TaskManagementService", lambda: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
     monkeypatch.setattr(module, "RunResourceRepository", lambda: object())
-    monkeypatch.setattr(module, "get_dashboard_emitter", lambda: SimpleNamespace(
-        on_context_event=lambda event: None,
-        register_execution=lambda **kwargs: None,
-    ))
+    monkeypatch.setattr(
+        module,
+        "get_dashboard_emitter",
+        lambda: SimpleNamespace(
+            on_context_event=lambda event: None,
+            register_execution=lambda **kwargs: None,
+        ),
+    )
 
     result = await run_worker_execute_job(
         WorkerExecuteJobRequest(

@@ -14,8 +14,7 @@ reuse the ``{env}-smoke-criterion`` slug on the rubric so the CLI arg
 ``--evaluator {env}-smoke-criterion`` resolves directly.
 """
 
-from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from pydantic import Field, model_validator
 
@@ -50,21 +49,22 @@ class ResearchRubricsSmokeRubric(Rubric):
 
 
 class MiniF2FSmokeRubric(Rubric):
-    """Evaluator wrapping the minif2f smoke criterion."""
+    """Evaluator wrapping the minif2f smoke criterion.
+
+    Mirrors the pure-Pydantic wrapper shape used by the other smoke
+    rubrics so object-bound Task snapshots can rehydrate inline
+    evaluators via ``Evaluator.from_definition``.
+    """
 
     type_slug: ClassVar[str] = "minif2f-smoke-criterion"
+    name: str = "minif2f-smoke-criterion"
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple, exclude=True)
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        super().__init__(
-            name=name,
-            criteria=(MiniF2FSmokeCriterion(slug="minif2f-smoke"),),
-            metadata=dict(metadata) if metadata else {},
-        )
+    @model_validator(mode="after")
+    def _build_criterion(self) -> "MiniF2FSmokeRubric":
+        if not self.criteria:
+            self.criteria = (MiniF2FSmokeCriterion(slug="minif2f-smoke"),)
+        return self
 
 
 class SweBenchSmokeRubric(Rubric):

@@ -10,6 +10,8 @@ from collections.abc import Awaitable, Callable
 from typing import Literal
 from uuid import UUID
 
+from ergon_core.api.benchmark import Task
+from ergon_core.api.worker import WorkerContext
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
@@ -148,17 +150,28 @@ class SubtaskLifecycleToolkit:
     def __init__(
         self,
         *,
-        run_id: UUID,
-        parent_node_id: UUID,
-        sandbox_id: str,
+        run_id: UUID | None = None,
+        parent_node_id: UUID | None = None,
+        sandbox_id: str | None = None,
+        context: WorkerContext | None = None,
         task_management_service: TaskManagementService | None = None,
         task_inspection_service: TaskInspectionService | None = None,
     ) -> None:
-        self._run_id = RunId(run_id)
-        self._parent_node_id = NodeId(parent_node_id)
-        self._sandbox_id = sandbox_id
-        self._mgmt = task_management_service or TaskManagementService()
-        self._inspect = task_inspection_service or TaskInspectionService()
+        if context is None and (run_id is None or parent_node_id is None or sandbox_id is None):
+            raise ValueError(
+                "SubtaskLifecycleToolkit requires either context=WorkerContext or "
+                "explicit run_id, parent_node_id, and sandbox_id for the admin path."
+            )
+        self._context = context
+        self._run_id = None if run_id is None else RunId(run_id)
+        self._parent_node_id = None if parent_node_id is None else NodeId(parent_node_id)
+        self._sandbox_id = sandbox_id if sandbox_id is not None else context.sandbox_id
+        self._mgmt = (
+            None if context is not None else task_management_service or TaskManagementService()
+        )
+        self._inspect = (
+            None if context is not None else task_inspection_service or TaskInspectionService()
+        )
 
     def get_tools(self) -> list[Callable[..., Awaitable[BaseModel]]]:
         """Return the eight subtask lifecycle tools for Agent(tools=[...])."""
@@ -176,7 +189,29 @@ class SubtaskLifecycleToolkit:
     # -- management --------------------------------------------------------
 
     def _make_add_subtask(self) -> Callable[..., Awaitable[AddSubtaskToolResponse]]:
+        if self._context is not None:
+            context = self._context
+
+            async def add_subtask(
+                task: Task, depends_on: list[str] | None = None
+            ) -> AddSubtaskToolResponse:
+                """Spawn one object-bound subtask under this worker context."""
+                try:
+                    deps = tuple(UUID(s) for s in (depends_on or []))
+                    handle = await context.spawn_task(task, depends_on=deps)
+                    return AddSubtaskToolSuccess(
+                        node_id=NodeId(handle.task_id),
+                        task_slug=TaskSlug(task.task_slug),
+                        status="pending",
+                    )
+                except Exception as exc:  # slopcop: ignore[no-broad-except]
+                    return ToolFailure(error=str(exc))
+
+            return add_subtask
+
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
+        if run_id is None or pid is None:
+            raise RuntimeError("admin add_subtask requires run_id and parent_node_id")
 
         async def add_subtask(
             task_slug: str,
@@ -220,6 +255,17 @@ class SubtaskLifecycleToolkit:
 
     def _make_plan_subtasks(self) -> Callable[..., Awaitable[PlanSubtasksToolResponse]]:
         mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
+        if run_id is None or pid is None:
+
+            async def plan_subtasks(_subtasks: list[SubtaskSpec]) -> PlanSubtasksToolResponse:
+                return ToolFailure(
+                    error=(
+                        "plan_subtasks is not available through worker-context "
+                        "containment; spawn object-bound tasks one at a time."
+                    )
+                )
+
+            return plan_subtasks
 
         async def plan_subtasks(subtasks: list[SubtaskSpec]) -> PlanSubtasksToolResponse:
             """Atomically create a sub-DAG. Each entry has ``task_slug``
@@ -245,7 +291,26 @@ class SubtaskLifecycleToolkit:
         return plan_subtasks
 
     def _make_cancel_task(self) -> Callable[..., Awaitable[CancelTaskToolResponse]]:
+        if self._context is not None:
+            context = self._context
+
+            async def cancel_task(node_id: str) -> CancelTaskToolResponse:
+                """Cancel a contained subtask through WorkerContext."""
+                try:
+                    await context.cancel_task(NodeId(UUID(node_id)))
+                    return CancelTaskToolSuccess(
+                        node_id=NodeId(UUID(node_id)),
+                        old_status="unknown",
+                        cascaded_count=0,
+                    )
+                except Exception as exc:  # slopcop: ignore[no-broad-except]
+                    return ToolFailure(error=str(exc))
+
+            return cancel_task
+
         mgmt, run_id = self._mgmt, self._run_id
+        if run_id is None:
+            raise RuntimeError("admin cancel_task requires run_id")
 
         async def cancel_task(node_id: str) -> CancelTaskToolResponse:
             """Cancel a subtask. Any descendants are cancelled via engine cascade."""
@@ -262,7 +327,26 @@ class SubtaskLifecycleToolkit:
         return cancel_task
 
     def _make_refine_task(self) -> Callable[..., Awaitable[RefineTaskToolResponse]]:
+        if self._context is not None:
+            context = self._context
+
+            async def refine_task(node_id: str, new_description: str) -> RefineTaskToolResponse:
+                """Refine a contained subtask through WorkerContext."""
+                try:
+                    await context.refine_task(NodeId(UUID(node_id)), description=new_description)
+                    return RefineTaskToolSuccess(
+                        node_id=NodeId(UUID(node_id)),
+                        old_description="",
+                        new_description=new_description,
+                    )
+                except Exception as exc:  # slopcop: ignore[no-broad-except]
+                    return ToolFailure(error=str(exc))
+
+            return refine_task
+
         mgmt, run_id = self._mgmt, self._run_id
+        if run_id is None:
+            raise RuntimeError("admin refine_task requires run_id")
 
         async def refine_task(node_id: str, new_description: str) -> RefineTaskToolResponse:
             """Refine a subtask's description. Allowed on any status except RUNNING.
@@ -288,7 +372,26 @@ class SubtaskLifecycleToolkit:
         return refine_task
 
     def _make_restart_task(self) -> Callable[..., Awaitable[RestartTaskToolResponse]]:
+        if self._context is not None:
+            context = self._context
+
+            async def restart_task(node_id: str) -> RestartTaskToolResponse:
+                """Restart a contained subtask through WorkerContext."""
+                try:
+                    await context.restart_task(NodeId(UUID(node_id)))
+                    return RestartTaskToolSuccess(
+                        node_id=NodeId(UUID(node_id)),
+                        old_status="unknown",
+                        invalidated_node_ids=[],
+                    )
+                except Exception as exc:  # slopcop: ignore[no-broad-except]
+                    return ToolFailure(error=str(exc))
+
+            return restart_task
+
         mgmt, run_id = self._mgmt, self._run_id
+        if run_id is None:
+            raise RuntimeError("admin restart_task requires run_id")
 
         async def restart_task(node_id: str) -> RestartTaskToolResponse:
             """Reset a terminal subtask back to PENDING and re-dispatch.
@@ -316,7 +419,22 @@ class SubtaskLifecycleToolkit:
     # -- inspection --------------------------------------------------------
 
     def _make_list_subtasks(self) -> Callable[..., Awaitable[ListSubtasksToolResponse]]:
+        if self._context is not None:
+            context = self._context
+
+            async def list_subtasks() -> ListSubtasksToolResponse:
+                """Return contained direct subtasks through WorkerContext."""
+                try:
+                    infos = await context.subtasks()
+                    return ListSubtasksToolSuccess(subtasks=list(infos))
+                except Exception as exc:  # slopcop: ignore[no-broad-except]
+                    return ToolFailure(error=str(exc))
+
+            return list_subtasks
+
         inspect, run_id, pid = self._inspect, self._run_id, self._parent_node_id
+        if run_id is None or pid is None:
+            raise RuntimeError("admin list_subtasks requires run_id and parent_node_id")
 
         async def list_subtasks() -> ListSubtasksToolResponse:
             """Return the current status and output-excerpt of every direct subtask."""
@@ -330,7 +448,24 @@ class SubtaskLifecycleToolkit:
         return list_subtasks
 
     def _make_get_subtask(self) -> Callable[..., Awaitable[GetSubtaskToolResponse]]:
+        if self._context is not None:
+            context = self._context
+
+            async def get_subtask(node_id: str) -> GetSubtaskToolResponse:
+                """Return a contained subtask through WorkerContext."""
+                try:
+                    info = await context.get_task(NodeId(UUID(node_id)))
+                    if isinstance(info, dict):
+                        return GetSubtaskToolSuccess.model_validate(info)
+                    return GetSubtaskToolSuccess.model_validate(info.model_dump())
+                except Exception as exc:  # slopcop: ignore[no-broad-except]
+                    return ToolFailure(error=str(exc))
+
+            return get_subtask
+
         inspect, run_id = self._inspect, self._run_id
+        if run_id is None:
+            raise RuntimeError("admin get_subtask requires run_id")
 
         async def get_subtask(node_id: str) -> GetSubtaskToolResponse:
             """Return the full SubtaskInfo for one node_id."""

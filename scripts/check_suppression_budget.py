@@ -113,7 +113,14 @@ BUDGET = SuppressionCounts(
     # corresponding reduction in `worker_factory.py` (deleted) so the
     # arithmetic balances at +5. `noqa: C901` on `build_tools` is the
     # same structural-complexity exemption as the prior two verticals.
-    slopcop_ignore=259,
+    # PR 10d-f net +20 slopcop_ignore. The late PR 10 stack adds the
+    # shared Toolkit serializer, object-bound WorkerContext/resource
+    # facades, public API rehydration bridges, and smoke/runtime protocol
+    # adapters. Most are temporary bridge suppressions around dynamic
+    # `_type` dispatch, Pydantic serializer handler shapes, and runtime
+    # protocol probing that PR 11 is explicitly scoped to delete or
+    # collapse once legacy TaskSpec/manager paths are gone.
+    slopcop_ignore=279,
     noqa=7,
     type_ignore=62,
 )
