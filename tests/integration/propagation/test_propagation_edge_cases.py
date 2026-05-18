@@ -43,7 +43,6 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
         for edge in session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all():
             session.delete(edge)
         nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
-        ordered_nodes: list[RunGraphNode] = []
         remaining = {node.id: node for node in nodes}
         while remaining:
             parent_ids = {
@@ -53,10 +52,9 @@ def _cleanup_run(run_id, defn_id) -> None:  # type: ignore[no-untyped-def]
             }
             leaves = [node for node in remaining.values() if node.id not in parent_ids]
             for node in leaves:
-                ordered_nodes.append(node)
+                session.delete(node)
                 remaining.pop(node.id)
-        for nd in ordered_nodes:
-            session.delete(nd)
+            session.flush()
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
             session.delete(run_row)
