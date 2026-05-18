@@ -19,6 +19,7 @@ from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.resources import RunResourceRepository
 from ergon_core.core.application.tasks.inspection import TaskInspectionService
 from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.tasks.models import PlanSubtasksCommand, PlanSubtasksResult
 from ergon_core.core.application.tasks.repository import (
     TaskExecutionRepository,
     WorkerOutputRepository,
@@ -36,6 +37,8 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
     worker_execute_context,
 )
+from pydantic import BaseModel
+from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 
@@ -93,11 +96,7 @@ async def run_worker_execute_job(
         definition_id=payload.definition_id,
         sandbox_id=payload.sandbox_id,
         node_id=payload.node_id,
-        task_mgmt=TaskManagementService(
-            task_ready_dispatcher=(
-                _task_ready_dispatcher_for_context(ctx) if ctx is not None else None
-            ),
-        ),
+        task_mgmt=_task_management_service_for_context(ctx),
         task_inspect=TaskInspectionService(),
         resource_repo=RunResourceRepository(),
         session_factory=get_session,
@@ -200,25 +199,107 @@ async def run_worker_execute_job(
     )
 
 
-def _task_ready_dispatcher_for_context(
-    ctx: inngest.Context,
-) -> Callable[[UUID, UUID, UUID], Awaitable[None]]:
-    async def _dispatch(run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
-        event = TaskReadyEvent(
-            run_id=run_id,
-            definition_id=definition_id,
-            task_id=None,
-            node_id=node_id,
+def _task_management_service_for_context(ctx: inngest.Context | None) -> TaskManagementService:
+    if ctx is None:
+        return TaskManagementService()
+    return _StepAwareTaskManagementService(ctx)
+
+
+class _ReadyDispatch(BaseModel):
+    model_config = {"frozen": True}
+
+    run_id: UUID
+    definition_id: UUID
+    node_id: UUID
+
+
+class _PlanSubtasksStepResult(BaseModel):
+    model_config = {"frozen": True}
+
+    result: PlanSubtasksResult
+    ready: list[_ReadyDispatch]
+
+
+class _StepAwareTaskManagementService(TaskManagementService):
+    """Task management facade for workers running inside an Inngest function.
+
+    Worker-authored graph mutations must be memoized as Inngest steps before
+    any child task/ready events are emitted. Otherwise ``ctx.step.send_event``
+    interrupts and replays the worker function, re-running the DB mutation.
+    """
+
+    def __init__(self, ctx: inngest.Context) -> None:
+        self._ctx = ctx
+        self._plan_subtasks_call_index = 0
+        self._active_ready_dispatches: list[_ReadyDispatch] | None = None
+        super().__init__(task_ready_dispatcher=self._collect_ready_dispatch)
+
+    async def plan_subtasks(
+        self,
+        session: Session,
+        command: PlanSubtasksCommand,
+    ) -> PlanSubtasksResult:
+        call_index = self._plan_subtasks_call_index
+        self._plan_subtasks_call_index += 1
+        step_id = f"plan-subtasks-{command.parent_task_id}-{call_index}"
+
+        async def _run_plan() -> _PlanSubtasksStepResult:
+            previous = self._active_ready_dispatches
+            ready: list[_ReadyDispatch] = []
+            self._active_ready_dispatches = ready
+            try:
+                result = await TaskManagementService.plan_subtasks(
+                    self,
+                    session,
+                    command,
+                )
+            finally:
+                self._active_ready_dispatches = previous
+            return _PlanSubtasksStepResult(result=result, ready=ready)
+
+        planned = await self._ctx.step.run(
+            step_id,
+            _run_plan,
+            output_type=_PlanSubtasksStepResult,
         )
-        await ctx.step.send_event(
-            f"dispatch-task-ready-{node_id}",
-            InngestEvent(
-                name=TaskReadyEvent.name,
-                data=event.model_dump(mode="json"),
-            ),
+        await self._dispatch_collected_ready_events(step_id, planned.ready)
+        return planned.result
+
+    async def _collect_ready_dispatch(
+        self,
+        run_id: UUID,
+        definition_id: UUID,
+        node_id: UUID,
+    ) -> None:
+        if self._active_ready_dispatches is None:
+            raise ContractViolationError(
+                "Worker task-ready dispatch attempted outside a memoized graph mutation",
+                run_id=run_id,
+                task_id=node_id,
+            )
+        self._active_ready_dispatches.append(
+            _ReadyDispatch(run_id=run_id, definition_id=definition_id, node_id=node_id)
         )
 
-    return _dispatch
+    async def _dispatch_collected_ready_events(
+        self,
+        parent_step_id: str,
+        ready: list[_ReadyDispatch],
+    ) -> None:
+        for dispatch in ready:
+            event = TaskReadyEvent(
+                run_id=dispatch.run_id,
+                definition_id=dispatch.definition_id,
+                task_id=None,
+                node_id=dispatch.node_id,
+            )
+            await self._ctx.step.send_event(
+                f"{parent_step_id}-dispatch-task-ready-{dispatch.node_id}",
+                InngestEvent(
+                    name=TaskReadyEvent.name,
+                    data=event.model_dump(mode="json"),
+                ),
+            )
 
 
 async def _consume_worker_stream(

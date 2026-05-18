@@ -125,8 +125,9 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
 
 
 @pytest.mark.asyncio
-async def test_context_dispatcher_sends_task_ready_as_inngest_step() -> None:
+async def test_step_aware_task_management_sends_collected_ready_events(monkeypatch) -> None:
     from ergon_core.core.application.jobs import worker_execute as module
+    from ergon_core.core.application.tasks import management
 
     sent: list[tuple[str, object]] = []
 
@@ -138,12 +139,20 @@ async def test_context_dispatcher_sends_task_ready_as_inngest_step() -> None:
     run_id = uuid4()
     definition_id = uuid4()
 
-    dispatcher = module._task_ready_dispatcher_for_context(SimpleNamespace(step=_Step()))
-    await dispatcher(run_id, definition_id, node_id)
+    monkeypatch.setattr(
+        management,
+        "get_dashboard_emitter",
+        lambda: SimpleNamespace(graph_mutation=lambda mutation: None),
+    )
+    service = module._StepAwareTaskManagementService(SimpleNamespace(step=_Step()))
+    await service._dispatch_collected_ready_events(
+        "plan-subtasks-test",
+        [module._ReadyDispatch(run_id=run_id, definition_id=definition_id, node_id=node_id)],
+    )
 
     assert len(sent) == 1
     step_id, event = sent[0]
-    assert step_id == f"dispatch-task-ready-{node_id}"
+    assert step_id == f"plan-subtasks-test-dispatch-task-ready-{node_id}"
     payload = TaskReadyEvent.model_validate(event.data)
     assert event.name == TaskReadyEvent.name
     assert payload.run_id == run_id
