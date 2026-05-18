@@ -200,6 +200,6 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
         benchmark_type=benchmark_type,
         instance_count=len(instance_rows),
         task_count=len(task_rows),
-        created_at=definition_row.created_at,
+        created_at=now,
         metadata=resolved_metadata,
     )
