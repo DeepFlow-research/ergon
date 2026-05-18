@@ -35,9 +35,6 @@ from ergon_core.core.application.tasks.models import (
     PlanSubtasksCommand,
     SubtaskSpec,
 )
-from ergon_core.core.application.tasks.management import (
-    TaskManagementService,
-)
 from tests.fixtures.smoke_components.smoke_base.constants import SUBTASK_GRAPH
 
 _CHILD_WAIT_TERMINAL_STATUSES = TERMINAL_STATUSES | {"blocked"}
@@ -90,7 +87,7 @@ class SmokeWorkerBase(Worker):
         # without overriding execute (which stays @final).
         specs = [self._spec_for(slug, deps, desc) for slug, deps, desc in SUBTASK_GRAPH]
         with get_session() as session:
-            result = await TaskManagementService().plan_subtasks(
+            result = await context.task_mgmt.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=RunId(context.run_id),

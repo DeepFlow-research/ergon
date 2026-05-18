@@ -22,7 +22,6 @@ from ergon_core.core.application.communication.models import CreateMessageReques
 from ergon_core.core.application.communication.service import communication_service
 from ergon_core.core.application.tasks.inspection import TaskInspectionService
 from ergon_core.core.application.tasks.models import PlanSubtasksCommand, SubtaskSpec
-from ergon_core.core.application.tasks.management import TaskManagementService
 
 NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
 NESTED_SUBTASK_GRAPH: tuple[tuple[str, tuple[str, ...], str], ...] = (
@@ -69,7 +68,7 @@ class RecursiveSmokeWorkerBase(Worker):
             for slug, deps, desc in NESTED_SUBTASK_GRAPH
         ]
         with get_session() as session:
-            result = await TaskManagementService().plan_subtasks(
+            result = await context.task_mgmt.plan_subtasks(
                 session,
                 PlanSubtasksCommand(
                     run_id=RunId(context.run_id),
