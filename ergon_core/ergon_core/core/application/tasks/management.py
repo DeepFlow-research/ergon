@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 import inngest
@@ -68,6 +69,7 @@ from sqlmodel import Session, select
 logger = logging.getLogger(__name__)
 
 _MANAGER_META = MutationMeta(actor="manager-worker", reason="manager_decision")
+TaskReadyDispatcher = Callable[[UUID, UUID, UUID], Awaitable[None]]
 
 
 def _count_non_terminal_descendants(session: Session, run_id: UUID, node_id: UUID) -> int:
@@ -90,10 +92,12 @@ class TaskManagementService:
         self,
         graph_repo: WorkflowGraphRepository | None = None,
         dashboard_emitter: DashboardEmitter | None = None,
+        task_ready_dispatcher: TaskReadyDispatcher | None = None,
     ) -> None:
         self._graph_repo = graph_repo or WorkflowGraphRepository()
         self._task_execution_repo = TaskExecutionRepository()
         self._dashboard_emitter = dashboard_emitter or get_dashboard_emitter()
+        self._task_ready_dispatcher = task_ready_dispatcher
         self._graph_repo.add_mutation_listener(self._dashboard_emitter.graph_mutation)
 
     # ── add_subtask ──────────────────────────────────────────
@@ -901,6 +905,13 @@ class TaskManagementService:
             task_id=None,
             node_id=node_id,
         )
+        if self._task_ready_dispatcher is not None:
+            await self._task_ready_dispatcher(run_id, definition_id, node_id)
+            logger.info(
+                "dispatch_task_ready: fired custom task/ready dispatcher for node %s",
+                node_id,
+            )
+            return
         inngest_client.send_sync(
             inngest.Event(
                 name=TaskReadyEvent.name,

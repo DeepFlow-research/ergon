@@ -10,8 +10,11 @@ import logging
 import traceback
 from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
+from uuid import UUID
 
+import inngest
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.core.application.events.task_events import TaskReadyEvent
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.resources import RunResourceRepository
 from ergon_core.core.application.tasks.inspection import TaskInspectionService
@@ -22,6 +25,7 @@ from ergon_core.core.application.tasks.repository import (
 )
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
+from ergon_core.core.infrastructure.inngest.client import InngestEvent
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.application.context.events import ContextEventService
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
@@ -36,7 +40,11 @@ from ergon_core.core.infrastructure.tracing import (
 logger = logging.getLogger(__name__)
 
 
-async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExecuteJobResult:
+async def run_worker_execute_job(
+    payload: WorkerExecuteJobRequest,
+    *,
+    ctx: inngest.Context | None = None,
+) -> WorkerExecuteJobResult:
     logger.info(
         "worker-execute run_id=%s task_id=%s worker_type=%s",
         payload.run_id,
@@ -85,7 +93,11 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         definition_id=payload.definition_id,
         sandbox_id=payload.sandbox_id,
         node_id=payload.node_id,
-        task_mgmt=TaskManagementService(),
+        task_mgmt=TaskManagementService(
+            task_ready_dispatcher=(
+                _task_ready_dispatcher_for_context(ctx) if ctx is not None else None
+            ),
+        ),
         task_inspect=TaskInspectionService(),
         resource_repo=RunResourceRepository(),
         session_factory=get_session,
@@ -186,6 +198,27 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         final_assistant_message=output.output,
         error=None if output.success else output.output,
     )
+
+
+def _task_ready_dispatcher_for_context(
+    ctx: inngest.Context,
+) -> Callable[[UUID, UUID, UUID], Awaitable[None]]:
+    async def _dispatch(run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
+        event = TaskReadyEvent(
+            run_id=run_id,
+            definition_id=definition_id,
+            task_id=None,
+            node_id=node_id,
+        )
+        await ctx.step.send_event(
+            f"dispatch-task-ready-{node_id}",
+            InngestEvent(
+                name=TaskReadyEvent.name,
+                data=event.model_dump(mode="json"),
+            ),
+        )
+
+    return _dispatch
 
 
 async def _consume_worker_stream(

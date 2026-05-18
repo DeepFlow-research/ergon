@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from ergon_core.core.application.events.task_events import TaskReadyEvent
 from ergon_core.api.worker.results import WorkerOutput
 from ergon_core.core.application.jobs.models import WorkerExecuteJobRequest
 from ergon_core.core.application.jobs.worker_execute import run_worker_execute_job
@@ -49,7 +50,7 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     monkeypatch.setattr(module.WorkerOutputRepository, "persist", _persist)
     monkeypatch.setattr(module.TaskExecutionRepository, "set_sandbox_id", _persist)
     monkeypatch.setattr(module.ContextEventService, "persist_chunk", _persist)
-    monkeypatch.setattr(module, "TaskManagementService", lambda: object())
+    monkeypatch.setattr(module, "TaskManagementService", lambda **kwargs: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
     monkeypatch.setattr(module, "RunResourceRepository", lambda: object())
     monkeypatch.setattr(
@@ -121,3 +122,31 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
                 benchmark_type="benchmark",
             )
         )
+
+
+@pytest.mark.asyncio
+async def test_context_dispatcher_sends_task_ready_as_inngest_step() -> None:
+    from ergon_core.core.application.jobs import worker_execute as module
+
+    sent: list[tuple[str, object]] = []
+
+    class _Step:
+        async def send_event(self, step_id: str, event: object) -> None:
+            sent.append((step_id, event))
+
+    node_id = uuid4()
+    run_id = uuid4()
+    definition_id = uuid4()
+
+    dispatcher = module._task_ready_dispatcher_for_context(SimpleNamespace(step=_Step()))
+    await dispatcher(run_id, definition_id, node_id)
+
+    assert len(sent) == 1
+    step_id, event = sent[0]
+    assert step_id == f"dispatch-task-ready-{node_id}"
+    payload = TaskReadyEvent.model_validate(event.data)
+    assert event.name == TaskReadyEvent.name
+    assert payload.run_id == run_id
+    assert payload.definition_id == definition_id
+    assert payload.task_id is None
+    assert payload.node_id == node_id

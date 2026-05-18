@@ -17,7 +17,9 @@ from ergon_core.core.infrastructure.inngest.contracts import (
     output_type=WorkerExecuteResult,
 )
 async def worker_execute_fn(ctx: inngest.Context) -> WorkerExecuteResult:
-    return await run_worker_execute_job(WorkerExecuteRequest.model_validate(ctx.event.data))
+    return await run_worker_execute_job(
+        WorkerExecuteRequest.model_validate(ctx.event.data), ctx=ctx
+    )
 
 
 __all__ = ["worker_execute_fn"]
