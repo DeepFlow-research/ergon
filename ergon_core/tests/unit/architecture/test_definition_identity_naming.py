@@ -19,7 +19,7 @@ EXCLUDED_FILES = {Path(__file__).resolve()}
 EXPERIMENT_ID_PATTERN = re.compile(r"\b(?:experiment" r"_id|experiment" r"Id)\b")
 
 
-def test_definition_identity_is_not_named_experiment_id() -> None:
+def test_definition_identity_uses_definition_name() -> None:
     hits: list[str] = []
     for root in ACTIVE_ROOTS:
         for path in root.rglob("*"):

@@ -22,7 +22,6 @@ from ergon_core.core.persistence.imports.models import (
 )
 from ergon_core.core.persistence.shared.enums import RunResourceKind, RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -38,7 +37,7 @@ class WriteRunResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     run_id: UUID
-    node_id: UUID
+    task_id: UUID
     task_execution_id: UUID
 
 
@@ -50,11 +49,9 @@ class ExternalRunWriter:
         self._source = source
         self._blob_root = blob_root
         self._definition: ExperimentDefinition | None = None
-        self._experiment: BenchmarkDefinitionRecord | None = None
 
     def write_run(self, parsed: ParsedRun) -> WriteRunResult:
         definition = self._definition_row()
-        self._experiment_row(definition)
         observed_fields = _compact_for_db(_json_safe(parsed.observed_fields))
         missing_fields = _json_safe(parsed.missing_fields)
         instance = ExperimentDefinitionInstance(
@@ -107,6 +104,7 @@ class ExternalRunWriter:
 
         node = RunGraphNode(
             run_id=run.id,
+            task_id=task.id,
             instance_key=parsed.instance_key,
             task_slug="imported-root",
             description=parsed.description,
@@ -181,7 +179,7 @@ class ExternalRunWriter:
                     )
                 )
 
-        return WriteRunResult(run_id=run.id, node_id=node.task_id, task_execution_id=execution.id)
+        return WriteRunResult(run_id=run.id, task_id=node.task_id, task_execution_id=execution.id)
 
     def _definition_row(self) -> ExperimentDefinition:
         if self._definition is None:
@@ -201,24 +199,6 @@ class ExternalRunWriter:
             self._session.add(self._definition)
             self._session.flush()
         return self._definition
-
-    def _experiment_row(self, definition: ExperimentDefinition) -> BenchmarkDefinitionRecord:
-        if self._experiment is None:
-            self._experiment = BenchmarkDefinitionRecord(
-                name=self._source.batch_id,
-                benchmark_type=definition.benchmark_type,
-                sample_count=0,
-                sample_selection_json={"source": self._source.dataset},
-                metadata_json={
-                    "imported": True,
-                    "source_slug": self._source.dataset,
-                    "import_batch_id": self._source.batch_id,
-                },
-            )
-            self._session.add(self._experiment)
-            self._session.flush()
-        self._experiment.sample_count += 1
-        return self._experiment
 
     def _resource_row(
         self,
