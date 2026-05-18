@@ -47,7 +47,7 @@ from ergon_core.core.application.read_models.run_snapshot import (
 )
 from ergon_core.core.application.read_models.resources import require_viewable_resource_size
 from pydantic import BaseModel
-from sqlmodel import select
+from sqlmodel import Session, select
 
 
 class RunResourceBlob(BaseModel):
@@ -350,7 +350,7 @@ def _display_run_score(score_summary: EvaluationScoreSummary, run_status: str) -
     return score_summary.normalized_score
 
 
-def _definition_ids_for_cohort(session, cohort_id: UUID) -> list[UUID]:
+def _definition_ids_for_cohort(session: Session, cohort_id: UUID) -> list[UUID]:
     definition_ids: list[UUID] = []
     for definition in session.exec(select(ExperimentDefinition)).all():
         metadata = definition.parsed_metadata()

@@ -196,9 +196,7 @@ def test_run_list_filters_by_definition(monkeypatch, session_factory, capsys):
     monkeypatch.setattr(run_cmd, "get_session", session_factory)
     monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
-    rc = run_cmd.list_runs(
-        Namespace(definition_id=matching_definition_id, status=None, limit=20)
-    )
+    rc = run_cmd.list_runs(Namespace(definition_id=matching_definition_id, status=None, limit=20))
 
     assert rc == 0
     out = capsys.readouterr().out

@@ -54,7 +54,9 @@ class ResearchRubricsJudgeCriterion(Criterion):
     @classmethod
     def _reject_model_alias(cls, data: Any) -> Any:  # slopcop: ignore[no-typing-any]
         if isinstance(data, dict) and "model" in data:
-            raise ValueError("ResearchRubricsJudgeCriterion uses judge_model; model is not accepted")
+            raise ValueError(
+                "ResearchRubricsJudgeCriterion uses judge_model; model is not accepted"
+            )
         return data
 
     def __init__(self, **data: Any) -> None:  # slopcop: ignore[no-typing-any]

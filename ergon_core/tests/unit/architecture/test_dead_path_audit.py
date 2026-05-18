@@ -67,10 +67,7 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
     ),
     DeadPath(
         symbol="_prepare_" + "leg" + "acy_graph_native",
-        audit_note=(
-            "PR 3 renamed _prepare_graph_native; the old method stays "
-            "callerless"
-        ),
+        audit_note=("PR 3 renamed _prepare_graph_native; the old method stays callerless"),
     ),
     DeadPath(
         symbol="materialize_dynamic_subtask_definition",

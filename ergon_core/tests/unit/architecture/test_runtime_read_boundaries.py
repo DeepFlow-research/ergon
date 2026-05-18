@@ -54,8 +54,7 @@ def test_worker_execute_prefers_task_worker_over_payload_bridge() -> None:
     # The PR 3 in-body bridge name is gone and must not appear as a
     # module-level def here.
     assert "def _worker_from_payload_bridge" not in text, (
-        "PR 5 retired the in-body bridge; it must not be a top-level def "
-        "in `worker_execute.py`."
+        "PR 5 retired the in-body bridge; it must not be a top-level def in `worker_execute.py`."
     )
     assert "task.worker" in text, (
         "PR 5 binds the worker directly to the Task snapshot; "

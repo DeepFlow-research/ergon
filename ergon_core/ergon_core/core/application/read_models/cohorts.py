@@ -25,7 +25,7 @@ from ergon_core.core.application.read_models.models import (
     UpdateCohortRequest,
 )
 from ergon_core.core.shared.utils import utcnow
-from sqlmodel import select
+from sqlmodel import Session, select
 
 COHORT_METADATA_KEY = "cohort_id"
 
@@ -162,7 +162,9 @@ class ExperimentCohortService:
     def recompute(self, cohort_id: UUID) -> None:
         """Recompute and persist aggregate stats for one cohort."""
         with get_session() as session:
-            definition_ids = [definition.id for definition in _definitions_for_cohort(session, cohort_id)]
+            definition_ids = [
+                definition.id for definition in _definitions_for_cohort(session, cohort_id)
+            ]
             runs = (
                 list(
                     session.exec(
@@ -306,7 +308,7 @@ def _score_value(run: RunRecord) -> float | None:
     return None
 
 
-def _definitions_for_cohort(session, cohort_id: UUID) -> list[ExperimentDefinition]:
+def _definitions_for_cohort(session: Session, cohort_id: UUID) -> list[ExperimentDefinition]:
     return [
         definition
         for definition in session.exec(select(ExperimentDefinition)).all()
@@ -325,7 +327,7 @@ def _cohort_id_from_metadata(metadata: dict) -> UUID | None:
     return None
 
 
-def _instance_count(session, definition_id: UUID) -> int:
+def _instance_count(session: Session, definition_id: UUID) -> int:
     return len(
         list(
             session.exec(

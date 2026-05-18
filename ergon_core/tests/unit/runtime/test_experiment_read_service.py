@@ -150,18 +150,14 @@ def test_read_service_returns_definition_metadata_without_benchmark_definition_r
     assert detail.metadata.get("created_by") == "test"
 
 
-def test_read_service_returns_none_for_unknown_definition(
-    monkeypatch, session_factory
-) -> None:
+def test_read_service_returns_none_for_unknown_definition(monkeypatch, session_factory) -> None:
     monkeypatch.setattr(module, "get_session", session_factory)
 
     detail = ExperimentReadService().get_experiment(uuid4())
     assert detail is None
 
 
-def test_list_experiments_reads_definition_rows(
-    monkeypatch, session_factory
-) -> None:
+def test_list_experiments_reads_definition_rows(monkeypatch, session_factory) -> None:
     definition_id = uuid4()
     with session_factory() as session:
         session.add(
