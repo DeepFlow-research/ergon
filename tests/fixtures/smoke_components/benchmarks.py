@@ -72,7 +72,28 @@ class _SingleTaskSmokeBenchmark(Benchmark):
         return ("default", "post-root")
 
 
+class ResearchRubricsSmokeTask(Task[ResearchRubricsTaskPayload]):
+    """Concrete Task subclass so ``Task.from_definition`` can resolve the
+    ``_type`` discriminator as a plain module attribute.
+
+    Mirrors the named-subclass pattern from PR 6 minif2f / PR 10a swebench.
+    Avoids the parameterized-generic ``Task[X]`` discriminator that
+    ``import_component`` cannot resolve.
+    """
+
+
 class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
+    """ResearchRubrics smoke benchmark (PR 10b: object-bound Task).
+
+    Overrides ``build_instances`` to return a concrete
+    ``ResearchRubricsSmokeTask`` with inline ``evaluators``, so the smoke
+    fixture exercises the v2 object-bound path that the production
+    ResearchRubrics benchmark now uses.  Note: ``worker`` and ``sandbox``
+    stay ``None`` because the smoke harness owns sandbox lifecycle via
+    ``SmokeSandboxManager`` and resolves workers by registry slug — the
+    existing v1 dispatch is what we test.
+    """
+
     type_slug: ClassVar[str] = "researchrubrics"
     task_payload_model = ResearchRubricsTaskPayload
     task_slug: ClassVar[str] = "smoke-001"
@@ -89,6 +110,36 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
             },
         ],
     }
+
+    def build_instances(self) -> Mapping[str, Sequence[Task[ResearchRubricsTaskPayload]]]:
+        # Import smoke rubrics lazily so the production import graph of
+        # `tests.fixtures.smoke_components.benchmarks` (used by anything that
+        # references the smoke payload model) doesn't fan out into the full
+        # rubric/criterion stack at module load.
+        # reason: circular import — `criteria.smoke_rubrics` transitively
+        # imports `tests.fixtures.smoke_components.smoke_base.criterion_base`,
+        # which imports back into the smoke-components package while it is
+        # still loading `benchmarks.py` during `register_smoke_fixtures`.
+        from tests.fixtures.smoke_components.criteria.smoke_rubrics import (
+            ResearchRubricsSmokeRubric,
+        )
+        from tests.fixtures.smoke_components.criteria.timing import (
+            SmokePostRootTimingRubric,
+        )
+
+        payload = ResearchRubricsTaskPayload.model_validate(self.task_payload)
+        task = ResearchRubricsSmokeTask(
+            task_slug=self.task_slug,
+            instance_key="default",
+            description=self.task_description,
+            evaluator_binding_keys=("default", "post-root"),
+            task_payload=payload,
+            evaluators=(
+                ResearchRubricsSmokeRubric(name="default"),
+                SmokePostRootTimingRubric(name="post-root"),
+            ),
+        )
+        return {"default": [task]}
 
 
 class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):

@@ -18,10 +18,10 @@ from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
 from ergon_builtins.benchmarks.researchrubrics.vanilla import (
     ResearchRubricsVanillaBenchmark,
 )
-from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
+from ergon_builtins.benchmarks.researchrubrics.workers import (
     ResearchRubricsResearcherWorker,
 )
-from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
+from ergon_builtins.benchmarks.researchrubrics.workers import (
     ResearchRubricsWorkflowCliReActWorker,
 )
 

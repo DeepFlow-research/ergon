@@ -12,6 +12,7 @@ PR 8).
 |---|---|---|---|
 | MiniF2F | `ergon_builtins.benchmarks.minif2f` | `make_minif2f_worker` (ReAct) | `LeanSandbox` |
 | SWE-Bench Verified | `ergon_builtins.benchmarks.swebench_verified` | `make_swebench_worker` (ReAct) | `SWEBenchSandbox` |
+| ResearchRubrics | `ergon_builtins.benchmarks.researchrubrics` | `make_research_worker` (ReAct) | `ResearchE2BSandbox` |
 
 Adding a new benchmark = a new subdirectory containing:
 

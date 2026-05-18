@@ -89,7 +89,19 @@ BUDGET = SuppressionCounts(
     # `_legacy_swebench_tools`) — structural complexity, same shape as
     # PR 6's MiniF2F `build_tools` noqa. -2 type_ignore is the implementer's
     # net cleanup elsewhere in the SWEBench migration.
-    slopcop_ignore=249,
+    # PR 10b (ResearchRubrics vertical migration): +5 slopcop_ignore.
+    # New `benchmarks/researchrubrics/_tools.py` mirrors PR 10a's pattern
+    # exactly — 2×`no-typing-any` on the `sandbox`/`task` tool-builder
+    # kwargs (genuinely heterogeneous Sandbox/Task surfaces, typed `Any`)
+    # plus 2×`no-broad-except` on the tool functions' catch-all (they must
+    # return structured error responses rather than propagate). The new
+    # `benchmarks/researchrubrics/toolkit.py` `tools()` method adds one
+    # more `no-typing-any` (same kwargs reason).  `judge_criterion.py`
+    # picks up one `no-str-empty-default` for the new `rubric_text: str
+    # = ""` field — the criterion's __init__ shim populates it from
+    # `rubric.criterion` when omitted, but the JSON round-trip path
+    # validates the bare default first.
+    slopcop_ignore=254,
     noqa=6,
     type_ignore=62,
 )

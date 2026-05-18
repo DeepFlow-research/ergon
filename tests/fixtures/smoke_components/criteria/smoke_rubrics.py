@@ -29,24 +29,24 @@ from tests.fixtures.smoke_components.criteria.swebench_smoke import SweBenchSmok
 
 
 class ResearchRubricsSmokeRubric(Rubric):
-    """Evaluator wrapping the researchrubrics smoke criterion."""
+    """Evaluator wrapping the researchrubrics smoke criterion.
+
+    PR 10b: migrated from custom ``__init__`` to pure-Pydantic
+    ``Field(default_factory=tuple, exclude=True)`` + ``@model_validator``
+    so the rubric round-trips through ``Evaluator.from_definition`` (the
+    object-bound code path used by ``ResearchRubricsSmokeTask.evaluators``).
+    Mirrors the PR 10a SWE-Bench smoke rubric migration.
+    """
 
     type_slug: ClassVar[str] = "researchrubrics-smoke-criterion"
+    name: str = "researchrubrics-smoke-criterion"
+    criteria: tuple[Criterion, ...] = Field(default_factory=tuple, exclude=True)
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
-    ) -> None:
-        # PR 5: Rubric / Evaluator are Pydantic BaseModels; `metadata`
-        # is a non-nullable `dict[str, Any]` field. Normalize None to {}
-        # so legacy callers continue to work.
-        super().__init__(
-            name=name,
-            criteria=(ResearchRubricsSmokeCriterion(slug="researchrubrics-smoke"),),
-            metadata=dict(metadata) if metadata else {},
-        )
+    @model_validator(mode="after")
+    def _build_criterion(self) -> "ResearchRubricsSmokeRubric":
+        if not self.criteria:
+            self.criteria = (ResearchRubricsSmokeCriterion(slug="researchrubrics-smoke"),)
+        return self
 
 
 class MiniF2FSmokeRubric(Rubric):

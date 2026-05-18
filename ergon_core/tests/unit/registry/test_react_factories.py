@@ -81,7 +81,7 @@ def test_gdpeval_react_worker_lives_with_benchmark() -> None:
 def test_researchrubrics_workers_are_reexported_from_benchmark_factory() -> None:
     """ResearchRubrics worker registry entries should come from the benchmark package."""
     pytest.importorskip("datasets", reason="ergon-builtins[data] not installed")
-    from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
+    from ergon_builtins.benchmarks.researchrubrics.workers import (
         ResearchRubricsResearcherWorker,
         ResearchRubricsWorkflowCliReActWorker,
     )

@@ -9,7 +9,7 @@ from ergon_builtins.benchmarks.researchrubrics.sandbox_manager import (
     ResearchRubricsSandboxManager,
 )
 
-from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
+from ergon_builtins.benchmarks.researchrubrics.toolkit import (
     ReportReadFailure,
     ReportReadResponse,
     ReportReadSuccess,

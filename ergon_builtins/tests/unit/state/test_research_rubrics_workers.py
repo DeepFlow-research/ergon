@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from ergon_builtins.benchmarks.researchrubrics.toolkit_types import (
+from ergon_builtins.benchmarks.researchrubrics.toolkit import (
     ReportReadSuccess,
     ReportWriteSuccess,
 )
