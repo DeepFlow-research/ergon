@@ -53,7 +53,7 @@ const onWorkflowStarted = inngest.createFunction(
     const payload = parseDashboardWorkflowStartedData(event.data);
     const {
       run_id,
-      experiment_id,
+      definition_id,
       workflow_name,
       task_tree,
       started_at,
@@ -70,7 +70,7 @@ const onWorkflowStarted = inngest.createFunction(
     // Update store
     store.initializeRun(
       run_id,
-      experiment_id,
+      definition_id,
       workflow_name,
       task_tree,
       started_at,

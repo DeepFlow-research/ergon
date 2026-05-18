@@ -64,7 +64,7 @@ class BaseSmokeLeafWorker(Worker):
     ) -> None:
         # PR 5 converted Worker to a Pydantic BaseModel — `metadata` is
         # now a non-nullable `dict[str, Any]` field with a
-        # `default_factory=dict`. Convert the legacy ``None`` sentinel
+        # `default_factory=dict`. Convert the nullable sentinel
         # into ``{}`` so callers that still pass ``metadata=None``
         # (e.g. smoke unit tests) keep working.
         super().__init__(name=name, model=model, metadata=dict(metadata) if metadata else {})

@@ -44,14 +44,14 @@ test("cohort detail renders summary and experiment list", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Compare" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Re-run failed" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open in training" })).toHaveCount(0);
-  const experimentRow = page.getByTestId(`cohort-experiment-row-${FIXTURE_IDS.experimentId}`);
+  const experimentRow = page.getByTestId(`cohort-experiment-row-${FIXTURE_IDS.definitionId}`);
   await expect(experimentRow).toContainText("minif2f smoke n=3");
   await expect(experimentRow).toContainText("3 done · 0 failed · 0 active");
   await expect(experimentRow).toContainText("lean-evaluator");
 });
 
 test("experiment detail renders restored run analytics surface", async ({ page }) => {
-  await page.goto(`/experiments/${FIXTURE_IDS.experimentId}`);
+  await page.goto(`/experiments/${FIXTURE_IDS.definitionId}`);
 
   await expect(page.getByRole("heading", { name: "minif2f smoke n=3" })).toBeVisible();
   await expect(page.getByTestId("experiment-summary-cards")).toContainText("Score");

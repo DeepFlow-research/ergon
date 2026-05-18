@@ -21,11 +21,8 @@ class _Criterion(Criterion):
 
 
 def test_criterion_requires_slug_keyword() -> None:
-    # PR 10 Task 0: Criterion is a Pydantic BaseModel + ABC. Missing the
-    # required ``slug`` field raises ``ValidationError`` (Pydantic) rather
-    # than the v1 ``TypeError`` from a hand-rolled ``__init__``.
     with pytest.raises(ValidationError):
-        _Criterion(name="legacy-name")  # type: ignore[call-arg]
+        _Criterion(name="old-name")  # type: ignore[call-arg]
 
 
 def test_criterion_exposes_slug_and_score_spec_without_compatibility_aliases() -> None:
@@ -50,3 +47,23 @@ def test_criterion_outcome_allows_slug_without_name() -> None:
 
     assert outcome.slug == "canonical-slug"
     assert outcome.name is None
+
+
+def test_criterion_validates_dependencies_with_runtime_method(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checked: list[tuple[list[str], str]] = []
+
+    def fake_check_packages(packages: list[str], owner: str) -> list[str]:
+        checked.append((packages, owner))
+        return []
+
+    monkeypatch.setattr(
+        "ergon_core.api.criterion.criterion.check_packages",
+        fake_check_packages,
+    )
+
+    criterion = _Criterion(slug="canonical-slug")
+    criterion.validate_runtime_deps()
+
+    assert checked == [([], "Criterion 'test-criterion'")]

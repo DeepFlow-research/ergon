@@ -19,10 +19,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
-    RunRecord,
-)
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
@@ -39,9 +36,6 @@ class _SnapshotTask(Task[_EmptyPayload]):
 
 
 def _session() -> Session:
-    # Ensure BenchmarkDefinitionRecord is imported so its table participates in
-    # create_all (same pattern as test_graph_worker_identity.py).
-    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -51,11 +45,9 @@ def _session() -> Session:
     return Session(engine)
 
 
-def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tuple[UUID, UUID, UUID]:
-    """Insert a minimal definition with one task and a backing
-    BenchmarkDefinitionRecord; return (experiment_id, definition_id, task_id)."""
+def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tuple[UUID, UUID]:
+    """Insert a minimal definition with one task; return (definition_id, task_id)."""
 
-    experiment_id = uuid4()
     definition_id = uuid4()
     instance_id = uuid4()
     task_id = uuid4()
@@ -69,12 +61,6 @@ def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tupl
     ).model_dump(mode="json")
     session.add_all(
         [
-            BenchmarkDefinitionRecord(
-                id=experiment_id,
-                name="test-experiment",
-                benchmark_type="test",
-                sample_count=1,
-            ),
             ExperimentDefinition(
                 id=definition_id, benchmark_type="test", name="test", metadata_json={}
             ),
@@ -95,20 +81,19 @@ def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tupl
         ]
     )
     session.commit()
-    return experiment_id, definition_id, task_id
+    return definition_id, task_id
 
 
 def _seed_run(
     session: Session,
     *,
-    experiment_id: UUID,
     definition_id: UUID,
     run_id: UUID,
 ) -> None:
     session.add(
         RunRecord(
             id=run_id,
-            definition_id=experiment_id,
+            definition_id=definition_id,
             workflow_definition_id=definition_id,
             benchmark_type="test",
             instance_key="sample-1",
@@ -122,12 +107,9 @@ def _seed_run(
 def test_initialize_from_definition_copies_task_json() -> None:
     session = _session()
     run_id = uuid4()
-    experiment_id, definition_id, _task_id = _seed_definition(
-        session, task_slug="solve", payload={"problem": "p"}
-    )
+    definition_id, _task_id = _seed_definition(session, task_slug="solve", payload={"problem": "p"})
     _seed_run(
         session,
-        experiment_id=experiment_id,
         definition_id=definition_id,
         run_id=run_id,
     )
@@ -163,12 +145,9 @@ async def test_graph_repo_node_inflates_task_from_run_tier() -> None:
 
     session = _session()
     run_id = uuid4()
-    experiment_id, definition_id, _task_id = _seed_definition(
-        session, task_slug="solve", payload={"problem": "p"}
-    )
+    definition_id, _task_id = _seed_definition(session, task_slug="solve", payload={"problem": "p"})
     _seed_run(
         session,
-        experiment_id=experiment_id,
         definition_id=definition_id,
         run_id=run_id,
     )
@@ -223,10 +202,9 @@ def test_graph_repo_node_does_not_reference_definition_tier_models() -> None:
 async def test_add_node_can_write_dynamic_task_json() -> None:
     session = _session()
     run_id = uuid4()
-    experiment_id, definition_id, _ = _seed_definition(session, task_slug="parent", payload={})
+    definition_id, _ = _seed_definition(session, task_slug="parent", payload={})
     _seed_run(
         session,
-        experiment_id=experiment_id,
         definition_id=definition_id,
         run_id=run_id,
     )
@@ -259,11 +237,11 @@ def test_initialize_from_definition_can_seed_same_task_ids_for_multiple_runs() -
     session = _session()
     run_a = uuid4()
     run_b = uuid4()
-    experiment_id, definition_id, definition_task_id = _seed_definition(
+    definition_id, definition_task_id = _seed_definition(
         session, task_slug="solve", payload={"problem": "p"}
     )
-    _seed_run(session, experiment_id=experiment_id, definition_id=definition_id, run_id=run_a)
-    _seed_run(session, experiment_id=experiment_id, definition_id=definition_id, run_id=run_b)
+    _seed_run(session, definition_id=definition_id, run_id=run_a)
+    _seed_run(session, definition_id=definition_id, run_id=run_b)
 
     repo = WorkflowGraphRepository()
     for run_id in (run_a, run_b):

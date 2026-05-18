@@ -91,7 +91,7 @@ test("run snapshot hydration orders context events across retried executions", (
   assert.equal(events[1]?.id, retryEvent.id);
 });
 
-test("run snapshot parser rejects legacy tuple-map transport", () => {
+test("run snapshot parser rejects tuple-map transport", () => {
   const seed = createDashboardSeed();
   const run = seed.runs?.[0];
 
@@ -139,7 +139,7 @@ test("dashboard harness only serves explicitly seeded runs", () => {
 test("workflow started event parser validates recursive task trees", () => {
   const payload = {
     run_id: FIXTURE_IDS.runId,
-    experiment_id: FIXTURE_IDS.experimentId,
+    definition_id: FIXTURE_IDS.definitionId,
     workflow_name: "parallel",
     started_at: "2026-03-18T12:00:00.000Z",
     total_tasks: 2,

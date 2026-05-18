@@ -2,7 +2,7 @@
 
 /**
  * RunStatusBar — segmented bar showing the count of leaf tasks in each
- * TaskStatus. Replaces the legacy "Tasks: 52 / Failed: 1" pair of tiles,
+ * TaskStatus. Replaces the prior "Tasks: 52 / Failed: 1" pair of tiles,
  * which hid how much work was pending, ready, or running.
  *
  * Each segment is width-proportional to its count; clicking a segment emits

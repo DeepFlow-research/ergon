@@ -297,7 +297,6 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
     session = _sql_session()
     run_id = uuid4()
     other_run_id = uuid4()
-    experiment_id = uuid4()
     definition_id = uuid4()
     root_id = uuid4()
     sibling_id = uuid4()
@@ -308,14 +307,14 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
     session.add_all(
         [
             BenchmarkDefinitionRecord(
-                id=experiment_id,
+                id=definition_id,
                 name="bench",
                 benchmark_type="bench",
                 sample_count=1,
             ),
             RunRecord(
                 id=run_id,
-                definition_id=experiment_id,
+                definition_id=definition_id,
                 workflow_definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
@@ -324,7 +323,7 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
             ),
             RunRecord(
                 id=other_run_id,
-                definition_id=experiment_id,
+                definition_id=definition_id,
                 workflow_definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-2",

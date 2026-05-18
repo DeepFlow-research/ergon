@@ -305,7 +305,7 @@ export interface UnhandledMutationRecord {
  */
 export interface WorkflowRunState {
   id: string;
-  experimentId: string;
+  definitionId: string;
   name: string;
   status: RunLifecycleStatus;
 

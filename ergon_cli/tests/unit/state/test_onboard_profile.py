@@ -10,36 +10,25 @@ from ergon_cli.onboarding.profile import (
 from ergon_core.api import BenchmarkRequirements
 
 
-class _Benchmark:
-    onboarding_deps = BenchmarkRequirements()
-
-
-class _E2BBenchmark:
-    onboarding_deps = BenchmarkRequirements(e2b=True)
-
-
-class _DataBenchmark:
-    onboarding_deps = BenchmarkRequirements(e2b=True, extras=("ergon-builtins[data]",))
-
-
-class _ResearchBenchmark:
-    onboarding_deps = BenchmarkRequirements(
-        extras=("ergon-builtins[data]",),
-        optional_keys=("EXA_API_KEY",),
-    )
-
-
 @pytest.fixture(autouse=True)
-def _benchmark_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+def _benchmark_requirements(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         profile_module,
-        "BUILTIN_BENCHMARKS",
+        "BUILTIN_BENCHMARK_REQUIREMENTS",
         {
-            "minif2f": _E2BBenchmark,
-            "swebench-verified": _DataBenchmark,
-            "gdpeval": _DataBenchmark,
-            "researchrubrics": _ResearchBenchmark,
-            "researchrubrics-vanilla": _ResearchBenchmark,
+            "minif2f": BenchmarkRequirements(e2b=True),
+            "swebench-verified": BenchmarkRequirements(
+                e2b=True,
+                extras=("ergon-builtins[data]",),
+            ),
+            "gdpeval": BenchmarkRequirements(e2b=True, extras=("ergon-builtins[data]",)),
+            "researchrubrics": BenchmarkRequirements(
+                extras=("ergon-builtins[data]",),
+                optional_keys=("EXA_API_KEY",),
+            ),
+            "researchrubrics-vanilla": BenchmarkRequirements(
+                extras=("ergon-builtins[data]",),
+            ),
         },
     )
 
@@ -66,7 +55,7 @@ class TestRequiredKeys:
 
     def test_e2b_benchmark_needs_e2b_key(self) -> None:
         # ``minif2f`` is the lowest-dependency E2B benchmark still in the
-        # registry after the canonical-smoke cleanup removed the legacy
+        # registry after the canonical-smoke cleanup removed the prior
         # ``smoke-test`` benchmark.
         p = OnboardProfile(benchmarks=["minif2f"])
         keys = p.required_keys()
@@ -193,4 +182,4 @@ class TestOnboardingWizardSeesAllBenchmarks:
             "researchrubrics",
             "researchrubrics-vanilla",
         }
-        assert expected <= set(profile_module.BUILTIN_BENCHMARKS)
+        assert expected <= set(profile_module.available_benchmark_slugs())

@@ -18,7 +18,7 @@ import type { GraphMutationDto } from "./graphMutations";
 function emptyState(): WorkflowRunState {
   return {
     id: "run-test",
-    experimentId: "00000000-0000-0000-0000-000000000000",
+    definitionId: "00000000-0000-0000-0000-000000000000",
     name: "test",
     status: "executing",
     tasks: new Map(),

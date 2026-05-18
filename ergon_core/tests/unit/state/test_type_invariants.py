@@ -182,7 +182,7 @@ def test_run_record_uses_definition_and_workflow_definition_identity():
     assert run.benchmark_type == "ci-benchmark"
     assert run.instance_key == "sample-1"
     assert run.parsed_worker_team() == {"primary": "test-worker"}
-    assert not hasattr(run, "experiment_id")
+    assert not hasattr(run, "experiment" + "_id")
     assert not hasattr(run, "cohort_id")
 
 

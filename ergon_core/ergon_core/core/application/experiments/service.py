@@ -20,6 +20,6 @@ async def run_experiment(
     """Materialize one run directly from an ExperimentDefinition row."""
 
     return await launch_run(
-        request.experiment_id,
+        request.definition_id,
         emit_workflow_started=emit_workflow_started,
     )

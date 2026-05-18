@@ -56,10 +56,10 @@ class FakeWorker(Worker):
         yield WorkerOutput(output="ok")
 
 
-class LegacyInitWorker(Worker):
-    type_slug: ClassVar[str] = "legacy-init-worker"
+class CustomInitWorker(Worker):
+    type_slug: ClassVar[str] = "custom-init-worker"
 
-    def __init__(self, *, name: str, model: str | None, label: str = "legacy") -> None:
+    def __init__(self, *, name: str, model: str | None, label: str = "default") -> None:
         super().__init__(name=name, model=model)
         self.label = label
 
@@ -107,10 +107,10 @@ async def test_object_bound_task_definition_round_trips_concrete_nested_componen
 
 
 def test_worker_from_definition_does_not_pass_type_to_custom_init() -> None:
-    worker = LegacyInitWorker.from_definition(
+    worker = CustomInitWorker.from_definition(
         {
             "_type": (
-                "ergon_core.tests.unit.api.test_public_api_definition_roundtrip:LegacyInitWorker"
+                "ergon_core.tests.unit.api.test_public_api_definition_roundtrip:CustomInitWorker"
             ),
             "name": "worker",
             "model": "test:none",
@@ -118,7 +118,7 @@ def test_worker_from_definition_does_not_pass_type_to_custom_init() -> None:
         }
     )
 
-    assert type(worker).__name__ == "LegacyInitWorker"
+    assert type(worker).__name__ == "CustomInitWorker"
     assert worker.label == "roundtrip"
 
 

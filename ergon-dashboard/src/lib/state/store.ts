@@ -104,7 +104,7 @@ class DashboardStore {
    */
   initializeRun(
     runId: string,
-    experimentId: string,
+    definitionId: string,
     name: string,
     taskTree: TaskTreeNode,
     startedAt: string,
@@ -116,7 +116,7 @@ class DashboardStore {
 
     const run: WorkflowRunState = {
       id: runId,
-      experimentId,
+      definitionId,
       name,
       status: "executing",
       tasks,

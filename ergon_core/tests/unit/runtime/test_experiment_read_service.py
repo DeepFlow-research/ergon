@@ -4,21 +4,22 @@ from uuid import uuid4
 import pytest
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
+    ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.read_models import experiments as module
 from ergon_core.core.application.read_models.experiments import ExperimentReadService
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine
 
 
 @pytest.fixture()
 def session_factory():
-    _ = BenchmarkDefinitionRecord
     _ = ExperimentDefinition
+    _ = ExperimentDefinitionInstance
     _ = ExperimentDefinitionTask
     _ = RunGraphNode
     engine = create_engine(
@@ -36,7 +37,6 @@ def session_factory():
 
 def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory) -> None:
     now = datetime(2026, 4, 27, 12, 0, tzinfo=UTC)
-    experiment_id = uuid4()
     definition_id = uuid4()
     run_a_id = uuid4()
     run_b_id = uuid4()
@@ -44,21 +44,26 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
 
     with session_factory() as session:
         session.add(
-            BenchmarkDefinitionRecord(
-                id=experiment_id,
+            ExperimentDefinition(
+                id=definition_id,
                 name="ci experiment",
                 benchmark_type="ci-benchmark",
-                sample_count=3,
-                sample_selection_json={"instance_keys": ["a", "b", "c"]},
-                default_worker_team_json={"primary": "ci-worker"},
-                default_evaluator_slug="ci-evaluator",
-                default_model_target="openai:gpt-4o",
-                design_json={},
-                metadata_json={},
-                status="running",
+                metadata_json={
+                    "default_worker_team": {"primary": "ci-worker"},
+                    "default_evaluator_slug": "ci-evaluator",
+                    "default_model_target": "openai:gpt-4o",
+                    "status": "running",
+                },
                 created_at=now,
             )
         )
+        for instance_key in ("a", "b", "c"):
+            session.add(
+                ExperimentDefinitionInstance(
+                    experiment_definition_id=definition_id,
+                    instance_key=instance_key,
+                )
+            )
         for run_id, instance_key, status, started, completed, score, cost in [
             (run_a_id, "a", RunStatus.COMPLETED, now, now + timedelta(seconds=10), 1.0, 0.2),
             (run_b_id, "b", RunStatus.FAILED, now, now + timedelta(seconds=20), 0.0, 0.3),
@@ -67,7 +72,7 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
             session.add(
                 RunRecord(
                     id=run_id,
-                    definition_id=experiment_id,
+                    definition_id=definition_id,
                     workflow_definition_id=definition_id,
                     benchmark_type="ci-benchmark",
                     instance_key=instance_key,
@@ -100,7 +105,7 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
 
     monkeypatch.setattr(module, "get_session", session_factory)
 
-    detail = ExperimentReadService().get_experiment(experiment_id)
+    detail = ExperimentReadService().get_experiment(definition_id)
 
     assert detail is not None
     assert detail.analytics.total_runs == 3
@@ -118,13 +123,7 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
 def test_read_service_returns_definition_metadata_without_benchmark_definition_record(
     monkeypatch, session_factory
 ) -> None:
-    """``get_experiment`` selects ``ExperimentDefinition`` first.
-
-    A definition row alone (no legacy ``BenchmarkDefinitionRecord``)
-    resolves cleanly via the new definition-first path Task 4 added,
-    with name/description/metadata sourced from the columns Task 1
-    introduced.
-    """
+    """``get_experiment`` resolves directly from ``ExperimentDefinition``."""
 
     definition_id = uuid4()
     with session_factory() as session:
@@ -139,74 +138,35 @@ def test_read_service_returns_definition_metadata_without_benchmark_definition_r
         )
         session.commit()
 
-        # Sanity check: no BenchmarkDefinitionRecord exists for this id.
-        assert (
-            session.exec(
-                select(BenchmarkDefinitionRecord).where(
-                    BenchmarkDefinitionRecord.id == definition_id
-                )
-            ).first()
-            is None
-        )
-
     monkeypatch.setattr(module, "get_session", session_factory)
 
     detail = ExperimentReadService().get_experiment(definition_id)
 
     assert detail is not None
-    assert detail.experiment_id == definition_id
+    assert detail.definition_id == definition_id
     assert detail.name == "mini-experiment"
     assert detail.description == "smoke for read model"
     assert detail.benchmark_type == "mini"
     assert detail.metadata.get("created_by") == "test"
 
 
-def test_read_service_falls_back_to_benchmark_definition_record_for_legacy_rows(
+def test_read_service_returns_none_for_unknown_definition(
     monkeypatch, session_factory
 ) -> None:
-    """Old rows with a ``BenchmarkDefinitionRecord`` but no ``ExperimentDefinition``
-    name still resolve via the compatibility path."""
-
-    legacy_id = uuid4()
-    with session_factory() as session:
-        session.add(
-            BenchmarkDefinitionRecord(
-                id=legacy_id,
-                name="legacy-only",
-                benchmark_type="mini",
-                sample_count=0,
-            )
-        )
-        session.commit()
-
     monkeypatch.setattr(module, "get_session", session_factory)
 
-    detail = ExperimentReadService().get_experiment(legacy_id)
-    assert detail is not None
-    assert detail.name == "legacy-only"
+    detail = ExperimentReadService().get_experiment(uuid4())
+    assert detail is None
 
 
-def test_list_experiments_dedups_definition_and_legacy_with_same_id(
+def test_list_experiments_reads_definition_rows(
     monkeypatch, session_factory
 ) -> None:
-    """When an ``ExperimentDefinition`` and a ``BenchmarkDefinitionRecord`` share
-    an id (transitional state during PR 7 → PR 11), ``list_experiments`` prefers
-    the definition's fields and emits a single merged row.
-    """
-
-    shared_id = uuid4()
+    definition_id = uuid4()
     with session_factory() as session:
         session.add(
-            BenchmarkDefinitionRecord(
-                id=shared_id,
-                name="legacy-name",
-                benchmark_type="legacy-type",
-                sample_count=0,
-            )
-        )
-        session.add(
             ExperimentDefinition(
-                id=shared_id,
+                id=definition_id,
                 name="definition-name",
                 benchmark_type="definition-type",
                 metadata_json={},
@@ -217,7 +177,7 @@ def test_list_experiments_dedups_definition_and_legacy_with_same_id(
     monkeypatch.setattr(module, "get_session", session_factory)
 
     summaries = ExperimentReadService().list_experiments(limit=10)
-    matching = [s for s in summaries if s.experiment_id == shared_id]
-    assert len(matching) == 1, "duplicate id should be merged into a single row"
-    assert matching[0].name == "definition-name", "definition wins on collision"
+    matching = [s for s in summaries if s.definition_id == definition_id]
+    assert len(matching) == 1
+    assert matching[0].name == "definition-name"
     assert matching[0].benchmark_type == "definition-type"

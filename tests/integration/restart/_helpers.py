@@ -5,7 +5,7 @@ from uuid import UUID
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from sqlmodel import select
 
 
@@ -31,13 +31,8 @@ def cleanup_run(run_id: UUID, defn_id: UUID) -> None:
                 remaining.pop(node.id)
             session.flush()
         run_row = session.get(RunRecord, run_id)
-        experiment_id = run_row.experiment_id if run_row is not None else None
         if run_row is not None:
             session.delete(run_row)
-        if experiment_id is not None:
-            experiment_row = session.get(BenchmarkDefinitionRecord, experiment_id)
-            if experiment_row is not None:
-                session.delete(experiment_row)
         defn_row = session.get(ExperimentDefinition, defn_id)
         if defn_row is not None:
             session.delete(defn_row)

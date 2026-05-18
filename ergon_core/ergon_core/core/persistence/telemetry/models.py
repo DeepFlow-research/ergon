@@ -43,18 +43,16 @@ class ExperimentCohortStatus(StrEnum):
 
 
 # ---------------------------------------------------------------------------
-# BenchmarkDefinitionRecord
+# Historical benchmark-definition telemetry
 # ---------------------------------------------------------------------------
 
 
 class BenchmarkDefinitionRecord(SQLModel, table=True):
-    """One launched experiment definition and sample selection.
+    """Stored shape for the pre-v2 experiments table.
 
-    The ``experiment`` field is an optional *experiment tag* string.  Multiple
-    ``BenchmarkDefinitionRecord`` rows that share the same ``experiment`` value
-    belong to the same logical experiment (e.g. a multi-arm study or a set of
-    re-runs sharing a common identifier).  ``None`` means the record is not
-    grouped into any named experiment.
+    Active v2 runtime, read models, and test harness paths use
+    ``ExperimentDefinition`` plus run-tier rows. This table remains in the
+    schema until a dedicated migration removes it.
     """
 
     __tablename__ = "experiments"

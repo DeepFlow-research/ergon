@@ -48,7 +48,7 @@ async def launch_run(
         )
     await emitter(run.id, definition_id)
     return ExperimentRunResult(
-        experiment_id=definition_id,
+        definition_id=definition_id,
         run_ids=[run.id],
         workflow_definition_ids=[definition_id],
     )

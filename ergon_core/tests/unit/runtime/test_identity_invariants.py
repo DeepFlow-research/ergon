@@ -67,7 +67,6 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
     """Insert a definition with two tasks; return (definition_id, run_id,
     set_of_task_ids)."""
 
-    experiment_id = uuid4()
     definition_id = uuid4()
     instance_id = uuid4()
     task_ids = {uuid4(), uuid4()}
@@ -75,7 +74,7 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
     session.add_all(
         [
             BenchmarkDefinitionRecord(
-                id=experiment_id,
+                id=definition_id,
                 name="identity",
                 benchmark_type="test",
                 sample_count=1,
@@ -113,7 +112,7 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
     session.add(
         RunRecord(
             id=run_id,
-            definition_id=experiment_id,
+            definition_id=definition_id,
             workflow_definition_id=definition_id,
             benchmark_type="test",
             instance_key="sample-1",

@@ -10,16 +10,14 @@ from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.application.experiments.service import run_experiment
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 
 
 class _FakeSession:
     def __init__(
         self,
-        experiment: BenchmarkDefinitionRecord | None = None,
         definition: ExperimentDefinition | None = None,
     ) -> None:
-        self.experiment = experiment
         self.definition = definition
 
     def __enter__(self) -> "_FakeSession":
@@ -29,12 +27,6 @@ class _FakeSession:
         return None
 
     def get(self, cls, row_id):
-        if (
-            cls is BenchmarkDefinitionRecord
-            and self.experiment is not None
-            and row_id == self.experiment.id
-        ):
-            return self.experiment
         if (
             cls is ExperimentDefinition
             and self.definition is not None
@@ -81,11 +73,11 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
     monkeypatch.setattr(launch_module, "create_run", fake_create_run)
 
     result = await run_experiment(
-        ExperimentRunRequest(experiment_id=definition.id),
+        ExperimentRunRequest(definition_id=definition.id),
         emit_workflow_started=fake_emit,
     )
 
-    assert result.experiment_id == definition.id
+    assert result.definition_id == definition.id
     assert result.run_ids == [created_runs[0].id]
     assert result.workflow_definition_ids == [definition.id]
     assert [run.instance_key for run in created_runs] == ["default"]
@@ -94,7 +86,7 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_launch_run_accepts_definition_id_without_experiment_record(monkeypatch):
+async def test_launch_run_accepts_definition_id(monkeypatch):
     """``launch_run`` materializes a run straight from ``ExperimentDefinition``.
 
     The real DB write inside ``create_run`` is blocked by
@@ -139,7 +131,7 @@ async def test_launch_run_accepts_definition_id_without_experiment_record(monkey
     assert captured["kwargs"]["instance_key"] == "default"
 
     # Result shape mirrors the spec.
-    assert result.experiment_id == definition.id
+    assert result.definition_id == definition.id
     assert result.workflow_definition_ids == [definition.id]
     assert result.run_ids
     assert len(result.run_ids) == 1

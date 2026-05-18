@@ -46,7 +46,7 @@
   --font: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Legacy compat — old references still work */
+  /* App shell color aliases */
   --background: var(--paper);
   --foreground: var(--ink);
 }

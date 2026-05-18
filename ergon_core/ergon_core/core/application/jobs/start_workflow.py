@@ -170,7 +170,7 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
 
     await get_dashboard_emitter().workflow_started(
         run_id=payload.run_id,
-        experiment_id=payload.definition_id,
+        definition_id=payload.definition_id,
         workflow_name=initialized.benchmark_type,
         task_tree=task_tree,
         total_tasks=initialized.total_tasks,

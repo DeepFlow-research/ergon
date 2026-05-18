@@ -14,7 +14,7 @@ ALLOWLIST = {
     # for rollout inspection. They should remain isolated behind settings gates.
     Path("ergon_core/ergon_core/core/rest_api/test_harness.py"),
     # Context events are streamed from the application job as each model turn
-    # lands; this legacy path is intentionally deferred until the context
+    # lands; this older path is intentionally deferred until the context
     # event repository owns its transaction boundary.
     Path("ergon_core/ergon_core/core/application/jobs/worker_execute.py"),
     # Workflow lifecycle jobs still own small transactional updates.

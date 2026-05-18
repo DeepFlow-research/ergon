@@ -1,7 +1,7 @@
 """Typed command/result DTOs for orchestration services.
 
 These are the contracts between Inngest functions and services.
-Adapted from ref: definition_id replaces experiment_id.
+Adapted from ref: definition_id replaces definition_id.
 """
 
 import sys

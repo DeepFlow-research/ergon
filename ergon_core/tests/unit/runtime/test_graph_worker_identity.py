@@ -12,7 +12,6 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RunRecord,
     RunTaskExecution,
 )
@@ -38,7 +37,6 @@ class _Payload(BaseModel):
 
 
 def _session() -> Session:
-    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -103,26 +101,11 @@ def _run(
     run_id: UUID | None = None,
     model_target: str = "stub:constant",
 ) -> UUID:
-    experiment_id = uuid4()
     resolved_run_id = run_id or uuid4()
-    session.add(
-        BenchmarkDefinitionRecord(
-            id=experiment_id,
-            name="worker identity",
-            benchmark_type="minif2f",
-            sample_count=1,
-            sample_selection_json={"instance_keys": ["sample-1"]},
-            default_worker_team_json={"primary": "minif2f-react"},
-            default_model_target=model_target,
-            design_json={},
-            metadata_json={},
-            status="running",
-        )
-    )
     session.add(
         RunRecord(
             id=resolved_run_id,
-            definition_id=experiment_id,
+            definition_id=definition_id,
             workflow_definition_id=definition_id,
             benchmark_type="minif2f",
             instance_key="sample-1",

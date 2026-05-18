@@ -5,7 +5,7 @@ import type { ExperimentDetail } from "@/lib/contracts/rest";
 import { loadExperimentDetail } from "@/lib/server-data/experiments";
 
 interface ExperimentPageProps {
-  params: Promise<{ experimentId: string }>;
+  params: Promise<{ definitionId: string }>;
 }
 
 function formatNumber(value: number | null | undefined, fallback = "—") {
@@ -43,14 +43,14 @@ function runLink(runId: string, cohortId: string | null) {
 }
 
 export default async function ExperimentPage({ params }: ExperimentPageProps) {
-  const { experimentId } = await params;
+  const { definitionId } = await params;
   let detail: ExperimentDetail | null = null;
-  const result = await loadExperimentDetail(experimentId);
+  const result = await loadExperimentDetail(definitionId);
   if (result.ok) {
     detail = result.data;
   } else {
     if (result.status === 404) notFound();
-    throw new Error(`Failed to load experiment ${experimentId}: ${result.status}`);
+    throw new Error(`Failed to load experiment ${definitionId}: ${result.status}`);
   }
 
   const experiment = detail.experiment;

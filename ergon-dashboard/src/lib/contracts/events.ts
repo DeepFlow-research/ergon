@@ -112,7 +112,7 @@ export const TaskTreeNodeSchema: z.ZodType<{
 
 export const DashboardWorkflowStartedDataSchema = z.object({
   run_id: z.string().uuid(),
-  experiment_id: z.string().uuid(),
+  definition_id: z.string().uuid(),
   workflow_name: z.string(),
   task_tree: TaskTreeNodeSchema,
   started_at: z.string().datetime({ offset: true }),
@@ -187,7 +187,7 @@ export const SandboxClosedSocketDataSchema = z.object({
 
 export type TaskTrigger = z.infer<typeof TaskTriggerSchema>;
 export type DashboardWorkflowStartedData = z.infer<typeof DashboardWorkflowStartedDataSchema>;
-// Migrated to generated schemas — types re-exported under the legacy `Data` suffix.
+// Migrated to generated schemas; existing type names are re-exported for callers.
 export type DashboardWorkflowCompletedData = GeneratedDashboardWorkflowCompletedEvent;
 export type DashboardTaskStatusChangedData = GeneratedDashboardTaskStatusChangedEvent;
 export type DashboardResourcePublishedData = GeneratedDashboardResourcePublishedEvent;

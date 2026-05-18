@@ -75,7 +75,7 @@ class DashboardEmitter:
     async def workflow_started(
         self,
         run_id: UUID,
-        experiment_id: UUID,
+        definition_id: UUID,
         workflow_name: str,
         task_tree: TaskTreeNode,
         total_tasks: int,
@@ -86,7 +86,7 @@ class DashboardEmitter:
         try:
             evt = DashboardWorkflowStartedEvent(
                 run_id=run_id,
-                experiment_id=experiment_id,
+                definition_id=definition_id,
                 workflow_name=workflow_name,
                 task_tree=task_tree,
                 started_at=utcnow(),

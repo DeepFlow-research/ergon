@@ -5,10 +5,10 @@ from ergon_core.core.application.experiments.models import (
 )
 
 
-def test_run_request_identifies_defined_experiment() -> None:
-    experiment_id = uuid4()
+def test_run_request_identifies_definition() -> None:
+    definition_id = uuid4()
 
-    request = ExperimentRunRequest(experiment_id=experiment_id)
+    request = ExperimentRunRequest(definition_id=definition_id)
 
-    assert request.experiment_id == experiment_id
+    assert request.definition_id == definition_id
     assert request.wait is True
