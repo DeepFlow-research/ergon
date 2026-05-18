@@ -37,7 +37,6 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
         task_slug="task",
         instance_key="default",
         description="Task",
-        evaluator_binding_keys=("default",),
     )
     result = await service.evaluate(
         context=CriterionContext(

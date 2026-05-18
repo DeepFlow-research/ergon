@@ -42,7 +42,6 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
     task_id = uuid4()
     evaluator_id = uuid4()
     run_id = uuid4()
-    node_id = uuid4()
     execution_id = uuid4()
     session.add_all(
         [
@@ -81,7 +80,7 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
             ),
             RunRecord(
                 id=run_id,
-                definition_id=experiment_id,
+                definition_id=definition_id,
                 workflow_definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
@@ -89,7 +88,6 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
                 status=RunStatus.EXECUTING,
             ),
             RunGraphNode(
-                id=node_id,
                 run_id=run_id,
                 task_id=task_id,
                 instance_key="sample-1",
@@ -101,13 +99,12 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
                 id=execution_id,
                 run_id=run_id,
                 task_id=task_id,
-                node_id=node_id,
                 status=TaskExecutionStatus.RUNNING,
             ),
         ]
     )
     session.commit()
-    return run_id, node_id, task_id, evaluator_id, execution_id
+    return run_id, task_id, evaluator_id, execution_id
 
 
 @pytest.mark.asyncio
@@ -117,12 +114,11 @@ async def test_persist_success_links_inline_evaluator_definition_row(monkeypatch
     session = _session()
     monkeypatch.setattr(module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
-    run_id, node_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
+    run_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
     await service.persist_success(
         run_id=run_id,
-        node_id=node_id,
         task_execution_id=execution_id,
         task_id=task_id,
         binding_key="judge",
@@ -150,12 +146,11 @@ async def test_persist_failure_links_inline_evaluator_definition_row(monkeypatch
     session = _session()
     monkeypatch.setattr(module, "get_session", lambda: session)
     monkeypatch.setattr(session, "close", lambda: None)
-    run_id, node_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
+    run_id, task_id, evaluator_id, execution_id = _seed_inline_evaluator_run(session)
     service = EvaluationService()
 
     await service.persist_failure(
         run_id=run_id,
-        node_id=node_id,
         task_execution_id=execution_id,
         task_id=task_id,
         binding_key="judge",
@@ -165,3 +160,41 @@ async def test_persist_failure_links_inline_evaluator_definition_row(monkeypatch
     rows = session.exec(select(RunTaskEvaluation)).all()
     assert len(rows) == 1
     assert rows[0].definition_evaluator_id == evaluator_id
+
+
+@pytest.mark.asyncio
+async def test_persist_success_creates_dynamic_inline_evaluator_definition_row(
+    monkeypatch,
+) -> None:
+    from ergon_core.core.application.evaluation import service as module
+
+    session = _session()
+    monkeypatch.setattr(module, "get_session", lambda: session)
+    monkeypatch.setattr(session, "close", lambda: None)
+    run_id, task_id, _evaluator_id, execution_id = _seed_inline_evaluator_run(session)
+    service = EvaluationService()
+
+    await service.persist_success(
+        run_id=run_id,
+        task_execution_id=execution_id,
+        task_id=task_id,
+        binding_key="dynamic-judge",
+        service_result=EvaluationServiceResult(
+            result=TaskEvaluationResult(
+                task_slug="root",
+                score=1.0,
+                passed=True,
+                evaluator_name="dynamic-judge",
+                criterion_results=[],
+            ),
+            specs=[],
+        ),
+    )
+
+    evaluator_row = session.exec(
+        select(ExperimentDefinitionEvaluator).where(
+            ExperimentDefinitionEvaluator.binding_key == "dynamic-judge"
+        )
+    ).one()
+    rows = session.exec(select(RunTaskEvaluation)).all()
+    assert rows[-1].definition_evaluator_id == evaluator_row.id

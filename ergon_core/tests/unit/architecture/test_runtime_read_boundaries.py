@@ -1,9 +1,8 @@
 """PR 3 textual guards: the worker_execute job body must read only
 from the run tier, never from definition tables.
 
-After PR 3, `worker_execute.py` goes through `graph_repo.node(...)` to
-get a typed Task; the legacy DefinitionRepository / ExperimentDefinitionTask
-imports are gone. PR 11 deletes the legacy prep methods entirely.
+`worker_execute.py` goes through `graph_repo.node(...)` to get a typed
+Task; definition-tier imports stay out of the runtime job body.
 """
 
 from __future__ import annotations
@@ -67,16 +66,14 @@ def test_worker_execute_prefers_task_worker_over_legacy_bridge() -> None:
 
 
 def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
-    """PR 4 textual guard: the `evaluate_task_run.py` body reads only
-    from the run tier and only via the thin id-only payload."""
+    """`evaluate_task_run.py` reads from the run tier via id-only payload."""
 
     body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
 
     # Thin payload only.
     assert "TaskEvaluateRequest" in body
     assert "EvaluateTaskRunRequest" not in body, (
-        "PR 4 retires the legacy multi-field payload from the eval body; "
-        "the import shim still exists in models.py for back-compat."
+        "The legacy multi-field payload must stay out of the eval body."
     )
 
     # No definition-tier reads.
@@ -94,13 +91,7 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
 
 
 def test_evaluate_task_run_uses_object_bound_evaluators() -> None:
-    """PR 5: the eval body dispatches on ``task.evaluators[index]``.
-
-    Retires the PR 4 ``_evaluator_bridge`` (was a sibling module
-    owning the multi-hop binding-key → ExperimentDefinitionEvaluator
-    → ComponentCatalogService lookup chain). PR 5's object-bound Task
-    snapshot carries Evaluator instances inline.
-    """
+    """The eval body dispatches on ``task.evaluators[index]``."""
 
     import ergon_core.core.application.jobs as jobs_pkg
     from pathlib import Path
@@ -113,16 +104,12 @@ def test_evaluate_task_run_uses_object_bound_evaluators() -> None:
     # Bridge module is gone.
     jobs_dir = Path(jobs_pkg.__file__).parent
     assert not (jobs_dir / "_evaluator_bridge.py").exists(), (
-        "PR 5 deletes the PR 4 evaluator-resolution bridge module."
+        "The evaluator-resolution bridge module must stay deleted."
     )
 
 
 def test_evaluate_task_run_detaches_sandbox() -> None:
-    """PR 5: the eval body releases the local sandbox handle on the
-    way out so the gRPC stream / TCP connection doesn't leak. The
-    external sandbox stays running — the orchestrator (`execute_task`)
-    owns termination.
-    """
+    """The eval body releases its local sandbox handle on the way out."""
 
     body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
     assert "task.sandbox.detach()" in body, (

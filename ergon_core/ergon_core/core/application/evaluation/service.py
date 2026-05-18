@@ -7,30 +7,20 @@ from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.criterion.results import CriterionOutcome
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
-from ergon_core.core.persistence.definitions.models import (
-    ExperimentDefinitionEvaluator,
-    ExperimentDefinitionTask,
-    ExperimentDefinitionTaskEvaluator,
-)
-from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
+from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.evaluation_summary import (
     CriterionOutcomeEntry,
     EvaluationSummary,
 )
-from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.persistence.telemetry.repository import (
     CreateTaskEvaluation,
     TelemetryRepository,
 )
 from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
-from ergon_core.core.application.evaluation.models import (
-    CriterionSpec,
-    DispatchEvaluatorsCommand,
-    PreparedEvaluatorDispatch,
-    PreparedSingleEvaluator,
-    TaskEvaluationContext,
-)
+from ergon_core.core.application.evaluation.models import CriterionSpec
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.application.read_models.models import (
     RunEvaluationCriterionDto,
@@ -57,67 +47,13 @@ class PersistedEvaluation(BaseModel):
 
 
 class EvaluationService:
-    """Prepare, execute, and persist task evaluations."""
+    """Execute and persist task evaluations."""
 
     def __init__(
         self,
         telemetry_repo: TelemetryRepository | None = None,
     ) -> None:
         self.telemetry_repo = telemetry_repo or TelemetryRepository()
-
-    def prepare_dispatch(self, command: DispatchEvaluatorsCommand) -> PreparedEvaluatorDispatch:
-        session = get_session()
-        try:
-            node = session.get(RunGraphNode, (command.run_id, command.task_id))
-            if node is None:
-                raise LookupError(f"run graph task not found: {command.task_id}")
-            task_id = node.task_id
-            task_evals = list(
-                session.exec(
-                    select(ExperimentDefinitionTaskEvaluator).where(
-                        ExperimentDefinitionTaskEvaluator.experiment_definition_id
-                        == command.definition_id,
-                        ExperimentDefinitionTaskEvaluator.task_id == task_id,
-                    )
-                ).all()
-            )
-            if not task_evals:
-                return PreparedEvaluatorDispatch(
-                    task_id=task_id,
-                    evaluators_found=0,
-                )
-            task_row = session.get(ExperimentDefinitionTask, task_id)
-            if task_row is None:
-                raise LookupError(f"definition task not found: {task_id}")
-            execution = session.get(RunTaskExecution, command.execution_id)
-            agent_reasoning = execution.final_assistant_message if execution is not None else None
-            valid_evaluators: list[PreparedSingleEvaluator] = []
-            for te in task_evals:
-                evaluator_def = session.exec(
-                    select(ExperimentDefinitionEvaluator).where(
-                        ExperimentDefinitionEvaluator.experiment_definition_id
-                        == command.definition_id,
-                        ExperimentDefinitionEvaluator.binding_key == te.evaluator_binding_key,
-                    )
-                ).first()
-                if evaluator_def is None:
-                    continue
-                valid_evaluators.append(
-                    PreparedSingleEvaluator(
-                        evaluator_id=evaluator_def.id,
-                        evaluator_binding_key=te.evaluator_binding_key,
-                        evaluator_type=evaluator_def.evaluator_type,
-                        task_input=task_row.description,
-                        agent_reasoning=agent_reasoning,
-                    )
-                )
-            return PreparedEvaluatorDispatch(
-                task_id=task_id,
-                evaluators_found=len(task_evals),
-                valid_evaluators=valid_evaluators,
-            )
-        finally:
-            session.close()
 
     async def evaluate(
         self,
@@ -136,8 +72,6 @@ class EvaluationService:
         its own ``ctx.step.invoke``, so retries replay whole evaluators,
         not individual criteria.
 
-        Sibling method ``evaluate_legacy`` keeps the v1 executor-based
-        signature alive for tests that exercise it; PR 11 deletes it.
         """
 
         task = context.task
@@ -250,20 +184,21 @@ class EvaluationService:
         session: Session,
         run_id: UUID,
         binding_key: str,
+        *,
+        evaluator_type: str | None = None,
+        snapshot_json: dict | None = None,
     ) -> UUID:
         """Resolve the ``ExperimentDefinitionEvaluator.id`` for a binding key.
 
-        PR 5 moved evaluator picking from the v1 wire payload to
-        ``task.evaluators[i]``
-        — the eval body no longer has the id, only the live ``Evaluator``
-        instance. The persistence layer needs the id for the FK on
-        ``run_task_evaluations.definition_evaluator_id``, so the lookup
-        happens here on the binding_key (which is ``evaluator.name`` on
-        an object-bound Evaluator and matches the column on
-        ``ExperimentDefinitionEvaluator``).
+        The eval body receives an id-only payload, so it executes the
+        inline ``task.evaluators[i]`` object and passes only its
+        ``evaluator.name``. The persistence layer needs the normalized
+        evaluator id for the FK on
+        ``run_task_evaluations.definition_evaluator_id``.
 
-        PR 11 may drop this lookup entirely by making the FK nullable
-        once object-bound is the only path.
+        The normalized evaluator row remains the persistence/read-model
+        target for evaluation summaries, even though runtime dispatch
+        executes the inline evaluator from ``task.evaluators``.
         """
 
         run = session.get(RunRecord, run_id)
@@ -279,10 +214,15 @@ class EvaluationService:
             )
         ).first()
         if evaluator_def is None:
-            raise ContractViolationError(
-                f"No ExperimentDefinitionEvaluator for binding_key={binding_key!r} "
-                f"under definition {run.workflow_definition_id}"
+            evaluator_def = ExperimentDefinitionEvaluator(
+                id=new_id(),
+                experiment_definition_id=run.workflow_definition_id,
+                binding_key=binding_key,
+                evaluator_type=evaluator_type or binding_key,
+                snapshot_json=snapshot_json or {},
             )
+            session.add(evaluator_def)
+            session.flush()
         return evaluator_def.id
 
     def _refresh_run_evaluation_summary(self, session: Session, run_id: UUID) -> None:

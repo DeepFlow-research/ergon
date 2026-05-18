@@ -1,7 +1,7 @@
 """Per-evaluator Inngest function — thin id-only payload, run-tier reads.
 
-Receives one ``TaskEvaluateRequest`` per evaluator from the
-orchestrator's `asyncio.gather` (see `execute_task._fan_out_evaluators`).
+Receives one ``TaskEvaluateRequest`` per evaluator from
+`execute_task._fan_out_evaluators`.
 The payload only carries identity (``run_id`` + ``task_id`` +
 ``execution_id`` + ``evaluator_index``); everything else is
 reconstructed locally from the run-tier read boundary:
@@ -10,8 +10,6 @@ reconstructed locally from the run-tier read boundary:
 - typed Task view ← ``WorkflowGraphRepository.node(..., sandbox_id=...)``
 - persisted ``WorkerOutput`` ← ``WorkerOutputRepository.load``
 - evaluator instance ← ``task.evaluators[payload.evaluator_index]``
-  (PR 5 object-bound; the PR 4 ``_evaluator_bridge`` multi-hop lookup
-  was retired alongside the Worker/Evaluator → Pydantic conversion)
 
 Criteria run inline via ``EvaluationService.evaluate``: no
 ``evaluator runner`` Protocol, no per-criterion ``ctx.step.run``.
@@ -58,14 +56,17 @@ logger = logging.getLogger(__name__)
 _evaluation_persistence = EvaluationService()
 
 
+def _evaluator_binding_key(evaluator: "Evaluator", evaluator_index: int) -> str:
+    return evaluator.name or f"inline-{evaluator_index}"
+
+
 async def run_evaluate_task_run_job(
     ctx: inngest.Context,
     payload: TaskEvaluateRequest,
 ) -> EvaluateTaskRunResult:
     """Per-evaluator fanout target. Thin id-only payload."""
 
-    del ctx  # PR 4: no per-criterion step.run; the orchestrator already
-    # provides the retry/concurrency boundary at the evaluator level.
+    del ctx  # The orchestrator provides the evaluator-level retry boundary.
 
     span_start = datetime.now(UTC)
     run_id = payload.run_id
@@ -102,7 +103,7 @@ async def run_evaluate_task_run_job(
                 execution_id=execution_id,
             )
         evaluator = task.evaluators[evaluator_index]
-        binding_key = evaluator.name
+        binding_key = _evaluator_binding_key(evaluator, evaluator_index)
 
     context = CriterionContext(
         run_id=run_id,
@@ -125,13 +126,9 @@ async def run_evaluate_task_run_job(
             span_start=span_start,
         )
     finally:
-        # PR 5: release the local sandbox handle as soon as criteria
-        # finish. The external sandbox stays running — the orchestrator
-        # (`execute_task`) owns termination, and other eval workers
-        # invoked from the same `ctx.group.parallel` need the sandbox
-        # alive until the gather resolves. `detach()` raises if there's
-        # no live runtime, but `Task.from_definition` with `sandbox_id`
-        # always attaches — see `Sandbox.from_definition`'s contract.
+        # Release the local sandbox handle as soon as criteria finish.
+        # The orchestrator owns external sandbox termination, and sibling
+        # eval workers still need it alive until fanout resolves.
         if task.sandbox.is_live:
             await task.sandbox.detach()
 
@@ -198,7 +195,13 @@ async def _run_evaluation(
     # `run_task_evaluations.definition_evaluator_id` FK on the
     # row persist_success just wrote.
     with get_session() as session:
-        evaluator_id = _evaluation_persistence.lookup_evaluator_id(session, run_id, binding_key)
+        evaluator_id = _evaluation_persistence.lookup_evaluator_id(
+            session,
+            run_id,
+            binding_key,
+            evaluator_type=evaluator.type_slug,
+            snapshot_json=evaluator.model_dump(mode="json"),
+        )
     get_trace_sink().emit_span(
         CompletedSpan(
             name="evaluation.task",

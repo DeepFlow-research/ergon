@@ -17,6 +17,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionWorker,
 )
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
+from pydantic import ValidationError
 
 
 class _InlineTask(Task[EmptyTaskPayload]):
@@ -40,7 +41,6 @@ class _InlineBenchmark(Benchmark):
                     worker=EchoWorker(name="worker", model="echo-model"),
                     sandbox=EchoSandbox(),
                     evaluators=self._evaluators,
-                    evaluator_binding_keys=(),
                 ),
             )
         }
@@ -81,6 +81,22 @@ def test_persist_benchmark_writes_definition_rows_for_inline_evaluators(
     assert [row.worker_binding_key for row in assignments] == ["echo"]
 
 
+def test_persist_benchmark_normalizes_blank_inline_evaluator_name(
+    monkeypatch,
+) -> None:
+    session = _session()
+    monkeypatch.setattr(module, "get_session", lambda: session)
+    monkeypatch.setattr(session, "close", lambda: None)
+
+    persist_benchmark(_InlineBenchmark((Rubric(name=""),)))
+
+    evaluators = session.exec(select(ExperimentDefinitionEvaluator)).all()
+    bindings = session.exec(select(ExperimentDefinitionTaskEvaluator)).all()
+
+    assert [row.binding_key for row in evaluators] == ["inline-0"]
+    assert [row.evaluator_binding_key for row in bindings] == ["inline-0"]
+
+
 def test_persist_benchmark_rejects_duplicate_inline_evaluator_names(
     monkeypatch,
 ) -> None:
@@ -90,3 +106,15 @@ def test_persist_benchmark_rejects_duplicate_inline_evaluator_names(
 
     with pytest.raises(ValueError, match="Duplicate inline evaluator name"):
         persist_benchmark(_InlineBenchmark((Rubric(name="judge"), Rubric(name="judge"))))
+
+
+def test_task_rejects_legacy_evaluator_binding_keys() -> None:
+    with pytest.raises(ValidationError, match="evaluator_binding_keys"):
+        _InlineTask(
+            task_slug="root",
+            instance_key="sample-1",
+            description="root task",
+            worker=EchoWorker(name="worker", model="echo-model"),
+            sandbox=EchoSandbox(),
+            evaluator_binding_keys=("default",),
+        )

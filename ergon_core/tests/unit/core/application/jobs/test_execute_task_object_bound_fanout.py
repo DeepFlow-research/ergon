@@ -63,7 +63,6 @@ async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
     ctx = _FakeCtx()
     task = SimpleNamespace(
         evaluators=(object(), object()),
-        evaluator_binding_keys=(),
     )
 
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
@@ -85,7 +84,7 @@ async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fanout_uses_legacy_binding_keys_only_as_pr11_bridge(monkeypatch) -> None:
+async def test_fanout_emits_no_jobs_without_inline_evaluators(monkeypatch) -> None:
     from ergon_core.core.application.jobs import execute_task as module
 
     run_id = uuid4()
@@ -95,7 +94,6 @@ async def test_fanout_uses_legacy_binding_keys_only_as_pr11_bridge(monkeypatch) 
     ctx = _FakeCtx()
     task = SimpleNamespace(
         evaluators=(),
-        evaluator_binding_keys=("legacy-a", "legacy-b"),
     )
 
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
@@ -113,4 +111,4 @@ async def test_fanout_uses_legacy_binding_keys_only_as_pr11_bridge(monkeypatch) 
         evaluate_task_run_function=object(),
     )
 
-    assert [payload["evaluator_index"] for payload in ctx.step.payloads] == [0, 1]
+    assert ctx.step.payloads == []
