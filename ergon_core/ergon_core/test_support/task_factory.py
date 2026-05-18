@@ -47,7 +47,7 @@ def task_with_id(
     pre-PR-2 production code used to.
     """
 
-    kwargs.setdefault("worker", TestWorker(name="worker", model=None))
+    kwargs.setdefault("worker", TestWorker(name="worker", model="test:none"))
     kwargs.setdefault("sandbox", TestSandbox())
     task = cls(**kwargs)
     task._task_id = task_id

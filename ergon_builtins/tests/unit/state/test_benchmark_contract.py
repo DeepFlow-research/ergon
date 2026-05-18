@@ -71,7 +71,7 @@ class TestTaskPayloadContract:
             instance_key="default",
             description="desc",
             task_payload=payload,
-            worker=TestWorker(name="worker", model=None),
+            worker=TestWorker(name="worker", model="test:none"),
             sandbox=TestSandbox(),
         )
 
@@ -84,6 +84,6 @@ class TestTaskPayloadContract:
                 instance_key="default",
                 description="desc",
                 task_payload={"loose": "dict"},
-                worker=TestWorker(name="worker", model=None),
+                worker=TestWorker(name="worker", model="test:none"),
                 sandbox=TestSandbox(),
             )

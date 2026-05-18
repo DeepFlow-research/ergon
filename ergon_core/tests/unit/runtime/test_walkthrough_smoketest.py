@@ -75,7 +75,7 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
         instance_key="sample-1",
         description="root task",
         task_payload=_EmptyPayload.model_validate({"problem": "p"}),
-        worker=EchoWorker(name="echo", model=None),
+        worker=EchoWorker(name="echo", model="test:none"),
         sandbox=EchoSandbox(),
     ).model_dump(mode="json")
     session.add_all(
@@ -460,7 +460,7 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
             task_slug="child",
             instance_key="sample-1",
             description="dynamic child",
-            worker=EchoWorker(name="echo", model=None),
+            worker=EchoWorker(name="echo", model="test:none"),
             sandbox=EchoSandbox(),
             evaluators=(),
         )

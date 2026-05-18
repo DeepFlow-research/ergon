@@ -105,7 +105,7 @@ def _make_task() -> Task:
         task_slug="child",
         instance_key="sample-1",
         description="spawned child",
-        worker=EchoWorker(name="echo", model=None),
+        worker=EchoWorker(name="echo", model="test:none"),
         sandbox=EchoSandbox(),
         evaluators=(),
     )

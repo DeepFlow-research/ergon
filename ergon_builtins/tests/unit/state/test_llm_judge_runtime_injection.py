@@ -94,6 +94,7 @@ class TestLegacyCriterionIgnoresRuntime:
 
             async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
                 return CriterionOutcome(
+                    slug=self.slug,
                     name=self.slug,
                     score=1.0,
                     passed=True,

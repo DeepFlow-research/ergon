@@ -3,6 +3,8 @@
 import importlib
 import inspect
 
+import pytest
+
 
 def test_public_api_root_exports_semantic_authoring_names_only() -> None:
     public_api = importlib.import_module("ergon_core.api")
@@ -17,6 +19,7 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "WorkerOutput",
         "WorkerStreamItem",
         "AwaitCompletionNotSupportedError",
+        "DependencyError",
         # PR 9 — dynamic subtasks: SpawnedTaskHandle is the return type
         # of ``WorkerContext.spawn_task`` / ``.restart_task``;
         # ContainmentViolation is raised by the curated single-target
@@ -124,10 +127,18 @@ def test_criterion_context_hides_runtime_protocol_field() -> None:
 def test_public_result_models_do_not_import_core_json_types() -> None:
     modules = [
         importlib.import_module("ergon_core.api.worker.results"),
-        importlib.import_module("ergon_core.api.criterion.results"),
+        importlib.import_module("ergon_core.api.criterion.score"),
+        importlib.import_module("ergon_core.api.criterion.evidence"),
+        importlib.import_module("ergon_core.api.criterion.outcome"),
         importlib.import_module("ergon_core.api.rubric.results"),
     ]
 
     assert all(
         "ergon_core.core.shared.json_types" not in inspect.getsource(module) for module in modules
     )
+
+
+def test_legacy_criterion_results_module_is_absent() -> None:
+    module_name = ".".join(["ergon_core", "api", "criterion", "results"])
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(module_name)

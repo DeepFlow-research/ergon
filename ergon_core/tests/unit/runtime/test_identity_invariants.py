@@ -96,7 +96,7 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
             instance_key="sample-1",
             description=f"task {i}",
             task_payload=_EmptyPayload(),
-            worker=EchoWorker(name="echo", model=None),
+            worker=EchoWorker(name="echo", model="test:none"),
             sandbox=EchoSandbox(),
         ).model_dump(mode="json")
         session.add(
@@ -379,7 +379,7 @@ async def test_dynamic_task_id_has_no_definition_row(
             task_slug="child",
             instance_key="sample-1",
             description="dynamic child",
-            worker=EchoWorker(name="echo", model=None),
+            worker=EchoWorker(name="echo", model="test:none"),
             sandbox=EchoSandbox(),
             evaluators=(),
         )

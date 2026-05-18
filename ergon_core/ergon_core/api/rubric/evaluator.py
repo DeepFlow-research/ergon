@@ -6,10 +6,14 @@ from typing import Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
+from ergon_core.api._serialization import (
+    TaskDefinitionJson,
+    import_component_subclass,
+    inject_type_discriminator,
+)
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.criterion.criterion import Criterion
-from ergon_core.api.criterion.results import CriterionOutcome
+from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.rubric.results import TaskEvaluationResult
 from ergon_core.core.infrastructure.dependencies import check_packages
@@ -36,12 +40,10 @@ class Evaluator(BaseModel, ABC):
 
     type_slug: ClassVar[str]
     required_packages: ClassVar[list[str]] = []
-    install_hint: ClassVar[str] = (
-        ""  # TODO: this should not be "" default, make this just optional arg
-    )
+    install_hint: ClassVar[str | None] = None
 
     name: str
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @abstractmethod
     def criteria_for(self, task: Task) -> Iterable[Criterion]:
@@ -72,13 +74,13 @@ class Evaluator(BaseModel, ABC):
         payload = {k: v for k, v in evaluator_json.items() if k != "_type"}
         return cast("Evaluator", EvaluatorCls.model_validate(payload))
 
-    # TODO: check if this is ever actually used, if not delete it
     def validate_runtime_deps(self) -> None:
         """Check that runtime dependencies are available.
 
         Renamed from ``validate`` because Pydantic v2 reserves ``validate``
-        on ``BaseModel``. Renaming also makes the intent (check importable
-        packages) explicit at every call site.
+        on ``BaseModel``. ``EvaluationService.evaluate`` calls this before
+        resolving criteria so evaluator dependency errors are surfaced at the
+        task-evaluation boundary.
         """
         errors = check_packages(
             self.required_packages,
@@ -93,9 +95,7 @@ class Evaluator(BaseModel, ABC):
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,
-        handler: Callable[["Evaluator"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
-    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        handler: Callable[["Evaluator"], dict[str, Any]],
+    ) -> dict[str, Any]:
         """Inject the ``_type`` discriminator on every dump (mirrors ``Worker``)."""
-        payload = handler(self)
-        payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
-        return payload
+        return inject_type_discriminator(handler(self), self)

@@ -1,10 +1,11 @@
 """Per-execution runtime state passed to Worker.execute()."""
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Annotated, Any, ContextManager, TypeAlias
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field
 
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.errors import ContainmentViolation
@@ -12,6 +13,47 @@ from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.resources.models import RunResourceView
 from ergon_core.core.application.tasks.models import SubtaskInfo
 from ergon_core.core.persistence.shared.types import NodeId, RunId
+
+if TYPE_CHECKING:
+    from sqlmodel import Session
+
+    from ergon_core.core.application.resources.repository import RunResourceRepository
+    from ergon_core.core.application.tasks.inspection import TaskInspectionService
+    from ergon_core.core.application.tasks.management import TaskManagementService
+
+    TaskManagementServiceAlias: TypeAlias = TaskManagementService
+    TaskInspectionServiceAlias: TypeAlias = TaskInspectionService
+    RunResourceRepositoryAlias: TypeAlias = RunResourceRepository
+    SessionFactory: TypeAlias = Callable[[], ContextManager[Session]]
+else:
+    TaskManagementServiceAlias: TypeAlias = Any
+    TaskInspectionServiceAlias: TypeAlias = Any
+    RunResourceRepositoryAlias: TypeAlias = Any
+    SessionFactory: TypeAlias = Callable[[], ContextManager[Any]]
+
+
+def _require_injected_dependency(value: object | None) -> object:
+    if value is None:
+        raise ValueError("WorkerContext injected dependencies cannot be None")
+    return value
+
+
+TaskManagementDependency: TypeAlias = Annotated[
+    TaskManagementServiceAlias,
+    AfterValidator(_require_injected_dependency),
+]
+TaskInspectionDependency: TypeAlias = Annotated[
+    TaskInspectionServiceAlias,
+    AfterValidator(_require_injected_dependency),
+]
+RunResourceRepositoryDependency: TypeAlias = Annotated[
+    RunResourceRepositoryAlias,
+    AfterValidator(_require_injected_dependency),
+]
+SessionFactoryDependency: TypeAlias = Annotated[
+    SessionFactory,
+    AfterValidator(_require_injected_dependency),
+]
 
 
 class WorkerContext(BaseModel):
@@ -41,47 +83,25 @@ class WorkerContext(BaseModel):
     )
     execution_id: UUID
     sandbox_id: str
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     # Injected services. These are required construction dependencies
     # because WorkerContext is the executable worker-facing facade.
     # They are excluded from dumps so context identity remains plain JSON.
     #
-    # Typed as ``Any`` (with a comment naming the
-    # real class) to avoid an api → core → api import cycle:
-    # ``TaskManagementService`` lives in
-    # ``ergon_core.core.application.tasks.management``. Typing these
-    # service dependencies here would make the public API package depend
-    # on the runtime application layer.
-    # TODO: I'd quite like these typed as their "real objects," lets find some way to make that happen.
-    task_mgmt: Any = Field(
+    task_mgmt: TaskManagementDependency = Field(
         exclude=True,
         repr=False,
-    )  # TaskManagementService — slopcop: ignore[no-typing-any]
-    task_inspect: Any = Field(
+    )
+    task_inspect: TaskInspectionDependency = Field(
         exclude=True,
         repr=False,
-    )  # TaskInspectionService — slopcop: ignore[no-typing-any]
-    resource_repo: Any = Field(
+    )
+    resource_repo: RunResourceRepositoryDependency = Field(
         exclude=True,
         repr=False,
-    )  # RunResourceRepository — slopcop: ignore[no-typing-any]
-    session_factory: Any = Field(exclude=True, repr=False)  # slopcop: ignore[no-typing-any]
-
-    @model_validator(mode="after")
-    def _validate_required_services(self) -> "WorkerContext":
-        service_values = {
-            "task_mgmt": self.task_mgmt,
-            "task_inspect": self.task_inspect,
-            "resource_repo": self.resource_repo,
-            "session_factory": self.session_factory,
-        }
-        missing = [name for name, value in service_values.items() if value is None]
-        if missing:
-            raise ValueError(
-                "WorkerContext requires non-null facade services: " + ", ".join(missing)
-            )
-        return self
+    )
+    session_factory: SessionFactoryDependency = Field(exclude=True, repr=False)
 
     @classmethod
     def _for_job(
@@ -92,10 +112,10 @@ class WorkerContext(BaseModel):
         execution_id: UUID,
         definition_id: UUID | None,
         sandbox_id: str,
-        task_mgmt: Any,  # TaskManagementService — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
-        task_inspect: Any,  # TaskInspectionService — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
-        resource_repo: Any,  # RunResourceRepository — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
-        session_factory: Any,  # slopcop: ignore[no-typing-any]
+        task_mgmt: TaskManagementServiceAlias,
+        task_inspect: TaskInspectionServiceAlias,
+        resource_repo: RunResourceRepositoryAlias,
+        session_factory: SessionFactory,
     ) -> "WorkerContext":
         """Construct the job runtime ``WorkerContext``.
 
@@ -122,9 +142,7 @@ class WorkerContext(BaseModel):
         self,
         task: Task,
         *,
-        depends_on: tuple[
-            UUID, ...
-        ] = (),  # todo: consider if this should be required and not have a default
+        depends_on: tuple[UUID, ...] = (),
     ) -> SpawnedTaskHandle:
         """Spawn a child task under this context's task_id."""
 
@@ -135,9 +153,7 @@ class WorkerContext(BaseModel):
             depends_on=depends_on,
         )
 
-    async def cancel_task(
-        self, task_id: UUID, *, reason: str = ""
-    ) -> None:  # todo: make reason str | None not str = ""
+    async def cancel_task(self, task_id: UUID, *, reason: str | None = None) -> None:
         """Cancel a descendant task.
 
         ``reason`` is currently advisory; ``CancelTaskCommand`` has no
@@ -147,6 +163,7 @@ class WorkerContext(BaseModel):
 
         del reason
         await self._assert_descendant(task_id)
+        # reason: keep runtime task command imports out of public API module import time.
         from ergon_core.core.application.tasks.models import CancelTaskCommand
 
         with self.session_factory() as session:
@@ -159,6 +176,7 @@ class WorkerContext(BaseModel):
         """Refine a descendant task's description. Raises ``ContainmentViolation`` otherwise."""
 
         await self._assert_descendant(task_id)
+        # reason: keep runtime task command imports out of public API module import time.
         from ergon_core.core.application.tasks.models import RefineTaskCommand
 
         with self.session_factory() as session:
@@ -175,6 +193,7 @@ class WorkerContext(BaseModel):
         """Restart a descendant task. Raises ``ContainmentViolation`` otherwise."""
 
         await self._assert_descendant(task_id)
+        # reason: keep runtime task command imports out of public API module import time.
         from ergon_core.core.application.tasks.models import RestartTaskCommand
 
         with self.session_factory() as session:

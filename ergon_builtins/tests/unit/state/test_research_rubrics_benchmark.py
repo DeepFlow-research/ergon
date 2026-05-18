@@ -170,8 +170,20 @@ class TestResearchRubricsRubric:
         result = rubric.aggregate_task(
             task,
             [
-                CriterionOutcome(name="positive", score=1.0, passed=True, weight=2.0),
-                CriterionOutcome(name="negative", score=0.0, passed=False, weight=-1.0),
+                CriterionOutcome(
+                    slug="positive",
+                    name="positive",
+                    score=1.0,
+                    passed=True,
+                    weight=2.0,
+                ),
+                CriterionOutcome(
+                    slug="negative",
+                    name="negative",
+                    score=0.0,
+                    passed=False,
+                    weight=-1.0,
+                ),
             ],
         )
 

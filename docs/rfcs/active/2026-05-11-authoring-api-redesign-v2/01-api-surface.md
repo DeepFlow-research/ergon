@@ -122,7 +122,9 @@ ergon_core/ergon_core/api/
 │   │                                #   from_definition classmethod [P1]
 │   ├── context.py                   # MODIFY — CriterionContext becomes a pure data carrier [P4: runtime proxies dropped;
 │   │                                #   sandbox proxies live on Sandbox itself]
-│   └── results.py                   # unchanged — CriterionOutcome / EvidenceMessage / etc.
+│   ├── score.py                     # ADD — ScoreScale
+│   ├── evidence.py                  # ADD — EvidenceMessage / CriterionEvidence
+│   └── outcome.py                   # ADD — CriterionOutcome
 │
 ├── rubric/
 │   ├── __init__.py                  # MODIFY — re-export WeightedCriterion
@@ -1048,7 +1050,7 @@ separate positional parameter. Rationale:
 
 ```python
 from ergon_core.api.criterion.context import CriterionContext
-from ergon_core.api.criterion.results import CriterionOutcome
+from ergon_core.api.criterion import CriterionOutcome
 
 
 class Criterion(BaseModel, ABC):

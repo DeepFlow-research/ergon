@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
+from ergon_core.api._serialization import (
+    TaskDefinitionJson,
+    import_component_subclass,
+    inject_type_discriminator,
+)
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.sandbox.sandbox import Sandbox
@@ -45,7 +49,7 @@ class Worker(BaseModel, ABC):
 
     type_slug: ClassVar[str]
     required_packages: ClassVar[list[str]] = []
-    install_hint: ClassVar[str] = ""
+    install_hint: ClassVar[str | None] = None
     # The Sandbox subclass a Worker requires. Default is the base
     # ``Sandbox`` (accepts any kind); concrete subclasses narrow
     # (e.g. ``LeanReActWorker.requires_sandbox = LeanSandbox``).
@@ -57,8 +61,8 @@ class Worker(BaseModel, ABC):
     # `model` is required (no default) — defaults hide sizing decisions
     # per RFC 2026-04-22. Subclasses that want a fixed model should set
     # it on the subclass, not on the base.
-    model: str | None  # TODO: make not | None
-    metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
+    model: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @abstractmethod
     async def execute(
@@ -103,18 +107,15 @@ class Worker(BaseModel, ABC):
                 parts.append(f"Install with: {self.install_hint}")
             raise DependencyError("\n".join(parts))
 
-    # TODO: I'd quite like to find some way to kill these serializer methods, they are a bit of a hack and dont really fit in with the rest of the api
     @model_serializer(mode="wrap")
     def _serialize_with_type_discriminator(
         self,
-        handler: Callable[["Worker"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
-    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        handler: Callable[["Worker"], dict[str, Any]],
+    ) -> dict[str, Any]:
         """Inject the ``_type`` discriminator on every dump.
 
         Worker subclasses dump as ``{..., "_type": "module:Qualname"}``
         so ``from_definition`` can re-resolve the concrete class from
         the JSON without external metadata.
         """
-        payload = handler(self)
-        payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
-        return payload
+        return inject_type_discriminator(handler(self), self)

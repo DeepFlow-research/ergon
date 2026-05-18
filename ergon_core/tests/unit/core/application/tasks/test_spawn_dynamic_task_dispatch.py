@@ -38,7 +38,7 @@ class _FakeGraphRepo:
 
     async def add_node(self, session, run_id, **kwargs):
         del session, run_id
-        node = SimpleNamespace(id=uuid4(), **kwargs)
+        node = SimpleNamespace(id=uuid4(), task_id=uuid4(), **kwargs)
         self.added_nodes.append(kwargs)
         return node
 
@@ -74,7 +74,7 @@ async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(mo
             task_slug="child",
             instance_key="sample-1",
             description="child task",
-            worker=TestWorker(name="worker", model=None),
+            worker=TestWorker(name="worker", model="test:none"),
             sandbox=TestSandbox(),
         ),
     )
@@ -119,7 +119,7 @@ async def test_spawn_dynamic_task_with_dependencies_waits_for_propagation(monkey
             task_slug="child",
             instance_key="sample-1",
             description="child task",
-            worker=TestWorker(name="worker", model=None),
+            worker=TestWorker(name="worker", model="test:none"),
             sandbox=TestSandbox(),
         ),
         depends_on=(dependency_id,),

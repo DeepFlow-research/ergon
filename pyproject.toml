@@ -92,6 +92,15 @@ max-complexity = 10
 # User-facing CLI output and dashboard render helpers.
 "**/ergon_cli/**" = ["no-print"]
 "**/rendering/**" = ["no-print"]
+# Public authoring API intentionally exposes JSON-like metadata bags and
+# dynamic component import helpers; keep these suppressions centralized
+# rather than repeated inline across api/ source files.
+"ergon_core/ergon_core/api/**" = [
+    "no-typing-any",
+    "no-str-empty-default",
+    "no-hasattr-getattr",
+    "max-function-params",
+]
 
 # SQLModel Field(sa_type=DateTime(...)) — ty misreads the overloaded __init__.
 [[tool.ty.overrides]]

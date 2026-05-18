@@ -5,7 +5,7 @@ from uuid import UUID
 
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion.context import CriterionContext
-from ergon_core.api.criterion.results import CriterionOutcome
+from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
 from ergon_core.core.persistence.shared.ids import new_id
@@ -76,6 +76,7 @@ class EvaluationService:
 
         """
 
+        evaluator.validate_runtime_deps()
         task = context.task
         criteria = list(evaluator.criteria_for(task))
         specs = [
@@ -286,7 +287,7 @@ def build_evaluation_summary(
         entries.append(
             CriterionOutcomeEntry(
                 criterion_slug=cr.slug,
-                criterion_name=cr.name,
+                criterion_name=cr.name or cr.slug,
                 criterion_type=spec.criterion.type_slug,
                 criterion_description=spec.criterion.description,
                 stage_num=spec.stage_idx,

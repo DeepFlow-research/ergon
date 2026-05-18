@@ -13,6 +13,7 @@ class _Criterion(Criterion):
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         return CriterionOutcome(
+            slug=self.slug,
             name=self.slug,
             score=self.score_spec.max_score,
             passed=True,
@@ -37,3 +38,15 @@ def test_criterion_exposes_slug_and_score_spec_without_compatibility_aliases() -
     assert criterion.score_spec.max_score == 2.5
     assert not hasattr(criterion, "name")
     assert not hasattr(criterion, "max_score")
+
+
+def test_criterion_outcome_requires_slug_without_name_fallback() -> None:
+    with pytest.raises(ValidationError):
+        CriterionOutcome.model_validate({"name": "legacy-name", "score": 1.0, "passed": True})
+
+
+def test_criterion_outcome_allows_slug_without_name() -> None:
+    outcome = CriterionOutcome(slug="canonical-slug", score=1.0, passed=True)
+
+    assert outcome.slug == "canonical-slug"
+    assert outcome.name is None
