@@ -9,6 +9,8 @@ import { DashboardSandboxCommandEventSchema } from "./DashboardSandboxCommandEve
 import { DashboardSandboxClosedEventSchema } from "./DashboardSandboxClosedEvent";
 import { DashboardThreadMessageCreatedEventSchema } from "./DashboardThreadMessageCreatedEvent";
 import { DashboardTaskEvaluationUpdatedEventSchema } from "./DashboardTaskEvaluationUpdatedEvent";
+import { DashboardGraphMutationEventSchema } from "./DashboardGraphMutationEvent";
+import { DashboardContextEventEventSchema } from "./DashboardContextEventEvent";
 
 export { CohortUpdatedEventSchema };
 export type CohortUpdatedEvent = z.infer<typeof CohortUpdatedEventSchema>;
@@ -30,6 +32,10 @@ export { DashboardThreadMessageCreatedEventSchema };
 export type DashboardThreadMessageCreatedEvent = z.infer<typeof DashboardThreadMessageCreatedEventSchema>;
 export { DashboardTaskEvaluationUpdatedEventSchema };
 export type DashboardTaskEvaluationUpdatedEvent = z.infer<typeof DashboardTaskEvaluationUpdatedEventSchema>;
+export { DashboardGraphMutationEventSchema };
+export type DashboardGraphMutationEvent = z.infer<typeof DashboardGraphMutationEventSchema>;
+export { DashboardContextEventEventSchema };
+export type DashboardContextEventEvent = z.infer<typeof DashboardContextEventEventSchema>;
 
 export const dashboardEventSchemas = {
   "dashboard/cohort.updated": CohortUpdatedEventSchema,
@@ -42,6 +48,8 @@ export const dashboardEventSchemas = {
   "dashboard/sandbox.closed": DashboardSandboxClosedEventSchema,
   "dashboard/thread.message_created": DashboardThreadMessageCreatedEventSchema,
   "dashboard/task.evaluation_updated": DashboardTaskEvaluationUpdatedEventSchema,
+  "dashboard/graph.mutation": DashboardGraphMutationEventSchema,
+  "dashboard/context.event": DashboardContextEventEventSchema,
 } as const;
 
 export type DashboardEventName = keyof typeof dashboardEventSchemas;

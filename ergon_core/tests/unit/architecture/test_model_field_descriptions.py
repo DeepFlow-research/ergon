@@ -49,7 +49,7 @@ def test_context_event_payload_field_docs_are_schema_metadata() -> None:
 
 def test_dashboard_context_event_field_docs_are_schema_metadata() -> None:
     assert _description(DashboardContextEventEvent, "id")
-    assert _description(DashboardContextEventEvent, "task_node_id")
+    assert _description(DashboardContextEventEvent, "task_id")
     assert _description(DashboardContextEventEvent, "payload")
 
 

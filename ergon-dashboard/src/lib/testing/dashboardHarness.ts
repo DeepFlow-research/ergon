@@ -248,12 +248,12 @@ export function emitHarnessThreadMessage(runId: string, thread: CommunicationThr
 
 export function emitHarnessContextEvent(
   runId: string,
-  taskNodeId: string,
+  taskId: string,
   event: ContextEventState,
 ): void {
   requireHarnessEnabled();
-  store.addContextEvent(runId, taskNodeId, event);
-  broadcastContextEvent(runId, taskNodeId, event);
+  store.addContextEvent(runId, taskId, event);
+  broadcastContextEvent(runId, taskId, event);
 }
 
 export function emitHarnessTaskEvaluation(

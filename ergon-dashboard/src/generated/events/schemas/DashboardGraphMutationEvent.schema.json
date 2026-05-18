@@ -1,0 +1,524 @@
+{
+  "$defs": {
+    "AnnotationDeletedMutation": {
+      "description": "annotation.deleted \u2014 tombstone.",
+      "properties": {
+        "mutation_type": {
+          "const": "annotation.deleted",
+          "default": "annotation.deleted",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "namespace": {
+          "title": "Namespace",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "required": [
+        "namespace",
+        "payload"
+      ],
+      "title": "AnnotationDeletedMutation",
+      "type": "object"
+    },
+    "AnnotationSetMutation": {
+      "description": "annotation.set.",
+      "properties": {
+        "mutation_type": {
+          "const": "annotation.set",
+          "default": "annotation.set",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "namespace": {
+          "title": "Namespace",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "required": [
+        "namespace",
+        "payload"
+      ],
+      "title": "AnnotationSetMutation",
+      "type": "object"
+    },
+    "EdgeAddedMutation": {
+      "description": "edge.added \u2014 full edge snapshot.",
+      "properties": {
+        "mutation_type": {
+          "const": "edge.added",
+          "default": "edge.added",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "source_task_id": {
+          "format": "uuid",
+          "title": "Source Task Id",
+          "type": "string"
+        },
+        "target_task_id": {
+          "format": "uuid",
+          "title": "Target Task Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_task_id",
+        "target_task_id",
+        "status"
+      ],
+      "title": "EdgeAddedMutation",
+      "type": "object"
+    },
+    "EdgeRemovedMutation": {
+      "description": "edge.removed.",
+      "properties": {
+        "mutation_type": {
+          "const": "edge.removed",
+          "default": "edge.removed",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "source_task_id": {
+          "format": "uuid",
+          "title": "Source Task Id",
+          "type": "string"
+        },
+        "target_task_id": {
+          "format": "uuid",
+          "title": "Target Task Id",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_task_id",
+        "target_task_id",
+        "status"
+      ],
+      "title": "EdgeRemovedMutation",
+      "type": "object"
+    },
+    "EdgeStatusChangedMutation": {
+      "description": "edge.status_changed.",
+      "properties": {
+        "mutation_type": {
+          "const": "edge.status_changed",
+          "default": "edge.status_changed",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "EdgeStatusChangedMutation",
+      "type": "object"
+    },
+    "GraphMutationRecordDto": {
+      "description": "Append-only graph mutation record with a typed mutation payload.",
+      "properties": {
+        "id": {
+          "description": "Identifier of the mutation row itself, not a graph target id.",
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "mutation_type": {
+          "enum": [
+            "node.added",
+            "node.removed",
+            "node.status_changed",
+            "node.field_changed",
+            "edge.added",
+            "edge.removed",
+            "edge.status_changed",
+            "annotation.set",
+            "annotation.deleted"
+          ],
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "target_type": {
+          "enum": [
+            "node",
+            "edge"
+          ],
+          "title": "Target Type",
+          "type": "string"
+        },
+        "target_id": {
+          "description": "Polymorphic mutation target identifier. Interpreted as a NodeId, EdgeId, or annotation id based on target_type and mutation_type.",
+          "format": "uuid",
+          "title": "Target Id",
+          "type": "string"
+        },
+        "actor": {
+          "title": "Actor",
+          "type": "string"
+        },
+        "old_value": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "annotation.deleted": "#/$defs/AnnotationDeletedMutation",
+                  "annotation.set": "#/$defs/AnnotationSetMutation",
+                  "edge.added": "#/$defs/EdgeAddedMutation",
+                  "edge.removed": "#/$defs/EdgeRemovedMutation",
+                  "edge.status_changed": "#/$defs/EdgeStatusChangedMutation",
+                  "node.added": "#/$defs/NodeAddedMutation",
+                  "node.field_changed": "#/$defs/NodeFieldChangedMutation",
+                  "node.removed": "#/$defs/NodeRemovedMutation",
+                  "node.status_changed": "#/$defs/NodeStatusChangedMutation"
+                },
+                "propertyName": "mutation_type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/NodeAddedMutation"
+                },
+                {
+                  "$ref": "#/$defs/NodeRemovedMutation"
+                },
+                {
+                  "$ref": "#/$defs/NodeStatusChangedMutation"
+                },
+                {
+                  "$ref": "#/$defs/NodeFieldChangedMutation"
+                },
+                {
+                  "$ref": "#/$defs/EdgeAddedMutation"
+                },
+                {
+                  "$ref": "#/$defs/EdgeRemovedMutation"
+                },
+                {
+                  "$ref": "#/$defs/EdgeStatusChangedMutation"
+                },
+                {
+                  "$ref": "#/$defs/AnnotationSetMutation"
+                },
+                {
+                  "$ref": "#/$defs/AnnotationDeletedMutation"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Old Value"
+        },
+        "new_value": {
+          "discriminator": {
+            "mapping": {
+              "annotation.deleted": "#/$defs/AnnotationDeletedMutation",
+              "annotation.set": "#/$defs/AnnotationSetMutation",
+              "edge.added": "#/$defs/EdgeAddedMutation",
+              "edge.removed": "#/$defs/EdgeRemovedMutation",
+              "edge.status_changed": "#/$defs/EdgeStatusChangedMutation",
+              "node.added": "#/$defs/NodeAddedMutation",
+              "node.field_changed": "#/$defs/NodeFieldChangedMutation",
+              "node.removed": "#/$defs/NodeRemovedMutation",
+              "node.status_changed": "#/$defs/NodeStatusChangedMutation"
+            },
+            "propertyName": "mutation_type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NodeAddedMutation"
+            },
+            {
+              "$ref": "#/$defs/NodeRemovedMutation"
+            },
+            {
+              "$ref": "#/$defs/NodeStatusChangedMutation"
+            },
+            {
+              "$ref": "#/$defs/NodeFieldChangedMutation"
+            },
+            {
+              "$ref": "#/$defs/EdgeAddedMutation"
+            },
+            {
+              "$ref": "#/$defs/EdgeRemovedMutation"
+            },
+            {
+              "$ref": "#/$defs/EdgeStatusChangedMutation"
+            },
+            {
+              "$ref": "#/$defs/AnnotationSetMutation"
+            },
+            {
+              "$ref": "#/$defs/AnnotationDeletedMutation"
+            }
+          ],
+          "title": "New Value"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "run_id",
+        "sequence",
+        "mutation_type",
+        "target_type",
+        "target_id",
+        "actor",
+        "old_value",
+        "new_value",
+        "reason",
+        "created_at"
+      ],
+      "title": "GraphMutationRecordDto",
+      "type": "object"
+    },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonScalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonScalar"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "NodeAddedMutation": {
+      "description": "node.added \u2014 full node snapshot.",
+      "properties": {
+        "mutation_type": {
+          "const": "node.added",
+          "default": "node.added",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "task_slug": {
+          "title": "Task Slug",
+          "type": "string"
+        },
+        "instance_key": {
+          "title": "Instance Key",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "assigned_worker_slug": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Assigned Worker Slug"
+        }
+      },
+      "required": [
+        "task_slug",
+        "instance_key",
+        "description",
+        "status",
+        "assigned_worker_slug"
+      ],
+      "title": "NodeAddedMutation",
+      "type": "object"
+    },
+    "NodeFieldChangedMutation": {
+      "description": "node.field_changed.",
+      "properties": {
+        "mutation_type": {
+          "const": "node.field_changed",
+          "default": "node.field_changed",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "description",
+            "assigned_worker_slug"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "title": "NodeFieldChangedMutation",
+      "type": "object"
+    },
+    "NodeRemovedMutation": {
+      "description": "node.removed \u2014 node snapshot at removal time.",
+      "properties": {
+        "mutation_type": {
+          "const": "node.removed",
+          "default": "node.removed",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "task_slug": {
+          "title": "Task Slug",
+          "type": "string"
+        },
+        "instance_key": {
+          "title": "Instance Key",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "assigned_worker_slug": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Assigned Worker Slug"
+        }
+      },
+      "required": [
+        "task_slug",
+        "instance_key",
+        "description",
+        "status",
+        "assigned_worker_slug"
+      ],
+      "title": "NodeRemovedMutation",
+      "type": "object"
+    },
+    "NodeStatusChangedMutation": {
+      "description": "node.status_changed.",
+      "properties": {
+        "mutation_type": {
+          "const": "node.status_changed",
+          "default": "node.status_changed",
+          "title": "Mutation Type",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "NodeStatusChangedMutation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "mutation": {
+      "$ref": "#/$defs/GraphMutationRecordDto"
+    }
+  },
+  "required": [
+    "mutation"
+  ],
+  "title": "DashboardGraphMutationEvent",
+  "type": "object"
+}

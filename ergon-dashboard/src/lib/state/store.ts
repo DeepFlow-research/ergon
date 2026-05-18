@@ -219,13 +219,13 @@ class DashboardStore {
     }
   }
 
-  addContextEvent(runId: string, taskNodeId: string, event: ContextEventState): void {
+  addContextEvent(runId: string, taskId: string, event: ContextEventState): void {
     const run = this.runs.get(runId);
     if (!run) return;
-    const existing = run.contextEventsByTask.get(taskNodeId) ?? [];
+    const existing = run.contextEventsByTask.get(taskId) ?? [];
     if (existing.some((e) => e.id === event.id)) return; // deduplicate
     run.contextEventsByTask.set(
-      taskNodeId,
+      taskId,
       [...existing, event].sort((a, b) => a.sequence - b.sequence),
     );
   }
@@ -363,7 +363,7 @@ class DashboardStore {
       id: tree.id,
       name: tree.name,
       description: tree.description,
-      status: TaskStatus.PENDING,
+      status: tree.status as TaskStatus,
       parentId,
       childIds: tree.children.map((c) => c.id),
       dependsOnIds: tree.depends_on,
@@ -372,7 +372,7 @@ class DashboardStore {
       startedAt: null,
       completedAt: null,
       isLeaf: tree.is_leaf,
-      level,
+      level: tree.level,
     };
 
     tasks.set(tree.id, taskState);

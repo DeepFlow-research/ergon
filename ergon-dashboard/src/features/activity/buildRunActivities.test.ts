@@ -56,7 +56,7 @@ test("buildRunActivities surfaces semantic activity kinds without creating actor
       id: "context-noisy",
       runId: runState.id,
       taskExecutionId: "execution-noisy",
-      taskNodeId: noisyTaskId,
+      taskId: noisyTaskId,
       workerBindingKey: "worker-1",
       sequence: 12,
       eventType: "tool_call",

@@ -234,9 +234,9 @@ class DashboardContextEventEvent(InngestEventContract):
     )
     run_id: UUID
     task_execution_id: UUID
-    task_node_id: UUID = Field(
+    task_id: UUID = Field(
         description=(
-            "Graph task node resolved from the task execution by the dashboard emitter at "
+            "Graph task id resolved from the task execution by the dashboard emitter at "
             "event emission time."
         )
     )

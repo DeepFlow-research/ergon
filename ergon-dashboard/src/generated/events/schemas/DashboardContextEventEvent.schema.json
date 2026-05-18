@@ -1,0 +1,470 @@
+{
+  "$defs": {
+    "AssistantTextPart": {
+      "properties": {
+        "part_kind": {
+          "const": "assistant_text",
+          "default": "assistant_text",
+          "description": "Discriminator identifying this context part as assistant text.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "content": {
+          "description": "Assistant response text emitted by the worker.",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "AssistantTextPart",
+      "type": "object"
+    },
+    "ContextPartChunkLog": {
+      "description": "Core-enriched context stream item suitable for API/dashboard projection.",
+      "properties": {
+        "part": {
+          "description": "Typed context stream payload.",
+          "discriminator": {
+            "mapping": {
+              "assistant_text": "#/$defs/AssistantTextPart",
+              "system_prompt": "#/$defs/SystemPromptPart",
+              "thinking": "#/$defs/ThinkingPart",
+              "tool_call": "#/$defs/ToolCallPart",
+              "tool_result": "#/$defs/ToolResultPart",
+              "user_message": "#/$defs/UserMessagePart"
+            },
+            "propertyName": "part_kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SystemPromptPart"
+            },
+            {
+              "$ref": "#/$defs/UserMessagePart"
+            },
+            {
+              "$ref": "#/$defs/AssistantTextPart"
+            },
+            {
+              "$ref": "#/$defs/ToolCallPart"
+            },
+            {
+              "$ref": "#/$defs/ToolResultPart"
+            },
+            {
+              "$ref": "#/$defs/ThinkingPart"
+            }
+          ],
+          "title": "Part"
+        },
+        "token_ids": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Token IDs associated with this context part when provided by the backend.",
+          "title": "Token Ids"
+        },
+        "logprobs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TokenLogprob"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-token log probabilities associated with this context part.",
+          "title": "Logprobs"
+        },
+        "sequence": {
+          "description": "Monotonic sequence number within the execution stream.",
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "worker_binding_key": {
+          "description": "Worker binding that emitted this context part.",
+          "title": "Worker Binding Key",
+          "type": "string"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stable generation turn identifier shared by related streamed parts.",
+          "title": "Turn Id"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Timestamp when generation for this part started.",
+          "title": "Started At"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Timestamp when generation for this part completed.",
+          "title": "Completed At"
+        },
+        "policy_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional worker or policy version that produced the part.",
+          "title": "Policy Version"
+        }
+      },
+      "required": [
+        "part",
+        "sequence",
+        "worker_binding_key"
+      ],
+      "title": "ContextPartChunkLog",
+      "type": "object"
+    },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonScalar": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/JsonScalar"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "SystemPromptPart": {
+      "properties": {
+        "part_kind": {
+          "const": "system_prompt",
+          "default": "system_prompt",
+          "description": "Discriminator identifying this context part as a system prompt.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "content": {
+          "description": "System instructions supplied to the worker.",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "SystemPromptPart",
+      "type": "object"
+    },
+    "ThinkingPart": {
+      "properties": {
+        "part_kind": {
+          "const": "thinking",
+          "default": "thinking",
+          "description": "Discriminator identifying this context part as private thinking.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "content": {
+          "description": "Reasoning or thinking text emitted by the model.",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "ThinkingPart",
+      "type": "object"
+    },
+    "TokenLogprob": {
+      "description": "Per-token log probability from the serving backend.",
+      "properties": {
+        "token": {
+          "description": "Generated token text.",
+          "title": "Token",
+          "type": "string"
+        },
+        "logprob": {
+          "description": "Natural-log probability assigned to the token.",
+          "title": "Logprob",
+          "type": "number"
+        },
+        "top_logprobs": {
+          "description": "Optional model-provider alternatives and probabilities for this position.",
+          "items": {
+            "$ref": "#/$defs/JsonObject"
+          },
+          "title": "Top Logprobs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "token",
+        "logprob"
+      ],
+      "title": "TokenLogprob",
+      "type": "object"
+    },
+    "ToolCallPart": {
+      "properties": {
+        "part_kind": {
+          "const": "tool_call",
+          "default": "tool_call",
+          "description": "Discriminator identifying this context part as a tool call.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "tool_name": {
+          "description": "Name of the tool requested by the worker.",
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "tool_call_id": {
+          "description": "Provider-stable identifier for this tool call.",
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "description": "JSON-like tool input arguments.",
+          "title": "Args",
+          "type": "object"
+        }
+      },
+      "required": [
+        "tool_name",
+        "tool_call_id",
+        "args"
+      ],
+      "title": "ToolCallPart",
+      "type": "object"
+    },
+    "ToolResultPart": {
+      "properties": {
+        "part_kind": {
+          "const": "tool_result",
+          "default": "tool_result",
+          "description": "Discriminator identifying this context part as a tool result.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "tool_call_id": {
+          "description": "Identifier of the tool call this result answers.",
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "tool_name": {
+          "description": "Name of the tool that produced this result.",
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "content": {
+          "description": "Serialized tool result content.",
+          "title": "Content",
+          "type": "string"
+        },
+        "is_error": {
+          "default": false,
+          "description": "Whether the tool result represents an error response.",
+          "title": "Is Error",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tool_call_id",
+        "tool_name",
+        "content"
+      ],
+      "title": "ToolResultPart",
+      "type": "object"
+    },
+    "UserMessagePart": {
+      "properties": {
+        "part_kind": {
+          "const": "user_message",
+          "default": "user_message",
+          "description": "Discriminator identifying this context part as a user message.",
+          "title": "Part Kind",
+          "type": "string"
+        },
+        "content": {
+          "description": "User or upstream task message content.",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "title": "UserMessagePart",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "id": {
+      "description": "RunContextEvent.id used by the frontend as a stable deduplication key.",
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "task_execution_id": {
+      "format": "uuid",
+      "title": "Task Execution Id",
+      "type": "string"
+    },
+    "task_id": {
+      "description": "Graph task id resolved from the task execution by the dashboard emitter at event emission time.",
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "worker_binding_key": {
+      "title": "Worker Binding Key",
+      "type": "string"
+    },
+    "sequence": {
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "event_type": {
+      "enum": [
+        "system_prompt",
+        "user_message",
+        "assistant_text",
+        "tool_call",
+        "tool_result",
+        "thinking"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/ContextPartChunkLog",
+      "description": "Typed context event payload serialized with model_dump(mode='json') before being sent through Inngest."
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "started_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Started At"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Completed At"
+    }
+  },
+  "required": [
+    "id",
+    "run_id",
+    "task_execution_id",
+    "task_id",
+    "worker_binding_key",
+    "sequence",
+    "event_type",
+    "payload",
+    "created_at",
+    "started_at",
+    "completed_at"
+  ],
+  "title": "DashboardContextEventEvent",
+  "type": "object"
+}

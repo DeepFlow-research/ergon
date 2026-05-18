@@ -350,15 +350,15 @@ def _context_events_by_task(
 ) -> dict[str, list[RunContextEventDto]]:
     context_events_by_task: dict[str, list[RunContextEventDto]] = defaultdict(list)
     for event in context_events_rows:
-        task_node_id = execution_task_map.get(event.task_execution_id)
-        if task_node_id is None:
+        task_id = execution_task_map.get(event.task_execution_id)
+        if task_id is None:
             continue
-        context_events_by_task[str(task_node_id)].append(
+        context_events_by_task[str(task_id)].append(
             RunContextEventDto(
                 id=event.id,
                 run_id=event.run_id,
                 task_execution_id=event.task_execution_id,
-                task_node_id=task_node_id,
+                task_id=task_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
                 event_type=event.event_type,

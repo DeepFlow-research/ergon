@@ -377,7 +377,7 @@ export interface ServerToClientEvents {
   "thread:message": (data: DashboardThreadMessageCreatedData) => void;
   "task:evaluation": (data: DashboardTaskEvaluationUpdatedData) => void;
   "graph:mutation": (data: GraphMutationSocketData) => void;
-  "context:event": (data: { runId: string; taskNodeId: string; event: ContextEventState }) => void;
+  "context:event": (data: { runId: string; taskId: string; event: ContextEventState }) => void;
   // Sync event - sends all current runs to a client on request
   "sync:runs": (runs: RunListEntry[]) => void;
   // Sync event - sends full state for a specific run

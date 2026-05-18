@@ -280,9 +280,9 @@ export function broadcastGraphMutation(
 
 export function broadcastContextEvent(
   runId: string,
-  taskNodeId: string,
+  taskId: string,
   event: ContextEventState,
 ): void {
   const io = getIO();
-  io?.to(`run:${runId}`).emit("context:event", { runId, taskNodeId, event });
+  io?.to(`run:${runId}`).emit("context:event", { runId, taskId, event });
 }
