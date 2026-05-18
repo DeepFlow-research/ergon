@@ -15,7 +15,6 @@ from ergon_core.api.benchmark import (
     BenchmarkRequirements,
     EmptyTaskPayload,
     Task,
-    TaskSpec,
 )
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
@@ -48,25 +47,28 @@ class SWEBenchTaskPayload(BaseModel):
     test_patch: str
 
 
+class GDPEvalTaskPayload(BaseModel):
+    task_id: str
+    workflow_type: str
+    reference_files: list[str]
+
+
 class _SingleTaskSmokeBenchmark(Benchmark):
-    """Base class for smoke benchmarks that expose one deterministic task."""
+    """Base class for smoke benchmarks that expose one deterministic task.
+
+    PR 10c: every subclass now overrides ``build_instances`` to return
+    a concrete ``Task[...]`` with inline ``evaluators``.  The base
+    method previously returned a ``TaskSpec``-shaped payload; with all
+    four benchmark subclasses (MiniF2F, SWE-Bench, ResearchRubrics,
+    GDPEval) owning their builds, the default is gone and the import
+    of ``TaskSpec`` no longer fans out from this module.
+    """
 
     onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(e2b=True)
     task_slug: ClassVar[str]
     task_description: ClassVar[str]
     task_payload: ClassVar[JsonObject] = {}
     task_payload_model = EmptyTaskPayload
-
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel]]]:
-        payload = self.task_payload_model.model_validate(self.task_payload)
-        task = TaskSpec[BaseModel](
-            task_slug=self.task_slug,
-            instance_key="default",
-            description=self.task_description,
-            evaluator_binding_keys=("default", "post-root"),
-            task_payload=payload,
-        )
-        return {"default": [task]}
 
     def evaluator_requirements(self) -> Sequence[str]:
         return ("default", "post-root")
@@ -142,7 +144,28 @@ class ResearchRubricsSmokeBenchmark(_SingleTaskSmokeBenchmark):
         return {"default": [task]}
 
 
+class MiniF2FSmokeTask(Task[MiniF2FTaskPayload]):
+    """Concrete Task subclass so ``Task.from_definition`` can resolve the
+    ``_type`` discriminator via a plain module attribute.
+
+    Mirrors the named-subclass pattern from PR 6 minif2f / PR 10a swebench /
+    PR 10b researchrubrics.  Avoids the parameterized-generic ``Task[X]``
+    discriminator that ``import_component`` cannot resolve.
+    """
+
+
 class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
+    """MiniF2F smoke benchmark (PR 10c: object-bound Task).
+
+    Overrides ``build_instances`` to return a concrete ``MiniF2FSmokeTask``
+    with inline ``evaluators``, so the smoke fixture exercises the v2
+    object-bound path that the production MiniF2F benchmark now uses.
+    Note: ``worker`` and ``sandbox`` stay ``None`` because the smoke
+    harness owns sandbox lifecycle via ``SmokeSandboxManager`` and
+    resolves workers by registry slug — the existing v1 dispatch is what
+    we test.
+    """
+
     type_slug: ClassVar[str] = "minif2f"
     task_payload_model = MiniF2FTaskPayload
     task_slug: ClassVar[str] = "mathd_algebra_478"
@@ -154,10 +177,37 @@ class MiniF2FSmokeBenchmark(_SingleTaskSmokeBenchmark):
         "header": "",
     }
 
+    def build_instances(self) -> Mapping[str, Sequence[Task[MiniF2FTaskPayload]]]:
+        # See ResearchRubricsSmokeBenchmark for the lazy-import rationale.
+        # reason: circular import — `criteria.smoke_rubrics` transitively
+        # imports `tests.fixtures.smoke_components.smoke_base.criterion_base`,
+        # which imports back into the smoke-components package while it is
+        # still loading `benchmarks.py` during `register_smoke_fixtures`.
+        from tests.fixtures.smoke_components.criteria.smoke_rubrics import (
+            MiniF2FSmokeRubric,
+        )
+        from tests.fixtures.smoke_components.criteria.timing import (
+            SmokePostRootTimingRubric,
+        )
+
+        payload = MiniF2FTaskPayload.model_validate(self.task_payload)
+        task = MiniF2FSmokeTask(
+            task_slug=self.task_slug,
+            instance_key="default",
+            description=self.task_description,
+            evaluator_binding_keys=("default", "post-root"),
+            task_payload=payload,
+            evaluators=(
+                MiniF2FSmokeRubric(name="default"),
+                SmokePostRootTimingRubric(name="post-root"),
+            ),
+        )
+        return {"default": [task]}
+
 
 class SweBenchSmokeTask(Task[SWEBenchTaskPayload]):
     """Concrete Task subclass so ``Task.from_definition`` can resolve the
-    ``_type`` discriminator via ``getattr(module, "SweBenchSmokeTask")``.
+    ``_type`` discriminator as a plain module attribute.
 
     Mirrors the named-subclass pattern from PR 6 minif2f.  Avoids the
     parameterized-generic ``Task[X]`` discriminator that
@@ -194,10 +244,7 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
     }
 
     def build_instances(self) -> Mapping[str, Sequence[Task[SWEBenchTaskPayload]]]:
-        # Import smoke rubrics lazily so the production import graph of
-        # `tests.fixtures.smoke_components.benchmarks` (used by anything that
-        # references the smoke payload model) doesn't fan out into the full
-        # rubric/criterion stack at module load.
+        # See ResearchRubricsSmokeBenchmark for the lazy-import rationale.
         # reason: circular import — `criteria.smoke_rubrics` transitively
         # imports `tests.fixtures.smoke_components.smoke_base.criterion_base`,
         # which imports back into the smoke-components package while it is
@@ -220,5 +267,59 @@ class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
                 SweBenchSmokeRubric(name="default"),
                 SmokePostRootTimingRubric(name="post-root"),
             ),
+        )
+        return {"default": [task]}
+
+
+class GDPEvalSmokeTask(Task[GDPEvalTaskPayload]):
+    """Concrete Task subclass so ``Task.from_definition`` can resolve the
+    ``_type`` discriminator via a plain module attribute.
+
+    Mirrors the named-subclass pattern from PR 10a swebench / PR 10b
+    researchrubrics.  Avoids the parameterized-generic ``Task[X]``
+    discriminator that ``import_component`` cannot resolve.
+    """
+
+
+class GDPEvalSmokeBenchmark(_SingleTaskSmokeBenchmark):
+    """GDPEval smoke benchmark (PR 10c: object-bound Task).
+
+    Overrides ``build_instances`` to return a concrete ``GDPEvalSmokeTask``
+    with inline ``evaluators``, so the smoke fixture exercises the v2
+    object-bound path that the production GDPEval benchmark now uses.
+    The GDPEval slot did not exist before PR 10c — this is the first
+    smoke fixture row for the benchmark.  The post-root timing rubric is
+    the only evaluator wired here; per-criterion smoke checks for
+    GDPEval can land in a follow-up.
+    """
+
+    type_slug: ClassVar[str] = "gdpeval"
+    task_payload_model = GDPEvalTaskPayload
+    task_slug: ClassVar[str] = "gdpeval-smoke-001"
+    task_description: ClassVar[str] = "Process the reference documents and write outputs."
+    task_payload: ClassVar[JsonObject] = {
+        "task_id": "gdpeval-smoke-001",
+        "workflow_type": "document_processing",
+        "reference_files": [],
+    }
+
+    def build_instances(self) -> Mapping[str, Sequence[Task[GDPEvalTaskPayload]]]:
+        # See ResearchRubricsSmokeBenchmark for the lazy-import rationale.
+        # reason: circular import — `criteria.timing` transitively
+        # imports `tests.fixtures.smoke_components.smoke_base.criterion_base`,
+        # which imports back into the smoke-components package while it is
+        # still loading `benchmarks.py` during `register_smoke_fixtures`.
+        from tests.fixtures.smoke_components.criteria.timing import (
+            SmokePostRootTimingRubric,
+        )
+
+        payload = GDPEvalTaskPayload.model_validate(self.task_payload)
+        task = GDPEvalSmokeTask(
+            task_slug=self.task_slug,
+            instance_key="default",
+            description=self.task_description,
+            evaluator_binding_keys=("post-root",),
+            task_payload=payload,
+            evaluators=(SmokePostRootTimingRubric(name="post-root"),),
         )
         return {"default": [task]}

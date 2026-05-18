@@ -13,7 +13,7 @@ from ergon_core.api.rubric import Evaluator
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
-from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
+from ergon_builtins.benchmarks.gdpeval.sandbox_manager import GDPEvalSandboxManager
 from ergon_builtins.benchmarks.minif2f.benchmark import MiniF2FBenchmark
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager

@@ -69,10 +69,10 @@ def test_benchmark_react_workers_live_with_benchmarks() -> None:
 def test_gdpeval_react_worker_lives_with_benchmark() -> None:
     """GDPEval should expose a benchmark-owned ReAct worker through registry_data."""
     pytest.importorskip("datasets", reason="ergon-builtins[data] not installed")
-    from ergon_builtins.benchmarks.gdpeval import worker_factory
+    from ergon_builtins.benchmarks.gdpeval import workers as gdpeval_workers
     from ergon_builtins.registry_data import WORKERS as DATA_WORKERS
 
-    assert DATA_WORKERS["gdpeval-react"] is worker_factory.GDPEvalReactWorker
+    assert DATA_WORKERS["gdpeval-react"] is gdpeval_workers.GDPEvalReactWorker
 
     worker = DATA_WORKERS["gdpeval-react"](name="gdpeval-test", model="openai:gpt-4o")
     assert worker.max_iterations == 40

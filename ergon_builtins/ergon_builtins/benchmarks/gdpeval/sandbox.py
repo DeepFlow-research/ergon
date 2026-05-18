@@ -1,73 +1,90 @@
-"""GDPEval-specific sandbox manager.
+"""GDPEvalSandbox — object-bound E2B sandbox for GDPEval.
 
-Thin subclass of :class:`BaseSandboxManager` that installs the Python
-packages needed for GDP document-processing evaluation (PDF, OCR, etc.).
+Wraps the legacy ``GDPEvalSandboxManager`` (E2B-backed) so the v2
+``Task.sandbox`` authoring shape works end to end while the manager
+infrastructure is still the source of truth for sandbox lifecycle.
+
+Migration trajectory:
+
+- **PR 10c** (this PR) introduces ``GDPEvalSandbox`` reusing the shared
+  ``_ManagerBackedSandboxRuntime`` adapter PR 10a extracted to
+  ``ergon_builtins/sandbox/_manager_backed.py``.
+- **PR 11** deletes ``GDPEvalSandboxManager`` (and the rest of the
+  per-benchmark manager files); ``provision()`` and ``_bind_runtime()``
+  here are rewritten to call the E2B SDK directly, and per-task setup
+  (currently in ``GDPEvalSandboxManager._install_dependencies``) is
+  absorbed into ``provision()``.
 """
 
-import logging
-from uuid import UUID
+from typing import cast
+from uuid import uuid4
 
-from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
+from ergon_core.api.sandbox import Sandbox
 
-try:
-    from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-except ImportError:
-    AsyncSandbox = object  # type: ignore[assignment,misc]
+# TODO(PR 11): drop this import.  ``GDPEvalSandboxManager`` is deleted in
+# PR 11; ``GDPEvalSandbox.provision()`` is rewritten to call the E2B SDK
+# directly and per-task setup (``_install_dependencies``) moves into
+# ``provision()`` itself.
+from ergon_builtins.benchmarks.gdpeval.sandbox_manager import (
+    GDPEvalSandboxManager,
+)
+from ergon_builtins.sandbox._manager_backed import (
+    _DirectSandboxRuntime,
+    _E2BSandboxHandle,
+    _ManagerBackedSandboxRuntime,
+)
 
-logger = logging.getLogger(__name__)
 
-_GDP_PACKAGES = "pdfplumber PyPDF2 reportlab pytesseract"
+class GDPEvalSandbox(Sandbox):
+    """E2B-backed sandbox for GDPEval document-processing tasks.
 
-
-class GDPEvalSandboxManager(BaseSandboxManager):
-    """Sandbox manager for the GDPEval benchmark.
-
-    Installs additional Python packages on top of the E2B default image:
-    ``pdfplumber``, ``PyPDF2``, ``reportlab``, ``pytesseract``.
+    Wraps the legacy ``GDPEvalSandboxManager`` (PR 10c bridge). Carries
+    config (``template_id`` / ``requires_network`` / ``workspace_dir``)
+    that round-trips through ``task_json`` snapshots via the ``_type``
+    discriminator inherited from ``Sandbox``.
     """
 
-    async def _install_dependencies(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
-        logger.info("Installing GDPEval packages (task_id=%s) …", task_id)
+    template_id: str = "ergon-gdpeval-v1"
+    requires_network: bool = False
+    workspace_dir: str = "/workspace/gdpeval"
 
-        pip_result = await sandbox.commands.run(f"pip install -q {_GDP_PACKAGES}")
-        if pip_result.exit_code != 0:
-            stderr = pip_result.stderr if pip_result.stderr else "N/A"
-            raise RuntimeError(
-                f"Failed to install GDPEval packages ({_GDP_PACKAGES}) "
-                f"for task_id={task_id}. "
-                f"exit_code={pip_result.exit_code}, stderr={stderr}"
-            )
-
-        logger.info("Successfully installed GDPEval packages (task_id=%s)", task_id)
-
-    async def _verify_setup(self, sandbox: AsyncSandbox, task_id: UUID) -> None:
-        logger.info("Verifying GDPEval package installation (task_id=%s) …", task_id)
-
-        verify_code = (
-            "import sys\n"
-            "packages = ['pdfplumber', 'PyPDF2', 'reportlab']\n"
-            "missing = []\n"
-            "for pkg in packages:\n"
-            "    try:\n"
-            "        __import__(pkg)\n"
-            "    except ImportError:\n"
-            "        missing.append(pkg)\n"
-            "if missing:\n"
-            "    print(f'MISSING: {', '.join(missing)}', file=sys.stderr)\n"
-            "    sys.exit(1)\n"
-            "print('All GDPEval packages verified successfully')\n"
+    async def provision(self) -> None:
+        """Provision a fresh GDPEval sandbox via GDPEvalSandboxManager."""
+        # TODO(PR 11): rewrite to call the E2B SDK directly using
+        # ``self.template_id`` and absorb
+        # ``GDPEvalSandboxManager._install_dependencies`` into this
+        # method.  The manager-mediated path is the v1 bridge — once
+        # PR 11 deletes ``GDPEvalSandboxManager``, this body produces
+        # an E2B ``AsyncSandbox`` itself and wraps it in
+        # ``_DirectSandboxRuntime``.
+        manager = GDPEvalSandboxManager()
+        sandbox_key = uuid4()
+        run_id = uuid4()
+        await manager.create(
+            sandbox_key,
+            run_id,
+            envs=self.env if self.env else None,
         )
-
-        result = await sandbox.run_code(verify_code, language="python", timeout=10)
-
-        if result.error is not None:
-            stderr_text = "N/A"
-            if result.logs and result.logs.stderr:
-                parts = list(result.logs.stderr)
-                stderr_text = "\n".join(parts) if parts else "N/A"
+        live_sandbox = manager.get_sandbox(sandbox_key)
+        if live_sandbox is None:
             raise RuntimeError(
-                f"GDPEval package verification failed for task_id={task_id}. "
-                f"error={result.error}, stderr={stderr_text}"
+                f"GDPEvalSandboxManager.create returned but no sandbox is "
+                f"registered for sandbox_key={sandbox_key}"
             )
+        runtime = _ManagerBackedSandboxRuntime(
+            manager=manager,
+            sandbox=cast("_E2BSandboxHandle", live_sandbox),
+            sandbox_key=sandbox_key,
+        )
+        object.__setattr__(self, "_runtime", runtime)
 
-        logger.info("GDPEval package verification passed (task_id=%s)", task_id)
+    async def _bind_runtime(self, sandbox_id: str) -> None:
+        """Reconnect to an existing E2B sandbox by id (eval-worker path)."""
+        # TODO(PR 11): drop the ``GDPEvalSandboxManager()`` indirection
+        # and call ``e2b.AsyncSandbox.connect(sandbox_id)`` (or
+        # equivalent SDK entry point) directly.  The manager is only
+        # used here to share the reconnect codepath with the v1 system.
+        manager = GDPEvalSandboxManager()
+        live_sandbox = await manager.reconnect(sandbox_id)
+        runtime = _DirectSandboxRuntime(sandbox=cast("_E2BSandboxHandle", live_sandbox))
+        object.__setattr__(self, "_runtime", runtime)

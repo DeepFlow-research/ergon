@@ -101,8 +101,20 @@ BUDGET = SuppressionCounts(
     # = ""` field — the criterion's __init__ shim populates it from
     # `rubric.criterion` when omitted, but the JSON round-trip path
     # validates the bare default first.
-    slopcop_ignore=254,
-    noqa=6,
+    # PR 10c (GDPEval vertical migration): +5 slopcop_ignore, +1 noqa.
+    # New `benchmarks/gdpeval/_tools.py` mirrors PR 10a/10b exactly —
+    # 2×`no-typing-any` on the `sandbox`/`task` tool-builder kwargs and
+    # 2×`no-broad-except` on the tool functions' catch-all (they must
+    # return structured error responses rather than propagate). The new
+    # `benchmarks/gdpeval/toolkit.py` `tools()` method adds one more
+    # `no-typing-any` (same kwargs reason). `benchmark.py`'s metadata
+    # kwarg is typed `Mapping[str, Any]` matching the SWE-Bench /
+    # ResearchRubrics constructor surface — but net total includes a
+    # corresponding reduction in `worker_factory.py` (deleted) so the
+    # arithmetic balances at +5. `noqa: C901` on `build_tools` is the
+    # same structural-complexity exemption as the prior two verticals.
+    slopcop_ignore=259,
+    noqa=7,
     type_ignore=62,
 )
 
