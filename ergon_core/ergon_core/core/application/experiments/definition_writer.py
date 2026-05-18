@@ -15,8 +15,10 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionEvaluator,
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
+    ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionTaskDependency,
     ExperimentDefinitionTaskEvaluator,
+    ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.shared.json_types import JsonObject
@@ -94,6 +96,50 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
                 child.parent_task_id = parent.id
 
     task_rows = list(task_rows_by_key.values())
+
+    worker_rows_by_key: dict[str, ExperimentDefinitionWorker] = {}
+    worker_snapshot_by_key: dict[str, JsonObject] = {}
+    task_assignment_rows: list[ExperimentDefinitionTaskAssignment] = []
+    for instance_key, tasks in instances_map.items():
+        for task in tasks:
+            task_id = task_rows_by_key[(instance_key, task.task_slug)].id
+            if task_id is None:
+                raise ValueError(
+                    f"Task {task.task_slug!r} has no assigned ID for worker binding"
+                )
+            worker = task.worker
+            binding_key = worker.type_slug
+            snapshot = worker.model_dump(mode="json")
+            prior_snapshot = worker_snapshot_by_key.get(binding_key)
+            if prior_snapshot is not None and prior_snapshot != snapshot:
+                raise ValueError(
+                    f"Duplicate worker binding {binding_key!r} has conflicting snapshots"
+                )
+            worker_snapshot_by_key[binding_key] = snapshot
+            if binding_key not in worker_rows_by_key:
+                if worker.model is None:
+                    raise ValueError(
+                        f"Worker {binding_key!r} on task {task.task_slug!r} has no model"
+                    )
+                worker_rows_by_key[binding_key] = ExperimentDefinitionWorker(
+                    id=uuid4(),
+                    experiment_definition_id=definition_id,
+                    binding_key=binding_key,
+                    worker_type=worker.type_slug,
+                    model_target=worker.model,
+                    snapshot_json=snapshot,
+                    created_at=now,
+                )
+            task_assignment_rows.append(
+                ExperimentDefinitionTaskAssignment(
+                    id=uuid4(),
+                    experiment_definition_id=definition_id,
+                    task_id=task_id,
+                    worker_binding_key=binding_key,
+                    assignment_type="initial",
+                    created_at=now,
+                )
+            )
 
     evaluator_rows_by_key: dict[str, ExperimentDefinitionEvaluator] = {}
     evaluator_snapshot_by_key: dict[str, JsonObject] = {}
@@ -173,14 +219,18 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
         | ExperimentDefinitionEvaluator
         | ExperimentDefinitionInstance
         | ExperimentDefinitionTask
+        | ExperimentDefinitionTaskAssignment
         | ExperimentDefinitionTaskDependency
         | ExperimentDefinitionTaskEvaluator
+        | ExperimentDefinitionWorker
     )
     all_rows: list[DefinitionRow] = [
         definition_row,
+        *worker_rows_by_key.values(),
         *evaluator_rows_by_key.values(),
         *instance_rows,
         *task_rows,
+        *task_assignment_rows,
         *dependency_rows,
         *task_evaluator_rows,
     ]

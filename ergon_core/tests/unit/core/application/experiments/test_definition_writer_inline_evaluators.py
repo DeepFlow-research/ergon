@@ -12,7 +12,9 @@ from ergon_core.core.application.experiments import definition_writer as module
 from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionEvaluator,
+    ExperimentDefinitionTaskAssignment,
     ExperimentDefinitionTaskEvaluator,
+    ExperimentDefinitionWorker,
 )
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 
@@ -35,7 +37,7 @@ class _InlineBenchmark(Benchmark):
                     task_slug="root",
                     instance_key="sample-1",
                     description="root task",
-                    worker=EchoWorker(name="worker", model=None),
+                    worker=EchoWorker(name="worker", model="echo-model"),
                     sandbox=EchoSandbox(),
                     evaluators=self._evaluators,
                     evaluator_binding_keys=(),
@@ -65,12 +67,18 @@ def test_persist_benchmark_writes_definition_rows_for_inline_evaluators(
 
     evaluators = session.exec(select(ExperimentDefinitionEvaluator)).all()
     bindings = session.exec(select(ExperimentDefinitionTaskEvaluator)).all()
+    workers = session.exec(select(ExperimentDefinitionWorker)).all()
+    assignments = session.exec(select(ExperimentDefinitionTaskAssignment)).all()
 
     assert [(row.binding_key, row.evaluator_type) for row in evaluators] == [("judge", "rubric")]
     assert evaluators[0].experiment_definition_id == handle.definition_id
     assert evaluators[0].snapshot_json["name"] == "judge"
     assert evaluators[0].snapshot_json["_type"].endswith(":Rubric")
     assert [row.evaluator_binding_key for row in bindings] == ["judge"]
+    assert [(row.binding_key, row.worker_type, row.model_target) for row in workers] == [
+        ("echo", "echo", "echo-model")
+    ]
+    assert [row.worker_binding_key for row in assignments] == ["echo"]
 
 
 def test_persist_benchmark_rejects_duplicate_inline_evaluator_names(

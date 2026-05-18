@@ -33,6 +33,8 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
     ExperimentDefinitionTask,
+    ExperimentDefinitionTaskAssignment,
+    ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
@@ -182,7 +184,7 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
                         task_slug="root",
                         instance_key="sample-1",
                         description="root task",
-                        worker=EchoWorker(name="echo", model=None),
+                        worker=EchoWorker(name="echo", model="echo-model"),
                         sandbox=EchoSandbox(),
                     ),
                 )
@@ -219,6 +221,13 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     instances = session.exec(select(ExperimentDefinitionInstance)).all()
     assert len(instances) == 1
     assert instances[0].experiment_definition_id == handle.definition_id
+
+    workers = session.exec(select(ExperimentDefinitionWorker)).all()
+    assert [(row.binding_key, row.worker_type, row.model_target) for row in workers] == [
+        ("echo", "echo", "echo-model")
+    ]
+    assignments = session.exec(select(ExperimentDefinitionTaskAssignment)).all()
+    assert [row.worker_binding_key for row in assignments] == ["echo"]
 
     # PR 7 invariant: persist_benchmark must NOT write to the legacy
     # BenchmarkDefinitionRecord table at all.
