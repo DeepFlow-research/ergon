@@ -104,9 +104,7 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
         for task in tasks:
             task_id = task_rows_by_key[(instance_key, task.task_slug)].id
             if task_id is None:
-                raise ValueError(
-                    f"Task {task.task_slug!r} has no assigned ID for worker binding"
-                )
+                raise ValueError(f"Task {task.task_slug!r} has no assigned ID for worker binding")
             worker = task.worker
             binding_key = worker.type_slug
             snapshot = worker.model_dump(mode="json")
