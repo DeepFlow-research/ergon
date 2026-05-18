@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import resolve_template
+from ergon_builtins.benchmarks.swebench_verified.sandbox_template.utils import resolve_template
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )

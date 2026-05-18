@@ -80,9 +80,18 @@ BUDGET = SuppressionCounts(
     # that overrode it; net change is +2 across all touched files.
     # PR 10 working-tree TODO sweep: +1 (one WIP TODO note appended to a
     # line that already had a slopcop ignore).
-    slopcop_ignore=245,
-    noqa=4,
-    type_ignore=64,
+    # PR 10a (SWEBench vertical migration): +4 slopcop_ignore covering the
+    # new SWEBenchToolkit/_tools.py + _legacy_workers.py modules — each
+    # carries `no-typing-any` on the sandbox/task tool-builder kwargs and
+    # `no-broad-except` on the catch-all in `str_replace_editor` (tool
+    # functions must return error responses, not propagate). +2 noqa: C901
+    # on the closure-heavy tool builders (`build_tools` and
+    # `_legacy_swebench_tools`) — structural complexity, same shape as
+    # PR 6's MiniF2F `build_tools` noqa. -2 type_ignore is the implementer's
+    # net cleanup elsewhere in the SWEBench migration.
+    slopcop_ignore=249,
+    noqa=6,
+    type_ignore=62,
 )
 
 _SLOPCOP_IGNORE = re.compile(r"\bslopcop:\s*ignore\b")
