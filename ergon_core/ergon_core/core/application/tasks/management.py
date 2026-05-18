@@ -171,7 +171,7 @@ class TaskManagementService:
             await self._dispatch_task_ready(
                 run_id=dispatch[0],
                 definition_id=dispatch[1],
-                node_id=dispatch[2],
+                task_id=dispatch[2],
             )
 
         return SpawnedTaskHandle(task_id=task_id)
@@ -438,7 +438,7 @@ class TaskManagementService:
         await self._dispatch_task_ready(
             run_id=command.run_id,
             definition_id=definition_id,
-            node_id=command.task_id,
+            task_id=command.task_id,
         )
 
         logger.info(
@@ -722,19 +722,19 @@ class TaskManagementService:
         *,
         run_id: UUID,
         definition_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> None:
         """Fire task/ready Inngest event (after commit)."""
         event = TaskReadyEvent(
             run_id=run_id,
             definition_id=definition_id,
-            task_id=node_id,
+            task_id=task_id,
         )
         if self._task_ready_dispatcher is not None:
-            await self._task_ready_dispatcher(run_id, definition_id, node_id)
+            await self._task_ready_dispatcher(run_id, definition_id, task_id)
             logger.info(
-                "dispatch_task_ready: fired custom task/ready dispatcher for node %s",
-                node_id,
+                "dispatch_task_ready: fired custom task/ready dispatcher for task %s",
+                task_id,
             )
             return
         inngest_client.send_sync(
@@ -744,6 +744,6 @@ class TaskManagementService:
             )
         )
         logger.info(
-            "dispatch_task_ready: fired task/ready for node %s",
-            node_id,
+            "dispatch_task_ready: fired task/ready for task %s",
+            task_id,
         )

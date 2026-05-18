@@ -135,7 +135,7 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
         async def send_event(self, step_id: str, event: object) -> None:
             sent.append((step_id, event))
 
-    node_id = uuid4()
+    task_id = uuid4()
     run_id = uuid4()
     definition_id = uuid4()
 
@@ -147,14 +147,14 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     service = module._StepAwareTaskManagementService(SimpleNamespace(step=_Step()))
     await service._dispatch_collected_ready_events(
         "plan-subtasks-test",
-        [module._ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=node_id)],
+        [module._ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=task_id)],
     )
 
     assert len(sent) == 1
     step_id, event = sent[0]
-    assert step_id == f"plan-subtasks-test-dispatch-task-ready-{node_id}"
+    assert step_id == f"plan-subtasks-test-dispatch-task-ready-{task_id}"
     payload = TaskReadyEvent.model_validate(event.data)
     assert event.name == TaskReadyEvent.name
     assert payload.run_id == run_id
     assert payload.definition_id == definition_id
-    assert payload.task_id == node_id
+    assert payload.task_id == task_id
