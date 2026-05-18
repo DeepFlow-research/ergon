@@ -49,13 +49,13 @@ def _build_task_map(
     task_map: dict[str, RunTaskDto] = {}
 
     for node in nodes:
-        nid = str(node.id)
+        nid = str(node.task_id)
         worker = (
             worker_by_binding.get(node.assigned_worker_slug)
             if node.assigned_worker_slug is not None
             else None
         )
-        started_at, completed_at = task_timestamps.get(node.id, (None, None))
+        started_at, completed_at = task_timestamps.get(node.task_id, (None, None))
         task_map[nid] = RunTaskDto(
             id=nid,
             name=node.task_slug,
@@ -107,11 +107,9 @@ def _task_keyed_executions(
     by_task: dict[str, list[RunExecutionAttemptDto]] = defaultdict(list)
     for ex in sorted(
         executions,
-        key=lambda e: ("" if e.node_id is None else str(e.node_id), e.attempt_number),
+        key=lambda e: (str(e.task_id), e.attempt_number),
     ):
-        if ex.node_id is None:
-            continue
-        tid = str(ex.node_id)
+        tid = str(ex.task_id)
         error_msg: str | None = None
         if ex.error_json:
             message = ex.error_json.get("message")
@@ -182,12 +180,7 @@ def _task_keyed_evaluations(
 ) -> dict[str, RunTaskEvaluationDto]:
     result: dict[str, RunTaskEvaluationDto] = {}
     for ev in evaluations:
-        node_id = ev.node_id
-        if node_id is None:
-            # Evaluation rows without runtime node identity cannot be
-            # truthfully rendered in a task workspace.
-            continue
-        tid = str(node_id)
+        tid = str(ev.task_id)
         summary = ev.parsed_summary()
 
         criterion_results = [
@@ -336,8 +329,7 @@ def _task_timestamps(
     result: dict[UUID, tuple[datetime | None, datetime | None]] = {}
     by_task: dict[UUID, list[RunTaskExecution]] = defaultdict(list)
     for execution in executions:
-        if execution.node_id is not None:
-            by_task[execution.node_id].append(execution)
+        by_task[execution.task_id].append(execution)
 
     for task_id, execs in by_task.items():
         started = min(

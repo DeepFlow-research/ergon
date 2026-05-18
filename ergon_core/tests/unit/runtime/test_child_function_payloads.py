@@ -54,11 +54,11 @@ def test_worker_execute_request_requires_static_or_dynamic_identity() -> None:
 
 
 def test_worker_execute_request_allows_dynamic_worker_without_model_target() -> None:
+    task_id = uuid4()
     request = WorkerExecuteRequest(
         run_id=uuid4(),
         definition_id=uuid4(),
-        task_id=None,
-        node_id=uuid4(),
+        task_id=task_id,
         execution_id=uuid4(),
         sandbox_id="sbx",
         task_slug="task",
@@ -70,6 +70,7 @@ def test_worker_execute_request_allows_dynamic_worker_without_model_target() -> 
     )
 
     assert request.model_target is None
+    assert request.task_id == task_id
 
 
 def test_sandbox_and_persist_outputs_require_task_id() -> None:

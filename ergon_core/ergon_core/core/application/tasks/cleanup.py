@@ -36,7 +36,7 @@ class TaskCleanupService:
         if execution_id is None:
             return CleanupResult(
                 run_id=run_id,
-                node_id=node_id,
+                task_id=node_id,
                 execution_id=None,
                 sandbox_released=False,
                 execution_row_updated=False,
@@ -55,7 +55,7 @@ class TaskCleanupService:
         )
         return CleanupResult(
             run_id=run_id,
-            node_id=node_id,
+            task_id=node_id,
             execution_id=execution_id,
             sandbox_released=sandbox_released,
             execution_row_updated=execution_updated,

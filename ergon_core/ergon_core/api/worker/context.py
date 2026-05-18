@@ -27,13 +27,8 @@ class WorkerContext(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     run_id: UUID
-    task_id: UUID | None = Field(
-        default=None,
-        description=(
-            "RunGraphNode.task_id — canonical task identity. Optional "
-            "in PR 9 during the column rename transition; PR 11 makes "
-            "this required and removes node_id."
-        ),
+    task_id: UUID = Field(
+        description="RunGraphNode.task_id — canonical runtime task identity.",
     )
     definition_id: UUID | None = Field(
         default=None,
@@ -46,13 +41,6 @@ class WorkerContext(BaseModel):
     )
     execution_id: UUID
     sandbox_id: str
-    node_id: UUID | None = Field(
-        default=None,
-        description=(
-            "RunGraphNode.id — bridge field during the schema "
-            "transition. PR 11 removes this in favour of task_id."
-        ),
-    )
     metadata: dict[str, Any] = Field(default_factory=dict)  # slopcop: ignore[no-typing-any]
 
     # Injected services. These are required construction dependencies
@@ -100,11 +88,10 @@ class WorkerContext(BaseModel):
         cls,
         *,
         run_id: UUID,
-        task_id: UUID | None,
+        task_id: UUID,
         execution_id: UUID,
         definition_id: UUID | None,
         sandbox_id: str,
-        node_id: UUID | None,
         task_mgmt: Any,  # TaskManagementService — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
         task_inspect: Any,  # TaskInspectionService — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
         resource_repo: Any,  # RunResourceRepository — slopcop: ignore[no-typing-any] # TODO: find some way to strongly type this
@@ -123,7 +110,6 @@ class WorkerContext(BaseModel):
             execution_id=execution_id,
             definition_id=definition_id,
             sandbox_id=sandbox_id,
-            node_id=node_id,
             task_mgmt=task_mgmt,
             task_inspect=task_inspect,
             resource_repo=resource_repo,
@@ -141,12 +127,6 @@ class WorkerContext(BaseModel):
         ] = (),  # todo: consider if this should be required and not have a default
     ) -> SpawnedTaskHandle:
         """Spawn a child task under this context's task_id."""
-
-        if self.task_id is None:
-            raise RuntimeError(
-                "WorkerContext.spawn_task called from a context without "
-                "task_id; this is a v2-runtime bug."
-            )
 
         return await self.task_mgmt.spawn_dynamic_task(
             run_id=self.run_id,
@@ -172,7 +152,7 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             await self.task_mgmt.cancel_task(
                 session,
-                CancelTaskCommand(run_id=RunId(self.run_id), node_id=NodeId(task_id)),
+                CancelTaskCommand(run_id=RunId(self.run_id), task_id=NodeId(task_id)),
             )
 
     async def refine_task(self, task_id: UUID, *, description: str) -> None:
@@ -186,7 +166,7 @@ class WorkerContext(BaseModel):
                 session,
                 RefineTaskCommand(
                     run_id=RunId(self.run_id),
-                    node_id=NodeId(task_id),
+                    task_id=NodeId(task_id),
                     new_description=description,
                 ),
             )
@@ -200,15 +180,13 @@ class WorkerContext(BaseModel):
         with self.session_factory() as session:
             result = await self.task_mgmt.restart_task(
                 session,
-                RestartTaskCommand(run_id=RunId(self.run_id), node_id=NodeId(task_id)),
+                RestartTaskCommand(run_id=RunId(self.run_id), task_id=NodeId(task_id)),
             )
-        return SpawnedTaskHandle(task_id=result.node_id)
+        return SpawnedTaskHandle(task_id=result.task_id)
 
     async def subtasks(self) -> tuple[SubtaskInfo, ...]:
         """Return the direct children of this context's task_id."""
 
-        if self.task_id is None:
-            return ()
         with self.session_factory() as session:
             rows = self.task_inspect.list_subtasks(
                 session,
@@ -220,8 +198,6 @@ class WorkerContext(BaseModel):
     async def descendants(self) -> tuple[SubtaskInfo, ...]:
         """Return the transitive descendants of this context's task_id."""
 
-        if self.task_id is None:
-            return ()
         descendant_ids = await self.task_inspect.descendant_ids(
             run_id=self.run_id,
             root_task_id=self.task_id,
@@ -266,7 +242,7 @@ class WorkerContext(BaseModel):
             rows = self.resource_repo.list_for_run(
                 session,
                 run_id=self.run_id,
-                node_id=task_id,
+                task_id=task_id,
                 task_execution_id=execution_id,
                 kind=kind,
                 name=name,

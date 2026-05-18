@@ -32,13 +32,13 @@ def session_factory():
 
 def _run(
     *,
-    experiment_id: object,
+    definition_id: object,
     workflow_definition_id: object,
     created_at: datetime | None = None,
 ) -> RunRecord:
     return RunRecord(
         id=uuid4(),
-        experiment_id=experiment_id,
+        definition_id=definition_id,
         workflow_definition_id=workflow_definition_id,
         benchmark_type="ci-benchmark",
         instance_key="k",
@@ -54,12 +54,12 @@ def test_latest_run_for_definition_returns_most_recent(monkeypatch, session_fact
 
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     older = _run(
-        experiment_id=experiment_id,
+        definition_id=definition_id,
         workflow_definition_id=definition_id,
         created_at=now - timedelta(hours=1),
     )
     newest = _run(
-        experiment_id=experiment_id,
+        definition_id=definition_id,
         workflow_definition_id=definition_id,
         created_at=now,
     )
@@ -100,9 +100,9 @@ def test_latest_run_for_definition_ignores_other_definitions(monkeypatch, sessio
     experiment_id = uuid4()
 
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
-    run_a = _run(experiment_id=experiment_id, workflow_definition_id=def_a, created_at=now)
+    run_a = _run(definition_id=def_a, workflow_definition_id=def_a, created_at=now)
     run_b = _run(
-        experiment_id=experiment_id,
+        definition_id=def_b,
         workflow_definition_id=def_b,
         created_at=now + timedelta(hours=1),
     )

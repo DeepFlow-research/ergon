@@ -193,7 +193,7 @@ class DashboardEmitter:
         try:
             evt = DashboardTaskStatusChangedEvent(
                 run_id=event.run_id,
-                task_id=event.node_id,
+                task_id=event.task_id,
                 task_name="",
                 parent_task_id=None,
                 old_status=None,
@@ -387,11 +387,11 @@ class DashboardEmitter:
     # Context events (repository listener)
     # ------------------------------------------------------------------
 
-    def register_execution(self, execution_id: UUID, task_node_id: UUID) -> None:
-        """Register execution_id → task graph node_id mapping.
+    def register_execution(self, execution_id: UUID, task_id: UUID) -> None:
+        """Register execution_id → task_id mapping.
         Called from worker_execute.py before persist_turn so that on_context_event
-        can resolve task_node_id without a DB lookup."""
-        self._execution_task_map[execution_id] = task_node_id
+        can resolve task_id without a DB lookup."""
+        self._execution_task_map[execution_id] = task_id
 
     async def on_context_event(self, event: "RunContextEvent") -> None:
         """Called by ContextEventService after each event is committed."""

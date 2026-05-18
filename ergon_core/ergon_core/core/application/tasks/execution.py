@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 async def _emit_task_status(
     run_id: UUID,
-    node_id: UUID | None,
+    task_id: UUID | None,
     task_slug: str,
     new_status: str,
     old_status: str | None = None,
@@ -42,12 +42,12 @@ async def _emit_task_status(
     worker_slug: str | None = None,
 ) -> None:
     """Emit dashboard/task.status_changed. All arguments are plain primitives."""
-    if node_id is None:
+    if task_id is None:
         return
     try:
         await get_dashboard_emitter().task_status_changed(
             run_id=run_id,
-            task_id=node_id,
+            task_id=task_id,
             task_name=task_slug,
             new_status=new_status,
             old_status=old_status,
@@ -75,16 +75,10 @@ class TaskExecutionService:
     async def _prepare_run_node(
         self, command: PrepareTaskExecutionCommand
     ) -> PreparedTaskExecution:
-        lookup_id = command.node_id or command.task_id
-        if lookup_id is None:
-            raise ConfigurationError(
-                "Task preparation requires node_id or task_id",
-                run_id=command.run_id,
-                task_id=None,
-            )
+        lookup_id = command.task_id
         with get_session() as session:
             view = await self._graph_repo.node(session, run_id=command.run_id, task_id=lookup_id)
-            node = session.get(RunGraphNode, view.task_id)
+            node = session.get(RunGraphNode, (command.run_id, view.task_id))
             if node is None:
                 raise ConfigurationError(
                     f"RunGraphNode {view.task_id} not found",
@@ -109,7 +103,6 @@ class TaskExecutionService:
             execution = RunTaskExecution(
                 run_id=command.run_id,
                 task_id=view.task_id,
-                node_id=view.task_id,
                 definition_worker_id=definition_worker_id,
                 attempt_number=self._task_execution_repo.next_attempt_for_node(
                     session, command.run_id, view.task_id
@@ -141,7 +134,7 @@ class TaskExecutionService:
 
         await _emit_task_status(
             run_id=command.run_id,
-            node_id=view.task_id,
+            task_id=view.task_id,
             task_slug=view.task.task_slug,
             new_status=graph_status.RUNNING,
             old_status=None,
@@ -214,7 +207,7 @@ class TaskExecutionService:
 
             await _emit_task_status(
                 run_id=execution.run_id,
-                node_id=execution.task_id,
+                task_id=execution.task_id,
                 task_slug=str(execution.task_id or ""),
                 new_status=graph_status.COMPLETED,
                 old_status=graph_status.RUNNING,
@@ -245,7 +238,7 @@ class TaskExecutionService:
 
             await _emit_task_status(
                 run_id=command.run_id,
-                node_id=execution.task_id,
+                task_id=execution.task_id,
                 task_slug=str(execution.task_id or ""),
                 new_status=graph_status.FAILED,
                 old_status=graph_status.RUNNING,

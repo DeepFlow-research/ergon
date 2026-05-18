@@ -85,11 +85,11 @@ def _build_task_tree_for_run(
         w.binding_key: w for w in worker_rows
     }
 
-    # children_by_parent: parent_task_id -> [child_node_id]
+    # children_by_parent: parent_task_id -> [child_task_id]
     children_by_parent: dict[UUID | None, list[UUID]] = {}
-    node_by_id: dict[UUID, RunGraphNode] = {n.id: n for n in node_rows}
+    node_by_id: dict[UUID, RunGraphNode] = {n.task_id: n for n in node_rows}
     for n in node_rows:
-        children_by_parent.setdefault(n.parent_task_id, []).append(n.id)
+        children_by_parent.setdefault(n.parent_task_id, []).append(n.task_id)
 
     # depends_on_by_target: target_task_id -> [source_task_id]
     # Edges are stored as source=dependency, target=dependent task.
@@ -101,7 +101,7 @@ def _build_task_tree_for_run(
         node = node_by_id[node_id]
         child_ids = children_by_parent.get(node_id, [])
         return TaskTreeNode(
-            id=str(node.id),
+            id=str(node.task_id),
             name=node.task_slug,
             description=node.description,
             status=node.status,
@@ -158,7 +158,6 @@ async def run_start_workflow_job(payload: WorkflowStartedEvent) -> WorkflowStart
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
-                node_id=td.node_id,
             ).model_dump(mode="json"),
         )
         for td in initialized.initial_ready_tasks

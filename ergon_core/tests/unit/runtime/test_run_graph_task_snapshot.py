@@ -108,7 +108,7 @@ def _seed_run(
     session.add(
         RunRecord(
             id=run_id,
-            experiment_id=experiment_id,
+            definition_id=experiment_id,
             workflow_definition_id=definition_id,
             benchmark_type="test",
             instance_key="sample-1",
@@ -189,7 +189,7 @@ async def test_graph_repo_node_inflates_task_from_run_tier() -> None:
     row = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).first()
     assert row is not None
 
-    canonical_task_id = row.id
+    canonical_task_id = row.task_id
     view = await repo.node(session, run_id=run_id, task_id=canonical_task_id)
 
     assert view.task.task_slug == "solve"
@@ -251,7 +251,33 @@ async def test_add_node_can_write_dynamic_task_json() -> None:
         meta=MutationMeta(actor="test", reason="dynamic"),
     )
 
-    row = session.get(RunGraphNode, node_dto.id)
+    row = session.get(RunGraphNode, (run_id, node_dto.task_id))
     assert row is not None
     assert row.task_json == payload
     assert row.is_dynamic is True
+
+
+def test_initialize_from_definition_can_seed_same_task_ids_for_multiple_runs() -> None:
+    session = _session()
+    run_a = uuid4()
+    run_b = uuid4()
+    experiment_id, definition_id, definition_task_id = _seed_definition(
+        session, task_slug="solve", payload={"problem": "p"}
+    )
+    _seed_run(session, experiment_id=experiment_id, definition_id=definition_id, run_id=run_a)
+    _seed_run(session, experiment_id=experiment_id, definition_id=definition_id, run_id=run_b)
+
+    repo = WorkflowGraphRepository()
+    for run_id in (run_a, run_b):
+        repo.initialize_from_definition(
+            session,
+            run_id=run_id,
+            definition_id=definition_id,
+            initial_node_status="pending",
+            initial_edge_status="pending",
+            task_payload_model=_EmptyPayload,
+            meta=MutationMeta(actor="test", reason="multi-run"),
+        )
+
+    assert session.get(RunGraphNode, (run_a, definition_task_id)) is not None
+    assert session.get(RunGraphNode, (run_b, definition_task_id)) is not None

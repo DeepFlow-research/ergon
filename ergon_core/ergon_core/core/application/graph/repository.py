@@ -158,7 +158,7 @@ class WorkflowGraphRepository:
             def_to_node[task.id] = task.id
             node_rows.append(
                 RunGraphNode(
-                    id=task.id,
+                    task_id=task.id,
                     run_id=run_id,
                     instance_key=instance_key_by_id[task.instance_id],
                     task_slug=task.task_slug,
@@ -203,7 +203,7 @@ class WorkflowGraphRepository:
                     sequence=seq,
                     mutation_type="node.added",
                     target_type="node",
-                    target_id=node.id,
+                    target_id=node.task_id,
                     actor=meta.actor,
                     old_value=None,
                     new_value=_node_snapshot(node).model_dump(mode="json"),
@@ -219,7 +219,7 @@ class WorkflowGraphRepository:
                     RunGraphAnnotation(
                         run_id=run_id,
                         target_type="node",
-                        target_id=node.id,
+                        target_id=node.task_id,
                         namespace="payload",
                         sequence=seq,
                         payload=payload,
@@ -232,7 +232,7 @@ class WorkflowGraphRepository:
                         sequence=seq,
                         mutation_type="annotation.set",
                         target_type="node",
-                        target_id=node.id,
+                        target_id=node.task_id,
                         actor=meta.actor,
                         old_value=None,
                         new_value=AnnotationSetMutation(
@@ -294,14 +294,14 @@ class WorkflowGraphRepository:
         this signature; PR 5 actually awaits in the body once Sandbox
         reconstruction lands).
 
-        PR 11 makes ``RunGraphNode.id`` the task identity for both
+        ``RunGraphNode.task_id`` is the task identity for both
         definition-seeded and dynamic nodes.
         """
 
         row = session.exec(
             select(RunGraphNode).where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.id == task_id,
+                RunGraphNode.task_id == task_id,
             )
         ).first()
         if row is None:
@@ -309,12 +309,12 @@ class WorkflowGraphRepository:
 
         task = await Task.from_definition(
             row.task_json,
-            task_id=row.id,
+            task_id=row.task_id,
             sandbox_id=sandbox_id,
         )
         return RunGraphNodeView(
             run_id=row.run_id,
-            task_id=row.id,
+            task_id=row.task_id,
             parent_task_id=row.parent_task_id,
             status=row.status,
             task=task,
@@ -370,7 +370,7 @@ class WorkflowGraphRepository:
             run_id,
             mutation_type="node.added",
             target_type="node",
-            target_id=node.id,
+            target_id=node.task_id,
             meta=meta,
             old_value=None,
             new_value=_node_snapshot(node),
@@ -583,26 +583,22 @@ class WorkflowGraphRepository:
         root_task_id via parent_task_id, NOT including the root itself.
         """
 
-        # During the transition the canonical identity column is `id`
-        # (with `parent_task_id` pointing at parent.id). PR 11 renames to
-        # `task_id` / `parent_task_id`; update the column references in
-        # the same commit that does the rename.
         cte_sql = text(
             """
             WITH RECURSIVE descendants AS (
-                SELECT id, parent_task_id, run_id
+                SELECT task_id, parent_task_id, run_id
                 FROM run_graph_nodes
                 WHERE run_id = :run_id
                   AND parent_task_id = :root_task_id
 
                 UNION ALL
 
-                SELECT child.id, child.parent_task_id, child.run_id
+                SELECT child.task_id, child.parent_task_id, child.run_id
                 FROM run_graph_nodes AS child
-                JOIN descendants ON child.parent_task_id = descendants.id
+                JOIN descendants ON child.parent_task_id = descendants.task_id
                 WHERE child.run_id = :run_id
             )
-            SELECT id FROM descendants
+            SELECT task_id FROM descendants
             """
         )
         # Use session.execute (SQLAlchemy raw) rather than session.exec
@@ -619,7 +615,9 @@ class WorkflowGraphRepository:
         if not descendant_ids:
             return ()
 
-        return session.exec(select(RunGraphNode).where(RunGraphNode.id.in_(descendant_ids))).all()
+        return session.exec(
+            select(RunGraphNode).where(RunGraphNode.task_id.in_(descendant_ids))
+        ).all()
 
     # ── Internal helpers ────────────────────────────────────
 
@@ -631,7 +629,7 @@ class WorkflowGraphRepository:
     ) -> RunGraphNode:
         row = session.exec(
             select(RunGraphNode).where(
-                RunGraphNode.id == node_id,
+                RunGraphNode.task_id == node_id,
                 RunGraphNode.run_id == run_id,
             )
         ).first()
@@ -662,8 +660,8 @@ class WorkflowGraphRepository:
         node_id: UUID,
     ) -> None:
         exists = session.exec(
-            select(RunGraphNode.id).where(
-                RunGraphNode.id == node_id,
+            select(RunGraphNode.task_id).where(
+                RunGraphNode.task_id == node_id,
                 RunGraphNode.run_id == run_id,
             )
         ).first()
@@ -751,7 +749,7 @@ class WorkflowGraphRepository:
 
 def _to_node_dto(row: RunGraphNode) -> GraphNodeDto:
     return GraphNodeDto(
-        id=row.id,
+        task_id=row.task_id,
         run_id=row.run_id,
         instance_key=row.instance_key,
         task_slug=row.task_slug,

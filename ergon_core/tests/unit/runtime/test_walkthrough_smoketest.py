@@ -111,7 +111,7 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
             ),
             RunRecord(
                 id=run_id,
-                experiment_id=experiment_id,
+                definition_id=experiment_id,
                 workflow_definition_id=definition_id,
                 benchmark_type="test",
                 instance_key="sample-1",
@@ -397,7 +397,7 @@ def _seed_parent_node(session: Session, *, run_id: UUID) -> RunGraphNode:
     session.add(
         RunRecord(
             id=run_id,
-            experiment_id=uuid4(),
+            definition_id=uuid4(),
             workflow_definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
@@ -448,11 +448,10 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
     task_inspect = TaskInspectionService()
     context = WorkerContext._for_job(
         run_id=run_id,
-        task_id=parent.id,
+        task_id=parent.task_id,
         execution_id=uuid4(),
         definition_id=None,
         sandbox_id="sandbox-smoke",
-        node_id=parent.id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
         resource_repo=object(),

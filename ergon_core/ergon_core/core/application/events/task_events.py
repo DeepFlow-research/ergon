@@ -19,8 +19,7 @@ class TaskReadyEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
-    node_id: UUID | None = None
+    task_id: UUID
 
 
 class TaskStartedEvent(InngestEventContract):
@@ -30,7 +29,7 @@ class TaskStartedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
+    task_id: UUID
     execution_id: UUID
 
 
@@ -41,10 +40,9 @@ class TaskCompletedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
+    task_id: UUID
     execution_id: UUID
     sandbox_id: SandboxId
-    node_id: UUID
 
 
 class TaskFailedEvent(InngestEventContract):
@@ -54,12 +52,11 @@ class TaskFailedEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None = None
+    task_id: UUID
     execution_id: UUID
     error: str
     # ``None`` when the task failed before sandbox-setup could run.
     sandbox_id: str | None = None
-    node_id: UUID | None = None
 
 
 class WorkflowStartedEvent(InngestEventContract):
@@ -103,7 +100,7 @@ PropagationCancelCause = Literal["parent_terminal", "dep_invalidated"]
 
 
 class TaskCancelledEvent(InngestEventContract):
-    """Emitted whenever a node transitions from non-terminal into CANCELLED.
+    """Emitted whenever a task transitions from non-terminal into CANCELLED.
 
     Consumers:
       - cancel_orphan_subtasks_fn (recurse cascade to descendants)
@@ -116,7 +113,7 @@ class TaskCancelledEvent(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    node_id: UUID
+    task_id: UUID
     execution_id: UUID | None
     cause: CancelCause
 

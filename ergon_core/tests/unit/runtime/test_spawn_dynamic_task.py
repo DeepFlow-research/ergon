@@ -6,7 +6,7 @@ Verifies the dynamic-spawn write path:
   the full Task snapshot in task_json.
 - Zero rows inserted into experiment_definition_tasks.
 - Optional depends_on creates the dependency edge in run_graph_edges.
-- Returned SpawnedTaskHandle.task_id matches the inserted node's id.
+- Returned SpawnedTaskHandle.task_id matches the inserted node's task_id.
 """
 
 from types import SimpleNamespace
@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 import pytest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
+from ergon_core.core.application.jobs.worker_execute import _StepAwareTaskManagementService
 from ergon_core.core.application.tasks import management as management_module
 from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
@@ -64,7 +65,7 @@ def _seed_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
     session.add(
         RunRecord(
             id=run_id,
-            experiment_id=uuid4(),
+            definition_id=uuid4(),
             workflow_definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
@@ -126,6 +127,30 @@ def _service(session: Session, monkeypatch: pytest.MonkeyPatch) -> TaskManagemen
     return svc
 
 
+class _FakeStep:
+    def __init__(self) -> None:
+        self._run_cache: dict[str, object] = {}
+        self._sent_ids: set[str] = set()
+        self.sent_events: list[object] = []
+
+    async def run(self, step_id: str, fn, *, output_type=None):  # noqa: ANN001
+        del output_type
+        if step_id not in self._run_cache:
+            self._run_cache[step_id] = await fn()
+        return self._run_cache[step_id]
+
+    async def send_event(self, step_id: str, event: object) -> None:
+        if step_id in self._sent_ids:
+            return
+        self._sent_ids.add(step_id)
+        self.sent_events.append(event)
+
+
+class _FakeCtx:
+    def __init__(self, step: _FakeStep) -> None:
+        self.step = step
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -147,7 +172,7 @@ async def test_spawn_dynamic_task_inserts_dynamic_node_with_task_json(
     task = _make_task()
     handle = await svc.spawn_dynamic_task(
         run_id=run_id,
-        parent_task_id=parent.id,
+        parent_task_id=parent.task_id,
         task=task,
     )
 
@@ -159,7 +184,7 @@ async def test_spawn_dynamic_task_inserts_dynamic_node_with_task_json(
     ).one()
 
     assert new_node.is_dynamic is True
-    assert new_node.parent_task_id == parent.id
+    assert new_node.parent_task_id == parent.task_id
     assert new_node.level == parent.level + 1
     assert new_node.status == "pending"
 
@@ -174,7 +199,7 @@ async def test_spawn_dynamic_task_inserts_dynamic_node_with_task_json(
 
     # Returned handle points at the inserted row.
     assert isinstance(handle, SpawnedTaskHandle)
-    assert handle.task_id == new_node.id
+    assert handle.task_id == new_node.task_id
 
 
 @pytest.mark.asyncio
@@ -191,7 +216,7 @@ async def test_spawn_dynamic_task_does_not_write_definition_row(
 
     await svc.spawn_dynamic_task(
         run_id=run_id,
-        parent_task_id=parent.id,
+        parent_task_id=parent.task_id,
         task=_make_task(),
     )
 
@@ -212,14 +237,14 @@ async def test_spawn_dynamic_task_creates_dependency_edge(
 
     handle = await svc.spawn_dynamic_task(
         run_id=run_id,
-        parent_task_id=parent.id,
+        parent_task_id=parent.task_id,
         task=_make_task(),
-        depends_on=(other.id,),
+        depends_on=(other.task_id,),
     )
 
     edges = session.exec(select(RunGraphEdge).where(RunGraphEdge.run_id == run_id)).all()
     assert len(edges) == 1
-    assert edges[0].source_task_id == other.id
+    assert edges[0].source_task_id == other.task_id
     assert edges[0].target_task_id == handle.task_id
 
 
@@ -227,7 +252,7 @@ async def test_spawn_dynamic_task_creates_dependency_edge(
 async def test_spawn_dynamic_task_handle_matches_inserted_row_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """SpawnedTaskHandle.task_id is the new node's id (UUID)."""
+    """SpawnedTaskHandle.task_id is the new task's task_id (UUID)."""
     session = _make_session()
     run_id = uuid4()
     parent = _seed_parent(session, run_id=run_id)
@@ -235,12 +260,12 @@ async def test_spawn_dynamic_task_handle_matches_inserted_row_id(
 
     handle = await svc.spawn_dynamic_task(
         run_id=run_id,
-        parent_task_id=parent.id,
+        parent_task_id=parent.task_id,
         task=_make_task(),
     )
 
     inserted_ids = frozenset(
-        row.id
+        row.task_id
         for row in session.exec(
             select(RunGraphNode).where(
                 RunGraphNode.run_id == run_id,
@@ -252,3 +277,45 @@ async def test_spawn_dynamic_task_handle_matches_inserted_row_id(
     assert isinstance(handle.task_id, UUID)
     assert handle.task_id in inserted_ids
     assert inserted_ids == frozenset({handle.task_id})
+
+
+@pytest.mark.asyncio
+async def test_step_aware_spawn_dynamic_task_is_replay_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated Inngest replay returns the memoized handle without duplicating DB rows/events."""
+    session = _make_session()
+    run_id = uuid4()
+    parent = _seed_parent(session, run_id=run_id)
+    _patch = monkeypatch.setattr
+    _patch(management_module, "get_session", lambda: _SessionContext(session))
+    _patch(
+        management_module,
+        "get_dashboard_emitter",
+        lambda: SimpleNamespace(graph_mutation=AsyncMock()),
+    )
+
+    step = _FakeStep()
+    task = _make_task()
+
+    first = await _StepAwareTaskManagementService(_FakeCtx(step)).spawn_dynamic_task(
+        run_id=run_id,
+        parent_task_id=parent.task_id,
+        task=task,
+    )
+    second = await _StepAwareTaskManagementService(_FakeCtx(step)).spawn_dynamic_task(
+        run_id=run_id,
+        parent_task_id=parent.task_id,
+        task=task,
+    )
+
+    child_rows = session.exec(
+        select(RunGraphNode).where(
+            RunGraphNode.run_id == run_id,
+            RunGraphNode.parent_task_id == parent.task_id,
+            RunGraphNode.task_slug == "child",
+        )
+    ).all()
+    assert first == second
+    assert [row.task_id for row in child_rows] == [first.task_id]
+    assert len(step.sent_events) == 1

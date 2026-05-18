@@ -49,7 +49,7 @@ async def _cancel_orphans_for(
             )
             session.commit()
         return {
-            "cancelled_node_ids": [str(nid) for nid in result.cancelled_node_ids],
+            "cancelled_task_ids": [str(tid) for tid in result.cancelled_task_ids],
             "events": [e.model_dump(mode="json") for e in result.events_to_emit],
         }
 
@@ -64,7 +64,7 @@ async def _cancel_orphans_for(
 
         await ctx.step.run("emit-cancelled-events", _emit_events)
 
-    return len(scan_result["cancelled_node_ids"])
+    return len(scan_result["cancelled_task_ids"])
 
 
 async def run_block_descendants_on_failed_job(
@@ -75,7 +75,7 @@ async def run_block_descendants_on_failed_job(
     RUNNING descendants are not interrupted. Horizontal (edge-based) successor
     BLOCKED propagation is handled separately in propagation.py.
     """
-    logger.info("block-descendants-on-failed parent=%s", payload.node_id)
+    logger.info("block-descendants-on-failed parent=%s", payload.task_id)
     svc = TaskManagementService()
 
     async def _block_descendants() -> list[str]:
@@ -83,7 +83,7 @@ async def run_block_descendants_on_failed_job(
             blocked_ids = await svc.block_pending_descendants(
                 session,
                 run_id=payload.run_id,
-                parent_task_id=payload.node_id,
+                parent_task_id=payload.task_id,
                 cause="parent_failed",
             )
             session.commit()
@@ -96,11 +96,11 @@ async def run_block_descendants_on_failed_job(
 async def run_cancel_orphans_on_cancelled_job(
     ctx: inngest.Context, payload: TaskCancelledEvent
 ) -> int:
-    logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.node_id)
+    logger.info("cancel-orphans parent=%s cause=parent_terminal", payload.task_id)
     return await _cancel_orphans_for(
         ctx,
         run_id=payload.run_id,
         definition_id=payload.definition_id,
-        parent_task_id=payload.node_id,
+        parent_task_id=payload.task_id,
         cause="parent_terminal",
     )

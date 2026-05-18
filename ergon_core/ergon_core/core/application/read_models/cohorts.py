@@ -107,7 +107,7 @@ class ExperimentCohortService:
                     experiment,
                     list(
                         session.exec(
-                            select(RunRecord).where(RunRecord.experiment_id == experiment.id)
+                            select(RunRecord).where(RunRecord.definition_id == experiment.id)
                         ).all()
                     ),
                 )
@@ -130,9 +130,9 @@ class ExperimentCohortService:
         """Return the owning cohort for a run, if one exists."""
         with get_session() as session:
             run = session.get(RunRecord, run_id)
-            if run is None or run.experiment_id is None:
+            if run is None:
                 return None
-            experiment = session.get(BenchmarkDefinitionRecord, run.experiment_id)
+            experiment = session.get(BenchmarkDefinitionRecord, run.definition_id)
             return experiment.cohort_id if experiment is not None else None
 
     def update_cohort(

@@ -91,7 +91,7 @@ def make_run(session: Session, definition_id: UUID) -> RunRecord:
     session.add(experiment)
     session.flush()
     run = RunRecord(
-        experiment_id=experiment.id,
+        definition_id=experiment.id,
         workflow_definition_id=definition_id,
         benchmark_type="ci-propagation-test",
         instance_key="test",

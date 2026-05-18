@@ -67,7 +67,7 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
             session.add(
                 RunRecord(
                     id=run_id,
-                    experiment_id=experiment_id,
+                    definition_id=experiment_id,
                     workflow_definition_id=definition_id,
                     benchmark_type="ci-benchmark",
                     instance_key=instance_key,

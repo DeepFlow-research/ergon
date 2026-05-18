@@ -41,7 +41,6 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
-            node_id=payload.node_id,
         )
     )
 
@@ -52,7 +51,6 @@ async def run_propagate_task_job(payload: TaskCompletedEvent) -> TaskPropagateRe
                 run_id=payload.run_id,
                 definition_id=payload.definition_id,
                 task_id=td.task_id,
-                node_id=td.node_id,
             ).model_dump(mode="json"),
         )
         for td in propagation.ready_tasks
@@ -124,7 +122,6 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
             definition_id=payload.definition_id,
             task_id=payload.task_id,
             execution_id=payload.execution_id,
-            node_id=payload.node_id,
         )
     )
     await _terminate_failed_task_sandbox(payload.sandbox_id)

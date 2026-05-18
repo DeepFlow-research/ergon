@@ -26,7 +26,7 @@ def _experiment(status: str = "running") -> BenchmarkDefinitionRecord:
 def _run(experiment_id, status: RunStatus) -> RunRecord:
     return RunRecord(
         id=uuid4(),
-        experiment_id=experiment_id,
+        definition_id=experiment_id,
         workflow_definition_id=uuid4(),
         benchmark_type="ci-benchmark",
         instance_key=str(status),

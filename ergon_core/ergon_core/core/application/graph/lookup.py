@@ -1,4 +1,4 @@
-"""Batch-loaded run graph id lookup for propagation."""
+"""Batch-loaded run graph task lookup for propagation."""
 
 from uuid import UUID
 
@@ -7,11 +7,13 @@ from sqlmodel import Session, select
 
 
 class GraphNodeLookup:
-    """Caches node and edge ids for one run."""
+    """Caches task and edge ids for one run."""
 
     def __init__(self, session: Session, run_id: UUID) -> None:
-        node_rows = session.exec(select(RunGraphNode.id).where(RunGraphNode.run_id == run_id)).all()
-        self._nodes: dict[UUID, UUID] = {node_id: node_id for node_id in node_rows}
+        task_ids = session.exec(
+            select(RunGraphNode.task_id).where(RunGraphNode.run_id == run_id)
+        ).all()
+        self._tasks: frozenset[UUID] = frozenset(task_ids)
 
         edge_rows = session.exec(
             select(RunGraphEdge.id, RunGraphEdge.source_task_id, RunGraphEdge.target_task_id).where(
@@ -23,11 +25,11 @@ class GraphNodeLookup:
         }
 
     def node_id(self, task_id: UUID) -> UUID | None:
-        """Get the run graph node ID for a task ID."""
-        return self._nodes.get(task_id)
+        """Compatibility shim for callers still named around node lookup."""
+        return task_id if task_id in self._tasks else None
 
     def edge_id_by_nodes(self, source_task_id: UUID, target_task_id: UUID) -> UUID | None:
-        """Get edge ID by source and target node IDs."""
+        """Get edge ID by source and target task IDs."""
         return self._edges.get((source_task_id, target_task_id))
 
     def edge_id(self, source_task_id: UUID, target_task_id: UUID) -> UUID | None:

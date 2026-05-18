@@ -145,9 +145,10 @@ async def mark_task_failed_by_node(
     node_id: UUID,
     error: str,
     *,
-    execution_id: UUID | None = None,  # TODO: dead param
+    execution_id: UUID | None = None,
     graph_repo: WorkflowGraphRepository,
 ) -> None:
+    del execution_id
     await graph_repo.update_node_status(
         session,
         run_id=run_id,
@@ -174,7 +175,7 @@ async def _block_successors_bfs(
     queue = list(seed_node_ids)
     while queue:
         target_id = queue.pop()
-        target_node = session.get(RunGraphNode, target_id)
+        target_node = session.get(RunGraphNode, (run_id, target_id))
         if target_node is None:
             continue
         if target_node.status == graph_status.RUNNING:
@@ -228,10 +229,10 @@ def _dependency_free_children(session: Session, run_id: UUID, node_id: UUID) -> 
         has_incoming_edges = session.exec(
             select(RunGraphEdge.id)
             .where(RunGraphEdge.run_id == run_id)
-            .where(RunGraphEdge.target_task_id == child.id)
+            .where(RunGraphEdge.target_task_id == child.task_id)
         ).first()
         if has_incoming_edges is None:
-            child_ids.add(child.id)
+            child_ids.add(child.task_id)
     return child_ids
 
 
@@ -283,7 +284,7 @@ async def on_task_completed_or_failed(
         return newly_ready
 
     for candidate_id in candidate_node_ids:
-        candidate_node = session.get(RunGraphNode, candidate_id)
+        candidate_node = session.get(RunGraphNode, (run_id, candidate_id))
         if candidate_node is None:
             continue
         if (
@@ -309,7 +310,9 @@ async def on_task_completed_or_failed(
             ).all()
         )
 
-        source_nodes = [session.get(RunGraphNode, edge.source_task_id) for edge in incoming]
+        source_nodes = [
+            session.get(RunGraphNode, (run_id, edge.source_task_id)) for edge in incoming
+        ]
         if all(node is not None and node.status == graph_status.COMPLETED for node in source_nodes):
             reason = (
                 f"all dependencies satisfied after {node_id}"

@@ -137,7 +137,11 @@ class RunRecord(SQLModel, table=True):
     __tablename__ = "runs"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    experiment_id: UUID = Field(foreign_key="experiments.id", index=True)
+    definition_id: UUID = Field(
+        foreign_key="experiment_definitions.id",
+        index=True,
+        description="Immutable ExperimentDefinition provenance for this run.",
+    )
     workflow_definition_id: UUID = Field(
         foreign_key="experiment_definitions.id",
         index=True,
@@ -205,17 +209,10 @@ class RunTaskExecution(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    task_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
-        index=True,
-    )
+    task_id: UUID = Field(index=True)
     definition_worker_id: UUID | None = Field(
         default=None,
         foreign_key="experiment_definition_workers.id",
-        index=True,
-    )
-    node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
         index=True,
     )
     attempt_number: int = 1
@@ -349,18 +346,11 @@ class RunTaskEvaluation(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    node_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
-        index=True,
-    )
     task_execution_id: UUID = Field(
         foreign_key="run_task_executions.id",
         index=True,
     )
-    task_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
-        index=True,
-    )
+    task_id: UUID = Field(index=True)
     definition_evaluator_id: UUID = Field(
         foreign_key="experiment_definition_evaluators.id",
         index=True,

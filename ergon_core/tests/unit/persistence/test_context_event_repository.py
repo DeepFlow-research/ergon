@@ -67,7 +67,7 @@ def _execution_fixture(session: Session) -> tuple:
     session.add(
         RunRecord(
             id=run_id,
-            experiment_id=experiment_id,
+            definition_id=experiment_id,
             workflow_definition_id=definition_id,
             benchmark_type="unit",
             instance_key="instance",

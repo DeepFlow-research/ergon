@@ -89,7 +89,7 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
     assert result.run_ids == [created_runs[0].id]
     assert result.workflow_definition_ids == [definition.id]
     assert [run.instance_key for run in created_runs] == ["default"]
-    assert {run.experiment_id for run in created_runs} == {definition.id}
+    assert {run.definition_id for run in created_runs} == {definition.id}
     assert emitted == [(created_runs[0].id, definition.id)]
 
 
@@ -98,8 +98,8 @@ async def test_launch_run_accepts_definition_id_without_experiment_record(monkey
     """``launch_run`` materializes a run straight from ``ExperimentDefinition``.
 
     The real DB write inside ``create_run`` is blocked by
-    ``RunRecord.experiment_id`` / ``RunRecord.instance_key`` NOT NULL
-    until PR 11 narrows the schema, so ``create_run`` is mocked here.
+    ``create_run`` is mocked here so the orchestration around the
+    definition-first path can be exercised without a database write.
     The orchestration around it (session lookup, emitter, result shape)
     is still exercised end-to-end against the new definition-first path.
     """
@@ -119,8 +119,10 @@ async def test_launch_run_accepts_definition_id_without_experiment_record(monkey
             id=uuid4(),
             status=RunStatus.PENDING,
             benchmark_type=handle.benchmark_type,
+            definition_id=kwargs.get("definition_id"),
             workflow_definition_id=kwargs.get("workflow_definition_id"),
             worker_team_json=kwargs.get("worker_team_json") or {},
+            instance_key=kwargs.get("instance_key", "default"),
         )
 
     monkeypatch.setattr(launch_module, "get_session", lambda: _FakeSession(definition=definition))
@@ -133,7 +135,7 @@ async def test_launch_run_accepts_definition_id_without_experiment_record(monkey
     assert captured["handle"].definition_id == definition.id
     assert captured["handle"].benchmark_type == "mini"
     assert captured["kwargs"]["workflow_definition_id"] == definition.id
-    assert captured["kwargs"]["experiment_id"] == definition.id
+    assert captured["kwargs"]["definition_id"] == definition.id
     assert captured["kwargs"]["instance_key"] == "default"
 
     # Result shape mirrors the spec.
