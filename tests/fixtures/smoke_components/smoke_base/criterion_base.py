@@ -18,8 +18,10 @@ Topology + slug set is sourced from ``constants.EXPECTED_SUBTASK_SLUGS``.
 See docs/superpowers/plans/test-refactor/01-fixtures.md §2.5 and §2.7.
 """
 
+import asyncio
 import json
 import logging
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
@@ -30,7 +32,7 @@ from ergon_core.api.criterion import CriterionContext, CriterionOutcome
 from ergon_core.api.errors import CriterionCheckError
 from ergon_core.api.sandbox.runtime import CommandResult
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import COMPLETED
+from ergon_core.core.persistence.graph.status_conventions import COMPLETED, NON_AUTONOMOUS_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
 from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS
@@ -74,14 +76,13 @@ class SmokeCriterionBase(Criterion):
 
     async def evaluate(self, context: CriterionContext) -> CriterionOutcome:
         try:
-            # 1. Artifact-side checks (no sandbox; reads blob storage only)
+            # 1. Parent-side planning checks. Child completion, artifacts,
+            # probes, messages, and WAL are asserted by the E2E harness after
+            # graph propagation reaches a terminal run state. The parent
+            # evaluator runs before task/completed is emitted, so waiting for
+            # child artifacts here would deadlock propagation.
             children = await self._pull_children(context)
             self._check_graph_shape(children)
-            self._check_children_completed(children)
-            artifact_children = await self._artifact_children(children)
-            probes = await self._pull_probe_results(context, artifact_children)
-            self._check_probes_succeeded(probes, artifact_children)
-            await self._verify_env_content(context, artifact_children, probes)
 
             # 2. Sandbox-side check: attach to the parent task's OWN sandbox
             #    (kept alive by the runtime per RFC
@@ -136,6 +137,36 @@ class SmokeCriterionBase(Criterion):
                 ).all(),
             )
         return children
+
+    async def _wait_for_artifact_state(
+        self,
+        context: CriterionContext,
+        *,
+        timeout_s: float = 180.0,
+        interval_s: float = 2.0,
+    ) -> tuple[list[RunGraphNode], list[RunGraphNode], dict[UUID, ProbeResult]]:
+        deadline = time.monotonic() + timeout_s
+        last_error: CriterionCheckError | None = None
+
+        while time.monotonic() < deadline:
+            try:
+                children = await self._pull_children(context)
+                self._check_graph_shape(children)
+                artifact_children = await self._artifact_children(children)
+                self._check_children_completed(children)
+                self._check_children_completed(artifact_children)
+                probes = await self._pull_probe_results(context, artifact_children)
+                self._check_probes_succeeded(probes, artifact_children)
+                return children, artifact_children, probes
+            except CriterionCheckError as err:
+                last_error = err
+                if await self._observed_terminal_non_completed(context):
+                    raise
+                await asyncio.sleep(interval_s)
+
+        raise CriterionCheckError(
+            f"timed out waiting for smoke child artifacts: {last_error}",
+        )
 
     async def _artifact_children(
         self,
@@ -236,6 +267,18 @@ class SmokeCriterionBase(Criterion):
                 raise CriterionCheckError(
                     f"child {c.task_slug} not completed (status={c.status!r})",
                 )
+
+    async def _observed_terminal_non_completed(self, context: CriterionContext) -> bool:
+        try:
+            children = await self._pull_children(context)
+            artifact_children = await self._artifact_children(children)
+        except CriterionCheckError:
+            return False
+        all_children = [*children, *artifact_children]
+        return bool(all_children) and any(
+            child.status in NON_AUTONOMOUS_STATUSES and child.status != COMPLETED
+            for child in all_children
+        )
 
     def _check_probes_succeeded(
         self,

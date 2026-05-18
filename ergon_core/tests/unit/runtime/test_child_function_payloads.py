@@ -53,6 +53,25 @@ def test_worker_execute_request_requires_static_or_dynamic_identity() -> None:
         )
 
 
+def test_worker_execute_request_allows_dynamic_worker_without_model_target() -> None:
+    request = WorkerExecuteRequest(
+        run_id=uuid4(),
+        definition_id=uuid4(),
+        task_id=None,
+        node_id=uuid4(),
+        execution_id=uuid4(),
+        sandbox_id="sbx",
+        task_slug="task",
+        task_description="description",
+        assigned_worker_slug="worker",
+        worker_type="worker",
+        model_target=None,
+        benchmark_type="researchrubrics",
+    )
+
+    assert request.model_target is None
+
+
 def test_sandbox_and_persist_outputs_require_task_id() -> None:
     with pytest.raises(ValidationError):
         SandboxSetupRequest(

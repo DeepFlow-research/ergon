@@ -83,7 +83,8 @@ class Worker(BaseModel, ABC):
                 f"carry `_type`."
             )
         WorkerCls = import_component_subclass(worker_type, Worker, kind="Worker")
-        return cast("Worker", WorkerCls.model_validate(worker_json))
+        payload = {k: v for k, v in worker_json.items() if k != "_type"}
+        return cast("Worker", WorkerCls.model_validate(payload))
 
     def validate_runtime_deps(self) -> None:
         """Check that runtime dependencies are available.

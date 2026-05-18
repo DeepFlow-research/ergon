@@ -115,7 +115,8 @@ class Sandbox(BaseModel, ABC):
                 f"must carry `_type`."
             )
         SandboxCls = import_component_subclass(sandbox_type, Sandbox, kind="Sandbox")
-        instance = cast("Sandbox", SandboxCls.model_validate(sandbox_json))
+        payload = {k: v for k, v in sandbox_json.items() if k != "_type"}
+        instance = cast("Sandbox", SandboxCls.model_validate(payload))
         if sandbox_id is not None:
             await instance._bind_runtime(sandbox_id)
         return instance

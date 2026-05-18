@@ -359,15 +359,16 @@ def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
 
 
 def _assert_sadpath_graph_cascade(run_id: UUID) -> None:
-    """Canonical sad path: l_2 fails, l_3 blocks, independent leaves complete."""
+    """Canonical sad path: parent plans, l_2 fails, l_3 blocks, independent leaves complete."""
     snapshot = require_run_snapshot(run_id)
     tasks = list(snapshot.tasks.values())
     leaves = [task for task in tasks if task.level > 0]
     root_tasks = [task for task in tasks if task.level == 0]
     by_slug = {task.name: task for task in leaves}
     assert len(root_tasks) == 1, f"expected 1 root task, got {len(root_tasks)}"
-    assert root_tasks[0].status != COMPLETED, (
-        f"parent task should not complete when a child fails, got {root_tasks[0].status}"
+    assert root_tasks[0].status == COMPLETED, (
+        "parent task should complete after planning; child failure is represented "
+        f"on the failing child and run terminal status, got {root_tasks[0].status}"
     )
     assert by_slug["l_2"].status == FAILED, f"l_2 expected FAILED, got {by_slug['l_2'].status}"
     assert by_slug["l_3"].status == BLOCKED, f"l_3 expected BLOCKED, got {by_slug['l_3'].status}"

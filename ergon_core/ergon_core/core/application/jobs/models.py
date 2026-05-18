@@ -34,7 +34,7 @@ class WorkerExecuteRequest(InngestEventContract):
     task_description: str
     assigned_worker_slug: str
     worker_type: str
-    model_target: str
+    model_target: str | None = None
     benchmark_type: str
     node_id: UUID | None = None
 

@@ -179,9 +179,7 @@ def _task_keyed_resources(
 def _task_keyed_evaluations(
     evaluations: list[RunTaskEvaluation],
     run_id: str,
-    defn_to_node: dict[UUID, UUID],
 ) -> dict[str, RunTaskEvaluationDto]:
-    del defn_to_node
     result: dict[str, RunTaskEvaluationDto] = {}
     for ev in evaluations:
         node_id = ev.node_id

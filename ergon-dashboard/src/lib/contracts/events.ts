@@ -343,7 +343,18 @@ export function parseSandboxClosedSocketData(input: unknown): SandboxClosedSocke
 // Graph Mutation Events
 // =============================================================================
 
-export const DashboardGraphMutationDataSchema = z.object({
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+export const DashboardGraphMutationDataSchema = z.preprocess((input) => {
+  const outer = asRecord(input);
+  const mutation = asRecord(outer.mutation ?? input);
+  if (mutation.timestamp === undefined && mutation.created_at !== undefined) {
+    return { ...mutation, timestamp: mutation.created_at };
+  }
+  return mutation;
+}, z.object({
   run_id: z.string().uuid(),
   sequence: z.number().int().nonnegative(),
   mutation_type: MutationTypeSchema,
@@ -354,7 +365,7 @@ export const DashboardGraphMutationDataSchema = z.object({
   old_value: z.record(z.string(), z.unknown()).nullable().optional(),
   reason: z.string().nullable().optional(),
   timestamp: z.string().datetime({ offset: true }),
-});
+}));
 
 export type DashboardGraphMutationData = z.infer<typeof DashboardGraphMutationDataSchema>;
 
@@ -416,6 +427,69 @@ const ContextEventPayloadSchema = z.discriminatedUnion("event_type", [
   }),
 ]);
 
+function normalizeContextEventPayload(input: unknown): z.infer<typeof ContextEventPayloadSchema> {
+  const parsed = ContextEventPayloadSchema.safeParse(input);
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  const record = asRecord(input);
+  const part = asRecord(record.part);
+  const tokenIds = (record.token_ids as number[] | null | undefined) ?? null;
+  const logprobs = (record.logprobs as z.infer<typeof TokenLogprobSchema>[] | null | undefined) ?? null;
+  const turnId = String(record.turn_id ?? "");
+
+  switch (part.part_kind) {
+    case "system_prompt":
+      return ContextEventPayloadSchema.parse({
+        event_type: "system_prompt",
+        text: String(part.content ?? ""),
+      });
+    case "user_message":
+      return ContextEventPayloadSchema.parse({
+        event_type: "user_message",
+        text: String(part.content ?? ""),
+        from_worker_key: null,
+      });
+    case "assistant_text":
+      return ContextEventPayloadSchema.parse({
+        event_type: "assistant_text",
+        text: String(part.content ?? ""),
+        turn_id: turnId,
+        turn_token_ids: tokenIds,
+        turn_logprobs: logprobs,
+      });
+    case "tool_call":
+      return ContextEventPayloadSchema.parse({
+        event_type: "tool_call",
+        tool_call_id: String(part.tool_call_id ?? ""),
+        tool_name: String(part.tool_name ?? ""),
+        args: asRecord(part.args),
+        turn_id: turnId,
+        turn_token_ids: tokenIds,
+        turn_logprobs: logprobs,
+      });
+    case "tool_result":
+      return ContextEventPayloadSchema.parse({
+        event_type: "tool_result",
+        tool_call_id: String(part.tool_call_id ?? ""),
+        tool_name: String(part.tool_name ?? ""),
+        result: part.content ?? null,
+        is_error: Boolean(part.is_error ?? false),
+      });
+    case "thinking":
+      return ContextEventPayloadSchema.parse({
+        event_type: "thinking",
+        text: String(part.content ?? ""),
+        turn_id: turnId,
+        turn_token_ids: tokenIds,
+        turn_logprobs: logprobs,
+      });
+    default:
+      return ContextEventPayloadSchema.parse(input);
+  }
+}
+
 export const DashboardContextEventEventSchema = z.object({
   id: z.string(),
   run_id: z.string(),
@@ -424,7 +498,7 @@ export const DashboardContextEventEventSchema = z.object({
   worker_binding_key: z.string(),
   sequence: z.number(),
   event_type: z.string(),
-  payload: ContextEventPayloadSchema,
+  payload: z.unknown().transform(normalizeContextEventPayload),
   created_at: z.string(),
   started_at: z.string().nullable(),
   completed_at: z.string().nullable(),

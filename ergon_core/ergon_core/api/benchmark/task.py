@@ -150,7 +150,9 @@ class Task(BaseModel, Generic[PayloadT]):
         import_component(task_type)
         TaskCls = import_component_subclass(task_type, Task, kind="Task")
         scalar_fields: dict[str, Any] = {
-            k: v for k, v in task_json.items() if k not in {"worker", "sandbox", "evaluators"}
+            k: v
+            for k, v in task_json.items()
+            if k not in {"_type", "worker", "sandbox", "evaluators"}
         }
         instance = cast("Task", TaskCls.model_construct(**scalar_fields))
 

@@ -214,6 +214,27 @@ async def _block_successors_bfs(
                 queue.append(edge.target_task_id)
 
 
+def _dependency_free_children(session: Session, run_id: UUID, node_id: UUID) -> set[UUID]:
+    child_ids: set[UUID] = set()
+    containment_children = list(
+        session.exec(
+            select(RunGraphNode).where(
+                RunGraphNode.run_id == run_id,
+                RunGraphNode.parent_task_id == node_id,
+            )
+        ).all()
+    )
+    for child in containment_children:
+        has_incoming_edges = session.exec(
+            select(RunGraphEdge.id)
+            .where(RunGraphEdge.run_id == run_id)
+            .where(RunGraphEdge.target_task_id == child.id)
+        ).first()
+        if has_incoming_edges is None:
+            child_ids.add(child.id)
+    return child_ids
+
+
 async def on_task_completed_or_failed(
     session: Session,
     run_id: UUID,
@@ -245,6 +266,8 @@ async def on_task_completed_or_failed(
         )
 
     candidate_node_ids = {edge.target_task_id for edge in outgoing}
+    if is_success:
+        candidate_node_ids.update(_dependency_free_children(session, run_id, node_id))
     newly_ready: list[UUID] = []
 
     if not is_success:

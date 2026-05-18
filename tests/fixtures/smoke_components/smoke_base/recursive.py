@@ -6,7 +6,6 @@ the same completion-thread message shape as a normal leaf.  The top-level
 ``l_3`` dependency therefore waits on a non-leaf dynamic task.
 """
 
-import asyncio
 from collections.abc import AsyncGenerator
 from typing import ClassVar
 from uuid import UUID
@@ -15,12 +14,10 @@ from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, NodeId, RunId, TaskSlug
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import communication_service
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
 from ergon_core.core.application.tasks.models import PlanSubtasksCommand, SubtaskSpec
 
 NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
@@ -35,10 +32,6 @@ class RecursiveSmokeWorkerBase(Worker):
 
     leaf_slug: ClassVar[str]
     RECURSIVE_TURN_COUNT: ClassVar[int] = 3
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._last_child_statuses: dict[str, str] = {}
 
     async def execute(
         self,
@@ -87,48 +80,28 @@ class RecursiveSmokeWorkerBase(Worker):
             ),
         )
 
-        inspection = TaskInspectionService()
-        while True:
-            with get_session() as session:
-                children = inspection.list_subtasks(
-                    session,
-                    run_id=context.run_id,
-                    parent_task_id=context.node_id,
-                )
-            if children and all(c.status in TERMINAL_STATUSES for c in children):
-                self._last_child_statuses = {c.task_slug: c.status for c in children}
-                break
-            await asyncio.sleep(2)
-
-        await self._send_recursive_completion_message(context)
+        planned_children = sorted(str(slug) for slug in result.nodes)
+        await self._send_recursive_completion_message(context, planned_children)
         yield ContextPartChunk(
             part=AssistantTextPart(
-                content=(
-                    f"{type(self).__name__}: nested children terminal {self._last_child_statuses}"
-                ),
+                content=f"{type(self).__name__}: nested children planned {planned_children}",
             ),
         )
 
-        non_completed = {
-            slug: status
-            for slug, status in self._last_child_statuses.items()
-            if status != "completed"
-        }
-        if non_completed:
-            yield WorkerOutput(
-                output=f"nested children did not all complete: {non_completed}",
-                success=False,
-                metadata={"child_statuses": self._last_child_statuses},
-            )
-            return
-
         yield WorkerOutput(
-            output="nested smoke recursion completed",
+            output="nested smoke recursion planned",
             success=True,
-            metadata={"child_statuses": self._last_child_statuses},
+            metadata={
+                "planned_children": planned_children,
+                "child_wait_mode": "criterion",
+            },
         )
 
-    async def _send_recursive_completion_message(self, context: WorkerContext) -> None:
+    async def _send_recursive_completion_message(
+        self,
+        context: WorkerContext,
+        planned_children: list[str],
+    ) -> None:
         task_slug = self._lookup_task_slug(context.node_id)
         await communication_service.save_message(
             CreateMessageRequest(
@@ -137,7 +110,7 @@ class RecursiveSmokeWorkerBase(Worker):
                 from_agent_id=f"leaf-{task_slug}",
                 to_agent_id="parent",
                 thread_topic="smoke-completion",
-                content=(f"{task_slug}: recursive done nested={sorted(self._last_child_statuses)}"),
+                content=(f"{task_slug}: recursive planned nested={planned_children}"),
             ),
         )
 

@@ -19,6 +19,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
     BenchmarkDefinitionRecord,
     RunRecord,
@@ -129,7 +130,6 @@ class RunReadService:
         execution_task_map: dict[UUID, UUID] = {
             ex.id: ex.node_id for ex in executions if ex.node_id is not None
         }
-        defn_to_node: dict[UUID, UUID] = {n.task_id: n.id for n in nodes if n.task_id is not None}
 
         context_events_by_task = _context_events_by_task(
             context_events,
@@ -165,7 +165,6 @@ class RunReadService:
             evaluations_by_task=_task_keyed_evaluations(
                 evaluations,
                 run_id_str,
-                defn_to_node,
             ),
             context_events_by_task=dict(context_events_by_task),
             sandboxes_by_task=_task_keyed_sandboxes(run_summary),
@@ -183,7 +182,7 @@ class RunReadService:
             failed_tasks=failed_tasks,
             running_tasks=running_tasks,
             cancelled_tasks=cancelled_tasks,
-            final_score=_display_run_score(score_summary),
+            final_score=_display_run_score(score_summary, run.status),
             error=run.error_message,
         )
 
@@ -344,7 +343,9 @@ class RunReadService:
         ]
 
 
-def _display_run_score(score_summary: EvaluationScoreSummary) -> float | None:
+def _display_run_score(score_summary: EvaluationScoreSummary, run_status: str) -> float | None:
+    if run_status != RunStatus.COMPLETED:
+        return None
     # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.
     return score_summary.normalized_score
 

@@ -69,7 +69,8 @@ class Criterion(BaseModel, ABC):
                 f"must carry `_type`."
             )
         CriterionCls = import_component_subclass(criterion_type, Criterion, kind="Criterion")
-        return cast("Criterion", CriterionCls.model_validate(criterion_json))
+        payload = {k: v for k, v in criterion_json.items() if k != "_type"}
+        return cast("Criterion", CriterionCls.model_validate(payload))
 
     @abstractmethod
     async def evaluate(
