@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component
+from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.api.sandbox.sandbox import Sandbox
@@ -82,7 +82,7 @@ class Worker(BaseModel, ABC):
                 f"(got {type(worker_type).__name__}). Every persisted worker must "
                 f"carry `_type`."
             )
-        WorkerCls = import_component(worker_type)
+        WorkerCls = import_component_subclass(worker_type, Worker, kind="Worker")
         return cast("Worker", WorkerCls.model_validate(worker_json))
 
     def validate_runtime_deps(self) -> None:
@@ -117,4 +117,10 @@ class Worker(BaseModel, ABC):
         """
         payload = handler(self)
         payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
+        toolkit = getattr(self, "toolkit", None)
+        if toolkit is not None:
+            from ergon_core.api.toolkit import Toolkit
+
+            if isinstance(toolkit, Toolkit):
+                payload["toolkit"] = toolkit.model_dump(mode="json")
         return payload

@@ -11,7 +11,7 @@ here directly.
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from pydantic import JsonValue
 
@@ -49,3 +49,23 @@ def import_component(
     if not isinstance(obj, type):
         raise TypeError(f"Component _type {path!r} did not resolve to a class")
     return obj
+
+
+T = TypeVar("T")
+
+
+def import_component_subclass(
+    path: str,
+    expected_base: type[T],
+    *,
+    kind: str,
+) -> type[T]:
+    """Resolve ``path`` and verify it names a subclass of ``expected_base``."""
+
+    imported = import_component(path)
+    if not issubclass(imported, expected_base):
+        raise TypeError(
+            f"{kind} _type {path!r} did not resolve to a "
+            f"{expected_base.__name__} subclass"
+        )
+    return cast("type[T]", imported)

@@ -14,6 +14,7 @@ from ergon_core.api.sandbox import Sandbox
 from ergon_core.api.worker import Worker
 
 from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
+from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
     RubricCriterion,
@@ -84,6 +85,13 @@ class ResearchRubricsBenchmark(Benchmark):
         payloads = self._load_rows()
         tasks: list[Task[ResearchRubricsTaskPayload]] = []
         for payload in payloads:
+            evaluator = self._evaluator_factory()
+            if isinstance(evaluator, ResearchRubricsRubric) and not evaluator.rubric_criteria:
+                evaluator = ResearchRubricsRubric(
+                    name=evaluator.name,
+                    metadata=evaluator.metadata,
+                    rubric_criteria=tuple(payload.rubrics),
+                )
             tasks.append(
                 ResearchRubricsTask(
                     task_slug=payload.sample_id,
@@ -92,7 +100,7 @@ class ResearchRubricsBenchmark(Benchmark):
                     task_payload=payload,
                     worker=self._worker_factory(),
                     sandbox=self._sandbox_factory(),
-                    evaluators=(self._evaluator_factory(),),
+                    evaluators=(evaluator,),
                 )
             )
         return {"default": tasks}

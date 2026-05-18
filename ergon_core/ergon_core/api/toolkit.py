@@ -9,11 +9,11 @@ config-side round-trips through `task_json`; runtime tools never do.
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, model_serializer, model_validator
 
-from ergon_core.api._serialization import import_component
+from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
 
 
 class Toolkit(BaseModel, ABC):
@@ -45,13 +45,22 @@ class Toolkit(BaseModel, ABC):
         # raise ``TypeError``. We instead resolve the concrete subclass
         # from ``_type`` and delegate to its own ``model_validate``.
         if isinstance(data, dict) and cls is Toolkit:
-            type_path = data.get("_type")
-            if isinstance(type_path, str):
-                ConcreteCls = import_component(type_path)
-                return ConcreteCls.model_validate(  # ty: ignore[invalid-return-type]
-                    {k: v for k, v in data.items() if k != "_type"}
-                )
+            return cls.from_definition(data)
         return handler(data)
+
+    @classmethod
+    def from_definition(cls, toolkit_json: TaskDefinitionJson) -> "Toolkit":
+        """Reconstruct a Toolkit subclass from ``_type``-discriminated JSON."""
+
+        toolkit_type = toolkit_json.get("_type")
+        if not isinstance(toolkit_type, str):
+            raise ValueError(
+                f"Toolkit snapshot is missing the required `_type` discriminator "
+                f"(got {type(toolkit_type).__name__}). Every persisted toolkit "
+                f"must carry `_type`."
+            )
+        ToolkitCls = import_component_subclass(toolkit_type, Toolkit, kind="Toolkit")
+        return cast("Toolkit", ToolkitCls.model_validate(toolkit_json))
 
     @abstractmethod
     def tools(self, sandbox: Any, task: Any) -> list:  # slopcop: ignore[no-typing-any]

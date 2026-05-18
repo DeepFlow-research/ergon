@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_serializer
 
-from ergon_core.api._serialization import TaskDefinitionJson, import_component
+from ergon_core.api._serialization import TaskDefinitionJson, import_component, import_component_subclass
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric.evaluator import Evaluator
@@ -92,8 +92,15 @@ class Task(BaseModel, Generic[PayloadT]):
         re-serialize those three fields directly via the runtime objects'
         own ``model_dump`` so their full subclass schemas are used.
         """
+        qualname = type(self).__qualname__
+        if "[" in qualname or "]" in qualname:
+            raise ValueError(
+                "Task snapshot cannot be persisted from a parametrized generic; "
+                f"got {qualname!r}. Persisted Task snapshots must use a "
+                "concrete Task subclass."
+            )
         payload = handler(self)
-        payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
+        payload["_type"] = f"{type(self).__module__}:{qualname}"
         # TODO(PR 11): once PR 11 makes `worker` and `sandbox` non-
         # nullable on the object-bound path, drop the `is not None`
         # guards (the legacy TaskSpec-bridge branch in `from_definition`
@@ -205,6 +212,7 @@ class Task(BaseModel, Generic[PayloadT]):
             # without doing the discriminator dispatch). Pull those keys
             # out, validate the Task scaffolding, then re-inflate each
             # nested component via its own ``from_definition``.
+            TaskCls = import_component_subclass(task_type, Task, kind="Task")
             scalar_fields = {
                 k: v for k, v in task_json.items() if k not in {"worker", "sandbox", "evaluators"}
             }

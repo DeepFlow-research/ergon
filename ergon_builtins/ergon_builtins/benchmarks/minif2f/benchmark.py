@@ -30,6 +30,15 @@ HF_REPO_ID = "roozbeh-yz/miniF2F_v2"
 HF_FILENAME = "miniF2F_v2c.jsonl"
 
 
+class MiniF2FTask(Task[MiniF2FTaskPayload]):
+    """Concrete Task subclass for MiniF2F instances.
+
+    Named so ``Task.from_definition`` can resolve the ``_type``
+    discriminator as a plain module attribute. The parameterized
+    generic ``Task[MiniF2FTaskPayload]`` cannot be looked up that way.
+    """
+
+
 class MiniF2FBenchmark(Benchmark):
     """Benchmark backed by the MiniF2F-v2c dataset of formal math problems.
 
@@ -83,7 +92,7 @@ class MiniF2FBenchmark(Benchmark):
                 f"{problem.formal_statement}"
             )
             tasks.append(
-                Task[MiniF2FTaskPayload](
+                MiniF2FTask(
                     task_slug=problem.name,
                     instance_key="default",
                     description=description,

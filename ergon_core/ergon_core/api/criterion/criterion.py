@@ -1,10 +1,12 @@
 """Public criterion ABC."""
 
 from abc import ABC, abstractmethod
-from typing import Any, ClassVar
+from collections.abc import Callable
+from typing import Any, ClassVar, cast
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
+from ergon_core.api._serialization import TaskDefinitionJson, import_component_subclass
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.criterion.results import CriterionOutcome, ScoreScale
 from ergon_core.api.errors import DependencyError
@@ -44,6 +46,30 @@ class Criterion(BaseModel, ABC):
         if not self.description:
             object.__setattr__(self, "description", self.slug)
         return self
+
+    @model_serializer(mode="wrap")
+    def _serialize_with_type_discriminator(
+        self,
+        handler: Callable[["Criterion"], dict[str, Any]],  # slopcop: ignore[no-typing-any]
+    ) -> dict[str, Any]:  # slopcop: ignore[no-typing-any]
+        """Inject ``_type`` so criterion snapshots can round-trip."""
+        payload = handler(self)
+        payload["_type"] = f"{type(self).__module__}:{type(self).__qualname__}"
+        return payload
+
+    @classmethod
+    def from_definition(cls, criterion_json: TaskDefinitionJson) -> "Criterion":
+        """Reconstruct a Criterion subclass from ``_type``-discriminated JSON."""
+
+        criterion_type = criterion_json.get("_type")
+        if not isinstance(criterion_type, str):
+            raise ValueError(
+                f"Criterion snapshot is missing the required `_type` discriminator "
+                f"(got {type(criterion_type).__name__}). Every persisted criterion "
+                f"must carry `_type`."
+            )
+        CriterionCls = import_component_subclass(criterion_type, Criterion, kind="Criterion")
+        return cast("Criterion", CriterionCls.model_validate(criterion_json))
 
     @abstractmethod
     async def evaluate(
