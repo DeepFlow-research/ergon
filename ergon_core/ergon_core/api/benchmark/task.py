@@ -149,7 +149,7 @@ class Task(BaseModel, Generic[PayloadT]):
 
         import_component(task_type)
         TaskCls = import_component_subclass(task_type, Task, kind="Task")
-        scalar_fields = {
+        scalar_fields: dict[str, Any] = {
             k: v for k, v in task_json.items() if k not in {"worker", "sandbox", "evaluators"}
         }
         instance = cast("Task", TaskCls.model_construct(**scalar_fields))
@@ -157,16 +157,14 @@ class Task(BaseModel, Generic[PayloadT]):
         worker_json = task_json.get("worker")
         if not isinstance(worker_json, dict):
             raise ValueError(
-                f"Task snapshot for {task_id} has no object-bound worker "
-                f"(_type={task_type!r})."
+                f"Task snapshot for {task_id} has no object-bound worker (_type={task_type!r})."
             )
         instance.worker = Worker.from_definition(worker_json)
 
         sandbox_json = task_json.get("sandbox")
         if not isinstance(sandbox_json, dict):
             raise ValueError(
-                f"Task snapshot for {task_id} has no object-bound sandbox "
-                f"(_type={task_type!r})."
+                f"Task snapshot for {task_id} has no object-bound sandbox (_type={task_type!r})."
             )
         instance.sandbox = await Sandbox.from_definition(
             sandbox_json,

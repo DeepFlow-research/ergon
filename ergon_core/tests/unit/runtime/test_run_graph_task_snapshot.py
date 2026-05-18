@@ -23,12 +23,18 @@ from ergon_core.core.persistence.telemetry.models import (
     BenchmarkDefinitionRecord,
     RunRecord,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
+from ergon_core.api.benchmark import Task
+from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 
 
 class _EmptyPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class _SnapshotTask(Task[_EmptyPayload]):
     pass
 
 
@@ -53,6 +59,14 @@ def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tupl
     definition_id = uuid4()
     instance_id = uuid4()
     task_id = uuid4()
+    task_json = _SnapshotTask(
+        task_slug=task_slug,
+        instance_key="sample-1",
+        description=f"{task_slug} task",
+        task_payload=_EmptyPayload.model_validate(payload),
+        worker=TestWorker(name="worker", model=None),
+        sandbox=TestSandbox(),
+    ).model_dump(mode="json")
     session.add_all(
         [
             BenchmarkDefinitionRecord(
@@ -76,6 +90,7 @@ def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tupl
                 task_slug=task_slug,
                 description=f"{task_slug} task",
                 task_payload_json=payload,
+                task_json=task_json,
             ),
         ]
     )
@@ -134,8 +149,9 @@ def test_initialize_from_definition_copies_task_json() -> None:
     assert row.task_json, "task_json must be populated for static nodes"
     assert row.task_json["task_slug"] == "solve"
     assert row.task_json["task_payload"] == {"problem": "p"}
-    assert row.task_json["_type"].endswith(":TaskSpec")
-    assert row.task_json["_legacy"]["task_id"]
+    assert row.task_json["_type"].endswith(":_SnapshotTask")
+    assert row.task_json["worker"]["_type"].endswith(":TestWorker")
+    assert row.task_json["sandbox"]["_type"].endswith(":TestSandbox")
     assert row.is_dynamic is False
 
 
@@ -173,7 +189,7 @@ async def test_graph_repo_node_inflates_task_from_run_tier() -> None:
     row = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).first()
     assert row is not None
 
-    canonical_task_id = row.task_id or row.id
+    canonical_task_id = row.id
     view = await repo.node(session, run_id=run_id, task_id=canonical_task_id)
 
     assert view.task.task_slug == "solve"

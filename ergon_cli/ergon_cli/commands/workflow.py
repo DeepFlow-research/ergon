@@ -328,7 +328,11 @@ async def _handle_manage(
         )
         return _format_output(
             {"task": _dump(result)},
-            text_lines=[f"{result.task_slug} {result.status} {result.node_id}"],
+            text_lines=[
+                result.message
+                if result.node is None
+                else f"{result.node.task_slug} {result.node.status} {result.node.node_id}"
+            ],
             output_format=args.format,
         )
     try:

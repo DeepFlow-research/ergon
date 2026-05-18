@@ -561,26 +561,9 @@ class WorkflowService:
                 message=f"Would add task {task_slug}",
             )
 
-        created = await self._graph_repo.add_node(
-            session,
-            run_id,
-            task_slug=task_slug,
-            instance_key=parent.instance_key,
-            description=description,
-            status=TaskExecutionStatus.PENDING.value,
-            assigned_worker_slug=assigned_worker_slug,
-            parent_task_id=parent.id,
-            level=parent.level + 1,
-            meta=self._meta("add-task"),
-        )
-        session.commit()
-        definition_id = self._resolve_definition_id(session, run_id)
-        await self._task_ready_dispatcher(run_id, definition_id, created.id)
-        return WorkflowMutationRef(
-            action="add-task",
-            dry_run=False,
-            node=self._task_ref_from_graph(created),
-            message=f"Added task {task_slug}",
+        raise ValueError(
+            "add-task requires an object-bound Task in the final v2 schema; "
+            "use WorkerContext.spawn_task(Task(...)) for dynamic tasks."
         )
 
     async def add_edge(

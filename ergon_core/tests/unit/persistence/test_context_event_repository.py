@@ -78,6 +78,7 @@ def _execution_fixture(session: Session) -> tuple:
     session.flush()
     execution = RunTaskExecution(
         run_id=run_id,
+        task_id=node.id,
         node_id=node.id,
         status=TaskExecutionStatus.RUNNING,
     )

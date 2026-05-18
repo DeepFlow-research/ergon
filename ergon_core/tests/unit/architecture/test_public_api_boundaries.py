@@ -186,7 +186,6 @@ def test_shared_and_domain_primitives_stay_in_new_core_layout() -> None:
         assert not old_path.exists()
 
     for new_path in (
-        core_root / "domain" / "experiments" / "__init__.py",
         core_root / "domain" / "generation" / "context_parts.py",
         core_root / "shared" / "json_types.py",
         core_root / "shared" / "settings.py",
@@ -228,7 +227,6 @@ def test_experiment_application_cluster_stays_in_new_core_layout() -> None:
         core_root / "application" / "experiments" / "__init__.py",
         core_root / "application" / "experiments" / "service.py",
         core_root / "application" / "experiments" / "models.py",
-        core_root / "application" / "experiments" / "repository.py",
         core_root / "application" / "experiments" / "definition_writer.py",
         core_root / "application" / "experiments" / "launch.py",
     ):
@@ -288,11 +286,7 @@ def test_application_clusters_stay_out_of_runtime_layout() -> None:
         core_root / "application" / "tasks" / "errors.py",
         core_root / "application" / "evaluation" / "__init__.py",
         core_root / "application" / "evaluation" / "service.py",
-        core_root / "application" / "evaluation" / "executors.py",
-        core_root / "application" / "evaluation" / "inngest_executor.py",
-        core_root / "application" / "evaluation" / "criterion_runtime.py",
         core_root / "application" / "evaluation" / "scoring.py",
-        core_root / "application" / "evaluation" / "protocols.py",
         core_root / "application" / "evaluation" / "models.py",
         core_root / "application" / "evaluation" / "errors.py",
     ):

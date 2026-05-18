@@ -5,14 +5,21 @@ Revises:
 Create Date: 2026-05-18
 """
 
-import ergon_core.core.persistence.components.models  # noqa: F401
-import ergon_core.core.persistence.context.models  # noqa: F401
-import ergon_core.core.persistence.definitions.models  # noqa: F401
-import ergon_core.core.persistence.graph.models  # noqa: F401
-import ergon_core.core.persistence.imports.models  # noqa: F401
-import ergon_core.core.persistence.telemetry.models  # noqa: F401
+from importlib import import_module
+
 from alembic import op
 from sqlmodel import SQLModel
+
+
+for module_name in (
+    "ergon_core.core.persistence.components.models",
+    "ergon_core.core.persistence.context.models",
+    "ergon_core.core.persistence.definitions.models",
+    "ergon_core.core.persistence.graph.models",
+    "ergon_core.core.persistence.imports.models",
+    "ergon_core.core.persistence.telemetry.models",
+):
+    import_module(module_name)
 
 
 revision = "00000000"

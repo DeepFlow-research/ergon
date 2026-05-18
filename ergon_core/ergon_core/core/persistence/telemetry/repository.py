@@ -17,7 +17,7 @@ class CreateTaskEvaluation(BaseModel):
     run_id: UUID
     node_id: UUID
     task_execution_id: UUID
-    task_id: UUID | None
+    task_id: UUID
     definition_evaluator_id: UUID
     score: float | None = None
     passed: bool | None = None

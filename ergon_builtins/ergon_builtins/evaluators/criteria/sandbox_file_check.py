@@ -6,6 +6,7 @@ Used by the smoke-test rubric for CI / E2E testing.
 from typing import ClassVar
 
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
+
 MARKER_PATH = "/outputs/ci_marker.txt"
 MARKER_CONTENT = "smoke-test-marker"
 

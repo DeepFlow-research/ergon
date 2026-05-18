@@ -16,7 +16,7 @@ async def test_failed_task_sandbox_cleanup_delegates_to_lifecycle_service() -> N
         reason=SandboxTerminationReason.TERMINATED,
     )
     with patch(
-        "ergon_core.core.application.jobs.propagate_execution.terminate_sandbox_by_id",
+        "ergon_core.core.application.jobs.propagate_execution.terminate_external_sandbox",
         new=AsyncMock(return_value=result),
     ) as terminate:
         await _terminate_failed_task_sandbox("sandbox-real")

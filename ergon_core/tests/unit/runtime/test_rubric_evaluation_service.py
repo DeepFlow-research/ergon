@@ -7,12 +7,8 @@ from ergon_core.api.criterion import Criterion
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.rubric import Rubric
 from ergon_core.api.criterion import CriterionOutcome, ScoreScale
-from ergon_core.api.benchmark import Task
+from ergon_core.api.worker import WorkerOutput
 from ergon_core.test_support.task_factory import task_with_id
-from ergon_core.core.application.evaluation.models import (
-    CriterionSpec,
-    TaskEvaluationContext,
-)
 from ergon_core.core.application.evaluation.service import (
     EvaluationService,
 )
@@ -25,33 +21,9 @@ class _Criterion(Criterion):
         return CriterionOutcome(name=self.slug, score=self.score_spec.max_score, passed=True)
 
 
-class _Executor:
-    def __init__(self) -> None:
-        self.seen_specs: list[CriterionSpec] = []
-
-    async def execute_all(
-        self,
-        task_context: TaskEvaluationContext,
-        task: Task,
-        benchmark_name: str,
-        criteria: list[CriterionSpec],
-    ) -> list[CriterionOutcome]:
-        self.seen_specs = criteria
-        return [
-            CriterionOutcome(
-                name=spec.criterion.slug,
-                score=spec.max_score,
-                passed=True,
-                weight=spec.criterion.weight,
-            )
-            for spec in criteria
-        ]
-
-
 @pytest.mark.asyncio
 async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> None:
-    executor = _Executor()
-    service = EvaluationService(executor)
+    service = EvaluationService()
     evaluator = Rubric(
         name="rubric",
         criteria=[
@@ -60,21 +32,22 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
         ],
     )
 
-    await service.evaluate_legacy(
-        TaskEvaluationContext(
+    task = task_with_id(
+        uuid4(),
+        task_slug="task",
+        instance_key="default",
+        description="Task",
+        evaluator_binding_keys=("default",),
+    )
+    result = await service.evaluate(
+        context=CriterionContext(
             run_id=uuid4(),
-            task_input="",
-            agent_reasoning=None,
+            task_id=task.task_id,
+            execution_id=uuid4(),
+            task=task,
+            worker_result=WorkerOutput(output="", success=True),
         ),
-        evaluator,
-        task_with_id(
-            uuid4(),
-            task_slug="task",
-            instance_key="default",
-            description="Task",
-            evaluator_binding_keys=("default",),
-        ),
-        "benchmark",
+        evaluator=evaluator,
     )
 
-    assert [spec.max_score for spec in executor.seen_specs] == [2.0, 5.0]
+    assert [spec.max_score for spec in result.specs] == [2.0, 5.0]

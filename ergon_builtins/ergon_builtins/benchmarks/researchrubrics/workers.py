@@ -5,30 +5,16 @@ prompt with a chosen worker class (ReActWorker today; CoTWorker /
 ReflexionWorker future).  Strategies vary independently; the domain
 bundle is constant.
 
-Legacy registry bridges (``ResearchRubricsResearcherWorker`` and
-``ResearchRubricsWorkflowCliReActWorker``) are re-exported below so the
-existing ``researchrubrics-researcher`` and
-``researchrubrics-workflow-cli-react`` registry slugs keep resolving for
-experiments persisted before PR 10b.  PR 11 drops these re-exports.
+PR 11 removed the legacy registry bridges. v2 callers use
+``make_research_worker()`` directly from the benchmark object graph.
 """
 
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit
 
-# TODO(PR 11): drop these re-exports along with the
-# ``researchrubrics-researcher`` / ``researchrubrics-workflow-cli-react``
-# registry slugs.  v2 callers use ``make_research_worker()`` directly.
-from ergon_builtins.workers.research_rubrics.researcher_worker import (
-    ResearchRubricsResearcherWorker,
-)
-from ergon_builtins.workers.research_rubrics.workflow_cli_react_worker import (
-    ResearchRubricsWorkflowCliReActWorker,
-)
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 
 __all__ = [
-    "ResearchRubricsResearcherWorker",
-    "ResearchRubricsWorkflowCliReActWorker",
     "make_research_rubric",
     "make_research_worker",
 ]

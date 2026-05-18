@@ -24,7 +24,8 @@ importing the SDK at module level.
 """
 
 from collections.abc import Sequence
-from typing import Any, Protocol
+from importlib import import_module
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 from ergon_core.api.sandbox.runtime import CommandResult
@@ -33,10 +34,17 @@ from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 try:
     from e2b import SandboxNotFoundException, TimeoutException
-    from e2b_code_interpreter import AsyncSandbox
+
+    _AsyncSandbox: Any = import_module("e2b_code_interpreter").AsyncSandbox
 except ImportError:  # pragma: no cover - optional dependency boundary
-    SandboxNotFoundException = TimeoutException = RuntimeError  # type: ignore[assignment]
-    AsyncSandbox = None  # type: ignore[assignment]
+
+    class SandboxNotFoundException(RuntimeError):
+        pass
+
+    class TimeoutException(RuntimeError):
+        pass
+
+    _AsyncSandbox: Any = None
 
 
 # ── E2B SDK Protocol boundary ──────────────────────────────────────────
@@ -186,42 +194,40 @@ async def provision_e2b_runtime(
 ) -> _DirectSandboxRuntime:
     """Create an E2B sandbox and wrap it in the public Sandbox runtime."""
 
-    if AsyncSandbox is None:
+    if _AsyncSandbox is None:
         raise RuntimeError(
             "e2b_code_interpreter is not installed. "
             "Install it with: pip install e2b-code-interpreter"
         )
     if not settings.e2b_api_key:
         raise ValueError("E2B_API_KEY is not set.")
-    create_kwargs: dict[str, object] = {"api_key": settings.e2b_api_key}
-    if timeout_seconds is not None:
-        create_kwargs["timeout"] = timeout_seconds
-    if envs:
-        create_kwargs["envs"] = envs
-    if template:
-        create_kwargs["template"] = template
-    sandbox = await AsyncSandbox.create(**create_kwargs)
+    sandbox = await _AsyncSandbox.create(
+        template=template,
+        timeout=timeout_seconds,
+        envs=envs,
+        api_key=settings.e2b_api_key,
+    )
     await sandbox.commands.run(
         "mkdir -p /inputs /workspace /workspace/scratchpad "
         "/workspace/final_output /skills /tools 2>/dev/null || true",
         timeout=30,
     )
-    return _DirectSandboxRuntime(sandbox=sandbox)
+    return _DirectSandboxRuntime(sandbox=cast("_E2BSandboxHandle", sandbox))
 
 
 async def bind_e2b_runtime(sandbox_id: str) -> _DirectSandboxRuntime:
     """Connect to an existing E2B sandbox and wrap it in the public runtime."""
 
-    if AsyncSandbox is None:
+    if _AsyncSandbox is None:
         raise RuntimeError(
             "e2b_code_interpreter is not installed. "
             "Install it with: pip install e2b-code-interpreter"
         )
     try:
-        sandbox = await AsyncSandbox.connect(
+        sandbox = await _AsyncSandbox.connect(
             sandbox_id=sandbox_id,
             api_key=settings.e2b_api_key,
         )
     except (SandboxNotFoundException, TimeoutException) as exc:
         raise RuntimeError(f"Sandbox {sandbox_id} is not available: {exc}") from exc
-    return _DirectSandboxRuntime(sandbox=sandbox)
+    return _DirectSandboxRuntime(sandbox=cast("_E2BSandboxHandle", sandbox))

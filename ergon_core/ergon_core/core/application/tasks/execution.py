@@ -69,8 +69,8 @@ class TaskExecutionService:
     # -- Unified run-tier path (PR 3) ---
     #
     # Reads the run-tier task snapshot via `graph_repo.node(...)`
-        # instead of branching on static vs dynamic. `task_id` is the
-        # run graph node id after PR 11.
+    # instead of branching on static vs dynamic. `task_id` is the
+    # run graph node id after PR 11.
 
     async def _prepare_run_node(
         self, command: PrepareTaskExecutionCommand

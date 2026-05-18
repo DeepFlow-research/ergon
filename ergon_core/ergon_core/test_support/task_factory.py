@@ -30,7 +30,7 @@ class TestWorker(Worker):
     type_slug = "test-worker"
 
     async def execute(self, task: Task, *, context: object):
-        yield WorkerOutput(final_text="ok")
+        yield WorkerOutput(output="ok")
 
 
 def task_with_id(

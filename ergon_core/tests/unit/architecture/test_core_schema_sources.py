@@ -309,7 +309,6 @@ def test_definition_and_composition_services_do_not_live_in_runtime_services() -
         assert old_spec is None
 
     new_modules = (
-        "ergon_core.core.domain.experiments.validation",
         "ergon_core.core.application.experiments.definition_writer",
         "ergon_core.core.application.experiments.service",
         "ergon_core.core.application.experiments.models",
@@ -367,7 +366,7 @@ def test_task_latest_execution_selection_lives_in_task_repository() -> None:
     repository_path = ROOT / "ergon_core/ergon_core/core/application/tasks/repository.py"
 
     assert not queries_path.exists()
-    assert "def latest_for_definition_task" in repository_path.read_text()
+    assert "def latest_for_node" in repository_path.read_text()
 
 
 def test_runtime_and_builtins_do_not_use_task_execution_query_bag_for_domain_reads() -> None:

@@ -1,8 +1,7 @@
 import pytest
 
 from ergon_core.api import Benchmark, Rubric, Worker
-from ergon_core.api.registry import ComponentRegistry
-from ergon_core.core.application.components.catalog import ComponentCatalogService
+from ergon_core.api.registry import ComponentCatalog
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 
 
@@ -27,7 +26,7 @@ class ExampleSandboxManager(BaseSandboxManager):
 
 
 def test_registers_components_by_explicit_or_type_slug() -> None:
-    registry = ComponentRegistry(catalog_service=ComponentCatalogService())
+    registry = ComponentCatalog()
 
     registry.register_worker(ExampleWorker.type_slug, ExampleWorker)
     registry.register_benchmark(ExampleBenchmark)
@@ -41,7 +40,7 @@ def test_registers_components_by_explicit_or_type_slug() -> None:
 
 
 def test_duplicate_slug_rejects_different_object() -> None:
-    registry = ComponentRegistry(catalog_service=ComponentCatalogService())
+    registry = ComponentCatalog()
     registry.register_worker("example-worker", ExampleWorker)
 
     with pytest.raises(ValueError, match="Duplicate worker slug 'example-worker'"):
@@ -49,7 +48,7 @@ def test_duplicate_slug_rejects_different_object() -> None:
 
 
 def test_duplicate_slug_allows_idempotent_registration() -> None:
-    registry = ComponentRegistry(catalog_service=ComponentCatalogService())
+    registry = ComponentCatalog()
     registry.register_worker("example-worker", ExampleWorker)
     registry.register_worker("example-worker", ExampleWorker)
 
@@ -57,7 +56,7 @@ def test_duplicate_slug_allows_idempotent_registration() -> None:
 
 
 def test_unknown_slug_error_lists_registered_values() -> None:
-    registry = ComponentRegistry(catalog_service=ComponentCatalogService())
+    registry = ComponentCatalog()
     registry.register_worker("example-worker", ExampleWorker)
 
     with pytest.raises(
@@ -67,23 +66,10 @@ def test_unknown_slug_error_lists_registered_values() -> None:
         registry.require_worker("missing-worker")
 
 
-def test_registry_records_import_refs_for_registered_components() -> None:
-    registry = ComponentRegistry(catalog_service=ComponentCatalogService())
-
-    registry.register_worker(ExampleWorker.type_slug, ExampleWorker)
-    ref = registry.component_refs[("worker", "example-worker")]
-
-    assert ref.kind == "worker"
-    assert ref.slug == "example-worker"
-    assert ref.module == __name__
-    assert ref.qualname == "ExampleWorker"
-
-
-def test_registry_deregister_removes_component_and_ref() -> None:
-    registry = ComponentRegistry(catalog_service=ComponentCatalogService())
+def test_catalog_deregister_removes_component() -> None:
+    registry = ComponentCatalog()
     registry.register_worker("example-worker", ExampleWorker)
 
     registry.deregister("worker", "example-worker")
 
     assert "example-worker" not in registry.workers
-    assert ("worker", "example-worker") not in registry.component_refs

@@ -5,6 +5,7 @@ from uuid import UUID
 
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion.context import CriterionContext
+from ergon_core.api.criterion.results import CriterionOutcome
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionEvaluator,
@@ -174,7 +175,7 @@ class EvaluationService:
         run_id: UUID,
         node_id: UUID,
         task_execution_id: UUID,
-        task_id: UUID | None,
+        task_id: UUID,
         binding_key: str,
         service_result: EvaluationServiceResult,
         evaluation_input: str | None = None,
@@ -221,7 +222,7 @@ class EvaluationService:
         run_id: UUID,
         node_id: UUID,
         task_execution_id: UUID,
-        task_id: UUID | None,
+        task_id: UUID,
         binding_key: str,
         exc: Exception,
     ) -> None:

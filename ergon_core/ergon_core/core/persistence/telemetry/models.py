@@ -56,6 +56,7 @@ class BenchmarkDefinitionRecord(SQLModel, table=True):
     re-runs sharing a common identifier).  ``None`` means the record is not
     grouped into any named experiment.
     """
+
     __tablename__ = "experiments"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -125,6 +126,7 @@ class BenchmarkDefinitionRecord(SQLModel, table=True):
         self.__class__._parse_json_object(self.design_json, "design_json")
         self.__class__._parse_json_object(self.metadata_json, "metadata_json")
         return self
+
 
 # ---------------------------------------------------------------------------
 # RunRecord

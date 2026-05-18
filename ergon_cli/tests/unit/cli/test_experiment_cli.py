@@ -134,6 +134,14 @@ def test_experiment_show_logs_detail_without_printing(monkeypatch, caplog, capsy
 # ---------------------------------------------------------------------------
 
 
+class _FakeExecResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def all(self):
+        return self._rows
+
+
 def test_experiment_tags_lists_distinct_tags(monkeypatch, caplog):
     class FakeRepo:
         def distinct_experiment_tags(self, session):
@@ -146,8 +154,10 @@ def test_experiment_tags_lists_distinct_tags(monkeypatch, caplog):
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(experiment_cmd, "DefinitionRepository", FakeRepo)
-    monkeypatch.setattr(experiment_cmd, "get_session", lambda: FakeSession())
+    repo = FakeRepo()
+    session = FakeSession()
+    session.exec = lambda _query: _FakeExecResult(repo.distinct_experiment_tags(session))
+    monkeypatch.setattr(experiment_cmd, "get_session", lambda: session)
     caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
 
     rc = experiment_cmd.handle_experiment_tags(Namespace())
@@ -169,8 +179,10 @@ def test_experiment_tags_handles_empty(monkeypatch, caplog):
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(experiment_cmd, "DefinitionRepository", FakeRepo)
-    monkeypatch.setattr(experiment_cmd, "get_session", lambda: FakeSession())
+    repo = FakeRepo()
+    session = FakeSession()
+    session.exec = lambda _query: _FakeExecResult(repo.distinct_experiment_tags(session))
+    monkeypatch.setattr(experiment_cmd, "get_session", lambda: session)
     caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
 
     rc = experiment_cmd.handle_experiment_tags(Namespace())
@@ -219,8 +231,10 @@ def test_experiment_by_tag_lists_definitions_with_latest_run_status(monkeypatch,
         def __exit__(self, *args):
             pass
 
-    monkeypatch.setattr(experiment_cmd, "DefinitionRepository", FakeRepo)
-    monkeypatch.setattr(experiment_cmd, "get_session", lambda: FakeSession())
+    repo = FakeRepo()
+    session = FakeSession()
+    session.exec = lambda _query: _FakeExecResult(repo.list_by_experiment_tag(session, "my-tag"))
+    monkeypatch.setattr(experiment_cmd, "get_session", lambda: session)
     monkeypatch.setattr(experiment_cmd, "latest_run_for_definition", fake_latest)
     caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
 

@@ -1,9 +1,6 @@
-"""ResearchRubrics worker subclasses (researcher)."""
+"""Retired ResearchRubrics worker subclass package.
 
-from ergon_builtins.workers.research_rubrics.researcher_worker import (
-    ResearchRubricsResearcherWorker,
-)
+PR 11 moved ResearchRubrics onto object-bound benchmark worker factories.
+"""
 
-__all__ = [
-    "ResearchRubricsResearcherWorker",
-]
+__all__: list[str] = []

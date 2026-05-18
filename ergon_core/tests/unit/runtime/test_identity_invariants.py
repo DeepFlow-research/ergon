@@ -39,12 +39,16 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
 )
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine, select
 
 
 class _EmptyPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class _IdentityTask(Task[_EmptyPayload]):
     pass
 
 
@@ -87,6 +91,14 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
         ]
     )
     for i, task_id in enumerate(task_ids):
+        task_json = _IdentityTask(
+            task_slug=f"task-{i}",
+            instance_key="sample-1",
+            description=f"task {i}",
+            task_payload=_EmptyPayload(),
+            worker=EchoWorker(name="echo", model=None),
+            sandbox=EchoSandbox(),
+        ).model_dump(mode="json")
         session.add(
             ExperimentDefinitionTask(
                 id=task_id,
@@ -95,6 +107,7 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
                 task_slug=f"task-{i}",
                 description=f"task {i}",
                 task_payload_json={},
+                task_json=task_json,
             )
         )
     session.add(
@@ -141,7 +154,7 @@ def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
     rows = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
     # Every task_id should appear on exactly one run-graph
     # row.
-    seen = {row.task_id for row in rows}
+    seen = {row.id for row in rows}
     assert seen == defn_task_ids, (
         f"task_id did not survive prepare: definition={defn_task_ids}, run-tier={seen}"
     )
@@ -172,14 +185,14 @@ async def test_task_id_propagates_into_runtime_task_instance() -> None:
 
     nodes = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
     for row in nodes:
-        canonical_id = row.task_id or row.id
+        canonical_id = row.id
         view = await repo.node(session, run_id=run_id, task_id=canonical_id)
         assert view.task_id == canonical_id
         assert view.task.task_id == canonical_id
     # And the inflated task ids match the original definition task ids
     seen = set()
     for row in nodes:
-        canonical_id = row.task_id or row.id
+        canonical_id = row.id
         view = await repo.node(session, run_id=run_id, task_id=canonical_id)
         seen.add(view.task.task_id)
     assert seen == defn_task_ids
@@ -365,7 +378,7 @@ async def test_dynamic_task_id_has_no_definition_row(
 
     # Spawn a dynamic child task.
     handle = await context.spawn_task(
-        Task(
+        _IdentityTask(
             task_slug="child",
             instance_key="sample-1",
             description="dynamic child",

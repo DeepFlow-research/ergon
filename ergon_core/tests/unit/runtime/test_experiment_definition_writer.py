@@ -10,12 +10,8 @@ from ergon_builtins.benchmarks.minif2f.workers import (
     make_minif2f_worker,
 )
 from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
-from ergon_core.api.benchmark.task import Task, TaskSpec
+from ergon_core.api.benchmark.task import Task
 from ergon_core.api.criterion import Criterion, CriterionContext, CriterionOutcome
-from ergon_core.core.application.experiments.definition_writer import (
-    _criterion_snapshot_name,
-    _task_to_definition_json,
-)
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 
 
@@ -29,22 +25,7 @@ class _Criterion(Criterion):
 def test_criterion_snapshot_uses_public_slug_not_missing_name_attribute() -> None:
     criterion = _Criterion(slug="ci-criterion-instance")
 
-    assert _criterion_snapshot_name(criterion) == "ci-criterion-instance"
-
-
-def test_task_to_definition_json_legacy_taskspec_shape() -> None:
-    spec = TaskSpec(
-        task_slug="legacy",
-        instance_key="sample-1",
-        description="legacy task",
-        evaluator_binding_keys=("default",),
-    )
-    result = _task_to_definition_json(spec)
-
-    assert result["_type"].endswith(":TaskSpec")
-    assert result["_legacy"] is True
-    assert "worker" not in result
-    assert result["evaluator_binding_keys"] == ["default"]
+    assert criterion.slug == "ci-criterion-instance"
 
 
 def test_task_to_definition_json_object_bound_shape() -> None:
@@ -56,7 +37,7 @@ def test_task_to_definition_json_object_bound_shape() -> None:
         sandbox=EchoSandbox(),
         evaluators=(),
     )
-    result = _task_to_definition_json(task)
+    result = task.model_dump(mode="json")
 
     assert result["_type"].endswith(":Task")
     assert "_legacy" not in result
@@ -81,7 +62,7 @@ def test_minif2f_definition_json_has_v2_object_bound_shape() -> None:
         sandbox=LeanSandbox(),
         evaluators=(make_minif2f_rubric(),),
     )
-    task_json = _task_to_definition_json(task)
+    task_json = task.model_dump(mode="json")
 
     assert task_json["worker"]["_type"].endswith(":ReActWorker")
     assert task_json["worker"]["toolkit"]["_type"].endswith(":MiniF2FToolkit")
@@ -105,7 +86,7 @@ async def test_object_bound_task_json_round_trips_through_from_definition() -> N
         sandbox=EchoSandbox(),
         evaluators=(),
     )
-    task_json = _task_to_definition_json(task)
+    task_json = task.model_dump(mode="json")
     task_id = uuid4()
 
     restored = await Task.from_definition(task_json, task_id=task_id)

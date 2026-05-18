@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from ergon_core.core.domain.experiments import DefinitionHandle
+from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.application.workflows import runs as run_service
 
