@@ -12,7 +12,7 @@ from collections import deque
 from uuid import UUID
 
 import inngest
-from ergon_core.api.benchmark.task import Task
+from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.registry import registry
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
@@ -117,6 +117,14 @@ class TaskManagementService:
         parent = self._graph_repo.get_node(
             session, run_id=command.run_id, node_id=command.parent_task_id
         )
+        task_json = await self._subtask_json(
+            session,
+            run_id=command.run_id,
+            parent=parent,
+            task_slug=task_slug,
+            description=command.description,
+            assigned_worker_slug=command.assigned_worker_slug,
+        )
 
         node = await self._graph_repo.add_node(
             session,
@@ -128,6 +136,8 @@ class TaskManagementService:
             assigned_worker_slug=command.assigned_worker_slug,
             parent_task_id=command.parent_task_id,
             level=parent.level + 1,
+            task_json=task_json,
+            is_dynamic=True,
             meta=_MANAGER_META,
         )
 
@@ -191,6 +201,7 @@ class TaskManagementService:
                 instance_key=task.instance_key,
                 description=task.description,
                 status=PENDING,
+                assigned_worker_slug=task.worker.type_slug,
                 parent_task_id=parent_task_id,
                 level=parent.level + 1,
                 task_json=task.model_dump(mode="json"),
@@ -384,12 +395,24 @@ class TaskManagementService:
         parent = self._graph_repo.get_node(
             session, run_id=command.run_id, node_id=command.parent_task_id
         )
+        parent_view = await self._graph_repo.node(
+            session,
+            run_id=command.run_id,
+            task_id=parent.id,
+        )
 
         slug_to_node_id: dict[TaskSlug, NodeId] = {}
         roots: list[TaskSlug] = []
 
         for spec in command.subtasks:
             task_slug = spec.task_slug
+            task_json = self._subtask_json_from_parent_task(
+                parent=parent,
+                parent_task=parent_view.task,
+                task_slug=task_slug,
+                description=spec.description,
+                assigned_worker_slug=spec.assigned_worker_slug,
+            )
 
             node = await self._graph_repo.add_node(
                 session,
@@ -401,6 +424,8 @@ class TaskManagementService:
                 assigned_worker_slug=spec.assigned_worker_slug,
                 parent_task_id=command.parent_task_id,
                 level=parent.level + 1,
+                task_json=task_json,
+                is_dynamic=True,
                 meta=_MANAGER_META,
             )
             slug_to_node_id[spec.task_slug] = node.id
@@ -442,6 +467,56 @@ class TaskManagementService:
             nodes=slug_to_node_id,
             roots=roots,
         )
+
+    async def _subtask_json(
+        self,
+        session: Session,
+        *,
+        run_id: UUID,
+        parent: RunGraphNode,
+        task_slug: str,
+        description: str,
+        assigned_worker_slug: str,
+    ) -> dict:
+        parent_view = await self._graph_repo.node(
+            session,
+            run_id=run_id,
+            task_id=parent.id,
+        )
+        return self._subtask_json_from_parent_task(
+            parent=parent,
+            parent_task=parent_view.task,
+            task_slug=task_slug,
+            description=description,
+            assigned_worker_slug=assigned_worker_slug,
+        )
+
+    @staticmethod
+    def _subtask_json_from_parent_task(
+        *,
+        parent: RunGraphNode,
+        parent_task: Task,
+        task_slug: str,
+        description: str,
+        assigned_worker_slug: str,
+    ) -> dict:
+        worker_cls = registry.require_worker(assigned_worker_slug)
+        model = parent_task.worker.model
+        if model is None:
+            raise ValueError(
+                f"Cannot create subtask {task_slug!r}: parent task worker has no model"
+            )
+        task = Task(
+            task_slug=task_slug,
+            instance_key=parent.instance_key,
+            description=description,
+            parent_task_slug=parent.task_slug,
+            task_payload=EmptyTaskPayload(),
+            worker=worker_cls(name=assigned_worker_slug, model=model),
+            sandbox=parent_task.sandbox,
+            evaluators=(),
+        )
+        return task.model_dump(mode="json")
 
     # ── refine_task ──────────────────────────────────────────
 
