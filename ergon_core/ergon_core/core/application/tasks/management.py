@@ -13,8 +13,7 @@ from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 import inngest
-from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
-from ergon_core.api.registry import registry
+from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
@@ -107,75 +106,15 @@ class TaskManagementService:
         session: Session,
         command: AddSubtaskCommand,
     ) -> AddSubtaskResult:
-        """Create a subtask node under parent_task_id with dependency edges.
+        """Reject the retired slug-based subtask creation path.
 
-        Sets parent_task_id and level on the node so the containment tree
-        is queryable without edge traversal. Wires depends_on as
-        dependency edges (source=dep, target=new_node).
+        Worker-authored dynamic subtasks must call
+        ``WorkerContext.spawn_task(Task(...))`` so the run graph receives a full
+        object-bound task snapshot with ``_type`` discriminators.
         """
-        task_slug = command.task_slug
-
-        if command.assigned_worker_slug not in registry.workers:
-            raise ValueError(f"Unknown worker slug: {command.assigned_worker_slug!r}")
-
-        parent = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.parent_task_id
-        )
-        task_json = await self._subtask_json(
-            session,
-            run_id=command.run_id,
-            parent=parent,
-            task_slug=task_slug,
-            description=command.description,
-            assigned_worker_slug=command.assigned_worker_slug,
-        )
-
-        node = await self._graph_repo.add_node(
-            session,
-            command.run_id,
-            task_slug=task_slug,
-            instance_key=parent.instance_key,
-            description=command.description,
-            status=PENDING,
-            assigned_worker_slug=command.assigned_worker_slug,
-            parent_task_id=command.parent_task_id,
-            level=parent.level + 1,
-            task_json=task_json,
-            is_dynamic=True,
-            meta=_MANAGER_META,
-        )
-
-        for dep_node_id in command.depends_on:
-            await self._graph_repo.add_edge(
-                session,
-                command.run_id,
-                source_task_id=dep_node_id,
-                target_task_id=node.task_id,
-                status=EDGE_PENDING,
-                meta=_MANAGER_META,
-            )
-
-        session.commit()
-
-        if not command.depends_on:
-            definition_id = self._resolve_definition_id(session, command.run_id)
-            await self._dispatch_task_ready(
-                run_id=command.run_id,
-                definition_id=definition_id,
-                task_id=node.task_id,
-            )
-
-        logger.info(
-            "add_subtask: created node %s (slug=%s) under parent %s",
-            node.task_id,
-            task_slug,
-            command.parent_task_id,
-        )
-
-        return AddSubtaskResult(
-            task_id=node.task_id,
-            task_slug=task_slug,
-            status=PENDING,
+        del session, command
+        raise ValueError(
+            "Slug-based add_subtask was removed; use WorkerContext.spawn_task(Task(...))."
         )
 
     # ── spawn_dynamic_task ───────────────────────────────────
@@ -384,143 +323,15 @@ class TaskManagementService:
         session: Session,
         command: PlanSubtasksCommand,
     ) -> PlanSubtasksResult:
-        """Batch-create subtasks with local dependency references.
+        """Reject the retired slug-based batch subtask creation path.
 
-        Validates the plan (no duplicates, no unknown refs, no cycles),
-        creates all nodes and edges in one transaction, then dispatches
-        root tasks (those with no depends_on).
+        Worker-authored dynamic subtasks are object-bound and created one at a
+        time through ``WorkerContext.spawn_task(Task(...))``.
         """
-        self._validate_plan(command.subtasks)
-
-        for spec in command.subtasks:
-            if spec.assigned_worker_slug not in registry.workers:
-                raise ValueError(f"Unknown worker slug: {spec.assigned_worker_slug!r}")
-
-        parent = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.parent_task_id
+        del session, command
+        raise ValueError(
+            "Slug-based plan_subtasks was removed; use WorkerContext.spawn_task(Task(...))."
         )
-        parent_view = await self._graph_repo.node(
-            session,
-            run_id=command.run_id,
-            task_id=parent.task_id,
-        )
-
-        slug_to_node_id: dict[TaskSlug, NodeId] = {}
-        roots: list[TaskSlug] = []
-
-        for spec in command.subtasks:
-            task_slug = spec.task_slug
-            task_json = self._subtask_json_from_parent_task(
-                parent=parent,
-                parent_task=parent_view.task,
-                task_slug=task_slug,
-                description=spec.description,
-                assigned_worker_slug=spec.assigned_worker_slug,
-            )
-
-            node = await self._graph_repo.add_node(
-                session,
-                command.run_id,
-                task_slug=task_slug,
-                instance_key=parent.instance_key,
-                description=spec.description,
-                status=PENDING,
-                assigned_worker_slug=spec.assigned_worker_slug,
-                parent_task_id=command.parent_task_id,
-                level=parent.level + 1,
-                task_json=task_json,
-                is_dynamic=True,
-                meta=_MANAGER_META,
-            )
-            slug_to_node_id[spec.task_slug] = node.task_id
-
-            if not spec.depends_on:
-                roots.append(spec.task_slug)
-
-        for spec in command.subtasks:
-            target_id = slug_to_node_id[spec.task_slug]
-            for dep_slug in spec.depends_on:
-                source_id = slug_to_node_id[dep_slug]
-                await self._graph_repo.add_edge(
-                    session,
-                    command.run_id,
-                    source_task_id=source_id,
-                    target_task_id=target_id,
-                    status=EDGE_PENDING,
-                    meta=_MANAGER_META,
-                )
-
-        session.commit()
-
-        definition_id = self._resolve_definition_id(session, command.run_id)
-        for root_slug in roots:
-            await self._dispatch_task_ready(
-                run_id=command.run_id,
-                definition_id=definition_id,
-                node_id=slug_to_node_id[root_slug],
-            )
-
-        logger.info(
-            "plan_subtasks: created %d nodes (%d roots) under parent %s",
-            len(command.subtasks),
-            len(roots),
-            command.parent_task_id,
-        )
-
-        return PlanSubtasksResult(
-            nodes=slug_to_node_id,
-            roots=roots,
-        )
-
-    async def _subtask_json(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        parent: RunGraphNode,
-        task_slug: str,
-        description: str,
-        assigned_worker_slug: str,
-    ) -> dict:
-        parent_view = await self._graph_repo.node(
-            session,
-            run_id=run_id,
-            task_id=parent.task_id,
-        )
-        return self._subtask_json_from_parent_task(
-            parent=parent,
-            parent_task=parent_view.task,
-            task_slug=task_slug,
-            description=description,
-            assigned_worker_slug=assigned_worker_slug,
-        )
-
-    @staticmethod
-    def _subtask_json_from_parent_task(
-        *,
-        parent: RunGraphNode,
-        parent_task: Task,
-        task_slug: str,
-        description: str,
-        assigned_worker_slug: str,
-    ) -> dict:
-        worker_cls = registry.require_worker(assigned_worker_slug)
-        model = parent_task.worker.model
-        if model is None:
-            raise ValueError(
-                f"Cannot create subtask {task_slug!r}: parent task worker has no model"
-            )
-        task = Task(
-            task_slug=task_slug,
-            instance_key=parent.instance_key,
-            description=description,
-            parent_task_slug=parent.task_slug,
-            task_payload=EmptyTaskPayload(),
-            worker=worker_cls(name=assigned_worker_slug, model=model),
-            sandbox=parent_task.sandbox,
-            evaluators=(),
-        )
-        return task.model_dump(mode="json")
 
     # ── refine_task ──────────────────────────────────────────
 

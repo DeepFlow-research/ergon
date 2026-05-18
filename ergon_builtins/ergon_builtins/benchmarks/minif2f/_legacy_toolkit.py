@@ -158,9 +158,7 @@ class MiniF2FToolkit:
         *,
         # `sandbox` and `sandbox_run_skill` use `Any` deliberately —
         # the v1 benchmark surface accepts both the live e2b
-        # `AsyncSandbox` and lighter test doubles. The `_minif2f_run_skill`
-        # helper in `_legacy_workers.py` already types its closure return
-        # as `Any` (see slopcop ignore there); we mirror the same bound.
+        # `AsyncSandbox` and lighter test doubles.
         sandbox: Any,  # slopcop: ignore[no-typing-any]
         sandbox_run_skill: Callable[..., Any],  # slopcop: ignore[no-typing-any]
         run_id: UUID,

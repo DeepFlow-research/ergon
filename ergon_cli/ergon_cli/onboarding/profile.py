@@ -2,9 +2,8 @@
 
 from enum import Enum
 
+from ergon_core.api.benchmark import BenchmarkRequirements
 from pydantic import BaseModel, Field
-
-from ergon_core.api.registry import registry
 
 
 class LLMProvider(str, Enum):
@@ -34,6 +33,21 @@ GPU_PROVIDER_KEY_MAP: dict[GPUProvider, str] = {
     GPUProvider.RUNPOD: "RUNPOD_API_KEY",
 }
 
+BUILTIN_BENCHMARK_REQUIREMENTS: dict[str, BenchmarkRequirements] = {
+    "gdpeval": BenchmarkRequirements(e2b=True, extras=("ergon-builtins[data]",)),
+    "minif2f": BenchmarkRequirements(e2b=True),
+    "researchrubrics": BenchmarkRequirements(
+        extras=("ergon-builtins[data]",),
+        optional_keys=("EXA_API_KEY",),
+    ),
+    "researchrubrics-vanilla": BenchmarkRequirements(),
+    "swebench-verified": BenchmarkRequirements(e2b=True, extras=("ergon-builtins[data]",)),
+}
+
+
+def available_benchmark_slugs() -> list[str]:
+    return sorted(BUILTIN_BENCHMARK_REQUIREMENTS)
+
 
 class OnboardProfile(BaseModel):
     """Captures every user choice made during onboarding."""
@@ -47,7 +61,7 @@ class OnboardProfile(BaseModel):
 
     def required_keys(self) -> dict[str, str]:
         """Return {env_var: human_reason} derived purely from user choices."""
-        benchmarks = registry.benchmarks
+        benchmarks = BUILTIN_BENCHMARK_REQUIREMENTS
 
         result: dict[str, str] = {}
 
@@ -55,12 +69,12 @@ class OnboardProfile(BaseModel):
             env_var = PROVIDER_KEY_MAP[provider]
             result[env_var] = f"{provider.value} API access"
 
-        if any(benchmarks[b].onboarding_deps.e2b for b in self.benchmarks if b in benchmarks):
+        if any(benchmarks[b].e2b for b in self.benchmarks if b in benchmarks):
             result["E2B_API_KEY"] = "Sandboxed code execution for selected benchmarks"
 
         for b in self.benchmarks:
             if b in benchmarks:
-                for k in benchmarks[b].onboarding_deps.optional_keys:
+                for k in benchmarks[b].optional_keys:
                     result.setdefault(k, f"Optional for {b}")
 
         if self.gpu_provider and self.gpu_provider != GPUProvider.LOCAL:
@@ -71,12 +85,12 @@ class OnboardProfile(BaseModel):
 
     def required_extras(self) -> list[str]:
         """Pip extras to install based on choices."""
-        benchmarks = registry.benchmarks
+        benchmarks = BUILTIN_BENCHMARK_REQUIREMENTS
 
         extras: set[str] = set()
         for b in self.benchmarks:
             if b in benchmarks:
-                for e in benchmarks[b].onboarding_deps.extras:
+                for e in benchmarks[b].extras:
                     extras.add(e)
         if self.training:
             extras.add("ergon-infra[training]")

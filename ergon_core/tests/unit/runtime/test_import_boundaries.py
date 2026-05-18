@@ -1,3 +1,46 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[4]
+
+
+def _python_files(*roots: str) -> list[Path]:
+    files: list[Path] = []
+    for root in roots:
+        path = ROOT / root
+        if path.is_file():
+            files.append(path)
+        else:
+            files.extend(path.rglob("*.py"))
+    return sorted(files)
+
+
+def test_runtime_and_tooling_do_not_import_process_local_registry() -> None:
+    """PR14 deletes ``ergon_core.api.registry`` as a public/runtime surface."""
+
+    forbidden = "ergon_core.api.registry"
+    offenders = [
+        path.relative_to(ROOT).as_posix()
+        for path in _python_files(
+            "ergon_core/ergon_core",
+            "ergon_cli/ergon_cli",
+            "tests/fixtures/smoke_components",
+            "scripts/smoke_reassert.py",
+        )
+        if path.relative_to(ROOT).as_posix() != "ergon_core/ergon_core/api/registry.py"
+        and forbidden in path.read_text()
+    ]
+
+    assert offenders == []
+
+
+def test_process_local_registry_module_is_deleted() -> None:
+    assert not (ROOT / "ergon_core/ergon_core/api/registry.py").exists()
+
+
+def test_persistent_component_catalog_model_is_deleted() -> None:
+    assert not (ROOT / "ergon_core/ergon_core/core/persistence/components/models.py").exists()
+
+
 def test_telemetry_models_import_before_run_resource_api() -> None:
     from ergon_core.core.persistence.telemetry.models import RunResource
 

@@ -51,7 +51,6 @@ from ergon_core.core.application.graph.models import (
     WorkflowGraphDto,
 )
 from ergon_core.core.shared.utils import utcnow
-from pydantic import BaseModel
 from sqlalchemy import text
 from sqlmodel import Session, col, select
 
@@ -97,7 +96,6 @@ class WorkflowGraphRepository:
         *,
         initial_node_status: str,
         initial_edge_status: str,
-        task_payload_model: type[BaseModel],
         meta: MutationMeta,
     ) -> WorkflowGraphDto:
         """Copy definition tables into run graph tables.
@@ -213,7 +211,7 @@ class WorkflowGraphRepository:
             )
             seq += 1
 
-            payload = task.task_payload_as(task_payload_model).model_dump(mode="json")
+            payload = task.task_json.get("task_payload") or {}
             if payload:
                 annotation_rows.append(
                     RunGraphAnnotation(

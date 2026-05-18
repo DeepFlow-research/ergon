@@ -50,9 +50,9 @@ class WorkerContext(BaseModel):
     # Typed as ``Any`` (with a comment naming the
     # real class) to avoid an api → core → api import cycle:
     # ``TaskManagementService`` lives in
-    # ``ergon_core.core.application.tasks.management`` which imports
-    # ``from ergon_core.api.registry import registry``. Typing the
-    # ``PrivateAttr`` with the real class would close that cycle.
+    # ``ergon_core.core.application.tasks.management``. Typing these
+    # service dependencies here would make the public API package depend
+    # on the runtime application layer.
     # TODO: I'd quite like these typed as their "real objects," lets find some way to make that happen.
     task_mgmt: Any = Field(
         exclude=True,

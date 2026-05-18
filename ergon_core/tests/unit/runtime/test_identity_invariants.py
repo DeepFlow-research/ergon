@@ -145,7 +145,6 @@ def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
         definition_id=definition_id,
         initial_node_status="pending",
         initial_edge_status="pending",
-        task_payload_model=_EmptyPayload,
         meta=MutationMeta(actor="test", reason="identity"),
     )
 
@@ -179,7 +178,6 @@ async def test_task_id_propagates_into_runtime_task_instance() -> None:
         definition_id=definition_id,
         initial_node_status="pending",
         initial_edge_status="pending",
-        task_payload_model=_EmptyPayload,
         meta=MutationMeta(actor="test", reason="identity"),
     )
 

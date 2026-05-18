@@ -146,7 +146,6 @@ def test_graph_initialization_writes_concrete_worker_slug_from_definition_bindin
         definition_id,
         initial_node_status=TaskExecutionStatus.PENDING,
         initial_edge_status="pending",
-        task_payload_model=_Payload,
         meta=MutationMeta(actor="test"),
     )
 
@@ -167,16 +166,6 @@ async def test_workflow_initialization_returns_node_ids_for_initial_ready_static
     )
     run_id = _run(session, definition_id=definition_id)
 
-    class _Benchmark:
-        task_payload_model = _Payload
-
-    from ergon_core.api.registry import registry
-
-    monkeypatch.setitem(
-        registry.benchmarks,
-        benchmark_type,
-        _Benchmark,
-    )
     monkeypatch.setattr(
         "ergon_core.core.application.workflows.service.get_session",
         lambda: _session_context(session),
@@ -271,7 +260,7 @@ async def test_add_subtask_rejects_unknown_worker_slug_before_creating_node() ->
 
     dashboard_emitter = MagicMock()
 
-    with pytest.raises(ValueError, match="Unknown worker slug"):
+    with pytest.raises(ValueError, match="Slug-based add_subtask was removed"):
         await TaskManagementService(dashboard_emitter=dashboard_emitter).add_subtask(
             session,
             AddSubtaskCommand(

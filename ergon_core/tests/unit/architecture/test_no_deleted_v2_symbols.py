@@ -12,6 +12,7 @@ PRODUCTION_ROOTS = (
 DELETED_SYMBOLS = (
     "TaskSpec",
     "ComponentRegistry",
+    "ComponentCatalog",
     "ComponentCatalogService",
     "EvaluateTaskRunRequest",
     "ExperimentRecord",

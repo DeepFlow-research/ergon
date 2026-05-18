@@ -30,3 +30,10 @@ def test_object_bound_benchmark_does_not_import_component_registry(
         f"{slug} still depends on ComponentRegistry; PR 10 was supposed "
         f"to remove that dependency. Offenders: {offenders}"
     )
+
+
+def test_toolkit_is_public_from_stable_builtins_baselines_path() -> None:
+    from ergon_builtins.workers.baselines import Toolkit
+    from ergon_builtins.workers.baselines.toolkit import Toolkit as ToolkitModuleSymbol
+
+    assert Toolkit is ToolkitModuleSymbol

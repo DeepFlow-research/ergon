@@ -1,13 +1,13 @@
 """Unit tests for OnboardProfile: required_keys() and required_extras()."""
 
 import pytest
+import ergon_cli.onboarding.profile as profile_module
 from ergon_cli.onboarding.profile import (
     GPUProvider,
     LLMProvider,
     OnboardProfile,
 )
 from ergon_core.api import BenchmarkRequirements
-from ergon_core.api.registry import registry
 
 
 class _Benchmark:
@@ -32,8 +32,8 @@ class _ResearchBenchmark:
 @pytest.fixture(autouse=True)
 def _benchmark_registry(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        registry,
-        "benchmarks",
+        profile_module,
+        "BUILTIN_BENCHMARKS",
         {
             "minif2f": _E2BBenchmark,
             "swebench-verified": _DataBenchmark,
@@ -193,4 +193,4 @@ class TestOnboardingWizardSeesAllBenchmarks:
             "researchrubrics",
             "researchrubrics-vanilla",
         }
-        assert expected <= set(registry.benchmarks)
+        assert expected <= set(profile_module.BUILTIN_BENCHMARKS)

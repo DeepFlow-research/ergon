@@ -21,7 +21,6 @@ logging.basicConfig(
 )
 
 import inngest.fast_api
-from ergon_core.api.registry import registry
 from ergon_core.core.rest_api.cohorts import router as cohorts_router
 from ergon_core.core.rest_api.experiments import router as experiments_router
 from ergon_core.core.rest_api.rollouts import router as rollouts_router
@@ -68,11 +67,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         PostgresSandboxEventSink(),
     )
     DefaultSandboxManager.set_event_sink(sink)
-    for manager_cls in registry.sandbox_managers.values():
-        manager_cls.set_event_sink(sink)
     logger.info(
-        "sandbox event sink wired on %d manager subclass(es)",
-        1 + len(registry.sandbox_managers),
+        "sandbox event sink wired on default sandbox manager",
     )
 
     logger.info("app startup complete — all subsystems initialised")

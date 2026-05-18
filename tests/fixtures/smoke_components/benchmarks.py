@@ -16,11 +16,60 @@ from ergon_core.api.benchmark import (
     EmptyTaskPayload,
     Task,
 )
-from ergon_core.api.registry import registry
 from ergon_core.api.worker import Worker
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
 from tests.fixtures.smoke_components.sandbox import SmokePublicSandbox
+from tests.fixtures.smoke_components.workers.minif2f_smoke import (
+    MiniF2FFailingLeafWorker,
+    MiniF2FRecursiveSmokeWorker,
+    MiniF2FSadPathSmokeWorker,
+    MiniF2FSmokeLeafWorker,
+    MiniF2FSmokeWorker,
+)
+from tests.fixtures.smoke_components.workers.researchrubrics_smoke import (
+    ResearchRubricsFailingLeafWorker,
+    ResearchRubricsRecursiveSmokeWorker,
+    ResearchRubricsSadPathSmokeWorker,
+    ResearchRubricsSmokeLeafWorker,
+    ResearchRubricsSmokeWorker,
+)
+from tests.fixtures.smoke_components.workers.swebench_smoke import (
+    SweBenchFailingLeafWorker,
+    SweBenchRecursiveSmokeWorker,
+    SweBenchSadPathSmokeWorker,
+    SweBenchSmokeLeafWorker,
+    SweBenchSmokeWorker,
+)
+
+
+class GDPEvalSmokeWorker(SweBenchSmokeWorker):
+    """GDPEval smoke root using the generic smoke worker topology."""
+
+    type_slug: ClassVar[str] = "gdpeval-smoke-worker"
+
+
+_SMOKE_WORKERS: dict[str, type[Worker]] = {
+    cls.type_slug: cls
+    for cls in (
+        ResearchRubricsSmokeWorker,
+        ResearchRubricsSmokeLeafWorker,
+        ResearchRubricsRecursiveSmokeWorker,
+        ResearchRubricsSadPathSmokeWorker,
+        ResearchRubricsFailingLeafWorker,
+        MiniF2FSmokeWorker,
+        MiniF2FSmokeLeafWorker,
+        MiniF2FRecursiveSmokeWorker,
+        MiniF2FSadPathSmokeWorker,
+        MiniF2FFailingLeafWorker,
+        SweBenchSmokeWorker,
+        SweBenchSmokeLeafWorker,
+        SweBenchRecursiveSmokeWorker,
+        SweBenchSadPathSmokeWorker,
+        SweBenchFailingLeafWorker,
+        GDPEvalSmokeWorker,
+    )
+}
 
 
 class ResearchRubricsTaskPayload(BaseModel):
@@ -89,7 +138,11 @@ class _SingleTaskSmokeBenchmark(Benchmark):
         return ("default", "post-root")
 
     def _make_worker(self) -> Worker:
-        worker_cls = registry.require_worker(self.worker_slug)
+        try:
+            worker_cls = _SMOKE_WORKERS[self.worker_slug]
+        except KeyError:
+            known = ", ".join(sorted(_SMOKE_WORKERS))
+            raise ValueError(f"Unknown smoke worker slug {self.worker_slug!r}; known: {known}")
         return worker_cls(name=self.worker_slug, model=self.model)
 
 

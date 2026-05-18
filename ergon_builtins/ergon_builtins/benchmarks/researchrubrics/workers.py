@@ -5,8 +5,8 @@ prompt with a chosen worker class (ReActWorker today; CoTWorker /
 ReflexionWorker future).  Strategies vary independently; the domain
 bundle is constant.
 
-PR 11 removed the legacy registry bridges. v2 callers use
-``make_research_worker()`` directly from the benchmark object graph.
+v2 callers use ``make_research_worker()`` directly from the benchmark
+object graph.
 """
 
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric

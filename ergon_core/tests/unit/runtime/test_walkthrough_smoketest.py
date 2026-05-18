@@ -142,7 +142,6 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
         definition_id=definition_id,
         initial_node_status="pending",
         initial_edge_status="pending",
-        task_payload_model=_EmptyPayload,
         meta=MutationMeta(actor="test", reason="smoke"),
     )
 
