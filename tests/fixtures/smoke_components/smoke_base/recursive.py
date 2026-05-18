@@ -15,10 +15,11 @@ from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, NodeId, RunId, TaskSlug
+from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from ergon_core.core.application.communication.models import CreateMessageRequest
 from ergon_core.core.application.communication.service import communication_service
-from ergon_core.core.application.tasks.models import PlanSubtasksCommand, SubtaskSpec
+from ergon_core.core.application.tasks.models import SubtaskSpec
+from tests.fixtures.smoke_components.smoke_base.dynamic_tasks import smoke_task_from_spec
 from sqlmodel import select
 
 NESTED_LINE_SLUGS: tuple[str, ...] = ("l_2_a", "l_2_b")
@@ -61,18 +62,19 @@ class RecursiveSmokeWorkerBase(Worker):
             )
             for slug, deps, desc in NESTED_SUBTASK_GRAPH
         ]
-        with get_session() as session:
-            result = await context.task_mgmt.plan_subtasks(
-                session,
-                PlanSubtasksCommand(
-                    run_id=RunId(context.run_id),
-                    parent_task_id=NodeId(context.task_id),
-                    subtasks=specs,
-                ),
+        planned: dict[TaskSlug, UUID] = {}
+        for spec in specs:
+            child_task = smoke_task_from_spec(
+                parent_task=task,
+                spec=spec,
+                model=self.model,
             )
+            dependency_task_ids = tuple(planned[dep] for dep in spec.depends_on)
+            handle = await context.spawn_task(child_task, depends_on=dependency_task_ids)
+            planned[spec.task_slug] = handle.task_id
 
         summary = "\n".join(
-            f"{slug}: planned (task_id={result.nodes[TaskSlug(slug)]})"
+            f"{slug}: planned (task_id={planned[TaskSlug(slug)]})"
             for slug, _deps, _desc in NESTED_SUBTASK_GRAPH
         )
         yield ContextPartChunk(
@@ -81,7 +83,7 @@ class RecursiveSmokeWorkerBase(Worker):
             ),
         )
 
-        planned_children = sorted(str(slug) for slug in result.nodes)
+        planned_children = sorted(str(slug) for slug in planned)
         await self._send_recursive_completion_message(context, planned_children)
         yield ContextPartChunk(
             part=AssistantTextPart(
