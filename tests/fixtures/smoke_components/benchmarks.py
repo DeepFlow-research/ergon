@@ -59,10 +59,10 @@ class _SingleTaskSmokeBenchmark(Benchmark):
 
     PR 10c: every subclass now overrides ``build_instances`` to return
     a concrete ``Task[...]`` with inline ``evaluators``.  The base
-    method previously returned a ``TaskSpec``-shaped payload; with all
+    method previously returned a ``object-bound Task``-shaped payload; with all
     four benchmark subclasses (MiniF2F, SWE-Bench, ResearchRubrics,
     GDPEval) owning their builds, the default is gone and the import
-    of ``TaskSpec`` no longer fans out from this module.
+    of ``object-bound Task`` no longer fans out from this module.
     """
 
     onboarding_deps: ClassVar[BenchmarkRequirements] = BenchmarkRequirements(e2b=True)

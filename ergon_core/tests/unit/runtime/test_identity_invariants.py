@@ -61,7 +61,7 @@ def _session() -> Session:
 
 def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
     """Insert a definition with two tasks; return (definition_id, run_id,
-    set_of_definition_task_ids)."""
+    set_of_task_ids)."""
 
     experiment_id = uuid4()
     definition_id = uuid4()
@@ -120,7 +120,7 @@ def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
     experiment_definition_tasks → run_graph_nodes.
 
     During the transition, run-tier identity lives in either
-    ``definition_task_id`` (copied from definition) or ``id`` (run-tier
+    ``task_id`` (copied from definition) or ``id`` (run-tier
     minted). PR 11 collapses to ``task_id``.
     """
 
@@ -139,9 +139,9 @@ def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
     )
 
     rows = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
-    # Every definition_task_id should appear on exactly one run-graph
+    # Every task_id should appear on exactly one run-graph
     # row.
-    seen = {row.definition_task_id for row in rows}
+    seen = {row.task_id for row in rows}
     assert seen == defn_task_ids, (
         f"task_id did not survive prepare: definition={defn_task_ids}, run-tier={seen}"
     )
@@ -172,14 +172,14 @@ async def test_task_id_propagates_into_runtime_task_instance() -> None:
 
     nodes = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
     for row in nodes:
-        canonical_id = row.definition_task_id or row.id
+        canonical_id = row.task_id or row.id
         view = await repo.node(session, run_id=run_id, task_id=canonical_id)
         assert view.task_id == canonical_id
         assert view.task.task_id == canonical_id
     # And the inflated task ids match the original definition task ids
     seen = set()
     for row in nodes:
-        canonical_id = row.definition_task_id or row.id
+        canonical_id = row.task_id or row.id
         view = await repo.node(session, run_id=run_id, task_id=canonical_id)
         seen.add(view.task.task_id)
     assert seen == defn_task_ids
@@ -318,7 +318,7 @@ def _seed_identity_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
         description="parent task",
         status="RUNNING",
         is_dynamic=False,
-        parent_node_id=None,
+        parent_task_id=None,
         level=0,
     )
     session.add(node)

@@ -135,7 +135,7 @@ def test_initialize_from_definition_copies_task_json() -> None:
     assert row.task_json["task_slug"] == "solve"
     assert row.task_json["task_payload"] == {"problem": "p"}
     assert row.task_json["_type"].endswith(":TaskSpec")
-    assert row.task_json["_legacy"]["definition_task_id"]
+    assert row.task_json["_legacy"]["task_id"]
     assert row.is_dynamic is False
 
 
@@ -173,7 +173,7 @@ async def test_graph_repo_node_inflates_task_from_run_tier() -> None:
     row = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).first()
     assert row is not None
 
-    canonical_task_id = row.definition_task_id or row.id
+    canonical_task_id = row.task_id or row.id
     view = await repo.node(session, run_id=run_id, task_id=canonical_task_id)
 
     assert view.task.task_slug == "solve"

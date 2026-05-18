@@ -130,7 +130,7 @@ class RunReadService:
             ex.id: ex.node_id for ex in executions if ex.node_id is not None
         }
         defn_to_node: dict[UUID, UUID] = {
-            n.definition_task_id: n.id for n in nodes if n.definition_task_id is not None
+            n.task_id: n.id for n in nodes if n.task_id is not None
         }
 
         context_events_by_task = _context_events_by_task(

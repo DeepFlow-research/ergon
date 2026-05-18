@@ -4,7 +4,6 @@ from datetime import datetime
 from uuid import UUID
 
 from ergon_core.api.benchmark import Task
-from ergon_core.api.criterion import CriterionOutcome
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
 from ergon_core.core.persistence.definitions.models import (
@@ -23,7 +22,6 @@ from ergon_core.core.persistence.telemetry.repository import (
     CreateTaskEvaluation,
     TelemetryRepository,
 )
-from ergon_core.core.application.evaluation.executors import CriterionExecutor
 from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
 from ergon_core.core.application.evaluation.models import (
     CriterionSpec,
@@ -62,10 +60,8 @@ class EvaluationService:
 
     def __init__(
         self,
-        criterion_executor: CriterionExecutor | None = None,
         telemetry_repo: TelemetryRepository | None = None,
     ) -> None:
-        self.criterion_executor = criterion_executor
         self.telemetry_repo = telemetry_repo or TelemetryRepository()
 
     def prepare_dispatch(self, command: DispatchEvaluatorsCommand) -> PreparedEvaluatorDispatch:
@@ -74,7 +70,7 @@ class EvaluationService:
             node = session.get(RunGraphNode, command.node_id)
             if node is None:
                 raise LookupError(f"run graph node not found: {command.node_id}")
-            task_id = command.task_id or node.definition_task_id
+            task_id = command.task_id or node.task_id
             if task_id is None:
                 return PreparedEvaluatorDispatch(
                     node_id=command.node_id,
@@ -130,56 +126,6 @@ class EvaluationService:
         finally:
             session.close()
 
-    # TODO(PR 11): delete this method together with `CriterionExecutor`
-    # and `InngestCriterionExecutor` (Δ.7 deletion list).
-    async def evaluate_legacy(
-        self,
-        task_context: TaskEvaluationContext,
-        evaluator: Evaluator,
-        task: Task,
-        benchmark_name: str,
-    ) -> EvaluationServiceResult:
-        """v1 entry point — held only for tests still exercising the
-        executor-based signature.
-
-        **Status.** Zero production callers as of PR 4. The only
-        remaining caller is
-        ``tests/unit/runtime/test_rubric_evaluation_service.py``,
-        which specifically tests that an injected ``CriterionExecutor``
-        receives the expected ``CriterionSpec``s. Production code uses
-        the v2 ``evaluate`` (below).
-
-        **Deletion gate.** PR 11 (Δ.7) deletes this method together
-        with the ``CriterionExecutor`` Protocol and
-        ``InngestCriterionExecutor`` — at which point the executor-spec
-        test goes too. Don't add new callers.
-        """
-
-        if self.criterion_executor is None:
-            raise RuntimeError("EvaluationService.evaluate_legacy requires a criterion executor")
-        criteria = list(evaluator.criteria_for(task))
-        specs = [
-            CriterionSpec(
-                criterion=c,
-                criterion_idx=i,
-                max_score=c.score_spec.max_score,
-                stage_idx=0,
-                stage_name="default",
-                aggregation_weight=c.weight,
-            )
-            for i, c in enumerate(criteria)
-        ]
-        criterion_results: list[CriterionOutcome] = await self.criterion_executor.execute_all(
-            task_context=task_context,
-            task=task,
-            benchmark_name=benchmark_name,
-            criteria=specs,
-        )
-        return EvaluationServiceResult(
-            result=evaluator.aggregate_task(task, criterion_results),
-            specs=specs,
-        )
-
     async def evaluate(
         self,
         *,
@@ -191,7 +137,7 @@ class EvaluationService:
         The v2 evaluation entry point. Iterates
         ``evaluator.criteria_for(context.task)`` and awaits
         ``criterion.evaluate(context)`` on each — there's no
-        ``CriterionExecutor`` indirection because the Inngest retry
+        ``evaluator runner`` indirection because the Inngest retry
         boundary already lives one level up: the orchestrator
         (``execute_task._fan_out_evaluators``) gives each evaluator
         its own ``ctx.step.invoke``, so retries replay whole evaluators,
@@ -222,13 +168,13 @@ class EvaluationService:
             specs=specs,
         )
 
-    def persist_success(
+    async def persist_success(
         self,
         *,
         run_id: UUID,
         node_id: UUID,
         task_execution_id: UUID,
-        definition_task_id: UUID | None,
+        task_id: UUID | None,
         binding_key: str,
         service_result: EvaluationServiceResult,
         evaluation_input: str | None = None,
@@ -238,13 +184,13 @@ class EvaluationService:
         session = get_session()
         try:
             evaluator_id = self.lookup_evaluator_id(session, run_id, binding_key)
-            evaluation = self.telemetry_repo.create_task_evaluation(
+            evaluation = await self.telemetry_repo.create_task_evaluation(
                 session,
                 CreateTaskEvaluation(
                     run_id=run_id,
                     node_id=node_id,
                     task_execution_id=task_execution_id,
-                    definition_task_id=definition_task_id,
+                    task_id=task_id,
                     definition_evaluator_id=evaluator_id,
                     score=result.score,
                     passed=result.passed,
@@ -269,13 +215,13 @@ class EvaluationService:
         finally:
             session.close()
 
-    def persist_failure(
+    async def persist_failure(
         self,
         *,
         run_id: UUID,
         node_id: UUID,
         task_execution_id: UUID,
-        definition_task_id: UUID | None,
+        task_id: UUID | None,
         binding_key: str,
         exc: Exception,
     ) -> None:
@@ -291,13 +237,13 @@ class EvaluationService:
         session = get_session()
         try:
             evaluator_id = self.lookup_evaluator_id(session, run_id, binding_key)
-            self.telemetry_repo.create_task_evaluation(
+            await self.telemetry_repo.create_task_evaluation(
                 session,
                 CreateTaskEvaluation(
                     run_id=run_id,
                     node_id=node_id,
                     task_execution_id=task_execution_id,
-                    definition_task_id=definition_task_id,
+                    task_id=task_id,
                     definition_evaluator_id=evaluator_id,
                     score=0.0,
                     passed=False,
@@ -318,8 +264,8 @@ class EvaluationService:
     ) -> UUID:
         """Resolve the ``ExperimentDefinitionEvaluator.id`` for a binding key.
 
-        PR 5 moved evaluator picking from the v1 wire payload (legacy
-        ``EvaluateTaskRunRequest`` carried the id) to ``task.evaluators[i]``
+        PR 5 moved evaluator picking from the v1 wire payload to
+        ``task.evaluators[i]``
         — the eval body no longer has the id, only the live ``Evaluator``
         instance. The persistence layer needs the id for the FK on
         ``run_task_evaluations.definition_evaluator_id``, so the lookup

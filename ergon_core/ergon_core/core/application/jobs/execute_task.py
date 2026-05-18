@@ -7,7 +7,7 @@ Emits TaskCompletedEvent on success, TaskFailedEvent on failure.
 **Sandbox lifetime ownership.** This function owns the *acquisition*
 side of the sandbox lifecycle (via ``sandbox-setup``) and emits the
 *terminal* events (``task/completed`` / ``task/failed``) that gate
-cleanup.  The actual ``terminate_sandbox_by_id`` call lives in a
+cleanup.  The actual ``terminate_external_sandbox`` call lives in a
 sibling Inngest function — see
 ``ergon_core/core/application/jobs/sandbox_cleanup.py``.
 
@@ -29,7 +29,7 @@ evaluators are done.  The sibling cleanup function then fires once
 and terminates the sandbox.
 
 **Why a sibling function, not an inline try/finally.** The original
-PR 4 layout used ``try/finally: terminate_sandbox_by_id(...)`` here.
+PR 4 layout used ``try/finally: terminate_external_sandbox(...)`` here.
 That pattern is incompatible with Inngest's step-replay model: each
 ``await ctx.step.invoke(...)`` raises ``ResponseInterrupt`` (a
 ``BaseException``) to suspend the coroutine, which fires the
@@ -122,7 +122,7 @@ async def _invoke_sandbox_setup(
 ) -> SandboxReadyResult:
     # Dynamic subtasks have no static task_id. Use node_id as the sandbox key
     # so each subtask gets its own isolated sandbox slot in the manager registry.
-    sandbox_task_key = payload.task_id or prepared.node_id
+    sandbox_task_key = payload.task_id or prepared.task_id
     return await ctx.step.invoke(
         "sandbox-setup",
         function=sandbox_setup_function,
@@ -167,7 +167,7 @@ async def _invoke_worker_execute(
             worker_type=prepared.worker_type,
             model_target=prepared.model_target,
             benchmark_type=prepared.benchmark_type,
-            node_id=prepared.node_id,
+            node_id=prepared.task_id,
         ).model_dump(),
     )
 
@@ -185,7 +185,7 @@ async def _fan_out_evaluators(
     `ctx.step.invoke(...)` returns; once it resumes, control falls
     through to the `finally` block in ``run_execute_task_job`` and
     the external sandbox is terminated. Same shape as
-    `InngestCriterionExecutor.execute_all` (the v1 per-criterion
+    `Inngestevaluator runner.execute_all` (the v1 per-criterion
     parallelism), just lifted one level up to per-evaluator.
 
     ``ctx.group.parallel`` over a tuple of ``partial(ctx.step.invoke, ...)``
@@ -196,10 +196,10 @@ async def _fan_out_evaluators(
 
     Evaluator count comes from the object-bound ``task.evaluators`` tuple.
     A narrow legacy binding-key fallback remains until PR 11 deletes
-    TaskSpec snapshots and the definition-row evaluator bridge.
+    object-bound Task snapshots and the definition-row evaluator bridge.
     """
 
-    canonical_task_id = payload.task_id or prepared.node_id
+    canonical_task_id = payload.task_id or prepared.task_id
     with get_session() as session:
         view = await WorkflowGraphRepository().node(
             session,
@@ -208,7 +208,7 @@ async def _fan_out_evaluators(
         )
     evaluator_count = len(view.task.evaluators)
     if evaluator_count == 0 and view.task.evaluator_binding_keys:
-        # TODO(PR 11): delete legacy fallback once TaskSpec snapshots and
+        # TODO(PR 11): delete legacy fallback once object-bound Task snapshots and
         # evaluator binding keys are gone from the runtime path.
         evaluator_count = len(view.task.evaluator_binding_keys)
     if evaluator_count == 0:
@@ -239,7 +239,7 @@ async def _invoke_persist_outputs(
     sandbox_result: SandboxReadyResult,
     persist_outputs_function: inngest.Function,
 ) -> PersistOutputsResult:
-    output_task_key = payload.task_id or prepared.node_id
+    output_task_key = payload.task_id or prepared.task_id
     return await ctx.step.invoke(
         "persist-outputs",
         function=persist_outputs_function,
@@ -270,7 +270,7 @@ async def _emit_task_completed(
                 task_id=payload.task_id,
                 execution_id=prepared.execution_id,
                 sandbox_id=sandbox_id,
-                node_id=prepared.node_id,
+                node_id=prepared.task_id,
             ).model_dump(mode="json"),
         )
     )
@@ -292,7 +292,7 @@ async def _emit_task_failed(
                 execution_id=prepared.execution_id,
                 error=error_message,
                 sandbox_id=sandbox_id,
-                node_id=prepared.node_id,
+                node_id=prepared.task_id,
             ).model_dump(mode="json"),
         )
     )
@@ -404,13 +404,13 @@ async def run_execute_task_job(
         get_trace_sink().emit_span(
             CompletedSpan(
                 name="task.execute",
-                context=task_execute_context(payload.run_id, prepared.node_id),
+                context=task_execute_context(payload.run_id, prepared.task_id),
                 start_time=span_start,
                 end_time=datetime.now(UTC),
                 attributes={
                     "run_id": str(payload.run_id),
                     "definition_id": str(payload.definition_id),
-                    "task_id": str(prepared.node_id),
+                    "task_id": str(prepared.task_id),
                     "execution_id": str(prepared.execution_id),
                     "task_slug": prepared.task_slug,
                     "benchmark_type": prepared.benchmark_type,
@@ -456,7 +456,7 @@ async def run_execute_task_job(
                             "assigned_worker_slug": str(prepared.assigned_worker_slug),
                             "worker_type": str(prepared.worker_type),
                             "model_target": str(prepared.model_target),
-                            "node_id": str(prepared.node_id),
+                            "node_id": str(prepared.task_id),
                             "execution_id": str(prepared.execution_id),
                         },
                     },
@@ -468,7 +468,7 @@ async def run_execute_task_job(
             get_trace_sink().emit_span(
                 CompletedSpan(
                     name="task.execute",
-                    context=task_execute_context(payload.run_id, prepared.node_id),
+                    context=task_execute_context(payload.run_id, prepared.task_id),
                     start_time=span_start,
                     end_time=datetime.now(UTC),
                     status_code="error",
@@ -476,7 +476,7 @@ async def run_execute_task_job(
                     attributes={
                         "run_id": str(payload.run_id),
                         "definition_id": str(payload.definition_id),
-                        "task_id": str(prepared.node_id),
+                        "task_id": str(prepared.task_id),
                         "execution_id": str(prepared.execution_id),
                         "task_slug": prepared.task_slug,
                         "benchmark_type": prepared.benchmark_type,

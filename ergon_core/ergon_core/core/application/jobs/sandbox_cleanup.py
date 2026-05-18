@@ -19,7 +19,7 @@ that listens for the terminal task events:
 Both events carry ``sandbox_id`` (nullable on ``task/failed`` for the
 pre-sandbox-setup error case).  The cleanup function is idempotent: a
 second termination for the same sandbox_id is a no-op
-(``terminate_sandbox_by_id`` returns ``NOT_FOUND_OR_ALREADY_CLOSED``).
+(``terminate_external_sandbox`` returns ``NOT_FOUND_OR_ALREADY_CLOSED``).
 
 This restores the v1 layout (separate function for sandbox cleanup) but
 fixes the v1 bug PR 4 cited as motivation — "the sibling function could
@@ -36,7 +36,7 @@ from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
 )
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
+from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_external_sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ async def run_sandbox_cleanup_on_completed(
 ) -> str:
     """Terminate the sandbox after a successful task.
 
-    Wraps ``terminate_sandbox_by_id`` in ``ctx.step.run`` so the cleanup
+    Wraps ``terminate_external_sandbox`` in ``ctx.step.run`` so the cleanup
     happens exactly once even if the function is retried, and so the
     termination is observable in Inngest's step inspector.
     """
@@ -83,7 +83,7 @@ async def run_sandbox_cleanup_on_failed(
 
 async def _terminate(sandbox_id: str, *, reason: str) -> str:
     """Inner step body: terminate by sandbox_id, log, return reason."""
-    result = await terminate_sandbox_by_id(sandbox_id)
+    result = await terminate_external_sandbox(sandbox_id)
     logger.info(
         "sandbox-cleanup sandbox_id=%s terminated=%s reason=%s trigger=%s",
         result.sandbox_id,

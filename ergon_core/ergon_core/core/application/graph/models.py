@@ -46,7 +46,6 @@ class GraphNodeDto(BaseModel):
 
     id: NodeId
     run_id: RunId
-    definition_task_id: DefinitionId | None
     instance_key: str
     task_slug: str
     description: str
@@ -57,7 +56,7 @@ class GraphNodeDto(BaseModel):
         )
     )
     assigned_worker_slug: str | None
-    parent_node_id: NodeId | None
+    parent_task_id: NodeId | None
     level: int
 
 
@@ -70,7 +69,7 @@ class GraphTaskRef(BaseModel):
     task_slug: str
     status: NodeStatus
     level: int
-    parent_node_id: NodeId | None = None
+    parent_task_id: NodeId | None = None
     assigned_worker_slug: str | None = None
     description: str | None = None
 
@@ -81,8 +80,8 @@ class GraphEdgeDto(BaseModel):
     id: EdgeId
     run_id: RunId
     definition_dependency_id: DefinitionId | None
-    source_node_id: NodeId
-    target_node_id: NodeId
+    source_task_id: NodeId
+    target_task_id: NodeId
     status: str = Field(
         description=(
             "Domain-specific edge lifecycle status stored as a string because the database "
@@ -197,8 +196,8 @@ class EdgeAddedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["edge.added"] = "edge.added"
-    source_node_id: NodeId
-    target_node_id: NodeId
+    source_task_id: NodeId
+    target_task_id: NodeId
     status: str
 
 
@@ -208,8 +207,8 @@ class EdgeRemovedMutation(BaseModel):
     model_config = {"frozen": True}
 
     mutation_type: Literal["edge.removed"] = "edge.removed"
-    source_node_id: NodeId
-    target_node_id: NodeId
+    source_task_id: NodeId
+    target_task_id: NodeId
     status: str
 
 
@@ -269,21 +268,15 @@ class RunGraphNodeView(BaseModel):
     already inflated via ``Task.from_definition`` so callers downstream
     of the repo never see ``dict[str, Any]``.
 
-    Carries both ``node_id`` and ``task_id`` during the v2 transition;
-    PR 11 removes ``node_id`` once ``(run_id, task_id)`` is the only
-    canonical identity.
+    ``task_id`` is the run graph node id. Static definition ids are not
+    part of the runtime identity after PR 11.
     """
 
     model_config = {"frozen": True, "arbitrary_types_allowed": True}
 
     run_id: RunId
     task_id: UUID
-    # Transitional fields — kept during the v2 stack so downstream
-    # consumers that still read these can flip incrementally. PR 11
-    # collapses identity to `(run_id, task_id)` only.
-    node_id: NodeId  # TODO(PR 11): drop; task_id is the canonical id
-    definition_task_id: DefinitionId | None  # TODO(PR 11): drop with the column
-    parent_node_id: NodeId | None  # TODO(PR 11): rename to parent_task_id
+    parent_task_id: NodeId | None
     status: str
     task: Task
     is_dynamic: bool = False

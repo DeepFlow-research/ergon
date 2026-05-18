@@ -43,7 +43,7 @@ class _Criterion(Criterion):
 @pytest.mark.asyncio
 async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) -> None:
     execution_id = uuid4()
-    definition_task_id = uuid4()
+    task_id = uuid4()
     captured_options = []
 
     class FakeRuntime:
@@ -59,7 +59,7 @@ async def test_executor_scopes_criterion_runtime_to_task_execution(monkeypatch) 
     criterion = _Criterion()
     executor = InngestCriterionExecutor(
         _Ctx(),
-        task_id=definition_task_id,
+        task_id=task_id,
         execution_id=execution_id,
         evaluator_id=uuid4(),
         sandbox_manager=object(),

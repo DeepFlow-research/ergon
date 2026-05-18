@@ -32,7 +32,7 @@ async def _cancel_orphans_for(
     *,
     run_id: UUID,
     definition_id: UUID,
-    parent_node_id: UUID,
+    parent_task_id: UUID,
     cause: CancelCause,
 ) -> int:
     """Two durable steps: scan-and-cancel, then emit events."""
@@ -44,7 +44,7 @@ async def _cancel_orphans_for(
                 session,
                 run_id=run_id,
                 definition_id=definition_id,
-                parent_node_id=parent_node_id,
+                parent_task_id=parent_task_id,
                 cause=cause,
             )
             session.commit()
@@ -83,7 +83,7 @@ async def run_block_descendants_on_failed_job(
             blocked_ids = await svc.block_pending_descendants(
                 session,
                 run_id=payload.run_id,
-                parent_node_id=payload.node_id,
+                parent_task_id=payload.node_id,
                 cause="parent_failed",
             )
             session.commit()
@@ -101,6 +101,6 @@ async def run_cancel_orphans_on_cancelled_job(
         ctx,
         run_id=payload.run_id,
         definition_id=payload.definition_id,
-        parent_node_id=payload.node_id,
+        parent_task_id=payload.node_id,
         cause="parent_terminal",
     )

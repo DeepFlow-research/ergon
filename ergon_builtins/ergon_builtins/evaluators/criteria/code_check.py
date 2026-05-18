@@ -2,7 +2,7 @@
 
 Stores a Python code template that checks worker output. In-process evaluation
 does simple template matching; full sandbox execution happens via
-InngestCriterionExecutor + DefaultCriterionRuntime.
+Inngestevaluator runner + public sandbox runtime.
 """
 
 from typing import Any, ClassVar

@@ -48,7 +48,7 @@ async def test_8_blocked_node_cannot_be_restarted() -> None:
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="task-a-failed", status="failed")
         node_b = make_node(session, run.id, task_slug="task-b-blocked", status=BLOCKED)
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_b.id)
         run_id = run.id
         defn_id = defn.id
         node_b_id = node_b.id

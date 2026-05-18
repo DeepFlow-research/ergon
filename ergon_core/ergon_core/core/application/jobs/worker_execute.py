@@ -67,26 +67,8 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         )
     task = view.task
 
-    # PR 5 made `task.worker` the canonical source. `Task.from_definition`
-    # re-inflates the right Worker subclass via the `_type` discriminator
-    # when the snapshot is object-bound.
-    #
-    # When `task.worker is None` we fell off the v2 path — the snapshot
-    # came from a TaskSpec-returning benchmark that hasn't been migrated
-    # yet (PR 6 migrates minif2f, PR 10a swebench, PR 10b researchrubrics,
-    # PR 10c gdpeval). The legacy fallback lives in a sibling module so
-    # the runtime-read architecture guard sees only `task.worker` in
-    # this body. See `_legacy_worker_bridge.py` for the deletion gate.
     worker = task.worker
-    if worker is None:
-        # TODO(PR 11): delete this branch + the sibling module. See
-        # `_legacy_worker_bridge.py` docstring for the migration ledger.
-        from ergon_core.core.application.jobs._legacy_worker_bridge import (
-            legacy_worker_from_payload,
-        )
-
-        worker = legacy_worker_from_payload(payload)
-    elif task.sandbox is None or not task.sandbox.is_live:
+    if not task.sandbox.is_live:
         raise ContractViolationError(
             "worker-execute object-bound task requires a live sandbox attached via sandbox_id",
             run_id=payload.run_id,

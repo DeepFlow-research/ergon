@@ -4,10 +4,11 @@ from argparse import Namespace
 import logging
 from uuid import UUID
 
-from ergon_core.core.application.experiments.repository import DefinitionRepository
 from ergon_core.core.application.read_models.experiments import ExperimentReadService
 from ergon_core.core.application.workflows.runs import latest_run_for_definition
 from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord
+from sqlmodel import col, select
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,14 @@ def handle_experiment_list(args: Namespace) -> int:
 def handle_experiment_tags(args: Namespace) -> int:
     _ensure_cli_logging()
     with get_session() as session:
-        tags = DefinitionRepository().distinct_experiment_tags(session)
+        tags = list(
+            session.exec(
+                select(BenchmarkDefinitionRecord.experiment)
+                .where(BenchmarkDefinitionRecord.experiment.is_not(None))
+                .distinct()
+                .order_by(col(BenchmarkDefinitionRecord.experiment).asc())
+            ).all()
+        )
     if not tags:
         logger.info(
             "No experiment tags yet.  Tag definitions by setting "
@@ -102,9 +110,12 @@ def handle_experiment_tags(args: Namespace) -> int:
 def handle_experiment_by_tag(args: Namespace) -> int:
     _ensure_cli_logging()
     with get_session() as session:
-        records = DefinitionRepository().list_by_experiment_tag(
-            session,
-            args.tag,
+        records = list(
+            session.exec(
+                select(BenchmarkDefinitionRecord)
+                .where(BenchmarkDefinitionRecord.experiment == args.tag)
+                .order_by(col(BenchmarkDefinitionRecord.created_at).desc())
+            ).all()
         )
     if not records:
         logger.info("No definitions tagged with experiment=%r", args.tag)

@@ -2,7 +2,7 @@
 
 This remains available for benchmark presets that want a lightweight judge,
 but it owns its provider call directly instead of reaching through
-``CriterionRuntime``. Benchmark-specific rubrics should prefer dedicated
+``public sandbox runtime``. Benchmark-specific rubrics should prefer dedicated
 criterion classes with their own prompts and evidence formatting.
 """
 

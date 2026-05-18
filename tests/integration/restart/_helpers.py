@@ -37,8 +37,8 @@ def get_edge_status(session, run_id: UUID, source_id: UUID, target_id: UUID) -> 
     edge = session.exec(
         select(RunGraphEdge).where(
             RunGraphEdge.run_id == run_id,
-            RunGraphEdge.source_node_id == source_id,
-            RunGraphEdge.target_node_id == target_id,
+            RunGraphEdge.source_task_id == source_id,
+            RunGraphEdge.target_task_id == target_id,
         )
     ).first()
     assert edge is not None, f"No edge from {source_id} to {target_id}"

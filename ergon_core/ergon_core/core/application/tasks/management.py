@@ -71,7 +71,7 @@ _MANAGER_META = MutationMeta(actor="manager-worker", reason="manager_decision")
 
 
 def _count_non_terminal_descendants(session: Session, run_id: UUID, node_id: UUID) -> int:
-    """Count non-terminal descendants via iterative BFS on parent_node_id.
+    """Count non-terminal descendants via iterative BFS on parent_task_id.
 
     Uses Python-level BFS rather than a recursive CTE so the logic is
     portable across SQLite (tests) and Postgres (production).
@@ -103,9 +103,9 @@ class TaskManagementService:
         session: Session,
         command: AddSubtaskCommand,
     ) -> AddSubtaskResult:
-        """Create a subtask node under parent_node_id with dependency edges.
+        """Create a subtask node under parent_task_id with dependency edges.
 
-        Sets parent_node_id and level on the node so the containment tree
+        Sets parent_task_id and level on the node so the containment tree
         is queryable without edge traversal. Wires depends_on as
         dependency edges (source=dep, target=new_node).
         """
@@ -115,7 +115,7 @@ class TaskManagementService:
             raise ValueError(f"Unknown worker slug: {command.assigned_worker_slug!r}")
 
         parent = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.parent_node_id
+            session, run_id=command.run_id, node_id=command.parent_task_id
         )
 
         node = await self._graph_repo.add_node(
@@ -126,7 +126,7 @@ class TaskManagementService:
             description=command.description,
             status=PENDING,
             assigned_worker_slug=command.assigned_worker_slug,
-            parent_node_id=command.parent_node_id,
+            parent_task_id=command.parent_task_id,
             level=parent.level + 1,
             meta=_MANAGER_META,
         )
@@ -135,8 +135,8 @@ class TaskManagementService:
             await self._graph_repo.add_edge(
                 session,
                 command.run_id,
-                source_node_id=dep_node_id,
-                target_node_id=node.id,
+                source_task_id=dep_node_id,
+                target_task_id=node.id,
                 status=EDGE_PENDING,
                 meta=_MANAGER_META,
             )
@@ -155,7 +155,7 @@ class TaskManagementService:
             "add_subtask: created node %s (slug=%s) under parent %s",
             node.id,
             task_slug,
-            command.parent_node_id,
+            command.parent_task_id,
         )
 
         return AddSubtaskResult(
@@ -191,7 +191,7 @@ class TaskManagementService:
                 instance_key=task.instance_key,
                 description=task.description,
                 status=PENDING,
-                parent_node_id=parent_task_id,
+                parent_task_id=parent_task_id,
                 level=parent.level + 1,
                 task_json=task.model_dump(mode="json"),
                 is_dynamic=True,
@@ -201,8 +201,8 @@ class TaskManagementService:
                 await self._graph_repo.add_edge(
                     session,
                     run_id,
-                    source_node_id=dep,
-                    target_node_id=node.id,
+                    source_task_id=dep,
+                    target_task_id=node.id,
                     status=EDGE_PENDING,
                     meta=MutationMeta(actor="worker-context", reason="spawn dependency"),
                 )
@@ -297,14 +297,14 @@ class TaskManagementService:
         *,
         run_id: UUID,
         definition_id: UUID,
-        parent_node_id: UUID,
+        parent_task_id: UUID,
         cause: PropagationCancelCause,
     ) -> CancelOrphansResult:
-        """Cancel every non-terminal containment descendant of parent_node_id."""
+        """Cancel every non-terminal containment descendant of parent_task_id."""
         meta = MutationMeta(actor="system:cascade", reason=cause)
         transitioned: list[UUID] = []
 
-        for child in descendants(session, run_id=run_id, root_node_id=parent_node_id):
+        for child in descendants(session, run_id=run_id, root_node_id=parent_task_id):
             if child.status in TERMINAL_STATUSES:
                 continue
             applied = await self._graph_repo.update_node_status(
@@ -329,7 +329,7 @@ class TaskManagementService:
             for nid in transitioned
         ]
         return CancelOrphansResult(
-            parent_node_id=parent_node_id,
+            parent_task_id=parent_task_id,
             cancelled_node_ids=transitioned,
             events_to_emit=events,
         )
@@ -339,14 +339,14 @@ class TaskManagementService:
         session: Session,
         *,
         run_id: UUID,
-        parent_node_id: UUID,
+        parent_task_id: UUID,
         cause: str,
     ) -> list[UUID]:
         """Block non-terminal, non-running containment descendants."""
         meta = MutationMeta(actor="system:cascade", reason=cause)
         blocked: list[UUID] = []
 
-        for child in descendants(session, run_id=run_id, root_node_id=parent_node_id):
+        for child in descendants(session, run_id=run_id, root_node_id=parent_task_id):
             if child.status == RUNNING or child.status in TERMINAL_STATUSES:
                 continue
             applied = await self._graph_repo.update_node_status(
@@ -382,7 +382,7 @@ class TaskManagementService:
                 raise ValueError(f"Unknown worker slug: {spec.assigned_worker_slug!r}")
 
         parent = self._graph_repo.get_node(
-            session, run_id=command.run_id, node_id=command.parent_node_id
+            session, run_id=command.run_id, node_id=command.parent_task_id
         )
 
         slug_to_node_id: dict[TaskSlug, NodeId] = {}
@@ -399,7 +399,7 @@ class TaskManagementService:
                 description=spec.description,
                 status=PENDING,
                 assigned_worker_slug=spec.assigned_worker_slug,
-                parent_node_id=command.parent_node_id,
+                parent_task_id=command.parent_task_id,
                 level=parent.level + 1,
                 meta=_MANAGER_META,
             )
@@ -415,8 +415,8 @@ class TaskManagementService:
                 await self._graph_repo.add_edge(
                     session,
                     command.run_id,
-                    source_node_id=source_id,
-                    target_node_id=target_id,
+                    source_task_id=source_id,
+                    target_task_id=target_id,
                     status=EDGE_PENDING,
                     meta=_MANAGER_META,
                 )
@@ -435,7 +435,7 @@ class TaskManagementService:
             "plan_subtasks: created %d nodes (%d roots) under parent %s",
             len(command.subtasks),
             len(roots),
-            command.parent_node_id,
+            command.parent_task_id,
         )
 
         return PlanSubtasksResult(
@@ -612,7 +612,7 @@ class TaskManagementService:
             current = stack.pop()
             outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, node_id=current)
             for edge in outgoing:
-                target_id = edge.target_node_id
+                target_id = edge.target_task_id
                 if target_id in seen:
                     continue
                 seen.add(target_id)

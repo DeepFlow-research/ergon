@@ -33,7 +33,7 @@ def _node(
     *,
     run_id: UUID,
     slug: str,
-    parent_node_id: UUID | None = None,
+    parent_task_id: UUID | None = None,
     status: str = "PENDING",
 ) -> RunGraphNode:
     node = RunGraphNode(
@@ -43,7 +43,7 @@ def _node(
         description=f"Task {slug}",
         is_dynamic=False,
         status=status,
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_task_id,
     )
     session.add(node)
     session.flush()
@@ -63,9 +63,9 @@ class TestDescendantsByParent:
         repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_node_id=root.id)
-        child2 = _node(session, run_id=run_id, slug="child2", parent_node_id=root.id)
-        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_node_id=child1.id)
+        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.id)
+        child2 = _node(session, run_id=run_id, slug="child2", parent_task_id=root.id)
+        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.id)
         session.commit()
 
         rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.id)
@@ -80,8 +80,8 @@ class TestDescendantsByParent:
         repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_node_id=root.id)
-        sibling = _node(session, run_id=run_id, slug="sibling")  # no parent_node_id
+        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.id)
+        sibling = _node(session, run_id=run_id, slug="sibling")  # no parent_task_id
         session.commit()
 
         rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.id)
@@ -110,10 +110,10 @@ class TestDescendantsByParent:
         repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
-        a = _node(session, run_id=run_id, slug="a", parent_node_id=root.id)
-        b = _node(session, run_id=run_id, slug="b", parent_node_id=a.id)
-        c = _node(session, run_id=run_id, slug="c", parent_node_id=b.id)
-        d = _node(session, run_id=run_id, slug="d", parent_node_id=c.id)
+        a = _node(session, run_id=run_id, slug="a", parent_task_id=root.id)
+        b = _node(session, run_id=run_id, slug="b", parent_task_id=a.id)
+        c = _node(session, run_id=run_id, slug="c", parent_task_id=b.id)
+        d = _node(session, run_id=run_id, slug="d", parent_task_id=c.id)
         session.commit()
 
         rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.id)
@@ -129,9 +129,9 @@ class TestDescendantsByParent:
         repo = WorkflowGraphRepository()
 
         root = _node(session, run_id=run_id, slug="root")
-        child = _node(session, run_id=run_id, slug="child", parent_node_id=root.id)
+        child = _node(session, run_id=run_id, slug="child", parent_task_id=root.id)
         # A node in another run that happens to point at root.id as parent
-        other = _node(session, run_id=other_run_id, slug="other", parent_node_id=root.id)
+        other = _node(session, run_id=other_run_id, slug="other", parent_task_id=root.id)
         session.commit()
 
         rows = repo.descendants_by_parent(session, run_id=run_id, root_task_id=root.id)
@@ -153,9 +153,9 @@ class TestTaskInspectionServiceDescendantIds:
         run_id = uuid4()
 
         root = _node(session, run_id=run_id, slug="root")
-        child1 = _node(session, run_id=run_id, slug="child1", parent_node_id=root.id)
-        child2 = _node(session, run_id=run_id, slug="child2", parent_node_id=root.id)
-        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_node_id=child1.id)
+        child1 = _node(session, run_id=run_id, slug="child1", parent_task_id=root.id)
+        child2 = _node(session, run_id=run_id, slug="child2", parent_task_id=root.id)
+        grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child1.id)
         session.commit()
 
         # Patch get_session in the inspection module to return the test session
@@ -194,9 +194,9 @@ class TestTaskInspectionServiceDescendantIds:
         run_id = uuid4()
 
         root = _node(session, run_id=run_id, slug="root")
-        a = _node(session, run_id=run_id, slug="a", parent_node_id=root.id)
-        b = _node(session, run_id=run_id, slug="b", parent_node_id=a.id)
-        c = _node(session, run_id=run_id, slug="c", parent_node_id=b.id)
+        a = _node(session, run_id=run_id, slug="a", parent_task_id=root.id)
+        b = _node(session, run_id=run_id, slug="b", parent_task_id=a.id)
+        c = _node(session, run_id=run_id, slug="c", parent_task_id=b.id)
         session.commit()
 
         monkeypatch.setattr(inspection_module, "get_session", lambda: session)

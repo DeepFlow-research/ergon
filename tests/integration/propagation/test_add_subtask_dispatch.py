@@ -47,7 +47,7 @@ async def test_add_subtask_dispatches_dependency_free_child() -> None:
                     session,
                     AddSubtaskCommand(
                         run_id=RunId(run_id),
-                        parent_node_id=NodeId(parent_id),
+                        parent_task_id=NodeId(parent_id),
                         task_slug=TaskSlug("source-scout"),
                         description="Find sources.",
                         assigned_worker_slug=AssignedWorkerSlug("researchrubrics-researcher"),

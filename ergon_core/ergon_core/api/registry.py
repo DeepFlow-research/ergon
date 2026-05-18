@@ -1,42 +1,24 @@
-"""Public process-level component registry.
+"""Process-local component catalog used by CLI and test harnesses."""
 
-The registry maps stable slugs stored in experiment definitions back to the
-Python classes/factories needed by runtime jobs. Packages such as
-``ergon_builtins`` and test fixtures contribute components explicitly during
-startup; ``ergon_core`` never imports those packages to discover components.
-"""
-
-# TODO: this seems like a hacky way to do this, and also maybe a victim to "doesn't make sense anymore in the v2 api. lets revisit"
 from collections.abc import Mapping
-from typing import Protocol, TypeVar, cast
+from typing import Literal, TypeVar, cast
 
 from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.rubric import Evaluator
 from ergon_core.api.worker import Worker
-from ergon_core.core.application.components.catalog import (
-    ComponentCatalogService,
-    ComponentKind,
-    ComponentRef,
-)
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
 from pydantic import BaseModel, ConfigDict, Field
 from sqlmodel import Session
 
+ComponentKind = Literal["worker", "benchmark", "evaluator", "sandbox_manager"]
 T = TypeVar("T")
 
 
-class _ImportableComponent(Protocol):
-    __module__: str
-    __qualname__: str
-
-
-class ComponentRegistry(BaseModel):
+class ComponentCatalog(BaseModel):
     """Catalog of component types available in the current Python process."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    catalog_service: ComponentCatalogService
-    component_refs: dict[tuple[str, str], ComponentRef] = Field(default_factory=dict)
     workers: dict[str, type[Worker]] = Field(default_factory=dict)
     benchmarks: dict[str, type[Benchmark]] = Field(default_factory=dict)
     evaluators: dict[str, type[Evaluator]] = Field(default_factory=dict)
@@ -44,17 +26,12 @@ class ComponentRegistry(BaseModel):
 
     def register_worker(self, slug: str, worker_cls: type[Worker]) -> None:
         self._register(self.workers, "worker", slug, worker_cls)
-        self._remember_ref("worker", slug, worker_cls)
 
     def register_benchmark(self, benchmark_cls: type[Benchmark], slug: str | None = None) -> None:
-        resolved_slug = slug or benchmark_cls.type_slug
-        self._register(self.benchmarks, "benchmark", resolved_slug, benchmark_cls)
-        self._remember_ref("benchmark", resolved_slug, benchmark_cls)
+        self._register(self.benchmarks, "benchmark", slug or benchmark_cls.type_slug, benchmark_cls)
 
     def register_evaluator(self, evaluator_cls: type[Evaluator], slug: str | None = None) -> None:
-        resolved_slug = slug or evaluator_cls.type_slug
-        self._register(self.evaluators, "evaluator", resolved_slug, evaluator_cls)
-        self._remember_ref("evaluator", resolved_slug, evaluator_cls)
+        self._register(self.evaluators, "evaluator", slug or evaluator_cls.type_slug, evaluator_cls)
 
     def register_sandbox_manager(
         self,
@@ -62,7 +39,6 @@ class ComponentRegistry(BaseModel):
         manager_cls: type[BaseSandboxManager],
     ) -> None:
         self._register(self.sandbox_managers, "sandbox manager", slug, manager_cls)
-        self._remember_ref("sandbox_manager", slug, manager_cls)
 
     def require_worker(self, slug: str) -> type[Worker]:
         return self._require(self.workers, "worker", slug)
@@ -75,11 +51,9 @@ class ComponentRegistry(BaseModel):
 
     def deregister(self, kind: ComponentKind, slug: str) -> None:
         self._mapping_for(kind).pop(slug, None)
-        self.component_refs.pop((kind, slug), None)
 
     def publish(self, session: Session) -> None:
-        for ref in self.component_refs.values():
-            self.catalog_service.upsert(session, ref)
+        del session
 
     def _register(self, target: dict[str, T], kind: str, slug: str, value: T) -> None:
         existing = target.get(slug)
@@ -105,21 +79,5 @@ class ComponentRegistry(BaseModel):
             return cast(dict[str, object], self.sandbox_managers)
         raise ValueError(f"Unsupported component kind {kind!r}")
 
-    def _remember_ref(self, kind: ComponentKind, slug: str, value: object) -> None:
-        component = cast(_ImportableComponent, value)
-        module = component.__module__
-        qualname = component.__qualname__
-        if not isinstance(module, str) or not isinstance(qualname, str):
-            raise ValueError(
-                f"Cannot register {kind} slug {slug!r}: component must be an importable "
-                "module-level object with __module__ and __qualname__."
-            )
-        self.component_refs[(kind, slug)] = ComponentRef(
-            kind=kind,
-            slug=slug,
-            module=module,
-            qualname=qualname,
-        )
 
-
-registry = ComponentRegistry(catalog_service=ComponentCatalogService())
+registry = ComponentCatalog()

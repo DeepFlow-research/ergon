@@ -50,7 +50,7 @@ class TestGraphNodeDto(BaseModel):
     task_slug: str
     level: int
     status: str
-    parent_node_id: UUID | None
+    parent_task_id: UUID | None
     parent_task_slug: str | None
 
 
@@ -145,8 +145,8 @@ def read_run_state(
             task_slug=n.task_slug,
             level=n.level,
             status=n.status,
-            parent_node_id=n.parent_node_id,
-            parent_task_slug=(slug_by_node_id.get(n.parent_node_id) if n.parent_node_id else None),
+            parent_task_id=n.parent_task_id,
+            parent_task_slug=(slug_by_node_id.get(n.parent_task_id) if n.parent_task_id else None),
         )
         for n in nodes
     ]

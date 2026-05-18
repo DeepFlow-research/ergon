@@ -12,7 +12,25 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from ergon_core.api.sandbox.sandbox import Sandbox
 from ergon_core.api.benchmark.task import Task
+from ergon_core.api.worker.worker import Worker
+from ergon_core.api.worker.results import WorkerOutput
+
+
+class TestSandbox(Sandbox):
+    async def provision(self) -> None:
+        return None
+
+    async def _bind_runtime(self, sandbox_id: str) -> None:
+        return None
+
+
+class TestWorker(Worker):
+    type_slug = "test-worker"
+
+    async def execute(self, task: Task, *, context: object):
+        yield WorkerOutput(final_text="ok")
 
 
 def task_with_id(
@@ -29,6 +47,8 @@ def task_with_id(
     pre-PR-2 production code used to.
     """
 
+    kwargs.setdefault("worker", TestWorker(name="worker", model=None))
+    kwargs.setdefault("sandbox", TestSandbox())
     task = cls(**kwargs)
     task._task_id = task_id
     return task

@@ -7,10 +7,10 @@ Implements the env-specific hooks on ``SmokeCriterionBase``:
     * body starts with ``"# Research report"``
     * body is at least 20 bytes (non-empty content)
 - ``_verify_sandbox_setup`` — runs a trivial bash probe (write file →
-  wc → echo OK) via ``context.runtime.run_command`` against the parent
+  wc → echo OK) via ``context.task.sandbox.run_command`` against the parent
   task's live sandbox.  Proves bash + coreutils + /tmp are wired up.
 
-Uses the landed CriterionRuntime DI API (RFC
+Uses the landed public sandbox runtime DI API (RFC
 ``criterion-runtime-di-container``) — criteria never call
 ``AsyncSandbox.connect`` directly.  Phase G migrates the runtime
 internal to use ``BaseSandboxManager.reconnect`` for cross-process

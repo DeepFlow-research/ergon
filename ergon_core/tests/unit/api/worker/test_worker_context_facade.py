@@ -79,8 +79,8 @@ class _FakeInspection:
         self.descendant_set = descendants or frozenset()
         self.calls: list[tuple[str, object]] = []
 
-    def list_subtasks(self, session, *, run_id, parent_node_id):
-        self.calls.append(("list_subtasks", session, run_id, parent_node_id))
+    def list_subtasks(self, session, *, run_id, parent_task_id):
+        self.calls.append(("list_subtasks", session, run_id, parent_task_id))
         return [
             SubtaskInfo(
                 node_id=uuid4(),
@@ -321,12 +321,14 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
             RunTaskExecution(
                 id=sibling_execution_id,
                 run_id=run_id,
+                task_id=sibling_id,
                 node_id=sibling_id,
                 status=TaskExecutionStatus.COMPLETED,
             ),
             RunTaskExecution(
                 id=other_execution_id,
                 run_id=other_run_id,
+                task_id=uuid4(),
                 node_id=uuid4(),
                 status=TaskExecutionStatus.COMPLETED,
             ),

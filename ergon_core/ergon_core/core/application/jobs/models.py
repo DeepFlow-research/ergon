@@ -59,48 +59,6 @@ class PersistOutputsRequest(InngestEventContract):
     sandbox_slug: str | None = None
 
 
-# TODO(PR 11): delete; no production sender or receiver since PR 4
-# (Δ.7 deletion list).
-class EvaluateTaskRunRequest(InngestEventContract):
-    """Legacy v1 multi-field `task/evaluate` payload — kept importable
-    only so pre-PR-4 worktrees can still load this module.
-
-    **Live status:** no production sender, no production receiver.
-    The Inngest function on `task/evaluate` was switched to validate
-    against `TaskEvaluateRequest` in PR 4 (see
-    `core/infrastructure/inngest/handlers/evaluate_task_run.py`).
-    Sending an event with this payload shape into Inngest now fails
-    validation at the handler boundary.
-
-    **Why the class still exists.** A few in-flight branches (and the
-    pre-PR-4 dashboard fixtures) still `import EvaluateTaskRunRequest`
-    at module load time. Deleting the class right now would break
-    `import` on those branches before they rebase. So PR 4 retired
-    every code path that *uses* it; PR 11 deletes the class itself.
-
-    **Why it's not the wire shape any more.** The new contract
-    (`TaskEvaluateRequest`) is id-only: every other piece of state
-    (`task_config`, `sandbox_id`, `worker_output`, evaluator instance)
-    is recovered by the receiver via persisted-state lookups, so
-    retries/replays are trivially correct — the payload carries
-    identity, the state lives in the database.
-    """
-
-    model_config = {"extra": "allow"}
-    name: ClassVar[str] = "task/evaluate"
-
-    run_id: UUID
-    definition_id: UUID
-    task_id: UUID | None = None
-    node_id: UUID
-    execution_id: UUID
-    evaluator_id: UUID
-    evaluator_binding_key: str
-    evaluator_type: str
-    agent_reasoning: str | None = None
-    sandbox_id: str | None = None
-
-
 class TaskEvaluateRequest(InngestEventContract):
     """v2 wire shape for `task/evaluate`. The id-only payload — every
     other piece of state is reloaded from persistence by the receiver.
@@ -233,7 +191,6 @@ WorkerExecuteJobRequest = WorkerExecuteRequest
 WorkerExecuteJobResult = WorkerExecuteResult
 
 __all__ = [
-    "EvaluateTaskRunRequest",
     "EvaluateTaskRunResult",
     "TaskEvaluateRequest",
     "EvaluatorsResult",

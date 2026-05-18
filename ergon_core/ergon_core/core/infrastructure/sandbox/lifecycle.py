@@ -21,7 +21,7 @@ class SandboxTerminationResult(BaseModel):
     reason: SandboxTerminationReason
 
 
-async def terminate_sandbox_by_id(sandbox_id: str | None) -> SandboxTerminationResult:
+async def terminate_external_sandbox(sandbox_id: str | None) -> SandboxTerminationResult:
     """Terminate a sandbox behind a single runtime-facing boundary."""
     if sandbox_id is None:
         return SandboxTerminationResult(

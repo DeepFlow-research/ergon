@@ -71,27 +71,27 @@ async def test_diamond_restart_invalidates_fanin_and_reactivates_on_recompletion
             run.id,
             task_slug="task-a",
             status="completed",
-            parent_node_id=root.id,
+            parent_task_id=root.id,
         )
         task_b = make_node(
             session,
             run.id,
             task_slug="task-b",
             status="completed",
-            parent_node_id=root.id,
+            parent_task_id=root.id,
         )
         task_c = make_node(
             session,
             run.id,
             task_slug="task-c",
             status="completed",
-            parent_node_id=root.id,
+            parent_task_id=root.id,
         )
         make_edge(
-            session, run.id, source_node_id=task_a.id, target_node_id=task_c.id, status="satisfied"
+            session, run.id, source_task_id=task_a.id, target_task_id=task_c.id, status="satisfied"
         )
         make_edge(
-            session, run.id, source_node_id=task_b.id, target_node_id=task_c.id, status="satisfied"
+            session, run.id, source_task_id=task_b.id, target_task_id=task_c.id, status="satisfied"
         )
         run_id = run.id
         defn_id = defn.id

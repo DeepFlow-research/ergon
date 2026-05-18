@@ -45,8 +45,6 @@ def _prepared(run_id, definition_id, task_id, execution_id) -> PreparedTaskExecu
         run_id=run_id,
         definition_id=definition_id,
         task_id=task_id,
-        node_id=task_id,
-        definition_task_id=task_id,
         task_slug="root",
         task_description="root task",
         benchmark_type="benchmark",

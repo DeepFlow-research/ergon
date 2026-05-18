@@ -17,8 +17,8 @@ def test_rest_and_dashboard_mutations_share_graph_mutation_record_payloads() -> 
     target_id = uuid4()
 
     payload = EdgeAddedMutation(
-        source_node_id=source_id,
-        target_node_id=target_id,
+        source_task_id=source_id,
+        target_task_id=target_id,
         status="pending",
     )
 

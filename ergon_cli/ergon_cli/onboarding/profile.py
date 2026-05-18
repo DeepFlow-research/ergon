@@ -4,7 +4,6 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from ergon_builtins.registry import register_builtins
 from ergon_core.api.registry import registry
 
 
@@ -48,7 +47,6 @@ class OnboardProfile(BaseModel):
 
     def required_keys(self) -> dict[str, str]:
         """Return {env_var: human_reason} derived purely from user choices."""
-        register_builtins(registry)
         benchmarks = registry.benchmarks
 
         result: dict[str, str] = {}
@@ -73,7 +71,6 @@ class OnboardProfile(BaseModel):
 
     def required_extras(self) -> list[str]:
         """Pip extras to install based on choices."""
-        register_builtins(registry)
         benchmarks = registry.benchmarks
 
         extras: set[str] = set()

@@ -131,13 +131,13 @@ class SubtaskLifecycleToolkit:
     """Produces the eight manager-facing tool callables for ``Agent(tools=[...])``.
 
     The toolkit is a closure factory, not a service: it captures
-    ``run_id`` and ``parent_node_id`` from ``WorkerContext`` so that
+    ``run_id`` and ``parent_task_id`` from ``WorkerContext`` so that
     creation tools (add_subtask, plan_subtasks, list_subtasks) are
     scoped to the manager's subtree by construction.
 
     Note: cancel_task, refine_task, and get_subtask accept a
     ``node_id`` from the LLM and do not yet verify containment
-    (i.e. that the target is a descendant of ``parent_node_id``).
+    (i.e. that the target is a descendant of ``parent_task_id``).
     The service layer checks status guards but not subtree membership.
     TODO: add descendant-of check for full containment enforcement.
 
@@ -151,20 +151,20 @@ class SubtaskLifecycleToolkit:
         self,
         *,
         run_id: UUID | None = None,
-        parent_node_id: UUID | None = None,
+        parent_task_id: UUID | None = None,
         sandbox_id: str | None = None,
         context: WorkerContext | None = None,
         task_management_service: TaskManagementService | None = None,
         task_inspection_service: TaskInspectionService | None = None,
     ) -> None:
-        if context is None and (run_id is None or parent_node_id is None or sandbox_id is None):
+        if context is None and (run_id is None or parent_task_id is None or sandbox_id is None):
             raise ValueError(
                 "SubtaskLifecycleToolkit requires either context=WorkerContext or "
-                "explicit run_id, parent_node_id, and sandbox_id for the admin path."
+                "explicit run_id, parent_task_id, and sandbox_id for the admin path."
             )
         self._context = context
         self._run_id = None if run_id is None else RunId(run_id)
-        self._parent_node_id = None if parent_node_id is None else NodeId(parent_node_id)
+        self._parent_task_id = None if parent_task_id is None else NodeId(parent_task_id)
         self._sandbox_id = sandbox_id if sandbox_id is not None else context.sandbox_id
         self._mgmt = (
             None if context is not None else task_management_service or TaskManagementService()
@@ -209,9 +209,9 @@ class SubtaskLifecycleToolkit:
 
             return add_subtask
 
-        mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
+        mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_task_id
         if run_id is None or pid is None:
-            raise RuntimeError("admin add_subtask requires run_id and parent_node_id")
+            raise RuntimeError("admin add_subtask requires run_id and parent_task_id")
 
         async def add_subtask(
             task_slug: str,
@@ -240,7 +240,7 @@ class SubtaskLifecycleToolkit:
                         session,
                         AddSubtaskCommand(
                             run_id=run_id,
-                            parent_node_id=pid,
+                            parent_task_id=pid,
                             task_slug=TaskSlug(task_slug),
                             description=description,
                             assigned_worker_slug=AssignedWorkerSlug(assigned_worker_slug),
@@ -254,7 +254,7 @@ class SubtaskLifecycleToolkit:
         return add_subtask
 
     def _make_plan_subtasks(self) -> Callable[..., Awaitable[PlanSubtasksToolResponse]]:
-        mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_node_id
+        mgmt, run_id, pid = self._mgmt, self._run_id, self._parent_task_id
         if run_id is None or pid is None:
 
             async def plan_subtasks(_subtasks: list[SubtaskSpec]) -> PlanSubtasksToolResponse:
@@ -280,7 +280,7 @@ class SubtaskLifecycleToolkit:
                         session,
                         PlanSubtasksCommand(
                             run_id=run_id,
-                            parent_node_id=pid,
+                            parent_task_id=pid,
                             subtasks=subtasks,
                         ),
                     )
@@ -432,15 +432,15 @@ class SubtaskLifecycleToolkit:
 
             return list_subtasks
 
-        inspect, run_id, pid = self._inspect, self._run_id, self._parent_node_id
+        inspect, run_id, pid = self._inspect, self._run_id, self._parent_task_id
         if run_id is None or pid is None:
-            raise RuntimeError("admin list_subtasks requires run_id and parent_node_id")
+            raise RuntimeError("admin list_subtasks requires run_id and parent_task_id")
 
         async def list_subtasks() -> ListSubtasksToolResponse:
             """Return the current status and output-excerpt of every direct subtask."""
             try:
                 with get_session() as session:
-                    infos = inspect.list_subtasks(session, run_id=run_id, parent_node_id=pid)
+                    infos = inspect.list_subtasks(session, run_id=run_id, parent_task_id=pid)
                 return ListSubtasksToolSuccess(subtasks=infos)
             except Exception as exc:  # slopcop: ignore[no-broad-except]
                 return ToolFailure(error=str(exc))
@@ -484,7 +484,7 @@ class SubtaskLifecycleToolkit:
 def build_subtask_lifecycle_tools(
     *,
     run_id: UUID,
-    parent_node_id: UUID,
+    parent_task_id: UUID,
     sandbox_id: str,
 ) -> list[Callable[..., Awaitable[BaseModel]]]:
     """Factory entry point for workers.
@@ -493,6 +493,6 @@ def build_subtask_lifecycle_tools(
     """
     return SubtaskLifecycleToolkit(
         run_id=run_id,
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_task_id,
         sandbox_id=sandbox_id,
     ).get_tools()

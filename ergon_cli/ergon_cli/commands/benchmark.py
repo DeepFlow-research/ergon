@@ -17,6 +17,13 @@ from ergon_core.core.shared.settings import settings
 from ergon_cli.discovery import list_benchmarks
 from ergon_cli.rendering import render_table
 
+SANDBOX_TEMPLATES: dict[str, Path] = {
+    "minif2f": Path(__file__).parents[3]
+    / "ergon_builtins/ergon_builtins/benchmarks/minif2f/sandbox_template",
+    "swebench-verified": Path(__file__).parents[3]
+    / "ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox_template",
+}
+
 
 class BuildLog(Protocol):
     def __str__(self) -> str: ...
@@ -59,9 +66,6 @@ def setup_benchmark(args: Namespace) -> int:
     requirement is specific to its auth flow; the SDK talks to the REST API
     with the API key.)
     """
-
-    # reason: deferred to avoid pulling heavy ergon_builtins deps at CLI startup
-    from ergon_builtins.registry_core import SANDBOX_TEMPLATES
 
     slug: str = args.slug
     force: bool = args.force

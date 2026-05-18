@@ -81,8 +81,8 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         node_a = make_node(session, run.id, task_slug="fan-a", status="running")
         node_b = make_node(session, run.id, task_slug="fan-b", status="running")
         node_c = make_node(session, run.id, task_slug="fan-c", status="pending")
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_c.id)
-        make_edge(session, run.id, source_node_id=node_b.id, target_node_id=node_c.id)
+        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_c.id)
+        make_edge(session, run.id, source_task_id=node_b.id, target_task_id=node_c.id)
         run_id = run.id
         defn_id = defn.id
         node_a_id = node_a.id
@@ -175,7 +175,7 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         run = make_run(session, defn.id)
         node_a = make_node(session, run.id, task_slug="idem-a", status="running")
         node_b = make_node(session, run.id, task_slug="idem-b", status="pending")
-        make_edge(session, run.id, source_node_id=node_a.id, target_node_id=node_b.id)
+        make_edge(session, run.id, source_task_id=node_a.id, target_task_id=node_b.id)
         run_id = run.id
         defn_id = defn.id
         node_a_id = node_a.id

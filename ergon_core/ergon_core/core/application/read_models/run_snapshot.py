@@ -39,7 +39,7 @@ def _build_task_map(
 ) -> tuple[dict[str, RunTaskDto], str, int, int, int, int, int, int]:
     """Three clean passes using stored containment columns.
 
-    Pass 1: node columns (parent_node_id, level) - no edge traversal.
+    Pass 1: node columns (parent_task_id, level) - no edge traversal.
     Pass 2: reverse lookup for child_ids and is_leaf.
     Pass 3: dependency edges -> depends_on_ids.
     """
@@ -61,7 +61,7 @@ def _build_task_map(
             name=node.task_slug,
             description=node.description,
             status=node.status,
-            parent_id=str(node.parent_node_id) if node.parent_node_id else None,
+            parent_id=str(node.parent_task_id) if node.parent_task_id else None,
             child_ids=[],
             depends_on_ids=[],
             is_leaf=True,
@@ -80,7 +80,7 @@ def _build_task_map(
             )
 
     for edge in edges:
-        src, tgt = str(edge.source_node_id), str(edge.target_node_id)
+        src, tgt = str(edge.source_task_id), str(edge.target_task_id)
         target_task = task_map.get(tgt)
         if target_task is None:
             continue

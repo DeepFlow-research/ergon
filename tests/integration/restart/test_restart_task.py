@@ -59,8 +59,8 @@ async def test_restart_completed_node_becomes_pending_and_resets_edge() -> None:
         make_edge(
             session,
             run.id,
-            source_node_id=node_a.id,
-            target_node_id=node_b.id,
+            source_task_id=node_a.id,
+            target_task_id=node_b.id,
             status=EDGE_SATISFIED,
         )
         run_id = run.id

@@ -52,7 +52,7 @@ def test_read_endpoint_returns_404_for_unknown_run_id() -> None:
 
 
 def test_read_state_dto_exposes_live_playwright_contract_fields() -> None:
-    assert {"id", "parent_node_id"} <= set(test_harness.TestGraphNodeDto.model_fields)
+    assert {"id", "parent_task_id"} <= set(test_harness.TestGraphNodeDto.model_fields)
     assert {"task_id", "task_slug"} <= set(test_harness.TestEvaluationDto.model_fields)
     assert {
         "executions",

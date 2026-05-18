@@ -389,7 +389,7 @@ def _seed_parent_node(session: Session, *, run_id: UUID) -> RunGraphNode:
         description="parent task",
         status="RUNNING",
         is_dynamic=False,
-        parent_node_id=None,
+        parent_task_id=None,
         level=0,
     )
     session.add(node)

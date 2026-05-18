@@ -7,7 +7,7 @@ timeout) and — once provisioned or attached — holds a live
 proxies IO (``run_command``, ``write_file``, ``read_file``,
 ``list_files``) to the runtime; criteria call those directly off
 ``context.task.sandbox`` rather than reaching into a separate
-``CriterionRuntime`` object.
+``public sandbox runtime`` object.
 
 Lifecycle verbs:
 

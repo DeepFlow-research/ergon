@@ -17,12 +17,10 @@ from ergon_cli.commands.worker import handle_worker
 from ergon_cli.commands.workflow import handle_workflow
 from ergon_ingestion.cli import handle_ingest
 from ergon_cli.bootstrap import register_and_publish_builtins
-from ergon_builtins.registry import register_builtins
-from ergon_core.api.registry import registry
 
 
 def register_default_components() -> None:
-    register_builtins(registry)
+    return None
 
 
 def build_parser() -> argparse.ArgumentParser:

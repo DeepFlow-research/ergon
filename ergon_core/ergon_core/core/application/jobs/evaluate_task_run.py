@@ -14,7 +14,7 @@ reconstructed locally from the run-tier read boundary:
   was retired alongside the Worker/Evaluator → Pydantic conversion)
 
 Criteria run inline via ``EvaluationService.evaluate``: no
-``CriterionExecutor`` Protocol, no per-criterion ``ctx.step.run``.
+``evaluator runner`` Protocol, no per-criterion ``ctx.step.run``.
 The Inngest retry unit is now the whole evaluator, because the
 orchestrator already gives one ``step.invoke`` per evaluator via
 the synchronous-fanout boundary in `execute_task`.
@@ -48,7 +48,7 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
 )
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
+from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric import Evaluator
@@ -93,39 +93,16 @@ async def run_evaluate_task_run_job(
             execution_id=execution_id,
         )
         task = view.task
-        if task.evaluators:
-            if evaluator_index < 0 or evaluator_index >= len(task.evaluators):
-                raise ContractViolationError(
-                    f"evaluator_index {evaluator_index} out of range for task "
-                    f"{task.task_slug!r} (has {len(task.evaluators)} evaluators)",
-                    run_id=run_id,
-                    task_id=task_id,
-                    execution_id=execution_id,
-                )
-            evaluator = task.evaluators[evaluator_index]
-            binding_key = evaluator.name
-        else:
-            # TODO(PR 11): delete this branch + the sibling module. See
-            # `_legacy_evaluator_bridge.py` docstring for the migration ledger.
-            from ergon_core.core.application.jobs._legacy_evaluator_bridge import (
-                legacy_evaluator_from_binding,
-            )
-
-            if evaluator_index < 0 or evaluator_index >= len(task.evaluator_binding_keys):
-                raise ContractViolationError(
-                    f"evaluator_index {evaluator_index} out of range for task "
-                    f"{task.task_slug!r} (has {len(task.evaluator_binding_keys)} "
-                    "evaluator binding keys)",
-                    run_id=run_id,
-                    task_id=task_id,
-                    execution_id=execution_id,
-                )
-            binding_key = task.evaluator_binding_keys[evaluator_index]
-            evaluator = legacy_evaluator_from_binding(
-                session,
+        if evaluator_index < 0 or evaluator_index >= len(task.evaluators):
+            raise ContractViolationError(
+                f"evaluator_index {evaluator_index} out of range for task "
+                f"{task.task_slug!r} (has {len(task.evaluators)} evaluators)",
                 run_id=run_id,
-                binding_key=binding_key,
+                task_id=task_id,
+                execution_id=execution_id,
             )
+        evaluator = task.evaluators[evaluator_index]
+        binding_key = evaluator.name
 
     context = CriterionContext(
         run_id=run_id,
@@ -133,28 +110,7 @@ async def run_evaluate_task_run_job(
         execution_id=execution_id,
         task=task,
         worker_result=worker_output,
-        sandbox_id=execution.sandbox_id,
     )
-    if task.sandbox is None:
-        # TODO(PR 11): delete this branch + the sibling module. The
-        # object-bound path attaches `_runtime` via `task.sandbox`;
-        # legacy TaskSpec snapshots have no `task.sandbox`, so the
-        # bridge constructs an equivalent runtime from the benchmark's
-        # sandbox manager. See `_legacy_evaluator_bridge.py` docstring.
-        from ergon_core.core.application.jobs._legacy_evaluator_bridge import (
-            legacy_inject_criterion_runtime,
-        )
-
-        with get_session() as _sess:
-            _run = _sess.get(RunRecord, run_id)
-            benchmark_type = _run.benchmark_type if _run is not None else ""
-        context = legacy_inject_criterion_runtime(
-            public_context=context,
-            benchmark_type=benchmark_type,
-            run_id=run_id,
-            task_id=task_id or task.task_id,
-            sandbox_id=execution.sandbox_id,
-        )
 
     try:
         return await _run_evaluation(
@@ -176,7 +132,7 @@ async def run_evaluate_task_run_job(
         # alive until the gather resolves. `detach()` raises if there's
         # no live runtime, but `Task.from_definition` with `sandbox_id`
         # always attaches — see `Sandbox.from_definition`'s contract.
-        if task.sandbox is not None and task.sandbox.is_live:
+        if task.sandbox.is_live:
             await task.sandbox.detach()
 
 
@@ -210,11 +166,11 @@ async def _run_evaluation(
             task_id,
             evaluator_index,
         )
-        _evaluation_persistence.persist_failure(
+        await _evaluation_persistence.persist_failure(
             run_id=run_id,
-            node_id=view.node_id,
+            node_id=view.task_id,
             task_execution_id=execution_id,
-            definition_task_id=view.definition_task_id,
+            task_id=view.task_id,
             binding_key=binding_key,
             exc=exc,
         )
@@ -225,17 +181,17 @@ async def _run_evaluation(
         )
 
     result = service_result.result
-    persisted = _evaluation_persistence.persist_success(
+    persisted = await _evaluation_persistence.persist_success(
         run_id=run_id,
-        node_id=view.node_id,
+        node_id=view.task_id,
         task_execution_id=execution_id,
-        definition_task_id=view.definition_task_id,
+        task_id=view.task_id,
         binding_key=binding_key,
         service_result=service_result,
     )
     await get_dashboard_emitter().task_evaluation_updated(
         run_id=run_id,
-        task_id=view.node_id,
+        task_id=view.task_id,
         evaluation=persisted.dashboard_dto,
     )
 
@@ -248,12 +204,12 @@ async def _run_evaluation(
     get_trace_sink().emit_span(
         CompletedSpan(
             name="evaluation.task",
-            context=evaluation_task_context(run_id, view.node_id, execution_id, evaluator_id),
+            context=evaluation_task_context(run_id, view.task_id, execution_id, evaluator_id),
             start_time=span_start,
             end_time=datetime.now(UTC),
             attributes={
                 "run_id": str(run_id),
-                "task_id": str(view.node_id),
+                "task_id": str(view.task_id),
                 "execution_id": str(execution_id),
                 "evaluator_id": str(evaluator_id),
                 "evaluator_binding_key": binding_key,

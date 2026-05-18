@@ -9,13 +9,13 @@ from collections.abc import Mapping, Sequence
 from typing import ClassVar
 
 from ergon_core.api import Benchmark
-from ergon_core.api.benchmark import TaskSpec
+from ergon_core.api.benchmark import Task
 
 
 class _NoopBenchmark(Benchmark):
     type_slug: ClassVar[str] = "test-noop"
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task]]:
         return {}
 
 

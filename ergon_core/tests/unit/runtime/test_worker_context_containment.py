@@ -77,7 +77,7 @@ def _seed_node(
     *,
     run_id: UUID,
     slug: str,
-    parent_node_id: UUID | None = None,
+    parent_task_id: UUID | None = None,
     level: int = 0,
     status: str = "RUNNING",
 ) -> RunGraphNode:
@@ -88,7 +88,7 @@ def _seed_node(
         description=f"Task {slug}",
         status=status,
         is_dynamic=False,
-        parent_node_id=parent_node_id,
+        parent_task_id=parent_task_id,
         level=level,
     )
     session.add(node)
@@ -193,7 +193,7 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     ).one()
 
     assert new_node.is_dynamic is True
-    assert new_node.parent_node_id == parent.id
+    assert new_node.parent_task_id == parent.id
     assert new_node.task_json["task_slug"] == "child"
     assert isinstance(handle, SpawnedTaskHandle)
     assert handle.task_id == new_node.id
@@ -245,7 +245,7 @@ async def test_worker_context_cancel_raises_on_non_descendant(
         session,
         run_id=run_id,
         slug="child",
-        parent_node_id=root.id,
+        parent_task_id=root.id,
         level=1,
     )
     sibling = _seed_node(session, run_id=run_id, slug="sibling")  # peer of root, no parent

@@ -35,20 +35,6 @@ PayloadT = TypeVar(
 )
 
 
-class TaskSpec(BaseModel, Generic[PayloadT]):
-    """Definition-time task template produced by benchmark authoring code."""
-
-    model_config = {"frozen": True}
-
-    task_slug: str
-    instance_key: str
-    description: str
-    parent_task_slug: str | None = None
-    dependency_task_slugs: tuple[str, ...] = ()
-    evaluator_binding_keys: tuple[str, ...] = ()
-    task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # ty: ignore[invalid-assignment]
-
-
 class Task(BaseModel, Generic[PayloadT]):
     """Runtime task passed to Worker.execute().
 
@@ -57,10 +43,9 @@ class Task(BaseModel, Generic[PayloadT]):
     raises if read before materialization — surfaces the bug at the
     boundary instead of producing a Task with an unset identity.
 
-    PR 5 adds the object-bound authoring fields (`worker`, `sandbox`,
-    `evaluators`). They are nullable in PR 5 only so legacy
-    ``TaskSpec`` snapshots from PR 1's bridge still inflate; PR 11
-    makes ``worker`` and ``sandbox`` non-null.
+    PR 11 makes the object-bound fields the only public shape: every
+    persisted task snapshot carries its worker, sandbox, and evaluators
+    directly.
     """
 
     model_config = ConfigDict(frozen=False, arbitrary_types_allowed=True)
@@ -73,11 +58,8 @@ class Task(BaseModel, Generic[PayloadT]):
     evaluator_binding_keys: tuple[str, ...] = ()
     task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # ty: ignore[invalid-assignment]
 
-    # Object-bound authoring fields (PR 5). TODO(PR 11): drop nullability
-    # on worker and sandbox; once every builtin returns Task instances
-    # the legacy TaskSpec bridge in from_definition goes away.
-    worker: "Worker | None" = None
-    sandbox: "Sandbox | None" = None
+    worker: "Worker"
+    sandbox: "Sandbox"
     evaluators: "tuple[Evaluator, ...]" = ()
 
     _task_id: UUID | None = PrivateAttr(default=None)
@@ -105,14 +87,8 @@ class Task(BaseModel, Generic[PayloadT]):
             )
         payload = handler(self)
         payload["_type"] = f"{type(self).__module__}:{qualname}"
-        # TODO(PR 11): once PR 11 makes `worker` and `sandbox` non-
-        # nullable on the object-bound path, drop the `is not None`
-        # guards (the legacy TaskSpec-bridge branch in `from_definition`
-        # is what produces None values today; PR 11 deletes it).
-        if self.worker is not None:
-            payload["worker"] = self.worker.model_dump(mode="json")
-        if self.sandbox is not None:
-            payload["sandbox"] = self.sandbox.model_dump(mode="json")
+        payload["worker"] = self.worker.model_dump(mode="json")
+        payload["sandbox"] = self.sandbox.model_dump(mode="json")
         if self.evaluators:
             payload["evaluators"] = [ev.model_dump(mode="json") for ev in self.evaluators]
         return payload
@@ -149,17 +125,9 @@ class Task(BaseModel, Generic[PayloadT]):
           sandbox_id=...)``. ``task.sandbox.run_command(...)`` works
           immediately.
 
-        Two snapshot shapes are accepted:
-
-        1. **TaskSpec bridge** (PR 1 legacy): JSON with
-           ``_type=...:TaskSpec`` or a ``_legacy`` marker. Reshaped to a
-           base ``Task`` with empty ``worker``/``sandbox``/``evaluators``
-           (the legacy path predates object-bound binding). PR 11 drops
-           this branch entirely along with ``TaskSpec``.
-        2. **Object-bound Task** (v2): JSON with a Task subclass
-           ``_type`` plus nested ``worker``/``sandbox``/``evaluators``
-           sub-objects, each carrying their own ``_type``. Each sub-
-           object is re-inflated via its own ``from_definition``.
+        Object-bound Task snapshots carry nested ``worker``/``sandbox``/
+        ``evaluators`` sub-objects, each with its own ``_type``. Each
+        sub-object is re-inflated via its own ``from_definition``.
         """
 
         # Import the sub-component classes lazily to avoid cycles
@@ -176,88 +144,46 @@ class Task(BaseModel, Generic[PayloadT]):
                 f"Task snapshot is missing the required `_type` discriminator "
                 f"(got {type(task_type).__name__}). Every persisted task must "
                 f"carry `_type` — produced by `model_serializer` on Task "
-                f"subclasses or by `_definition_task_snapshot` during the PR 1 "
-                f"bridge."
+                f"subclasses."
             )
-        TaskCls = import_component(task_type)
 
-        if TaskCls is TaskSpec or "_legacy" in task_json:
-            # TODO(PR 11): drop this entire bridge branch along with TaskSpec.
-            if sandbox_id is not None:
-                # TaskSpec snapshots carry no object-bound sandbox; the
-                # caller asked for a live attach but there's nothing to
-                # attach to. Log loudly — this is the kind of drift the
-                # v1 audit was designed to surface (an unmigrated
-                # benchmark reaching an object-bound code path).
-                logger.warning(
-                    "Task.from_definition: sandbox_id=%r passed for a "
-                    "TaskSpec/legacy snapshot (task_id=%s); cannot attach a "
-                    "live sandbox to a TaskSpec. Migrate the benchmark to "
-                    "return Task instances.",
-                    sandbox_id,
-                    task_id,
-                )
-            spec_fields = {
-                k: v for k, v in task_json.items() if k not in {"_type", "_legacy", "task_payload"}
-            }
-            spec = TaskSpec.model_validate(spec_fields)
-            instance: Task = Task(
-                task_slug=spec.task_slug,
-                instance_key=spec.instance_key,
-                description=spec.description,
-                parent_task_slug=spec.parent_task_slug,
-                dependency_task_slugs=spec.dependency_task_slugs,
-                evaluator_binding_keys=spec.evaluator_binding_keys,
+        import_component(task_type)
+        TaskCls = import_component_subclass(task_type, Task, kind="Task")
+        scalar_fields = {
+            k: v for k, v in task_json.items() if k not in {"worker", "sandbox", "evaluators"}
+        }
+        instance = cast("Task", TaskCls.model_construct(**scalar_fields))
+
+        worker_json = task_json.get("worker")
+        if not isinstance(worker_json, dict):
+            raise ValueError(
+                f"Task snapshot for {task_id} has no object-bound worker "
+                f"(_type={task_type!r})."
             )
-        else:
-            # Object-bound path: model_validate would fail on the abstract
-            # ``Worker``/``Sandbox``/``Evaluator`` field types (Pydantic
-            # tries to construct the base class from the nested JSON
-            # without doing the discriminator dispatch). Pull those keys
-            # out, validate the Task scaffolding, then re-inflate each
-            # nested component via its own ``from_definition``.
-            TaskCls = import_component_subclass(task_type, Task, kind="Task")
-            scalar_fields = {
-                k: v for k, v in task_json.items() if k not in {"worker", "sandbox", "evaluators"}
-            }
-            instance = cast("Task", TaskCls.model_validate(scalar_fields))
+        instance.worker = Worker.from_definition(worker_json)
 
-            worker_json = task_json.get("worker")
-            if isinstance(worker_json, dict):
-                instance.worker = Worker.from_definition(worker_json)
+        sandbox_json = task_json.get("sandbox")
+        if not isinstance(sandbox_json, dict):
+            raise ValueError(
+                f"Task snapshot for {task_id} has no object-bound sandbox "
+                f"(_type={task_type!r})."
+            )
+        instance.sandbox = await Sandbox.from_definition(
+            sandbox_json,
+            sandbox_id=sandbox_id,
+        )
 
-            sandbox_json = task_json.get("sandbox")
-            if isinstance(sandbox_json, dict):
-                instance.sandbox = await Sandbox.from_definition(
-                    sandbox_json,
-                    sandbox_id=sandbox_id,
-                )
-            elif sandbox_id is not None:
-                # Caller wants a live sandbox but the snapshot carries
-                # no Sandbox to attach to. Silent fall-through would
-                # produce a Task whose sandbox is None — every
-                # subsequent task.sandbox.run_command(...) then explodes
-                # with a confusing AttributeError far from the cause.
-                # Loud fail here instead.
-                raise ValueError(
-                    f"sandbox_id={sandbox_id!r} passed to Task.from_definition "
-                    f"but task snapshot has no sandbox to attach to "
-                    f"(task_id={task_id}, _type={task_type!r}). The eval-side "
-                    f"call site expects a live sandbox; the snapshot must "
-                    f"carry one."
-                )
-
-            evaluators_json = task_json.get("evaluators")
-            if isinstance(evaluators_json, list) and evaluators_json:
-                inflated: list[Evaluator] = []
-                for ev_json in evaluators_json:
-                    if not isinstance(ev_json, dict):
-                        raise ValueError(
-                            f"Evaluator snapshot in task {task_id} must be a "
-                            f"dict, got {type(ev_json).__name__}."
-                        )
-                    inflated.append(Evaluator.from_definition(ev_json))
-                instance.evaluators = tuple(inflated)
+        evaluators_json = task_json.get("evaluators")
+        if isinstance(evaluators_json, list) and evaluators_json:
+            inflated: list[Evaluator] = []
+            for ev_json in evaluators_json:
+                if not isinstance(ev_json, dict):
+                    raise ValueError(
+                        f"Evaluator snapshot in task {task_id} must be a "
+                        f"dict, got {type(ev_json).__name__}."
+                    )
+                inflated.append(Evaluator.from_definition(ev_json))
+            instance.evaluators = tuple(inflated)
 
         instance._task_id = task_id
         return instance

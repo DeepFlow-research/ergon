@@ -105,6 +105,8 @@ def test_parametrized_generic_task_type_is_rejected_when_persisting() -> None:
         task_slug="generic",
         instance_key="sample-1",
         description="Should use a concrete subclass before persistence.",
+        worker=FakeWorker(name="worker", model=None),
+        sandbox=FakeSandbox(),
     )
 
     with pytest.raises(ValueError, match="Task snapshot.*concrete Task subclass"):

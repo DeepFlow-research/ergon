@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
-from ergon_core.api.benchmark.task import EmptyTaskPayload, Task, TaskSpec
+from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import DependencyError
 from ergon_core.core.infrastructure.dependencies import check_packages
 from pydantic import BaseModel
@@ -44,13 +44,8 @@ class Benchmark(ABC):
         self.created_by = created_by
 
     @abstractmethod
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel] | Task[BaseModel]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[BaseModel]]]:
         """Materialize benchmark instances."""
-        # TODO(PR 11): narrow the return type back to
-        # `Mapping[str, Sequence[Task[BaseModel]]]`.  `TaskSpec` is
-        # deleted in PR 11 once every benchmark has migrated to the
-        # object-bound `Task` shape (PR 6 → PR 10c covers MiniF2F,
-        # SWEBench, ResearchRubrics, GDPEval).
         ...
 
     def evaluator_requirements(self) -> Sequence[str]:

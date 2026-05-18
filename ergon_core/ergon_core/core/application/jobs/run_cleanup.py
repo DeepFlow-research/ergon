@@ -10,7 +10,7 @@ from uuid import UUID
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_sandbox_by_id
+from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_external_sandbox
 from ergon_core.core.infrastructure.inngest.errors import ConfigurationError, DataIntegrityError
 from ergon_core.core.application.events.infrastructure_events import RunCleanupEvent
 from ergon_core.core.application.jobs.models import RunCleanupResult
@@ -56,7 +56,7 @@ async def _cleanup_run(run_id: UUID, status: str, error_message: str | None) -> 
             raise DataIntegrityError("RunRecord", run_id)
 
         sandbox_id = run.parsed_summary().get("sandbox_id")
-        sandbox_result = await terminate_sandbox_by_id(
+        sandbox_result = await terminate_external_sandbox(
             sandbox_id if isinstance(sandbox_id, str) else None
         )
         sandbox_terminated = sandbox_result.terminated

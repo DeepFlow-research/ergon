@@ -121,4 +121,4 @@ async def test_spawn_dynamic_task_with_dependencies_waits_for_propagation(monkey
     )
 
     assert dispatched == []
-    assert graph_repo.added_edges[0]["source_node_id"] == dependency_id
+    assert graph_repo.added_edges[0]["source_task_id"] == dependency_id

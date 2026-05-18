@@ -213,7 +213,7 @@ class WorkerContext(BaseModel):
             rows = self.task_inspect.list_subtasks(
                 session,
                 run_id=self.run_id,
-                parent_node_id=self.task_id,
+                parent_task_id=self.task_id,
             )
         return tuple(rows)
 

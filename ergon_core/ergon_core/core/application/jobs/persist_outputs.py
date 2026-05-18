@@ -11,12 +11,7 @@ read via the publisher (``kind='report'``/``kind='artifact'`` rows whose
 import logging
 from datetime import UTC, datetime
 
-from ergon_core.api.registry import registry
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.infrastructure.sandbox.manager import (
-    BaseSandboxManager,
-    DefaultSandboxManager,
-)
 from ergon_core.core.infrastructure.sandbox.resource_publisher import SandboxResourcePublisher
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.application.jobs.models import PersistOutputsRequest, PersistOutputsResult
@@ -61,14 +56,7 @@ async def run_persist_outputs_job(payload: PersistOutputsRequest) -> PersistOutp
             sandbox_id=sandbox_id,
         )
 
-    if view.task.sandbox is None:
-        # TODO(PR 11): delete manager fallback once TaskSpec snapshots no
-        # longer reach runtime jobs.
-        manager_cls = registry.sandbox_managers.get(payload.benchmark_type, DefaultSandboxManager)
-        sandbox_manager = manager_cls()
-        outputs_count = await _publish_resources(sandbox_manager, payload)
-    else:
-        outputs_count = await _publish_public_sandbox_resources(view.task.sandbox, payload)
+    outputs_count = await _publish_public_sandbox_resources(view.task.sandbox, payload)
 
     get_trace_sink().emit_span(
         CompletedSpan(
@@ -104,39 +92,4 @@ async def _publish_public_sandbox_resources(sandbox: object, payload: PersistOut
             count,
             payload.run_id,
         )
-    return count
-
-
-async def _publish_resources(
-    sandbox_manager: BaseSandboxManager,
-    payload: PersistOutputsRequest,
-) -> int:
-    """Sync the live sandbox's publish dirs to the blob store.
-
-    Returns the number of new resource rows created.  No-op when no live
-    sandbox exists for this task (e.g. benchmark without sandboxes).
-    """
-    sandbox = sandbox_manager.get_sandbox(payload.task_id)
-    if sandbox is None:
-        logger.info(
-            "persist-outputs: no live sandbox for task_id=%s, skipping publisher",
-            payload.task_id,
-        )
-        return 0
-
-    publisher = SandboxResourcePublisher(
-        sandbox=sandbox,
-        run_id=payload.run_id,
-        task_execution_id=payload.execution_id,
-    )
-
-    synced = await publisher.sync()
-    count = len(synced)
-    if synced:
-        logger.info(
-            "persist-outputs: publisher.sync() created %d resource(s) for run_id=%s",
-            count,
-            payload.run_id,
-        )
-
     return count

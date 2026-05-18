@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 
 class DefinitionHandle(BaseModel):
-    """Rich handle returned after an experiment definition is persisted."""
+    """Rich handle returned after a benchmark definition is persisted."""
 
     model_config = {"frozen": True}
 

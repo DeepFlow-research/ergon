@@ -94,7 +94,7 @@ class SmokeWorkerBase(Worker):
                 session,
                 PlanSubtasksCommand(
                     run_id=RunId(context.run_id),
-                    parent_node_id=NodeId(context.node_id),
+                    parent_task_id=NodeId(context.node_id),
                     subtasks=specs,
                 ),
             )
@@ -134,7 +134,7 @@ class SmokeWorkerBase(Worker):
                 children = inspection.list_subtasks(
                     session,
                     run_id=context.run_id,
-                    parent_node_id=context.node_id,
+                    parent_task_id=context.node_id,
                 )
             if children and all(c.status in _CHILD_WAIT_TERMINAL_STATUSES for c in children):
                 self._last_child_statuses = {c.task_slug: c.status for c in children}
