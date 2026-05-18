@@ -310,7 +310,7 @@ class WorkflowService:
             if node is not None:
                 descriptors.append(
                     TaskDescriptor(
-                        task_id=node.task_id,
+                        task_id=node.id,
                         task_slug=node.task_slug,
                         node_id=node_id,
                     )
