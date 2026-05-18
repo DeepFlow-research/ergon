@@ -90,7 +90,7 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
     DeadPath(
         symbol="terminate_sandbox_by_id",
         landing_pr="PR 11",
-        audit_note="legacy cleanup path; orchestrator try/finally owns release",
+        audit_note="legacy cleanup helper; sandbox_cleanup is the only production owner",
     ),
     DeadPath(
         symbol="_persist_single_sample_workflow_definition",
@@ -113,26 +113,6 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
         symbol="_DetachableSandboxBridge",
         landing_pr="PR 5",
         audit_note="PR 4 bridge; lifted into Sandbox.detach() base method",
-    ),
-    # --- Inngest jobs that PR 4 absorbs into worker_execute ---
-    DeadPath(
-        symbol="execute_task",
-        landing_pr="PR 11",
-        audit_note=(
-            "v1 orchestrator that fanned out to sandbox_setup → "
-            "worker_execute → persist_outputs → check_evaluators; v2 "
-            "collapses into worker_execute"
-        ),
-    ),
-    DeadPath(
-        symbol="sandbox_setup",
-        landing_pr="PR 11",
-        audit_note="PR 4 acquires inline in worker_execute",
-    ),
-    DeadPath(
-        symbol="persist_outputs",
-        landing_pr="PR 11",
-        audit_note="PR 4 persists WorkerOutput inline before fanout",
     ),
     # --- Components/registry layer that v2 retires ---
     DeadPath(
@@ -233,12 +213,8 @@ _XFAIL_BY_SYMBOL: dict[str, str] = {
         "the method definition is still in the source file as transitional "
         "code for rollback. PR 11 deletes it."
     ),
-    "terminate_sandbox_by_id": "PR 11: orchestrator owns release",
+    "terminate_sandbox_by_id": "PR 11: cleanup helper deleted or renamed",
     "_persist_single_sample_workflow_definition": "PR 8: CLI uses persist_benchmark",
-    # Inngest jobs absorbed into worker_execute by PR 4; deleted by PR 11
-    "execute_task": "PR 11: worker_execute is the orchestrator",
-    "sandbox_setup": "PR 11: worker_execute acquires inline",
-    "persist_outputs": "PR 11: worker_execute persists inline",
     # Registry/definition layer retired by PR 11
     "ComponentCatalogService": "PR 11: object-bound task replaces registry resolution",
     "DefinitionRepository": "PR 11: runtime reads run-tier only",

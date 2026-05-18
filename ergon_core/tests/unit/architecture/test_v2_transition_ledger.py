@@ -114,7 +114,7 @@ TRANSITIONAL_SYMBOLS = (
         name="terminate_sandbox_by_id",
         owner_pr="PR 4",
         deletion_pr="PR 11",
-        allowed_reason="old cleanup path remains until worker_execute owns release",
+        allowed_reason="cleanup helper remains behind the sandbox_cleanup owner until PR 11",
     ),
 )
 

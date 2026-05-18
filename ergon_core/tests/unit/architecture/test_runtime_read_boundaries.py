@@ -133,14 +133,13 @@ def test_evaluate_task_run_detaches_sandbox() -> None:
 
 def test_execute_task_fans_out_via_step_invoke() -> None:
     """PR 4 textual guard: the orchestrator fans out evaluators
-    synchronously via ``ctx.step.invoke`` + ``asyncio.gather`` and
-    bounds sandbox lifetime via ``try/finally``.
+    synchronously via ``ctx.step.invoke`` + ``ctx.group.parallel``.
 
     Note: the plan code originally placed this logic in
     `worker_execute.py`; in our codebase `execute_task.py` is the
     orchestrator (it invokes sandbox_setup, worker_execute, and
-    persist_outputs as siblings). See PR 4 plan § "Implementation
-    Note — Bridge-Everything Approach" for the location rationale.
+    persist_outputs as siblings). Sandbox termination is owned by the
+    sibling sandbox_cleanup functions gated on terminal task events.
     """
 
     body = (ROOT / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
@@ -150,9 +149,7 @@ def test_execute_task_fans_out_via_step_invoke() -> None:
         "Use Inngest-native `ctx.group.parallel` for the fan-out, not "
         "`asyncio.gather` over `step.invoke` coroutines."
     )
-    assert "finally:" in body
-    assert "terminate_sandbox_by_id" in body, (
-        "sandbox termination must live inside the orchestrator now; PR 11 "
-        "removes the helper entirely once a `lifecycle_hub.release` "
-        "replacement lands."
+    assert "sandbox_cleanup" in body, (
+        "sandbox termination must be delegated to the sibling cleanup "
+        "functions, not an inline orchestrator finally block."
     )

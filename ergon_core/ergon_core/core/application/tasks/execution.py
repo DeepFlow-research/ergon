@@ -79,9 +79,9 @@ class TaskExecutionService:
     # OR `command.task_id` (definition FK) resolves to the same
     # RunGraphNode row.
     #
-    # TODO(PR 5): `worker_type` / `model_target` come from
-    # `task.worker` once Worker is Pydantic-serializable; drop the
-    # ExperimentDefinitionWorker lookup below.
+    # TODO(PR 11): keep `worker_type` / `model_target` only as tracing
+    # and legacy-payload bridge fields. Object-bound worker execution
+    # reads `task.worker` from the run-tier snapshot.
     # TODO(PR 11): drop `_prepare_legacy_graph_native` /
     # `_prepare_legacy_definition` along with the legacy DTO fields.
 
@@ -109,8 +109,8 @@ class TaskExecutionService:
                 f"Definition {command.definition_id} not found",
             )
 
-            # TODO(PR 5): `worker_type` / `model_target` come from
-            # `task.worker` once Worker is Pydantic-serializable.
+            # TODO(PR 11): bridge metadata only; runtime worker selection
+            # no longer depends on these fields for object-bound tasks.
             assigned_worker_slug = node.assigned_worker_slug
             worker_type, model_target, definition_worker_id = self._resolve_worker_config(
                 session,
@@ -191,9 +191,9 @@ class TaskExecutionService:
         ExperimentDefinitionWorker row matches the binding key (matches
         legacy graph-native behavior for dynamically-assigned workers).
 
-        TODO(PR 5): obsoleted by `task.worker` carrying the config
-        directly; this whole helper goes away with the legacy DTO
-        fields.
+        TODO(PR 11): obsoleted by `task.worker` carrying the config
+        directly for object-bound snapshots; this helper survives only
+        to populate bridge metadata and legacy DTO fields.
         """
 
         if assigned_worker_slug is None:

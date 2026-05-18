@@ -194,14 +194,9 @@ async def _fan_out_evaluators(
     SDK's parallel-step bookkeeping and isn't guaranteed to give
     proper parallelism.
 
-    Evaluator count comes from ``task.evaluator_binding_keys`` today.
-    In PR 5 it comes from ``len(task.evaluators)`` — the loop body
-    stays the same, only the source of the bound list changes (see
-    `06-pr-05-object-bound-api.md` Task 2). We load the task view
-    without ``sandbox_id=`` here because the orchestrator side doesn't
-    need a live ``_runtime`` handle on the inflated Task; the eval
-    workers each call ``graph_repo.node(..., sandbox_id=...)`` on their
-    own side to attach.
+    Evaluator count comes from the object-bound ``task.evaluators`` tuple.
+    A narrow legacy binding-key fallback remains until PR 11 deletes
+    TaskSpec snapshots and the definition-row evaluator bridge.
     """
 
     canonical_task_id = payload.task_id or prepared.node_id
@@ -211,7 +206,11 @@ async def _fan_out_evaluators(
             run_id=payload.run_id,
             task_id=canonical_task_id,
         )
-    evaluator_count = len(view.task.evaluator_binding_keys)
+    evaluator_count = len(view.task.evaluators)
+    if evaluator_count == 0 and view.task.evaluator_binding_keys:
+        # TODO(PR 11): delete legacy fallback once TaskSpec snapshots and
+        # evaluator binding keys are gone from the runtime path.
+        evaluator_count = len(view.task.evaluator_binding_keys)
     if evaluator_count == 0:
         return
 
@@ -378,8 +377,9 @@ async def run_execute_task_job(
 
         # Synchronous fanout. `ctx.group.parallel` keeps the sandbox
         # alive through every per-evaluator Inngest invocation; the
-        # orchestrator cannot reach the `finally` (sandbox termination)
-        # until all evaluators return.
+        # orchestrator emits `task/completed` only after all evaluators
+        # return, and the sibling sandbox_cleanup function terminates
+        # the external sandbox from that terminal event.
         await _fan_out_evaluators(ctx, payload, prepared, evaluate_task_run_function)
 
         await svc.finalize_success(

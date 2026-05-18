@@ -163,6 +163,14 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
 
     task_rows = list(task_rows_by_key.values())
 
+    # -- evaluator rows from inline object-bound Task.evaluators --------
+    # PR 10e bridge: current telemetry still requires a
+    # RunTaskEvaluation.definition_evaluator_id FK, so inline public
+    # evaluators are mirrored into the existing definition evaluator
+    # tables until PR 11 resets the schema around task snapshots.
+    evaluator_rows_by_key: dict[str, ExperimentDefinitionEvaluator] = {}
+    evaluator_snapshot_by_key: dict[str, JsonObject] = {}
+
     # -- dependency rows --
     dependency_rows: list[ExperimentDefinitionTaskDependency] = []
     for instance_key, tasks in instances_map.items():
@@ -193,6 +201,42 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
                 raise ValueError(
                     f"Task {task.task_slug!r} has no assigned ID for evaluator binding"
                 )
+            inline_names_for_task: set[str] = set()
+            for index, evaluator in enumerate(getattr(task, "evaluators", ())):
+                binding_key = evaluator.name or f"inline-{index}"
+                if binding_key in inline_names_for_task:
+                    raise ValueError(
+                        f"Duplicate inline evaluator name {binding_key!r} "
+                        f"on task {task.task_slug!r}"
+                    )
+                inline_names_for_task.add(binding_key)
+
+                snapshot = evaluator.model_dump(mode="json")
+                prior_snapshot = evaluator_snapshot_by_key.get(binding_key)
+                if prior_snapshot is not None and prior_snapshot != snapshot:
+                    raise ValueError(
+                        f"Duplicate inline evaluator name {binding_key!r} "
+                        "has conflicting snapshots in one definition"
+                    )
+                evaluator_snapshot_by_key[binding_key] = snapshot
+                if binding_key not in evaluator_rows_by_key:
+                    evaluator_rows_by_key[binding_key] = ExperimentDefinitionEvaluator(
+                        id=uuid4(),
+                        experiment_definition_id=definition_id,
+                        binding_key=binding_key,
+                        evaluator_type=evaluator.type_slug,
+                        snapshot_json=snapshot,
+                        created_at=now,
+                    )
+                task_evaluator_rows.append(
+                    ExperimentDefinitionTaskEvaluator(
+                        id=uuid4(),
+                        experiment_definition_id=definition_id,
+                        task_id=task_id,
+                        evaluator_binding_key=binding_key,
+                        created_at=now,
+                    )
+                )
             for eval_key in task.evaluator_binding_keys:
                 task_evaluator_rows.append(
                     ExperimentDefinitionTaskEvaluator(
@@ -207,6 +251,7 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
     # ---- 3. Write all rows in one transaction ------------------------
     DefinitionRow = (
         ExperimentDefinition
+        | ExperimentDefinitionEvaluator
         | ExperimentDefinitionInstance
         | ExperimentDefinitionTask
         | ExperimentDefinitionTaskDependency
@@ -214,6 +259,7 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
     )
     all_rows: list[DefinitionRow] = [
         definition_row,
+        *evaluator_rows_by_key.values(),
         *instance_rows,
         *task_rows,
         *dependency_rows,

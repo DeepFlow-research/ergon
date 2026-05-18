@@ -8,8 +8,8 @@ import hashlib
 import logging
 import mimetypes
 import os
-from pathlib import Path
-from typing import ClassVar
+from pathlib import Path, PurePosixPath
+from typing import Any, ClassVar
 from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
@@ -42,7 +42,7 @@ class SandboxResourcePublisher:
     def __init__(
         self,
         *,
-        sandbox: AsyncSandbox,
+        sandbox: AsyncSandbox | Any,  # slopcop: ignore[no-typing-any]
         run_id: UUID,
         task_execution_id: UUID,
         blob_root: Path = _DEFAULT_BLOB_ROOT,
@@ -54,6 +54,24 @@ class SandboxResourcePublisher:
         self._blob_root = blob_root
         self._publish_dirs = publish_dirs if publish_dirs is not None else self.DEFAULT_PUBLISH_DIRS
         self._resource_repo = RunResourceRepository()
+
+    @classmethod
+    def from_public_sandbox(
+        cls,
+        *,
+        sandbox: Any,  # slopcop: ignore[no-typing-any]
+        run_id: UUID,
+        task_execution_id: UUID,
+        blob_root: Path = _DEFAULT_BLOB_ROOT,
+        publish_dirs: tuple[tuple[str, RunResourceKind], ...] | None = None,
+    ) -> "SandboxResourcePublisher":
+        return cls(
+            sandbox=sandbox,
+            run_id=run_id,
+            task_execution_id=task_execution_id,
+            blob_root=blob_root,
+            publish_dirs=publish_dirs,
+        )
 
     # ------------------------------------------------------------------
     # Filesystem sync -- called from write-type toolkit methods and from
@@ -70,11 +88,9 @@ class SandboxResourcePublisher:
         for sandbox_dir, resource_kind in self._publish_dirs:
             entries = await self._list_sandbox_dir(sandbox_dir)
             for entry in entries:
-                sandbox_full_path = f"{sandbox_dir}{entry.name}"
-                content_bytes = await self._sandbox.files.read(
-                    sandbox_full_path,
-                    request_timeout=30,
-                )
+                entry_name = self._entry_name(entry)
+                sandbox_full_path = self._entry_path(sandbox_dir, entry)
+                content_bytes = await self._read_sandbox_file(sandbox_full_path)
                 if isinstance(content_bytes, str):
                     content_bytes = content_bytes.encode("utf-8")
                 content_hash = hashlib.sha256(content_bytes).hexdigest()
@@ -95,7 +111,7 @@ class SandboxResourcePublisher:
                 self._write_blob(content_bytes, content_hash)
 
                 # reason: inline mimetypes to keep module-level namespace clean
-                guessed, _ = mimetypes.guess_type(entry.name)
+                guessed, _ = mimetypes.guess_type(entry_name)
                 mime = guessed or "application/octet-stream"
 
                 with get_session() as session:
@@ -104,7 +120,7 @@ class SandboxResourcePublisher:
                         run_id=self._run_id,
                         task_execution_id=self._task_execution_id,
                         kind=resource_kind.value,
-                        name=entry.name,
+                        name=entry_name,
                         mime_type=mime,
                         file_path=str(durable_path),
                         size_bytes=len(content_bytes),
@@ -189,6 +205,29 @@ class SandboxResourcePublisher:
     async def _list_sandbox_dir(self, path: str) -> list:
         """List directory entries (``EntryInfo`` from e2b).  Missing directory -> ``[]``."""
         try:
-            return await self._sandbox.files.list(path)
+            if hasattr(self._sandbox, "files"):
+                return await self._sandbox.files.list(path)
+            return await self._sandbox.list_files(path)
         except FileNotFoundError:
             return []
+
+    async def _read_sandbox_file(self, path: str) -> bytes | str:
+        if hasattr(self._sandbox, "files"):
+            return await self._sandbox.files.read(
+                path,
+                request_timeout=30,
+            )
+        return await self._sandbox.read_file(path)
+
+    def _entry_name(self, entry: Any) -> str:  # slopcop: ignore[no-typing-any]
+        if hasattr(entry, "name"):
+            return str(entry.name)
+        return PurePosixPath(str(entry)).name
+
+    def _entry_path(self, sandbox_dir: str, entry: Any) -> str:  # slopcop: ignore[no-typing-any]
+        if hasattr(entry, "name"):
+            return f"{sandbox_dir.rstrip('/')}/{entry.name}"
+        entry_path = str(entry)
+        if entry_path.startswith("/"):
+            return entry_path
+        return f"{sandbox_dir.rstrip('/')}/{entry_path}"
