@@ -74,7 +74,7 @@ def assert_cross_cutting_invariants(session: Session, run_id: UUID) -> None:
 
 def make_experiment_definition(session: Session) -> ExperimentDefinition:
     """Create a minimal ExperimentDefinition row for test scaffolding."""
-    defn = ExperimentDefinition(benchmark_type="ci-propagation-test")
+    defn = ExperimentDefinition(benchmark_type="ci-propagation-test", name="ci-propagation-test")
     session.add(defn)
     session.flush()
     session.refresh(defn)

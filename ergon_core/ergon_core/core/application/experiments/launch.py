@@ -9,9 +9,10 @@ from ergon_core.api.registry import registry
 from ergon_core.api.rubric import Evaluator
 from ergon_core.core.domain.experiments import Experiment
 from ergon_core.core.domain.experiments import DefinitionHandle
-from ergon_core.core.shared.json_types import JsonObject
+from ergon_core.core.shared.json_types import JsonObject, JsonValue
 from ergon_core.api.benchmark import TaskSpec
 from ergon_core.core.domain.experiments import WorkerSpec
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord
 from ergon_core.core.application.events.task_events import WorkflowStartedEvent
@@ -22,6 +23,7 @@ from ergon_core.core.application.experiments.models import (
     RunAssignment,
 )
 from ergon_core.core.application.experiments.definition_writer import _ExperimentDefinitionWriter
+from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 
 from ergon_core.core.application.workflows.runs import create_run
 from pydantic import BaseModel
@@ -31,6 +33,54 @@ WorkflowDefinitionFactory = Callable[
     DefinitionHandle,
 ]
 WorkflowStartedEmitter = Callable[[UUID, UUID], Awaitable[None]]
+
+
+async def launch_run(
+    definition_id: UUID,
+    *,
+    assignment_metadata: Mapping[str, JsonValue] | None = None,
+    emit_workflow_started: WorkflowStartedEmitter | None = None,
+) -> ExperimentRunResult:
+    """Materialize a run directly from an ``ExperimentDefinition`` row.
+
+    The canonical definition-first launch path introduced in PR 7. Skips the
+    legacy ``BenchmarkDefinitionRecord`` lookup entirely — identity comes
+    from ``ExperimentDefinition``. PR 11 narrows ``create_run`` so the
+    ``experiment_id=None`` / ``instance_key=None`` calls land cleanly.
+
+    ``assignment_metadata`` flows into ``RunRecord.assignment_json`` — the
+    assignment-metadata column that historically holds arm-key style values
+    (e.g. ``{"arm_key": "default"}``). It is NOT a free-form launch metadata
+    bag; values land in the assignment column verbatim and downstream
+    consumers read them as assignment metadata.
+    """
+    emitter = emit_workflow_started or _emit_workflow_started
+    with get_session() as session:
+        definition = session.get(ExperimentDefinition, definition_id)
+        if definition is None:
+            raise DefinitionNotFoundError(definition_id)
+        run = create_run(
+            DefinitionHandle(
+                definition_id=definition.id,
+                benchmark_type=definition.benchmark_type,
+            ),
+            experiment_id=None,  # type: ignore[arg-type]  # PR 11 narrows create_run; legacy FK still nominally required
+            workflow_definition_id=definition.id,
+            instance_key=None,  # type: ignore[arg-type]  # PR 11 narrows create_run; legacy column still nominally required
+            worker_team_json={},
+            evaluator_slug=None,
+            model_target=None,
+            sandbox_slug=None,
+            dependency_extras_json={},
+            assignment_json=dict(assignment_metadata or {}),
+            seed=None,
+        )
+    await emitter(run.id, definition_id)
+    return ExperimentRunResult(
+        experiment_id=definition_id,
+        run_ids=[run.id],
+        workflow_definition_ids=[definition_id],
+    )
 
 
 class _ExperimentRunLauncher:

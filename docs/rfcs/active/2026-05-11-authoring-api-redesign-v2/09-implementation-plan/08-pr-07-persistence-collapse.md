@@ -37,13 +37,17 @@ ergon_core/tests/unit/state/test_type_invariants.py
 **Create:**
 
 ```text
-ergon_core/migrations/versions/aabbccdd0004_definition_metadata_and_launch.py
+ergon_core/migrations/versions/aabbccdd0005_definition_metadata_and_launch.py
 ergon_core/ergon_core/core/application/experiments/errors.py
 ```
 
-(Migration id `aabbccdd0004` continues the PR 1/4/5 numbering sequence —
+(Migration id `aabbccdd0005` continues the existing numbering sequence —
 `aabbccdd0001` (run-graph task_json), `aabbccdd0002` (worker_output_json),
-`aabbccdd0003` (definition task_json). PR 7 is the next consecutive id.)
+`aabbccdd0003` (definition task_json), `aabbccdd0004` (PR 6.5
+`add_experiment_tag`, already shipped on the public PR 6.5 branch / PR
+#58 CI). PR 7 takes `aabbccdd0005` because PR 6.5 pushed `0004` first —
+migration ids are monotonic by push order. Downstream plans (PR 10a/b/c,
+PR 11) need to claim `aabbccdd0006` as the next free id.)
 
 ## Current State
 
@@ -481,7 +485,7 @@ Tests added or updated: launch-by-definition and read-model tests.
 Modules owned by this PR: definition metadata, launch, read models.
 
 Files added: `experiments/errors.py` (typed exceptions),
-`migrations/versions/aabbccdd0004_definition_metadata_and_launch.py`.
+`migrations/versions/aabbccdd0005_definition_metadata_and_launch.py`.
 
 Identity source assumed: `Benchmark.{name, description, created_by, metadata}`
 (PR 6.5 deleted the `Experiment` wrapper that previously owned these).

@@ -28,6 +28,9 @@ class ExperimentDefinition(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     benchmark_type: str = Field(index=True)
+    name: str = Field(index=True)
+    description: str | None = None
+    created_by: str | None = None
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 

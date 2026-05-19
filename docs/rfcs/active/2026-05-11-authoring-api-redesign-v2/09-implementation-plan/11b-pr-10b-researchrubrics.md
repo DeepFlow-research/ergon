@@ -408,8 +408,9 @@ registry registrations, `_legacy_worker_bridge.py`, and
 `_legacy_evaluator_bridge.py` (the last two still required by gdpeval).
 
 Migrations: this PR adds **no Alembic migration** (the change is
-code-only). If a migration is needed, it claims `aabbccdd0005` (PR 7
-reserves `aabbccdd0004`; PR 10a does not add one).
+code-only). If a migration is needed, it claims `aabbccdd0006` (PR 6.5
+took `aabbccdd0004` for `add_experiment_tag`; PR 7 took `aabbccdd0005`
+for `definition_metadata_and_launch`; PR 10a does not add one).
 
 Deletion gate: PR 11 deletes the manager file and registry registrations.
 PR 10c's cross-cutting cleanup verifies migrated benchmarks no longer

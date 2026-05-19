@@ -506,8 +506,9 @@ Plus the additive migrations introduced earlier in this program:
 - `aabbccdd0001_add_run_graph_task_json.py` (PR 1)
 - `aabbccdd0002_add_worker_output_json.py` (PR 4)
 - `aabbccdd0003_add_definition_task_json.py` (PR 5)
-- `aabbccdd0004_definition_metadata_and_launch.py` (PR 7)
-- (any `aabbccdd0005+` additive migrations PR 10a/10b/10c may have added)
+- `aabbccdd0004_add_experiment_tag.py` (PR 6.5)
+- `aabbccdd0005_definition_metadata_and_launch.py` (PR 7)
+- (any `aabbccdd0006+` additive migrations PR 10a/10b/10c may have added)
 
 ### Developer-facing downgrade step
 

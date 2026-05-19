@@ -28,6 +28,7 @@ class Benchmark(ABC):
             Any,  # slopcop: ignore[no-typing-any] -- public metadata bag accepts arbitrary JSON-like values
         ]
         | None = None,
+        created_by: str | None = None,
     ) -> None:
         self.name = name or self.__class__.__name__
         self.description = description or ""
@@ -35,6 +36,12 @@ class Benchmark(ABC):
             str,
             Any,  # slopcop: ignore[no-typing-any] -- preserves caller-supplied benchmark metadata values
         ] = dict(metadata or {})
+        # `created_by` deliberately preserves `None` as the unset sentinel,
+        # unlike `name`/`description` which collapse to defaults via `or`.
+        # Attribution wants the absent state distinguishable from empty
+        # (an empty string would mean "explicitly set to nothing", which is
+        # meaningless for "who created this").
+        self.created_by = created_by
 
     @abstractmethod
     def build_instances(self) -> Mapping[str, Sequence[TaskSpec[BaseModel] | Task[BaseModel]]]:

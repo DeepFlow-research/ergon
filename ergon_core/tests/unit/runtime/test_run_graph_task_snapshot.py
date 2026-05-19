@@ -61,7 +61,9 @@ def _seed_definition(session: Session, *, task_slug: str, payload: dict) -> tupl
                 benchmark_type="test",
                 sample_count=1,
             ),
-            ExperimentDefinition(id=definition_id, benchmark_type="test", metadata_json={}),
+            ExperimentDefinition(
+                id=definition_id, benchmark_type="test", name="test", metadata_json={}
+            ),
             ExperimentDefinitionInstance(
                 id=instance_id,
                 experiment_definition_id=definition_id,

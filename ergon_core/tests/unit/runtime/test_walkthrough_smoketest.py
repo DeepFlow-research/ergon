@@ -69,7 +69,9 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
                 benchmark_type="test",
                 sample_count=1,
             ),
-            ExperimentDefinition(id=definition_id, benchmark_type="test", metadata_json={}),
+            ExperimentDefinition(
+                id=definition_id, benchmark_type="test", name="test", metadata_json={}
+            ),
             ExperimentDefinitionInstance(
                 id=instance_id,
                 experiment_definition_id=definition_id,
@@ -132,16 +134,73 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
 # ── Future-PR invariants — xfailed pending implementation ────────────
 
 
-@pytest.mark.xfail(
-    reason="PR 7: persist_definition collapses BenchmarkDefinitionRecord onto definitions",
-    strict=True,
-)
-def test_persist_definition_writes_only_intended_tables() -> None:
-    """PR 7 invariant: persist_definition writes experiment_definitions
-    plus experiment_definition_tasks. No write to BenchmarkDefinitionRecord, no
-    write to saved_specs."""
+def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
+    """PR 7 invariant: persist_benchmark writes experiment_definitions
+    plus experiment_definition_tasks (and related instance / task-
+    evaluator rows). It must NOT write to the legacy
+    BenchmarkDefinitionRecord table — identity comes from
+    ExperimentDefinition only after PR 7's persistence collapse."""
 
-    pytest.fail("requires PR 7's persistence collapse + helper rewrite")
+    from collections.abc import Mapping, Sequence
+    from typing import ClassVar
+
+    from ergon_core.api import Benchmark
+    from ergon_core.api.benchmark import TaskSpec
+    from ergon_core.core.application.experiments import (
+        definition_writer as definition_writer_module,
+    )
+    from ergon_core.core.application.experiments.definition_writer import persist_benchmark
+
+    class _OneTaskBenchmark(Benchmark):
+        type_slug: ClassVar[str] = "smoketest-one-task"
+
+        def build_instances(self) -> Mapping[str, Sequence[TaskSpec]]:
+            return {
+                "sample-1": (
+                    TaskSpec(
+                        task_slug="root",
+                        instance_key="sample-1",
+                        description="root task",
+                    ),
+                )
+            }
+
+    session = _session()
+    monkeypatch.setattr(definition_writer_module, "get_session", lambda: session)
+    # persist_benchmark calls session.close() at the end of its
+    # transaction; swap close to a no-op so we can still query the
+    # in-memory engine afterwards.
+    monkeypatch.setattr(session, "close", lambda: None)
+
+    benchmark = _OneTaskBenchmark(name="smoke benchmark", description="one task")
+    handle = persist_benchmark(benchmark)
+
+    # experiment_definitions has exactly one row with the benchmark's
+    # identity fields.
+    definitions = session.exec(select(ExperimentDefinition)).all()
+    assert len(definitions) == 1
+    persisted = definitions[0]
+    assert persisted.id == handle.definition_id
+    assert persisted.name == "smoke benchmark"
+    assert persisted.description == "one task"
+
+    # experiment_definition_tasks has exactly one row, parented to the
+    # new definition.
+    tasks = session.exec(select(ExperimentDefinitionTask)).all()
+    assert len(tasks) == 1
+    assert tasks[0].experiment_definition_id == handle.definition_id
+    assert tasks[0].task_slug == "root"
+
+    # experiment_definition_instances has exactly one row, parented to
+    # the new definition.
+    instances = session.exec(select(ExperimentDefinitionInstance)).all()
+    assert len(instances) == 1
+    assert instances[0].experiment_definition_id == handle.definition_id
+
+    # PR 7 invariant: persist_benchmark must NOT write to the legacy
+    # BenchmarkDefinitionRecord table at all.
+    legacy_rows = session.exec(select(BenchmarkDefinitionRecord)).all()
+    assert legacy_rows == []
 
 
 def test_worker_execute_reads_task_from_run_tier_only() -> None:
