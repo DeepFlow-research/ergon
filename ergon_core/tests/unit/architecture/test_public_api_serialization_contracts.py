@@ -53,8 +53,10 @@ def _is_non_empty_literal_sequence(value: ast.expr | None) -> bool:
 
 
 def _is_non_empty_literal_string(value: ast.expr | None) -> bool:
-    return isinstance(value, ast.Constant) and isinstance(value.value, str) and bool(
-        value.value.strip()
+    return (
+        isinstance(value, ast.Constant)
+        and isinstance(value.value, str)
+        and bool(value.value.strip())
     )
 
 

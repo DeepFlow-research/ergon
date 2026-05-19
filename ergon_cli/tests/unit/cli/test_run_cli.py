@@ -10,7 +10,7 @@ from ergon_cli.main import build_parser
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -38,7 +38,6 @@ def test_run_subcommands_are_registered_in_main_parser() -> None:
 
 @pytest.fixture()
 def session_factory():
-    _ = BenchmarkDefinitionRecord
     _ = ExperimentDefinition
     _ = RunGraphNode
     engine = create_engine(
@@ -59,21 +58,20 @@ def session_factory():
 # ---------------------------------------------------------------------------
 
 
-def _bdr(*, experiment: str | None = None) -> BenchmarkDefinitionRecord:
-    return BenchmarkDefinitionRecord(
+def _definition(*, name: str) -> ExperimentDefinition:
+    return ExperimentDefinition(
         id=uuid4(),
-        name="ci experiment",
         benchmark_type="ci-benchmark",
-        sample_count=1,
-        experiment=experiment,
+        name=name,
+        metadata_json={},
     )
 
 
-def _run_record(*, experiment_id: object) -> RunRecord:
+def _run_record(*, definition_id: object) -> RunRecord:
     return RunRecord(
         id=uuid4(),
-        experiment_id=experiment_id,
-        workflow_definition_id=uuid4(),
+        definition_id=definition_id,
+        workflow_definition_id=definition_id,
         benchmark_type="ci-benchmark",
         instance_key="k",
         worker_team_json={},
@@ -92,7 +90,7 @@ def test_run_status_prints_status_fields(monkeypatch, capsys):
     bdr_id = uuid4()
     fake_run = RunRecord(
         id=run_id,
-        experiment_id=bdr_id,
+        definition_id=bdr_id,
         workflow_definition_id=uuid4(),
         benchmark_type="ci-benchmark",
         instance_key="sample-1",
@@ -174,20 +172,20 @@ def test_run_status_reports_missing_run(monkeypatch, capsys):
 
 
 def test_run_list_filters_by_experiment(monkeypatch, session_factory, capsys):
-    """Only runs whose parent BenchmarkDefinitionRecord.experiment=='ablation-x' appear."""
-    bdr_matching = _bdr(experiment="ablation-x")
-    bdr_other = _bdr(experiment="other-exp")
+    """Only runs whose workflow definition name matches --experiment appear."""
+    definition_matching = _definition(name="ablation-x")
+    definition_other = _definition(name="other-exp")
 
-    run_matching = _run_record(experiment_id=bdr_matching.id)
-    run_other = _run_record(experiment_id=bdr_other.id)
+    run_matching = _run_record(definition_id=definition_matching.id)
+    run_other = _run_record(definition_id=definition_other.id)
 
     # Capture IDs before the session closes to avoid DetachedInstanceError
     matching_id = str(run_matching.id)
     other_id = str(run_other.id)
 
     with session_factory() as session:
-        session.add(bdr_matching)
-        session.add(bdr_other)
+        session.add(definition_matching)
+        session.add(definition_other)
         session.add(run_matching)
         session.add(run_other)
         session.commit()

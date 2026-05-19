@@ -127,8 +127,10 @@ class Task(BaseModel, Generic[PayloadT]):
         # the api/ import graph).
         # reason: avoid circular import — Worker/Sandbox/Evaluator import Task.
         from ergon_core.api.rubric.evaluator import Evaluator
+
         # reason: avoid circular import — Worker/Sandbox/Evaluator import Task.
         from ergon_core.api.sandbox.sandbox import Sandbox
+
         # reason: avoid circular import — Worker/Sandbox/Evaluator import Task.
         from ergon_core.api.worker.worker import Worker
 

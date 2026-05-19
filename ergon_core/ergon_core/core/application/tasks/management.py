@@ -552,7 +552,7 @@ class TaskManagementService:
         await self._graph_repo.update_node_status(
             session,
             run_id=run_id,
-            task_id=node_id,
+            node_id=node_id,
             new_status=CANCELLED,
             meta=MutationMeta(
                 actor="manager-worker",

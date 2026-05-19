@@ -488,9 +488,9 @@ async def test_add_task_non_dry_run_requires_object_bound_task() -> None:
 
     with pytest.raises(ValueError, match="requires an object-bound Task"):
         await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
-                session,
-                run_id=run_id,
-                parent_task_id=parent.task_id,
+            session,
+            run_id=run_id,
+            parent_task_id=parent.task_id,
             task_slug="child",
             description="Child task",
             assigned_worker_slug="minif2f-react",
@@ -520,9 +520,9 @@ async def test_add_task_rejects_unknown_worker_slug_before_creating_node() -> No
 
     with pytest.raises(ValueError, match="requires an object-bound Task"):
         await WorkflowService(task_ready_dispatcher=dispatch_task_ready).add_task(
-                session,
-                run_id=run_id,
-                parent_task_id=parent.task_id,
+            session,
+            run_id=run_id,
+            parent_task_id=parent.task_id,
             task_slug="bad-worker",
             description="Should not be inserted",
             assigned_worker_slug="not-a-real-worker",

@@ -68,9 +68,7 @@ class TaskCleanupService:
             select(RunTaskExecution).where(RunTaskExecution.id == execution_id)
         ).first()
 
-    def _mark_execution_cancelled(
-        self, session: Session, exe: RunTaskExecution | None
-    ) -> bool:
+    def _mark_execution_cancelled(self, session: Session, exe: RunTaskExecution | None) -> bool:
         """Idempotent: skip if already terminal."""
         if exe is None or exe.status in {
             TaskExecutionStatus.COMPLETED,

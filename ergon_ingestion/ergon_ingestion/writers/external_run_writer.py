@@ -54,7 +54,7 @@ class ExternalRunWriter:
 
     def write_run(self, parsed: ParsedRun) -> WriteRunResult:
         definition = self._definition_row()
-        experiment = self._experiment_row(definition)
+        self._experiment_row(definition)
         observed_fields = _compact_for_db(_json_safe(parsed.observed_fields))
         missing_fields = _json_safe(parsed.missing_fields)
         instance = ExperimentDefinitionInstance(
@@ -86,7 +86,7 @@ class ExternalRunWriter:
         self._session.flush()
 
         run = RunRecord(
-            experiment_id=experiment.id,
+            definition_id=definition.id,
             workflow_definition_id=definition.id,
             benchmark_type=f"imported:{self._source.dataset}",
             instance_key=parsed.instance_key,
@@ -95,6 +95,7 @@ class ExternalRunWriter:
             summary_json={
                 "imported": True,
                 "source_slug": self._source.dataset,
+                "import_batch_id": self._source.batch_id,
                 "source_run_id": parsed.source_run_id,
                 "source_unit_kind": parsed.schema_fit_class,
                 "observed_fields": observed_fields,
@@ -116,8 +117,7 @@ class ExternalRunWriter:
 
         execution = RunTaskExecution(
             run_id=run.id,
-            task_id=node.id,
-            node_id=node.id,
+            task_id=node.task_id,
             status=TaskExecutionStatus.COMPLETED,
             output_json={
                 "imported": True,
@@ -133,7 +133,7 @@ class ExternalRunWriter:
                 RunGraphAnnotation(
                     run_id=run.id,
                     target_type="node",
-                    target_id=node.id,
+                    target_id=node.task_id,
                     namespace=annotation.namespace,
                     sequence=sequence,
                     payload=_json_safe(annotation.payload),
@@ -146,7 +146,7 @@ class ExternalRunWriter:
         for reducer in parsed.reducers:
             reducer_row = RunReducer(
                 run_id=run.id,
-                node_id=node.id,
+                task_id=node.task_id,
                 task_execution_id=execution.id,
                 name=reducer.name,
                 kind=reducer.kind,
@@ -181,7 +181,7 @@ class ExternalRunWriter:
                     )
                 )
 
-        return WriteRunResult(run_id=run.id, node_id=node.id, task_execution_id=execution.id)
+        return WriteRunResult(run_id=run.id, node_id=node.task_id, task_execution_id=execution.id)
 
     def _definition_row(self) -> ExperimentDefinition:
         if self._definition is None:

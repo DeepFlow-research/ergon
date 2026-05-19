@@ -68,8 +68,7 @@ DEAD_PATHS: tuple[DeadPath, ...] = (
     DeadPath(
         symbol="_prepare_legacy_graph_native",
         audit_note=(
-            "PR 3 renamed _prepare_graph_native; the legacy method is "
-            "kept callerless for rollback"
+            "PR 3 renamed _prepare_graph_native; the legacy method is kept callerless for rollback"
         ),
     ),
     DeadPath(

@@ -3,8 +3,9 @@
 from argparse import Namespace
 from uuid import UUID
 
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
-from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.workflows.runs import cancel_run as do_cancel
 from sqlmodel import select
 
@@ -32,9 +33,9 @@ def list_runs(args: Namespace) -> int:
             stmt = stmt.where(RunRecord.status == args.status)
         if args.experiment:
             stmt = stmt.join(
-                BenchmarkDefinitionRecord,
-                RunRecord.experiment_id == BenchmarkDefinitionRecord.id,  # type: ignore[invalid-argument-type]
-            ).where(BenchmarkDefinitionRecord.experiment == args.experiment)
+                ExperimentDefinition,
+                RunRecord.workflow_definition_id == ExperimentDefinition.id,  # type: ignore[invalid-argument-type]
+            ).where(ExperimentDefinition.name == args.experiment)
         stmt = stmt.limit(args.limit)
         runs = list(session.exec(stmt).all())
 

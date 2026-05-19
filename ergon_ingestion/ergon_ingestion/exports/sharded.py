@@ -13,7 +13,6 @@ from sqlmodel import Session, select
 
 from ergon_core.core.persistence.imports.models import RunDropsManifest, RunReducer
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RunRecord,
     RunResource,
 )
@@ -121,12 +120,11 @@ def export_dataset_from_config(config: ShardedExportConfig) -> DatasetExportMani
 def _load_runs(*, session: Session, dataset: str, batch: str) -> list[RunRecord]:
     statement = (
         select(RunRecord)
-        .join(BenchmarkDefinitionRecord)
         .where(RunRecord.benchmark_type == f"imported:{dataset}")
-        .where(BenchmarkDefinitionRecord.name == batch)
         .order_by(RunRecord.created_at, RunRecord.id)
     )
-    return list(session.exec(statement))
+    runs = list(session.exec(statement))
+    return [run for run in runs if run.summary_json.get("import_batch_id") == batch]
 
 
 def _export_resources(
@@ -178,7 +176,7 @@ def _run_row(
         "dataset": config.dataset,
         "batch": config.batch,
         "run_id": str(run.id),
-        "experiment_id": str(run.experiment_id),
+        "definition_id": str(run.definition_id),
         "workflow_definition_id": str(run.workflow_definition_id),
         "benchmark_type": run.benchmark_type,
         "instance_key": run.instance_key,

@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.utils import utcnow as _utcnow
 from pydantic import model_validator
-from sqlalchemy import JSON, Column, DateTime
+from sqlalchemy import JSON, Column, DateTime, ForeignKeyConstraint
 from sqlmodel import Field, SQLModel
 
 TZDateTime = DateTime(timezone=True)
@@ -16,10 +16,16 @@ class RunReducer(SQLModel, table=True):
     """Reducer/reporting rule applied to a run."""
 
     __tablename__ = "run_reducers"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["run_id", "task_id"],
+            ["run_graph_nodes.run_id", "run_graph_nodes.task_id"],
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     run_id: UUID = Field(foreign_key="runs.id", index=True)
-    node_id: UUID | None = Field(default=None, foreign_key="run_graph_nodes.id", index=True)
+    task_id: UUID | None = Field(default=None, index=True)
     task_execution_id: UUID | None = Field(
         default=None,
         foreign_key="run_task_executions.id",

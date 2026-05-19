@@ -178,7 +178,7 @@ def read_run_state(
         TestGraphMutationDto(
             sequence=m.sequence,
             mutation_type=m.mutation_type,
-            target_task_slug=slug_by_node_id.get(m.target_id) if m.target_id else None,
+            target_task_slug=slug_by_task_id.get(m.target_id) if m.target_id else None,
         )
         for m in mutation_rows
     ]
@@ -188,8 +188,8 @@ def read_run_state(
     )
     evaluations = [
         TestEvaluationDto(
-            task_id=ev.node_id,
-            task_slug=slug_by_node_id.get(ev.node_id),
+            task_id=ev.task_id,
+            task_slug=slug_by_task_id.get(ev.task_id),
             score=float(ev.score) if ev.score is not None else 0.0,
             reason="" if ev.feedback is None else ev.feedback,
         )
@@ -201,7 +201,7 @@ def read_run_state(
     )
     executions = [
         TestExecutionDto(
-            task_slug=slug_by_node_id.get(ex.node_id) if ex.node_id else None,
+            task_slug=slug_by_task_id.get(ex.task_id),
             status=ex.status,
             error=_execution_error_message(ex),
         )

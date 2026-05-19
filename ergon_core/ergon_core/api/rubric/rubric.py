@@ -30,9 +30,7 @@ class Rubric(Evaluator):
 
     @field_validator("criteria", mode="before")
     @classmethod
-    def _rehydrate_criteria(
-        cls, value: Any
-    ) -> tuple[Criterion, ...]:
+    def _rehydrate_criteria(cls, value: Any) -> tuple[Criterion, ...]:
         if value is None:
             return ()
         return tuple(

@@ -9,6 +9,7 @@ from ergon_core.api.errors import DependencyError
 from ergon_core.api.rubric import Evaluator, Rubric
 from ergon_core.api.rubric.results import TaskEvaluationResult
 from ergon_core.api.worker import WorkerOutput
+from ergon_core.api.benchmark import Task
 from ergon_core.core.application.evaluation.models import CriterionSpec
 from ergon_core.core.application.evaluation.service import (
     EvaluationService,
@@ -35,15 +36,17 @@ class _MissingDepsEvaluator(Evaluator):
     required_packages = ["definitely_missing_ergon_eval_dep_17"]
     install_hint = "pip install definitely-missing-ergon-eval-dep-17"
 
-    def criteria_for(self, task) -> Iterable[Criterion]:  # noqa: ANN001
+    def criteria_for(self, task: Task) -> Iterable[Criterion]:
         raise AssertionError("criteria_for should not run before evaluator dependencies validate")
 
     def aggregate_task(
         self,
-        task,  # noqa: ANN001
+        task: Task,
         criterion_results: Iterable[CriterionOutcome],
     ) -> TaskEvaluationResult:
-        raise AssertionError("aggregate_task should not run when evaluator dependencies are missing")
+        raise AssertionError(
+            "aggregate_task should not run when evaluator dependencies are missing"
+        )
 
 
 @pytest.mark.asyncio
