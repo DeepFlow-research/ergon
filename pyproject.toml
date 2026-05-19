@@ -217,8 +217,8 @@ invalid-method-override = "ignore"
 #   - ergon_infra/: tokenizer.pad_token assignment + TrainingStatus str coercion
 [[tool.ty.overrides]]
 include = [
-    "**/core/rest_api/runs.py",
-    "**/core/rest_api/test_harness.py",
+    "**/core/infrastructure/http/routes/runs.py",
+    "**/core/infrastructure/http/routes/test_harness.py",
     "**/core/infrastructure/tracing/**",
     "**/providers/judges/**",
     "**/benchmarks/smoke_test/**",
@@ -242,7 +242,7 @@ invalid-argument-type = "ignore"
 
 # inngest_client.send_sync signature vs Callable[[Event], None] — harmless mismatch.
 [[tool.ty.overrides]]
-include = ["**/core/rest_api/app.py"]
+include = ["**/core/infrastructure/http/app.py"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "ignore"
 
