@@ -17,7 +17,7 @@ from ergon_core.core.persistence.telemetry.evaluation_summary import (
     EvaluationSummary,
 )
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
-from ergon_core.core.persistence.telemetry.repositories import (
+from ergon_core.core.persistence.telemetry.repository import (
     CreateTaskEvaluation,
     TelemetryRepository,
 )

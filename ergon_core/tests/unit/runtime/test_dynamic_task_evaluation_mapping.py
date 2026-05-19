@@ -2,7 +2,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
-from ergon_core.core.persistence.telemetry.repositories import CreateTaskEvaluation
+from ergon_core.core.persistence.telemetry.repository import CreateTaskEvaluation
 from ergon_core.core.application.read_models.run_snapshot import _task_keyed_evaluations
 
 

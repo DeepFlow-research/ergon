@@ -76,7 +76,7 @@ old fields until later PRs flip it.
 - Modify: `ergon_core/ergon_core/core/persistence/graph/models.py`
 - Create: `ergon_core/migrations/versions/<revision>_add_run_graph_task_json.py`
 
-- [ ] **Step 1: Update `RunGraphNode`**
+- [x] **Step 1: Update `RunGraphNode`**
 
 Add imports:
 
@@ -105,7 +105,7 @@ Add fields after `description`:
 
 Keep `definition_task_id` unchanged.
 
-- [ ] **Step 2: Add additive migration**
+- [x] **Step 2: Add additive migration**
 
 Create a migration that runs:
 
@@ -132,7 +132,7 @@ def downgrade() -> None:
     op.drop_column("run_graph_nodes", "task_json")
 ```
 
-- [ ] **Step 3: Run model import smoke**
+- [x] **Step 3: Run model import smoke**
 
 Run:
 
@@ -148,7 +148,7 @@ Expected: prints a callable/default factory reference and exits 0.
 
 - Modify: `ergon_core/ergon_core/core/application/graph/repository.py`
 
-- [ ] **Step 1: Add helper near `_node_snapshot` helpers**
+- [x] **Step 1: Add helper near `_node_snapshot` helpers**
 
 ```python
 def _definition_task_snapshot(
@@ -176,7 +176,7 @@ def _definition_task_snapshot(
 This is a bridge snapshot, not the final v2 `Task` JSON. PR 5 replaces the
 payload shape once object-bound tasks exist.
 
-- [ ] **Step 2: Populate `task_json` when creating static nodes**
+- [x] **Step 2: Populate `task_json` when creating static nodes**
 
 Replace the `RunGraphNode(...)` creation inside `initialize_from_definition`
 with the same fields plus:
@@ -190,7 +190,7 @@ task_json=_definition_task_snapshot(
 is_dynamic=False,
 ```
 
-- [ ] **Step 3: Populate `task_json` in `add_node`**
+- [x] **Step 3: Populate `task_json` in `add_node`**
 
 Extend `add_node` signature:
 
@@ -216,7 +216,7 @@ explicitly.
 
 - Create: `ergon_core/tests/unit/runtime/test_run_graph_task_snapshot.py`
 
-- [ ] **Step 1: Write static-copy test**
+- [x] **Step 1: Write static-copy test**
 
 ```python
 def test_initialize_from_definition_copies_task_json(session, definition_factory):
@@ -240,7 +240,7 @@ def test_initialize_from_definition_copies_task_json(session, definition_factory
     assert row.is_dynamic is False
 ```
 
-- [ ] **Step 2: Write dynamic insert test**
+- [x] **Step 2: Write dynamic insert test**
 
 ```python
 @pytest.mark.asyncio
@@ -271,7 +271,7 @@ async def test_add_node_can_write_dynamic_task_json(session):
     assert row.is_dynamic is True
 ```
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 ```bash
 uv run pytest ergon_core/tests/unit/runtime/test_run_graph_task_snapshot.py -q
@@ -295,7 +295,7 @@ These are explicitly **not** call-graph mock tests — they observe outcomes
 integration test in PR 12 is the heavier, multi-variant version of the
 same pattern; this skeleton is the unit-level seed.
 
-- [ ] **Step 1: Write the smoketest skeleton**
+- [x] **Step 1: Write the smoketest skeleton**
 
 ```python
 """Observable-effect smoketests for the v2 happy path.
@@ -454,7 +454,7 @@ PR that flips the corresponding test green. PR 1 only needs
 `persisted_definition` and `session`; the rest are added by their
 landing PR.
 
-- [ ] **Step 2: Add the minimal PR 1 fixtures**
+- [x] **Step 2: Add the minimal PR 1 fixtures**
 
 In `ergon_core/tests/unit/runtime/conftest.py` (extend if it exists):
 
@@ -484,7 +484,7 @@ The `sample_experiment` fixture lives where the existing benchmark test
 fixtures live; reuse the simplest in-tree benchmark that builds a
 non-empty graph.
 
-- [ ] **Step 3: Run the smoketest**
+- [x] **Step 3: Run the smoketest**
 
 ```bash
 uv run pytest ergon_core/tests/unit/runtime/test_walkthrough_smoketest.py -q
@@ -510,7 +510,7 @@ The PR 1 invariant (task_id flows from definition tasks into
 `run_graph_nodes`) is green; later invariants xfail until their landing
 PR.
 
-- [ ] **Step 1: Write the skeleton**
+- [x] **Step 1: Write the skeleton**
 
 ```python
 """Identity-flow invariants from 02-persistence-layer.md §2.
@@ -620,7 +620,7 @@ async def test_dynamic_task_id_has_no_definition_row(
     pytest.fail("requires PR 9's graph-native spawn")
 ```
 
-- [ ] **Step 2: Run the identity tests**
+- [x] **Step 2: Run the identity tests**
 
 ```bash
 uv run pytest ergon_core/tests/unit/runtime/test_identity_invariants.py -q
@@ -628,7 +628,7 @@ uv run pytest ergon_core/tests/unit/runtime/test_identity_invariants.py -q
 
 Expected: one PASS, four XFAIL.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add ergon_core/tests/unit/runtime/test_run_graph_task_snapshot.py \
@@ -655,14 +655,14 @@ PR 0.5's repository-layer-conventions guard xfails the
 rename lands. PR 1 is the natural home because no other PR is heavily
 editing `telemetry/repositories.py` first — PR 4 touches it next.
 
-- [ ] **Step 1: Rename the file**
+- [x] **Step 1: Rename the file**
 
 ```bash
 git mv ergon_core/ergon_core/core/persistence/telemetry/repositories.py \
        ergon_core/ergon_core/core/persistence/telemetry/repository.py
 ```
 
-- [ ] **Step 2: Update importers**
+- [x] **Step 2: Update importers**
 
 ```bash
 rg -l "from ergon_core\.core\.persistence\.telemetry\.repositories" \
@@ -672,7 +672,7 @@ rg -l "from ergon_core\.core\.persistence\.telemetry\.repositories" \
 Edit each hit to `... .telemetry.repository`. Same for any
 `import ergon_core.core.persistence.telemetry.repositories as ...` form.
 
-- [ ] **Step 3: Remove the xfail entry**
+- [x] **Step 3: Remove the xfail entry**
 
 In `test_repository_layer_conventions.py`, delete:
 
@@ -681,7 +681,7 @@ In `test_repository_layer_conventions.py`, delete:
     "PR 1: rename telemetry/repositories.py -> telemetry/repository.py",
 ```
 
-- [ ] **Step 4: Run the guard**
+- [x] **Step 4: Run the guard**
 
 ```bash
 uv run pytest ergon_core/tests/unit/architecture/test_repository_layer_conventions.py -q

@@ -90,12 +90,6 @@ def _public_methods(cls: type) -> Iterator[tuple[str, object]]:
 # from this dict at collection time so each known case is treated as
 # expected-to-fail with strict=True. The dict drains as fix-PRs land.
 _KNOWN_VIOLATORS: dict[tuple[str, str], str] = {
-    # PR 1 renames telemetry/repositories.py -> telemetry/repository.py.
-    # Until that PR lands, the plural filename is a known violator.
-    (
-        "test_repository_file_is_singular",
-        "TelemetryRepository",
-    ): "PR 1: rename telemetry/repositories.py -> telemetry/repository.py.",
     # PR 4 already touches TelemetryRepository to add set_sandbox_id +
     # WorkerOutputRepository. The same PR should make create_task_evaluation
     # async (it's only called from async eval workers anyway).
