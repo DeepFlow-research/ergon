@@ -1,10 +1,15 @@
 """Experiment lifecycle commands."""
 
 from argparse import Namespace
+from dataclasses import dataclass
 import logging
 from uuid import UUID
 
-from ergon_core.core.application.read_models.experiments import ExperimentReadService
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
+from ergon_core.core.persistence.shared.db import ensure_db, get_session
+from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.views.experiments.service import ExperimentReadService
+from sqlmodel import select
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +20,11 @@ async def handle_experiment(args: Namespace) -> int:
         return handle_experiment_show(args)
     if args.experiment_action == "list":
         return handle_experiment_list(args)
-    logger.error("Usage: ergon experiment {show|list}")
+    if args.experiment_action == "tags":
+        return handle_experiment_tags(args)
+    if args.experiment_action == "by-tag":
+        return handle_experiment_by_tag(args)
+    logger.error("Usage: ergon experiment {show|list|tags|by-tag}")
     return 1
 
 
@@ -73,6 +82,87 @@ def handle_experiment_list(args: Namespace) -> int:
             experiment.sample_count,
             experiment.run_count,
             "" if experiment.default_model_target is None else experiment.default_model_target,
+        )
+    return 0
+
+
+@dataclass(frozen=True)
+class ExperimentTagDefinitionRow:
+    definition_id: UUID
+    name: str
+    benchmark_type: str
+    latest_run_status: str | None = None
+
+
+class ExperimentTagService:
+    """Read v2 experiment grouping tags from ``RunRecord.experiment``."""
+
+    def distinct_tags(self) -> list[str]:
+        ensure_db()
+        with get_session() as session:
+            tags = {
+                tag
+                for tag in session.exec(select(RunRecord.experiment)).all()
+                if isinstance(tag, str) and tag
+            }
+        return sorted(tags)
+
+    def definitions_by_tag(self, tag: str) -> list[ExperimentTagDefinitionRow]:
+        ensure_db()
+        with get_session() as session:
+            runs = list(
+                session.exec(
+                    select(RunRecord)
+                    .where(RunRecord.experiment == tag)
+                    .order_by(RunRecord.created_at.desc())
+                ).all()
+            )
+            latest_by_definition: dict[UUID, RunRecord] = {}
+            for run in runs:
+                latest_by_definition.setdefault(run.definition_id, run)
+
+            rows: list[ExperimentTagDefinitionRow] = []
+            for definition_id, latest_run in latest_by_definition.items():
+                definition = session.get(ExperimentDefinition, definition_id)
+                if definition is None:
+                    continue
+                rows.append(
+                    ExperimentTagDefinitionRow(
+                        definition_id=definition.id,
+                        name=definition.name,
+                        benchmark_type=definition.benchmark_type,
+                        latest_run_status=str(latest_run.status),
+                    )
+                )
+        return rows
+
+
+def handle_experiment_tags(args: Namespace) -> int:
+    _ensure_cli_logging()
+    tags = ExperimentTagService().distinct_tags()
+    if not tags:
+        logger.info("No experiment tags found.")
+        return 0
+    for tag in tags:
+        logger.info("%s", tag)
+    return 0
+
+
+def handle_experiment_by_tag(args: Namespace) -> int:
+    _ensure_cli_logging()
+    rows = ExperimentTagService().definitions_by_tag(args.tag)
+    if not rows:
+        logger.info("No definitions found for experiment tag %r.", args.tag)
+        return 0
+
+    logger.info("DEFINITION_ID\tNAME\tBENCHMARK\tLATEST_RUN_STATUS")
+    for row in rows:
+        logger.info(
+            "%s\t%s\t%s\t%s",
+            row.definition_id,
+            row.name,
+            row.benchmark_type,
+            "" if row.latest_run_status is None else row.latest_run_status,
         )
     return 0
 

@@ -172,6 +172,14 @@ class RunRecord(SQLModel, table=True):
     )
     assignment_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     seed: int | None = None
+    experiment: str | None = Field(
+        default=None,
+        index=True,
+        description=(
+            "Optional v2 experiment grouping tag for runs. This is a label "
+            "for grouping related runs, not a foreign key to a retired table."
+        ),
+    )
     status: RunStatus = Field(index=True)
     error_message: str | None = None
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)

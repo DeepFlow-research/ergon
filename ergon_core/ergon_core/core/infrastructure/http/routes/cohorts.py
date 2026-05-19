@@ -1,13 +1,15 @@
-"""FastAPI router for experiment cohort endpoints."""
+"""Deprecated FastAPI router for experiment cohort compatibility endpoints."""
 
 from uuid import UUID
 
-from ergon_core.core.application.read_models.cohorts import (
+from ergon_core.core.application.compat.cohorts import (
+    deprecated_cohort_compatibility_service,
+)
+from ergon_core.core.views.compat.cohorts import (
     CohortDetailDto,
     CohortSummaryDto,
     UpdateCohortRequest,
 )
-from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
 from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(prefix="/cohorts", tags=["cohorts"])
@@ -18,13 +20,15 @@ def list_cohorts(
     include_archived: bool = Query(default=False),
 ) -> list[CohortSummaryDto]:
     """List all experiment cohorts."""
-    return experiment_cohort_service.list_summaries(include_archived=include_archived)
+    return deprecated_cohort_compatibility_service.list_summaries(
+        include_archived=include_archived
+    )
 
 
 @router.get("/{cohort_id}", response_model=CohortDetailDto)
 def get_cohort(cohort_id: UUID) -> CohortDetailDto:
     """Get one cohort detail payload."""
-    detail = experiment_cohort_service.get_detail(cohort_id)
+    detail = deprecated_cohort_compatibility_service.get_detail(cohort_id)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Cohort {cohort_id} not found")
     return detail
@@ -33,7 +37,7 @@ def get_cohort(cohort_id: UUID) -> CohortDetailDto:
 @router.patch("/{cohort_id}", response_model=CohortSummaryDto)
 def update_cohort(cohort_id: UUID, request: UpdateCohortRequest) -> CohortSummaryDto:
     """Update one cohort's operator-managed fields."""
-    summary = experiment_cohort_service.update_cohort(cohort_id, request)
+    summary = deprecated_cohort_compatibility_service.update_cohort(cohort_id, request)
     if summary is None:
         raise HTTPException(status_code=404, detail=f"Cohort {cohort_id} not found")
     return summary

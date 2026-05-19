@@ -10,6 +10,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord
 from ergon_core.core.views.experiments import service as module
 from ergon_core.core.views.experiments.service import ExperimentReadService
 from sqlalchemy.pool import StaticPool
@@ -18,6 +19,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 @pytest.fixture()
 def session_factory():
+    _ = BenchmarkDefinitionRecord
     _ = ExperimentDefinition
     _ = ExperimentDefinitionInstance
     _ = ExperimentDefinitionTask
@@ -147,6 +149,76 @@ def test_read_service_returns_definition_metadata_without_benchmark_definition_r
     assert detail.description == "smoke for read model"
     assert detail.benchmark_type == "mini"
     assert detail.metadata.get("created_by") == "test"
+
+
+def test_read_service_prefers_definition_over_legacy_experiment_record(
+    monkeypatch, session_factory
+) -> None:
+    """Canonical ``ExperimentDefinition`` data wins over same-id retired rows."""
+
+    definition_id = uuid4()
+    with session_factory() as session:
+        session.add(
+            BenchmarkDefinitionRecord(
+                id=definition_id,
+                name="retired-name",
+                benchmark_type="retired-benchmark",
+                sample_count=9,
+            )
+        )
+        session.add(
+            ExperimentDefinition(
+                id=definition_id,
+                benchmark_type="definition-benchmark",
+                name="definition-name",
+                description="canonical detail",
+                metadata_json={},
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(module, "get_session", session_factory)
+
+    detail = ExperimentReadService().get_experiment(definition_id)
+
+    assert detail is not None
+    assert detail.name == "definition-name"
+    assert detail.description == "canonical detail"
+    assert detail.benchmark_type == "definition-benchmark"
+
+
+def test_read_service_falls_back_to_legacy_experiment_record(
+    monkeypatch, session_factory
+) -> None:
+    """Retired records are still displayable only through compat fallback."""
+
+    legacy_id = uuid4()
+    with session_factory() as session:
+        session.add(
+            BenchmarkDefinitionRecord(
+                id=legacy_id,
+                name="retired-name",
+                benchmark_type="retired-benchmark",
+                sample_count=3,
+                sample_selection_json={"instance_keys": ["a", "b", "c"]},
+                default_worker_team_json={"primary": "retired-worker"},
+                default_evaluator_slug="retired-evaluator",
+                experiment="retired-tag",
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(module, "get_session", session_factory)
+
+    detail = ExperimentReadService().get_experiment(legacy_id)
+
+    assert detail is not None
+    assert detail.definition_id == legacy_id
+    assert detail.name == "retired-name"
+    assert detail.benchmark_type == "retired-benchmark"
+    assert detail.experiment.sample_count == 3
+    assert detail.sample_selection == {"instance_keys": ["a", "b", "c"]}
+    assert detail.experiment.default_worker_team == {"primary": "retired-worker"}
 
 
 def test_read_service_returns_none_for_unknown_definition(monkeypatch, session_factory) -> None:

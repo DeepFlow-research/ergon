@@ -47,6 +47,7 @@ def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirr
     dependency_extras_json: JsonObject | None = None,
     assignment_json: JsonObject | None = None,
     seed: int | None = None,
+    experiment: str | None = None,
 ) -> RunRecord:
     with get_session() as session:
         run = RunRecord(
@@ -60,6 +61,7 @@ def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirr
             dependency_extras_json=dependency_extras_json or {},
             assignment_json=assignment_json or {},
             seed=seed,
+            experiment=experiment,
             status=RunStatus.PENDING,
             created_at=utcnow(),
             summary_json=_checkpoint_metadata(),

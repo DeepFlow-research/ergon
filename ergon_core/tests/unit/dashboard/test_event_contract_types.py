@@ -20,7 +20,7 @@ from ergon_core.core.views.dashboard_events.contracts import (
     DashboardThreadMessageCreatedEvent,
     DashboardWorkflowStartedEvent,
 )
-from ergon_core.core.application.read_models.cohorts import CohortSummaryDto
+from ergon_core.core.views.compat.cohorts import CohortSummaryDto
 from ergon_core.core.views.runs.models import RunSnapshotDto
 
 
