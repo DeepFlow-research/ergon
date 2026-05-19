@@ -22,7 +22,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 
 class ExperimentReadService:
@@ -33,7 +33,7 @@ class ExperimentReadService:
             definitions = list(
                 session.exec(
                     select(ExperimentDefinition)
-                    .order_by(ExperimentDefinition.created_at.desc())
+                    .order_by(col(ExperimentDefinition.created_at).desc())
                     .limit(limit)
                 ).all()
             )
@@ -99,9 +99,7 @@ def _definition_detail(
 ) -> ExperimentDetailDto:
     """Build a detail DTO from an ``ExperimentDefinition`` row."""
     runs = list(
-        session.exec(
-            select(RunRecord).where(RunRecord.definition_id == definition.id)
-        ).all()
+        session.exec(select(RunRecord).where(RunRecord.definition_id == definition.id)).all()
     )
     task_counts = _task_counts_by_run(session, [run.id for run in runs])
     run_rows = [_run_row(run, total_tasks=task_counts.get(run.id)) for run in runs]
@@ -121,11 +119,7 @@ def _definition_detail(
 
 def _run_count_by_definition(session: Session, definition_id: UUID) -> int:
     return len(
-        list(
-            session.exec(
-                select(RunRecord.id).where(RunRecord.definition_id == definition_id)
-            )
-        )
+        list(session.exec(select(RunRecord.id).where(RunRecord.definition_id == definition_id)))
     )
 
 
@@ -199,11 +193,12 @@ def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:
         if latest_activity_at is None or activity_at > latest_activity_at:
             latest_activity_at = activity_at
 
+    average_duration = _average(durations)
     return ExperimentAnalyticsDto(
         total_runs=len(rows),
         status_counts=status_counts,
         average_score=_average(scores),
-        average_duration_ms=round(_average(durations)) if durations else None,
+        average_duration_ms=round(average_duration) if average_duration is not None else None,
         average_tasks=_average(task_counts),
         total_cost_usd=total_cost_usd,
         latest_activity_at=latest_activity_at,

@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 from datetime import datetime
+from typing import cast
 from uuid import UUID
 
 from ergon_core.core.application.communication.models import (
@@ -28,6 +29,7 @@ from ergon_core.core.persistence.telemetry.models import (
     Thread,
     ThreadMessage,
 )
+from ergon_core.core.shared.context_parts import ContextEventType
 
 
 # TODO: this file / logic almost certainly duplicates the run benchmarks logic? if not it needs to be moved, renamed and laid out cleaner.
@@ -121,8 +123,9 @@ def _task_keyed_executions(
 
         resource_ids: list[str] = []
         output = ex.parsed_output()
-        if "resource_ids" in output:
-            resource_ids = [str(r) for r in output["resource_ids"]]
+        output_resource_ids = output.get("resource_ids")
+        if isinstance(output_resource_ids, list):
+            resource_ids = [str(r) for r in output_resource_ids]
 
         by_task[tid].append(
             RunExecutionAttemptDto(
@@ -317,7 +320,7 @@ def _context_events_by_task(
                 task_id=task_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
-                event_type=event.event_type,
+                event_type=cast(ContextEventType, event.event_type),
                 payload=event.parsed_payload(),
                 created_at=event.created_at,
                 started_at=event.started_at,

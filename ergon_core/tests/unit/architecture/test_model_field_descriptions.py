@@ -78,9 +78,7 @@ def test_sqlmodel_field_docs_are_schema_metadata() -> None:
     assert "Compatibility/display-only" in (_description(RunRecord, "worker_team_json") or "")
     assert "Compatibility/display-only" in (_description(RunRecord, "evaluator_slug") or "")
     assert "Compatibility/display-only" in (_description(RunRecord, "sandbox_slug") or "")
-    assert "Compatibility/display-only" in (
-        _description(RunRecord, "dependency_extras_json") or ""
-    )
+    assert "Compatibility/display-only" in (_description(RunRecord, "dependency_extras_json") or "")
     assert _description(RunResource, "kind")
 
 

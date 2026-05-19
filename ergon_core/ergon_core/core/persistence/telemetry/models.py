@@ -166,8 +166,7 @@ class RunRecord(SQLModel, table=True):
         default_factory=dict,
         sa_column=Column(JSON),
         description=(
-            "Compatibility/display-only dependency extras snapshot retained "
-            "for older run displays."
+            "Compatibility/display-only dependency extras snapshot retained for older run displays."
         ),
     )
     assignment_json: dict = Field(default_factory=dict, sa_column=Column(JSON))

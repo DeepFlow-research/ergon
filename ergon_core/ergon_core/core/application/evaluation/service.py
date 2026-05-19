@@ -191,8 +191,7 @@ class EvaluationService:
             )
         evaluator_def = session.exec(
             select(ExperimentDefinitionEvaluator).where(
-                ExperimentDefinitionEvaluator.experiment_definition_id
-                == run.definition_id,
+                ExperimentDefinitionEvaluator.experiment_definition_id == run.definition_id,
                 ExperimentDefinitionEvaluator.binding_key == binding_key,
             )
         ).first()

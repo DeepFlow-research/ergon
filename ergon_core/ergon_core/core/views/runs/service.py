@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 from ergon_core.core.views.runs.models import (
@@ -12,9 +13,16 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionWorker,
 )
-from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
+from ergon_core.core.persistence.graph.models import (
+    GraphTargetType,
+    MutationType,
+    RunGraphEdge,
+    RunGraphMutation,
+    RunGraphNode,
+)
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
+from ergon_core.core.persistence.shared.types import RunId
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
@@ -23,7 +31,7 @@ from ergon_core.core.persistence.telemetry.models import (
     Thread,
     ThreadMessage,
 )
-from ergon_core.core.application.graph.models import GraphMutationRecordDto
+from ergon_core.core.application.graph.models import GraphMutationRecordDto, GraphMutationValue
 from ergon_core.core.application.evaluation.scoring import (
     EvaluationScoreSummary,
     aggregate_evaluation_scores,
@@ -40,7 +48,7 @@ from ergon_core.core.views.runs.snapshot import (
 )
 from ergon_core.core.views.resources import require_viewable_resource_size
 from pydantic import BaseModel
-from sqlmodel import select
+from sqlmodel import col, select
 
 
 class RunResourceBlob(BaseModel):
@@ -99,7 +107,10 @@ class RunReadService:
                 session.exec(
                     select(RunContextEvent)
                     .where(RunContextEvent.run_id == run_id)
-                    .order_by(RunContextEvent.task_execution_id, RunContextEvent.sequence)
+                    .order_by(
+                        col(RunContextEvent.task_execution_id),
+                        col(RunContextEvent.sequence),
+                    )
                 ).all()
             )
 
@@ -185,21 +196,21 @@ class RunReadService:
                 session.exec(
                     select(RunGraphMutation)
                     .where(RunGraphMutation.run_id == run_id)
-                    .order_by(RunGraphMutation.sequence)
+                    .order_by(col(RunGraphMutation.sequence))
                 ).all()
             )
 
         return [
             GraphMutationRecordDto(
                 id=m.id,
-                run_id=m.run_id,
+                run_id=cast(RunId, m.run_id),
                 sequence=m.sequence,
-                mutation_type=m.mutation_type,
-                target_type=m.target_type,
+                mutation_type=cast(MutationType, m.mutation_type),
+                target_type=cast(GraphTargetType, m.target_type),
                 target_id=m.target_id,
                 actor=m.actor,
-                old_value=m.old_value,
-                new_value=m.new_value,
+                old_value=cast("GraphMutationValue | None", m.old_value),
+                new_value=cast(GraphMutationValue, m.new_value),
                 reason=m.reason,
                 created_at=m.created_at,
             )

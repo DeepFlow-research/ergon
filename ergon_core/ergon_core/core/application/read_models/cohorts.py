@@ -174,9 +174,7 @@ class ExperimentCohortService:
                     _instance_count(session, definition.id),
                     list(
                         session.exec(
-                            select(RunRecord).where(
-                                RunRecord.definition_id == definition.id
-                            )
+                            select(RunRecord).where(RunRecord.definition_id == definition.id)
                         ).all()
                     ),
                 )
