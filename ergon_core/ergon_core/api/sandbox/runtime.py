@@ -26,8 +26,7 @@ class CommandResult(BaseModel):
 class SandboxRuntime(Protocol):
     """Lifecycle + IO surface a ``Sandbox`` holds onto when it's live.
 
-    Concrete implementations: ``ManagerBackedSandboxRuntime`` (production,
-    backed by ``BaseSandboxManager`` + an e2b ``AsyncSandbox``) and the
+    Concrete implementations include built-ins' E2B runtime adapter and the
     in-process test stub in ``ergon_core/test_support/sandbox/``.
     """
 
