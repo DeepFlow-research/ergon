@@ -18,7 +18,7 @@ import pytest
 from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
     ProofVerificationCriterion,
 )
-from ergon_builtins.benchmarks.minif2f.sandbox.utils import REGISTRY_PATH
+from ergon_builtins.benchmarks.minif2f.sandbox_template.utils import REGISTRY_PATH
 from ergon_builtins.benchmarks.minif2f.sandbox_manager import MiniF2FSandboxManager
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.worker import WorkerOutput

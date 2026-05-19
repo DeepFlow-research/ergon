@@ -520,22 +520,32 @@ def test_telemetry_repository_is_row_storage_not_evaluation_summary_service() ->
     assert "aggregate_evaluation_scores" not in text
 
 
-def test_experiment_lifecycle_has_one_front_door_service() -> None:
+def test_experiment_lifecycle_uses_module_level_functions() -> None:
     service_path = ROOT / "ergon_core/ergon_core/core/application/experiments/service.py"
     service_text = service_path.read_text()
+    writer_path = ROOT / "ergon_core/ergon_core/core/application/experiments/definition_writer.py"
+    writer_text = writer_path.read_text()
 
-    assert "class ExperimentService" in service_text
-    for method_name in ("define_benchmark_experiment", "persist_definition", "run_experiment"):
-        assert f"def {method_name}(" in service_text
+    # PR 6.5 cleanup: ExperimentService façade collapsed; persistence and
+    # launch are module-level functions matching the Benchmark-direct shape.
+    assert "async def run_experiment(" in service_text
+    assert "def persist_benchmark(" in writer_text
+
+    # define_benchmark_experiment, persist_definition, and the
+    # ExperimentService class itself must all be gone.
+    assert "def define_benchmark_experiment(" not in service_text
+    assert "def persist_definition(" not in service_text
+    assert "class ExperimentService" not in service_text
 
     forbidden_class_names = (
+        "class ExperimentService",
         "class ExperimentDefinitionService",
         "class ExperimentPersistenceService",
         "class ExperimentLaunchService",
     )
     for path in (
         service_path,
-        ROOT / "ergon_core/ergon_core/core/application/experiments/definition_writer.py",
+        writer_path,
         ROOT / "ergon_core/ergon_core/core/application/experiments/launch.py",
     ):
         text = path.read_text()

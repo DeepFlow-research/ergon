@@ -15,8 +15,8 @@ from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphN
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
+    BenchmarkDefinitionRecord,
     ExperimentCohort,
-    ExperimentRecord,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -27,10 +27,9 @@ from ergon_core.core.application.events.task_events import WorkflowStartedEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
 from ergon_core.core.application.experiments.service import (
-    ExperimentService,
+    run_experiment as _run_experiment,
 )
 from ergon_core.core.application.experiments.models import (
-    ExperimentDefineRequest,
     ExperimentRunRequest,
 )
 from ergon_core.api.registry import registry
@@ -257,7 +256,9 @@ def read_cohort_runs(
         return []
     runs = list(
         session.exec(
-            select(RunRecord).join(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort.id)
+            select(RunRecord)
+            .join(BenchmarkDefinitionRecord)
+            .where(BenchmarkDefinitionRecord.cohort_id == cohort.id)
         ).all(),
     )
     return [TestCohortRunDto(run_id=r.id, status=r.status) for r in runs]
@@ -330,7 +331,7 @@ def seed_run(
         experiment_kwargs = {}
         if body.experiment_id is not None:
             experiment_kwargs["id"] = body.experiment_id
-        experiment = ExperimentRecord(
+        experiment = BenchmarkDefinitionRecord(
             **experiment_kwargs,
             cohort_id=cohort.id,
             name=f"Seeded {body.cohort}",
@@ -378,7 +379,7 @@ def reset_test_rows(
             tag = meta.get("_test_cohort")
             if isinstance(tag, str) and tag.startswith(body.cohort_prefix):
                 s.delete(r)
-        experiments = list(s.exec(select(ExperimentRecord)).all())
+        experiments = list(s.exec(select(BenchmarkDefinitionRecord)).all())
         for experiment in experiments:
             meta = {} if experiment.metadata_json is None else experiment.metadata_json
             tag = meta.get("_test_cohort")
@@ -426,8 +427,9 @@ class SubmitCohortResponse(BaseModel):
 async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
     """Build + persist + dispatch N runs under one cohort.
 
-    Per-slot flow mirrors the CLI's ``ergon experiment define`` followed by
-    ``ergon experiment run``. Slots submit sequentially — typical N ≤ 3,
+    Per-slot flow creates a ``BenchmarkDefinitionRecord`` directly (the v1
+    ``define_benchmark_experiment`` path was deleted in PR 6.5 Phase 2) and
+    then calls ``run_experiment``.  Slots submit sequentially — typical N ≤ 3,
     so the parallel-gather savings are negligible.
     """
     cohort = experiment_cohort_service.resolve_or_create(
@@ -436,27 +438,41 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
         created_by="test-harness",
     )
 
+    benchmark_source = registry.require_benchmark(body.benchmark_slug)()
+    instances = benchmark_source.build_instances()
+    selected_keys = list(instances.keys())[: body.limit]
+    evaluator_bindings = _extra_evaluator_bindings(body.benchmark_slug)
+
     run_ids: list[UUID] = []
     for slot in body.slots:
-        experiment_service = ExperimentService()
-        evaluator_bindings = _extra_evaluator_bindings(body.benchmark_slug)
-        defined = experiment_service.define_benchmark_experiment(
-            ExperimentDefineRequest(
-                benchmark_slug=body.benchmark_slug,
+        design: dict = {}
+        if evaluator_bindings:
+            design["evaluator_bindings"] = evaluator_bindings
+        with Session(get_engine()) as s:
+            bench_def = BenchmarkDefinitionRecord(
                 cohort_id=cohort.id,
-                limit=body.limit,
-                default_model_target=body.model,
-                default_worker_team={"primary": slot.worker_slug},
+                name=f"smoke:{body.benchmark_slug}",
+                benchmark_type=benchmark_source.type_slug,
+                sample_count=len(selected_keys),
+                sample_selection_json={"instance_keys": selected_keys},
+                default_worker_team_json={"primary": slot.worker_slug},
                 default_evaluator_slug=slot.evaluator_slug,
-                evaluator_bindings=evaluator_bindings,
+                default_model_target=body.model,
                 sandbox_slug=body.sandbox_slug or body.benchmark_slug,
-                dependency_extras=body.dependency_extras,
-                metadata={"source": "test-harness"},
+                dependency_extras_json={"extras": list(body.dependency_extras)},
+                design_json=design,
+                metadata_json={
+                    "benchmark_slug": body.benchmark_slug,
+                    "source": "test-harness",
+                },
+                status="defined",
             )
-        )
-        launched = await experiment_service.run_experiment(
-            ExperimentRunRequest(experiment_id=defined.experiment_id)
-        )
+            s.add(bench_def)
+            s.commit()
+            s.refresh(bench_def)
+            experiment_id = bench_def.id
+
+        launched = await _run_experiment(ExperimentRunRequest(experiment_id=experiment_id))
         run_ids.extend(launched.run_ids)
 
     return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)

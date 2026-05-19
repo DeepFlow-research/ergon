@@ -53,7 +53,7 @@ def test_training_stub_factory_accepts_authoring_configuration() -> None:
 def test_benchmark_react_workers_live_with_benchmarks() -> None:
     """Benchmark-specific ReAct workers should not live in the global registry module."""
     from ergon_builtins import registry_core
-    from ergon_builtins.benchmarks.minif2f.worker_factory import MiniF2FReactWorker
+    from ergon_builtins.benchmarks.minif2f._legacy_workers import MiniF2FReactWorker
     from ergon_builtins.benchmarks.swebench_verified.worker_factory import SWEBenchReactWorker
     from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
     from ergon_builtins.evaluators.rubrics.swebench_rubric import (

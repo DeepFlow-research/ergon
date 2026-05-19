@@ -1,58 +1,10 @@
-"""DTOs for experiment definition and launch services."""
+"""DTOs for experiment launch services."""
 
 from typing import Self
 from uuid import UUID
 
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel, Field, model_validator
-
-
-class ExperimentDefineRequest(BaseModel):
-    benchmark_slug: str
-    name: str | None = None
-    cohort_id: UUID | None = None
-    limit: int | None = None
-    sample_ids: list[str] | None = None
-    default_model_target: str | None = None
-    default_worker_team: JsonObject = Field(default_factory=dict)
-    default_evaluator_slug: str | None = None
-    evaluator_bindings: dict[str, str] = Field(default_factory=dict)
-    sandbox_slug: str | None = None
-    dependency_extras: tuple[str, ...] = ()
-    design: JsonObject = Field(default_factory=dict)
-    seed: int | None = None
-    metadata: JsonObject = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def validate_define_request(self) -> Self:
-        if (self.limit is None) == (self.sample_ids is None):
-            raise ValueError("Provide exactly one of limit or sample_ids")
-        if self.limit is not None and self.limit < 1:
-            raise ValueError("limit must be >= 1")
-
-        if self.design.get("arms"):
-            raise ValueError("design.arms is not supported until multi-arm launch semantics exist")
-
-        has_default_assignment = bool(self.default_worker_team) and bool(self.default_model_target)
-        if not has_default_assignment:
-            raise ValueError(
-                "Experiment definition requires default_worker_team + default_model_target"
-            )
-        if not self.default_evaluator_slug:
-            raise ValueError("Experiment definition requires default_evaluator_slug")
-        if not self.sandbox_slug:
-            raise ValueError("Experiment definition requires sandbox_slug")
-        if not self.dependency_extras:
-            raise ValueError("Experiment definition requires dependency_extras")
-        return self
-
-
-class ExperimentDefineResult(BaseModel):
-    experiment_id: UUID
-    cohort_id: UUID | None
-    benchmark_type: str
-    sample_count: int
-    selected_samples: list[str]
 
 
 class ExperimentRunRequest(BaseModel):

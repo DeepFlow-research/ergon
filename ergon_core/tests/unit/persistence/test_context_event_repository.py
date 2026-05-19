@@ -16,7 +16,7 @@ from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RunRecord,
     RunTaskExecution,
 )
@@ -26,7 +26,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 def _session() -> Session:
     _ = ExperimentDefinition
-    _ = ExperimentRecord
+    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -49,7 +49,7 @@ def _execution_fixture(session: Session) -> tuple:
         assigned_worker_slug="worker",
     )
     session.add(
-        ExperimentRecord(
+        BenchmarkDefinitionRecord(
             id=experiment_id,
             name="context event test",
             benchmark_type="unit",

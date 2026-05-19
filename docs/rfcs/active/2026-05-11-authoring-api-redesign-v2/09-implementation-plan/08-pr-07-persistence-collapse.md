@@ -4,12 +4,13 @@
 > `superpowers:subagent-driven-development` or
 > `superpowers:executing-plans` to implement this plan task-by-task.
 
-**Goal:** Make new definitions and runs work without `ExperimentRecord`,
-while old read paths remain bridged until final deletion.
+**Goal:** Make new definitions and runs work without
+`BenchmarkDefinitionRecord` (PR 6.5's renamed `ExperimentRecord`), while
+old read paths remain bridged until final deletion.
 
 **Architecture:** Add definition metadata columns and canonical launch by
-`definition_id`. Keep `ExperimentRecord` importable for old read models until
-PR 11.
+`definition_id`. Keep `BenchmarkDefinitionRecord` importable for old
+read models until PR 11.
 
 **Tech Stack:** SQLModel, Alembic additive migration, read-model tests.
 
@@ -36,14 +37,20 @@ ergon_core/tests/unit/state/test_type_invariants.py
 **Create:**
 
 ```text
-ergon_core/migrations/versions/<revision>_definition_metadata_and_launch.py
+ergon_core/migrations/versions/aabbccdd0004_definition_metadata_and_launch.py
+ergon_core/ergon_core/core/application/experiments/errors.py
 ```
+
+(Migration id `aabbccdd0004` continues the PR 1/4/5 numbering sequence —
+`aabbccdd0001` (run-graph task_json), `aabbccdd0002` (worker_output_json),
+`aabbccdd0003` (definition task_json). PR 7 is the next consecutive id.)
 
 ## Current State
 
-`ExperimentRecord` carries user-facing metadata and run launch loads by
-`experiment_id`. `ExperimentDefinition` carries only benchmark type,
-metadata JSON, and created timestamp.
+`BenchmarkDefinitionRecord` (formerly `ExperimentRecord` pre-PR-6.5)
+carries user-facing metadata and run launch loads by `experiment_id`.
+`ExperimentDefinition` carries only benchmark type, metadata JSON, and
+created timestamp.
 
 ## Target State For This PR
 
@@ -52,15 +59,27 @@ New path:
 ```python
 definition = ExperimentDefinition(
     id=definition_id,
-    name=experiment.name or benchmark_type,
-    description=experiment.description,
-    metadata_json=dict(experiment.metadata),
-    created_by="cli",
+    name=benchmark.name or benchmark_type,
+    description=benchmark.description,
+    metadata_json=dict(benchmark.metadata),
+    created_by=benchmark.created_by,
 )
 run = launch_run(definition_id)
 ```
 
-Old `ExperimentRecord` remains for old read models.
+Old `BenchmarkDefinitionRecord` (renamed from `ExperimentRecord` in PR
+6.5) remains for old read models.
+
+**Reconciliation note (post-PR-6.5).** This plan was originally written
+when the `Experiment` wrapper class was the source of identity. PR 6.5
+deleted that wrapper — identity now lives on the `Benchmark` instance.
+Throughout this document, references to ``experiment.name`` /
+``experiment.description`` / ``experiment.created_by`` /
+``experiment.metadata`` resolve to the matching ``benchmark.*`` fields.
+References to ``ExperimentRecord`` resolve to ``BenchmarkDefinitionRecord``.
+References to ``ExperimentService.run_experiment`` resolve to the
+module-level ``run_experiment`` function in
+``application/experiments/service.py``.
 
 ## Task 1: Add Definition Metadata
 
@@ -120,13 +139,15 @@ reproduce the denormalization for back-fills), promote the inline block
 to a `_metadata_columns(experiment)` private helper in the same module
 at that point — not preemptively.
 
-- [ ] **Step 1: Change definition row construction**
+- [ ] **Step 1: Add `created_by` to `Benchmark.__init__`**
 
-PR 5 already lands the public `Experiment` with first-class typed
-fields for `name`, `description`, `created_by`, and `metadata`. By
-PR 7, these are real attributes on every `Experiment` instance — no
-`getattr` fallback is needed, and `created_by` is no longer buried in
-the metadata dict.
+PR 6.5 made `Benchmark` the source of identity (`name`, `description`,
+`metadata` are already first-class kwargs on ``Benchmark.__init__``).
+Add ``created_by: str | None = None`` to the constructor and store it
+as ``self.created_by``. Symmetric with the existing identity fields;
+no separate wrapper class involved.
+
+- [ ] **Step 2: Change definition row construction**
 
 Replace:
 
@@ -134,7 +155,7 @@ Replace:
 definition_row = ExperimentDefinition(
     id=definition_id,
     benchmark_type=benchmark_type,
-    metadata_json=dict(experiment.metadata),
+    metadata_json=resolved_metadata,
     created_at=now,
 )
 ```
@@ -145,23 +166,23 @@ with:
 definition_row = ExperimentDefinition(
     id=definition_id,
     benchmark_type=benchmark_type,
-    name=experiment.name if experiment.name is not None else benchmark_type,
-    description=experiment.description,
-    created_by=experiment.created_by,
-    metadata_json=dict(experiment.metadata),
+    name=benchmark.name if benchmark.name is not None else benchmark_type,
+    description=benchmark.description,
+    created_by=benchmark.created_by,
+    metadata_json=resolved_metadata,
     created_at=now,
 )
 ```
 
-The `if ... is not None` form (rather than `experiment.name or
+The `if ... is not None` form (rather than `benchmark.name or
 benchmark_type`) is deliberate: `or` would also fall through on the
 empty string, which is a valid (if unusual) author choice; `is not
 None` only falls through when the author left the field unset.
 
-If a CLI or test ever constructs an `ExperimentDefinition` *without*
-going through `Experiment(...)` first, that's a typing gap to fix at
-the caller — not a `getattr` bridge to add here. PR 11's
-"`test_no_type_circumventors.py`" guard catches re-introductions.
+(Today ``benchmark.name`` is always a non-empty string because
+``Benchmark.__init__`` defaults to ``self.__class__.__name__``. Once a
+benchmark subclass overrides `__init__` to leave it unset, the
+``is not None`` guard becomes load-bearing — keep it.)
 
 ## Task 3: Add Canonical Launch By Definition
 
@@ -206,11 +227,16 @@ async def launch_run(
 
 The `create_run` call still accepts old telemetry fields. PR 11 narrows it.
 
-- [ ] **Step 2: Make `ExperimentService.run_experiment` delegate**
+- [ ] **Step 2: Make the module-level `run_experiment` delegate**
 
-If the request field is still named `experiment_id`, detect whether it is an
-`ExperimentDefinition` first. Fall back to `ExperimentRecord` only if no
-definition exists.
+PR 6.5's cleanup collapsed `ExperimentService` to the module-level
+``run_experiment(request, *, workflow_definition_factory=None,
+emit_workflow_started=None)`` function in
+``application/experiments/service.py``. If the request field is still
+named ``experiment_id``, detect whether it is an ``ExperimentDefinition``
+first (call ``launch_run(definition_id)`` from Task 3 Step 1). Fall
+back to ``BenchmarkDefinitionRecord`` lookup only if no definition
+exists.
 
 ## Task 4: Read Models Prefer Definitions
 
@@ -230,8 +256,9 @@ benchmark_type = definition.benchmark_type
 metadata = definition.parsed_metadata()
 ```
 
-Keep an `ExperimentRecord` fallback method named
-`_legacy_experiment_record_detail` for old rows.
+Keep a `BenchmarkDefinitionRecord` fallback method named
+`_legacy_benchmark_definition_record_detail` for old rows that
+predate the new columns.
 
 ## Task 5: Tests
 
@@ -268,11 +295,11 @@ from ergon_core.core.application.read_models.experiments import (
     ExperimentReadService,
 )
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord
 
 
 @pytest.mark.asyncio
-async def test_read_service_returns_definition_metadata_without_experiment_record(
+async def test_read_service_returns_definition_metadata_without_benchmark_definition_record(
     session,
 ):
     definition = ExperimentDefinition(
@@ -284,10 +311,12 @@ async def test_read_service_returns_definition_metadata_without_experiment_recor
     session.add(definition)
     session.commit()
 
-    # Sanity-check setup: no ExperimentRecord exists for this id.
+    # Sanity-check setup: no BenchmarkDefinitionRecord exists for this id.
     assert (
         session.exec(
-            select(ExperimentRecord).where(ExperimentRecord.id == definition.id)
+            select(BenchmarkDefinitionRecord).where(
+                BenchmarkDefinitionRecord.id == definition.id
+            )
         ).first()
         is None
     )
@@ -303,13 +332,14 @@ async def test_read_service_returns_definition_metadata_without_experiment_recor
 
 
 @pytest.mark.asyncio
-async def test_read_service_falls_back_to_experiment_record_for_legacy_rows(
+async def test_read_service_falls_back_to_benchmark_definition_record_for_legacy_rows(
     session,
 ):
-    """Old rows with an ExperimentRecord but no ExperimentDefinition name
-    still resolve via the legacy path until PR 11 deletes ExperimentRecord."""
+    """Old rows with a BenchmarkDefinitionRecord but no ExperimentDefinition
+    name still resolve via the legacy path until PR 11 deletes the legacy
+    table."""
 
-    legacy = ExperimentRecord(name="legacy-only", benchmark_slug="mini")
+    legacy = BenchmarkDefinitionRecord(name="legacy-only", benchmark_type="mini")
     session.add(legacy)
     session.commit()
 
@@ -434,15 +464,24 @@ Expected: the PR 7 cases PASS; remaining cases still XFAIL.
 
 ## PR Ledger
 
-Invariant landed: new definitions can launch without experiment records.
+Invariant landed: new definitions can launch without `BenchmarkDefinitionRecord`
+rows (the table formerly known as `ExperimentRecord` pre-PR-6.5).
 
-Bridge code introduced: `ExperimentRecord` fallback read/launch path.
+Bridge code introduced: `BenchmarkDefinitionRecord` fallback read/launch
+path; ``run_experiment`` detects which side of the bridge to take.
 
-Old path still intentionally alive: `ExperimentRecord`, old run telemetry
-fields.
+Old path still intentionally alive: `BenchmarkDefinitionRecord`, old run
+telemetry fields.
 
-Deletion gate: PR 11 deletes `ExperimentRecord` and narrows `create_run`.
+Deletion gate: PR 11 deletes `BenchmarkDefinitionRecord` and narrows
+`create_run`.
 
 Tests added or updated: launch-by-definition and read-model tests.
 
 Modules owned by this PR: definition metadata, launch, read models.
+
+Files added: `experiments/errors.py` (typed exceptions),
+`migrations/versions/aabbccdd0004_definition_metadata_and_launch.py`.
+
+Identity source assumed: `Benchmark.{name, description, created_by, metadata}`
+(PR 6.5 deleted the `Experiment` wrapper that previously owned these).

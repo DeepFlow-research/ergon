@@ -8,10 +8,10 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.evaluation_summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import (
+    BenchmarkDefinitionRecord,
     ExperimentCohort,
     ExperimentCohortStats,
     ExperimentCohortStatus,
-    ExperimentRecord,
     RunRecord,
 )
 from ergon_core.core.application.read_models.models import (
@@ -95,7 +95,9 @@ class ExperimentCohortService:
 
             experiments = list(
                 session.exec(
-                    select(ExperimentRecord).where(ExperimentRecord.cohort_id == cohort_id)
+                    select(BenchmarkDefinitionRecord).where(
+                        BenchmarkDefinitionRecord.cohort_id == cohort_id
+                    )
                 ).all()
             )
             experiment_rows = [
@@ -128,7 +130,7 @@ class ExperimentCohortService:
             run = session.get(RunRecord, run_id)
             if run is None or run.experiment_id is None:
                 return None
-            experiment = session.get(ExperimentRecord, run.experiment_id)
+            experiment = session.get(BenchmarkDefinitionRecord, run.experiment_id)
             return experiment.cohort_id if experiment is not None else None
 
     def update_cohort(
@@ -157,8 +159,8 @@ class ExperimentCohortService:
             runs = list(
                 session.exec(
                     select(RunRecord)
-                    .join(ExperimentRecord)
-                    .where(ExperimentRecord.cohort_id == cohort_id)
+                    .join(BenchmarkDefinitionRecord)
+                    .where(BenchmarkDefinitionRecord.cohort_id == cohort_id)
                 ).all()
             )
             status_counts = Counter(run.status for run in runs)
@@ -222,7 +224,7 @@ class ExperimentCohortService:
 
     @staticmethod
     def _build_experiment_row(
-        experiment: ExperimentRecord,
+        experiment: BenchmarkDefinitionRecord,
         runs: list[RunRecord],
     ) -> CohortExperimentRowDto:
         score: float | None = None

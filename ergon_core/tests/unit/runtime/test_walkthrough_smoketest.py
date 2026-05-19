@@ -29,7 +29,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RunRecord,
 )
 from pydantic import BaseModel
@@ -42,7 +42,7 @@ class _EmptyPayload(BaseModel):
 
 
 def _session() -> Session:
-    _ = ExperimentRecord
+    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -63,7 +63,7 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
     run_id = uuid4()
     session.add_all(
         [
-            ExperimentRecord(
+            BenchmarkDefinitionRecord(
                 id=experiment_id,
                 name="smoke",
                 benchmark_type="test",
@@ -133,12 +133,12 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
 
 
 @pytest.mark.xfail(
-    reason="PR 7: persist_definition collapses ExperimentRecord onto definitions",
+    reason="PR 7: persist_definition collapses BenchmarkDefinitionRecord onto definitions",
     strict=True,
 )
 def test_persist_definition_writes_only_intended_tables() -> None:
     """PR 7 invariant: persist_definition writes experiment_definitions
-    plus experiment_definition_tasks. No write to ExperimentRecord, no
+    plus experiment_definition_tasks. No write to BenchmarkDefinitionRecord, no
     write to saved_specs."""
 
     pytest.fail("requires PR 7's persistence collapse + helper rewrite")

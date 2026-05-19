@@ -13,7 +13,7 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RunRecord,
     RunTaskExecution,
 )
@@ -38,7 +38,7 @@ def swebench_execution() -> tuple[UUID, UUID]:
     """Seed the minimal FK chain needed by SWEBenchSandboxManager._install_dependencies.
 
     Seeds: ExperimentDefinition → ExperimentDefinitionInstance →
-    ExperimentDefinitionTask + ExperimentRecord + RunRecord →
+    ExperimentDefinitionTask + BenchmarkDefinitionRecord + RunRecord →
     RunTaskExecution(id=execution_id).
 
     Yields (execution_id, run_id) so tests can pass execution_id as
@@ -73,7 +73,7 @@ def swebench_execution() -> tuple[UUID, UUID]:
         session.flush()
         session.refresh(task)
 
-        experiment = ExperimentRecord(
+        experiment = BenchmarkDefinitionRecord(
             name="swebench sandbox manager test",
             benchmark_type="swebench-verified",
             sample_count=1,
@@ -115,7 +115,7 @@ def swebench_execution() -> tuple[UUID, UUID]:
         run_row = session.get(RunRecord, run_id)
         if run_row is not None:
             session.delete(run_row)
-        experiment_row = session.get(ExperimentRecord, experiment_id)
+        experiment_row = session.get(BenchmarkDefinitionRecord, experiment_id)
         if experiment_row is not None:
             session.delete(experiment_row)
         for t in session.exec(

@@ -7,19 +7,22 @@ statements aligned with mathlib4.
 
 import json
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
 from ergon_core.api import Benchmark, BenchmarkRequirements, Task
+from ergon_core.api.rubric import Evaluator
+from ergon_core.api.sandbox import Sandbox
+from ergon_core.api.worker import Worker
 from huggingface_hub import hf_hub_download
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
-from ergon_builtins.benchmarks.minif2f.worker_factory import (
+from ergon_builtins.benchmarks.minif2f.workers import (
     make_minif2f_rubric,
     make_minif2f_worker,
 )
-from ergon_builtins.sandboxes import LeanSandbox
+from ergon_builtins.benchmarks.minif2f.sandbox import LeanSandbox
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +49,9 @@ class MiniF2FBenchmark(Benchmark):
         name: str | None = None,
         description: str | None = None,
         metadata: Mapping[str, Any] | None = None,  # slopcop: ignore[no-typing-any]
+        worker_factory: Callable[[], Worker] = make_minif2f_worker,
+        sandbox_factory: Callable[[], Sandbox] = LeanSandbox,
+        evaluator_factory: Callable[[], Evaluator] = make_minif2f_rubric,
     ) -> None:
         super().__init__(
             name=name or "minif2f",
@@ -54,6 +60,9 @@ class MiniF2FBenchmark(Benchmark):
         )
         self.data_dir = Path(data_dir) if data_dir else None
         self.limit = limit
+        self._worker_factory = worker_factory
+        self._sandbox_factory = sandbox_factory
+        self._evaluator_factory = evaluator_factory
 
     # ------------------------------------------------------------------
 
@@ -79,9 +88,9 @@ class MiniF2FBenchmark(Benchmark):
                     instance_key="default",
                     description=description,
                     task_payload=payload,
-                    worker=make_minif2f_worker(),
-                    sandbox=LeanSandbox(),
-                    evaluators=(make_minif2f_rubric(),),
+                    worker=self._worker_factory(),
+                    sandbox=self._sandbox_factory(),
+                    evaluators=(self._evaluator_factory(),),
                 )
             )
         return {"default": tasks}

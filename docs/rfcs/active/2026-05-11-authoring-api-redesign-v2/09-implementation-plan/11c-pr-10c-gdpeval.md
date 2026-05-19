@@ -35,42 +35,65 @@ Conversion Recipe.
 **Create:**
 
 ```text
-ergon_builtins/ergon_builtins/sandboxes/gdpeval.py
-ergon_builtins/ergon_builtins/toolkits/gdpeval.py
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox.py             # was sandboxes/gdpeval.py
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/toolkit.py             # was toolkits/gdpeval.py
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/_tools.py              # runtime tool construction
 ergon_builtins/tests/unit/test_gdpeval_v2_definition.py
 ergon_builtins/tests/unit/architecture/test_object_bound_benchmarks_no_registry.py
+```
+
+**Rename:**
+
+```text
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/worker_factory.py
+    → ergon_builtins/ergon_builtins/benchmarks/gdpeval/workers.py
 ```
 
 **Modify:**
 
 ```text
 ergon_builtins/ergon_builtins/benchmarks/gdpeval/benchmark.py
-ergon_builtins/ergon_builtins/benchmarks/gdpeval/worker_factory.py
 ergon_builtins/ergon_builtins/benchmarks/gdpeval/rubric.py
 ergon_builtins/ergon_builtins/benchmarks/gdpeval/criteria.py
 ergon_builtins/ergon_builtins/registry.py
 ergon_builtins/ergon_builtins/registry_core.py
 ergon_builtins/ergon_builtins/registry_data.py
-ergon_cli/ergon_cli/commands/_registry.py        # add the slug factory
+ergon_builtins/ergon_builtins/benchmarks/README.md          # add GDPEval row
 ```
+
+**Note: no `ergon_cli/_registry.py` edit.**  PR 6.5 deleted `BUILTIN_EXPERIMENT_FACTORIES`.
 
 ## Task 1: Add `GDPEvalSandbox`
 
-GDPEval today has both `sandbox.py` and `sandbox_utils.py`. Move the
-provisioning entry point into the new subclass.
+GDPEval today has `sandbox.py` (the manager) and `sandbox_utils.py`.  The existing `sandbox.py` conflicts with the new `Sandbox` subclass file we want to create.  Rename the manager first to match the convention used by MiniF2F / SWEBench / ResearchRubrics:
+
+- [ ] **Step 0: Rename existing `sandbox.py` → `sandbox_manager.py`**
+
+```bash
+git mv ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox.py \
+       ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_manager.py
+```
+
+Update every import of `GDPEvalSandboxManager` to use the new path:
+
+```bash
+rg "from ergon_builtins.benchmarks.gdpeval.sandbox import" ergon_builtins ergon_core
+```
+
+Replace with `from ergon_builtins.benchmarks.gdpeval.sandbox_manager import GDPEvalSandboxManager`.
 
 - [ ] **Step 1: Create subclass**
 
-`ergon_builtins/ergon_builtins/sandboxes/gdpeval.py`:
+`ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox.py` (now free after Step 0):
 
 ```python
 from uuid import uuid4
 
 from ergon_core.api.sandbox import Sandbox
-from ergon_builtins.benchmarks.gdpeval.sandbox import (
+from ergon_builtins.benchmarks.gdpeval.sandbox_manager import (
     GDPEvalSandboxManager,
 )
-from ergon_builtins.sandboxes._manager_backed import (
+from ergon_builtins.sandbox._manager_backed import (
     ManagerBackedSandboxRuntime,
 )
 
@@ -106,12 +129,9 @@ add thin adapter methods at the manager — do not reshape the
 
 ## Task 2: Move Toolkit
 
-- [ ] **Step 1: Move toolkit**
+- [ ] **Step 1: Convert existing `toolkit.py` to Pydantic in place**
 
-```bash
-git mv ergon_builtins/ergon_builtins/benchmarks/gdpeval/toolkit.py \
-       ergon_builtins/ergon_builtins/toolkits/gdpeval.py
-```
+`toolkit.py` already lives at `benchmarks/gdpeval/toolkit.py` — no move needed.  Do not create `ergon_builtins/toolkits/gdpeval.py` (PR 6.5 deleted the top-level `toolkits/` dir).
 
 - [ ] **Step 2: Convert to Pydantic**
 
@@ -126,17 +146,21 @@ class GDPEvalToolkit(BaseModel):
     allow_shell: bool = False
 
     def tools(self, sandbox, task):
-        from ergon_builtins.toolkits._gdpeval_tools import build_tools
+        from ergon_builtins.benchmarks.gdpeval._tools import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)
 ```
+
+Move runtime tool construction into `benchmarks/gdpeval/_tools.py`.
 
 ## Task 3: Convert Worker Factory
 
 - [ ] **Step 1: Replace registry call**
 
+In `gdpeval/workers.py` (renamed from `worker_factory.py`):
+
 ```python
-from ergon_builtins.toolkits.gdpeval import GDPEvalToolkit
+from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 
 
@@ -154,6 +178,8 @@ def make_gdpeval_worker(
     )
 ```
 
+**Also: parameterise `GDPEvalBenchmark.__init__`** to accept `worker_factory` / `sandbox_factory` kwargs with defaults — mirror PR 6.5's MiniF2F pattern.
+
 ## Task 4: Convert Benchmark Tasks
 
 - [ ] **Step 1: Replace imports**
@@ -164,8 +190,8 @@ from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
 
 # Add:
 from ergon_core.api import Benchmark, BenchmarkRequirements, Task
-from ergon_builtins.sandboxes.gdpeval import GDPEvalSandbox
-from ergon_builtins.benchmarks.gdpeval.worker_factory import (
+from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandbox
+from ergon_builtins.benchmarks.gdpeval.workers import (
     make_gdpeval_worker,
 )
 from ergon_builtins.benchmarks.gdpeval.rubric import make_gdpeval_rubric
@@ -189,29 +215,55 @@ Task[GDPEvalTaskPayload](
 )
 ```
 
-## Task 5: Add CLI Factory Entry
+## Task 5: Add GDPEval To The Benchmarks Catalogue
 
 **Files:**
 
-- Modify: `ergon_cli/ergon_cli/commands/_registry.py`
+- Modify: `ergon_builtins/ergon_builtins/benchmarks/README.md` (created in PR 6.5 Task 20)
 
-- [ ] **Step 1: Register the GDPEval experiment factory**
+PR 6.5 killed `BUILTIN_EXPERIMENT_FACTORIES` and the CLI authoring route.  No CLI registry entry needed.
+
+- [ ] **Step 1: Add one row to the catalogue**
+
+```markdown
+| GDPEval | `ergon_builtins.benchmarks.gdpeval` | `make_gdpeval_worker` | `GDPEvalSandbox` |
+```
+
+- [ ] **Step 2: Add a Python authoring example**
 
 ```python
-from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
+from ergon_builtins.benchmarks.gdpeval import (
+    GDPEvalBenchmark,
+    make_gdpeval_worker,
+)
+from ergon_core.api import persist_benchmark, launch_run
 
-
-def _gdpeval() -> Experiment:
-    return Experiment(
-        benchmark=GDPEvalBenchmark(),
-        name="gdpeval",
-        description="GDPEval benchmark on object-bound API.",
-        metadata={"source": "builtins"},
-    )
-
-
-BUILTIN_EXPERIMENT_FACTORIES["gdpeval"] = _gdpeval
+benchmark = GDPEvalBenchmark(
+    name="gdpeval-react",
+    metadata={"experiment": "gdp-eval-2026"},
+    worker_factory=make_gdpeval_worker,
+    limit=10,
+)
+handle = persist_benchmark(benchmark)
+await launch_run(handle.definition_id)
 ```
+
+## Task 5.5: Migrate The Matching Smoke Fixture (closes the gate)
+
+**Files:**
+
+- Modify: `tests/fixtures/smoke_components/benchmarks.py` — `GDPEvalSmokeBenchmark` (or whichever subclass exists; add one if not)
+
+PR 6 (minif2f), PR 10a (swebench), PR 10b (researchrubrics) each
+migrated their matching smoke-fixture row. PR 10c does the last one.
+After this step, **`tests/fixtures/smoke_components/benchmarks.py`
+imports `Task` (not `TaskSpec`) for every benchmark** — which is the
+prerequisite PR 11 needs to delete `TaskSpec` outright.
+
+- [ ] **Step 1: Add a concrete `GDPEvalSmokeTask(Task[...])` subclass**
+- [ ] **Step 2: Override `build_instances` to return that Task with `evaluators=(...)`** (mirror the prior three smoke-fixture migrations)
+- [ ] **Step 3: Sweep the file for any remaining `TaskSpec` references** — after this PR, the import line should drop `TaskSpec` entirely.
+- [ ] **Step 4: Update `_SingleTaskSmokeBenchmark` base class** — once every subclass overrides `build_instances`, the base's `TaskSpec`-shaped default can be deleted. Either delete the base method (preferred — each subclass owns its build) or convert it to raise `NotImplementedError`.
 
 ## Task 6: Tests
 
@@ -221,23 +273,19 @@ Create `ergon_builtins/tests/unit/test_gdpeval_v2_definition.py`:
 
 ```python
 import pytest
-from ergon_core.api import Experiment
-from ergon_core.core.application.experiments.definition_writer import (
-    persist_definition,
-)
+from ergon_core.api import persist_benchmark
 from ergon_builtins.benchmarks.gdpeval.benchmark import GDPEvalBenchmark
 
 
 @pytest.mark.asyncio
 async def test_gdpeval_persists_object_bound_task_json(session_factory):
-    benchmark = GDPEvalBenchmark(limit=1)
-    experiment = Experiment(
-        benchmark=benchmark,
+    benchmark = GDPEvalBenchmark(
         name="gdpeval-smoke",
-        metadata={"created_by": "test"},
+        metadata={"author": "test"},
+        limit=1,
     )
 
-    handle = persist_definition(experiment)
+    handle = persist_benchmark(benchmark)
     with session_factory() as session:
         rows = session.exec(
             "SELECT task_json FROM experiment_definition_tasks "
@@ -357,13 +405,11 @@ Expected: all green; no `TaskSpec`, `ComponentRegistry`, or
 ## Task 8: Commit
 
 ```bash
-git add ergon_builtins/ergon_builtins/sandboxes/gdpeval.py \
-        ergon_builtins/ergon_builtins/toolkits/gdpeval.py \
-        ergon_builtins/ergon_builtins/benchmarks/gdpeval/ \
+git add ergon_builtins/ergon_builtins/benchmarks/gdpeval/ \
+        ergon_builtins/ergon_builtins/benchmarks/README.md \
         ergon_builtins/ergon_builtins/registry*.py \
         ergon_builtins/tests/unit/test_gdpeval_v2_definition.py \
-        ergon_builtins/tests/unit/architecture/test_object_bound_benchmarks_no_registry.py \
-        ergon_cli/ergon_cli/commands/_registry.py
+        ergon_builtins/tests/unit/architecture/test_object_bound_benchmarks_no_registry.py
 git commit -m "feat(builtins): convert GDPEval + close out builtins migration (PR 10c)"
 ```
 
@@ -376,24 +422,34 @@ are slimmed to model-backend registrations only.
 Bridge code introduced: `GDPEvalSandbox` wraps the legacy manager via
 `ManagerBackedSandboxRuntime`.
 
-Bridge code retired (partially):
-- GDPEval tasks now carry `task.worker`/`task.sandbox` inline, so
-  GDPEval runs no longer hit the `_legacy_worker_bridge` fallback that
-  PR 5 Task 4b put on `worker_execute`. After PR 10c, no benchmark
-  still produces `TaskSpec` — the "must support" set for
-  `_legacy_worker_bridge.legacy_worker_from_payload` is empty. The
-  fallback file is not deleted here; PR 11 owns the `git rm` plus the
-  `if worker is None:` branch removal in `worker_execute.py`.
+Bridge code retired (fully — after this PR's smoke-fixture migration):
+- GDPEval tasks now carry `task.worker`/`task.sandbox`/`task.evaluators`
+  inline, so GDPEval runs no longer hit either the
+  `_legacy_worker_bridge` fallback on `worker_execute` or the symmetric
+  `_legacy_evaluator_bridge` fallback on `evaluate_task_run`.
+- After PR 10c + the smoke-fixture migration in Task 6.5, **no
+  benchmark — production or smoke fixture — still produces `TaskSpec`**.
+  The "must support" sets for both `_legacy_worker_bridge` and
+  `_legacy_evaluator_bridge` are empty.
+- The two bridge files are not deleted here; PR 11 owns the `git rm`
+  plus the `if worker is None:` and `if not task.evaluators:` branch
+  removals in `worker_execute.py` and `evaluate_task_run.py`.
 
 Old path still intentionally alive: `gdpeval/sandbox.py`,
 `gdpeval/sandbox_utils.py`, slimmed `registry*.py` modules,
 `BaseSandboxManager`, all per-benchmark `sandbox_manager.py` files (kept
-until PR 11 deletes them in one sweep), and `_legacy_worker_bridge.py`
-(now unreachable from any benchmark, but the file stays until PR 11
-removes it together with the `worker_execute` fallback branch).
+until PR 11 deletes them in one sweep), `_legacy_worker_bridge.py`,
+and `_legacy_evaluator_bridge.py` (both unreachable from any benchmark
+after this PR, but the files stay until PR 11 removes them together
+with the matching fallback branches).
+
+Migrations: this PR adds **no Alembic migration** (code-only changes).
+Next free migration id is `aabbccdd0005` (PR 7 reserves `aabbccdd0004`;
+PR 10a / 10b do not add migrations).
 
 Deletion gate: PR 11 deletes the registry modules, per-benchmark
-sandbox managers, and `_legacy_worker_bridge.py`.
+sandbox managers, `_legacy_worker_bridge.py`, and
+`_legacy_evaluator_bridge.py`.
 
 Tests added or updated: GDPEval definition JSON + reconstruction +
 no-registry architecture guard across all four migrated benchmarks.

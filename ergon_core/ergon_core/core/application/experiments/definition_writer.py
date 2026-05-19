@@ -1,13 +1,14 @@
-"""Persist an Experiment directly into immutable definition rows.
+"""Persist a Benchmark directly into immutable definition rows.
 
-Reads identity fields inline from the live Experiment object graph — no
+Reads identity fields inline from the live Benchmark object graph — no
 BoundExperiment intermediate, no constructor_state() serialisation.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from ergon_core.api.benchmark import Task, TaskSpec
+from ergon_core.api.benchmark import Benchmark, Task, TaskSpec
+from ergon_core.api.errors import SandboxKindMismatch
 from ergon_core.api.rubric import Rubric
 from ergon_core.core.domain.experiments import DefinitionHandle
 from ergon_core.core.shared.json_types import JsonObject
@@ -59,13 +60,196 @@ def _criterion_snapshot_name(criterion: "Criterion") -> str:
     return criterion.slug
 
 
+def validate_sandbox_compatibility(benchmark: Benchmark) -> None:
+    """Reject benchmarks where a task's worker requires a sandbox
+    the bound ``task.sandbox`` doesn't satisfy.
+
+    Only checks object-bound ``Task`` instances — legacy
+    ``TaskSpec`` benchmarks have no inline worker/sandbox to
+    validate. PR 11 makes ``Task`` the only shape and drops the
+    ``isinstance(task, Task)`` branch.
+
+    Raises ``SandboxKindMismatch`` on the first mismatch found.
+    """
+    for tasks in benchmark.build_instances().values():
+        for task in tasks:
+            if not isinstance(task, Task):
+                continue
+            if task.worker is None or task.sandbox is None:
+                continue
+            required = type(task.worker).requires_sandbox
+            if not isinstance(task.sandbox, required):
+                raise SandboxKindMismatch(
+                    # Tasks at construction time don't have stable
+                    # ids — Task.task_id raises until
+                    # ``Task.from_definition`` binds it. A fresh
+                    # uuid4 is enough to identify which task in
+                    # the error context.
+                    task_id=task._task_id if task._task_id else uuid4(),
+                    component=type(task.worker).__name__,
+                    required=required,
+                    actual=type(task.sandbox),
+                )
+
+
+def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
+    """Persist a configured Benchmark as a definition row.
+
+    Replaces ``persist_definition(experiment)`` from before PR 6.5. Identity
+    fields (``name``, ``description``, ``metadata``) are read off the
+    ``Benchmark`` instance directly — the ``Experiment`` wrapper that
+    used to carry them is gone.
+
+    Validates sandbox/worker compatibility before any DB write.
+    """
+    validate_sandbox_compatibility(benchmark)
+
+    # ---- 1. Materialise instances / tasks ----------------------------
+    instances_map = benchmark.build_instances()
+
+    # ---- 2. Identity fields & shared bookkeeping ---------------------
+    benchmark_type: str = benchmark.type_slug
+    resolved_metadata: dict[str, Any] = dict(benchmark.metadata)  # slopcop: ignore[no-typing-any]
+    now = utcnow()
+    definition_id = uuid4()
+
+    # -- definition row --
+    definition_row = ExperimentDefinition(
+        id=definition_id,
+        benchmark_type=benchmark_type,
+        metadata_json=resolved_metadata,
+        created_at=now,
+    )
+
+    # -- instance + task rows (two-pass for parent resolution) --
+    instance_rows: list[ExperimentDefinitionInstance] = []
+    task_rows_by_key: dict[tuple[str, str], ExperimentDefinitionTask] = {}
+
+    for instance_key, tasks in instances_map.items():
+        instance_id = uuid4()
+        instance_rows.append(
+            ExperimentDefinitionInstance(
+                id=instance_id,
+                experiment_definition_id=definition_id,
+                instance_key=instance_key,
+                created_at=now,
+            )
+        )
+        for task in tasks:
+            task_row = ExperimentDefinitionTask(
+                id=uuid4(),
+                experiment_definition_id=definition_id,
+                instance_id=instance_id,
+                task_slug=task.task_slug,
+                description=task.description,
+                task_payload_json=task.task_payload.model_dump(mode="json"),
+                task_json=_task_to_definition_json(task),
+                created_at=now,
+            )
+            task_rows_by_key[(instance_key, task.task_slug)] = task_row
+
+    # resolve parent_task_id after all IDs are assigned
+    for instance_key, tasks in instances_map.items():
+        for task in tasks:
+            if task.parent_task_slug is not None:
+                child = task_rows_by_key[(instance_key, task.task_slug)]
+                parent = task_rows_by_key[(instance_key, task.parent_task_slug)]
+                child.parent_task_id = parent.id
+
+    task_rows = list(task_rows_by_key.values())
+
+    # -- dependency rows --
+    dependency_rows: list[ExperimentDefinitionTaskDependency] = []
+    for instance_key, tasks in instances_map.items():
+        for task in tasks:
+            task_id = task_rows_by_key[(instance_key, task.task_slug)].id
+            if task_id is None:
+                raise ValueError(f"Task {task.task_slug!r} has no assigned ID")
+            for dep_slug in task.dependency_task_slugs:
+                dep_task_id = task_rows_by_key[(instance_key, dep_slug)].id
+                if dep_task_id is None:
+                    raise ValueError(f"Dependency task {dep_slug!r} has no assigned ID")
+                dependency_rows.append(
+                    ExperimentDefinitionTaskDependency(
+                        id=uuid4(),
+                        experiment_definition_id=definition_id,
+                        task_id=task_id,
+                        depends_on_task_id=dep_task_id,
+                        created_at=now,
+                    )
+                )
+
+    # -- task-evaluator binding rows (from inline Task.evaluators) --
+    task_evaluator_rows: list[ExperimentDefinitionTaskEvaluator] = []
+    for instance_key, tasks in instances_map.items():
+        for task in tasks:
+            task_id = task_rows_by_key[(instance_key, task.task_slug)].id
+            if task_id is None:
+                raise ValueError(
+                    f"Task {task.task_slug!r} has no assigned ID for evaluator binding"
+                )
+            for eval_key in task.evaluator_binding_keys:
+                task_evaluator_rows.append(
+                    ExperimentDefinitionTaskEvaluator(
+                        id=uuid4(),
+                        experiment_definition_id=definition_id,
+                        task_id=task_id,
+                        evaluator_binding_key=eval_key,
+                        created_at=now,
+                    )
+                )
+
+    # ---- 3. Write all rows in one transaction ------------------------
+    DefinitionRow = (
+        ExperimentDefinition
+        | ExperimentDefinitionInstance
+        | ExperimentDefinitionTask
+        | ExperimentDefinitionTaskDependency
+        | ExperimentDefinitionTaskEvaluator
+    )
+    all_rows: list[DefinitionRow] = [
+        definition_row,
+        *instance_rows,
+        *task_rows,
+        *dependency_rows,
+        *task_evaluator_rows,
+    ]
+
+    created_at = definition_row.created_at
+
+    session = get_session()
+    try:
+        session.add_all(all_rows)
+        session.commit()
+    except SQLAlchemyError:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+    # ---- 4. Return handle --------------------------------------------
+    return DefinitionHandle(
+        definition_id=definition_id,
+        benchmark_type=benchmark_type,
+        instance_count=len(instance_rows),
+        task_count=len(task_rows),
+        created_at=created_at,
+        metadata=resolved_metadata,
+    )
+
+
 class _ExperimentDefinitionWriter:
-    """Writes immutable definition rows directly from an Experiment.
+    """Writes immutable definition rows directly from a domain Experiment.
 
     Identity-not-serialization: rows store type slugs + model_target,
     not serialized constructor state. Runtime reconstructs fresh objects
     from registry + identity fields. snapshot_json is write-once audit
     data -- nothing reconstructs from it.
+
+    Used by the v1 launch path (``_persist_single_sample_workflow_definition``
+    in ``launch.py``) which builds domain ``Experiment`` objects with
+    explicit worker/evaluator specs. PR 11 deletes this class once the
+    legacy launch path is gone.
     """
 
     def persist_definition(  # noqa: C901

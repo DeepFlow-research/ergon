@@ -13,7 +13,7 @@ from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.api.benchmark import TaskSpec
 from ergon_core.core.domain.experiments import WorkerSpec
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.models import ExperimentRecord
+from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord
 from ergon_core.core.application.events.task_events import WorkflowStartedEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.application.experiments.models import (
@@ -21,11 +21,13 @@ from ergon_core.core.application.experiments.models import (
     ExperimentRunResult,
     RunAssignment,
 )
+from ergon_core.core.application.experiments.definition_writer import _ExperimentDefinitionWriter
+
 from ergon_core.core.application.workflows.runs import create_run
 from pydantic import BaseModel
 
 WorkflowDefinitionFactory = Callable[
-    [ExperimentRecord, RunAssignment],
+    [BenchmarkDefinitionRecord, RunAssignment],
     DefinitionHandle,
 ]
 WorkflowStartedEmitter = Callable[[UUID, UUID], Awaitable[None]]
@@ -47,7 +49,7 @@ class _ExperimentRunLauncher:
 
     async def run_experiment(self, request: ExperimentRunRequest) -> ExperimentRunResult:
         with get_session() as session:
-            experiment = session.get(ExperimentRecord, request.experiment_id)
+            experiment = session.get(BenchmarkDefinitionRecord, request.experiment_id)
             if experiment is None:
                 raise ValueError(f"Experiment {request.experiment_id} not found")
             assignments = _assign_runs(experiment)
@@ -84,7 +86,7 @@ class _ExperimentRunLauncher:
         )
 
 
-def _assign_runs(experiment: ExperimentRecord) -> list[RunAssignment]:
+def _assign_runs(experiment: BenchmarkDefinitionRecord) -> list[RunAssignment]:
     sample_selection = experiment.parsed_sample_selection()
     instance_keys = sample_selection.get("instance_keys")
     if not isinstance(instance_keys, list) or not all(
@@ -111,13 +113,9 @@ def _assign_runs(experiment: ExperimentRecord) -> list[RunAssignment]:
 
 
 def _persist_single_sample_workflow_definition(
-    experiment: ExperimentRecord,
+    experiment: BenchmarkDefinitionRecord,
     assignment: RunAssignment,
 ) -> DefinitionHandle:
-    from ergon_core.core.application.experiments.definition_writer import (  # slopcop: ignore[guarded-function-import] -- reason: keep definition writing behind application launch plumbing
-        _ExperimentDefinitionWriter,
-    )
-
     benchmark_slug = _metadata_str(experiment, "benchmark_slug") or experiment.benchmark_type
     benchmark = _single_sample_benchmark(benchmark_slug, assignment.instance_key)
     worker_slug = _primary_worker_slug(assignment.worker_team)
@@ -136,7 +134,7 @@ def _persist_single_sample_workflow_definition(
     return _ExperimentDefinitionWriter().persist_definition(workflow)
 
 
-def _metadata_str(experiment: ExperimentRecord, key: str) -> str | None:
+def _metadata_str(experiment: BenchmarkDefinitionRecord, key: str) -> str | None:
     value = experiment.parsed_metadata().get(key)
     return value if isinstance(value, str) else None
 
@@ -148,7 +146,7 @@ def _primary_worker_slug(worker_team: JsonObject) -> str:
     return value
 
 
-def _evaluator_binding_slugs(experiment: ExperimentRecord) -> dict[str, str]:
+def _evaluator_binding_slugs(experiment: BenchmarkDefinitionRecord) -> dict[str, str]:
     design = experiment.design_json or {}
     bindings = design.get("evaluator_bindings")
     if not isinstance(bindings, dict):

@@ -20,8 +20,8 @@ from ergon_core.api.errors import (
     SandboxKindMismatch,
     SandboxNotLiveError,
 )
-from ergon_core.api.experiment import Experiment
 from ergon_core.api.registry import ComponentRegistry, registry
+from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
 from ergon_core.api.worker import Worker, WorkerContext, WorkerOutput, WorkerStreamItem
@@ -47,7 +47,7 @@ __all__ = [
     "EmptyTaskPayload",
     "Evaluator",
     "EvidenceMessage",
-    "Experiment",
+    "persist_benchmark",
     "Rubric",
     "Sandbox",
     "SandboxKindMismatch",

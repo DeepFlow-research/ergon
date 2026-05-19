@@ -24,8 +24,9 @@ def test_public_api_root_exports_semantic_authoring_names_only() -> None:
         "CriterionEvidence",
         "EvidenceMessage",
         # PR 5 — object-bound authoring surface.
+        # PR 6.5 — Experiment wrapper deleted; persist_benchmark replaces it.
         "Evaluator",
-        "Experiment",
+        "persist_benchmark",
         "Rubric",
         "Sandbox",
         "SandboxKindMismatch",

@@ -20,7 +20,7 @@ from ergon_core.core.persistence.shared.enums import (
 )
 from ergon_core.core.persistence.shared.ids import new_id
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentRecord,
+    BenchmarkDefinitionRecord,
     RolloutBatch,
     RolloutBatchRun,
     RunRecord,
@@ -86,7 +86,7 @@ class RolloutService:
         with self._session_factory() as session:
             definition = session.get(ExperimentDefinition, request.definition_id)
             benchmark_type = definition.benchmark_type if definition else "rl-rollout"
-            experiment = ExperimentRecord(
+            experiment = BenchmarkDefinitionRecord(
                 name=f"RL rollout batch {batch_id}",
                 benchmark_type=benchmark_type,
                 sample_count=request.num_episodes,

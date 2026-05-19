@@ -13,6 +13,48 @@ guards that prevent deleted symbols from returning.
 **Tech Stack:** source deletion, SQLModel final schema, Alembic reset,
 architecture tests.
 
+> **Note: PR 6.5 (and the post-PR-6.5 cleanup) already deleted several
+> things this plan used to claim.** Anything in the list below is **not**
+> in PR 11's deletion list anymore:
+> - The public `Experiment` class (`ergon_core.api.experiment.Experiment`) — already gone (PR 6.5).
+> - `ExperimentRecord` SQLModel + `experiments` table — already renamed
+>   to `BenchmarkDefinitionRecord` / `benchmark_definitions` (PR 6.5).
+>   **PR 11 KEEPS `BenchmarkDefinitionRecord`** — the rename made it the
+>   canonical v2 telemetry row for unstarted/launched experiments.
+> - `persist_definition` top-level function — already renamed to
+>   `persist_benchmark` (PR 6.5).
+> - `ExperimentDefineRequest`, `define_benchmark_experiment`,
+>   `BUILTIN_EXPERIMENT_FACTORIES` — already deleted (PR 6.5 Phase 2).
+> - CLI authoring commands (`ergon experiment define`, `ergon experiment run`) — already deleted (PR 6.5).
+> - Top-level `ergon_builtins/sandboxes/` and `toolkits/` dirs — already deleted (PR 6.5).
+> - `ExperimentService` class — already deleted (post-PR-6.5 cleanup); replaced by module-level `run_experiment` in `application/experiments/service.py`.
+> - Unused `name`/`description`/`created_by` kwargs on `persist_benchmark` — already dropped (post-PR-6.5 cleanup).
+>
+> What PR 11 still owns:
+> - The **domain** `Experiment` class (different class — see below),
+>   `TaskSpec`, the per-benchmark `sandbox_manager.py` files, the
+>   per-benchmark `_legacy_workers.py` files (created by PR 6.5 / 10a /
+>   10b / 10c specifically as PR 11 deletion targets), the legacy
+>   worker fallback chain.
+> - The **symmetric** legacy evaluator fallback: `_legacy_evaluator_bridge.py`
+>   was restored after PR 5's premature retirement; PR 11 deletes it
+>   alongside `_legacy_worker_bridge.py` (same deletion gate: every
+>   benchmark — production + smoke fixture — on object-bound `Task`).
+> - The PR 1 task-snapshot bridge helpers: `_definition_task_snapshot`
+>   and `_dynamic_task_snapshot` in `core/application/graph/repository.py`
+>   (docstrings already mark them for PR 11 deletion), plus the
+>   `task_json=task.task_json or _definition_task_snapshot(...)` fallback
+>   in `initialize_from_definition`.
+> - The v1 `_ExperimentDefinitionWriter` class in `definition_writer.py`
+>   (docstring already marks it for PR 11 deletion).
+> - The `terminate_sandbox_by_id` helper — but PR 4 moved its caller out
+>   of `execute_task.py` into a sibling Inngest function at
+>   `core/application/jobs/sandbox_cleanup.py` (triggered by
+>   `task/completed` / `task/failed`). PR 11 either keeps the sandbox
+>   cleanup function (if external sandboxes are still in scope) or
+>   deletes it alongside the legacy bridges.
+> - The final schema/identity collapse.
+
 ---
 
 ## Files To Delete
@@ -27,24 +69,32 @@ ergon_core/ergon_core/core/persistence/saved_specs/
 ergon_core/ergon_core/core/application/evaluation/executors.py
 ergon_core/ergon_core/core/application/evaluation/inngest_executor.py
 ergon_core/ergon_core/core/application/jobs/check_evaluators.py
-ergon_core/ergon_core/core/application/jobs/execute_task.py          # PR 4 absorbs its orchestration into worker_execute
-ergon_core/ergon_core/core/application/jobs/sandbox_setup.py         # PR 4 acquires inline in worker_execute
-ergon_core/ergon_core/core/application/jobs/persist_outputs.py       # PR 4 persists WorkerOutput inline before fanout
+ergon_core/ergon_core/core/application/jobs/_legacy_worker_bridge.py
+ergon_core/ergon_core/core/application/jobs/_legacy_evaluator_bridge.py
 ergon_builtins/ergon_builtins/registry.py
 ergon_builtins/ergon_builtins/registry_core.py
 ergon_builtins/ergon_builtins/registry_data.py
 ```
 
-The jobs/`execute_task.py`, `sandbox_setup.py`, and `persist_outputs.py`
-deletions are load-bearing for the Δ.4 / Δ.5 narrative. After PR 4
-flips `worker_execute` to acquire-run-fanout-release, these three child
-Inngest functions have no callers: `execute_task` was the
-sandbox→worker→persist→check_evaluators orchestrator that v2 collapses
-into `worker_execute`'s body; `sandbox_setup` provisioned the sandbox in
-a separate function that `execute_task` invoked; `persist_outputs`
-persisted `WorkerOutput` in its own function. PR 4 inlines all three.
-Run the dead-path audit's ledger for the corresponding entries to
-confirm callerless before deleting.
+**Note (post-reconciliation):** earlier drafts of this plan listed
+`execute_task.py`, `sandbox_setup.py`, and `persist_outputs.py` as
+deletion targets on the theory that PR 4 would collapse them into
+`worker_execute`'s body. **That collapse did not happen.** PR 4 kept
+the four-function orchestration (`execute_task` → `sandbox_setup` →
+`worker_execute` → `persist_outputs` + per-evaluator `evaluate_task_run`
+fanout) and added `sandbox_cleanup` as a sibling triggered by
+`task/completed` / `task/failed`. Those four files are part of the
+final v2 shape, not deletion targets.
+
+The two legacy bridge files (`_legacy_worker_bridge.py`,
+`_legacy_evaluator_bridge.py`) ARE deletion targets once every benchmark
+(production + smoke fixture) migrates to object-bound `Task`. The
+deletion gate is "no benchmark still produces `TaskSpec`" — PR 6
+migrated minif2f, PR 10a/b/c migrate swebench/researchrubrics/gdpeval
+plus their matching smoke fixtures. PR 11 verifies the call sets are
+empty, then `git rm`s both files and deletes the matching
+`if worker is None:` / `if not task.evaluators:` branches in
+`worker_execute.py` / `evaluate_task_run.py`.
 
 **Audit-before-delete:**
 
@@ -66,17 +116,27 @@ confirm callerless before deleting.
   registration all survive. Only the v1 body was removed (in PR 4),
   not the file itself.
 
-Delete old sandbox manager files only after each benchmark has a typed
-sandbox subclass:
+Delete old sandbox manager files only after each benchmark has a typed sandbox subclass:
 
 ```text
 ergon_builtins/ergon_builtins/benchmarks/minif2f/sandbox_manager.py
 ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox_manager.py
 ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox_manager_support.py
 ergon_builtins/ergon_builtins/benchmarks/researchrubrics/sandbox_manager.py
-ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox.py
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_manager.py     # PR 10c renamed from sandbox.py
 ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_utils.py
 ```
+
+Delete per-benchmark `_legacy_workers.py` files (created by PR 6.5 / 10a / 10b / 10c specifically as PR 11 deletion targets — they hold the legacy worker classes that the v1 registry strings still resolve to):
+
+```text
+ergon_builtins/ergon_builtins/benchmarks/minif2f/_legacy_workers.py
+ergon_builtins/ergon_builtins/benchmarks/swebench_verified/_legacy_workers.py    # if PR 10a created one
+ergon_builtins/ergon_builtins/benchmarks/researchrubrics/_legacy_workers.py      # if PR 10b created one
+ergon_builtins/ergon_builtins/benchmarks/gdpeval/_legacy_workers.py              # if PR 10c created one
+```
+
+(Some verticals may not have a `_legacy_workers.py` if their legacy worker block was already minimal.  Check before `git rm`.)
 
 ## Required Code Deletions
 
@@ -88,17 +148,35 @@ ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_utils.py
   grep-confirm the old name is gone from these callsites:
   `ergon_core.api.rubric.rubric.Rubric.validate`,
   `ergon_core.core.domain.experiments.validation`,
-  `ergon_core.core.application.experiments.definition_writer.persist_definition`,
+  `ergon_core.core.application.experiments.definition_writer.persist_benchmark`  # renamed by PR 6.5,
   `ergon_core.core.application.experiments.launch.launch_run`,
   `ergon_builtins.benchmarks.gdpeval.rubric`.
-- Remove the **domain** `Experiment` (`ergon_core.core.domain.experiments.Experiment`).
-  PR 5's public `Experiment` is the only `Experiment` after PR 11.
+- Remove the **domain** `Experiment` (`ergon_core.core.domain.experiments.Experiment`).  PR 6.5 deleted the public `Experiment` class; PR 11 deletes the remaining domain-layer class.  After PR 11, **there is no `Experiment` class anywhere** — the word survives only as a `str | None` column on `BenchmarkDefinitionRecord` (the "experiment tag" introduced by PR 6.5).
 - Remove `EvaluateTaskRunRequest` (the v1 multi-field payload). The
   replacement is `TaskEvaluateRequest` (id-only), already in use since
   PR 4.
 - Remove `_task_to_definition_json` support for `TaskSpec` (the function
   itself is the `_legacy` branch; PR 11 deletes the function).
-- Remove `terminate_sandbox_by_id`.
+- Remove `_definition_task_snapshot` and `_dynamic_task_snapshot` from
+  `core/application/graph/repository.py` (PR 1 bridge helpers; their
+  docstrings already mark them as PR 11 deletion targets). Then narrow
+  `initialize_from_definition` from
+  `task_json=task.task_json or _definition_task_snapshot(...)` to just
+  `task_json=task.task_json`.
+- Remove the v1 `_ExperimentDefinitionWriter` class from
+  `definition_writer.py` (its docstring already marks it for PR 11
+  deletion). The class is the leftover v1 launch path; the canonical
+  v2 path is the module-level `persist_benchmark` function.
+- Remove `terminate_sandbox_by_id`. **PR 4 moved this out of
+  `execute_task.py`'s deleted `try/finally`** — it now lives in the
+  sibling Inngest job at
+  `ergon_core/core/application/jobs/sandbox_cleanup.py` (plus the
+  matching handler at
+  `core/infrastructure/inngest/handlers/sandbox_cleanup.py`). If the
+  final v2 still terminates external sandboxes after each task, keep
+  the `sandbox_cleanup.py` job and only delete the helper if a more
+  direct API replaces it; otherwise delete the helper, the job, AND
+  the handler.
 
 **Runtime identity and DTOs:**
 
@@ -113,10 +191,20 @@ ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_utils.py
   `_worker_from_payload_bridge` but kept a narrow legacy fallback at
   `core/application/jobs/_legacy_worker_bridge.py` for unmigrated
   benchmarks. PR 6 / PR 10a / PR 10b / PR 10c migrate the four builtins
-  (minif2f, swebench, researchrubrics, gdpeval) one by one — after
-  PR 10c, no benchmark still produces `TaskSpec`. PR 11 performs the
-  final deletion (see Task 1.5 below). The grep for
-  `_worker_from_payload_bridge` must come back empty.
+  (minif2f, swebench, researchrubrics, gdpeval) **plus the matching
+  smoke fixtures in `tests/fixtures/smoke_components/benchmarks.py`** —
+  after PR 10c, no benchmark (production or fixture) still produces
+  `TaskSpec`. PR 11 performs the final deletion (see Task 1.5 below).
+  The grep for `_worker_from_payload_bridge` must come back empty.
+- Retire the **symmetric** legacy evaluator fallback chain. Post-PR-5
+  cleanup restored `core/application/jobs/_legacy_evaluator_bridge.py`
+  (which PR 5 had prematurely deleted) as the eval-side counterpart to
+  `_legacy_worker_bridge.py`. Same deletion gate, same migration
+  sequence: PR 6 / 10a / 10b / 10c remove each benchmark from the call
+  set. PR 11 `git rm`s the file and deletes the
+  `if not task.evaluators:` fallback branch in
+  `evaluate_task_run.py`. Add the eval-side `git rm` to Task 1.5
+  alongside the worker-side `git rm`.
 
 **Schema (run-tier collapse — composite PK `(run_id, task_id)`):**
 
@@ -134,8 +222,7 @@ ergon_builtins/ergon_builtins/benchmarks/gdpeval/sandbox_utils.py
   `RunTaskExecution.definition_task_id`.
 - Drop the matching columns on `RunTaskEvaluation`
   (`node_id`, `definition_task_id`).
-- Remove `ExperimentRecord` from telemetry models (table dropped by
-  schema reset in Task 2).
+- ~~Remove `ExperimentRecord` from telemetry models~~ — **already done by PR 6.5** (renamed to `BenchmarkDefinitionRecord`).  Task 2's schema reset uses the renamed model.
 
 **Inngest events:**
 
@@ -173,22 +260,26 @@ class RunGraphNode(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 ```
 
-`ExperimentDefinition` final metadata:
+`BenchmarkDefinitionRecord` final metadata (renamed from `ExperimentDefinition` by PR 6.5; PR 11 finalises field shape):
 
 ```python
-class ExperimentDefinition(SQLModel, table=True):
-    __tablename__ = "experiment_definitions"
+class BenchmarkDefinitionRecord(SQLModel, table=True):
+    __tablename__ = "benchmark_definitions"     # renamed by PR 6.5
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     name: str = Field(index=True)
     description: str | None = None
     benchmark_type: str = Field(index=True)
     benchmark_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    experiment_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    experiment: str | None = Field(default=None, index=True)     # PR 6.5 added — the experiment-tag column
     metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_by: str | None = None
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 ```
+
+Notes for the schema reset:
+- The `experiment_json` field from the v1 shape is gone — there is no `Experiment` class to persist.  All metadata lives in `metadata_json` or directly in `benchmark_json`.
+- The `experiment: str | None` column is PR 6.5's tag for grouping related definitions (e.g. ablation studies).  It is **not** a foreign key — just an indexed string column.
 
 ## Task 1: Delete Symbols
 
@@ -310,39 +401,53 @@ Note: this requires `Criterion` to be a Pydantic `BaseModel`. If it isn't
 yet at PR 11 time, defer to a dedicated "Criterion Pydantic migration" PR
 and leave a `TODO(PR N)` comment here instead.
 
-## Task 1.5: Retire The Legacy Worker Fallback
+## Task 1.5: Retire The Legacy Worker And Evaluator Fallbacks
 
-After PR 10c lands, no benchmark builtin still returns `TaskSpec`, so
-`_legacy_worker_bridge.legacy_worker_from_payload` has no remaining
-callers. PR 11 deletes the file and the `worker_execute` branch that
-invokes it.
+After PR 10c lands (production benchmarks migrated) AND each PR 10x has
+migrated its matching smoke fixture in
+`tests/fixtures/smoke_components/benchmarks.py`, no benchmark anywhere
+still returns `TaskSpec`. Both `_legacy_worker_bridge` and
+`_legacy_evaluator_bridge` are unreachable. PR 11 deletes both files
+plus their matching fallback branches.
 
-- [ ] **Step 1: Delete `_legacy_worker_bridge.py`**
+- [ ] **Step 1: Delete the bridge modules**
 
 ```bash
 git rm ergon_core/ergon_core/core/application/jobs/_legacy_worker_bridge.py
+git rm ergon_core/ergon_core/core/application/jobs/_legacy_evaluator_bridge.py
 ```
 
-- [ ] **Step 2: Delete the `if worker is None:` fallback branch in `worker_execute.py`**
+- [ ] **Step 2: Delete the `if worker is None:` fallback in `worker_execute.py`**
 
 Remove the `if worker is None:` block in
 `ergon_core/ergon_core/core/application/jobs/worker_execute.py` that
-imports `legacy_worker_from_payload` and assigns its return value to
-`worker`. After PR 10c, `task.worker` is always non-None for every
-benchmark; the branch is unreachable and the import is dead.
+imports `legacy_worker_from_payload`. After PR 10c (incl. smoke
+fixtures), `task.worker` is always non-None for every benchmark; the
+branch is unreachable and the import is dead.
 
-- [ ] **Step 3: Drop the `_worker_from_payload_bridge` entry from the dead-path audit `_XFAIL_BY_SYMBOL`**
+- [ ] **Step 3: Delete the `if not task.evaluators:` fallback in `evaluate_task_run.py`**
+
+Symmetric to Step 2. Remove the `else` branch in
+`ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py` that
+imports `legacy_evaluator_from_binding` and
+`legacy_inject_criterion_runtime`. After PR 10c (incl. smoke fixtures),
+`task.evaluators` is always populated for every benchmark; the eval-side
+fallback is unreachable.
+
+- [ ] **Step 4: Drop the bridge entries from the dead-path audit `_XFAIL_BY_SYMBOL`**
 
 In `ergon_core/tests/unit/architecture/test_dead_path_audit.py`, remove
-the `_worker_from_payload_bridge` entry from `_XFAIL_BY_SYMBOL`. This is
-folded into the "Empty `_XFAIL_BY_SYMBOL`" sweep in Task 4 Step 2 — call
-it out here so the deletion isn't lost when the dict is collapsed.
+any entries for `_worker_from_payload_bridge`, `_legacy_worker_bridge`,
+`_evaluator_bridge`, or `_legacy_evaluator_bridge` from
+`_XFAIL_BY_SYMBOL`. Folded into the "Empty `_XFAIL_BY_SYMBOL`" sweep in
+Task 4 Step 2 — call it out here so the deletion isn't lost when the
+dict is collapsed.
 
 Verify:
 
 ```bash
-rg "_worker_from_payload_bridge|_legacy_worker_bridge|legacy_worker_from_payload" \
-  ergon_core ergon_builtins ergon_cli
+rg "_worker_from_payload_bridge|_legacy_worker_bridge|legacy_worker_from_payload|_evaluator_bridge|_legacy_evaluator_bridge|legacy_evaluator_from_binding|legacy_inject_criterion_runtime" \
+  ergon_core ergon_builtins ergon_cli tests
 ```
 
 Expected: only docs hits remain.
@@ -398,8 +503,11 @@ f9075c2ddbc9_run_resource_append_only_log.py
 
 Plus the additive migrations introduced earlier in this program:
 
-- `<revision>_add_run_graph_task_json.py` (PR 1)
-- `<revision>_definition_metadata_and_launch.py` (PR 7)
+- `aabbccdd0001_add_run_graph_task_json.py` (PR 1)
+- `aabbccdd0002_add_worker_output_json.py` (PR 4)
+- `aabbccdd0003_add_definition_task_json.py` (PR 5)
+- `aabbccdd0004_definition_metadata_and_launch.py` (PR 7)
+- (any `aabbccdd0005+` additive migrations PR 10a/10b/10c may have added)
 
 ### Developer-facing downgrade step
 
@@ -581,7 +689,19 @@ DELETED_SYMBOLS = (
     "WorkerSpec",
     "ComponentRegistry",
     "saved_specs",
-    "ExperimentRecord",
+    "ExperimentRecord",                 # PR 6.5 renamed to BenchmarkDefinitionRecord
+    "ExperimentDefineRequest",          # PR 6.5 deleted
+    "BUILTIN_EXPERIMENT_FACTORIES",     # PR 6.5 deleted
+    "define_benchmark_experiment",      # PR 6.5 deleted
+    "persist_definition",               # PR 6.5 renamed to persist_benchmark
+    "class Experiment",                 # PR 6.5 deleted public; PR 11 deletes domain class
+    "class ExperimentService",          # post-PR-6.5 cleanup deleted the facade
+    "_evaluator_bridge",                # PR 5 retired; restored as _legacy_evaluator_bridge
+    "_legacy_worker_bridge",            # PR 11 Task 1.5
+    "_legacy_evaluator_bridge",         # PR 11 Task 1.5
+    "_definition_task_snapshot",        # PR 1 bridge helper, PR 11 deletes
+    "_dynamic_task_snapshot",           # PR 1 bridge helper, PR 11 deletes
+    "_ExperimentDefinitionWriter",      # v1 leftover, docstring marks PR 11
     "definition_task_id",
     "EvaluateTaskRunRequest",
     "CriterionExecutor",
@@ -591,9 +711,13 @@ DELETED_SYMBOLS = (
 )
 # evaluate_task_run is intentionally NOT in DELETED_SYMBOLS. Per Δ.4 it
 # survives as the per-evaluator fanout target reshaped in PR 4.
+# persist_benchmark, BenchmarkDefinitionRecord, and the experiment string
+# column are also NOT deleted — they're PR 6.5's replacements.
 KEPT_RESHAPED_SYMBOLS = (
     "evaluate_task_run",
     "TaskEvaluateRequest",
+    "persist_benchmark",                # PR 6.5 introduced
+    "BenchmarkDefinitionRecord",        # PR 6.5 introduced
 )
 
 

@@ -148,11 +148,13 @@ def test_happy_path_creates_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert "built_at" in data["minif2f"]
 
 
-def test_success_hint_uses_explicit_runtime_choices(
+def test_success_message_does_not_include_run_hint(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """``ergon benchmark run`` was removed in PR 6.5 Phase 2 — success message must not
+    suggest it."""
     monkeypatch.setenv("E2B_API_KEY", "test-key")
     monkeypatch.setenv("ERGON_CONFIG_DIR", str(tmp_path))
     monkeypatch.setattr(settings, "e2b_api_key", "test-key")
@@ -162,12 +164,9 @@ def test_success_hint_uses_explicit_runtime_choices(
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert "ergon benchmark run minif2f" in out
-    assert "--worker" in out
-    assert "--model" in out
-    assert "--evaluator" in out
-    assert "--sandbox" in out
-    assert "--extras" in out
+    # The "ergon benchmark run" hint was removed when the authoring route was deleted.
+    assert "ergon benchmark run" not in out
+    assert "Success! Template ID:" in out
 
 
 def test_force_rebuild_overwrites(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

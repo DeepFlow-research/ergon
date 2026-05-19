@@ -26,54 +26,57 @@ cleanup that PR 10c executes.
 
 ## Common Conversion Recipe
 
-Every vertical sub-PR (10a, 10b, 10c) follows the same template:
+Every vertical sub-PR (10a, 10b, 10c) follows the same template.  PR 6.5 fixed the file layout + killed the `Experiment` class, so this recipe assumes the post-PR-6.5 world:
 
-1. Create `Sandbox` subclass under `ergon_builtins/ergon_builtins/sandboxes/`.
-2. Move sandbox provisioning behavior into the subclass's `provision()`
-   body, attaching `_runtime` via `ManagerBackedSandboxRuntime`.
-3. Add `_bind_runtime(sandbox_id)` so eval workers can attach to an
-   already-running sandbox.
-4. Move reusable toolkit construction into a serializable Pydantic
-   object under `ergon_builtins/ergon_builtins/toolkits/`.
-5. Convert `worker_factory.py` to return a concrete `Worker` instance
-   that gets embedded in `Task.worker`.
+1. Create `Sandbox` subclass at **`ergon_builtins/ergon_builtins/benchmarks/<slug>/sandbox.py`** (per-benchmark, NOT under `sandboxes/` — PR 6.5 deleted that top-level dir).
+2. Move sandbox provisioning behavior into the subclass's `provision()` body, attaching `_runtime` via `ManagerBackedSandboxRuntime` from `ergon_builtins/sandbox/_manager_backed.py` (singular, top-level — created by PR 10a; reused by PR 10b/10c).
+3. Add `_bind_runtime(sandbox_id)` so eval workers can attach to an already-running sandbox.
+4. Move reusable toolkit construction into a serializable Pydantic object at **`ergon_builtins/ergon_builtins/benchmarks/<slug>/toolkit.py`** (per-benchmark, NOT under `toolkits/`).
+5. Add **`benchmarks/<slug>/workers.py`** (renamed from `worker_factory.py`) with factory functions like `make_<slug>_worker()` returning a concrete `Worker` instance.  Parameterise the benchmark constructor (`worker_factory=...`, `sandbox_factory=...`) following the PR 6.5 MiniF2F pattern.
 6. Convert `benchmark.py` to return `Task` (not `TaskSpec`).
-7. Add a unit test that persists the benchmark and asserts the stored
-   task JSON has `_type` entries for `worker`, `sandbox`, and every
-   `evaluators[i]`.
-8. Leave the old `sandbox_manager.py` and registry registrations in
-   place; PR 11 deletes them.
+7. Add a unit test that persists the benchmark and asserts the stored task JSON has `_type` entries for `worker`, `sandbox`, and every `evaluators[i]`.
+8. Add one line to **`ergon_builtins/ergon_builtins/benchmarks/README.md`** (the catalogue PR 6.5 added) listing this benchmark and its worker factories.
+9. Leave the old `sandbox_manager.py` and registry registrations in place; PR 11 deletes them.
 
-The `ManagerBackedSandboxRuntime` adapter is shared infrastructure —
-PR 10a creates it; PR 10b and PR 10c import it.
+**No CLI factory registration step.**  PR 6.5 deleted `BUILTIN_EXPERIMENT_FACTORIES` and the entire CLI authoring route.  Authoring is Python-only — users import the benchmark class directly from `ergon_builtins.benchmarks.<slug>` and call `persist_benchmark(...)`.  The CLI observes via `ergon experiment show` / `ergon run status` (added in PR 8).
+
+The `ManagerBackedSandboxRuntime` adapter is shared infrastructure — PR 10a creates it at `ergon_builtins/sandbox/_manager_backed.py`; PR 10b and PR 10c import from there.
 
 ## Files
 
 **Create:**
 
 ```text
-ergon_builtins/ergon_builtins/sandboxes/swebench.py
-ergon_builtins/ergon_builtins/sandboxes/_manager_backed.py
-ergon_builtins/ergon_builtins/toolkits/swebench.py
+ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox.py        # was sandboxes/swebench.py
+ergon_builtins/ergon_builtins/sandbox/_manager_backed.py                      # singular top-level; was sandboxes/_manager_backed.py
+ergon_builtins/ergon_builtins/benchmarks/swebench_verified/toolkit.py        # was toolkits/swebench.py
 ergon_builtins/tests/unit/test_swebench_v2_definition.py
+```
+
+**Rename:**
+
+```text
+ergon_builtins/ergon_builtins/benchmarks/swebench_verified/worker_factory.py
+    → ergon_builtins/ergon_builtins/benchmarks/swebench_verified/workers.py
 ```
 
 **Modify:**
 
 ```text
 ergon_builtins/ergon_builtins/benchmarks/swebench_verified/benchmark.py
-ergon_builtins/ergon_builtins/benchmarks/swebench_verified/worker_factory.py
 ergon_builtins/ergon_builtins/benchmarks/swebench_verified/rubric.py
-ergon_core/tests/unit/runtime/test_experiment_definition_service.py
-ergon_cli/ergon_cli/commands/_registry.py        # add the slug factory
+ergon_builtins/ergon_builtins/benchmarks/README.md                            # add SWEBench row
+ergon_core/tests/unit/runtime/test_definition_writer.py
+tests/fixtures/smoke_components/benchmarks.py            # migrate SweBenchSmokeBenchmark in lockstep
 ```
+
+**Note: no `ergon_cli/ergon_cli/commands/_registry.py` edit.**  PR 6.5 deleted `BUILTIN_EXPERIMENT_FACTORIES`; there is no CLI registry to add an entry to.  The benchmark is discoverable via the `benchmarks/README.md` catalogue and importable from Python.
 
 ## Task 1: Add `SWEBenchSandbox`
 
 - [ ] **Step 1: Extract the shared `ManagerBackedSandboxRuntime`**
 
-Create `ergon_builtins/ergon_builtins/sandboxes/_manager_backed.py` so
-PR 10b and PR 10c can reuse it:
+Create `ergon_builtins/ergon_builtins/sandbox/_manager_backed.py` (PR 6.5 created the empty `sandbox/` package dir specifically for this file) so PR 10b and PR 10c can reuse it:
 
 ```python
 """Adapter that lets a Sandbox subclass delegate to a legacy
@@ -124,13 +127,32 @@ If a manager's API differs (e.g. `delete` instead of `terminate`, no
 adapter — every `*SandboxManager` ends up with the same five
 operations.
 
-PR 6's `LeanSandbox` (which inlined this adapter) must be updated in
-this PR to import from the shared location. The edit is mechanical;
-include it as part of Step 1.
+PR 6.5's `LeanSandbox` at `ergon_builtins/benchmarks/minif2f/sandbox.py` (which inlined this adapter) must be updated in this PR to import from the shared location:
 
-- [ ] **Step 2: Create the SWEBench subclass**
+```python
+# Before (PR 6.5): the adapter was inlined inside benchmarks/minif2f/sandbox.py
+# After (PR 10a): import from the shared module
+from ergon_builtins.sandbox._manager_backed import ManagerBackedSandboxRuntime
+```
 
-`ergon_builtins/ergon_builtins/sandboxes/swebench.py`:
+The edit is mechanical; include it as part of Step 1.  PR 6.5's `# TODO(PR 10a):` markers on the inlined adapter point at this exact change.
+
+- [ ] **Step 2: Resolve the `sandbox/` directory name conflict**
+
+SWEBench currently has both `benchmarks/swebench_verified/sandbox_manager.py` (the manager) AND a `benchmarks/swebench_verified/sandbox/` *directory* containing `Dockerfile`, `e2b.toml.template`, and `utils.py`.  Creating a new `sandbox.py` file at the same level would shadow that directory in Python's module resolution.
+
+Rename the directory first:
+
+```bash
+git mv ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox \
+       ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox_template
+```
+
+Update any `from ergon_builtins.benchmarks.swebench_verified.sandbox.utils import ...` imports to `sandbox_template.utils`.
+
+- [ ] **Step 3: Create the SWEBench subclass**
+
+`ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox.py`:
 
 ```python
 from uuid import uuid4
@@ -139,7 +161,7 @@ from ergon_core.api.sandbox import Sandbox
 from ergon_builtins.benchmarks.swebench_verified.sandbox_manager import (
     SWEBenchSandboxManager,
 )
-from ergon_builtins.sandboxes._manager_backed import (
+from ergon_builtins.sandbox._manager_backed import (
     ManagerBackedSandboxRuntime,
 )
 
@@ -186,18 +208,21 @@ support reconnect-by-id for the synchronous-fanout eval path to work.
 
 ## Task 2: Move Toolkit Construction
 
-- [ ] **Step 1: Move toolkit to shared location**
+- [ ] **Step 1: Move toolkit into the per-benchmark subpackage**
+
+If a `toolkit.py` already exists under `swebench_verified/`, that's the target path — no move needed.  If toolkit logic lives elsewhere, move it:
 
 ```bash
-git mv ergon_builtins/ergon_builtins/benchmarks/swebench_verified/toolkit.py \
-       ergon_builtins/ergon_builtins/toolkits/swebench.py
+# Example if toolkit logic is currently in a sibling location:
+git mv <current_path>/toolkit.py \
+       ergon_builtins/ergon_builtins/benchmarks/swebench_verified/toolkit.py
 ```
+
+**Do NOT create `ergon_builtins/toolkits/`** — PR 6.5 explicitly deleted that top-level dir as a misleading cross-cutting namespace.  Per-benchmark toolkits live alongside their benchmark.
 
 - [ ] **Step 2: Convert toolkit to Pydantic BaseModel**
 
-`SWEBenchToolkit` must be a `BaseModel` so `Worker.toolkit` round-trips
-through `_type` discrimination. The toolkit holds **config**, not
-runtime handles:
+`SWEBenchToolkit` must be a `BaseModel` so `Worker.toolkit` round-trips through `_type` discrimination. The toolkit holds **config**, not runtime handles:
 
 ```python
 from pydantic import BaseModel, ConfigDict
@@ -212,32 +237,34 @@ class SWEBenchToolkit(BaseModel):
 
     def tools(self, sandbox, task):
         # Lazy import keeps runtime tool construction out of the
-        # serialization path.
-        from ergon_builtins.toolkits._swebench_tools import build_tools
+        # serialization path.  PR 6.5's MiniF2FToolkit followed the
+        # same pattern; reference its `# reason:` comment for the
+        # circular-import rationale.
+        from ergon_builtins.benchmarks.swebench_verified._tools import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)
 ```
 
-Move runtime tool construction into a sibling `_swebench_tools.py`
-module; the toolkit serializes; the tools do not.
+Move runtime tool construction into a sibling `_tools.py` module (under `benchmarks/swebench_verified/`); the toolkit serializes; the tools do not.
 
 - [ ] **Step 3: Update all importers**
 
 ```bash
+rg "from ergon_builtins.toolkits\b" ergon_builtins ergon_core   # should be zero hits — PR 6.5 deleted the dir
 rg "from ergon_builtins.benchmarks.swebench_verified.toolkit import" \
   ergon_builtins ergon_core
 ```
 
-Replace with `from ergon_builtins.toolkits.swebench import SWEBenchToolkit`.
+The first command exists to fail loudly if anyone still references the deleted top-level `toolkits/`.  The second is what should resolve cleanly.
 
 ## Task 3: Convert Worker Factory
 
 - [ ] **Step 1: Replace registry-driven factory with direct constructor**
 
-In `ergon_builtins/ergon_builtins/benchmarks/swebench_verified/worker_factory.py`:
+In `ergon_builtins/benchmarks/swebench_verified/workers.py` (renamed from `worker_factory.py`):
 
 ```python
-from ergon_builtins.toolkits.swebench import SWEBenchToolkit
+from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 from ergon_builtins.workers.baselines.react_worker import ReActWorker
 
 
@@ -255,10 +282,9 @@ def make_swebench_worker(
     )
 ```
 
-PR 6's `ReActWorker.toolkit` field gains the `SWEBenchToolkit` member
-of its union (or, if `ReActWorker.toolkit` is a `Toolkit` protocol,
-SWEBench's toolkit automatically satisfies it). Update PR 6's worker
-module type union in the same commit.
+`ReActWorker.toolkit` field gains `SWEBenchToolkit` in its union (PR 6.5's `# TODO(PR 10a/10b/10c):` comment on the field flagged this).  Update the union in the same commit.  PR 11 collapses the union into a `Toolkit` protocol once 3+ toolkits exist.
+
+**Also: parameterise `SWEBenchVerifiedBenchmark.__init__`** to accept `worker_factory` / `sandbox_factory` / `evaluator_factory` kwargs with defaults — mirror the PR 6.5 MiniF2F pattern.  This is what makes the worker swap point real for downstream `experiment.py` / Python authoring users.
 
 ## Task 4: Convert Benchmark Tasks
 
@@ -272,8 +298,8 @@ from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
 
 # Add:
 from ergon_core.api import Benchmark, BenchmarkRequirements, Task
-from ergon_builtins.sandboxes.swebench import SWEBenchSandbox
-from ergon_builtins.benchmarks.swebench_verified.worker_factory import (
+from ergon_builtins.benchmarks.swebench_verified.sandbox import SWEBenchSandbox
+from ergon_builtins.benchmarks.swebench_verified.workers import (
     make_swebench_worker,
 )
 from ergon_builtins.benchmarks.swebench_verified.rubric import (
@@ -304,37 +330,98 @@ Task[SWEBenchTaskPayload](
 )
 ```
 
-## Task 5: Add CLI Factory Entry
+## Task 5: Add SWEBench To The Benchmarks Catalogue
 
 **Files:**
 
-- Modify: `ergon_cli/ergon_cli/commands/_registry.py`
+- Modify: `ergon_builtins/ergon_builtins/benchmarks/README.md` (created in PR 6.5 Task 20)
 
-- [ ] **Step 1: Register the SWEBench experiment factory**
+PR 6.5 killed `BUILTIN_EXPERIMENT_FACTORIES` and the entire CLI authoring route.  There is **no CLI registry to update**.  Discovery is documentation-only.
 
-Per PR 8's "Adding a builtin factory" pattern, append to
-`BUILTIN_EXPERIMENT_FACTORIES`:
+- [ ] **Step 1: Add one row to the catalogue**
 
-```python
-from ergon_builtins.benchmarks.swebench_verified.benchmark import (
-    SWEBenchVerifiedBenchmark,
-)
+Open `ergon_builtins/ergon_builtins/benchmarks/README.md` and add a row for SWEBench under the existing table:
 
-
-def _swebench() -> Experiment:
-    return Experiment(
-        benchmark=SWEBenchVerifiedBenchmark(),
-        name="swebench-verified",
-        description="SWE-bench Verified instances against object-bound API.",
-        metadata={"source": "builtins"},
-    )
-
-
-BUILTIN_EXPERIMENT_FACTORIES["swebench-verified"] = _swebench
+```markdown
+| SWEBench Verified | `ergon_builtins.benchmarks.swebench_verified` | `make_swebench_worker` | `SWEBenchSandbox` |
 ```
 
-If the dict is built with literal initialization, add the entry to the
-literal and re-export `_swebench` for testability.
+- [ ] **Step 2: Document the Python authoring example for SWEBench**
+
+If the README has per-benchmark example snippets, add one for SWEBench mirroring the MiniF2F example PR 6.5 added:
+
+```python
+from ergon_builtins.benchmarks.swebench_verified import (
+    SWEBenchVerifiedBenchmark,
+    make_swebench_worker,
+)
+from ergon_core.api import persist_benchmark, launch_run
+
+benchmark = SWEBenchVerifiedBenchmark(
+    name="swebench-react",
+    metadata={"experiment": "swebench-eval-2026"},
+    worker_factory=make_swebench_worker,
+    limit=10,
+)
+handle = persist_benchmark(benchmark)
+await launch_run(handle.definition_id)
+```
+
+That's the entire "register the benchmark" workflow.  Users discover it via the README; they author runs via Python.
+
+## Task 5.5: Migrate The Matching Smoke Fixture
+
+**Files:**
+
+- Modify: `tests/fixtures/smoke_components/benchmarks.py` — `SweBenchSmokeBenchmark`
+- Modify (if needed): `tests/fixtures/smoke_components/criteria/smoke_rubrics.py` — `SweBenchSmokeRubric`
+
+PR 5's retirement of `_evaluator_bridge` + PR 6's object-bound migration
+created an asymmetry: the **production** SWEBench benchmark migrates to
+`Task` here, but the **smoke fixture** at
+`tests/fixtures/smoke_components/benchmarks.py` still uses `TaskSpec`.
+Both must move together or PR 11 cannot delete `TaskSpec`.
+
+- [ ] **Step 1: Add a concrete `SweBenchSmokeTask(Task[...])` subclass**
+
+Mirrors the named-subclass pattern from PR 6 minif2f. Avoids the
+parameterized-generic ``Task[X]`` discriminator that `import_component`
+cannot resolve via ``getattr(module, "Task[X]")``.
+
+- [ ] **Step 2: Override `build_instances` to return `Task`**
+
+```python
+class SweBenchSmokeTask(Task[SWEBenchTaskPayload]):
+    ...
+
+class SweBenchSmokeBenchmark(_SingleTaskSmokeBenchmark):
+    ...
+
+    def build_instances(self) -> Mapping[str, Sequence[Task[SWEBenchTaskPayload]]]:
+        payload = SWEBenchTaskPayload.model_validate(self.task_payload)
+        task = SweBenchSmokeTask(
+            task_slug=self.task_slug,
+            instance_key="default",
+            description=self.task_description,
+            evaluator_binding_keys=("default", "post-root"),
+            task_payload=payload,
+            evaluators=(
+                SweBenchSmokeRubric(name="default"),
+                SmokePostRootTimingRubric(name="post-root"),
+            ),
+        )
+        return {"default": [task]}
+```
+
+- [ ] **Step 3: Migrate `SweBenchSmokeRubric` to pure Pydantic**
+
+The smoke rubric currently has a custom `__init__(self, *, name, metadata=None)`
+that's incompatible with Pydantic's `model_validate` (used by
+`Evaluator.from_definition`). Replace with the
+`Field(default_factory=tuple, exclude=True)` + `@model_validator(mode="after")`
+pattern (see `ergon_builtins/benchmarks/minif2f/rubric.py` for the
+exemplar). PR 6 did this for `MiniF2FSmokeRubric`; this step does the
+same for the swebench counterpart.
 
 ## Task 6: Tests
 
@@ -344,10 +431,7 @@ Create `ergon_builtins/tests/unit/test_swebench_v2_definition.py`:
 
 ```python
 import pytest
-from ergon_core.api import Experiment
-from ergon_core.core.application.experiments.definition_writer import (
-    persist_definition,
-)
+from ergon_core.api import persist_benchmark
 from ergon_builtins.benchmarks.swebench_verified.benchmark import (
     SWEBenchVerifiedBenchmark,
 )
@@ -355,14 +439,13 @@ from ergon_builtins.benchmarks.swebench_verified.benchmark import (
 
 @pytest.mark.asyncio
 async def test_swebench_persists_object_bound_task_json(session_factory):
-    benchmark = SWEBenchVerifiedBenchmark(limit=1)
-    experiment = Experiment(
-        benchmark=benchmark,
+    benchmark = SWEBenchVerifiedBenchmark(
         name="swebench-smoke",
-        metadata={"created_by": "test"},
+        metadata={"author": "test"},
+        limit=1,
     )
 
-    handle = persist_definition(experiment)
+    handle = persist_benchmark(benchmark)
     with session_factory() as session:
         rows = session.exec(
             "SELECT task_json FROM experiment_definition_tasks "
@@ -406,7 +489,7 @@ async def test_swebench_task_json_round_trips_through_from_definition():
 
 ```bash
 uv run pytest ergon_builtins/tests/unit/test_swebench_v2_definition.py \
-  ergon_core/tests/unit/runtime/test_experiment_definition_service.py -q
+  ergon_core/tests/unit/runtime/test_definition_writer.py -q
 ```
 
 Expected: pass; persisted JSON includes object-bound `_type`s for
@@ -415,15 +498,19 @@ worker, sandbox, and every evaluator entry.
 ## Task 7: Commit
 
 ```bash
-git add ergon_builtins/ergon_builtins/sandboxes/swebench.py \
-        ergon_builtins/ergon_builtins/sandboxes/_manager_backed.py \
-        ergon_builtins/ergon_builtins/toolkits/swebench.py \
+git add ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox.py \
+        ergon_builtins/ergon_builtins/sandbox/_manager_backed.py \
+        ergon_builtins/ergon_builtins/benchmarks/swebench_verified/toolkit.py \
+        ergon_builtins/ergon_builtins/benchmarks/swebench_verified/_tools.py \
         ergon_builtins/ergon_builtins/benchmarks/swebench_verified/benchmark.py \
-        ergon_builtins/ergon_builtins/benchmarks/swebench_verified/worker_factory.py \
-        ergon_builtins/tests/unit/test_swebench_v2_definition.py \
-        ergon_cli/ergon_cli/commands/_registry.py
+        ergon_builtins/ergon_builtins/benchmarks/swebench_verified/workers.py \
+        ergon_builtins/ergon_builtins/benchmarks/minif2f/sandbox.py \
+        ergon_builtins/ergon_builtins/benchmarks/README.md \
+        ergon_builtins/tests/unit/test_swebench_v2_definition.py
 git commit -m "feat(builtins): convert SWEBench to object-bound Task (PR 10a)"
 ```
+
+Note: also includes `benchmarks/minif2f/sandbox.py` because PR 10a updates the MiniF2F sandbox to import the now-shared `ManagerBackedSandboxRuntime` from `sandbox/_manager_backed.py`.
 
 ## PR Ledger
 
@@ -437,16 +524,24 @@ Pydantic-serializable.
 Bridge code retired (partially):
 - SWEBench tasks now carry `task.worker`/`task.sandbox` inline, so
   SWEBench runs no longer hit the `_legacy_worker_bridge` fallback that
-  PR 5 Task 4b put on `worker_execute`. The fallback itself stays alive
-  — it still serves researchrubrics and gdpeval until they migrate in
-  PR 10b/10c. PR 11 deletes the fallback once every benchmark is on
-  object-bound `Task`.
+  PR 5 Task 4b put on `worker_execute`.
+- SWEBench tasks also carry `task.evaluators` inline, so SWEBench runs
+  no longer hit the symmetric `_legacy_evaluator_bridge` fallback that
+  PR 5 (restored post-cleanup) put on `evaluate_task_run`.
+- Both fallbacks stay alive — they still serve researchrubrics, gdpeval,
+  and the matching smoke fixtures until they migrate in PR 10b/10c.
+  PR 11 deletes both bridges once every benchmark is on object-bound
+  `Task`.
 
 Old path still intentionally alive: `swebench_verified/sandbox_manager.py`,
-registry registrations in `ergon_builtins/registry*.py`, the unmigrated
-MiniF2F inline adapter (Step 1 above migrates it), and
-`_legacy_worker_bridge.py` (still required by researchrubrics and
-gdpeval).
+registry registrations in `ergon_builtins/registry*.py`,
+`_legacy_worker_bridge.py`, and `_legacy_evaluator_bridge.py` (the last
+two are still required by researchrubrics, gdpeval, and any unmigrated
+smoke fixtures).
+
+Migrations: this PR adds **no Alembic migration** (the SWEBench changes
+are code-only). The next free migration id is `aabbccdd0005`; reserve
+it for PR 10b if/when needed.
 
 Deletion gate: PR 11 deletes the manager file and registry registrations.
 PR 10c's cross-cutting cleanup verifies migrated benchmarks no longer
