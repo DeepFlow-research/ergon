@@ -107,12 +107,11 @@ def test_core_schema_source_imports_are_directional() -> None:
     assert offenders == []
 
 
-def test_core_uses_hybrid_domain_layout_roots() -> None:
+def test_core_uses_hybrid_layout_roots_without_nominal_domain() -> None:
     core = ROOT / "ergon_core/ergon_core/core"
 
     expected_dirs = {
         "application",
-        "domain",
         "infrastructure",
         "persistence",
         "rest_api",
@@ -132,17 +131,13 @@ def test_core_uses_hybrid_domain_layout_roots() -> None:
     }
 
     assert expected_dirs <= actual_dirs
+    assert "domain" not in actual_dirs
+    assert not (core / "domain").exists()
     assert actual_dirs.isdisjoint(removed_dirs)
 
 
 def test_core_hybrid_layout_import_directions() -> None:
     forbidden_imports = {
-        "domain": (
-            "ergon_core.core.application",
-            "ergon_core.core.persistence",
-            "ergon_core.core.infrastructure",
-            "ergon_core.core.rest_api",
-        ),
         "persistence": (
             "ergon_core.core.application",
             "ergon_core.core.infrastructure",
@@ -157,6 +152,8 @@ def test_core_hybrid_layout_import_directions() -> None:
     offenders: list[str] = []
     for root_name, snippets in forbidden_imports.items():
         root = ROOT / "ergon_core/ergon_core/core" / root_name
+        if not root.exists():
+            continue
         for path in root.rglob("*.py"):
             text = path.read_text()
             for snippet in snippets:
@@ -214,13 +211,14 @@ def test_runtime_event_contract_references_do_not_return() -> None:
 
 
 def test_context_stream_has_single_discriminated_part_union() -> None:
-    generation = ROOT / "ergon_core/ergon_core/core/domain/generation/context_parts.py"
+    context_parts = ROOT / "ergon_core/ergon_core/core/shared/context_parts.py"
     event_payloads = ROOT / "ergon_core/ergon_core/core/persistence/context/event_payloads.py"
 
-    generation_text = generation.read_text()
-    event_payloads_text = event_payloads.read_text()
+    context_parts_text = context_parts.read_text()
 
-    assert "ContextPart = Annotated[" in generation_text
+    assert "ContextPart = Annotated[" in context_parts_text
+    assert "ContextEventType = Literal[" in context_parts_text
+    assert not event_payloads.exists()
     old_generation_names = (
         "Generation" + "Turn",
         "ModelRequest" + "Part",
@@ -233,9 +231,36 @@ def test_context_stream_has_single_discriminated_part_union() -> None:
     )
 
     for name in old_generation_names:
-        assert name not in generation_text
+        assert name not in context_parts_text
     for name in old_payload_names:
-        assert name not in event_payloads_text
+        assert name not in context_parts_text
+
+
+def test_context_contract_has_no_retired_imports_or_aliases() -> None:
+    checked_roots = (
+        ROOT / "ergon_core",
+        ROOT / "ergon_cli",
+        ROOT / "ergon_builtins",
+        ROOT / "tests",
+    )
+    forbidden_snippets = (
+        ".".join(("domain", "generation", "context_parts")),
+        ".".join(("persistence", "context", "event_payloads")),
+        "Worker" + "Yield",
+        "Context" + "Event" + "Payload",
+    )
+
+    offenders: list[str] = []
+    for root in checked_roots:
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts or path == Path(__file__).resolve():
+                continue
+            text = path.read_text()
+            for snippet in forbidden_snippets:
+                if snippet in text:
+                    offenders.append(f"{path.relative_to(ROOT)} references {snippet!r}")
+
+    assert offenders == []
 
 
 def test_generation_provider_resolution_does_not_live_in_core() -> None:

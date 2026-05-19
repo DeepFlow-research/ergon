@@ -16,7 +16,7 @@ from ergon_core.core.application.communication.models import (
 from ergon_core.core.application.read_models.models import (
     RunTaskEvaluationDto,
 )
-from ergon_core.core.persistence.context.event_payloads import ContextEventType
+from ergon_core.core.shared.context_parts import ContextEventType
 from ergon_core.core.persistence.graph.models import (
     GraphTargetType,
     MutationType,

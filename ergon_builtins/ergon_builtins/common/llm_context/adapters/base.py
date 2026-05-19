@@ -2,7 +2,7 @@
 
 from typing import Protocol, TypeVar
 
-from ergon_core.core.domain.generation.context_parts import ContextPartChunk
+from ergon_core.core.shared.context_parts import ContextPartChunk
 
 TranscriptT = TypeVar("TranscriptT")
 ReplayT = TypeVar("ReplayT")

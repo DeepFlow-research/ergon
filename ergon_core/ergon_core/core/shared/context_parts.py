@@ -1,4 +1,4 @@
-"""Core model context-stream types.
+"""Shared context-stream contracts.
 
 These types are used by worker APIs, transcript adapters, persistence, replay,
 and RL extraction. Keep them in core so persistence can import them without
@@ -141,5 +141,11 @@ class ContextPartChunkLog(ContextPartChunk):
         description="Optional worker or policy version that produced the part.",
     )
 
-
-WorkerYield = ContextPartChunk
+ContextEventType = Literal[
+    "system_prompt",
+    "user_message",
+    "assistant_text",
+    "tool_call",
+    "tool_result",
+    "thinking",
+]

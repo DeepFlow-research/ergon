@@ -1,7 +1,7 @@
 """Guards for model field docs that must survive schema export."""
 
 from ergon_core.core.infrastructure.dashboard.event_contracts import DashboardContextEventEvent
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunkLog,
     ThinkingPart,

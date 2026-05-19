@@ -11,10 +11,7 @@ from uuid import UUID
 
 from ergon_core.core.application.communication.models import RunCommunicationThreadDto
 from ergon_core.core.application.graph.models import GraphMutationRecordDto
-from ergon_core.core.persistence.context.event_payloads import (
-    ContextEventPayload,
-    ContextEventType,
-)
+from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.application.evaluation.summary import EvalCriterionStatus
 from ergon_core.core.persistence.telemetry.models import ExperimentCohortStatus
 from ergon_core.core.shared.json_types import JsonObject
@@ -155,7 +152,7 @@ class RunContextEventDto(CamelModel):
     worker_binding_key: str
     sequence: int
     event_type: ContextEventType
-    payload: ContextEventPayload
+    payload: ContextPartChunkLog
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None

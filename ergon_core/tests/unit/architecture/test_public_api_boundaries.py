@@ -38,7 +38,6 @@ PYTHON_DOMAIN_ROOTS = (
 
 EXPORT_FACADE_BOUNDARY_ROOTS = (
     ROOT / "ergon_core" / "ergon_core" / "api",
-    ROOT / "ergon_core" / "ergon_core" / "core" / "domain",
     ROOT / "ergon_core" / "ergon_core" / "core" / "shared",
 )
 
@@ -186,12 +185,14 @@ def test_shared_and_domain_primitives_stay_in_new_core_layout() -> None:
         assert not old_path.exists()
 
     for new_path in (
-        core_root / "domain" / "generation" / "context_parts.py",
+        core_root / "shared" / "context_parts.py",
         core_root / "shared" / "json_types.py",
         core_root / "shared" / "settings.py",
         core_root / "shared" / "utils.py",
     ):
         assert new_path.exists()
+
+    assert not (core_root / "domain").exists()
 
 
 def test_code_does_not_import_old_core_domain_paths() -> None:

@@ -18,10 +18,7 @@ from ergon_core.core.application.communication.models import (
 from ergon_core.core.application.read_models.models import (
     RunTaskEvaluationDto,
 )
-from ergon_core.core.persistence.context.event_payloads import (
-    ContextEventPayload,
-    ContextEventType,
-)
+from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.application.events.base import InngestEventContract
 from ergon_core.core.application.read_models.models import CohortSummaryDto
@@ -243,7 +240,7 @@ class DashboardContextEventEvent(InngestEventContract):
     worker_binding_key: str
     sequence: int
     event_type: ContextEventType
-    payload: ContextEventPayload = Field(
+    payload: ContextPartChunkLog = Field(
         description=(
             "Typed context event payload serialized with model_dump(mode='json') before "
             "being sent through Inngest."
