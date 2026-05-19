@@ -24,7 +24,7 @@ def _run(session: Session) -> UUID:
     session.add(
         RunRecord(
             id=run_id,
-            experiment_id=uuid4(),
+            definition_id=uuid4(),
             workflow_definition_id=uuid4(),
             benchmark_type="ci-task-execution-repository",
             instance_key="sample-1",

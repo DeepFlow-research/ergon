@@ -45,8 +45,12 @@ TZDateTime = DateTime(timezone=True)
 class RunGraphNode(SQLModel, table=True):
     __tablename__ = "run_graph_nodes"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    run_id: UUID = Field(foreign_key="runs.id", index=True)
+    run_id: UUID = Field(foreign_key="runs.id", primary_key=True, index=True)
+    task_id: UUID = Field(
+        default_factory=uuid4,
+        primary_key=True,
+        description="Canonical runtime identity for this task within a run.",
+    )
     instance_key: str = Field(
         description=(
             "Benchmark instance identifier for this node, such as a dataset row or "
@@ -103,7 +107,6 @@ class RunGraphNode(SQLModel, table=True):
 
     parent_task_id: UUID | None = Field(
         default=None,
-        foreign_key="run_graph_nodes.id",
         index=True,
         description=(
             "Self-referential containment parent. Null for definition-seeded roots and set "
@@ -138,11 +141,9 @@ class RunGraphEdge(SQLModel, table=True):
         foreign_key="experiment_definition_task_dependencies.id",
     )
     source_task_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
         index=True,
     )
     target_task_id: UUID = Field(
-        foreign_key="run_graph_nodes.id",
         index=True,
     )
     status: str = Field(index=True)

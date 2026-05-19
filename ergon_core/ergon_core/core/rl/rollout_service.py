@@ -118,7 +118,7 @@ class RolloutService:
                 session.add(
                     RunRecord(
                         id=run_id,
-                        experiment_id=experiment.id,
+                        definition_id=experiment.id,
                         workflow_definition_id=request.definition_id,
                         benchmark_type=benchmark_type,
                         instance_key=f"episode-{index}",

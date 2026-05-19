@@ -38,7 +38,7 @@ def _checkpoint_metadata() -> JsonObject:
 def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirrors RunRecord provenance fields
     definition: DefinitionHandle,
     *,
-    experiment_id: UUID,
+    definition_id: UUID,
     workflow_definition_id: UUID,
     instance_key: str,
     worker_team_json: JsonObject,
@@ -51,7 +51,7 @@ def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirr
 ) -> RunRecord:
     with get_session() as session:
         run = RunRecord(
-            experiment_id=experiment_id,
+            definition_id=definition_id,
             workflow_definition_id=workflow_definition_id,
             benchmark_type=definition.benchmark_type,
             instance_key=instance_key,

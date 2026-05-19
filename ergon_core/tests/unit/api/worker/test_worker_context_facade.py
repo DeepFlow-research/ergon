@@ -71,7 +71,7 @@ class _FakeTaskManagement:
 
     async def restart_task(self, session, command: RestartTaskCommand):
         self.calls.append(("restart", session, command))
-        return SimpleNamespace(node_id=command.node_id)
+        return SimpleNamespace(task_id=command.task_id)
 
 
 class _FakeInspection:
@@ -83,7 +83,7 @@ class _FakeInspection:
         self.calls.append(("list_subtasks", session, run_id, parent_task_id))
         return [
             SubtaskInfo(
-                node_id=uuid4(),
+                task_id=uuid4(),
                 task_slug="child",
                 description="child",
                 status="pending",
@@ -96,7 +96,7 @@ class _FakeInspection:
     def get_subtask(self, session, *, run_id, node_id):
         self.calls.append(("get_subtask", session, run_id, node_id))
         return SubtaskInfo(
-            node_id=node_id,
+            task_id=node_id,
             task_slug="target",
             description="target",
             status="pending",
@@ -149,7 +149,6 @@ def _context(*, run_id, task_id, inspect=None, resource_repo=None) -> WorkerCont
         execution_id=uuid4(),
         definition_id=uuid4(),
         sandbox_id="sbx",
-        node_id=task_id,
         task_mgmt=_FakeTaskManagement(),
         task_inspect=inspect or _FakeInspection(),
         resource_repo=resource_repo or SimpleNamespace(),
@@ -170,7 +169,6 @@ async def test_facade_mutations_call_current_service_command_signatures() -> Non
         execution_id=uuid4(),
         definition_id=uuid4(),
         sandbox_id="sbx",
-        node_id=root_id,
         task_mgmt=mgmt,
         task_inspect=inspect,
         resource_repo=SimpleNamespace(),
@@ -182,7 +180,7 @@ async def test_facade_mutations_call_current_service_command_signatures() -> Non
     restarted = await context.restart_task(child_id)
 
     assert isinstance(mgmt.calls[0][2], CancelTaskCommand)
-    assert mgmt.calls[0][2].node_id == child_id
+    assert mgmt.calls[0][2].task_id == child_id
     assert isinstance(mgmt.calls[1][2], RefineTaskCommand)
     assert mgmt.calls[1][2].new_description == "new description"
     assert isinstance(mgmt.calls[2][2], RestartTaskCommand)
@@ -203,7 +201,7 @@ async def test_facade_inspection_uses_current_service_names() -> None:
 
     assert len(subtasks) == 1
     assert len(descendants) == 1
-    assert task.node_id == child_id
+    assert task.task_id == child_id
     assert [call[0] for call in inspect.calls] == [
         "list_subtasks",
         "descendant_ids",
@@ -244,7 +242,7 @@ async def test_resources_are_run_scoped_not_descendant_scoped(tmp_path: Path) ->
     data = await context.read_resource(resources[0].id)
 
     assert data == b"ok"
-    assert repo.calls[0][2]["node_id"] == sibling_task_id
+    assert repo.calls[0][2]["task_id"] == sibling_task_id
     assert repo.calls[0][2]["task_execution_id"] == execution_id
 
 
@@ -286,7 +284,7 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
             ),
             RunRecord(
                 id=run_id,
-                experiment_id=experiment_id,
+                definition_id=experiment_id,
                 workflow_definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
@@ -295,7 +293,7 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
             ),
             RunRecord(
                 id=other_run_id,
-                experiment_id=experiment_id,
+                definition_id=experiment_id,
                 workflow_definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-2",
@@ -303,7 +301,7 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
                 status=RunStatus.EXECUTING,
             ),
             RunGraphNode(
-                id=root_id,
+                task_id=root_id,
                 run_id=run_id,
                 instance_key="sample-1",
                 task_slug="root",
@@ -311,7 +309,7 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
                 status="running",
             ),
             RunGraphNode(
-                id=sibling_id,
+                task_id=sibling_id,
                 run_id=run_id,
                 instance_key="sample-1",
                 task_slug="sibling",
@@ -322,14 +320,12 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
                 id=sibling_execution_id,
                 run_id=run_id,
                 task_id=sibling_id,
-                node_id=sibling_id,
                 status=TaskExecutionStatus.COMPLETED,
             ),
             RunTaskExecution(
                 id=other_execution_id,
                 run_id=other_run_id,
                 task_id=uuid4(),
-                node_id=uuid4(),
                 status=TaskExecutionStatus.COMPLETED,
             ),
             RunResource(
@@ -355,7 +351,6 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
         execution_id=uuid4(),
         definition_id=definition_id,
         sandbox_id="sbx",
-        node_id=root_id,
         task_mgmt=_FakeTaskManagement(),
         task_inspect=_FakeInspection(),
         resource_repo=RunResourceRepository(),

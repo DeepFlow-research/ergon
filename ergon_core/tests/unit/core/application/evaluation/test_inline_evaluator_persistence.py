@@ -81,7 +81,7 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
             ),
             RunRecord(
                 id=run_id,
-                experiment_id=experiment_id,
+                definition_id=experiment_id,
                 workflow_definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",

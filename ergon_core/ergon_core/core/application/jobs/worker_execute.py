@@ -13,7 +13,9 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import inngest
+from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.events.task_events import TaskReadyEvent
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.resources import RunResourceRepository
@@ -56,16 +58,7 @@ async def run_worker_execute_job(
     )
     span_start = datetime.now(UTC)
 
-    if payload.node_id is None:
-        raise ContractViolationError(
-            "worker-execute requires node_id",
-            run_id=payload.run_id,
-            task_id=payload.task_id,
-            execution_id=payload.execution_id,
-            sandbox_id=payload.sandbox_id,
-        )
-
-    # PR 3: read the typed run-tier view instead of rebuilding Task
+    # Read the typed run-tier view instead of rebuilding Task
     # from definition rows. No definition-tier repository, no component
     # catalog, no raw graph row read in this job — all of that lives
     # inside `graph_repo.node`.
@@ -73,7 +66,7 @@ async def run_worker_execute_job(
         view = await WorkflowGraphRepository().node(
             session,
             run_id=payload.run_id,
-            task_id=payload.task_id or payload.node_id,
+            task_id=payload.task_id,
             sandbox_id=payload.sandbox_id,
         )
     task = view.task
@@ -95,7 +88,6 @@ async def run_worker_execute_job(
         execution_id=payload.execution_id,
         definition_id=payload.definition_id,
         sandbox_id=payload.sandbox_id,
-        node_id=payload.node_id,
         task_mgmt=_task_management_service_for_context(ctx),
         task_inspect=TaskInspectionService(),
         resource_repo=RunResourceRepository(),
@@ -107,7 +99,7 @@ async def run_worker_execute_job(
     context_event_repo.add_listener(dashboard_emitter.on_context_event)
     dashboard_emitter.register_execution(
         execution_id=payload.execution_id,
-        task_node_id=payload.node_id,
+        task_id=payload.task_id,
     )
 
     chunk_count = 0
@@ -210,7 +202,14 @@ class _ReadyDispatch(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    node_id: UUID
+    task_id: UUID
+
+
+class _SpawnTaskStepResult(BaseModel):
+    model_config = {"frozen": True}
+
+    handle: SpawnedTaskHandle
+    ready: list[_ReadyDispatch]
 
 
 class _PlanSubtasksStepResult(BaseModel):
@@ -231,8 +230,45 @@ class _StepAwareTaskManagementService(TaskManagementService):
     def __init__(self, ctx: inngest.Context) -> None:
         self._ctx = ctx
         self._plan_subtasks_call_index = 0
+        self._spawn_task_call_index = 0
         self._active_ready_dispatches: list[_ReadyDispatch] | None = None
         super().__init__(task_ready_dispatcher=self._collect_ready_dispatch)
+
+    async def spawn_dynamic_task(
+        self,
+        *,
+        run_id: UUID,
+        parent_task_id: UUID,
+        task: Task,
+        depends_on: tuple[UUID, ...] = (),
+    ) -> SpawnedTaskHandle:
+        call_index = self._spawn_task_call_index
+        self._spawn_task_call_index += 1
+        step_id = f"spawn-task-{parent_task_id}-{call_index}"
+
+        async def _run_spawn() -> _SpawnTaskStepResult:
+            previous = self._active_ready_dispatches
+            ready: list[_ReadyDispatch] = []
+            self._active_ready_dispatches = ready
+            try:
+                handle = await TaskManagementService.spawn_dynamic_task(
+                    self,
+                    run_id=run_id,
+                    parent_task_id=parent_task_id,
+                    task=task,
+                    depends_on=depends_on,
+                )
+            finally:
+                self._active_ready_dispatches = previous
+            return _SpawnTaskStepResult(handle=handle, ready=ready)
+
+        spawned = await self._ctx.step.run(
+            step_id,
+            _run_spawn,
+            output_type=_SpawnTaskStepResult,
+        )
+        await self._dispatch_collected_ready_events(step_id, spawned.ready)
+        return spawned.handle
 
     async def plan_subtasks(
         self,
@@ -278,7 +314,7 @@ class _StepAwareTaskManagementService(TaskManagementService):
                 task_id=node_id,
             )
         self._active_ready_dispatches.append(
-            _ReadyDispatch(run_id=run_id, definition_id=definition_id, node_id=node_id)
+            _ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=node_id)
         )
 
     async def _dispatch_collected_ready_events(
@@ -290,11 +326,10 @@ class _StepAwareTaskManagementService(TaskManagementService):
             event = TaskReadyEvent(
                 run_id=dispatch.run_id,
                 definition_id=dispatch.definition_id,
-                task_id=None,
-                node_id=dispatch.node_id,
+                task_id=dispatch.task_id,
             )
             await self._ctx.step.send_event(
-                f"{parent_step_id}-dispatch-task-ready-{dispatch.node_id}",
+                f"{parent_step_id}-dispatch-task-ready-{dispatch.task_id}",
                 InngestEvent(
                     name=TaskReadyEvent.name,
                     data=event.model_dump(mode="json"),

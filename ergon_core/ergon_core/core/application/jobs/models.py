@@ -5,7 +5,7 @@ from uuid import UUID
 
 from ergon_core.core.application.events.base import InngestEventContract
 from ergon_core.core.shared.json_types import JsonObject
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class SandboxSetupRequest(InngestEventContract):
@@ -27,7 +27,7 @@ class WorkerExecuteRequest(InngestEventContract):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None
+    task_id: UUID
     execution_id: UUID
     sandbox_id: str
     task_slug: str
@@ -36,13 +36,6 @@ class WorkerExecuteRequest(InngestEventContract):
     worker_type: str
     model_target: str | None = None
     benchmark_type: str
-    node_id: UUID | None = None
-
-    @model_validator(mode="after")
-    def _has_static_or_dynamic_identity(self) -> "WorkerExecuteRequest":
-        if self.task_id is None and self.node_id is None:
-            raise ValueError("WorkerExecuteRequest requires task_id or node_id")
-        return self
 
 
 class PersistOutputsRequest(InngestEventContract):
@@ -99,7 +92,7 @@ class TaskExecuteResult(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    task_id: UUID | None
+    task_id: UUID
     execution_id: UUID
     success: bool = False
     skipped: bool = False
@@ -112,7 +105,7 @@ class TaskPropagateResult(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    task_id: UUID | None
+    task_id: UUID
     newly_ready_tasks: int = 0
     workflow_complete: bool = False
     workflow_failed: bool = False
@@ -162,7 +155,7 @@ class PersistOutputsResult(BaseModel):
 class EvaluatorsResult(BaseModel):
     model_config = {"frozen": True}
 
-    task_id: UUID | None
+    task_id: UUID
     evaluators_found: int = 0
     evaluators_run: int = 0
     scores: list[float | None] = Field(default_factory=list)

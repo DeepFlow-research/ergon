@@ -175,7 +175,7 @@ class ExperimentReadService:
         single symbol once every row lives in ``ExperimentDefinition``.
         """
         runs = list(
-            session.exec(select(RunRecord).where(RunRecord.experiment_id == experiment.id)).all()
+            session.exec(select(RunRecord).where(RunRecord.definition_id == experiment.id)).all()
         )
         task_counts = _task_counts_by_run(session, [run.id for run in runs])
         run_rows = [_run_row(run, total_tasks=task_counts.get(run.id)) for run in runs]
@@ -303,7 +303,7 @@ def _instance_count(session: Session, definition_id: UUID) -> int:
 
 def _run_count(session: Session, experiment_id: UUID) -> int:
     return len(
-        list(session.exec(select(RunRecord.id).where(RunRecord.experiment_id == experiment_id)))
+        list(session.exec(select(RunRecord.id).where(RunRecord.definition_id == experiment_id)))
     )
 
 
@@ -334,7 +334,7 @@ def _run_row(run: RunRecord, *, total_tasks: int | None = None) -> ExperimentRun
 def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, int]:
     return {
         run_id: len(
-            list(session.exec(select(RunGraphNode.id).where(RunGraphNode.run_id == run_id)))
+            list(session.exec(select(RunGraphNode.task_id).where(RunGraphNode.run_id == run_id)))
         )
         for run_id in run_ids
     }

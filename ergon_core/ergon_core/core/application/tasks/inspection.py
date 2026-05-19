@@ -49,7 +49,7 @@ class TaskInspectionService:
                 RunGraphNode.run_id == run_id,
                 RunGraphNode.parent_task_id == parent_task_id,
             )
-            .order_by(RunGraphNode.task_slug, RunGraphNode.id)
+            .order_by(RunGraphNode.task_slug, RunGraphNode.task_id)
         ).all()
         return [self._hydrate(session, n) for n in nodes]
 
@@ -64,7 +64,7 @@ class TaskInspectionService:
         node = session.exec(
             select(RunGraphNode).where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.id == node_id,
+                RunGraphNode.task_id == node_id,
             )
         ).one()
         return self._hydrate(session, node)
@@ -84,13 +84,13 @@ class TaskInspectionService:
                 root_task_id=root_task_id,
             )
             # Collect IDs inside the session scope to avoid DetachedInstanceError.
-            return frozenset(row.id for row in rows)
+            return frozenset(row.task_id for row in rows)
 
     def _hydrate(self, session: Session, node: RunGraphNode) -> SubtaskInfo:
         """Build a SubtaskInfo from a RunGraphNode, attaching deps and output/error."""
         deps = session.exec(
             select(RunGraphEdge.source_task_id).where(
-                RunGraphEdge.target_task_id == node.id,
+                RunGraphEdge.target_task_id == node.task_id,
                 RunGraphEdge.run_id == node.run_id,
             )
         ).all()
@@ -99,12 +99,12 @@ class TaskInspectionService:
         error: str | None = None
 
         if node.status == COMPLETED:
-            output = self._latest_output(session, node.id)
+            output = self._latest_output(session, node.task_id)
         elif node.status == FAILED:
-            error = self._latest_error(session, node.id)
+            error = self._latest_error(session, node.task_id)
 
         return SubtaskInfo(
-            node_id=node.id,
+            task_id=node.task_id,
             task_slug=node.task_slug,
             description=node.description,
             status=node.status,  # type: ignore[arg-type]

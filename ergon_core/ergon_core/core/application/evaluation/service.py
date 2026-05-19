@@ -68,16 +68,10 @@ class EvaluationService:
     def prepare_dispatch(self, command: DispatchEvaluatorsCommand) -> PreparedEvaluatorDispatch:
         session = get_session()
         try:
-            node = session.get(RunGraphNode, command.node_id)
+            node = session.get(RunGraphNode, (command.run_id, command.task_id))
             if node is None:
-                raise LookupError(f"run graph node not found: {command.node_id}")
-            task_id = command.task_id or node.task_id
-            if task_id is None:
-                return PreparedEvaluatorDispatch(
-                    node_id=command.node_id,
-                    task_id=None,
-                    evaluators_found=0,
-                )
+                raise LookupError(f"run graph task not found: {command.task_id}")
+            task_id = node.task_id
             task_evals = list(
                 session.exec(
                     select(ExperimentDefinitionTaskEvaluator).where(
@@ -89,7 +83,6 @@ class EvaluationService:
             )
             if not task_evals:
                 return PreparedEvaluatorDispatch(
-                    node_id=command.node_id,
                     task_id=task_id,
                     evaluators_found=0,
                 )
@@ -119,7 +112,6 @@ class EvaluationService:
                     )
                 )
             return PreparedEvaluatorDispatch(
-                node_id=command.node_id,
                 task_id=task_id,
                 evaluators_found=len(task_evals),
                 valid_evaluators=valid_evaluators,
@@ -173,7 +165,6 @@ class EvaluationService:
         self,
         *,
         run_id: UUID,
-        node_id: UUID,
         task_execution_id: UUID,
         task_id: UUID,
         binding_key: str,
@@ -189,7 +180,6 @@ class EvaluationService:
                 session,
                 CreateTaskEvaluation(
                     run_id=run_id,
-                    node_id=node_id,
                     task_execution_id=task_execution_id,
                     task_id=task_id,
                     definition_evaluator_id=evaluator_id,
@@ -207,7 +197,7 @@ class EvaluationService:
                 dashboard_dto=build_dashboard_evaluation_dto(
                     evaluation_id=evaluation.id,
                     run_id=run_id,
-                    task_id=node_id,
+                    task_id=task_id,
                     total_score=result.score,
                     created_at=evaluation.created_at,
                     summary=summary,
@@ -220,7 +210,6 @@ class EvaluationService:
         self,
         *,
         run_id: UUID,
-        node_id: UUID,
         task_execution_id: UUID,
         task_id: UUID,
         binding_key: str,
@@ -242,7 +231,6 @@ class EvaluationService:
                 session,
                 CreateTaskEvaluation(
                     run_id=run_id,
-                    node_id=node_id,
                     task_execution_id=task_execution_id,
                     task_id=task_id,
                     definition_evaluator_id=evaluator_id,

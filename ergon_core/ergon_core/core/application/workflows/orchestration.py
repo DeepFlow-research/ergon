@@ -27,10 +27,9 @@ class TaskDescriptor(BaseModel):
 
     model_config = {"frozen": True}
 
-    task_id: UUID | None = None
+    task_id: UUID
     task_slug: str
     parent_task_id: UUID | None = None
-    node_id: UUID | None = None
 
 
 class InitializeWorkflowCommand(BaseModel):
@@ -57,14 +56,13 @@ class PrepareTaskExecutionCommand(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None
-    node_id: UUID | None = None
+    task_id: UUID
 
 
 class PreparedTaskExecution(BaseModel):
     """Output of ``TaskExecutionService.prepare``.
 
-    ``task_id`` is the run graph node id after PR 11. Worker execution
+    ``task_id`` is the canonical runtime task id. Worker execution
     resolves the concrete object from the run-tier task snapshot.
     """
 
@@ -113,9 +111,8 @@ class PropagateTaskCompletionCommand(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    task_id: UUID | None
+    task_id: UUID
     execution_id: UUID
-    node_id: UUID | None = None
 
 
 class PropagationResult(BaseModel):
@@ -123,7 +120,7 @@ class PropagationResult(BaseModel):
 
     run_id: UUID
     definition_id: UUID
-    completed_task_id: UUID | None
+    completed_task_id: UUID
     ready_tasks: list[TaskDescriptor] = Field(default_factory=list)
     workflow_terminal_state: WorkflowTerminalState = WorkflowTerminalState.NONE
 

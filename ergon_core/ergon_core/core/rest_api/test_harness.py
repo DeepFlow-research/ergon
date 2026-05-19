@@ -347,7 +347,7 @@ def seed_run(
         s.add(experiment)
         s.flush()
         run = RunRecord(
-            experiment_id=experiment.id,
+            definition_id=experiment.id,
             workflow_definition_id=definition_id,
             benchmark_type=body.benchmark_type,
             instance_key=body.instance_key,

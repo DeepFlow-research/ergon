@@ -128,7 +128,7 @@ class RunReadService:
         ) = _build_task_map(nodes, edges, worker_by_binding, timestamps)
 
         execution_task_map: dict[UUID, UUID] = {
-            ex.id: ex.node_id for ex in executions if ex.node_id is not None
+            ex.id: ex.task_id for ex in executions
         }
 
         context_events_by_task = _context_events_by_task(
@@ -149,7 +149,7 @@ class RunReadService:
 
         return RunSnapshotDto(
             id=run_id_str,
-            experiment_id=str(run.experiment_id),
+            experiment_id=str(run.definition_id),
             name=run_name,
             status=run.status,
             tasks=task_map,

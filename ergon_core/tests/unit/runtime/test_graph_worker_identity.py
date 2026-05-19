@@ -122,7 +122,7 @@ def _run(
     session.add(
         RunRecord(
             id=resolved_run_id,
-            experiment_id=experiment_id,
+            definition_id=experiment_id,
             workflow_definition_id=definition_id,
             benchmark_type="minif2f",
             instance_key="sample-1",
@@ -188,8 +188,10 @@ async def test_workflow_initialization_returns_node_ids_for_initial_ready_static
 
     assert len(initialized.initial_ready_tasks) == 1
     ready_task = initialized.initial_ready_tasks[0]
-    node = session.exec(select(RunGraphNode).where(RunGraphNode.id == ready_task.task_id)).one()
-    assert ready_task.node_id == node.id
+    node = session.exec(
+        select(RunGraphNode).where(RunGraphNode.task_id == ready_task.task_id)
+    ).one()
+    assert ready_task.task_id == node.task_id
     assert node.assigned_worker_slug == "minif2f-react"
 
 
@@ -208,7 +210,7 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
         description="Dynamic specialist task",
     )
     node = RunGraphNode(
-        id=node_id,
+        task_id=node_id,
         run_id=run_id,
         instance_key="sample-1",
         task_slug="dynamic-leaf",
@@ -229,8 +231,7 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
         PrepareTaskExecutionCommand(
             run_id=run_id,
             definition_id=definition_id,
-            task_id=None,
-            node_id=node.id,
+            task_id=node.task_id,
         )
     )
 
@@ -275,7 +276,7 @@ async def test_add_subtask_rejects_unknown_worker_slug_before_creating_node() ->
             session,
             AddSubtaskCommand(
                 run_id=run_id,
-                parent_task_id=parent.id,
+                parent_task_id=parent.task_id,
                 task_slug="bad-worker",
                 description="Should not be inserted",
                 assigned_worker_slug="not-a-real-worker",

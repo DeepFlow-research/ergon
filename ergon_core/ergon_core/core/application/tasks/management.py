@@ -150,7 +150,7 @@ class TaskManagementService:
                 session,
                 command.run_id,
                 source_task_id=dep_node_id,
-                target_task_id=node.id,
+                target_task_id=node.task_id,
                 status=EDGE_PENDING,
                 meta=_MANAGER_META,
             )
@@ -162,18 +162,18 @@ class TaskManagementService:
             await self._dispatch_task_ready(
                 run_id=command.run_id,
                 definition_id=definition_id,
-                node_id=node.id,
+                task_id=node.task_id,
             )
 
         logger.info(
             "add_subtask: created node %s (slug=%s) under parent %s",
-            node.id,
+            node.task_id,
             task_slug,
             command.parent_task_id,
         )
 
         return AddSubtaskResult(
-            node_id=node.id,
+            task_id=node.task_id,
             task_slug=task_slug,
             status=PENDING,
         )
@@ -217,14 +217,14 @@ class TaskManagementService:
                     session,
                     run_id,
                     source_task_id=dep,
-                    target_task_id=node.id,
+                    target_task_id=node.task_id,
                     status=EDGE_PENDING,
                     meta=MutationMeta(actor="worker-context", reason="spawn dependency"),
                 )
-            node_id = node.id
+            task_id = node.task_id
             if not depends_on:
                 definition_id = self._resolve_definition_id(session, run_id)
-                dispatch = (run_id, definition_id, node_id)
+                dispatch = (run_id, definition_id, task_id)
             session.commit()
 
         if dispatch is not None:
@@ -234,7 +234,7 @@ class TaskManagementService:
                 node_id=dispatch[2],
             )
 
-        return SpawnedTaskHandle(task_id=node_id)
+        return SpawnedTaskHandle(task_id=task_id)
 
     # ── cancel_task ──────────────────────────────────────────
 
@@ -248,11 +248,11 @@ class TaskManagementService:
         Uses only_if_not_terminal to avoid races. Counts non-terminal
         descendants so the caller knows the cascade scope.
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
+        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.task_id)
         old_status = node.status
 
         if old_status in TERMINAL_STATUSES:
-            raise TaskAlreadyTerminalError(command.node_id, old_status)
+            raise TaskAlreadyTerminalError(command.task_id, old_status)
 
         # The explicit raise above handles the non-concurrent case. The
         # only_if_not_terminal guard below is still required as a safety net:
@@ -262,7 +262,7 @@ class TaskManagementService:
         applied = await self._graph_repo.update_node_status(
             session,
             run_id=command.run_id,
-            node_id=command.node_id,
+            node_id=command.task_id,
             new_status=CANCELLED,
             meta=_MANAGER_META,
             only_if_not_terminal=True,
@@ -270,19 +270,19 @@ class TaskManagementService:
 
         cascaded = 0
         if applied:
-            cascaded = _count_non_terminal_descendants(session, command.run_id, command.node_id)
+            cascaded = _count_non_terminal_descendants(session, command.run_id, command.task_id)
 
         session.commit()
 
         if applied:
             definition_id = self._resolve_definition_id(session, command.run_id)
             execution_id = self._task_execution_repo.latest_execution_id_for_node(
-                session, command.node_id
+                session, command.task_id
             )
             event = TaskCancelledEvent(
                 run_id=command.run_id,
                 definition_id=definition_id,
-                node_id=command.node_id,
+                task_id=command.task_id,
                 execution_id=execution_id,
                 cause="manager_decision",
             )
@@ -295,13 +295,13 @@ class TaskManagementService:
 
         logger.info(
             "cancel_task: node %s status %s -> cancelled (cascaded=%d)",
-            command.node_id,
+            command.task_id,
             old_status,
             cascaded,
         )
 
         return CancelTaskResult(
-            node_id=command.node_id,
+            task_id=command.task_id,
             old_status=old_status,
             cascaded_count=cascaded,
         )
@@ -325,19 +325,19 @@ class TaskManagementService:
             applied = await self._graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=child.id,
+                node_id=child.task_id,
                 new_status=CANCELLED,
                 meta=meta,
                 only_if_not_terminal=True,
             )
             if applied:
-                transitioned.append(child.id)
+                transitioned.append(child.task_id)
 
         events = [
             TaskCancelledEvent(
                 run_id=run_id,
                 definition_id=definition_id,
-                node_id=nid,
+                task_id=nid,
                 execution_id=self._task_execution_repo.latest_execution_id_for_node(session, nid),
                 cause=cause,
             )
@@ -345,7 +345,7 @@ class TaskManagementService:
         ]
         return CancelOrphansResult(
             parent_task_id=parent_task_id,
-            cancelled_node_ids=transitioned,
+            cancelled_task_ids=transitioned,
             events_to_emit=events,
         )
 
@@ -367,13 +367,13 @@ class TaskManagementService:
             applied = await self._graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=child.id,
+                node_id=child.task_id,
                 new_status=BLOCKED,
                 meta=meta,
                 only_if_not_terminal=True,
             )
             if applied:
-                blocked.append(child.id)
+                blocked.append(child.task_id)
 
         return blocked
 
@@ -402,7 +402,7 @@ class TaskManagementService:
         parent_view = await self._graph_repo.node(
             session,
             run_id=command.run_id,
-            task_id=parent.id,
+            task_id=parent.task_id,
         )
 
         slug_to_node_id: dict[TaskSlug, NodeId] = {}
@@ -432,7 +432,7 @@ class TaskManagementService:
                 is_dynamic=True,
                 meta=_MANAGER_META,
             )
-            slug_to_node_id[spec.task_slug] = node.id
+            slug_to_node_id[spec.task_slug] = node.task_id
 
             if not spec.depends_on:
                 roots.append(spec.task_slug)
@@ -485,7 +485,7 @@ class TaskManagementService:
         parent_view = await self._graph_repo.node(
             session,
             run_id=run_id,
-            task_id=parent.id,
+            task_id=parent.task_id,
         )
         return self._subtask_json_from_parent_task(
             parent=parent,
@@ -540,16 +540,16 @@ class TaskManagementService:
         The graph node's description is the single source of truth --
         no definition row to keep in sync.
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
+        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.task_id)
         old_description = node.description
 
         if node.status == RUNNING:
-            raise TaskRunningError(command.node_id, node.status)
+            raise TaskRunningError(command.task_id, node.status)
 
         await self._graph_repo.update_node_field(
             session,
             run_id=command.run_id,
-            node_id=command.node_id,
+            node_id=command.task_id,
             field="description",
             value=command.new_description,
             meta=_MANAGER_META,
@@ -558,11 +558,11 @@ class TaskManagementService:
 
         logger.info(
             "refine_task: node %s description updated",
-            command.node_id,
+            command.task_id,
         )
 
         return RefineTaskResult(
-            node_id=command.node_id,
+            task_id=command.task_id,
             old_description=old_description,
             new_description=command.new_description,
         )
@@ -585,21 +585,21 @@ class TaskManagementService:
         cancels non-terminal downstream targets (stale input) and
         recurses into COMPLETED downstream targets (stale output).
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.node_id)
+        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.task_id)
         old_status = node.status
 
         if old_status not in TERMINAL_STATUSES:
-            raise TaskNotTerminalError(command.node_id, old_status)
+            raise TaskNotTerminalError(command.task_id, old_status)
 
-        invalidated_node_ids = await self._invalidate_downstream(
+        invalidated_task_ids = await self._invalidate_downstream(
             session,
             run_id=command.run_id,
-            node_id=command.node_id,
+            node_id=command.task_id,
         )
 
         # Reset this node's outgoing edges so they re-satisfy on re-run.
         outgoing = self._graph_repo.get_outgoing_edges(
-            session, run_id=command.run_id, node_id=command.node_id
+            session, run_id=command.run_id, node_id=command.task_id
         )
         for edge in outgoing:
             if edge.status != EDGE_PENDING:
@@ -617,7 +617,7 @@ class TaskManagementService:
         await self._graph_repo.update_node_status(
             session,
             run_id=command.run_id,
-            node_id=command.node_id,
+            node_id=command.task_id,
             new_status=PENDING,
             meta=_MANAGER_META,
             only_if_not_terminal=False,
@@ -629,20 +629,20 @@ class TaskManagementService:
         await self._dispatch_task_ready(
             run_id=command.run_id,
             definition_id=definition_id,
-            node_id=command.node_id,
+            node_id=command.task_id,
         )
 
         logger.info(
             "restart_task: node %s status %s -> pending (invalidated=%d)",
-            command.node_id,
+            command.task_id,
             old_status,
-            len(invalidated_node_ids),
+            len(invalidated_task_ids),
         )
 
         return RestartTaskResult(
-            node_id=command.node_id,
+            task_id=command.task_id,
             old_status=old_status,
-            invalidated_node_ids=invalidated_node_ids,
+            invalidated_task_ids=invalidated_task_ids,
         )
 
     # ── Internal helpers ─────────────────────────────────────
@@ -743,7 +743,7 @@ class TaskManagementService:
         await self._graph_repo.update_node_status(
             session,
             run_id=run_id,
-            node_id=node_id,
+            task_id=node_id,
             new_status=CANCELLED,
             meta=MutationMeta(
                 actor="manager-worker",
@@ -757,7 +757,7 @@ class TaskManagementService:
         event = TaskCancelledEvent(
             run_id=run_id,
             definition_id=definition_id,
-            node_id=node_id,
+            task_id=node_id,
             execution_id=execution_id,
             cause="downstream_invalidation",
         )
@@ -902,8 +902,7 @@ class TaskManagementService:
         event = TaskReadyEvent(
             run_id=run_id,
             definition_id=definition_id,
-            task_id=None,
-            node_id=node_id,
+            task_id=node_id,
         )
         if self._task_ready_dispatcher is not None:
             await self._task_ready_dispatcher(run_id, definition_id, node_id)

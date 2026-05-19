@@ -41,7 +41,7 @@ from pydantic import ValidationError
     [
         (
             lambda: RunRecord(
-                experiment_id=uuid4(),
+                definition_id=uuid4(),
                 workflow_definition_id=uuid4(),
                 benchmark_type="ci-test",
                 instance_key="sample-1",
@@ -162,13 +162,13 @@ def test_experiment_record_accepts_optional_cohort_and_required_name():
     assert experiment.parsed_default_worker_team() == {"primary": "test-worker"}
 
 
-def test_run_record_uses_experiment_and_workflow_definition_identity():
-    experiment_id = uuid4()
+def test_run_record_uses_definition_and_workflow_definition_identity():
+    definition_id = uuid4()
     workflow_definition_id = uuid4()
 
     run = RunRecord.model_validate(
         {
-            "experiment_id": str(experiment_id),
+            "definition_id": str(definition_id),
             "workflow_definition_id": str(workflow_definition_id),
             "benchmark_type": "ci-benchmark",
             "instance_key": "sample-1",
@@ -177,12 +177,12 @@ def test_run_record_uses_experiment_and_workflow_definition_identity():
         }
     )
 
-    assert run.experiment_id == experiment_id
+    assert run.definition_id == definition_id
     assert run.workflow_definition_id == workflow_definition_id
     assert run.benchmark_type == "ci-benchmark"
     assert run.instance_key == "sample-1"
     assert run.parsed_worker_team() == {"primary": "test-worker"}
-    assert not hasattr(run, "experiment_definition_id")
+    assert not hasattr(run, "experiment_id")
     assert not hasattr(run, "cohort_id")
 
 
@@ -206,7 +206,7 @@ def test_enum_value_matches_string():
         (
             RunRecord,
             {
-                "experiment_id": str(uuid4()),
+                "definition_id": str(uuid4()),
                 "workflow_definition_id": str(uuid4()),
                 "benchmark_type": "ci-test",
                 "instance_key": "sample-1",

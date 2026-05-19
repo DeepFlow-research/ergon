@@ -3,7 +3,7 @@
 Frozen Pydantic models. Callers never receive raw SQLModel rows.
 
 UUID fields use NewType aliases (RunId, NodeId, etc.) so that type
-checkers catch cross-field swaps — e.g. passing a node_id where a
+checkers catch cross-field swaps — e.g. passing a task id where a
 run_id is expected. The aliases are erased at runtime (zero
 serialization cost).
 """
@@ -44,7 +44,7 @@ class MutationMeta(BaseModel):
 class GraphNodeDto(BaseModel):
     model_config = {"frozen": True}
 
-    id: NodeId
+    task_id: NodeId
     run_id: RunId
     instance_key: str
     task_slug: str
@@ -65,7 +65,7 @@ class GraphTaskRef(BaseModel):
 
     model_config = {"frozen": True}
 
-    node_id: NodeId
+    task_id: NodeId
     task_slug: str
     status: NodeStatus
     level: int
@@ -268,8 +268,8 @@ class RunGraphNodeView(BaseModel):
     already inflated via ``Task.from_definition`` so callers downstream
     of the repo never see ``dict[str, Any]``.
 
-    ``task_id`` is the run graph node id. Static definition ids are not
-    part of the runtime identity after PR 11.
+    ``task_id`` is the runtime identity. Static definition ids are not
+    part of the runtime identity.
     """
 
     model_config = {"frozen": True, "arbitrary_types_allowed": True}

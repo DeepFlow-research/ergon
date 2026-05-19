@@ -15,7 +15,6 @@ class CreateTaskEvaluation(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    node_id: UUID
     task_execution_id: UUID
     task_id: UUID
     definition_evaluator_id: UUID
@@ -48,7 +47,6 @@ class TelemetryRepository:
         evaluation = RunTaskEvaluation(
             id=new_id(),
             run_id=command.run_id,
-            node_id=command.node_id,
             task_execution_id=command.task_execution_id,
             task_id=command.task_id,
             definition_evaluator_id=command.definition_evaluator_id,

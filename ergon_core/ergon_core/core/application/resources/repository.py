@@ -28,7 +28,7 @@ class RunResourceRepository:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID | None = None,
+        task_id: UUID | None = None,
         task_execution_id: UUID | None = None,
         kind: str | None = None,
         name: str | None = None,
@@ -38,18 +38,18 @@ class RunResourceRepository:
             execution = session.get(RunTaskExecution, task_execution_id)
             if execution is None or execution.run_id != run_id:
                 raise ContainmentViolation(
-                    parent_task_id=node_id,
+                    parent_task_id=task_id,
                     target_task_id=task_execution_id,
                 )
             stmt = stmt.where(RunResource.task_execution_id == task_execution_id)
-        if node_id is not None:
-            node = session.get(RunGraphNode, node_id)
+        if task_id is not None:
+            node = session.get(RunGraphNode, (run_id, task_id))
             if node is None or node.run_id != run_id:
                 return []
             execution_ids = session.exec(
                 select(RunTaskExecution.id).where(
                     RunTaskExecution.run_id == run_id,
-                    RunTaskExecution.node_id == node_id,
+                    RunTaskExecution.task_id == task_id,
                 )
             ).all()
             stmt = stmt.where(RunResource.task_execution_id.in_(execution_ids))

@@ -31,9 +31,9 @@ class AddSubtaskCommand(BaseModel):
 
 
 class AddSubtaskResult(BaseModel):
-    """Result snapshot after creating a subtask node."""
+    """Result snapshot after creating a subtask task."""
 
-    node_id: NodeId
+    task_id: NodeId
     task_slug: TaskSlug
     status: str
 
@@ -65,7 +65,7 @@ class PlanSubtasksCommand(BaseModel):
 
 
 class PlanSubtasksResult(BaseModel):
-    """Maps task_slug to created node_id plus identifies root tasks."""
+    """Maps task_slug to created task_id plus identifies root tasks."""
 
     nodes: dict[TaskSlug, NodeId]
     roots: list[TaskSlug]
@@ -77,18 +77,18 @@ class PlanSubtasksResult(BaseModel):
 
 
 class CancelTaskCommand(BaseModel):
-    """Command to cancel a subtask node."""
+    """Command to cancel a subtask."""
 
     run_id: RunId
-    node_id: NodeId
+    task_id: NodeId
 
     model_config = {"frozen": True}
 
 
 class CancelTaskResult(BaseModel):
-    """Result of cancelling a subtask node."""
+    """Result of cancelling a subtask."""
 
-    node_id: NodeId
+    task_id: NodeId
     old_status: str
     cascaded_count: int
 
@@ -102,7 +102,7 @@ class RefineTaskCommand(BaseModel):
     """Command to update description on a pending sub-task."""
 
     run_id: RunId
-    node_id: NodeId
+    task_id: NodeId
     new_description: str = Field(min_length=1)
 
     model_config = {"frozen": True}
@@ -111,7 +111,7 @@ class RefineTaskCommand(BaseModel):
 class RefineTaskResult(BaseModel):
     """Result of refining a subtask description."""
 
-    node_id: NodeId
+    task_id: NodeId
     old_description: str
     new_description: str
 
@@ -130,7 +130,7 @@ class RestartTaskCommand(BaseModel):
     """
 
     run_id: RunId
-    node_id: NodeId
+    task_id: NodeId
 
     model_config = {"frozen": True}
 
@@ -143,9 +143,9 @@ class RestartTaskResult(BaseModel):
     downstream node whose upstream source is being re-run).
     """
 
-    node_id: NodeId
+    task_id: NodeId
     old_status: str
-    invalidated_node_ids: list[NodeId] = Field(default_factory=list)
+    invalidated_task_ids: list[NodeId] = Field(default_factory=list)
 
     model_config = {"frozen": True}
 
@@ -154,7 +154,7 @@ class CancelOrphansResult(BaseModel):
     """Result of cascade-cancelling non-terminal children of a parent node."""
 
     parent_task_id: NodeId
-    cancelled_node_ids: list[NodeId]
+    cancelled_task_ids: list[NodeId]
     events_to_emit: list[TaskCancelledEvent]
 
     model_config = {"frozen": True}
@@ -163,7 +163,7 @@ class CancelOrphansResult(BaseModel):
 class SubtaskInfo(BaseModel):
     """A snapshot of one subtask suitable for the manager to reason over."""
 
-    node_id: NodeId
+    task_id: NodeId
     task_slug: str
     description: str
     status: NodeStatus
@@ -178,7 +178,7 @@ class CleanupResult(BaseModel):
     """Result of cleaning up a cancelled task execution."""
 
     run_id: RunId
-    node_id: NodeId
+    task_id: NodeId
     execution_id: UUID | None
     sandbox_released: bool
     execution_row_updated: bool

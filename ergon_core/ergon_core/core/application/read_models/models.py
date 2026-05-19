@@ -1,7 +1,7 @@
 """Pydantic DTOs for the run detail API surface.
 
 Task structure comes from RunGraphNode + RunGraphEdge rows (the live graph),
-not from ExperimentDefinitionTask. All task keys are RunGraphNode.id.
+not from ExperimentDefinitionTask. All task keys are RunGraphNode.task_id.
 
 """
 
