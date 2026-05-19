@@ -67,7 +67,7 @@ The call reads `run_graph_nodes.task_json`, inflates a `Task`, binds
 - Modify: `ergon_core/ergon_core/api/benchmark/task.py`
 - Modify: `ergon_core/ergon_core/api/worker/worker.py`
 
-- [ ] **Step 1: Add import helper and serialized-form type alias to `task.py`**
+- [x] **Step 1: Add import helper and serialized-form type alias to `task.py`**
 
 ```python
 from importlib import import_module
@@ -105,7 +105,7 @@ Task subclass; trying to mirror it in a parallel typed structure would
 duplicate the schema and rot. The boundary type only asserts what's
 honest at the boundary: "JSON-shaped, value-side typed."
 
-- [ ] **Step 2: Convert `Task` to support runtime identity**
+- [x] **Step 2: Convert `Task` to support runtime identity**
 
 Change `Task.model_config` from frozen to mutable:
 
@@ -174,7 +174,7 @@ During the transition `Task` still has public fields compatible with the
 old runtime shape. PR 5 adds object-bound `worker`, `sandbox`, and
 `evaluators` and starts honoring the `sandbox_id` parameter.
 
-- [ ] **Step 3: Add `Worker.from_definition` and keep `from_buffer`**
+- [x] **Step 3: Add `Worker.from_definition` and keep `from_buffer`**
 
 In `worker.py`, make `Worker` reconstruction available without deleting
 the old dead method yet. Reuse the same serialized-form alias for
@@ -211,7 +211,7 @@ kind), the rename is mechanical.
 
 - Modify: `ergon_core/ergon_core/core/application/graph/models.py`
 
-- [ ] **Step 1: Add model**
+- [x] **Step 1: Add model**
 
 ```python
 from ergon_core.api.benchmark import Task
@@ -239,14 +239,14 @@ removes `node_id` from the public runtime identity.
 
 - Modify: `ergon_core/ergon_core/core/application/graph/repository.py`
 
-- [ ] **Step 1: Import view**
+- [x] **Step 1: Import view**
 
 ```python
 from ergon_core.api.benchmark import Task
 from ergon_core.core.application.graph.models import RunGraphNodeView
 ```
 
-- [ ] **Step 2: Add method**
+- [x] **Step 2: Add method**
 
 ```python
 async def node(
@@ -297,7 +297,7 @@ The OR predicate is transitional. PR 11 changes the lookup to exact
 
 - Modify: `ergon_core/tests/unit/runtime/test_run_graph_task_snapshot.py`
 
-- [ ] **Step 1: Add reconstruction test**
+- [x] **Step 1: Add reconstruction test**
 
 ```python
 @pytest.mark.asyncio
@@ -324,7 +324,7 @@ async def test_graph_repo_node_inflates_task_from_run_tier(session, run_node_fac
     assert view.task.task_id == (row.definition_task_id or row.id)
 ```
 
-- [ ] **Step 2: Add textual boundary test**
+- [x] **Step 2: Add textual boundary test**
 
 ```python
 import inspect
@@ -356,7 +356,7 @@ def test_graph_repo_node_does_not_reference_definition_tier_models() -> None:
     )
 ```
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 ```bash
 uv run pytest ergon_core/tests/unit/runtime/test_run_graph_task_snapshot.py ergon_core/tests/unit/api/test_task_spec_contract.py -q
@@ -372,7 +372,7 @@ The PR 1 ledger pre-registered one identity invariant that PR 2 lands.
 Remove the corresponding `@pytest.mark.xfail` decorator and verify the
 test passes.
 
-- [ ] **Step 1: Remove xfail from `test_task_id_propagates_into_runtime_task_instance`**
+- [x] **Step 1: Remove xfail from `test_task_id_propagates_into_runtime_task_instance`**
 
 In `test_identity_invariants.py`, delete the decorator:
 
@@ -410,7 +410,7 @@ async def test_task_id_propagates_into_runtime_task_instance(
         assert view.task.task_id == canonical_id
 ```
 
-- [ ] **Step 2: Run the ledgers**
+- [x] **Step 2: Run the ledgers**
 
 ```bash
 uv run pytest \

@@ -93,11 +93,27 @@ def _assert_run_graph_node_has_no_definition_task_id_column() -> None:
 
 
 def _assert_task_has_no_model_post_init() -> None:
-    """CLAUDE.md guardrail: no model_post_init in core public API objects."""
+    """CLAUDE.md guardrail: no *user-defined* `model_post_init` in core
+    public API objects.
+
+    Pydantic v2 auto-generates a `model_post_init` on any class that
+    declares a `PrivateAttr` (it just initializes the private slots
+    from their defaults). The guardrail's intent is to forbid
+    user-defined constructors that assemble derived state from public
+    fields — those hide invariants. We check the Task source text to
+    distinguish auto-generation from a hand-written override.
+    """
+
+    import inspect
 
     from ergon_core.api.benchmark.task import Task
 
-    assert "model_post_init" not in Task.__dict__
+    source = inspect.getsource(Task)
+    assert "def model_post_init" not in source, (
+        "Task defines a custom model_post_init. CLAUDE.md forbids this: "
+        "build derived state explicitly in constructors or factory "
+        "classmethods so object construction stays inspectable."
+    )
 
 
 def _assert_worker_from_buffer_is_gone() -> None:

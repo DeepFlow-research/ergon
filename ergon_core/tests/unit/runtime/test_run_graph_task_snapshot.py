@@ -138,6 +138,72 @@ def test_initialize_from_definition_copies_task_json() -> None:
 
 
 @pytest.mark.asyncio
+async def test_graph_repo_node_inflates_task_from_run_tier() -> None:
+    """PR 2 invariant: graph_repo.node reads run_graph_nodes.task_json
+    and returns a typed RunGraphNodeView with the Task already
+    inflated. No definition-tier read; no raw dict in the caller's
+    hands."""
+
+    session = _session()
+    run_id = uuid4()
+    experiment_id, definition_id, _task_id = _seed_definition(
+        session, task_slug="solve", payload={"problem": "p"}
+    )
+    _seed_run(
+        session,
+        experiment_id=experiment_id,
+        definition_id=definition_id,
+        run_id=run_id,
+    )
+
+    repo = WorkflowGraphRepository()
+    # Populate task_json via the PR 1 path so the view has something to
+    # inflate.
+    repo.initialize_from_definition(
+        session,
+        run_id=run_id,
+        definition_id=definition_id,
+        initial_node_status="pending",
+        initial_edge_status="pending",
+        task_payload_model=_EmptyPayload,
+        meta=MutationMeta(actor="test", reason="setup"),
+    )
+    row = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).first()
+    assert row is not None
+
+    canonical_task_id = row.definition_task_id or row.id
+    view = await repo.node(session, run_id=run_id, task_id=canonical_task_id)
+
+    assert view.task.task_slug == "solve"
+    assert view.task_id == canonical_task_id
+    assert view.task.task_id == canonical_task_id
+    assert view.is_dynamic is False
+
+
+def test_graph_repo_node_does_not_reference_definition_tier_models() -> None:
+    """PR 2 textual boundary guard: `graph_repo.node`'s source must not
+    mention definition-tier symbols. The runtime read path goes through
+    run_graph_nodes.task_json only — any subtle import or helper
+    delegation to DefinitionRepository would re-open the read path
+    PR 11 is closing."""
+
+    import inspect
+
+    source = inspect.getsource(WorkflowGraphRepository.node)
+    forbidden = (
+        "DefinitionRepository",
+        "ExperimentDefinitionTask",
+        "task_with_instance",
+        "ComponentCatalogService",
+    )
+    offenders = [symbol for symbol in forbidden if symbol in source]
+    assert offenders == [], (
+        f"WorkflowGraphRepository.node references definition-tier symbols "
+        f"{offenders}; the run-tier read boundary forbids these."
+    )
+
+
+@pytest.mark.asyncio
 async def test_add_node_can_write_dynamic_task_json() -> None:
     session = _session()
     run_id = uuid4()

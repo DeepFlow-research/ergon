@@ -22,6 +22,7 @@ from ergon_core.api.worker import WorkerOutput
 from ergon_core.core.application.resources import RunResourceView
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.api.benchmark import Task
+from ergon_core.test_support.task_factory import task_with_id
 
 
 class _FakeJudgeRuntime:
@@ -194,8 +195,9 @@ class TestResearchRubricsRubric:
 
     def test_can_construct_without_prebound_criteria(self):
         rubric = ResearchRubricsRubric(name="evaluator")
-        task = Task[ResearchRubricsTaskPayload](
-            task_id=uuid4(),
+        task = task_with_id(
+            uuid4(),
+            cls=Task[ResearchRubricsTaskPayload],
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
@@ -230,8 +232,8 @@ class TestResearchRubricsRubric:
 
     def test_aggregate_uses_result_weights(self):
         rubric = ResearchRubricsRubric(name="evaluator")
-        task = Task(
-            task_id=uuid4(),
+        task = task_with_id(
+            uuid4(),
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
@@ -282,8 +284,8 @@ class TestResearchRubricsJudgeCriterion:
             run_id=uuid4(),
             task_id=uuid4(),
             execution_id=uuid4(),
-            task=Task(
-                task_id=uuid4(),
+            task=task_with_id(
+                uuid4(),
                 task_slug="sample",
                 instance_key="default",
                 description="Write a report.",

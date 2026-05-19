@@ -8,6 +8,7 @@ from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.rubric import Rubric
 from ergon_core.api.criterion import CriterionOutcome, ScoreScale
 from ergon_core.api.benchmark import Task
+from ergon_core.test_support.task_factory import task_with_id
 from ergon_core.core.application.evaluation.models import (
     CriterionSpec,
     TaskEvaluationContext,
@@ -73,8 +74,8 @@ async def test_rubric_service_uses_criterion_max_score_not_signed_weight() -> No
             agent_reasoning=None,
         ),
         evaluator,
-        Task(
-            task_id=uuid4(),
+        task_with_id(
+            uuid4(),
             task_slug="task",
             instance_key="default",
             description="Task",

@@ -138,16 +138,39 @@ def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
 # ── Future-PR invariants — xfailed pending implementation ────────────
 
 
-@pytest.mark.xfail(
-    reason="PR 2: graph_repo.node binds task._task_id from the run-tier row",
-    strict=True,
-)
-def test_task_id_propagates_into_runtime_task_instance() -> None:
+@pytest.mark.asyncio
+async def test_task_id_propagates_into_runtime_task_instance() -> None:
     """PR 2 invariant: Task.from_definition binds _task_id; reading
     `task.task_id` on the inflated instance returns the same UUID the
     definition row had."""
 
-    pytest.fail("requires PR 2's typed run-node boundary")
+    session = _session()
+    definition_id, run_id, defn_task_ids = _seed_definition(session)
+
+    repo = WorkflowGraphRepository()
+    repo.initialize_from_definition(
+        session,
+        run_id=run_id,
+        definition_id=definition_id,
+        initial_node_status="pending",
+        initial_edge_status="pending",
+        task_payload_model=_EmptyPayload,
+        meta=MutationMeta(actor="test", reason="identity"),
+    )
+
+    nodes = session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
+    for row in nodes:
+        canonical_id = row.definition_task_id or row.id
+        view = await repo.node(session, run_id=run_id, task_id=canonical_id)
+        assert view.task_id == canonical_id
+        assert view.task.task_id == canonical_id
+    # And the inflated task ids match the original definition task ids
+    seen = set()
+    for row in nodes:
+        canonical_id = row.definition_task_id or row.id
+        view = await repo.node(session, run_id=run_id, task_id=canonical_id)
+        seen.add(view.task.task_id)
+    assert seen == defn_task_ids
 
 
 @pytest.mark.xfail(
