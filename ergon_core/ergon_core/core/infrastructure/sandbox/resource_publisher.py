@@ -1,21 +1,20 @@
-"""Append-only publisher for sandbox artifacts to the RunResource log.
+"""Sandbox filesystem and blob-store adapter for resource publication.
 
-Copies bytes out of an E2B sandbox into a content-addressed blob store on
-the local filesystem, then appends one row per new hash to ``run_resources``.
+Copies bytes out of an E2B sandbox into a content-addressed blob store on the
+local filesystem. Application resource row semantics live in
+``RunResourcePublishService``.
 """
 
-import hashlib
 import logging
-import mimetypes
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any, ClassVar
 from uuid import UUID
 
 from e2b_code_interpreter import AsyncSandbox  # type: ignore[import-untyped]
-from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.application.resources.models import RunResourceView
+from ergon_core.core.application.resources.publishing import RunResourcePublishService
 from ergon_core.core.persistence.shared.enums import RunResourceKind
-from ergon_core.core.application.resources import RunResourceRepository, RunResourceView
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +22,10 @@ _DEFAULT_BLOB_ROOT = Path(os.environ.get("ERGON_BLOB_ROOT", "/var/ergon/blob"))
 
 
 class SandboxResourcePublisher:
-    """Append-only publisher for RunResource rows.
+    """Adapter for reading sandbox files and writing content-addressed blobs.
 
-    Every call that results in a new content hash writes the bytes to the
-    content-addressed blob store at ``${ERGON_BLOB_ROOT}/<hash[:2]>/<hash>``
-    and appends one row to ``run_resources``.  Never updates.  Content-hash
-    dedup makes repeated calls safe.
+    ``sync()`` and ``publish_value()`` remain as compatibility helpers, but
+    they delegate resource append/dedup decisions to ``RunResourcePublishService``.
     """
 
     # Default ``(sandbox_path, resource_kind)`` pairs scanned by ``sync()``.
@@ -53,7 +50,6 @@ class SandboxResourcePublisher:
         self._task_execution_id = task_execution_id
         self._blob_root = blob_root
         self._publish_dirs = publish_dirs if publish_dirs is not None else self.DEFAULT_PUBLISH_DIRS
-        self._resource_repo = RunResourceRepository()
 
     @classmethod
     def from_public_sandbox(
@@ -79,60 +75,14 @@ class SandboxResourcePublisher:
     # ------------------------------------------------------------------
 
     async def sync(self) -> list[RunResourceView]:
-        """Scan the configured publish dirs; append one row for each file whose
-        ``content_hash`` differs from the current latest row at that sandbox
-        path.  Returns Views for the rows that were created (empty if nothing
-        changed).
-        """
-        created: list[RunResourceView] = []
-        for sandbox_dir, resource_kind in self._publish_dirs:
-            entries = await self._list_sandbox_dir(sandbox_dir)
-            for entry in entries:
-                entry_name = self._entry_name(entry)
-                sandbox_full_path = self._entry_path(sandbox_dir, entry)
-                content_bytes = await self._read_sandbox_file(sandbox_full_path)
-                if isinstance(content_bytes, str):
-                    content_bytes = content_bytes.encode("utf-8")
-                content_hash = hashlib.sha256(content_bytes).hexdigest()
-
-                # Durable path is content-addressed: identical bytes -> identical
-                # path.  Any existing row with this file_path in the current task
-                # execution is proof the content is already logged.
-                durable_path = self._blob_path(content_hash)
-                with get_session() as session:
-                    prior = self._resource_repo.latest_by_path(
-                        session,
-                        task_execution_id=self._task_execution_id,
-                        file_path=str(durable_path),
-                    )
-                if prior is not None:
-                    continue  # unchanged
-
-                self._write_blob(content_bytes, content_hash)
-
-                # reason: inline mimetypes to keep module-level namespace clean
-                guessed, _ = mimetypes.guess_type(entry_name)
-                mime = guessed or "application/octet-stream"
-
-                with get_session() as session:
-                    row = self._resource_repo.append(
-                        session,
-                        run_id=self._run_id,
-                        task_execution_id=self._task_execution_id,
-                        kind=resource_kind.value,
-                        name=entry_name,
-                        mime_type=mime,
-                        file_path=str(durable_path),
-                        size_bytes=len(content_bytes),
-                        error=None,
-                        content_hash=content_hash,
-                        metadata={"sandbox_origin": sandbox_full_path},
-                    )
-                    session.commit()
-                    session.refresh(row)
-                created.append(RunResourceView.from_row(row))
-
-        return created
+        """Publish configured sandbox dirs through the application service."""
+        return await RunResourcePublishService().publish_sandbox_files(
+            reader=self,
+            blob_store=self,
+            run_id=self._run_id,
+            task_execution_id=self._task_execution_id,
+            publish_dirs=self._publish_dirs,
+        )
 
     # ------------------------------------------------------------------
     # Non-FS artefact publish -- used by explicit toolkit calls for values
@@ -147,40 +97,16 @@ class SandboxResourcePublisher:
         content: str,
         mime_type: str = "text/plain",
     ) -> RunResourceView | None:
-        """Write ``content`` bytes to the blob store and append a row keyed by
-        ``name``.  Returns ``None`` if an existing row in this task execution
-        already has the same ``content_hash`` (no-op dedup).
-        """
-        content_bytes = content.encode("utf-8")
-        content_hash = hashlib.sha256(content_bytes).hexdigest()
-
-        with get_session() as session:
-            prior = self._resource_repo.find_by_hash(
-                session,
-                task_execution_id=self._task_execution_id,
-                content_hash=content_hash,
-            )
-        if prior is not None:
-            return None  # duplicate, no-op
-
-        durable_path = self._write_blob(content_bytes, content_hash)
-
-        with get_session() as session:
-            row = self._resource_repo.append(
-                session,
-                run_id=self._run_id,
-                task_execution_id=self._task_execution_id,
-                kind=kind.value,
-                name=name,
-                mime_type=mime_type,
-                file_path=str(durable_path),
-                size_bytes=len(content_bytes),
-                error=None,
-                content_hash=content_hash,
-            )
-            session.commit()
-            session.refresh(row)
-        return RunResourceView.from_row(row)
+        """Publish explicit value content through the application service."""
+        return RunResourcePublishService().publish_value(
+            blob_store=self,
+            run_id=self._run_id,
+            task_execution_id=self._task_execution_id,
+            kind=kind,
+            name=name,
+            content=content,
+            mime_type=mime_type,
+        )
 
     # ------------------------------------------------------------------
     # Blob store -- content-addressed local filesystem.
@@ -202,6 +128,12 @@ class SandboxResourcePublisher:
         tmp.rename(path)  # atomic on POSIX
         return path
 
+    def blob_path(self, content_hash: str) -> Path:
+        return self._blob_path(content_hash)
+
+    def write_blob(self, content_bytes: bytes, content_hash: str) -> Path:
+        return self._write_blob(content_bytes, content_hash)
+
     async def _list_sandbox_dir(self, path: str) -> list:
         """List directory entries (``EntryInfo`` from e2b).  Missing directory -> ``[]``."""
         try:
@@ -221,6 +153,12 @@ class SandboxResourcePublisher:
             )
         return await self._sandbox.read_file(path)
 
+    async def list_sandbox_dir(self, path: str) -> list:
+        return await self._list_sandbox_dir(path)
+
+    async def read_sandbox_file(self, path: str) -> bytes | str:
+        return await self._read_sandbox_file(path)
+
     def _entry_name(self, entry: Any) -> str:  # slopcop: ignore[no-typing-any]
         # typing: runtime-protocol
         if hasattr(entry, "name"):  # slopcop: ignore[no-hasattr-getattr]
@@ -235,3 +173,9 @@ class SandboxResourcePublisher:
         if entry_path.startswith("/"):
             return entry_path
         return f"{sandbox_dir.rstrip('/')}/{entry_path}"
+
+    def entry_name(self, entry: Any) -> str:  # slopcop: ignore[no-typing-any]
+        return self._entry_name(entry)
+
+    def entry_path(self, sandbox_dir: str, entry: Any) -> str:  # slopcop: ignore[no-typing-any]
+        return self._entry_path(sandbox_dir, entry)

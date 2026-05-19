@@ -15,10 +15,7 @@ class _FakeGraphRepo:
     async def node(self, _session, *, run_id, task_id, sandbox_id=None):
         del run_id, task_id
         self._seen.append(sandbox_id)
-        sandbox = SimpleNamespace(
-            output_path="/workspace/public-output/",
-            is_live=sandbox_id == "sbx-live",
-        )
+        sandbox = SimpleNamespace(output_path="/workspace/public-output/")
         return SimpleNamespace(task=SimpleNamespace(sandbox=sandbox))
 
 
@@ -37,12 +34,17 @@ class _FakePublisher:
 
 
 class _FakePublishService:
+    call: dict | None = None
+
     async def publish_sandbox_files(self, **kwargs):
+        self.__class__.call = kwargs
         return [object(), object()]
 
 
 @pytest.mark.asyncio
-async def test_persist_outputs_publishes_from_public_sandbox_output_path(monkeypatch) -> None:
+async def test_persist_outputs_publishes_public_sandbox_through_resource_service(
+    monkeypatch,
+) -> None:
     from ergon_core.core.application.jobs import persist_outputs as module
 
     seen_sandbox_ids: list[str | None] = []
@@ -67,3 +69,5 @@ async def test_persist_outputs_publishes_from_public_sandbox_output_path(monkeyp
     assert seen_sandbox_ids == ["sbx-live"]
     assert _FakePublisher.publish_dirs is not None
     assert _FakePublisher.publish_dirs[0][0] == "/workspace/public-output/"
+    assert _FakePublishService.call is not None
+    assert _FakePublishService.call["reader"] is _FakePublishService.call["blob_store"]
