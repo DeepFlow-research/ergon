@@ -5,7 +5,7 @@ serializable: the Pydantic BaseModel carries only config; ``build_tools``
 constructs live ``pydantic_ai.tools.Tool`` instances bound to the sandbox.
 
 Import note: ``SWEBenchToolkit`` is only imported under ``TYPE_CHECKING`` to
-break the runtime cycle ``toolkit.py → _tools.py → toolkit.py``.
+break the runtime cycle ``toolkit.py → tools/tool_builder.py → toolkit.py``.
 # reason: circular import — toolkit.py imports build_tools from this module;
 #         importing SWEBenchToolkit at runtime would re-enter toolkit.py
 #         before it finishes loading.

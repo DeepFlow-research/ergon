@@ -25,7 +25,7 @@ class SWEBenchToolkit(Toolkit):
     def tools(self, sandbox: Any, task: Any) -> list:  # slopcop: ignore[no-typing-any]
         """Build live pydantic_ai Tool instances bound to the v2 sandbox."""
         # reason: circular import — benchmarks/swebench_verified/toolkit.py →
-        # benchmarks/swebench_verified/_tools.py → benchmarks/swebench_verified/toolkit.py
-        from ergon_builtins.benchmarks.swebench_verified._tools import build_tools
+        # benchmarks/swebench_verified/tools/tool_builder.py → benchmarks/swebench_verified/toolkit.py
+        from ergon_builtins.benchmarks.swebench_verified.tools.tool_builder import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)

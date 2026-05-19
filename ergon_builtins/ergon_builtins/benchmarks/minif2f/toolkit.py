@@ -24,9 +24,9 @@ class MiniF2FToolkit(Toolkit):
 
     def tools(self, sandbox: Any, task: Any) -> list:  # slopcop: ignore[no-typing-any]
         """Build live pydantic_ai Tool instances bound to the v2 sandbox."""
-        # reason: circular import — benchmarks/minif2f/toolkit.py → benchmarks/minif2f/_tools.py →
+        # reason: circular import — benchmarks/minif2f/toolkit.py → benchmarks/minif2f/tools/tool_builder.py →
         # benchmarks/minif2f/constants.py → benchmarks/minif2f/__init__.py →
         # benchmark.py → worker_factory.py → benchmarks/minif2f/toolkit.py
-        from ergon_builtins.benchmarks.minif2f._tools import build_tools
+        from ergon_builtins.benchmarks.minif2f.tools.tool_builder import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)

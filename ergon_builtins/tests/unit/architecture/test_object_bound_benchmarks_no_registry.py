@@ -50,6 +50,11 @@ def test_shared_workers_compat_package_is_removed() -> None:
     assert not (ROOT / "ergon_builtins" / "ergon_builtins" / "shared" / "workers").exists()
 
 
+def test_shared_and_evaluators_compat_packages_are_removed() -> None:
+    assert not (SOURCE_ROOT / "shared").exists()
+    assert not (SOURCE_ROOT / "evaluators").exists()
+
+
 def test_worker_imports_use_canonical_paths() -> None:
     forbidden = (
         "ergon_builtins.workers.baselines",
@@ -74,6 +79,24 @@ def test_builtins_do_not_import_private_manager_backed_sandbox_runtime() -> None
         text = path.read_text()
         if any(import_path in text for import_path in forbidden):
             offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
+def test_benchmark_criteria_do_not_import_core_persistence() -> None:
+    offenders: list[str] = []
+    for path in (SOURCE_ROOT / "benchmarks").rglob("criteria/**/*.py"):
+        text = path.read_text()
+        if "ergon_core.core.persistence" in text or "get_session" in text:
+            offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
+def test_benchmark_tools_use_owned_tools_packages() -> None:
+    offenders = [
+        str(path.relative_to(ROOT)) for path in (SOURCE_ROOT / "benchmarks").rglob("_tools.py")
+    ]
 
     assert offenders == []
 

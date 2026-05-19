@@ -5,8 +5,8 @@ helpers that produce pre-configured CodeCheckCriterion /
 LLMJudgeCriterion instances tuned for document-processing evaluation.
 """
 
-from ergon_builtins.evaluators.criteria.code_check import CodeCheckCriterion
-from ergon_builtins.evaluators.criteria.llm_judge import LLMJudgeCriterion
+from ergon_builtins.benchmarks.gdpeval.criteria.code_check import CodeCheckCriterion
+from ergon_builtins.benchmarks.gdpeval.criteria.llm_judge import LLMJudgeCriterion
 
 GDPEvalCriterion = CodeCheckCriterion | LLMJudgeCriterion
 
