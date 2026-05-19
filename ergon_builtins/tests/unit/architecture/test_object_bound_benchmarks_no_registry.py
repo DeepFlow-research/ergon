@@ -64,9 +64,33 @@ def test_worker_imports_use_canonical_paths() -> None:
     assert offenders == []
 
 
+def test_builtins_do_not_import_private_manager_backed_sandbox_runtime() -> None:
+    forbidden = (
+        "ergon_builtins.sandbox._manager_backed",
+        "BaseSandboxManager",
+    )
+    offenders: list[str] = []
+    for path in SOURCE_ROOT.rglob("*.py"):
+        text = path.read_text()
+        if any(import_path in text for import_path in forbidden):
+            offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
 @pytest.mark.parametrize("slug", _MIGRATED_BENCHMARKS)
 def test_benchmark_worker_factories_use_canonical_module(slug: str) -> None:
     benchmark_pkg = SOURCE_ROOT / "benchmarks" / slug
 
     assert (benchmark_pkg / "worker_factory.py").exists()
     assert not (benchmark_pkg / "workers.py").exists()
+
+
+@pytest.mark.parametrize("slug", _MIGRATED_BENCHMARKS)
+def test_e2b_benchmark_sandboxes_use_shared_lifecycle_base(slug: str) -> None:
+    sandbox_file = SOURCE_ROOT / "benchmarks" / slug / "sandbox.py"
+    text = sandbox_file.read_text()
+
+    assert "E2BSandbox" in text
+    assert "async def provision" not in text
+    assert "async def _bind_runtime" not in text
