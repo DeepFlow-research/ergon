@@ -37,8 +37,6 @@ def handle_experiment_show(args: Namespace) -> int:
 
     experiment = detail.experiment
     logger.info("DEFINITION_ID=%s", experiment.definition_id)
-    if experiment.cohort_id is not None:
-        logger.info("COHORT_ID=%s", experiment.cohort_id)
     logger.info("NAME=%s", experiment.name)
     logger.info("BENCHMARK=%s", experiment.benchmark_type)
     logger.info("STATUS=%s", experiment.status)

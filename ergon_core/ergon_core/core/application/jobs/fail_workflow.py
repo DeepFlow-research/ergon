@@ -3,8 +3,6 @@
 import logging
 from datetime import UTC, datetime
 
-from ergon_core.core.application.compat.cohorts import cohort_id_for_trace_from_definition
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -75,7 +73,6 @@ async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedR
 
     with get_session() as session:
         run = session.get(RunRecord, payload.run_id)
-        definition = session.get(ExperimentDefinition, run.definition_id) if run else None
         if run and run.started_at and run.completed_at:
             sink.emit_span(
                 CompletedSpan(
@@ -88,7 +85,6 @@ async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedR
                     attributes={
                         "run_id": str(payload.run_id),
                         "definition_id": str(payload.definition_id),
-                        "cohort_id": cohort_id_for_trace_from_definition(definition),
                         "status": run.status,
                         "error": truncate_text(payload.error),
                     },

@@ -5,7 +5,6 @@ of truth for the definition itself.
 """
 
 from datetime import datetime
-from enum import StrEnum
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -25,100 +24,6 @@ TZDateTime = DateTime(timezone=True)
 # model_validator(mode="after") fires on model_validate() but NOT on direct
 # SQLModel table model construction (SQLModel's __init__ bypasses Pydantic
 # for table=True). Validators here protect the API/deserialization boundary.
-
-# ---------------------------------------------------------------------------
-# Cohort status enum
-# ---------------------------------------------------------------------------
-
-
-class ExperimentCohortStatus(StrEnum):
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-
-
-# ---------------------------------------------------------------------------
-# Historical benchmark-definition telemetry
-# ---------------------------------------------------------------------------
-
-
-class BenchmarkDefinitionRecord(SQLModel, table=True):
-    """Stored shape for the pre-v2 experiments table.
-
-    Active v2 runtime, read models, and test harness paths use
-    ``ExperimentDefinition`` plus run-tier rows. This table remains in the
-    schema until a dedicated migration removes it.
-    """
-
-    __tablename__ = "experiments"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    cohort_id: UUID | None = Field(
-        default=None,
-        foreign_key="experiment_cohorts.id",
-        index=True,
-    )
-    name: str = Field(index=True)
-    benchmark_type: str = Field(index=True)
-    sample_count: int
-    sample_selection_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    default_worker_team_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    default_evaluator_slug: str | None = Field(default=None, index=True)
-    default_model_target: str | None = None
-    sandbox_slug: str | None = Field(default=None, index=True)
-    dependency_extras_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    design_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    seed: int | None = None
-    metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    status: str = Field(default="defined", index=True)
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-    started_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-    completed_at: datetime | None = Field(default=None, sa_type=TZDateTime)
-    experiment: str | None = Field(
-        default=None,
-        index=True,
-        description=(
-            "Optional experiment tag.  Records that share the same tag belong "
-            "to the same logical experiment (e.g. a multi-arm study).  "
-            "None means the record is not grouped into any named experiment."
-        ),
-    )
-
-    def parsed_sample_selection(self) -> JsonObject:
-        return self.__class__._parse_json_object(
-            self.sample_selection_json, "sample_selection_json"
-        )
-
-    def parsed_default_worker_team(self) -> JsonObject:
-        return self.__class__._parse_json_object(
-            self.default_worker_team_json, "default_worker_team_json"
-        )
-
-    def parsed_design(self) -> JsonObject:
-        return self.__class__._parse_json_object(self.design_json, "design_json")
-
-    def parsed_dependency_extras(self) -> JsonObject:
-        return self.__class__._parse_json_object(
-            self.dependency_extras_json, "dependency_extras_json"
-        )
-
-    def parsed_metadata(self) -> JsonObject:
-        return self.__class__._parse_json_object(self.metadata_json, "metadata_json")
-
-    @classmethod
-    def _parse_json_object(cls, data: dict, field_name: str) -> JsonObject:
-        if not isinstance(data, dict):
-            raise ValueError(f"{field_name} must be a dict, got {type(data).__name__}")
-        return data
-
-    @model_validator(mode="after")
-    def _validate_fields(self) -> "BenchmarkDefinitionRecord":
-        self.__class__._parse_json_object(self.sample_selection_json, "sample_selection_json")
-        self.__class__._parse_json_object(self.default_worker_team_json, "default_worker_team_json")
-        self.__class__._parse_json_object(self.dependency_extras_json, "dependency_extras_json")
-        self.__class__._parse_json_object(self.design_json, "design_json")
-        self.__class__._parse_json_object(self.metadata_json, "metadata_json")
-        return self
-
 
 # ---------------------------------------------------------------------------
 # RunRecord
@@ -390,72 +295,6 @@ class RunTaskEvaluation(SQLModel, table=True):
         if not isinstance(self.summary_json, dict):
             raise ValueError(f"summary_json must be a dict, got {type(self.summary_json).__name__}")
         return self
-
-
-# ---------------------------------------------------------------------------
-# ExperimentCohort
-# ---------------------------------------------------------------------------
-
-
-class ExperimentCohort(SQLModel, table=True):
-    """A named grouping of runs that the operator monitors as one unit."""
-
-    __tablename__ = "experiment_cohorts"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    name: str = Field(index=True, unique=True)
-    description: str | None = None
-    created_by: str | None = None
-    status: ExperimentCohortStatus = Field(default=ExperimentCohortStatus.ACTIVE)
-    metadata_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-    updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-    # -- JSON accessor: metadata_json --
-
-    def parsed_metadata(self) -> JsonObject:
-        return self.__class__._parse_metadata(self.metadata_json)
-
-    @classmethod
-    def _parse_metadata(cls, data: dict) -> JsonObject:
-        if not isinstance(data, dict):
-            raise ValueError(f"metadata_json must be a dict, got {type(data).__name__}")
-        return data
-
-    @model_validator(mode="after")
-    def _validate_fields(self) -> "ExperimentCohort":
-        self.__class__._parse_metadata(self.metadata_json)
-        try:
-            ExperimentCohortStatus(self.status)
-        except ValueError:
-            raise ValueError(
-                f"{self.status!r} is not a valid ExperimentCohortStatus; "
-                f"valid values: {[e.value for e in ExperimentCohortStatus]}"
-            )
-        return self
-
-
-# ---------------------------------------------------------------------------
-# ExperimentCohortStats
-# ---------------------------------------------------------------------------
-
-
-class ExperimentCohortStats(SQLModel, table=True):
-    """Denormalized aggregate snapshot for a cohort."""
-
-    __tablename__ = "experiment_cohort_stats"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    cohort_id: UUID = Field(foreign_key="experiment_cohorts.id", index=True, unique=True)
-    total_runs: int = 0
-    completed_runs: int = 0
-    failed_runs: int = 0
-    average_score: float | None = None
-    best_score: float | None = None
-    worst_score: float | None = None
-    average_duration_ms: int | None = None
-    failure_rate: float = 0.0
-    updated_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
 
 
 # ---------------------------------------------------------------------------

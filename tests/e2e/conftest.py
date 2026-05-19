@@ -84,7 +84,7 @@ def run_benchmark(
     extras: str = "none",
     model: str = "stub:constant",
     limit: int = 1,
-    cohort: str = "ci",
+    experiment: str = "ci",
     timeout: int = 120,
 ) -> subprocess.CompletedProcess:
     """Define and run an experiment via the ergon CLI."""
@@ -105,8 +105,8 @@ def run_benchmark(
         extras,
         "--limit",
         str(limit),
-        "--cohort",
-        cohort,
+        "--experiment",
+        experiment,
     ]
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     define = subprocess.run(
@@ -158,10 +158,10 @@ def benchmarked():
         sandbox: str,
         extras: str = "none",
         limit: int = 1,
-        cohort: str = "ci",
+        experiment: str = "ci",
         timeout: int = 120,
     ) -> subprocess.CompletedProcess:
-        key = (slug, worker, evaluator, sandbox, extras, cohort)
+        key = (slug, worker, evaluator, sandbox, extras, experiment)
         if key not in cache:
             cache[key] = run_benchmark(
                 slug,
@@ -170,7 +170,7 @@ def benchmarked():
                 sandbox=sandbox,
                 extras=extras,
                 limit=limit,
-                cohort=cohort,
+                experiment=experiment,
                 timeout=timeout,
             )
         return cache[key]

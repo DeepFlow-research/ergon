@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Run one smoke driver locally against an already-up stack.
 #
-# Usage: scripts/smoke_local_run.sh <env> [<cohort_size>]
+# Usage: scripts/smoke_local_run.sh <env> [<experiment_group_size>]
 #   env:         researchrubrics | minif2f | swebench-verified
-#   cohort_size: integer, default 1 (local iteration preset).
-#                CI uses 3; pass 3 here to mirror CI exactly.
+#   experiment_group_size: integer, default 1 (local iteration preset).
+#                          CI uses 3; pass 3 here to mirror CI exactly.
 #
 # Host-side pytest talks to the dockerised stack via HTTP (see
 # ``tests/e2e/_submit.py``).  ``scripts/smoke_local_up.sh`` must have
@@ -12,8 +12,8 @@
 
 set -euo pipefail
 
-env_slug="${1:?usage: smoke_local_run.sh <env> [cohort_size]}"
-cohort_size="${2:-1}"
+env_slug="${1:?usage: smoke_local_run.sh <env> [experiment_group_size]}"
+experiment_group_size="${2:-1}"
 
 case "${env_slug}" in
   researchrubrics)   pyfile="tests/e2e/test_researchrubrics_smoke.py" ;;
@@ -29,10 +29,10 @@ for var in ERGON_DATABASE_URL ERGON_API_BASE_URL; do
   fi
 done
 
-export SMOKE_COHORT_SIZE="${cohort_size}"
+export SMOKE_EXPERIMENT_GROUP_SIZE="${experiment_group_size}"
 export SMOKE_ENV="${env_slug}"
 
-echo "-> Running ${pyfile} with SMOKE_COHORT_SIZE=${cohort_size}"
+echo "-> Running ${pyfile} with SMOKE_EXPERIMENT_GROUP_SIZE=${experiment_group_size}"
 echo "   (env: ${env_slug}, harness: ${ERGON_API_BASE_URL})"
 echo
 

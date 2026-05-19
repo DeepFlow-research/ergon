@@ -1,8 +1,8 @@
 "use client";
 
-import { ExperimentCohortStatus, RunLifecycleStatus, TaskStatus } from "@/lib/types";
+import { RunLifecycleStatus, TaskStatus } from "@/lib/types";
 
-type StatusType = TaskStatus | RunLifecycleStatus | ExperimentCohortStatus;
+type StatusType = TaskStatus | RunLifecycleStatus;
 
 interface StatusConfig {
   label: string;
@@ -72,20 +72,6 @@ const statusConfig: Record<string, StatusConfig> = {
     solidBorder: "oklch(0.85 0.10 295)",
     solidText: "oklch(0.40 0.16 295)",
     animate: true,
-  },
-  active: {
-    label: "Active",
-    dot: "var(--status-ready)",
-    solidBg: "oklch(0.97 0.03 240)",
-    solidBorder: "oklch(0.86 0.08 240)",
-    solidText: "oklch(0.40 0.12 240)",
-  },
-  archived: {
-    label: "Archived",
-    dot: "var(--status-cancelled)",
-    solidBg: "var(--paper-2)",
-    solidBorder: "var(--line)",
-    solidText: "var(--muted)",
   },
 };
 

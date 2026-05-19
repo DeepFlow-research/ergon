@@ -37,24 +37,22 @@ async function expectNoTimelinePlaybackControls(page: import("@playwright/test")
   await expect(page.getByTestId("activity-step-forward")).toHaveCount(0);
 }
 
-test("run page keeps cohort breadcrumb context", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+test("run page links back to experiments", async ({ page }) => {
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
 
-  await expect(page.getByTestId("run-breadcrumb-cohort")).toContainText(
-    "minif2f-react-worker-gpt5v3",
-  );
+  await expect(page.getByTestId("run-header")).toContainText("Experiments");
   await expect(page.getByTestId("run-header")).toContainText("parallel");
 });
 
 test("run workspace does not expose manual live or timeline mode controls", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
 
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
   await expectNoTimelinePlaybackControls(page);
 });
 
 test("run workspace shows rerun as unavailable until backend support exists", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
 
   const rerunButton = page.getByTestId("rerun-button");
   await expect(rerunButton).toBeVisible();
@@ -64,7 +62,7 @@ test("run workspace shows rerun as unavailable until backend support exists", as
 
 test("snapshot selection does not expose playback or speed controls", async ({ page }) => {
   await page.goto(
-    `/cohorts/${CONCURRENT_MAS_FIXTURE_IDS.cohortId}/runs/${CONCURRENT_MAS_FIXTURE_IDS.runId}`,
+    `/run/${CONCURRENT_MAS_FIXTURE_IDS.runId}`,
   );
 
   await expect(page.getByTestId("activity-stack-region")).toBeVisible();
@@ -80,7 +78,7 @@ test("activity marker locks graph and header to snapshot until Escape returns to
   page,
 }) => {
   await page.goto(
-    `/cohorts/${CONCURRENT_MAS_FIXTURE_IDS.cohortId}/runs/${CONCURRENT_MAS_FIXTURE_IDS.runId}`,
+    `/run/${CONCURRENT_MAS_FIXTURE_IDS.runId}`,
   );
 
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
@@ -107,7 +105,7 @@ test("activity marker locks graph and header to snapshot until Escape returns to
 });
 
 test("graph selection opens workspace evidence sections", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
 
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
   await expect(page.getByTestId("workspace-launcher")).toBeVisible();
@@ -192,7 +190,7 @@ test("graph selection opens workspace evidence sections", async ({ page }) => {
 });
 
 test("persisted run snapshot remains inspectable after refresh", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
   await page.reload();
 
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
@@ -206,7 +204,7 @@ test("persisted run snapshot remains inspectable after refresh", async ({ page }
 });
 
 test("run debugger panels can be resized and persist across reloads", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
 
   await expect(page.getByTestId("graph-canvas")).toBeVisible();
   await expect(page.getByTestId("timeline-region")).toBeVisible();

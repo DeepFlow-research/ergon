@@ -4,7 +4,6 @@ import inngest
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RolloutBatch,
     RolloutBatchRun,
     RunRecord,
@@ -17,7 +16,6 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 @pytest.fixture()
 def session_factory():
-    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -30,7 +28,6 @@ def session_factory():
             RunRecord.__table__,
             RolloutBatch.__table__,
             RolloutBatchRun.__table__,
-            BenchmarkDefinitionRecord.__table__,
         ],
     )
 
@@ -71,11 +68,9 @@ def test_rollout_submit_uses_rollout_batch_and_run_definition_without_legacy_rec
     )
 
     with session_factory() as session:
-        legacy_rows = list(session.exec(select(BenchmarkDefinitionRecord)).all())
         batch = session.get(RolloutBatch, response.batch_id)
         runs = list(session.exec(select(RunRecord)).all())
 
-    assert legacy_rows == []
     assert batch is not None
     assert batch.definition_id == definition_id
     assert {run.definition_id for run in runs} == {definition_id}

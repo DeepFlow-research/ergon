@@ -18,7 +18,6 @@ from ergon_core.core.persistence.definitions.models import (
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RunRecord,
     RunTaskEvaluation,
     RunTaskExecution,
@@ -44,12 +43,6 @@ def _seed_inline_evaluator_run(session: Session) -> tuple:
     execution_id = uuid4()
     session.add_all(
         [
-            BenchmarkDefinitionRecord(
-                id=definition_id,
-                name="bench",
-                benchmark_type="bench",
-                sample_count=1,
-            ),
             ExperimentDefinition(
                 id=definition_id,
                 benchmark_type="bench",

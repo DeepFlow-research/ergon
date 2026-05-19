@@ -24,7 +24,7 @@ Artifact layout:
     │   ├── run_graph_mutations.jsonl
     │   └── run_context_events.jsonl
     ├── screenshots/
-    │   ├── cohort_index.png
+    │   ├── experiment_index.png
     │   └── run_detail.png
     └── report.md                # stitched human/agent-readable summary
 """
@@ -190,7 +190,7 @@ async def capture_dashboard(
 ) -> dict[str, str]:
     """Screenshot the two dashboard pages that matter for a rollout.
 
-    ``/`` — cohort index (confirms the run exists in the aggregate list).
+    ``/`` — experiment index (confirms the run exists in the aggregate list).
     ``/run/<run_id>`` — run detail (agent graph, turn timeline, outputs).
 
     Returns a ``{page_name: screenshot_path}`` map.  Failures on either
@@ -209,11 +209,11 @@ async def capture_dashboard(
     try:
         await page.goto("/")
         await page.wait_for_load_state("networkidle")
-        shot = shots_dir / "cohort_index.png"
+        shot = shots_dir / "experiment_index.png"
         await page.screenshot(path=str(shot), full_page=True)
-        captured["cohort_index"] = str(shot.relative_to(out_dir))
+        captured["experiment_index"] = str(shot.relative_to(out_dir))
     except Exception:  # slopcop: ignore[no-broad-except]
-        logger.exception("capture_dashboard: cohort_index screenshot failed")
+        logger.exception("capture_dashboard: experiment_index screenshot failed")
     finally:
         await page.close()
 

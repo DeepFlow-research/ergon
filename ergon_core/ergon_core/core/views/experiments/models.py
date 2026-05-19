@@ -17,7 +17,6 @@ class ExperimentStatusCountsDto(BaseModel):
 
 class ExperimentSummaryDto(BaseModel):
     definition_id: UUID
-    cohort_id: UUID | None = None
     name: str
     description: str | None = None
     benchmark_type: str

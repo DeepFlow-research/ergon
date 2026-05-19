@@ -37,8 +37,7 @@ function workerTeamLabel(workerTeam: Record<string, unknown>) {
   return entries.map(([key, value]) => `${key}: ${String(value)}`).join(", ");
 }
 
-function runLink(runId: string, cohortId: string | null) {
-  if (cohortId) return `/cohorts/${cohortId}/runs/${runId}`;
+function runLink(runId: string) {
   return `/run/${runId}`;
 }
 
@@ -62,10 +61,10 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <Link
-            href={experiment.cohort_id ? `/cohorts/${experiment.cohort_id}` : "/experiments"}
+            href="/experiments"
             className="text-sm text-[var(--muted)] hover:text-[var(--ink)]"
           >
-            {experiment.cohort_id ? "Cohort" : "Experiments"}
+            Experiments
           </Link>
           <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[var(--ink)]">
             {experiment.name}
@@ -196,7 +195,7 @@ export default async function ExperimentPage({ params }: ExperimentPageProps) {
               <tr key={run.run_id} className="border-b border-[var(--line)] last:border-0">
                 <td className="px-4 py-3">
                   <Link
-                    href={runLink(run.run_id, experiment.cohort_id ?? null)}
+                    href={runLink(run.run_id)}
                     className="font-mono text-xs text-[var(--ink)] underline-offset-2 hover:underline"
                   >
                     {run.run_id}

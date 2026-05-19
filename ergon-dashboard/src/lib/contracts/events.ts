@@ -14,9 +14,6 @@ import {
   DashboardWorkflowStartedEventSchema as GeneratedDashboardWorkflowStartedEventSchema,
 } from "@/generated/events";
 import {
-  CohortSummary,
-  CohortSummarySchema,
-  parseCohortSummary,
   parseRunCommunicationMessage,
   parseRunCommunicationThread,
   parseRunSandbox,
@@ -70,11 +67,6 @@ export const DashboardWorkflowStartedDataSchema = z.object({
   started_at: z.string().datetime({ offset: true }),
   total_tasks: z.number().int(),
   total_leaf_tasks: z.number().int(),
-});
-
-export const DashboardCohortUpdatedDataSchema = z.object({
-  cohort_id: z.string().uuid(),
-  summary: CohortSummarySchema,
 });
 
 export const DashboardThreadMessageCreatedDataSchema = z.object({
@@ -154,10 +146,6 @@ export type DashboardResourcePublishedData = GeneratedDashboardResourcePublished
 export type DashboardSandboxCreatedData = GeneratedDashboardSandboxCreatedEvent;
 export type DashboardSandboxCommandData = GeneratedDashboardSandboxCommandEvent;
 export type DashboardSandboxClosedData = GeneratedDashboardSandboxClosedEvent;
-export interface DashboardCohortUpdatedData {
-  cohort_id: string;
-  summary: CohortSummary;
-}
 export interface DashboardThreadMessageCreatedData {
   run_id: string;
   thread: ReturnType<typeof parseRunCommunicationThread>;
@@ -218,14 +206,6 @@ function camelizeSnapshotKeys(input: unknown): unknown {
       key === "payload" ? value : camelizeSnapshotKeys(value),
     ]),
   );
-}
-
-export function parseDashboardCohortUpdatedData(input: unknown): DashboardCohortUpdatedData {
-  const parsed = DashboardCohortUpdatedDataSchema.parse(input);
-  return {
-    cohort_id: parsed.cohort_id,
-    summary: parseCohortSummary(parsed.summary),
-  };
 }
 
 export function parseDashboardThreadMessageCreatedData(

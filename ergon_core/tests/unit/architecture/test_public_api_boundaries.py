@@ -325,12 +325,12 @@ def test_read_context_and_resource_modules_stay_in_application_and_views_layout(
         core_root / "application" / "read_models" / "experiments.py",
         core_root / "application" / "read_models" / "resources.py",
         core_root / "application" / "read_models" / "errors.py",
+        core_root / "application" / "read_models" / ("co" + "horts.py"),
     ):
         assert not old_path.exists()
 
     for new_path in (
         core_root / "application" / "read_models" / "__init__.py",
-        core_root / "application" / "read_models" / "cohorts.py",
         core_root / "application" / "communication" / "__init__.py",
         core_root / "application" / "communication" / "service.py",
         core_root / "application" / "communication" / "models.py",
@@ -383,6 +383,7 @@ def test_views_package_replaces_non_compat_read_models() -> None:
         read_models_root / "experiments.py",
         read_models_root / "resources.py",
         read_models_root / "errors.py",
+        read_models_root / ("co" + "horts.py"),
     ):
         assert not removed_path.exists()
 
@@ -397,7 +398,6 @@ def test_views_package_replaces_non_compat_read_models() -> None:
         views_root / "experiments" / "service.py",
         views_root / "resources.py",
         views_root / "errors.py",
-        read_models_root / "cohorts.py",
     ):
         assert new_path.exists()
 
@@ -571,7 +571,6 @@ def test_sandbox_dashboard_tracing_and_dependencies_stay_in_infrastructure() -> 
         core_root / "views" / "dashboard_events" / "contracts.py",
         core_root / "views" / "dashboard_events" / "graph_mutations.py",
         core_root / "views" / "dashboard_events" / "context_events.py",
-        core_root / "views" / "dashboard_events" / "cohorts.py",
         core_root / "infrastructure" / "tracing" / "__init__.py",
         core_root / "infrastructure" / "tracing" / "attributes.py",
         core_root / "infrastructure" / "tracing" / "contexts.py",

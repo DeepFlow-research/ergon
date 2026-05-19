@@ -15,12 +15,10 @@ from ergon_core.core.infrastructure.dashboard import emitter as dashboard_emitte
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
 from ergon_core.core.views.dashboard_events import contracts as event_contracts
 from ergon_core.core.views.dashboard_events.contracts import (
-    CohortUpdatedEvent,
     DashboardTaskStatusChangedEvent,
     DashboardThreadMessageCreatedEvent,
     DashboardWorkflowStartedEvent,
 )
-from ergon_core.core.views.compat.cohorts import CohortSummaryDto
 from ergon_core.core.views.runs.models import RunSnapshotDto
 
 
@@ -59,10 +57,6 @@ def test_thread_dto_exposes_summary_and_task_identity() -> None:
     assert "summary" in RunCommunicationThreadDto.model_fields
     assert "task_id" in RunCommunicationThreadDto.model_fields
     assert "task_id" in RunCommunicationMessageDto.model_fields
-
-
-def test_cohort_updated_event_uses_cohort_summary_dto() -> None:
-    assert CohortUpdatedEvent.model_fields["summary"].annotation is CohortSummaryDto
 
 
 def test_workflow_started_event_embeds_run_snapshot_contract() -> None:
