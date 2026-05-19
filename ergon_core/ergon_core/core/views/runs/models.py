@@ -179,3 +179,17 @@ class RunSnapshotDto(CamelModel):
     cancelled_tasks: int = 0
     final_score: float | None = None
     error: str | None = None
+
+
+class RunSummaryDto(BaseModel):
+    id: UUID
+    status: str
+    created_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    definition_id: UUID
+    benchmark_type: str
+    instance_key: str
+    evaluator_slug: str | None = None
+    model_target: str | None = None
+    error_message: str | None = None

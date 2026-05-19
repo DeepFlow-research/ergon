@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.run import handle_run
+from ergon_cli.domains.runs.commands import handle_run
 
 
 def register_run_parser(subparsers: argparse._SubParsersAction) -> None:

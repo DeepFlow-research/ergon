@@ -9,6 +9,7 @@ from ergon_core.core.views.experiments.models import (
     ExperimentRunRowDto,
     ExperimentStatusCountsDto,
     ExperimentSummaryDto,
+    ExperimentTagDefinitionDto,
 )
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
@@ -51,6 +52,43 @@ class ExperimentReadService:
                 return _definition_detail(session, definition)
 
             return None
+
+    def distinct_tags(self) -> list[str]:
+        with get_session() as session:
+            tags = {
+                tag
+                for tag in session.exec(select(RunRecord.experiment)).all()
+                if isinstance(tag, str) and tag
+            }
+        return sorted(tags)
+
+    def definitions_by_tag(self, tag: str) -> list[ExperimentTagDefinitionDto]:
+        with get_session() as session:
+            runs = list(
+                session.exec(
+                    select(RunRecord)
+                    .where(RunRecord.experiment == tag)
+                    .order_by(col(RunRecord.created_at).desc())
+                ).all()
+            )
+            latest_by_definition: dict[UUID, RunRecord] = {}
+            for run in runs:
+                latest_by_definition.setdefault(run.definition_id, run)
+
+            rows: list[ExperimentTagDefinitionDto] = []
+            for definition_id, latest_run in latest_by_definition.items():
+                definition = session.get(ExperimentDefinition, definition_id)
+                if definition is None:
+                    continue
+                rows.append(
+                    ExperimentTagDefinitionDto(
+                        definition_id=definition.id,
+                        name=definition.name,
+                        benchmark_type=definition.benchmark_type,
+                        latest_run_status=str(latest_run.status),
+                    )
+                )
+        return rows
 
 
 def _definition_summary(

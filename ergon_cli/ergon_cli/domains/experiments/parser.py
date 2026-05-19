@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.experiment import handle_experiment
+from ergon_cli.domains.experiments.commands import handle_experiment
 
 
 def register_experiment_parser(subparsers: argparse._SubParsersAction) -> None:

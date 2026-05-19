@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID
 
 from ergon_core.core.views.runs.models import (
+    RunSummaryDto,
     RunSnapshotDto,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
@@ -58,6 +59,31 @@ class RunResourceBlob(BaseModel):
 
 class RunReadService:
     """Owns database reads and DTO shaping for run API endpoints."""
+
+    def list_runs(
+        self,
+        *,
+        limit: int = 20,
+        status: str | None = None,
+        definition_id: UUID | None = None,
+        experiment: str | None = None,
+    ) -> list[RunSummaryDto]:
+        with get_session() as session:
+            stmt = select(RunRecord).order_by(col(RunRecord.created_at).desc())
+            if status:
+                stmt = stmt.where(RunRecord.status == status)
+            if definition_id:
+                stmt = stmt.where(RunRecord.definition_id == definition_id)
+            if experiment:
+                stmt = stmt.where(RunRecord.experiment == experiment)
+            stmt = stmt.limit(limit)
+            rows = list(session.exec(stmt).all())
+        return [_run_summary(row) for row in rows]
+
+    def get_run_summary(self, run_id: UUID) -> RunSummaryDto | None:
+        with get_session() as session:
+            run = session.get(RunRecord, run_id)
+        return _run_summary(run) if run is not None else None
 
     def build_run_snapshot(self, run_id: UUID) -> RunSnapshotDto | None:
         with get_session() as session:
@@ -227,6 +253,22 @@ def _display_run_score(score_summary: EvaluationScoreSummary, run_status: str) -
         return None
     # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.
     return score_summary.normalized_score
+
+
+def _run_summary(run: RunRecord) -> RunSummaryDto:
+    return RunSummaryDto(
+        id=run.id,
+        status=str(run.status),
+        created_at=run.created_at,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        definition_id=run.definition_id,
+        benchmark_type=run.benchmark_type,
+        instance_key=run.instance_key,
+        evaluator_slug=run.evaluator_slug,
+        model_target=run.model_target,
+        error_message=run.error_message,
+    )
 
 
 def _blob_root() -> Path:

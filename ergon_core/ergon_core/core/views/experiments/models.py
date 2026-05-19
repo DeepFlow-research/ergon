@@ -88,3 +88,10 @@ class ExperimentDetailDto(BaseModel):
         if self.benchmark_type is None:
             self.benchmark_type = self.experiment.benchmark_type
         return self
+
+
+class ExperimentTagDefinitionDto(BaseModel):
+    definition_id: UUID
+    name: str
+    benchmark_type: str
+    latest_run_status: str | None = None

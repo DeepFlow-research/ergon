@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from ergon_cli.commands import run as run_cmd
 from ergon_cli.main import build_parser
+import ergon_core.core.views.runs.service as core_run_views
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -107,6 +108,8 @@ def test_run_status_prints_status_fields(monkeypatch, capsys):
         worker_team_json={},
         status=RunStatus.COMPLETED,
         created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        started_at=datetime(2026, 3, 1, 12, 1, tzinfo=UTC),
+        completed_at=datetime(2026, 3, 1, 12, 3, tzinfo=UTC),
     )
 
     class FakeSession:
@@ -120,7 +123,7 @@ def test_run_status_prints_status_fields(monkeypatch, capsys):
             assert pk == run_id
             return fake_run
 
-    monkeypatch.setattr(run_cmd, "get_session", lambda: FakeSession())
+    monkeypatch.setattr(core_run_views, "get_session", lambda: FakeSession())
     monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
     rc = run_cmd.status_run(Namespace(run_id=str(run_id)))
@@ -131,6 +134,8 @@ def test_run_status_prints_status_fields(monkeypatch, capsys):
     assert "completed" in out
     assert "ci-benchmark" in out
     assert "sample-1" in out
+    assert "started_at:" in out
+    assert "completed_at:" in out
 
 
 # ---------------------------------------------------------------------------
@@ -140,12 +145,11 @@ def test_run_status_prints_status_fields(monkeypatch, capsys):
 
 def test_run_status_reports_invalid_uuid(monkeypatch, capsys):
     monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
-
     rc = run_cmd.status_run(Namespace(run_id="not-a-valid-uuid"))
 
-    assert rc == 1
+    assert rc == 2
     out = capsys.readouterr().out
-    assert "Invalid UUID" in out or "invalid" in out.lower()
+    assert "valid UUID" in out
 
 
 # ---------------------------------------------------------------------------
@@ -166,12 +170,12 @@ def test_run_status_reports_missing_run(monkeypatch, capsys):
         def get(self, model, pk):
             return None
 
-    monkeypatch.setattr(run_cmd, "get_session", lambda: FakeSession())
+    monkeypatch.setattr(core_run_views, "get_session", lambda: FakeSession())
     monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
     rc = run_cmd.status_run(Namespace(run_id=str(run_id)))
 
-    assert rc == 1
+    assert rc == 3
     out = capsys.readouterr().out
     assert str(run_id) in out or "not found" in out.lower() or "No run" in out
 
@@ -201,7 +205,7 @@ def test_run_list_filters_by_definition(monkeypatch, session_factory, capsys):
         session.add(run_other)
         session.commit()
 
-    monkeypatch.setattr(run_cmd, "get_session", session_factory)
+    monkeypatch.setattr(core_run_views, "get_session", session_factory)
     monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
     rc = run_cmd.list_runs(
@@ -230,7 +234,7 @@ def test_run_list_filters_by_experiment_tag(monkeypatch, session_factory, capsys
         session.add(run_other)
         session.commit()
 
-    monkeypatch.setattr(run_cmd, "get_session", session_factory)
+    monkeypatch.setattr(core_run_views, "get_session", session_factory)
     monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
     rc = run_cmd.list_runs(Namespace(definition_id=None, experiment="alpha", status=None, limit=20))

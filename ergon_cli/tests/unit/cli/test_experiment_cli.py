@@ -1,9 +1,9 @@
-import logging
 from argparse import Namespace
 from uuid import uuid4
 
 import pytest
 from ergon_cli.commands import experiment as experiment_cmd
+import ergon_cli.domains.experiments.service as experiment_domain_service
 from ergon_cli.main import build_parser
 from ergon_core.core.views.experiments.models import (
     ExperimentDetailDto,
@@ -71,25 +71,24 @@ def test_experiment_run_subcommand_is_no_longer_registered() -> None:
         parser.parse_args(["experiment", "run", str(uuid4())])
 
 
-def test_experiment_list_logs_rows_without_printing(monkeypatch, caplog, capsys):
+def test_experiment_list_prints_rows(monkeypatch, capsys):
     class FakeReadService:
         def list_experiments(self, *, limit: int):
             assert limit == 3
             return [_summary(name="alpha"), _summary(name="beta", status="running", run_count=2)]
 
-    monkeypatch.setattr(experiment_cmd, "ExperimentReadService", FakeReadService)
-    caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
+    monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeReadService)
 
     rc = experiment_cmd.handle_experiment_list(Namespace(limit=3))
 
     assert rc == 0
-    assert capsys.readouterr().out == ""
-    assert "alpha" in caplog.text
-    assert "beta" in caplog.text
-    assert "running" in caplog.text
+    out = capsys.readouterr().out
+    assert "alpha" in out
+    assert "beta" in out
+    assert "running" in out
 
 
-def test_experiment_show_logs_detail_without_printing(monkeypatch, caplog, capsys):
+def test_experiment_show_prints_detail(monkeypatch, capsys):
     run_id = uuid4()
 
     class FakeReadService:
@@ -110,16 +109,15 @@ def test_experiment_show_logs_detail_without_printing(monkeypatch, caplog, capsy
             )
 
     definition_id = uuid4()
-    monkeypatch.setattr(experiment_cmd, "ExperimentReadService", FakeReadService)
-    caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
+    monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeReadService)
 
     rc = experiment_cmd.handle_experiment_show(Namespace(definition_id=str(definition_id)))
 
     assert rc == 0
-    assert capsys.readouterr().out == ""
-    assert str(definition_id) in caplog.text
-    assert str(run_id) in caplog.text
-    assert "sample-a" in caplog.text
+    out = capsys.readouterr().out
+    assert str(definition_id) in out
+    assert str(run_id) in out
+    assert "sample-a" in out
 
 
 def test_experiment_tag_subcommands_are_registered() -> None:
@@ -133,23 +131,22 @@ def test_experiment_tag_subcommands_are_registered() -> None:
     assert by_tag_args.tag == "alpha"
 
 
-def test_experiment_tags_logs_run_record_experiment_tags(monkeypatch, caplog, capsys):
+def test_experiment_tags_prints_run_record_experiment_tags(monkeypatch, capsys):
     class FakeTagService:
         def distinct_tags(self):
             return ["alpha", "beta"]
 
-    monkeypatch.setattr(experiment_cmd, "ExperimentTagService", FakeTagService)
-    caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
+    monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeTagService)
 
     rc = experiment_cmd.handle_experiment_tags(Namespace())
 
     assert rc == 0
-    assert capsys.readouterr().out == ""
-    assert "alpha" in caplog.text
-    assert "beta" in caplog.text
+    out = capsys.readouterr().out
+    assert "alpha" in out
+    assert "beta" in out
 
 
-def test_experiment_by_tag_logs_definitions_for_run_record_tag(monkeypatch, caplog, capsys):
+def test_experiment_by_tag_prints_definitions_for_run_record_tag(monkeypatch, capsys):
     definition_id = uuid4()
 
     class FakeTagService:
@@ -164,13 +161,12 @@ def test_experiment_by_tag_logs_definitions_for_run_record_tag(monkeypatch, capl
                 )
             ]
 
-    monkeypatch.setattr(experiment_cmd, "ExperimentTagService", FakeTagService)
-    caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
+    monkeypatch.setattr(experiment_domain_service, "ExperimentReadService", FakeTagService)
 
     rc = experiment_cmd.handle_experiment_by_tag(Namespace(tag="alpha"))
 
     assert rc == 0
-    assert capsys.readouterr().out == ""
-    assert str(definition_id) in caplog.text
-    assert "alpha definition" in caplog.text
-    assert "completed" in caplog.text
+    out = capsys.readouterr().out
+    assert str(definition_id) in out
+    assert "alpha definition" in out
+    assert "completed" in out
