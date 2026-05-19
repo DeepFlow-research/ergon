@@ -1,8 +1,18 @@
 """Public worker result models."""
 
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+
+class SpawnedTaskHandle(BaseModel):
+    model_config = {"frozen": True}
+
+    task_id: UUID
+
+    async def wait(self) -> None:
+        raise NotImplementedError("await_completion is deferred in v2")
 
 
 class WorkerOutput(BaseModel):

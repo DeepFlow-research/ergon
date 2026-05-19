@@ -5,12 +5,16 @@ graph-native operations. The service owns the write path for agent-initiated
 subtask mutations; read-only queries live in TaskInspectionService.
 """
 
+from __future__ import annotations
+
 import logging
 from collections import deque
 from uuid import UUID
 
 import inngest
+from ergon_core.api.benchmark.task import Task
 from ergon_core.api.registry import registry
+from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.graph.models import RunGraphNode
@@ -23,6 +27,7 @@ from ergon_core.core.persistence.graph.status_conventions import (
     RUNNING,
     TERMINAL_STATUSES,
 )
+from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.types import NodeId, TaskSlug
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.tasks.errors import (
@@ -158,6 +163,51 @@ class TaskManagementService:
             task_slug=task_slug,
             status=PENDING,
         )
+
+    # ── spawn_dynamic_task ───────────────────────────────────
+
+    async def spawn_dynamic_task(
+        self,
+        *,
+        run_id: UUID,
+        parent_task_id: UUID,
+        task: Task,
+        depends_on: tuple[UUID, ...] = (),
+    ) -> SpawnedTaskHandle:
+        """Insert a dynamic graph node with task JSON; no definition row.
+
+        Used by WorkerContext.spawn_task to make dynamic subtasks
+        graph-native. No experiment_definition_tasks row is written —
+        the full Task snapshot lives in run_graph_nodes.task_json with
+        is_dynamic=True.
+        """
+        with get_session() as session:
+            parent = self._graph_repo.get_node(session, run_id=run_id, node_id=parent_task_id)
+            node = await self._graph_repo.add_node(
+                session,
+                run_id,
+                task_slug=task.task_slug,
+                instance_key=task.instance_key,
+                description=task.description,
+                status=PENDING,
+                parent_node_id=parent_task_id,
+                level=parent.level + 1,
+                task_json=task.model_dump(mode="json"),
+                is_dynamic=True,
+                meta=MutationMeta(actor="worker-context", reason="spawn_task"),
+            )
+            for dep in depends_on:
+                await self._graph_repo.add_edge(
+                    session,
+                    run_id,
+                    source_node_id=dep,
+                    target_node_id=node.id,
+                    status=EDGE_PENDING,
+                    meta=MutationMeta(actor="worker-context", reason="spawn dependency"),
+                )
+            session.commit()
+
+        return SpawnedTaskHandle(task_id=node.id)
 
     # ── cancel_task ──────────────────────────────────────────
 

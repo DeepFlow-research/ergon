@@ -15,7 +15,7 @@ def make_code_check(
     name: str,
     code_template: str,
     *,
-    description: str = "",  # slopcop: ignore[no-str-empty-default]
+    description: str = "",  # slopcop: ignore[no-str-empty-default] # TODO: make this not default = ""
     weight: float = 1.0,
     max_score: float = 1.0,
 ) -> CodeCheckCriterion:
@@ -33,7 +33,7 @@ def make_llm_judge(
     name: str,
     prompt_template: str,
     *,
-    description: str = "",  # slopcop: ignore[no-str-empty-default]
+    description: str = "",  # slopcop: ignore[no-str-empty-default] # TODO: make this not default = ""
     weight: float = 1.0,
     max_score: float = 1.0,
     model: str = "gpt-4o",

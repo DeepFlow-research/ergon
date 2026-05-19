@@ -7,9 +7,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_serializer
 
-# Framework-internal serialization helpers live in a sibling module so
-# the `class Task` definition is the first thing readers of this file
-# see, not 30 lines of discriminator-resolution machinery.
 from ergon_core.api._serialization import TaskDefinitionJson, import_component
 
 if TYPE_CHECKING:

@@ -16,6 +16,7 @@ from ergon_core.api.criterion import (
     ScoreScale,
 )
 from ergon_core.api.errors import (
+    ContainmentViolation,
     CriterionCheckError,
     SandboxKindMismatch,
     SandboxNotLiveError,
@@ -24,7 +25,13 @@ from ergon_core.api.registry import ComponentRegistry, registry
 from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.api.rubric import Evaluator, Rubric, TaskEvaluationResult
 from ergon_core.api.sandbox import Sandbox, SandboxRuntime
-from ergon_core.api.worker import Worker, WorkerContext, WorkerOutput, WorkerStreamItem
+from ergon_core.api.worker import (
+    SpawnedTaskHandle,
+    Worker,
+    WorkerContext,
+    WorkerOutput,
+    WorkerStreamItem,
+)
 
 # Resolve forward references on ``Task`` now that ``Worker``,
 # ``Sandbox``, and ``Evaluator`` are all importable. ``Task`` annotates
@@ -39,6 +46,7 @@ __all__ = [
     "Benchmark",
     "BenchmarkRequirements",
     "ComponentRegistry",
+    "ContainmentViolation",
     "Criterion",
     "CriterionCheckError",
     "CriterionContext",
@@ -54,6 +62,7 @@ __all__ = [
     "SandboxNotLiveError",
     "SandboxRuntime",
     "ScoreScale",
+    "SpawnedTaskHandle",
     "Task",
     "TaskSpec",
     "TaskEvaluationResult",
