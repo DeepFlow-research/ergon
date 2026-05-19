@@ -1,13 +1,14 @@
-"""Test bootstrap for package-local Ergon Core tests."""
+"""Test bootstrap for package-local Ergon CLI tests."""
 
 import sys
 from pathlib import Path
 
-PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOTS = (
-    PACKAGE_ROOT,
-    REPO_ROOT / "ergon_builtins",
+    ROOT / "ergon_cli",
+    ROOT / "ergon_core",
+    ROOT / "ergon_builtins",
+    ROOT / "ergon_ingestion",
 )
 
 for package_root in PACKAGE_ROOTS:

@@ -3,6 +3,11 @@
 from datetime import datetime
 from uuid import UUID
 
+from ergon_core.core.application.compat.legacy_experiments import (
+    cohort_id_from_metadata,
+    dict_metadata,
+    optional_str_metadata,
+)
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -44,7 +49,7 @@ class ExperimentSummaryDto(BaseModel):
 
 class ExperimentRunRowDto(BaseModel):
     run_id: UUID
-    workflow_definition_id: UUID
+    definition_id: UUID
     benchmark_type: str
     instance_key: str
     status: str
@@ -143,7 +148,7 @@ def _definition_summary(
 
     Identity fields (``name``/``description``/``benchmark_type``/``created_by``)
     come directly from the columns Task 1 added.  Run / sample bookkeeping is
-    derived: ``RunRecord.workflow_definition_id`` indexes runs, and
+    derived: ``RunRecord.definition_id`` indexes runs, and
     ``ExperimentDefinitionInstance`` rows index instances.
     """
     run_count = len(runs) if runs is not None else _run_count_by_definition(session, definition.id)
@@ -151,15 +156,15 @@ def _definition_summary(
     metadata = definition.parsed_metadata()
     return ExperimentSummaryDto(
         definition_id=definition.id,
-        cohort_id=_cohort_id_from_metadata(metadata),
+        cohort_id=cohort_id_from_metadata(metadata),
         name=definition.name,
         description=definition.description,
         benchmark_type=definition.benchmark_type,
         sample_count=sample_count,
         status=str(metadata.get("status", "defined")),
-        default_worker_team=_dict_metadata(metadata, "default_worker_team"),
-        default_evaluator_slug=_optional_str_metadata(metadata, "default_evaluator_slug"),
-        default_model_target=_optional_str_metadata(metadata, "default_model_target"),
+        default_worker_team=dict_metadata(metadata, "default_worker_team"),
+        default_evaluator_slug=optional_str_metadata(metadata, "default_evaluator_slug"),
+        default_model_target=optional_str_metadata(metadata, "default_model_target"),
         created_by=definition.created_by,
         created_at=definition.created_at,
         started_at=None,
@@ -175,7 +180,7 @@ def _definition_detail(
     """Build a detail DTO from an ``ExperimentDefinition`` row."""
     runs = list(
         session.exec(
-            select(RunRecord).where(RunRecord.workflow_definition_id == definition.id)
+            select(RunRecord).where(RunRecord.definition_id == definition.id)
         ).all()
     )
     task_counts = _task_counts_by_run(session, [run.id for run in runs])
@@ -198,7 +203,7 @@ def _run_count_by_definition(session: Session, definition_id: UUID) -> int:
     return len(
         list(
             session.exec(
-                select(RunRecord.id).where(RunRecord.workflow_definition_id == definition_id)
+                select(RunRecord.id).where(RunRecord.definition_id == definition_id)
             )
         )
     )
@@ -220,7 +225,7 @@ def _run_row(run: RunRecord, *, total_tasks: int | None = None) -> ExperimentRun
     summary = run.parsed_summary()
     return ExperimentRunRowDto(
         run_id=run.id,
-        workflow_definition_id=run.workflow_definition_id,
+        definition_id=run.definition_id,
         benchmark_type=run.benchmark_type,
         instance_key=run.instance_key,
         status=run.status,
@@ -247,27 +252,6 @@ def _task_counts_by_run(session: Session, run_ids: list[UUID]) -> dict[UUID, int
         )
         for run_id in run_ids
     }
-
-
-def _cohort_id_from_metadata(metadata: dict) -> UUID | None:
-    raw = metadata.get("cohort_id")
-    if raw is None:
-        return None
-    if isinstance(raw, UUID):
-        return raw
-    if isinstance(raw, str):
-        return UUID(raw)
-    return None
-
-
-def _dict_metadata(metadata: dict, key: str) -> dict:
-    value = metadata.get(key)
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _optional_str_metadata(metadata: dict, key: str) -> str | None:
-    value = metadata.get(key)
-    return value if isinstance(value, str) else None
 
 
 def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:

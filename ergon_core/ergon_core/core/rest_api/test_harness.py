@@ -291,7 +291,7 @@ def read_cohort_runs(
     runs = list(
         session.exec(
             select(RunRecord).where(
-                RunRecord.workflow_definition_id.in_(definition_ids)  # type: ignore[attr-defined]
+                RunRecord.definition_id.in_(definition_ids)  # type: ignore[attr-defined]
             )
         ).all(),
     )
@@ -362,7 +362,6 @@ def seed_run(
         s.add(definition)
         run = RunRecord(
             definition_id=body.definition_id,
-            workflow_definition_id=body.definition_id,
             benchmark_type=body.benchmark_type,
             instance_key=body.instance_key,
             worker_team_json=body.worker_team,

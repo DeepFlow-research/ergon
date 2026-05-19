@@ -94,7 +94,6 @@ def _seed_run(
         RunRecord(
             id=run_id,
             definition_id=definition_id,
-            workflow_definition_id=definition_id,
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},

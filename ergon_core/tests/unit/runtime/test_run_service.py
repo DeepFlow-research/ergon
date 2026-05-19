@@ -25,12 +25,11 @@ class _FakeSession:
         return None
 
 
-def test_create_run_requires_definition_identity_and_records_workflow_assignment(monkeypatch):
+def test_create_run_requires_definition_identity_and_records_assignment(monkeypatch):
     session = _FakeSession()
     definition_id = uuid4()
-    workflow_definition_id = uuid4()
     definition = DefinitionHandle(
-        definition_id=workflow_definition_id,
+        definition_id=definition_id,
         benchmark_type="ci-benchmark",
         worker_bindings={"primary": "test-worker"},
         evaluator_bindings={"primary": "test-evaluator"},
@@ -41,7 +40,6 @@ def test_create_run_requires_definition_identity_and_records_workflow_assignment
     run = run_service.create_run(
         definition,
         definition_id=definition_id,
-        workflow_definition_id=workflow_definition_id,
         instance_key="sample-1",
         worker_team_json={"primary": "test-worker"},
         evaluator_slug="test-evaluator",
@@ -52,7 +50,6 @@ def test_create_run_requires_definition_identity_and_records_workflow_assignment
 
     assert session.added == [run]
     assert run.definition_id == definition_id
-    assert run.workflow_definition_id == workflow_definition_id
     assert run.benchmark_type == "ci-benchmark"
     assert run.instance_key == "sample-1"
     assert run.worker_team_json == {"primary": "test-worker"}

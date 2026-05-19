@@ -549,7 +549,7 @@ export function createDashboardSeed(): DashboardHarnessSeedPayload {
     runs: [
       {
         run_id: FIXTURE_IDS.runId,
-        workflow_definition_id: FIXTURE_IDS.definitionId,
+        definition_id: FIXTURE_IDS.definitionId,
         benchmark_type: "minif2f",
         instance_key: "algebra_sample",
         status: "completed",

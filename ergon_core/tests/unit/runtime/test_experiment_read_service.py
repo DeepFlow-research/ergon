@@ -73,7 +73,6 @@ def test_experiment_detail_aggregates_run_analytics(monkeypatch, session_factory
                 RunRecord(
                     id=run_id,
                     definition_id=definition_id,
-                    workflow_definition_id=definition_id,
                     benchmark_type="ci-benchmark",
                     instance_key=instance_key,
                     worker_team_json={"primary": "ci-worker"},

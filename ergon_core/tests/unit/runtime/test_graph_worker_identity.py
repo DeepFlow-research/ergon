@@ -106,7 +106,6 @@ def _run(
         RunRecord(
             id=resolved_run_id,
             definition_id=definition_id,
-            workflow_definition_id=definition_id,
             benchmark_type="minif2f",
             instance_key="sample-1",
             worker_team_json={"primary": "minif2f-react"},

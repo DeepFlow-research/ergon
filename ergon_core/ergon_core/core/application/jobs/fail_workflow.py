@@ -74,7 +74,7 @@ async def run_fail_workflow_job(payload: WorkflowFailedEvent) -> WorkflowFailedR
 
     with get_session() as session:
         run = session.get(RunRecord, payload.run_id)
-        definition = session.get(ExperimentDefinition, run.workflow_definition_id) if run else None
+        definition = session.get(ExperimentDefinition, run.definition_id) if run else None
         cohort_id = _cohort_id_from_definition(definition)
         if run and run.started_at and run.completed_at:
             sink.emit_span(

@@ -73,7 +73,6 @@ def _run_record(*, definition_id: object) -> RunRecord:
     return RunRecord(
         id=uuid4(),
         definition_id=definition_id,
-        workflow_definition_id=definition_id,
         benchmark_type="ci-benchmark",
         instance_key="k",
         worker_team_json={},
@@ -93,7 +92,6 @@ def test_run_status_prints_status_fields(monkeypatch, capsys):
     fake_run = RunRecord(
         id=run_id,
         definition_id=definition_id,
-        workflow_definition_id=definition_id,
         benchmark_type="ci-benchmark",
         instance_key="sample-1",
         worker_team_json={},

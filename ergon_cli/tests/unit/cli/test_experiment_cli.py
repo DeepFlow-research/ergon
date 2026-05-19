@@ -100,7 +100,7 @@ def test_experiment_show_logs_detail_without_printing(monkeypatch, caplog, capsy
                 runs=[
                     ExperimentRunRowDto(
                         run_id=run_id,
-                        workflow_definition_id=uuid4(),
+                        definition_id=uuid4(),
                         benchmark_type="ci-benchmark",
                         instance_key="sample-a",
                         status="completed",

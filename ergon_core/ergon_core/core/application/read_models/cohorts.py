@@ -4,6 +4,10 @@ from collections import Counter
 from dataclasses import dataclass, field
 from uuid import UUID
 
+from ergon_core.core.application.compat.cohorts import (
+    cohort_id_from_metadata,
+    optional_str_metadata,
+)
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -26,8 +30,6 @@ from ergon_core.core.application.read_models.models import (
 )
 from ergon_core.core.shared.utils import utcnow
 from sqlmodel import Session, select
-
-COHORT_METADATA_KEY = "cohort_id"
 
 
 # TODO: this should not be a dataclass, it should be a Pydantic model
@@ -108,7 +110,7 @@ class ExperimentCohortService:
                     list(
                         session.exec(
                             select(RunRecord).where(
-                                RunRecord.workflow_definition_id == definition.id
+                                RunRecord.definition_id == definition.id
                             )
                         ).all()
                     ),
@@ -134,10 +136,10 @@ class ExperimentCohortService:
             run = session.get(RunRecord, run_id)
             if run is None:
                 return None
-            definition = session.get(ExperimentDefinition, run.workflow_definition_id)
+            definition = session.get(ExperimentDefinition, run.definition_id)
             if definition is None:
                 return None
-            return _cohort_id_from_metadata(definition.parsed_metadata())
+            return cohort_id_from_metadata(definition.parsed_metadata())
 
     def update_cohort(
         self, cohort_id: UUID, request: UpdateCohortRequest
@@ -169,7 +171,7 @@ class ExperimentCohortService:
                 list(
                     session.exec(
                         select(RunRecord).where(
-                            RunRecord.workflow_definition_id.in_(definition_ids)  # type: ignore[attr-defined]
+                            RunRecord.definition_id.in_(definition_ids)  # type: ignore[attr-defined]
                         )
                     ).all()
                 )
@@ -272,8 +274,8 @@ class ExperimentCohortService:
                 len(runs),
             ),
             created_at=definition.created_at,
-            default_model_target=_optional_str_metadata(metadata, "default_model_target"),
-            default_evaluator_slug=_optional_str_metadata(metadata, "default_evaluator_slug"),
+            default_model_target=optional_str_metadata(metadata, "default_model_target"),
+            default_evaluator_slug=optional_str_metadata(metadata, "default_evaluator_slug"),
             final_score=score,
             total_cost_usd=total_cost_usd,
             error_message=None,
@@ -312,19 +314,8 @@ def _definitions_for_cohort(session: Session, cohort_id: UUID) -> list[Experimen
     return [
         definition
         for definition in session.exec(select(ExperimentDefinition)).all()
-        if _cohort_id_from_metadata(definition.parsed_metadata()) == cohort_id
+        if cohort_id_from_metadata(definition.parsed_metadata()) == cohort_id
     ]
-
-
-def _cohort_id_from_metadata(metadata: dict) -> UUID | None:
-    raw = metadata.get(COHORT_METADATA_KEY)
-    if raw is None:
-        return None
-    if isinstance(raw, UUID):
-        return raw
-    if isinstance(raw, str):
-        return UUID(raw)
-    return None
 
 
 def _instance_count(session: Session, definition_id: UUID) -> int:
@@ -337,11 +328,6 @@ def _instance_count(session: Session, definition_id: UUID) -> int:
             )
         )
     )
-
-
-def _optional_str_metadata(metadata: dict, key: str) -> str | None:
-    value = metadata.get(key)
-    return value if isinstance(value, str) else None
 
 
 def _rubric_status_summary(summaries: list[EvaluationSummary]) -> RubricStatusSummary:

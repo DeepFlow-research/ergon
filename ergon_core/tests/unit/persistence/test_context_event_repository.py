@@ -59,7 +59,6 @@ def _execution_fixture(session: Session) -> tuple:
         RunRecord(
             id=run_id,
             definition_id=definition_id,
-            workflow_definition_id=definition_id,
             benchmark_type="unit",
             instance_key="instance",
             status=RunStatus.EXECUTING,

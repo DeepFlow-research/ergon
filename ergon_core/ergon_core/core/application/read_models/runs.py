@@ -1,16 +1,11 @@
 """Read service for dashboard/API run snapshots and related views."""
 
 import os
-from collections import defaultdict
 from pathlib import Path
-from statistics import mean
 from uuid import UUID
 
 from ergon_core.core.application.read_models.models import (
     RunSnapshotDto,
-    TrainingCurvePointDto,
-    TrainingMetricDto,
-    TrainingSessionDto,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.definitions.models import (
@@ -27,8 +22,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
     Thread,
     ThreadMessage,
-    TrainingMetric,
-    TrainingSession,
 )
 from ergon_core.core.application.graph.models import GraphMutationRecordDto
 from ergon_core.core.application.evaluation.scoring import (
@@ -47,7 +40,7 @@ from ergon_core.core.application.read_models.run_snapshot import (
 )
 from ergon_core.core.application.read_models.resources import require_viewable_resource_size
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import select
 
 
 class RunResourceBlob(BaseModel):
@@ -67,11 +60,11 @@ class RunReadService:
             if run is None:
                 return None
 
-            definition = session.get(ExperimentDefinition, run.workflow_definition_id)
+            definition = session.get(ExperimentDefinition, run.definition_id)
             if definition is None:
                 return None
 
-            def_id = run.workflow_definition_id
+            def_id = run.definition_id
             nodes = list(
                 session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all()
             )
@@ -235,132 +228,12 @@ class RunReadService:
             filename=resource.name,
         )
 
-    def list_training_curves(
-        self,
-        *,
-        definition_id: UUID | None,
-        cohort_id: UUID | None,
-    ) -> list[TrainingCurvePointDto]:
-        with get_session() as session:
-            stmt = select(RunRecord)
-            if definition_id:
-                stmt = stmt.where(RunRecord.workflow_definition_id == definition_id)
-            if cohort_id:
-                definition_ids = _definition_ids_for_cohort(session, cohort_id)
-                if not definition_ids:
-                    return []
-                stmt = stmt.where(
-                    RunRecord.workflow_definition_id.in_(definition_ids)  # type: ignore[attr-defined]
-                )
-            stmt = stmt.order_by(RunRecord.created_at)
-            runs = list(session.exec(stmt).all())
-
-            all_run_ids = [r.id for r in runs]
-            evals = list(
-                session.exec(
-                    select(RunTaskEvaluation).where(RunTaskEvaluation.run_id.in_(all_run_ids))  # type: ignore[union-attr]
-                ).all()
-            )
-
-        scores_by_run: dict[UUID, list[float]] = defaultdict(list)
-        for ev in evals:
-            if ev.score is not None:
-                scores_by_run[ev.run_id].append(ev.score)
-
-        points: list[TrainingCurvePointDto] = []
-        for run in runs:
-            summary = run.parsed_summary()
-            step = summary.get("checkpoint_step")
-            if step is None:
-                continue
-
-            run_scores = scores_by_run.get(run.id, [])
-            if not run_scores:
-                continue
-
-            points.append(
-                TrainingCurvePointDto(
-                    run_id=str(run.id),
-                    step=int(step),
-                    mean_score=mean(run_scores),
-                    benchmark_type=summary.get("benchmark_type"),
-                    created_at=run.created_at.isoformat() if run.created_at else None,
-                )
-            )
-
-        return points
-
-    def list_training_sessions(
-        self,
-        *,
-        definition_id: UUID | None,
-    ) -> list[TrainingSessionDto]:
-        with get_session() as session:
-            stmt = select(TrainingSession).order_by(TrainingSession.started_at.desc())
-            if definition_id:
-                stmt = stmt.where(TrainingSession.experiment_definition_id == definition_id)
-            sessions = list(session.exec(stmt).all())
-
-        return [
-            TrainingSessionDto(
-                id=str(s.id),
-                definition_id=str(s.experiment_definition_id),
-                model_name=s.model_name,
-                status=s.status,
-                started_at=s.started_at.isoformat() if s.started_at else None,
-                completed_at=s.completed_at.isoformat() if s.completed_at else None,
-                output_dir=s.output_dir,
-                total_steps=s.total_steps,
-                final_loss=s.final_loss,
-            )
-            for s in sessions
-        ]
-
-    def list_training_metrics(self, session_id: UUID) -> list[TrainingMetricDto]:
-        with get_session() as session:
-            metrics = list(
-                session.exec(
-                    select(TrainingMetric)
-                    .where(TrainingMetric.session_id == session_id)
-                    .order_by(TrainingMetric.step)
-                ).all()
-            )
-
-        return [
-            TrainingMetricDto(
-                step=m.step,
-                epoch=m.epoch,
-                loss=m.loss,
-                grad_norm=m.grad_norm,
-                learning_rate=m.learning_rate,
-                reward_mean=m.reward_mean,
-                reward_std=m.reward_std,
-                entropy=m.entropy,
-                completion_mean_length=m.completion_mean_length,
-                step_time_s=m.step_time_s,
-            )
-            for m in metrics
-        ]
-
 
 def _display_run_score(score_summary: EvaluationScoreSummary, run_status: str) -> float | None:
     if run_status != RunStatus.COMPLETED:
         return None
     # TODO: this is a hack, we need to fix the calculation / rename variables to make clear that the output score should be normalised by here.
     return score_summary.normalized_score
-
-
-def _definition_ids_for_cohort(session: Session, cohort_id: UUID) -> list[UUID]:
-    definition_ids: list[UUID] = []
-    for definition in session.exec(select(ExperimentDefinition)).all():
-        metadata = definition.parsed_metadata()
-        raw = metadata.get("cohort_id")
-        if raw is None:
-            continue
-        resolved = raw if isinstance(raw, UUID) else UUID(str(raw))
-        if resolved == cohort_id:
-            definition_ids.append(definition.id)
-    return definition_ids
 
 
 def _blob_root() -> Path:

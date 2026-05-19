@@ -66,7 +66,6 @@ def _seed_parent(session: Session, *, run_id: UUID) -> RunGraphNode:
         RunRecord(
             id=run_id,
             definition_id=uuid4(),
-            workflow_definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},
