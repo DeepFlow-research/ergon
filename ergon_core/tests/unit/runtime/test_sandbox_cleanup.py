@@ -1,12 +1,10 @@
 """Tests for the sandbox-cleanup Inngest jobs.
 
 These jobs (introduced as a fix for the PR 4 try/finally bug) own the
-*termination* side of the sandbox lifecycle.  They listen for the
-terminal task events (``task/completed`` / ``task/failed``) and call
-``terminate_external_sandbox`` once.
+*termination* side of the sandbox lifecycle.  They listen for terminal
+task events and call ``terminate_external_sandbox`` once.
 """
 
-from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest

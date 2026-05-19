@@ -13,7 +13,6 @@ from ergon_core.core.application.workflows.orchestration import (
 )
 from ergon_core.core.application.workflows.service import WorkflowService
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
-from ergon_core.core.infrastructure.sandbox.lifecycle import terminate_external_sandbox
 from ergon_core.core.application.events.task_events import (
     TaskCompletedEvent,
     TaskFailedEvent,
@@ -124,7 +123,6 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
             execution_id=payload.execution_id,
         )
     )
-    await _terminate_failed_task_sandbox(payload.sandbox_id)
 
     # BLOCKED successors are a DB write only — no task/cancelled events.
     failure_events: list[InngestEvent] = []
@@ -152,13 +150,3 @@ async def run_propagate_task_failure_job(payload: TaskFailedEvent) -> TaskPropag
         workflow_failed=(propagation.workflow_terminal_state == WorkflowTerminalState.FAILED),
     )
     return result
-
-
-async def _terminate_failed_task_sandbox(sandbox_id: str | None) -> None:
-    result = await terminate_external_sandbox(sandbox_id)
-    if not result.terminated:
-        logger.info(
-            "failed-task sandbox cleanup did not terminate sandbox_id=%s reason=%s",
-            result.sandbox_id,
-            result.reason,
-        )

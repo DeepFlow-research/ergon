@@ -70,7 +70,7 @@ class TaskExecutionService:
     #
     # Reads the run-tier task snapshot via `graph_repo.node(...)`
     # instead of branching on static vs dynamic. `task_id` is the
-    # run graph node id after PR 11.
+    # canonical run graph node id.
 
     async def _prepare_run_node(
         self, command: PrepareTaskExecutionCommand
@@ -90,8 +90,6 @@ class TaskExecutionService:
                 f"Definition {command.definition_id} not found",
             )
 
-            # TODO(PR 11): bridge metadata only; runtime worker selection
-            # no longer depends on these fields for object-bound tasks.
             assigned_worker_slug = node.assigned_worker_slug
             worker_type, model_target, definition_worker_id = self._resolve_worker_config(
                 session,
@@ -166,12 +164,9 @@ class TaskExecutionService:
         given assigned_worker_slug.
 
         Falls back to the run's default model_target when no
-        ExperimentDefinitionWorker row matches the binding key (matches
-        legacy graph-native behavior for dynamically-assigned workers).
-
-        TODO(PR 11): obsoleted by `task.worker` carrying the config
-        directly for object-bound snapshots; this helper survives only
-        to populate bridge metadata and legacy DTO fields.
+        ExperimentDefinitionWorker row matches the binding key. The object-bound
+        worker instance is authoritative at runtime; these values populate
+        execution metadata and read-model fields.
         """
 
         if assigned_worker_slug is None:

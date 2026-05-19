@@ -5,13 +5,7 @@ that the spec requires. NOT call-graph tests — outcomes only. See
 07-test-strategy.md § "Why effect-based smoketests, not call-graph
 mocks".
 
-Tests for invariants that have not landed are xfail(strict=True) with
-the landing PR in the reason. Removing the decorator is the landing-PR
-signal.
-
-PR 1 lands one passing case
-(test_prepare_run_populates_task_json_for_every_node); the rest are
-xfailed until their landing PRs.
+The tests are effect-based guards for the current v2 runtime shape.
 """
 
 from __future__ import annotations
@@ -154,7 +148,7 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
     assert all(row.task_json.get("task_slug") for row in rows)
 
 
-# ── Future-PR invariants — xfailed pending implementation ────────────
+# ── Runtime invariants ───────────────────────────────────────────────
 
 
 def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
@@ -321,8 +315,7 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     This guard enforces the new shape:
     - ``ctx.group.parallel`` (the evaluator fanout) exists in execute_task
     - ``_emit_task_completed`` is called AFTER the fanout
-    - sandbox_cleanup module exists and is wired to ``task/completed`` +
-      ``task/failed``
+    - sandbox_cleanup module exists and is wired to terminal task events
     - ``terminate_sandbox_by_id`` is no longer called from execute_task
     """
 
@@ -490,11 +483,21 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
     assert new_node.is_dynamic is True
 
 
-@pytest.mark.xfail(
-    reason="PR 11: full v2 lifecycle — every acquire has a release",
-    strict=True,
-)
 def test_run_completion_releases_every_acquired_sandbox() -> None:
     """CLAUDE.md guardrail: every sandbox acquire has a release."""
 
-    pytest.fail("requires the full v2 lifecycle shape")
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    sandbox_cleanup_text = (
+        root / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
+    ).read_text()
+    handler_text = (
+        root / "ergon_core/ergon_core/core/infrastructure/inngest/handlers/sandbox_cleanup.py"
+    ).read_text()
+
+    assert "terminate_external_sandbox" in sandbox_cleanup_text
+    assert "run_sandbox_cleanup_on_completed" in sandbox_cleanup_text
+    assert "run_sandbox_cleanup_on_failed" in sandbox_cleanup_text
+    assert 'event="task/completed"' in handler_text
+    assert 'event="task/failed"' in handler_text

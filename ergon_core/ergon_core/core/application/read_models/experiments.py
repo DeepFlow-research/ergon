@@ -171,8 +171,8 @@ class ExperimentReadService:
     ) -> ExperimentDetailDto:
         """Build a detail DTO from the pre-PR-7 ``BenchmarkDefinitionRecord``.
 
-        Kept named so PR 11 can grep-and-delete this fallback path as a
-        single symbol once every row lives in ``ExperimentDefinition``.
+        Kept isolated so the read model has one compatibility path for
+        historical rows that predate ``ExperimentDefinition``.
         """
         runs = list(
             session.exec(select(RunRecord).where(RunRecord.definition_id == experiment.id)).all()

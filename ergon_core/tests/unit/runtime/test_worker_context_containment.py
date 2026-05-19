@@ -137,7 +137,6 @@ def _build_context(
         execution_id=uuid4(),
         definition_id=None,
         sandbox_id="sandbox-test",
-        node_id=task_id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
         resource_repo=object(),
@@ -167,7 +166,7 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     task_inspect = TaskInspectionService()
     context = _build_context(
         run_id=run_id,
-        task_id=parent.id,
+        task_id=parent.task_id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
     )
@@ -193,10 +192,10 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     ).one()
 
     assert new_node.is_dynamic is True
-    assert new_node.parent_task_id == parent.id
+    assert new_node.parent_task_id == parent.task_id
     assert new_node.task_json["task_slug"] == "child"
     assert isinstance(handle, SpawnedTaskHandle)
-    assert handle.task_id == new_node.id
+    assert handle.task_id == new_node.task_id
 
 
 @pytest.mark.asyncio
@@ -216,7 +215,7 @@ async def test_spawned_task_inflates_through_graph_repo_node(
     task_inspect = TaskInspectionService()
     context = _build_context(
         run_id=run_id,
-        task_id=parent.id,
+        task_id=parent.task_id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
     )
@@ -245,7 +244,7 @@ async def test_worker_context_cancel_raises_on_non_descendant(
         session,
         run_id=run_id,
         slug="child",
-        parent_task_id=root.id,
+        parent_task_id=root.task_id,
         level=1,
     )
     sibling = _seed_node(session, run_id=run_id, slug="sibling")  # peer of root, no parent
@@ -260,23 +259,23 @@ async def test_worker_context_cancel_raises_on_non_descendant(
 
     context = _build_context(
         run_id=run_id,
-        task_id=root.id,
+        task_id=root.task_id,
         task_mgmt=task_mgmt,
         task_inspect=task_inspect,
     )
 
     # Non-descendant: ContainmentViolation, service never called.
     with pytest.raises(ContainmentViolation) as excinfo:
-        await context.cancel_task(sibling.id)
+        await context.cancel_task(sibling.task_id)
 
-    assert excinfo.value.parent_task_id == root.id
-    assert excinfo.value.target_task_id == sibling.id
+    assert excinfo.value.parent_task_id == root.task_id
+    assert excinfo.value.target_task_id == sibling.task_id
     task_mgmt.cancel_task.assert_not_called()
 
     # Descendant: routes to the (mocked) service exactly once with kwargs.
-    await context.cancel_task(child.id)
+    await context.cancel_task(child.task_id)
 
     args = task_mgmt.cancel_task.await_args.args
     assert args[0] is session
     assert args[1].run_id == run_id
-    assert args[1].node_id == child.id
+    assert args[1].task_id == child.task_id

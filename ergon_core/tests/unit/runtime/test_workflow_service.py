@@ -586,35 +586,3 @@ async def test_update_task_description_changes_only_description() -> None:
     assert refreshed.task_slug == "target"
     assert result.node is not None
     assert result.node.description == "New description"
-
-
-@pytest.mark.asyncio
-async def test_restart_and_abandon_task_update_node_status() -> None:
-    session = _session()
-    run_id = _run(session)
-    failed = _node(run_id=run_id, slug="failed", status="failed")
-    running = _node(run_id=run_id, slug="running", status="running")
-    session.add_all([failed, running])
-    session.commit()
-
-    restarted = await WorkflowService().restart_task(
-        session,
-        run_id=run_id,
-        task_slug="failed",
-        dry_run=False,
-    )
-    abandoned = await WorkflowService().abandon_task(
-        session,
-        run_id=run_id,
-        task_slug="running",
-        dry_run=False,
-    )
-
-    failed_row = session.get(RunGraphNode, (run_id, failed.task_id))
-    running_row = session.get(RunGraphNode, (run_id, running.task_id))
-    assert failed_row is not None
-    assert running_row is not None
-    assert failed_row.status == TaskExecutionStatus.PENDING.value
-    assert running_row.status == TaskExecutionStatus.CANCELLED.value
-    assert restarted.action == "restart-task"
-    assert abandoned.action == "abandon-task"

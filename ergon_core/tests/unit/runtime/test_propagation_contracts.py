@@ -71,7 +71,7 @@ async def test_parent_completion_readies_dependency_free_dynamic_children() -> N
         task_slug="root-child",
         description="root child",
         status=graph_status.PENDING,
-        parent_task_id=parent.id,
+        parent_task_id=parent.task_id,
         level=1,
     )
     blocked_child = RunGraphNode(
@@ -80,7 +80,7 @@ async def test_parent_completion_readies_dependency_free_dynamic_children() -> N
         task_slug="blocked-child",
         description="blocked child",
         status=graph_status.PENDING,
-        parent_task_id=parent.id,
+        parent_task_id=parent.task_id,
         level=1,
     )
     session.add_all([parent, root_child, blocked_child])
@@ -88,8 +88,8 @@ async def test_parent_completion_readies_dependency_free_dynamic_children() -> N
     session.add(
         RunGraphEdge(
             run_id=run_id,
-            source_task_id=root_child.id,
-            target_task_id=blocked_child.id,
+            source_task_id=root_child.task_id,
+            target_task_id=blocked_child.task_id,
             status=graph_status.EDGE_PENDING,
         )
     )
@@ -98,9 +98,9 @@ async def test_parent_completion_readies_dependency_free_dynamic_children() -> N
     ready = await on_task_completed_or_failed(
         session,
         run_id,
-        parent.id,
+        parent.task_id,
         graph_status.COMPLETED,
         graph_repo=WorkflowGraphRepository(),
     )
 
-    assert ready == [root_child.id]
+    assert ready == [root_child.task_id]

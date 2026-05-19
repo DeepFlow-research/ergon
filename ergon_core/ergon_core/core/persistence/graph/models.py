@@ -72,9 +72,7 @@ class RunGraphNode(SQLModel, table=True):
         description=(
             "Run-tier snapshot of the authored Task. Static nodes copy "
             "this from experiment_definition_tasks at prepare-run time; "
-            "dynamic nodes write it directly at spawn time. PR 11 makes "
-            "the column NOT NULL with no default once every writer "
-            "populates it explicitly."
+            "dynamic nodes write it directly at spawn time."
         ),
     )
 

@@ -42,16 +42,6 @@ _BASEMODEL_DEF_RE = re.compile(
 )
 
 
-# Same shape as test_repository_layer_conventions.py — applied by the
-# shared conftest.py hook. Keys are (test_name, parametrize_id) tuples.
-_KNOWN_VIOLATORS: dict[tuple[str, str], str] = {
-    (
-        "test_repository_file_does_not_define_dtos",
-        "ergon_core/ergon_core/core/persistence/telemetry",
-    ): "PR 4: move CreateTaskEvaluation to telemetry/models.py.",
-}
-
-
 @pytest.mark.parametrize("pkg", REPO_PACKAGES, ids=lambda p: p.relative_to(ROOT).as_posix())
 def test_package_has_errors_py_if_repository_raises(pkg: Path) -> None:
     """If `repository.py` (or `repositories.py`) raises, `errors.py`

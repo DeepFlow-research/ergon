@@ -256,13 +256,12 @@ today and will be updated when an RFC lands and changes an invariant.
 
 | Concern | Location |
 |---|---|
-| Always-available benchmark registry | `ergon_builtins/registry_core.py` |
-| Data-extra benchmark registry | `ergon_builtins/registry.py` |
+| Public benchmark classes | `ergon_builtins/benchmarks/<slug>/benchmark.py` |
+| Public rubric classes | `ergon_builtins/benchmarks/<slug>/rubric.py` |
 | Benchmark subpackages | `ergon_builtins/benchmarks/<slug>/` |
 | Per-benchmark Sandbox subclass | `ergon_builtins/benchmarks/<slug>/sandbox.py` |
 | Per-benchmark Toolkit config | `ergon_builtins/benchmarks/<slug>/toolkit.py` |
 | Per-benchmark worker factories | `ergon_builtins/benchmarks/<slug>/workers.py` |
-| Per-benchmark legacy (PR 11 deletes) | `ergon_builtins/benchmarks/<slug>/_legacy_workers.py` |
 | Cross-benchmark reference workers | `ergon_builtins/workers/baselines/` |
 | Cross-cutting sandbox-adapter infra | `ergon_builtins/sandbox/` |
 | Reusable Criterion primitives | `ergon_builtins/evaluators/criteria/` |

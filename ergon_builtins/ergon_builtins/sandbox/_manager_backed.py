@@ -75,10 +75,6 @@ class _E2BSandboxHandle(Protocol):
 # ── Runtime adapters ───────────────────────────────────────────────────
 
 
-# TODO(PR 11): rewrite or delete.  Once `BaseSandboxManager` subclasses
-# are gone, this adapter has nothing to wrap — `provision()` will hold
-# the live E2B handle directly and `_DirectSandboxRuntime` becomes the
-# single runtime shape.
 class _ManagerBackedSandboxRuntime:
     """Adapter from BaseSandboxManager + AsyncSandbox to SandboxRuntime.
 

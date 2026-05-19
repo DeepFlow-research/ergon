@@ -43,4 +43,7 @@ async def sandbox_cleanup_on_failed_fn(ctx: inngest.Context) -> str:
     return await run_sandbox_cleanup_on_failed(ctx, TaskFailedEvent.model_validate(ctx.event.data))
 
 
-__all__ = ["sandbox_cleanup_on_completed_fn", "sandbox_cleanup_on_failed_fn"]
+__all__ = [
+    "sandbox_cleanup_on_completed_fn",
+    "sandbox_cleanup_on_failed_fn",
+]

@@ -104,7 +104,7 @@ class TaskCancelledEvent(InngestEventContract):
 
     Consumers:
       - cancel_orphan_subtasks_fn (recurse cascade to descendants)
-      - cleanup_cancelled_task_fn (release sandbox, mark execution row)
+      - cleanup_cancelled_task_fn (mark execution row and release sandbox)
       - execute_task_fn (via TASK_CANCEL matcher — drops queued / terminates running)
       - dashboard_emitter
     """

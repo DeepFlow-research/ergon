@@ -9,11 +9,6 @@
 #   → benchmark.py → benchmarks/researchrubrics/sandbox.py
 # All call sites that need ResearchRubricsBenchmark import it directly:
 #   from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
-#
-# TODO(PR 11): once `sandbox.py` no longer imports
-# `ResearchRubricsSandboxManager` (PR 11 deletes the manager and rewrites
-# `provision()` to call E2B directly), the cycle is broken and
-# `ResearchRubricsBenchmark` can be added back to the eager exports.
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,

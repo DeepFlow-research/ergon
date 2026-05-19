@@ -165,7 +165,7 @@ def test_read_service_falls_back_to_benchmark_definition_record_for_legacy_rows(
     monkeypatch, session_factory
 ) -> None:
     """Old rows with a ``BenchmarkDefinitionRecord`` but no ``ExperimentDefinition``
-    name still resolve via the legacy path until PR 11 deletes the legacy table."""
+    name still resolve via the compatibility path."""
 
     legacy_id = uuid4()
     with session_factory() as session:

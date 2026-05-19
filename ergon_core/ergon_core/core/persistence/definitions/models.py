@@ -190,9 +190,8 @@ class ExperimentDefinitionTask(SQLModel, table=True):
     # ``task_payload_json`` carries only ``Task.task_payload`` (the
     # benchmark-specific data); ``task_json`` is the complete object-
     # bound Task (worker + sandbox + evaluators + scalar fields) that
-    # ``Task.from_definition`` reconstructs end-to-end. Additive in
-    # PR 5; PR 11 may collapse ``task_payload_json`` into ``task_json``
-    # once every reader migrates.
+    # ``Task.from_definition`` reconstructs end-to-end. ``task_payload_json``
+    # remains for historical rows and public payload-specific readers.
     task_json: JsonObject = Field(
         default_factory=dict,
         sa_column=Column("task_json", JSON, nullable=False, server_default="{}"),

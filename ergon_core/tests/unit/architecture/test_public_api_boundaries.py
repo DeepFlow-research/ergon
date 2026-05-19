@@ -335,7 +335,6 @@ def test_read_context_and_resource_modules_stay_in_application_layout() -> None:
         core_root / "application" / "communication" / "errors.py",
         core_root / "application" / "context" / "__init__.py",
         core_root / "application" / "context" / "events.py",
-        core_root / "application" / "context" / "output_extraction.py",
         core_root / "application" / "resources" / "__init__.py",
         core_root / "application" / "resources" / "models.py",
         core_root / "application" / "resources" / "repository.py",
@@ -557,5 +556,6 @@ def test_local_api_composition_mounts_test_owned_smoke_components() -> None:
     api_app = ROOT / "ergon_cli" / "ergon_cli" / "api_app.py"
     compose = ROOT / "docker-compose.yml"
 
-    assert "tests.fixtures.smoke_components" in api_app.read_text()
+    assert "ergon_core.core.rest_api.app" in api_app.read_text()
+    assert "tests.fixtures.smoke_components" not in api_app.read_text()
     assert "./tests:/app/tests" in compose.read_text()
