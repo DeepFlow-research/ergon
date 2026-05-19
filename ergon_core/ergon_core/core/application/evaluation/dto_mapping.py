@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from ergon_core.core.application.evaluation.summary import EvaluationSummary
-from ergon_core.core.application.read_models.models import (
+from ergon_core.core.views.runs.models import (
     RunEvaluationCriterionDto,
     RunTaskEvaluationDto,
 )

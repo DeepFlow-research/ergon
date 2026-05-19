@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from uuid import UUID
 
-from ergon_core.core.application.read_models.models import (
+from ergon_core.core.views.runs.models import (
     RunSnapshotDto,
 )
 from ergon_core.core.persistence.context.models import RunContextEvent
@@ -28,7 +28,7 @@ from ergon_core.core.application.evaluation.scoring import (
     EvaluationScoreSummary,
     aggregate_evaluation_scores,
 )
-from ergon_core.core.application.read_models.run_snapshot import (
+from ergon_core.core.views.runs.snapshot import (
     _build_communication_threads,
     _build_task_map,
     _context_events_by_task,
@@ -38,7 +38,7 @@ from ergon_core.core.application.read_models.run_snapshot import (
     _task_keyed_sandboxes,
     _task_timestamps,
 )
-from ergon_core.core.application.read_models.resources import require_viewable_resource_size
+from ergon_core.core.views.resources import require_viewable_resource_size
 from pydantic import BaseModel
 from sqlmodel import select
 

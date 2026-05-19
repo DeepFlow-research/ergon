@@ -103,7 +103,6 @@ def _run(session: Session) -> UUID:
     session.add(
         RunRecord(
             id=run_id,
-            definition_id=uuid4(),
             definition_id=definition_id,
             benchmark_type="ci-workflow-service",
             instance_key="sample-1",

@@ -1,6 +1,6 @@
 """Resource read-model limits and guards."""
 
-from ergon_core.core.application.read_models.errors import ResourceTooLargeError
+from ergon_core.core.views.errors import ResourceTooLargeError
 
 RESOURCE_CONTENT_MAX_BYTES: int = 10 * 1024 * 1024
 

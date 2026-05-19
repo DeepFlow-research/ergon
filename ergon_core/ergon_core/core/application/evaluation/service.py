@@ -16,7 +16,7 @@ from ergon_core.core.application.evaluation.summary import (
     CriterionOutcomeEntry,
     EvaluationSummary,
 )
-from ergon_core.core.application.read_models.models import RunTaskEvaluationDto
+from ergon_core.core.views.runs.models import RunTaskEvaluationDto
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
 from ergon_core.core.persistence.shared.db import get_session

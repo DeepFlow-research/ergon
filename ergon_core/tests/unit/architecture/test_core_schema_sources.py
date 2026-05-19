@@ -51,7 +51,7 @@ def test_eval_criterion_status_literal_is_defined_only_in_evaluation_summary() -
 
 
 def test_run_task_dto_does_not_label_worker_slug_as_name() -> None:
-    path = ROOT / "ergon_core/ergon_core/core/application/read_models/models.py"
+    path = ROOT / "ergon_core/ergon_core/core/views/runs/models.py"
     text = path.read_text()
     assert "assigned_worker_name" not in text
     assert "assigned_worker_slug" in text
@@ -86,7 +86,7 @@ def test_cancel_cause_literals_live_in_task_events() -> None:
 
 def test_core_schema_source_imports_are_directional() -> None:
     forbidden_pairs = {
-        "ergon_core.core.application.read_models.models": (
+        "ergon_core.core.views.runs.models": (
             "EvalCriterionStatus = Literal",
             "GraphMutationValue =",
         ),
@@ -360,7 +360,7 @@ def test_runtime_errors_are_domain_local() -> None:
         "ergon_core.core.application.tasks.errors",
         "ergon_core.core.application.workflows.errors",
         "ergon_core.core.application.evaluation.errors",
-        "ergon_core.core.application.read_models.errors",
+        "ergon_core.core.views.errors",
         "ergon_core.core.infrastructure.inngest.errors",
     ):
         assert importlib.util.find_spec(module_name) is not None
@@ -414,7 +414,7 @@ def test_runtime_and_builtins_do_not_use_task_execution_query_bag_for_domain_rea
 
 def test_resource_viewer_limits_live_with_read_model_resources() -> None:
     api_path = ROOT / "ergon_core/ergon_core/core/rest_api/runs.py"
-    resource_path = ROOT / "ergon_core/ergon_core/core/application/read_models/resources.py"
+    resource_path = ROOT / "ergon_core/ergon_core/core/views/resources.py"
 
     assert "_RESOURCE_CONTENT_MAX_BYTES" not in api_path.read_text()
     assert "RESOURCE_CONTENT_MAX_BYTES" in resource_path.read_text()

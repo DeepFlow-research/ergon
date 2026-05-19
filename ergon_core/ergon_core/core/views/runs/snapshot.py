@@ -9,7 +9,7 @@ from ergon_core.core.application.communication.models import (
     RunCommunicationThreadDto,
 )
 from ergon_core.core.application.evaluation.dto_mapping import evaluation_row_to_dto
-from ergon_core.core.application.read_models.models import (
+from ergon_core.core.views.runs.models import (
     RunContextEventDto,
     RunExecutionAttemptDto,
     RunResourceDto,
