@@ -32,10 +32,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
-    RunRecord,
-)
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
@@ -51,7 +48,6 @@ class _SmokeTask(Task[_EmptyPayload]):
 
 
 def _session() -> Session:
-    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -79,12 +75,6 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
     ).model_dump(mode="json")
     session.add_all(
         [
-            BenchmarkDefinitionRecord(
-                id=definition_id,
-                name="smoke",
-                benchmark_type="test",
-                sample_count=1,
-            ),
             ExperimentDefinition(
                 id=definition_id, benchmark_type="test", name="test", metadata_json={}
             ),
@@ -152,9 +142,7 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
 def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     """PR 7 invariant: persist_benchmark writes experiment_definitions
     plus experiment_definition_tasks (and related instance / task-
-    evaluator rows). It must NOT write to the older
-    BenchmarkDefinitionRecord table — identity comes from
-    ExperimentDefinition only after PR 7's persistence collapse."""
+    evaluator rows). Identity comes from ``ExperimentDefinition`` only."""
 
     from collections.abc import Mapping, Sequence
     from typing import ClassVar
@@ -219,12 +207,6 @@ def test_persist_definition_writes_only_intended_tables(monkeypatch) -> None:
     ]
     assignments = session.exec(select(ExperimentDefinitionTaskAssignment)).all()
     assert [row.worker_binding_key for row in assignments] == ["echo"]
-
-    # PR 7 invariant: persist_benchmark must NOT write to the older
-    # BenchmarkDefinitionRecord table at all.
-    bdr_rows = session.exec(select(BenchmarkDefinitionRecord)).all()
-    assert bdr_rows == []
-
 
 def test_worker_execute_reads_task_from_run_tier_only() -> None:
     """PR 3 invariant: ``worker_execute.py`` source does not reference
@@ -416,7 +398,6 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
     """Δ.3 / PR 9 invariant: dynamic subtasks are graph-native."""
 
     # 1. In-memory SQLite with all tables.
-    _ = BenchmarkDefinitionRecord  # ensure telemetry models are registered
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},

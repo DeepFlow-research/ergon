@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -10,7 +12,7 @@ import {
   parseDashboardWorkflowStartedData,
   parseTaskStatusSocketData,
 } from "../../src/lib/contracts/events";
-import { parseCohortDetail, parseRunSnapshot } from "../../src/lib/contracts/rest";
+import { parseRunSnapshot } from "../../src/lib/contracts/rest";
 import { deserializeRunState } from "../../src/lib/runState";
 import { store } from "../../src/lib/state/store";
 import {
@@ -104,21 +106,6 @@ test("run snapshot parser rejects tuple-map transport", () => {
   assert.throws(() => parseRunSnapshot(legacyPayload));
 });
 
-test("cohort detail parser accepts harness payload", () => {
-  const seed = createDashboardSeed();
-  const cohortDetail = seed.cohortDetails?.[FIXTURE_IDS.cohortId];
-
-  assert.ok(cohortDetail);
-  const parsed = parseCohortDetail(cohortDetail);
-
-  assert.equal(parsed.summary.cohort_id, FIXTURE_IDS.cohortId);
-  assert.equal((parsed.experiments ?? []).length, 1);
-  assert.equal(parsed.experiments[0]?.total_runs, 3);
-  assert.equal(parsed.experiments[0]?.status_counts.completed, 3);
-  assert.equal(parsed.experiments[0]?.final_score, 1);
-  assert.equal(parsed.experiments[0]?.total_cost_usd, 0.42);
-});
-
 test("dashboard harness only serves explicitly seeded runs", () => {
   const seed = createDashboardSeed();
   const run = seed.runs?.[0];
@@ -159,6 +146,14 @@ test("workflow started event parser validates run snapshots", () => {
 test("generated dashboard event schemas cover graph and context live events", () => {
   assert.ok(dashboardEventSchemas["dashboard/graph.mutation"]);
   assert.ok(dashboardEventSchemas["dashboard/context.event"]);
+});
+
+test("frontend routes expose experiment grouping and no cohort surface", () => {
+  const root = process.cwd();
+
+  assert.equal(fs.existsSync(path.join(root, "src/app/experiments/[definitionId]/page.tsx")), true);
+  assert.equal(fs.existsSync(path.join(root, "src/app/cohorts/page.tsx")), false);
+  assert.equal(fs.existsSync(path.join(root, "src/app/api/cohorts/route.ts")), false);
 });
 
 test("dashboard nested DTO event parser accepts backend snake-case payloads", () => {

@@ -66,7 +66,7 @@ Data movement notes:
 ## 6. Lifecycle modes considered but NOT implemented
 
 - **Per-run** — share one sandbox across every task in a DAG. Rejected: cross-task isolation is a correctness property, not just a cleanliness one. A compromised tool call in task A could poison task B's filesystem. The per-task teardown gives every task a clean slate at start.
-- **Per-cohort** — warm pool of prebuilt sandboxes shared across runs. Deferred: this would cut training-time cold-start cost meaningfully, but adds eviction policy, poisoning mitigation, and debugging complexity. No current benchmark justifies the investment.
+- **Per-experiment-group** — warm pool of prebuilt sandboxes shared across runs. Deferred: this would cut training-time cold-start cost meaningfully, but adds eviction policy, poisoning mitigation, and debugging complexity. No current benchmark justifies the investment.
 - **Per-turn** — fresh sandbox per LLM call. Rejected: too slow (seconds per turn in E2B), and it breaks the load-bearing assumption that tool results from turn N are on disk for turn N+1. Most workers cd around, cat files, build artifacts, and cross-reference outputs between turns; a fresh sandbox per turn would require rebuilding that state from scratch every call.
 - The current design is "per-task, optional reuse if a benchmark opts in." No benchmark opts in today — the mechanism for opt-in (a `lifecycle_mode` enum on the manager) does not yet exist.
 
@@ -74,7 +74,7 @@ Data movement notes:
 
 ### 7.1 Opt into sandbox reuse (future)
 
-Not implemented. The future shape is a `lifecycle_mode: ClassVar[LifecycleMode]` enum on `BaseSandboxManager` subclasses with variants like `PER_TASK` (current behavior) and `PER_COHORT`. Adding this requires resolving the cross-task isolation question — cohort-level sandboxes would need explicit reset hooks between tasks. No RFC drafted.
+Not implemented. The future shape is a `lifecycle_mode: ClassVar[LifecycleMode]` enum on `BaseSandboxManager` subclasses with variants like `PER_TASK` (current behavior) and `PER_EXPERIMENT_GROUP`. Adding this requires resolving the cross-task isolation question; group-level sandboxes would need explicit reset hooks between tasks. No RFC drafted.
 
 ### 7.2 Override teardown trigger
 

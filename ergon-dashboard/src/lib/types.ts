@@ -3,10 +3,7 @@ export type { ContextEventState };
 
 import type {
   BenchmarkName as RestBenchmarkName,
-  CohortDetail as RestCohortDetail,
   ExperimentDetail as RestExperimentDetail,
-  CohortSummary as RestCohortSummary,
-  ExperimentCohortStatusValue,
   RunCommunicationMessage as RestRunCommunicationMessage,
   RunCommunicationThread as RestRunCommunicationThread,
   RunLifecycleStatus as RestRunLifecycleStatus,
@@ -14,7 +11,6 @@ import type {
   RunTaskEvaluation as RestRunTaskEvaluation,
 } from "@/lib/contracts/rest";
 import type {
-  DashboardCohortUpdatedData as GeneratedDashboardCohortUpdatedData,
   DashboardGraphMutationData as GeneratedDashboardGraphMutationData,
   DashboardResourcePublishedData as GeneratedDashboardResourcePublishedData,
   GraphMutationSocketData as GeneratedGraphMutationSocketData,
@@ -59,7 +55,6 @@ export enum TaskTrigger {
 
 export type BenchmarkName = RestBenchmarkName;
 export type RunLifecycleStatus = RestRunLifecycleStatus;
-export type ExperimentCohortStatus = ExperimentCohortStatusValue;
 
 // =============================================================================
 // Event Names
@@ -68,7 +63,6 @@ export type ExperimentCohortStatus = ExperimentCohortStatusValue;
 export const DashboardEventNames = {
   WORKFLOW_STARTED: "dashboard/workflow.started",
   WORKFLOW_COMPLETED: "dashboard/workflow.completed",
-  COHORT_UPDATED: "dashboard/cohort.updated",
   TASK_STATUS_CHANGED: "dashboard/task.status_changed",
   RESOURCE_PUBLISHED: "dashboard/resource.published",
   SANDBOX_CREATED: "dashboard/sandbox.created",
@@ -89,11 +83,7 @@ export type DashboardEventName =
 
 export type DashboardWorkflowStartedData = GeneratedDashboardWorkflowStartedData;
 export type DashboardWorkflowCompletedData = GeneratedDashboardWorkflowCompletedData;
-export type CohortSummary = RestCohortSummary;
-export type CohortExperimentRow = NonNullable<RestCohortDetail["experiments"]>[number];
-export type CohortDetail = RestCohortDetail;
 export type ExperimentDetail = RestExperimentDetail;
-export type DashboardCohortUpdatedData = GeneratedDashboardCohortUpdatedData;
 export type DashboardTaskStatusChangedData = GeneratedDashboardTaskStatusChangedData;
 export type DashboardResourcePublishedData = GeneratedDashboardResourcePublishedData;
 export type DashboardSandboxCreatedData = GeneratedDashboardSandboxCreatedData;
@@ -119,7 +109,6 @@ export type GraphMutationSocketData = GeneratedGraphMutationSocketData;
 export type DashboardEventData =
   | DashboardWorkflowStartedData
   | DashboardWorkflowCompletedData
-  | DashboardCohortUpdatedData
   | DashboardTaskStatusChangedData
   | DashboardResourcePublishedData
   | DashboardSandboxCreatedData
@@ -137,7 +126,6 @@ export type DashboardEventData =
 export type DashboardEvents = {
   "dashboard/workflow.started": { data: DashboardWorkflowStartedData };
   "dashboard/workflow.completed": { data: DashboardWorkflowCompletedData };
-  "dashboard/cohort.updated": { data: DashboardCohortUpdatedData };
   "dashboard/task.status_changed": { data: DashboardTaskStatusChangedData };
   "dashboard/resource.published": { data: DashboardResourcePublishedData };
   "dashboard/sandbox.created": { data: DashboardSandboxCreatedData };
@@ -364,7 +352,6 @@ export interface WorkflowRunState {
  * Events sent from server to client via Socket.io.
  */
 export interface ServerToClientEvents {
-  "cohort:updated": (data: DashboardCohortUpdatedData) => void;
   "run:started": (data: { runId: string; name: string }) => void;
   "run:completed": (data: RunCompletedSocketData) => void;
   "task:status": (data: TaskStatusSocketData) => void;

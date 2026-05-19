@@ -9,7 +9,6 @@ import { inngest } from "../client";
 import { store } from "@/lib/state/store";
 import {
   broadcastRunStarted,
-  broadcastCohortUpdated,
   broadcastRunCompleted,
   broadcastGraphMutation,
   broadcastTaskEvaluation,
@@ -21,7 +20,6 @@ import {
   broadcastSandboxClosed,
 } from "@/lib/socket/server";
 import {
-  parseDashboardCohortUpdatedData,
   parseDashboardGraphMutationData,
   parseDashboardTaskEvaluationUpdatedData,
   parseDashboardThreadMessageCreatedData,
@@ -139,20 +137,6 @@ const onWorkflowCompleted = inngest.createFunction(
 
     return { success: true };
   }
-);
-
-const onCohortUpdated = inngest.createFunction(
-  { id: "dashboard-cohort-updated" },
-  { event: "dashboard/cohort.updated" },
-  async ({ event }) => {
-    const payload = parseDashboardCohortUpdatedData(event.data);
-    console.log("[Dashboard] Cohort updated:", {
-      cohort_id: payload.cohort_id,
-      total_runs: payload.summary.total_runs,
-    });
-    broadcastCohortUpdated(payload);
-    return { success: true };
-  },
 );
 
 const onThreadMessageCreated = inngest.createFunction(
@@ -443,7 +427,6 @@ const onGraphMutation = inngest.createFunction(
 export const functions = [
   onWorkflowStarted,
   onWorkflowCompleted,
-  onCohortUpdated,
   onThreadMessageCreated,
   onTaskEvaluationUpdated,
   onTaskStatusChanged,

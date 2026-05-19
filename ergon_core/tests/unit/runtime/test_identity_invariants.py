@@ -34,10 +34,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
-    RunRecord,
-)
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.pool import StaticPool
@@ -53,7 +50,6 @@ class _IdentityTask(Task[_EmptyPayload]):
 
 
 def _session() -> Session:
-    _ = BenchmarkDefinitionRecord
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -73,12 +69,6 @@ def _seed_definition(session: Session) -> tuple[UUID, UUID, set[UUID]]:
     run_id = uuid4()
     session.add_all(
         [
-            BenchmarkDefinitionRecord(
-                id=definition_id,
-                name="identity",
-                benchmark_type="test",
-                sample_count=1,
-            ),
             ExperimentDefinition(
                 id=definition_id, benchmark_type="test", name="test", metadata_json={}
             ),
@@ -341,7 +331,6 @@ async def test_dynamic_task_id_has_no_definition_row(
     """Δ.3: dynamic spawn writes only to run_graph_nodes."""
 
     # 1. In-memory SQLite with all tables.
-    _ = BenchmarkDefinitionRecord  # ensure telemetry models are registered
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},

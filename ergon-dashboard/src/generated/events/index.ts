@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { CohortUpdatedEventSchema } from "./CohortUpdatedEvent";
 import { DashboardWorkflowStartedEventSchema } from "./DashboardWorkflowStartedEvent";
 import { DashboardWorkflowCompletedEventSchema } from "./DashboardWorkflowCompletedEvent";
 import { DashboardTaskStatusChangedEventSchema } from "./DashboardTaskStatusChangedEvent";
@@ -12,8 +11,6 @@ import { DashboardTaskEvaluationUpdatedEventSchema } from "./DashboardTaskEvalua
 import { DashboardGraphMutationEventSchema } from "./DashboardGraphMutationEvent";
 import { DashboardContextEventEventSchema } from "./DashboardContextEventEvent";
 
-export { CohortUpdatedEventSchema };
-export type CohortUpdatedEvent = z.infer<typeof CohortUpdatedEventSchema>;
 export { DashboardWorkflowStartedEventSchema };
 export type DashboardWorkflowStartedEvent = z.infer<typeof DashboardWorkflowStartedEventSchema>;
 export { DashboardWorkflowCompletedEventSchema };
@@ -38,7 +35,6 @@ export { DashboardContextEventEventSchema };
 export type DashboardContextEventEvent = z.infer<typeof DashboardContextEventEventSchema>;
 
 export const dashboardEventSchemas = {
-  "dashboard/cohort.updated": CohortUpdatedEventSchema,
   "dashboard/workflow.started": DashboardWorkflowStartedEventSchema,
   "dashboard/workflow.completed": DashboardWorkflowCompletedEventSchema,
   "dashboard/task.status_changed": DashboardTaskStatusChangedEventSchema,

@@ -8,7 +8,7 @@ existing public import path stable:
 Target span hierarchy (one trace per run, keyed by run_id)::
 
     workflow.execute (synthetic root)
-    |   cohort_id, instance_count
+    |   experiment, instance_count
     +-- workflow.start
     +-- task.execute (per task)
     |   instance_key

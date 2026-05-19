@@ -22,9 +22,9 @@ from ergon_core.core.application.tasks.models import (
 )
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
+from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.persistence.telemetry.models import (
-    BenchmarkDefinitionRecord,
     RunRecord,
     RunResource,
     RunTaskExecution,
@@ -306,11 +306,11 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
     blob.write_bytes(b"report")
     session.add_all(
         [
-            BenchmarkDefinitionRecord(
+            ExperimentDefinition(
                 id=definition_id,
-                name="bench",
                 benchmark_type="bench",
-                sample_count=1,
+                name="bench",
+                metadata_json={},
             ),
             RunRecord(
                 id=run_id,

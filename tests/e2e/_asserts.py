@@ -1,9 +1,9 @@
 """Shared assertion helpers for canonical smoke drivers.
 
 Per-run helpers take a single ``run_id`` and are called in a loop for
-each cohort member.  No "at-least-one-passed" fallbacks; each run must
-pass every check independently.  Cohort-level helpers (e.g.
-``_assert_cohort_membership``) take the cohort key + run_id list.
+each experiment-group member.  No "at-least-one-passed" fallbacks; each
+run must pass every check independently.  Experiment-group helpers take
+the experiment key + run_id list.
 
 See docs/superpowers/plans/test-refactor/02-drivers-and-asserts.md §2
 and §10 for the full catalogue.
@@ -59,7 +59,6 @@ def _assert_run_graph(run_id: UUID) -> None:
     snapshot = require_run_snapshot(run_id)
     tasks = list(snapshot.tasks.values())
     by_slug = {task.name: task for task in tasks}
-    leaves = [task for task in tasks if task.level > 0]
     root_tasks = [task for task in tasks if task.level == 0]
 
     assert snapshot.total_tasks == 12, f"expected 12 tasks, got {snapshot.total_tasks}"
@@ -335,22 +334,22 @@ def _assert_temporal_ordering(run_id: UUID) -> None:
 
 
 # =============================================================================
-# Cohort-level helpers
+# Experiment-group helpers
 # =============================================================================
 
 
-def _assert_cohort_membership(cohort_key: str, run_ids: list[UUID]) -> None:
-    """3 runs visible via ``/api/__danger__/test-harness/read/cohort/{key}/runs`` harness endpoint."""
+def _assert_experiment_membership(experiment: str, run_ids: list[UUID]) -> None:
+    """Runs are visible via the experiment-group test-harness endpoint."""
     api_base = os.environ["ERGON_API_BASE_URL"]
     r = httpx.get(
-        f"{api_base}/api/__danger__/test-harness/read/cohort/{cohort_key}/runs",
+        f"{api_base}/api/__danger__/test-harness/read/experiment/{experiment}/runs",
         timeout=10.0,
     )
     r.raise_for_status()
     rows = r.json()
     returned = {UUID(row["run_id"]) for row in rows}
     expected = set(run_ids)
-    assert expected <= returned, f"cohort missing expected run ids: {expected - returned}"
+    assert expected <= returned, f"experiment group missing expected run ids: {expected - returned}"
 
 
 # =============================================================================

@@ -9,11 +9,6 @@ from dataclasses import asdict
 from typing import Annotated
 from uuid import UUID
 
-from ergon_core.core.application.compat.cohorts import (
-    build_legacy_cohort_marker_metadata,
-    deprecated_cohort_compatibility_service,
-)
-from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 from ergon_core.core.application.experiments.models import (
     ExperimentRunRequest,
 )
@@ -24,8 +19,7 @@ from ergon_core.core.application.testing.test_harness_service import (
     DefinitionNotFoundError,
     UnknownRunStatusError,
     get_session_dep,
-    read_cohort_id as _read_cohort_id,
-    read_cohort_runs as _read_cohort_runs,
+    read_experiment_runs as _read_experiment_runs,
     read_run_state as _read_run_state,
     reset_test_rows as _reset_test_rows,
     seed_run as _seed_run,
@@ -99,13 +93,9 @@ class TestRunStateDto(BaseModel):
     context_event_count: int
 
 
-class TestCohortRunDto(BaseModel):
+class TestExperimentRunDto(BaseModel):
     run_id: UUID
     status: str
-
-
-class TestCohortIdDto(BaseModel):
-    cohort_id: UUID
 
 
 # ---------------------------------------------------------------------------
@@ -125,38 +115,17 @@ def read_run_state(
 
 
 @router.get(
-    "/read/cohort/{cohort_key}/id",
-    response_model=TestCohortIdDto,
+    "/read/experiment/{experiment}/runs",
+    response_model=list[TestExperimentRunDto],
 )
-def read_cohort_id(
-    cohort_key: str,
+def read_experiment_runs(
+    experiment: str,
     session: Annotated[object, Depends(get_session_dep)],
-) -> TestCohortIdDto:
-    """Resolve a cohort name to its UUID for dashboard navigation."""
-    cohort_id = _read_cohort_id(cohort_key, session)  # type: ignore[arg-type]
-    if cohort_id is None:
-        raise HTTPException(status_code=404, detail=f"Cohort {cohort_key!r} not found")
-    return TestCohortIdDto(cohort_id=cohort_id)
-
-
-@router.get(
-    "/read/cohort/{cohort_key}/runs",
-    response_model=list[TestCohortRunDto],
-)
-def read_cohort_runs(
-    cohort_key: str,
-    session: Annotated[object, Depends(get_session_dep)],
-) -> list[TestCohortRunDto]:
-    """List all runs attached to a cohort by name.
-
-    ``cohort_key`` matches the deprecated cohort compatibility name. Returns
-    empty list when the cohort does not exist (rather than 404) so
-    Playwright / pytest can poll cheaply while a cohort is being
-    submitted.
-    """
+) -> list[TestExperimentRunDto]:
+    """List all runs attached to a v2 experiment grouping tag."""
     return [
-        TestCohortRunDto(run_id=run.run_id, status=run.status)
-        for run in _read_cohort_runs(cohort_key, session)  # type: ignore[arg-type]
+        TestExperimentRunDto(run_id=run.run_id, status=run.status)
+        for run in _read_experiment_runs(experiment, session)  # type: ignore[arg-type]
     ]
 
 
@@ -164,10 +133,10 @@ def read_cohort_runs(
 # Write endpoints — danger-prefixed local/test harness
 # ---------------------------------------------------------------------------
 #
-# Seeded rows record the test cohort tag in ``summary_json`` and stamp the
-# target definition metadata with the resolved cohort id so dashboard read
-# models can use the canonical definition tables.
-# ``ResetRequest.cohort_prefix`` has no default: reset is destructive, so
+# Seeded rows record the test experiment tag in ``summary_json`` and
+# ``RunRecord.experiment`` so dashboard/read tests use the canonical v2 grouping
+# column.
+# ``ResetRequest.experiment_prefix`` has no default: reset is destructive, so
 # callers must always specify what to nuke.
 
 
@@ -176,13 +145,13 @@ class SeedRunRequest(BaseModel):
     benchmark_type: str = "test-harness"
     instance_key: str = "seeded"
     worker_team: dict = Field(default_factory=lambda: {"primary": "test-harness-worker"})
-    cohort: str = "_test_"
+    experiment: str = "_test_"
     status: str = "completed"
     task_slugs: list[str] = []
 
 
 class ResetRequest(BaseModel):
-    cohort_prefix: str
+    experiment_prefix: str
 
 
 @router.post("/write/run/seed", status_code=201)
@@ -195,7 +164,7 @@ def seed_run(
             benchmark_type=body.benchmark_type,
             instance_key=body.instance_key,
             worker_team=body.worker_team,
-            cohort_key=body.cohort,
+            experiment=body.experiment,
             status=body.status,
             task_slugs=body.task_slugs,
         )
@@ -216,15 +185,15 @@ def seed_run(
 def reset_test_rows(
     body: ResetRequest,
 ) -> None:
-    _reset_test_rows(cohort_prefix=body.cohort_prefix)
+    _reset_test_rows(experiment_prefix=body.experiment_prefix)
     return None
 
 
 # ---------------------------------------------------------------------------
-# Cohort submission endpoint — the single entry point for smoke drivers.
+# Experiment-run submission endpoint — the single entry point for smoke drivers.
 #
 # Moved here (rather than a separate /runs POST) because it's the test
-# harness that cares about cohort-scoped multi-run submission.  Host-side
+# harness that cares about grouped multi-run submission.  Host-side
 # pytest never imports ergon internals; it just POSTs slugs.  That keeps
 # the smoke fixtures single-sourced in the api container's process (one
 # ``register_smoke_fixtures()`` call in app.py) and eliminates the host /
@@ -232,15 +201,15 @@ def reset_test_rows(
 # ---------------------------------------------------------------------------
 
 
-class CohortSlotRequest(BaseModel):
+class ExperimentRunSlotRequest(BaseModel):
     worker_slug: str
     evaluator_slug: str
 
 
-class SubmitCohortRequest(BaseModel):
+class SubmitExperimentRunsRequest(BaseModel):
     benchmark_slug: str
-    slots: list[CohortSlotRequest]
-    cohort_key: str
+    slots: list[ExperimentRunSlotRequest]
+    experiment: str
     sandbox_slug: str | None = None
     dependency_extras: tuple[str, ...] = ("none",)
     # Smoke workers don't hit an LLM; the field is required downstream
@@ -249,25 +218,23 @@ class SubmitCohortRequest(BaseModel):
     limit: int = 1
 
 
-class SubmitCohortResponse(BaseModel):
+class SubmitExperimentRunsResponse(BaseModel):
     run_ids: list[UUID]
-    cohort_id: UUID
 
 
-@router.post("/write/cohort", response_model=SubmitCohortResponse)
-async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
-    """Build + persist + dispatch N runs under one cohort.
+@router.post("/write/experiment-runs", response_model=SubmitExperimentRunsResponse)
+async def submit_experiment_runs(
+    body: SubmitExperimentRunsRequest,
+) -> SubmitExperimentRunsResponse:
+    """Build + persist + dispatch N runs under one experiment tag.
 
     Per-slot flow persists the object-bound smoke ``Benchmark`` into the
-    immutable ``ExperimentDefinition`` tables. Cohort/display metadata is
-    written onto the definition metadata before launch. Slots submit
-    sequentially — typical N ≤ 3, so the parallel-gather savings are negligible.
+    immutable ``ExperimentDefinition`` tables. The v2 experiment grouping tag
+    is written into definition metadata and copied to ``RunRecord.experiment``
+    by launch. Slots submit sequentially — typical N ≤ 3, so the
+    parallel-gather savings are negligible.
     """
-    cohort = deprecated_cohort_compatibility_service.resolve_or_create(
-        name=body.cohort_key,
-        description=f"smoke cohort: {body.benchmark_slug}",
-        created_by="test-harness",
-    )
+    from ergon_core.core.application.experiments.definition_writer import persist_benchmark
 
     run_ids: list[UUID] = []
     for slot in body.slots:
@@ -283,15 +250,12 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
             metadata={
                 "benchmark_slug": body.benchmark_slug,
                 "source": "test-harness",
-                **build_legacy_cohort_marker_metadata(
-                    cohort_id=cohort.id,
-                    cohort_key=body.cohort_key,
-                    default_worker_team={"primary": slot.worker_slug},
-                    default_evaluator_slug=slot.evaluator_slug,
-                    default_model_target=body.model,
-                    sandbox_slug=body.sandbox_slug or body.benchmark_slug,
-                    dependency_extras=list(body.dependency_extras),
-                ),
+                "experiment": body.experiment,
+                "default_worker_team": {"primary": slot.worker_slug},
+                "default_evaluator_slug": slot.evaluator_slug,
+                "default_model_target": body.model,
+                "sandbox_slug": body.sandbox_slug or body.benchmark_slug,
+                "dependency_extras": list(body.dependency_extras),
             },
             created_by="test-harness",
         )
@@ -302,4 +266,4 @@ async def submit_cohort(body: SubmitCohortRequest) -> SubmitCohortResponse:
         launched = await _run_experiment(ExperimentRunRequest(definition_id=handle.definition_id))
         run_ids.extend(launched.run_ids)
 
-    return SubmitCohortResponse(run_ids=run_ids, cohort_id=cohort.id)
+    return SubmitExperimentRunsResponse(run_ids=run_ids)

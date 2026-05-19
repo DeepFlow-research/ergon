@@ -40,14 +40,10 @@ function formatPercent(value: number | null): string {
 
 export function RunWorkspacePage({
   runId,
-  cohortId,
-  cohortLabel,
   initialRunState = null,
   ssrError = null,
 }: {
   runId: string;
-  cohortId?: string;
-  cohortLabel?: string | null;
   initialRunState?: SerializedWorkflowRunState | null;
   ssrError?: string | null;
 }) {
@@ -242,20 +238,8 @@ export function RunWorkspacePage({
       >
         <div className="min-w-0">
           <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
-            <Link href="/cohorts" className="hover:text-[var(--ink)]">Cohorts</Link>
+            <Link href="/experiments" className="hover:text-[var(--ink)]">Experiments</Link>
             <span>›</span>
-            {cohortId && (
-              <>
-                <Link
-                  href={`/cohorts/${cohortId}`}
-                  className="max-w-[180px] truncate hover:text-[var(--ink)]"
-                  data-testid="run-breadcrumb-cohort"
-                >
-                  {cohortLabel ?? "Cohort"}
-                </Link>
-                <span>›</span>
-              </>
-            )}
             <span className="font-mono text-[var(--ink)]">{runId.slice(0, 8)}…</span>
           </div>
           <div className="mt-1.5 flex items-center gap-3">

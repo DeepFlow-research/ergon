@@ -14,7 +14,7 @@ Path-based, not marker-based. The local gate and the CI workflow both dispatch b
 |------|------|-------|------------|--------|
 | **Unit** | `tests/unit/` | None — no I/O, no fixtures | every PR (`ci-fast.yml`) | Pure logic: Pydantic, validators, registry wiring, pure functions, static lints |
 | **Integration** | `tests/integration/` | Real Postgres 15 + real Inngest dev server (docker-compose.ci.yml) | every PR (`ci-fast.yml`) | Graph / service / persistence semantics; API boundaries; harness round-trips |
-| **E2E smoke** | `tests/e2e/` | Full Docker stack + **real E2B** + dashboard + Playwright | every PR (`e2e-benchmarks.yml` matrix) | Cross-service + cross-process + UI truth; sandbox provisioning at volume; cohort-parallel scheduling; partial-work persistence on FAILED tasks |
+| **E2E smoke** | `tests/e2e/` | Full Docker stack + **real E2B** + dashboard + Playwright | every PR (`e2e-benchmarks.yml` matrix) | Cross-service + cross-process + UI truth; sandbox provisioning at volume; experiment-group parallel scheduling; partial-work persistence on FAILED tasks |
 | **Real-LLM** | `tests/real_llm/` | As e2e + real model calls, budget-gated | on demand + nightly | Non-deterministic model behaviour; RL trajectory extraction |
 
 `@pytest.mark.slow` is available for local dev ergonomics only; CI runs everything in-tier.
@@ -106,7 +106,7 @@ The criterion's `_verify_sandbox_setup` hook runs a trivial env-specific command
 
 ## 4. Per-run assertion surface
 
-For each run in a cohort, the pytest driver asserts:
+For each run in an experiment group, the pytest driver asserts:
 
 | Channel | What it checks |
 |---|---|
@@ -130,7 +130,7 @@ Read endpoints (Playwright + pytest consume):
 | Endpoint | Shape |
 |---|---|
 | `GET /api/test/read/run/{run_id}/state` | `TestRunStateDto` — graph nodes, mutations, evaluations, resource count |
-| `GET /api/test/read/cohort/{cohort_key}/runs` | `[{run_id, status}]` — returns empty list on miss (not 404) for cheap polling |
+| `GET /api/__danger__/test-harness/read/experiment/{experiment}/runs` | `[{run_id, status}]` — returns empty list on miss (not 404) for cheap polling |
 
 Write endpoints (`POST /write/run/seed`, `POST /write/reset`) are dashboard-fixture scaffolding; smoke does not use them.
 
@@ -138,18 +138,18 @@ Write endpoints (`POST /write/run/seed`, `POST /write/reset`) are dashboard-fixt
 
 ## 6. Dashboard + Playwright
 
-Per leg, the pytest driver subprocesses `pnpm --dir ergon-dashboard exec playwright test tests/e2e/{env}.smoke.spec.ts`, passing cohort state via env vars:
+Per leg, the pytest driver subprocesses `pnpm --dir ergon-dashboard exec playwright test tests/e2e/{env}.smoke.spec.ts`, passing experiment-group state via env vars:
 
-- `COHORT_KEY`, `SCREENSHOT_DIR`, `TEST_HARNESS_SECRET`, `ERGON_API_BASE_URL`
-- `SMOKE_COHORT_JSON` — JSON array of `[{run_id, kind}]` enabling per-kind dispatch in the Playwright spec
+- `EXPERIMENT_KEY`, `SCREENSHOT_DIR`, `TEST_HARNESS_SECRET`, `ERGON_API_BASE_URL`
+- `SMOKE_EXPERIMENT_JSON` — JSON array of `[{run_id, kind}]` for one experiment group, enabling per-kind dispatch in the Playwright spec
 
-Per-env spec is a 3-line file that delegates to the shared factory at `ergon-dashboard/tests/e2e/_shared/smoke.ts`. The factory iterates the cohort array, asserts against the backend harness DTO + the dashboard UI (keyed on `data-testid`), and captures screenshots per-run. The harness access goes through `ergon-dashboard/tests/helpers/backendHarnessClient.ts`.
+Per-env spec is a 3-line file that delegates to the shared factory at `ergon-dashboard/tests/e2e/_shared/smoke.ts`. The factory iterates the experiment run array, asserts against the backend harness DTO + the dashboard UI (keyed on `data-testid`), and captures screenshots per-run. The harness access goes through `ergon-dashboard/tests/helpers/backendHarnessClient.ts`.
 
-Required `data-testid` attributes: `run-status`, `task-node-{slug}` (one per `EXPECTED_SUBTASK_SLUGS`), `graph-canvas`, `cohort-run-row`, `cohort-env-label`.
+Required `data-testid` attributes: `run-status`, `task-node-{slug}` (one per `EXPECTED_SUBTASK_SLUGS`), `graph-canvas`, `experiment-run-row`, `experiment-env-label`.
 
 ### 6.1 Dashboard harness job (`ci-fast.yml` → `frontend-e2e`)
 
-This job runs `docker compose up -d --wait postgres api inngest-dev`, then `pnpm -C ergon-dashboard run e2e` (Playwright starts `pnpm dev:test` locally). The dashboard route `GET /api/health` probes the Ergon API (`GET /cohorts?limit=1`), so Compose `--wait` must not return until the API process is actually serving HTTP. The **`api`** service therefore carries a **Docker `healthcheck`** that curls `http://127.0.0.1:9000/health` inside the container; without it, only Postgres had a healthcheck and CI could hit `/api/health` while Uvicorn was still importing, yielding **503**. Playwright specs that drag `react-resizable-panels` separators poll for non-null `boundingBox()` after `toBeVisible` because layout geometry can trail visibility in headless Chromium.
+This job runs `docker compose up -d --wait postgres api inngest-dev`, then `pnpm -C ergon-dashboard run e2e` (Playwright starts `pnpm dev:test` locally). The dashboard route `GET /api/health` probes the Ergon API (`GET /experiments?limit=1`), so Compose `--wait` must not return until the API process is actually serving HTTP. The **`api`** service therefore carries a **Docker `healthcheck`** that curls `http://127.0.0.1:9000/health` inside the container; without it, only Postgres had a healthcheck and CI could hit `/api/health` while Uvicorn was still importing, yielding **503**. Playwright specs that drag `react-resizable-panels` separators poll for non-null `boundingBox()` after `toBeVisible` because layout geometry can trail visibility in headless Chromium.
 
 ## 7. CI workflow
 
@@ -169,7 +169,7 @@ This job runs `docker compose up -d --wait postgres api inngest-dev`, then `pnpm
 3. **Test stubs live in test fixture packages, not `ergon_builtins/`.** Smoke fixtures import their object-bound benchmark and worker classes explicitly; production builtins expose authoring classes directly instead of mutating a process-local registry. Exception: `training_stub_worker.py` — it's a real RL-trajectory baseline, not test scaffolding; operators invoke it via CLI.
 4. **Criteria reconnect via the CriterionRuntime DI container, never via `AsyncSandbox.connect` directly.** Enforced by code inspection; the anti-pattern previously fixed by `bugs/fixed/2026-04-18-swebench-criterion-spawns-sandbox.md`.
 5. **Sandbox outlives the task until all criteria finish.** RFC `sandbox-lifetime-covers-criteria`. Smoke is the living regression test for this.
-6. **Cohort parallelism exercised on every PR.** 2-run happy/sad cohorts prove concurrent workflow submission and cohort aggregation at the scale smoke uses.
+6. **Experiment grouping parallelism exercised on every PR.** 2-run happy/sad experiment groups prove concurrent workflow submission and run aggregation at the scale smoke uses.
 7. **Partial work persists on FAILED leaves.** Sad-path `AlwaysFailSubworker` writes a file + runs a probe command, then raises. Driver asserts the partial artifact and pre-failure WAL entry survive.
 
 ## 9. Budget
@@ -180,7 +180,7 @@ This job runs `docker compose up -d --wait postgres api inngest-dev`, then `pnpm
 | Dynamic child sandbox acquisitions per leg | 19 (1 happy × 11 child tasks + 1 sad × 8 child tasks) |
 | Dynamic child sandbox acquisitions per PR | 57 across 3 sandbox images |
 | Parent-task sandbox per run | 1 (used by parent worker + attached to by the criterion). Not additional at evaluation time. |
-| Parallel workflow runs per PR | 6 (3 legs × 2-run cohort) |
+| Parallel workflow runs per PR | 6 (3 legs × 2-run experiment group) |
 | Warm wall-clock per leg | 1–3 min (post-Docker cache) |
 | Cold wall-clock per leg | up to 5 min |
 

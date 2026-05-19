@@ -1,10 +1,5 @@
 [
   {
-    "eventName": "dashboard/cohort.updated",
-    "modelName": "CohortUpdatedEvent",
-    "schemaFile": "CohortUpdatedEvent.schema.json"
-  },
-  {
     "eventName": "dashboard/workflow.started",
     "modelName": "DashboardWorkflowStartedEvent",
     "schemaFile": "DashboardWorkflowStartedEvent.schema.json"

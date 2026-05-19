@@ -4,13 +4,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from uuid import UUID
 
-from ergon_core.core.application.compat.cohorts import (
-    deprecated_definition_ids_for_cohort,
-    deprecated_cohort_compatibility_service,
-    read_deprecated_cohort_id,
-    remove_legacy_test_cohort_marker,
-    write_legacy_cohort_marker,
-)
 from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
@@ -82,7 +75,7 @@ class HarnessRunState:
 
 
 @dataclass(frozen=True)
-class HarnessCohortRun:
+class HarnessExperimentRun:
     run_id: UUID
     status: str
 
@@ -177,25 +170,13 @@ def read_run_state(run_id: UUID, session: Session) -> HarnessRunState | None:
     )
 
 
-def read_cohort_id(cohort_key: str, session: Session) -> UUID | None:
-    return read_deprecated_cohort_id(cohort_key, session)
-
-
-def read_cohort_runs(cohort_key: str, session: Session) -> list[HarnessCohortRun]:
-    cohort_id = read_deprecated_cohort_id(cohort_key, session)
-    if cohort_id is None:
-        return []
-    definition_ids = deprecated_definition_ids_for_cohort(cohort_id, session)
-    if not definition_ids:
-        return []
+def read_experiment_runs(experiment: str, session: Session) -> list[HarnessExperimentRun]:
     runs = list(
         session.exec(
-            select(RunRecord).where(
-                RunRecord.definition_id.in_(definition_ids)  # type: ignore[attr-defined]
-            )
+            select(RunRecord).where(RunRecord.experiment == experiment)
         ).all(),
     )
-    return [HarnessCohortRun(run_id=r.id, status=r.status) for r in runs]
+    return [HarnessExperimentRun(run_id=r.id, status=r.status) for r in runs]
 
 
 def seed_run(
@@ -204,7 +185,7 @@ def seed_run(
     benchmark_type: str,
     instance_key: str,
     worker_team: dict,
-    cohort_key: str,
+    experiment: str,
     status: str,
     task_slugs: list[str],
 ) -> UUID:
@@ -214,34 +195,20 @@ def seed_run(
         raise UnknownRunStatusError(status) from exc
 
     with Session(get_engine()) as session:
-        cohort = deprecated_cohort_compatibility_service.resolve_or_create(
-            name=cohort_key,
-            description="test harness seeded cohort",
-            created_by="test-harness",
-        )
         definition = session.get(ExperimentDefinition, definition_id)
         if definition is None:
             raise DefinitionNotFoundError(str(definition_id))
-
-        write_legacy_cohort_marker(
-            definition,
-            cohort_id=cohort.id,
-            cohort_key=cohort_key,
-            default_worker_team=worker_team,
-            seeded=True,
-            status="seeded",
-        )
-        session.add(definition)
 
         run = RunRecord(
             definition_id=definition_id,
             benchmark_type=benchmark_type,
             instance_key=instance_key,
             worker_team_json=worker_team,
+            experiment=experiment,
             status=run_status,
             summary_json={
                 "_test_seeded": True,
-                "_test_cohort": cohort_key,
+                "_test_experiment": experiment,
                 "_test_task_slugs": task_slugs,
             },
         )
@@ -251,7 +218,7 @@ def seed_run(
         return run.id
 
 
-def reset_test_rows(*, cohort_prefix: str) -> None:
+def reset_test_rows(*, experiment_prefix: str) -> None:
     with Session(get_engine()) as session:
         # Cannot SQL-filter on JSON prefix portably; load seeded rows and
         # filter in Python. Bounded by the seed endpoint being test-only.
@@ -260,16 +227,9 @@ def reset_test_rows(*, cohort_prefix: str) -> None:
             metadata = {} if run.summary_json is None else run.summary_json
             if not metadata.get("_test_seeded"):
                 continue
-            tag = metadata.get("_test_cohort")
-            if isinstance(tag, str) and tag.startswith(cohort_prefix):
+            tag = metadata.get("_test_experiment")
+            if isinstance(tag, str) and tag.startswith(experiment_prefix):
                 session.delete(run)
-        definitions = list(session.exec(select(ExperimentDefinition)).all())
-        for definition in definitions:
-            metadata = {} if definition.metadata_json is None else definition.metadata_json
-            tag = metadata.get("_test_cohort")
-            if isinstance(tag, str) and tag.startswith(cohort_prefix):
-                remove_legacy_test_cohort_marker(definition)
-                session.add(definition)
         session.commit()
 
 

@@ -26,7 +26,6 @@ logging.basicConfig(
 )
 
 import inngest.fast_api
-from ergon_core.core.infrastructure.http.routes.cohorts import router as cohorts_router
 from ergon_core.core.infrastructure.http.routes.experiments import router as experiments_router
 from ergon_core.core.infrastructure.http.routes.rollouts import router as rollouts_router
 from ergon_core.core.infrastructure.http.routes.runs import router as runs_router
@@ -45,7 +44,7 @@ from ergon_core.core.infrastructure.sandbox.manager import DefaultSandboxManager
 from ergon_core.core.rl.rollout_service import RolloutService
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.infrastructure.inngest.registry import ALL_FUNCTIONS
-from ergon_core.core.shared.settings import Settings, settings
+from ergon_core.core.shared.settings import Settings
 from fastapi import FastAPI
 
 logger = logging.getLogger(__name__)
@@ -91,7 +90,6 @@ app = FastAPI(
 )
 
 app.include_router(runs_router)
-app.include_router(cohorts_router)
 app.include_router(experiments_router)
 app.include_router(rollouts_router)
 

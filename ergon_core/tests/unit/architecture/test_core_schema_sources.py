@@ -107,63 +107,77 @@ def test_core_schema_source_imports_are_directional() -> None:
     assert offenders == []
 
 
-def test_legacy_experiment_record_usage_is_compat_only() -> None:
-    allowed = {
-        ROOT / "ergon_core/ergon_core/core/persistence/telemetry/models.py",
-        ROOT / "ergon_core/ergon_core/core/application/compat/legacy_experiments.py",
+def test_legacy_experiment_record_is_deleted() -> None:
+    allowed_tests = {
+        ROOT / "ergon_core/tests/unit/architecture/test_core_schema_sources.py",
     }
     offenders: list[str] = []
 
     for base in (
         ROOT / "ergon_core/ergon_core/core",
         ROOT / "ergon_cli/ergon_cli",
+        ROOT / "ergon_core/tests/unit",
+        ROOT / "ergon_cli/tests/unit",
     ):
         for path in base.rglob("*.py"):
-            if path in allowed or "__pycache__" in path.parts:
+            if path in allowed_tests or "__pycache__" in path.parts:
                 continue
-            if "BenchmarkDefinitionRecord" in path.read_text():
+            if ("Benchmark" + "DefinitionRecord") in path.read_text():
                 offenders.append(str(path.relative_to(ROOT)))
 
     assert offenders == []
 
 
-def test_deprecated_cohort_table_usage_is_compat_only() -> None:
-    allowed = {
-        ROOT / "ergon_core/ergon_core/core/persistence/telemetry/models.py",
-        ROOT / "ergon_core/ergon_core/core/application/compat/cohorts.py",
-        ROOT / "ergon_core/ergon_core/core/application/read_models/cohorts.py",
+def test_deprecated_cohort_tables_are_deleted() -> None:
+    allowed_tests = {
+        ROOT / "ergon_core/tests/unit/architecture/test_core_schema_sources.py",
     }
     snippets = (
-        "ExperimentCohort",
-        "ExperimentCohortStats",
-        "ExperimentCohortStatus",
+        "Experiment" + "Cohort",
+        "Experiment" + "CohortStats",
+        "Experiment" + "CohortStatus",
     )
     offenders: list[str] = []
 
-    for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
-        if path in allowed or "__pycache__" in path.parts:
-            continue
-        text = path.read_text()
-        for snippet in snippets:
-            if snippet in text:
-                offenders.append(f"{path.relative_to(ROOT)} references {snippet}")
+    for base in (
+        ROOT / "ergon_core/ergon_core/core",
+        ROOT / "ergon_core/tests/unit",
+    ):
+        for path in base.rglob("*.py"):
+            if path in allowed_tests or "__pycache__" in path.parts:
+                continue
+            text = path.read_text()
+            for snippet in snippets:
+                if snippet in text:
+                    offenders.append(f"{path.relative_to(ROOT)} references {snippet}")
 
     assert offenders == []
 
 
-def test_deprecated_cohort_metadata_behavior_is_compat_only() -> None:
-    allowed = {
-        ROOT / "ergon_core/ergon_core/core/application/compat/cohorts.py",
-    }
+def test_deprecated_cohort_compat_modules_are_deleted() -> None:
+    for removed_path in (
+        ROOT / ("ergon_core/ergon_core/core/application/compat/co" + "horts.py"),
+        ROOT / "ergon_core/ergon_core/core/application/compat/legacy_experiments.py",
+        ROOT / ("ergon_core/ergon_core/core/application/read_models/co" + "horts.py"),
+        ROOT / ("ergon_core/ergon_core/core/views/compat/co" + "horts.py"),
+        ROOT / ("ergon_core/ergon_core/core/views/dashboard_events/co" + "horts.py"),
+        ROOT / ("ergon_core/ergon_core/core/infrastructure/http/routes/co" + "horts.py"),
+    ):
+        assert not removed_path.exists()
+
+
+def test_deprecated_cohort_metadata_behavior_is_deleted() -> None:
     snippets = (
         'parsed_metadata().get("cohort_id")',
         "parsed_metadata().get('cohort_id')",
-        "from ergon_core.core.application.compat.legacy_experiments import cohort_id_from_metadata",
+        "cohort_id_from_metadata",
+        "build_legacy_cohort_marker_metadata",
+        "write_legacy_cohort_marker",
     )
     offenders: list[str] = []
 
     for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
-        if path in allowed or "__pycache__" in path.parts:
+        if "__pycache__" in path.parts:
             continue
         text = path.read_text()
         for snippet in snippets:
@@ -174,7 +188,6 @@ def test_deprecated_cohort_metadata_behavior_is_compat_only() -> None:
 
 
 def test_production_callers_do_not_use_deprecated_cohort_read_model_path() -> None:
-    shim = ROOT / "ergon_core/ergon_core/core/application/read_models/cohorts.py"
     offenders: list[str] = []
 
     for base in (
@@ -182,9 +195,9 @@ def test_production_callers_do_not_use_deprecated_cohort_read_model_path() -> No
         ROOT / "ergon_cli/ergon_cli",
     ):
         for path in base.rglob("*.py"):
-            if path == shim or "__pycache__" in path.parts:
+            if "__pycache__" in path.parts:
                 continue
-            if "application.read_models.cohorts" in path.read_text():
+            if ("application.read_models.co" + "horts") in path.read_text():
                 offenders.append(str(path.relative_to(ROOT)))
 
     assert offenders == []
@@ -539,8 +552,10 @@ def test_deprecated_cohort_compatibility_has_one_front_door_service() -> None:
         spec = None
     assert spec is None
 
-    cohorts = ROOT / "ergon_core/ergon_core/core/application/compat/cohorts.py"
-    assert "def recompute(" in cohorts.read_text()
+    removed_grouping_module = ROOT / (
+        "ergon_core/ergon_core/core/application/compat/co" + "horts.py"
+    )
+    assert not removed_grouping_module.exists()
 
 
 def test_workflow_lifecycle_has_one_front_door_service() -> None:

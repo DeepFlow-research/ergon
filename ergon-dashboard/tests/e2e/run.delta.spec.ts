@@ -32,7 +32,7 @@ test.afterEach(async () => {
 });
 
 test("run header reacts to controlled completion delta", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
 
   await expect(page.getByTestId("run-header")).toContainText("Executing");
 
@@ -43,7 +43,6 @@ test("run header reacts to controlled completion delta", async ({ page }) => {
       durationSeconds: 42,
       finalScore: 0.75,
       error: null,
-      cohortId: FIXTURE_IDS.cohortId,
     },
   });
   expect(response.ok()).toBeTruthy();
@@ -53,7 +52,7 @@ test("run header reacts to controlled completion delta", async ({ page }) => {
 });
 
 test("communication and evaluation react to controlled deltas", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
   await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
 
   const messageResponse = await page.request.post("/api/danger/test-harness/dashboard/events/thread-message", {
@@ -88,7 +87,7 @@ test("communication and evaluation react to controlled deltas", async ({ page })
 });
 
 test("workspace actions react to controlled context event deltas", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
   await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
 
   await page.getByTestId("workspace-tab-actions").click();
@@ -106,7 +105,7 @@ test("workspace actions react to controlled context event deltas", async ({ page
 });
 
 test("evaluation tab shows a clear empty criteria state", async ({ page }) => {
-  await page.goto(`/cohorts/${FIXTURE_IDS.cohortId}/runs/${FIXTURE_IDS.runId}`);
+  await page.goto(`/run/${FIXTURE_IDS.runId}`);
   await page.getByTestId(`graph-node-${FIXTURE_IDS.solveTaskId}`).click();
 
   const response = await page.request.post("/api/danger/test-harness/dashboard/events/task-evaluation", {

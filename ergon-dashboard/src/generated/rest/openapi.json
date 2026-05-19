@@ -150,150 +150,6 @@
         }
       }
     },
-    "/cohorts": {
-      "get": {
-        "tags": [
-          "cohorts"
-        ],
-        "summary": "List Cohorts",
-        "description": "List all experiment cohorts.",
-        "operationId": "list_cohorts_cohorts_get",
-        "parameters": [
-          {
-            "name": "include_archived",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false,
-              "title": "Include Archived"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CohortSummaryDto"
-                  },
-                  "title": "Response List Cohorts Cohorts Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/cohorts/{cohort_id}": {
-      "get": {
-        "tags": [
-          "cohorts"
-        ],
-        "summary": "Get Cohort",
-        "description": "Get one cohort detail payload.",
-        "operationId": "get_cohort_cohorts__cohort_id__get",
-        "parameters": [
-          {
-            "name": "cohort_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Cohort Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CohortDetailDto"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "cohorts"
-        ],
-        "summary": "Update Cohort",
-        "description": "Update one cohort's operator-managed fields.",
-        "operationId": "update_cohort_cohorts__cohort_id__patch",
-        "parameters": [
-          {
-            "name": "cohort_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Cohort Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateCohortRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CohortSummaryDto"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/experiments": {
       "get": {
         "tags": [
@@ -672,65 +528,22 @@
         }
       }
     },
-    "/api/__danger__/test-harness/read/cohort/{cohort_key}/id": {
+    "/api/__danger__/test-harness/read/experiment/{experiment}/runs": {
       "get": {
         "tags": [
           "danger-test-harness"
         ],
-        "summary": "Read Cohort Id",
-        "description": "Resolve a cohort name to its UUID for dashboard navigation.",
-        "operationId": "read_cohort_id_api___danger___test_harness_read_cohort__cohort_key__id_get",
+        "summary": "Read Experiment Runs",
+        "description": "List all runs attached to a v2 experiment grouping tag.",
+        "operationId": "read_experiment_runs_api___danger___test_harness_read_experiment__experiment__runs_get",
         "parameters": [
           {
-            "name": "cohort_key",
+            "name": "experiment",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Cohort Key"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TestCohortIdDto"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/__danger__/test-harness/read/cohort/{cohort_key}/runs": {
-      "get": {
-        "tags": [
-          "danger-test-harness"
-        ],
-        "summary": "Read Cohort Runs",
-        "description": "List all runs attached to a cohort by name.\n\n``cohort_key`` matches ``ExperimentCohort.name`` exactly.  Returns\nempty list when the cohort does not exist (rather than 404) so\nPlaywright / pytest can poll cheaply while a cohort is being\nsubmitted.",
-        "operationId": "read_cohort_runs_api___danger___test_harness_read_cohort__cohort_key__runs_get",
-        "parameters": [
-          {
-            "name": "cohort_key",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Cohort Key"
+              "title": "Experiment"
             }
           }
         ],
@@ -742,9 +555,9 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/TestCohortRunDto"
+                    "$ref": "#/components/schemas/TestExperimentRunDto"
                   },
-                  "title": "Response Read Cohort Runs Api   Danger   Test Harness Read Cohort  Cohort Key  Runs Get"
+                  "title": "Response Read Experiment Runs Api   Danger   Test Harness Read Experiment  Experiment  Runs Get"
                 }
               }
             }
@@ -839,19 +652,19 @@
         }
       }
     },
-    "/api/__danger__/test-harness/write/cohort": {
+    "/api/__danger__/test-harness/write/experiment-runs": {
       "post": {
         "tags": [
           "danger-test-harness"
         ],
-        "summary": "Submit Cohort",
-        "description": "Build + persist + dispatch N runs under one cohort.\n\nPer-slot flow persists the object-bound smoke ``Benchmark`` into the\nimmutable ``ExperimentDefinition`` tables. Cohort/display metadata is\nwritten onto the definition metadata before launch. Slots submit\nsequentially — typical N ≤ 3, so the parallel-gather savings are negligible.",
-        "operationId": "submit_cohort_api___danger___test_harness_write_cohort_post",
+        "summary": "Submit Experiment Runs",
+        "description": "Build + persist + dispatch N runs under one experiment tag.\n\nPer-slot flow persists the object-bound smoke ``Benchmark`` into the\nimmutable ``ExperimentDefinition`` tables. The v2 experiment grouping tag\nis written into definition metadata and copied to ``RunRecord.experiment``\nby launch. Slots submit sequentially \u2014 typical N \u2264 3, so the\nparallel-gather savings are negligible.",
+        "operationId": "submit_experiment_runs_api___danger___test_harness_write_experiment_runs_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SubmitCohortRequest"
+                "$ref": "#/components/schemas/SubmitExperimentRunsRequest"
               }
             }
           },
@@ -863,7 +676,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubmitCohortResponse"
+                  "$ref": "#/components/schemas/SubmitExperimentRunsResponse"
                 }
               }
             }
@@ -950,7 +763,7 @@
           "payload"
         ],
         "title": "AnnotationDeletedMutation",
-        "description": "annotation.deleted — tombstone."
+        "description": "annotation.deleted \u2014 tombstone."
       },
       "AnnotationSetMutation": {
         "properties": {
@@ -996,313 +809,6 @@
           "content"
         ],
         "title": "AssistantTextPart"
-      },
-      "BatchStatus": {
-        "type": "string",
-        "enum": [
-          "pending",
-          "running",
-          "complete",
-          "failed",
-          "cancelled"
-        ],
-        "title": "BatchStatus"
-      },
-      "CohortDetailDto": {
-        "properties": {
-          "summary": {
-            "$ref": "#/components/schemas/CohortSummaryDto"
-          },
-          "experiments": {
-            "items": {
-              "$ref": "#/components/schemas/CohortExperimentRowDto"
-            },
-            "type": "array",
-            "title": "Experiments"
-          }
-        },
-        "type": "object",
-        "required": [
-          "summary"
-        ],
-        "title": "CohortDetailDto",
-        "description": "Full payload for a single cohort detail page."
-      },
-      "CohortExperimentRowDto": {
-        "properties": {
-          "definition_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Definition Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "benchmark_type": {
-            "type": "string",
-            "title": "Benchmark Type"
-          },
-          "sample_count": {
-            "type": "integer",
-            "title": "Sample Count"
-          },
-          "total_runs": {
-            "type": "integer",
-            "title": "Total Runs",
-            "default": 0
-          },
-          "status_counts": {
-            "$ref": "#/components/schemas/CohortStatusCountsDto"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "default_model_target": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Model Target"
-          },
-          "default_evaluator_slug": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Evaluator Slug"
-          },
-          "final_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Final Score"
-          },
-          "total_cost_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Cost Usd"
-          },
-          "error_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Message"
-          }
-        },
-        "type": "object",
-        "required": [
-          "definition_id",
-          "name",
-          "benchmark_type",
-          "sample_count",
-          "status",
-          "created_at"
-        ],
-        "title": "CohortExperimentRowDto",
-        "description": "One experiment inside a cohort detail view."
-      },
-      "CohortSlotRequest": {
-        "properties": {
-          "worker_slug": {
-            "type": "string",
-            "title": "Worker Slug"
-          },
-          "evaluator_slug": {
-            "type": "string",
-            "title": "Evaluator Slug"
-          }
-        },
-        "type": "object",
-        "required": [
-          "worker_slug",
-          "evaluator_slug"
-        ],
-        "title": "CohortSlotRequest"
-      },
-      "CohortStatusCountsDto": {
-        "properties": {
-          "pending": {
-            "type": "integer",
-            "title": "Pending",
-            "default": 0
-          },
-          "executing": {
-            "type": "integer",
-            "title": "Executing",
-            "default": 0
-          },
-          "evaluating": {
-            "type": "integer",
-            "title": "Evaluating",
-            "default": 0
-          },
-          "completed": {
-            "type": "integer",
-            "title": "Completed",
-            "default": 0
-          },
-          "failed": {
-            "type": "integer",
-            "title": "Failed",
-            "default": 0
-          }
-        },
-        "type": "object",
-        "title": "CohortStatusCountsDto",
-        "description": "Aggregate run counts by lifecycle status."
-      },
-      "CohortSummaryDto": {
-        "properties": {
-          "cohort_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Cohort Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "created_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created By"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "total_runs": {
-            "type": "integer",
-            "title": "Total Runs",
-            "default": 0
-          },
-          "status_counts": {
-            "$ref": "#/components/schemas/CohortStatusCountsDto"
-          },
-          "average_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Score"
-          },
-          "best_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Best Score"
-          },
-          "worst_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Worst Score"
-          },
-          "average_duration_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Duration Ms"
-          },
-          "failure_rate": {
-            "type": "number",
-            "title": "Failure Rate",
-            "default": 0
-          },
-          "stats_updated_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stats Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cohort_id",
-          "name",
-          "created_at",
-          "status"
-        ],
-        "title": "CohortSummaryDto",
-        "description": "Summary row for cohort list and live updates."
       },
       "ContextPartChunkLog": {
         "properties": {
@@ -1471,7 +977,7 @@
           "status"
         ],
         "title": "EdgeAddedMutation",
-        "description": "edge.added — full edge snapshot."
+        "description": "edge.added \u2014 full edge snapshot."
       },
       "EdgeRemovedMutation": {
         "properties": {
@@ -1619,14 +1125,6 @@
         },
         "type": "object",
         "title": "ExperimentAnalyticsDto"
-      },
-      "ExperimentCohortStatus": {
-        "type": "string",
-        "enum": [
-          "active",
-          "archived"
-        ],
-        "title": "ExperimentCohortStatus"
       },
       "ExperimentDetailDto": {
         "properties": {
@@ -1929,6 +1427,24 @@
         ],
         "title": "ExperimentRunRowDto"
       },
+      "ExperimentRunSlotRequest": {
+        "properties": {
+          "worker_slug": {
+            "type": "string",
+            "title": "Worker Slug"
+          },
+          "evaluator_slug": {
+            "type": "string",
+            "title": "Evaluator Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker_slug",
+          "evaluator_slug"
+        ],
+        "title": "ExperimentRunSlotRequest"
+      },
       "ExperimentStatusCountsDto": {
         "properties": {
           "pending": {
@@ -1971,18 +1487,6 @@
             "type": "string",
             "format": "uuid",
             "title": "Definition Id"
-          },
-          "cohort_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cohort Id"
           },
           "name": {
             "type": "string",
@@ -2380,7 +1884,7 @@
           "assigned_worker_slug"
         ],
         "title": "NodeAddedMutation",
-        "description": "node.added — full node snapshot."
+        "description": "node.added \u2014 full node snapshot."
       },
       "NodeFieldChangedMutation": {
         "properties": {
@@ -2463,7 +1967,7 @@
           "assigned_worker_slug"
         ],
         "title": "NodeRemovedMutation",
-        "description": "node.removed — node snapshot at removal time."
+        "description": "node.removed \u2014 node snapshot at removal time."
       },
       "NodeStatusChangedMutation": {
         "properties": {
@@ -2493,7 +1997,7 @@
             "title": "Batch Id"
           },
           "status": {
-            "$ref": "#/components/schemas/BatchStatus"
+            "$ref": "#/components/schemas/RolloutStatus"
           },
           "completed": {
             "type": "integer",
@@ -2526,20 +2030,31 @@
           "status"
         ],
         "title": "PollResponse",
-        "description": "Ergon → Trainer: current batch status + trajectories if complete."
+        "description": "Ergon \u2192 Trainer: current batch status + trajectories if complete."
       },
       "ResetRequest": {
         "properties": {
-          "cohort_prefix": {
+          "experiment_prefix": {
             "type": "string",
-            "title": "Cohort Prefix"
+            "title": "Experiment Prefix"
           }
         },
         "type": "object",
         "required": [
-          "cohort_prefix"
+          "experiment_prefix"
         ],
         "title": "ResetRequest"
+      },
+      "RolloutStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "complete",
+          "failed",
+          "cancelled"
+        ],
+        "title": "RolloutStatus"
       },
       "RunCommunicationMessageDto": {
         "properties": {
@@ -3555,7 +3070,7 @@
           "level"
         ],
         "title": "RunTaskDto",
-        "description": "REST projection of RunGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\napplication/graph/models.py and persistence/graph/status_conventions.py."
+        "description": "REST projection of RunGraphNode for run detail pages.\n\nThis is not the canonical graph schema; graph semantics live in\napplication/graph/models.py and application/runtime/status.py."
       },
       "RunTaskEvaluationDto": {
         "properties": {
@@ -3668,9 +3183,9 @@
             "type": "object",
             "title": "Worker Team"
           },
-          "cohort": {
+          "experiment": {
             "type": "string",
-            "title": "Cohort",
+            "title": "Experiment",
             "default": "_test_"
           },
           "status": {
@@ -3693,7 +3208,7 @@
         ],
         "title": "SeedRunRequest"
       },
-      "SubmitCohortRequest": {
+      "SubmitExperimentRunsRequest": {
         "properties": {
           "benchmark_slug": {
             "type": "string",
@@ -3701,14 +3216,14 @@
           },
           "slots": {
             "items": {
-              "$ref": "#/components/schemas/CohortSlotRequest"
+              "$ref": "#/components/schemas/ExperimentRunSlotRequest"
             },
             "type": "array",
             "title": "Slots"
           },
-          "cohort_key": {
+          "experiment": {
             "type": "string",
-            "title": "Cohort Key"
+            "title": "Experiment"
           },
           "sandbox_slug": {
             "anyOf": [
@@ -3746,11 +3261,11 @@
         "required": [
           "benchmark_slug",
           "slots",
-          "cohort_key"
+          "experiment"
         ],
-        "title": "SubmitCohortRequest"
+        "title": "SubmitExperimentRunsRequest"
       },
-      "SubmitCohortResponse": {
+      "SubmitExperimentRunsResponse": {
         "properties": {
           "run_ids": {
             "items": {
@@ -3759,19 +3274,13 @@
             },
             "type": "array",
             "title": "Run Ids"
-          },
-          "cohort_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Cohort Id"
           }
         },
         "type": "object",
         "required": [
-          "run_ids",
-          "cohort_id"
+          "run_ids"
         ],
-        "title": "SubmitCohortResponse"
+        "title": "SubmitExperimentRunsResponse"
       },
       "SubmitRequest": {
         "properties": {
@@ -3782,7 +3291,7 @@
           },
           "num_episodes": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Num Episodes"
           },
           "policy_version": {
@@ -3814,7 +3323,7 @@
           "num_episodes"
         ],
         "title": "SubmitRequest",
-        "description": "Trainer → Ergon: start a batch of episodes."
+        "description": "Trainer \u2192 Ergon: start a batch of episodes."
       },
       "SubmitResponse": {
         "properties": {
@@ -3832,7 +3341,7 @@
             "title": "Run Ids"
           },
           "status": {
-            "$ref": "#/components/schemas/BatchStatus",
+            "$ref": "#/components/schemas/RolloutStatus",
             "default": "pending"
           }
         },
@@ -3842,7 +3351,7 @@
           "run_ids"
         ],
         "title": "SubmitResponse",
-        "description": "Ergon → Trainer: batch accepted."
+        "description": "Ergon \u2192 Trainer: batch accepted."
       },
       "SystemPromptPart": {
         "properties": {
@@ -3864,39 +3373,6 @@
           "content"
         ],
         "title": "SystemPromptPart"
-      },
-      "TestCohortIdDto": {
-        "properties": {
-          "cohort_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Cohort Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cohort_id"
-        ],
-        "title": "TestCohortIdDto"
-      },
-      "TestCohortRunDto": {
-        "properties": {
-          "run_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Run Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "required": [
-          "run_id",
-          "status"
-        ],
-        "title": "TestCohortRunDto"
       },
       "TestEvaluationDto": {
         "properties": {
@@ -3970,6 +3446,25 @@
           "error"
         ],
         "title": "TestExecutionDto"
+      },
+      "TestExperimentRunDto": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "TestExperimentRunDto"
       },
       "TestGraphMutationDto": {
         "properties": {
@@ -4316,19 +3811,6 @@
         "title": "Trajectory",
         "description": "One agent's extracted trajectory from a completed episode.\n\nMaps 1:1 to AgentTrajectory from extraction.py, plus metadata."
       },
-      "UpdateCohortRequest": {
-        "properties": {
-          "status": {
-            "$ref": "#/components/schemas/ExperimentCohortStatus"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "title": "UpdateCohortRequest",
-        "description": "Mutable cohort fields exposed through the operator API."
-      },
       "UserMessagePart": {
         "properties": {
           "part_kind": {
@@ -4407,7 +3889,7 @@
           "model_name"
         ],
         "title": "WeightSyncRequest",
-        "description": "Trainer → Ergon: restart vLLM with updated checkpoint.\n\nFor full-weight RFT: Ergon kills the vLLM process and restarts it\nwith --model pointing to checkpoint_path. Blocks until healthy."
+        "description": "Trainer \u2192 Ergon: restart vLLM with updated checkpoint.\n\nFor full-weight RFT: Ergon kills the vLLM process and restarts it\nwith --model pointing to checkpoint_path. Blocks until healthy."
       },
       "WeightSyncResponse": {
         "properties": {
@@ -4426,7 +3908,7 @@
           "vllm_model_loaded"
         ],
         "title": "WeightSyncResponse",
-        "description": "Ergon → Trainer: sync result."
+        "description": "Ergon \u2192 Trainer: sync result."
       }
     }
   }

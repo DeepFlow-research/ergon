@@ -22,7 +22,6 @@ from ergon_core.core.views.runs.models import (
 from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
 from ergon_core.core.application.events.base import InngestEventContract
 from ergon_core.core.application.runtime.status import NodeStatus
-from ergon_core.core.views.compat.cohorts import CohortSummaryDto
 from ergon_core.core.application.graph.models import GraphMutationRecordDto
 from pydantic import Field
 
@@ -155,20 +154,6 @@ class DashboardThreadMessageCreatedEvent(InngestEventContract):
     run_id: UUID
     thread: RunCommunicationThreadDto
     message: RunCommunicationMessageDto
-
-
-# ---------------------------------------------------------------------------
-# Cohort events
-# ---------------------------------------------------------------------------
-
-
-class CohortUpdatedEvent(InngestEventContract):
-    """Live cohort summary update."""
-
-    name: ClassVar[str] = "dashboard/cohort.updated"
-
-    cohort_id: UUID
-    summary: CohortSummaryDto
 
 
 # ---------------------------------------------------------------------------

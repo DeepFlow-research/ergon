@@ -3,11 +3,6 @@
 import logging
 from datetime import UTC, datetime
 
-from ergon_core.core.application.compat.cohorts import (
-    cohort_id_for_trace_from_definition,
-    emit_deprecated_cohort_updated_for_run,
-)
-from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.application.events.infrastructure_events import RunCleanupEvent
@@ -40,8 +35,6 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
             definition_id=payload.definition_id,
         )
     )
-
-    await emit_deprecated_cohort_updated_for_run(payload.run_id)
 
     with get_session() as _session:
         _run = _session.get(RunRecord, payload.run_id)
@@ -97,7 +90,6 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
 
     with get_session() as session:
         run = session.get(RunRecord, payload.run_id)
-        definition = session.get(ExperimentDefinition, run.definition_id) if run else None
         if run and run.started_at and run.completed_at:
             sink.emit_span(
                 CompletedSpan(
@@ -108,7 +100,6 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
                     attributes={
                         "run_id": str(payload.run_id),
                         "definition_id": str(payload.definition_id),
-                        "cohort_id": cohort_id_for_trace_from_definition(definition),
                         "status": run.status,
                         "final_score": finalized.final_score,
                         "normalized_score": finalized.normalized_score,

@@ -3,12 +3,6 @@
 from datetime import datetime
 from uuid import UUID
 
-from ergon_core.core.application.compat.cohorts import cohort_id_from_metadata
-from ergon_core.core.application.compat.legacy_experiments import (
-    dict_metadata,
-    legacy_experiment_detail,
-    optional_str_metadata,
-)
 from ergon_core.core.views.experiments.models import (
     ExperimentAnalyticsDto,
     ExperimentDetailDto,
@@ -56,7 +50,7 @@ class ExperimentReadService:
             if definition is not None:
                 return _definition_detail(session, definition)
 
-            return legacy_experiment_detail(session, definition_id)
+            return None
 
 
 def _definition_summary(
@@ -69,15 +63,16 @@ def _definition_summary(
 
     Identity fields (``name``/``description``/``benchmark_type``/``created_by``)
     come directly from the columns Task 1 added.  Run / sample bookkeeping is
-    derived: ``RunRecord.definition_id`` indexes runs, and
+    derived: ``RunRecord.experiment`` indexes grouped runs, and
     ``ExperimentDefinitionInstance`` rows index instances.
     """
-    run_count = len(runs) if runs is not None else _run_count_by_definition(session, definition.id)
+    run_count = (
+        len(runs) if runs is not None else len(_runs_for_definition_view(session, definition))
+    )
     sample_count = _instance_count(session, definition.id)
     metadata = definition.parsed_metadata()
     return ExperimentSummaryDto(
         definition_id=definition.id,
-        cohort_id=cohort_id_from_metadata(metadata),
         name=definition.name,
         description=definition.description,
         benchmark_type=definition.benchmark_type,
@@ -99,9 +94,7 @@ def _definition_detail(
     definition: ExperimentDefinition,
 ) -> ExperimentDetailDto:
     """Build a detail DTO from an ``ExperimentDefinition`` row."""
-    runs = list(
-        session.exec(select(RunRecord).where(RunRecord.definition_id == definition.id)).all()
-    )
+    runs = _runs_for_definition_view(session, definition)
     task_counts = _task_counts_by_run(session, [run.id for run in runs])
     run_rows = [_run_row(run, total_tasks=task_counts.get(run.id)) for run in runs]
     return ExperimentDetailDto(
@@ -118,9 +111,21 @@ def _definition_detail(
     )
 
 
-def _run_count_by_definition(session: Session, definition_id: UUID) -> int:
-    return len(
-        list(session.exec(select(RunRecord.id).where(RunRecord.definition_id == definition_id)))
+def _runs_for_definition_view(
+    session: Session,
+    definition: ExperimentDefinition,
+) -> list[RunRecord]:
+    experiment = optional_str_metadata(definition.parsed_metadata(), "experiment")
+    if experiment:
+        return list(
+            session.exec(
+                select(RunRecord).where(RunRecord.experiment == experiment)
+            ).all()
+        )
+    return list(
+        session.exec(
+            select(RunRecord).where(RunRecord.definition_id == definition.id)
+        ).all()
     )
 
 
@@ -194,12 +199,11 @@ def _analytics(rows: list[ExperimentRunRowDto]) -> ExperimentAnalyticsDto:
         if latest_activity_at is None or activity_at > latest_activity_at:
             latest_activity_at = activity_at
 
-    average_duration = _average(durations)
     return ExperimentAnalyticsDto(
         total_runs=len(rows),
         status_counts=status_counts,
         average_score=_average(scores),
-        average_duration_ms=round(average_duration) if average_duration is not None else None,
+        average_duration_ms=_average_duration_ms(durations),
         average_tasks=_average(task_counts),
         total_cost_usd=total_cost_usd,
         latest_activity_at=latest_activity_at,
@@ -229,6 +233,11 @@ def _average(values: list[float] | list[int]) -> float | None:
     return sum(values) / len(values)
 
 
+def _average_duration_ms(durations: list[int]) -> int | None:
+    average = _average(durations)
+    return round(average) if average is not None else None
+
+
 def _duration_ms(run: RunRecord) -> int | None:
     if run.started_at is None or run.completed_at is None:
         return None
@@ -247,3 +256,13 @@ def _summary_text(summary: dict, key: str) -> str | None:
     if isinstance(value, str) and value:
         return value
     return None
+
+
+def dict_metadata(metadata: dict, key: str) -> dict:
+    value = metadata.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def optional_str_metadata(metadata: dict, key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) else None
