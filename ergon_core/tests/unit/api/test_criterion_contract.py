@@ -39,7 +39,7 @@ def test_criterion_exposes_slug_and_score_spec_without_compatibility_aliases() -
 
 def test_criterion_outcome_requires_slug_without_name_fallback() -> None:
     with pytest.raises(ValidationError):
-        CriterionOutcome.model_validate({"name": "legacy-name", "score": 1.0, "passed": True})
+        CriterionOutcome.model_validate({"name": "old-name", "score": 1.0, "passed": True})
 
 
 def test_criterion_outcome_allows_slug_without_name() -> None:

@@ -25,22 +25,20 @@ WorkerStreamItem = ContextPartChunk | WorkerOutput
 class Worker(BaseModel, ABC):
     """Base class for all workers. Pydantic-serializable.
 
-    PR 5 converts the v1 hand-rolled ABC to a Pydantic ``BaseModel``
-    so workers can be round-tripped through ``task_json`` snapshots
-    alongside ``Task`` and ``Sandbox``. Concrete subclasses declare
-    config fields directly on the model.
+    Workers are Pydantic models so authored worker instances can
+    round-trip through ``task_json`` snapshots alongside ``Task`` and
+    ``Sandbox``. Concrete subclasses declare config fields directly on
+    the model.
 
     ``type_slug`` / ``required_packages`` / ``install_hint`` /
     ``requires_sandbox`` are ``ClassVar``s on the subclass — Pydantic
     leaves ``ClassVar`` alone, so they don't become serialized fields.
     """
 
-    # ``extra="allow"`` lets subclasses keep their hand-rolled
-    # ``__init__`` patterns from before PR 5 (e.g. ``ReActWorker``'s
-    # tools/system_prompt/max_iterations kwargs). Those flow into
+    # ``extra="allow"`` lets subclass-specific kwargs flow into
     # ``__pydantic_extra__`` and round-trip through ``model_dump`` /
-    # ``model_validate`` like any other field while object-bound worker
-    # classes finish converging on explicit field declarations.
+    # ``model_validate`` while worker implementations converge on
+    # explicit field declarations.
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
         frozen=False,

@@ -282,15 +282,12 @@ class WorkflowGraphRepository:
     ) -> RunGraphNodeView:
         """Inflate a typed RunGraphNodeView from `run_graph_nodes.task_json`.
 
-        PR 2's run-tier read boundary: the repo reads the run-tier
-        ``task_json`` column ONLY and reconstructs a typed Task via
-        ``Task.from_definition``. The job body downstream receives a
-        ``RunGraphNodeView`` with the Task already inflated — no raw
-        JSON, no definition-tier reads.
+        The repository reads only the run-tier ``task_json`` column and
+        reconstructs a typed Task via ``Task.from_definition``. The job
+        body downstream receives a ``RunGraphNodeView`` with the Task
+        already inflated: no raw JSON and no definition-tier reads.
 
-        Async because ``Task.from_definition`` is async (PR 2 locks
-        this signature; PR 5 actually awaits in the body once Sandbox
-        reconstruction lands).
+        Async because ``Task.from_definition`` is async.
 
         ``RunGraphNode.task_id`` is the task identity for both
         definition-seeded and dynamic nodes.

@@ -39,10 +39,10 @@ PayloadT = TypeVar(
 class Task(BaseModel, Generic[PayloadT]):
     """Runtime task passed to Worker.execute().
 
-    Per PR 2 of the v2 authoring API redesign, `task_id` lives as a
-    `PrivateAttr` set by `Task.from_definition`. The `task_id` property
-    raises if read before materialization — surfaces the bug at the
-    boundary instead of producing a Task with an unset identity.
+    ``task_id`` lives as a ``PrivateAttr`` set by
+    ``Task.from_definition``. The ``task_id`` property raises if read
+    before materialization, surfacing the bug at the boundary instead
+    of producing a Task with an unset identity.
 
     Object-bound fields are the only public shape: every persisted task
     snapshot carries its worker, sandbox, and evaluators directly.

@@ -22,10 +22,10 @@ from ergon_core.core.infrastructure.dependencies import check_packages
 class Evaluator(BaseModel, ABC):
     """Base class for custom dynamic evaluators. Pydantic-serializable.
 
-    PR 5 converts the v1 hand-rolled ABC to a Pydantic ``BaseModel``
-    so evaluators round-trip through ``task_json`` snapshots alongside
-    ``Task``, ``Worker``, and ``Sandbox``. Concrete subclasses declare
-    config fields directly on the model.
+    Evaluators are Pydantic models so authored evaluator instances
+    round-trip through ``task_json`` snapshots alongside ``Task``,
+    ``Worker``, and ``Sandbox``. Concrete subclasses declare config
+    fields directly on the model.
 
     ``type_slug`` / ``required_packages`` / ``install_hint`` are
     ``ClassVar``s on the subclass — Pydantic leaves ``ClassVar`` alone,
