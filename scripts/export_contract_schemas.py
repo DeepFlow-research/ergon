@@ -1,7 +1,7 @@
 """Export dashboard Inngest event contracts as JSON Schema.
 
 Reads ergon-dashboard/src/generated/events/schemas/manifest.json, imports each
-listed pydantic model from ergon_core.core.infrastructure.dashboard.event_contracts, and
+listed pydantic model from ergon_core.core.views.dashboard_events.contracts, and
 writes its JSON schema next to the manifest. Downstream, json-schema-to-zod
 turns these into the dashboard's Zod validators (see package.json's
 generate:contracts:events step).
@@ -19,7 +19,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_DIR = REPO_ROOT / "ergon-dashboard" / "src" / "generated" / "events" / "schemas"
 MANIFEST_PATH = SCHEMA_DIR / "manifest.json"
-CONTRACTS_MODULE = "ergon_core.core.infrastructure.dashboard.event_contracts"
+CONTRACTS_MODULE = "ergon_core.core.views.dashboard_events.contracts"
 
 
 def main() -> None:

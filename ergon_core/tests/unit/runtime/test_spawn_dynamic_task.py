@@ -290,8 +290,8 @@ async def test_step_aware_spawn_dynamic_task_is_replay_safe(
     _patch(management_module, "get_session", lambda: _SessionContext(session))
     _patch(
         management_module,
-        "get_dashboard_emitter",
-        lambda: SimpleNamespace(graph_mutation=AsyncMock()),
+        "get_dashboard_event_publisher",
+        lambda: SimpleNamespace(publish=AsyncMock()),
     )
 
     step = _FakeStep()

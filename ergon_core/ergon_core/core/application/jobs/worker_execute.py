@@ -18,6 +18,7 @@ from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.application.events.task_events import TaskReadyEvent
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
 from ergon_core.core.application.resources import RunResourceRepository
 from ergon_core.core.application.tasks.inspection import TaskInspectionService
 from ergon_core.core.application.tasks.management import TaskManagementService
@@ -26,7 +27,6 @@ from ergon_core.core.application.tasks.repository import (
     TaskExecutionRepository,
     WorkerOutputRepository,
 )
-from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.infrastructure.inngest.client import InngestEvent
 from ergon_core.core.persistence.shared.db import get_session
@@ -39,6 +39,7 @@ from ergon_core.core.infrastructure.tracing import (
     get_trace_sink,
     worker_execute_context,
 )
+from ergon_core.core.views.dashboard_events.context_events import context_event_to_dashboard_event
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -95,12 +96,20 @@ async def run_worker_execute_job(
     )
 
     context_event_repo = ContextEventService()
-    dashboard_emitter = get_dashboard_emitter()
-    context_event_repo.add_listener(dashboard_emitter.on_context_event)
-    dashboard_emitter.register_execution(
-        execution_id=payload.execution_id,
-        task_id=payload.task_id,
-    )
+    dashboard_publisher = get_dashboard_event_publisher()
+    execution_task_map = {payload.execution_id: payload.task_id}
+
+    async def _publish_context_event(event) -> None:
+        dashboard_event = context_event_to_dashboard_event(event, execution_task_map)
+        if dashboard_event is None:
+            logger.warning(
+                "context_event: no task_id for execution %s",
+                event.task_execution_id,
+            )
+            return
+        await dashboard_publisher.publish(dashboard_event)
+
+    context_event_repo.add_listener(_publish_context_event)
 
     chunk_count = 0
     try:

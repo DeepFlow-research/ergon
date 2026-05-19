@@ -5,6 +5,10 @@ request can retrieve the initialized process instance from here.
 """
 
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
+from ergon_core.core.application.ports.dashboard import (
+    reset_dashboard_event_publisher,
+    set_dashboard_event_publisher,
+)
 
 _dashboard_emitter: DashboardEmitter | None = None
 
@@ -18,6 +22,7 @@ def set_dashboard_emitter(emitter: DashboardEmitter) -> DashboardEmitter:
     """Install an already-created DashboardEmitter instance."""
     global _dashboard_emitter
     _dashboard_emitter = emitter
+    set_dashboard_event_publisher(emitter)
     return _dashboard_emitter
 
 
@@ -32,3 +37,4 @@ def reset_dashboard_emitter() -> None:
     """Clear the process DashboardEmitter instance."""
     global _dashboard_emitter
     _dashboard_emitter = None
+    reset_dashboard_event_publisher()

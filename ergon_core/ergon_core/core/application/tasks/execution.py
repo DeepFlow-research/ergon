@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionWorker,
@@ -27,6 +27,7 @@ from ergon_core.core.application.graph.propagation import (
 )
 from ergon_core.core.application.tasks.repository import TaskExecutionRepository
 from ergon_core.core.shared.utils import require_not_none, utcnow
+from ergon_core.core.views.dashboard_events.contracts import DashboardTaskStatusChangedEvent
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -45,14 +46,17 @@ async def _emit_task_status(
     if task_id is None:
         return
     try:
-        await get_dashboard_emitter().task_status_changed(
-            run_id=run_id,
-            task_id=task_id,
-            task_name=task_slug,
-            new_status=new_status,
-            old_status=old_status,
-            assigned_worker_id=worker_id,
-            assigned_worker_slug=worker_slug,
+        await get_dashboard_event_publisher().publish(
+            DashboardTaskStatusChangedEvent(
+                run_id=run_id,
+                task_id=task_id,
+                task_name=task_slug,
+                new_status=new_status,
+                old_status=old_status,
+                timestamp=utcnow(),
+                assigned_worker_id=worker_id,
+                assigned_worker_slug=worker_slug,
+            )
         )
     except Exception:  # slopcop: ignore[no-broad-except]
         logger.warning("Failed to emit task_status_changed", exc_info=True)
