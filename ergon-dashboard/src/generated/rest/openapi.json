@@ -2727,10 +2727,10 @@
             "format": "uuid",
             "title": "Taskexecutionid"
           },
-          "taskNodeId": {
+          "taskId": {
             "type": "string",
             "format": "uuid",
-            "title": "Tasknodeid"
+            "title": "Taskid"
           },
           "workerBindingKey": {
             "type": "string",
@@ -2791,7 +2791,7 @@
           "id",
           "runId",
           "taskExecutionId",
-          "taskNodeId",
+          "taskId",
           "workerBindingKey",
           "sequence",
           "eventType",

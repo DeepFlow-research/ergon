@@ -398,10 +398,10 @@ class DashboardEmitter:
         if not self._enabled:
             return
         try:
-            task_node_id = self._execution_task_map.get(event.task_execution_id)
-            if task_node_id is None:
+            task_id = self._execution_task_map.get(event.task_execution_id)
+            if task_id is None:
                 logger.warning(
-                    "on_context_event: no task_node_id for execution %s",
+                    "on_context_event: no task_id for execution %s",
                     event.task_execution_id,
                 )
                 return
@@ -409,7 +409,7 @@ class DashboardEmitter:
                 id=event.id,
                 run_id=event.run_id,
                 task_execution_id=event.task_execution_id,
-                task_node_id=task_node_id,
+                task_id=task_id,
                 worker_binding_key=event.worker_binding_key,
                 sequence=event.sequence,
                 event_type=cast(ContextEventType, event.event_type),

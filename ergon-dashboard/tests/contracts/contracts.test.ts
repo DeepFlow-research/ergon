@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  dashboardEventSchemas,
   parseDashboardContextEventData,
   parseDashboardGraphMutationData,
   parseDashboardTaskEvaluationUpdatedData,
@@ -147,44 +148,47 @@ test("workflow started event parser validates recursive task trees", () => {
       id: "123e4567-e89b-42d3-a456-426614174000",
       name: "Root",
       description: "Root task",
+      status: "pending",
+      level: 0,
       assigned_to: {
         id: FIXTURE_IDS.workerId,
         name: "planner",
         type: "MockWorker",
       },
-      full_team: null,
       children: [
         {
           id: "123e4567-e89b-42d3-a456-426614174001",
           name: "Leaf",
           description: "Leaf task",
+          status: "pending",
+          level: 1,
           assigned_to: {
             id: FIXTURE_IDS.workerId,
             name: "planner",
             type: "MockWorker",
           },
-          full_team: null,
           children: [],
           depends_on: [],
           parent_id: "123e4567-e89b-42d3-a456-426614174000",
           is_leaf: true,
           resources: [],
-          evaluator: null,
-          evaluator_type: null,
         },
       ],
       depends_on: [],
       parent_id: null,
       is_leaf: false,
       resources: [],
-      evaluator: null,
-      evaluator_type: null,
     },
   };
 
   const parsed = parseDashboardWorkflowStartedData(payload);
 
   assert.equal(parsed.task_tree.children[0]?.name, "Leaf");
+});
+
+test("generated dashboard event schemas cover graph and context live events", () => {
+  assert.ok(dashboardEventSchemas["dashboard/graph.mutation"]);
+  assert.ok(dashboardEventSchemas["dashboard/context.event"]);
 });
 
 test("dashboard nested DTO event parser accepts backend snake-case payloads", () => {
@@ -233,7 +237,7 @@ test("dashboard nested DTO event parser accepts backend snake-case payloads", ()
 
   const parsedEvaluation = parseDashboardTaskEvaluationUpdatedData({
     run_id: FIXTURE_IDS.runId,
-    task_id: FIXTURE_IDS.solveTaskId,
+    task_id: FIXTURE_IDS.solveTaskNodeUuid,
     evaluation: {
       id: evaluation.id,
       run_id: evaluation.runId,
@@ -278,7 +282,35 @@ test("dashboard graph mutation parser accepts backend wrapped mutation event", (
   assert.equal(parsed.run_id, FIXTURE_IDS.runId);
   assert.equal(parsed.sequence, 4);
   assert.equal(parsed.target_id, FIXTURE_IDS.solveTaskNodeUuid);
-  assert.equal(parsed.timestamp, "2026-03-18T12:00:14.000000Z");
+  assert.equal(parsed.created_at, "2026-03-18T12:00:14.000000Z");
+});
+
+test("dashboard graph mutation parser preserves canonical edge task ids", () => {
+  const parsed = parseDashboardGraphMutationData({
+    mutation: {
+      id: "77777777-7777-4777-8777-777777777777",
+      run_id: FIXTURE_IDS.runId,
+      sequence: 5,
+      mutation_type: "edge.added",
+      target_type: "edge",
+      target_id: "99999999-9999-4999-8999-999999999999",
+      actor: "system",
+      old_value: null,
+      new_value: {
+        mutation_type: "edge.added",
+        source_task_id: FIXTURE_IDS.rootTaskId,
+        target_task_id: FIXTURE_IDS.solveTaskId,
+        status: "pending",
+      },
+      reason: "parent-child",
+      created_at: "2026-03-18T12:00:14.000000Z",
+    },
+  });
+
+  assert.equal(parsed.new_value.source_task_id, FIXTURE_IDS.rootTaskId);
+  assert.equal(parsed.new_value.target_task_id, FIXTURE_IDS.solveTaskId);
+  assert.equal("source_node_id" in parsed.new_value, false);
+  assert.equal("target_node_id" in parsed.new_value, false);
 });
 
 test("dashboard context event parser accepts backend context part payloads", () => {
@@ -286,7 +318,7 @@ test("dashboard context event parser accepts backend context part payloads", () 
     id: "88888888-8888-4888-8888-888888888888",
     run_id: FIXTURE_IDS.runId,
     task_execution_id: "99999999-9999-4999-8999-999999999999",
-    task_node_id: FIXTURE_IDS.solveTaskId,
+    task_id: FIXTURE_IDS.solveTaskNodeUuid,
     worker_binding_key: "swebench-smoke-worker",
     sequence: 0,
     event_type: "assistant_text",

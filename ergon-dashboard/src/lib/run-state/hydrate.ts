@@ -82,7 +82,7 @@ function deserializeContextEvents(data: RunSnapshot): Map<string, ContextEventSt
           id: String(event.id ?? ""),
           runId: String(event.runId ?? data.id),
           taskExecutionId: String(event.taskExecutionId ?? ""),
-          taskNodeId: String(event.taskNodeId ?? taskId),
+          taskId: String(event.taskId ?? taskId),
           workerBindingKey: String(event.workerBindingKey ?? ""),
           sequence: Number(event.sequence ?? 0),
           eventType: String(event.eventType ?? "") as ContextEventState["eventType"],

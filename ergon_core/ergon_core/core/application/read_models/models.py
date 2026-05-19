@@ -151,7 +151,7 @@ class RunContextEventDto(CamelModel):
     id: UUID
     run_id: UUID
     task_execution_id: UUID
-    task_node_id: UUID
+    task_id: UUID
     worker_binding_key: str
     sequence: int
     event_type: ContextEventType

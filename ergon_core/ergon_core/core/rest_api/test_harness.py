@@ -153,16 +153,16 @@ def read_run_state(
         raise HTTPException(status_code=404, detail=f"run {run_id} not found")
 
     nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
-    slug_by_node_id: dict[UUID, str] = {n.id: n.task_slug for n in nodes}
+    slug_by_task_id: dict[UUID, str] = {n.task_id: n.task_slug for n in nodes}
 
     graph_nodes = [
         TestGraphNodeDto(
-            id=n.id,
+            id=n.task_id,
             task_slug=n.task_slug,
             level=n.level,
             status=n.status,
             parent_task_id=n.parent_task_id,
-            parent_task_slug=(slug_by_node_id.get(n.parent_task_id) if n.parent_task_id else None),
+            parent_task_slug=(slug_by_task_id.get(n.parent_task_id) if n.parent_task_id else None),
         )
         for n in nodes
     ]

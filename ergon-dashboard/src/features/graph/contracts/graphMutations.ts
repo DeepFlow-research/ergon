@@ -42,20 +42,21 @@ export const NodeFieldChangedValueSchema = z.object({
 });
 export type NodeFieldChangedValue = z.infer<typeof NodeFieldChangedValueSchema>;
 
-export const EdgeAddedValueSchema = z.preprocess((input) => {
-  if (typeof input !== "object" || input === null) return input;
-  const value = input as Record<string, unknown>;
-  return {
-    ...value,
-    source_node_id: value.source_node_id ?? value.source_task_id,
-    target_node_id: value.target_node_id ?? value.target_task_id,
-  };
-}, z.object({
-  source_node_id: z.string().uuid(),
-  target_node_id: z.string().uuid(),
+export const EdgeAddedValueSchema = z.object({
+  mutation_type: z.literal("edge.added").optional(),
+  source_task_id: z.string().uuid(),
+  target_task_id: z.string().uuid(),
   status: z.string(),
-}));
+});
 export type EdgeAddedValue = z.infer<typeof EdgeAddedValueSchema>;
+
+export const EdgeRemovedValueSchema = z.object({
+  mutation_type: z.literal("edge.removed").optional(),
+  source_task_id: z.string().uuid(),
+  target_task_id: z.string().uuid(),
+  status: z.string(),
+});
+export type EdgeRemovedValue = z.infer<typeof EdgeRemovedValueSchema>;
 
 export const EdgeStatusChangedValueSchema = z.object({
   status: z.string(),

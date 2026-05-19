@@ -198,7 +198,7 @@ const RunContextEventDto = z.object({
   id: z.string().uuid(),
   runId: z.string().uuid(),
   taskExecutionId: z.string().uuid(),
-  taskNodeId: z.string().uuid(),
+  taskId: z.string().uuid(),
   workerBindingKey: z.string(),
   sequence: z.number().int(),
   eventType: z.enum([

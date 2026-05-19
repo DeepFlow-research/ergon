@@ -65,7 +65,7 @@ export interface ContextEventState {
   id: string;
   runId: string;
   taskExecutionId: string;
-  taskNodeId: string;
+  taskId: string;
   workerBindingKey: string;
   sequence: number;
   eventType: ContextEventType;
