@@ -5,18 +5,18 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from ergon_core.core.application.compat.cohorts import (
-    cohort_id_from_metadata,
+    deprecated_definition_ids_for_cohort,
+    deprecated_cohort_compatibility_service,
+    read_deprecated_cohort_id,
     remove_legacy_test_cohort_marker,
     write_legacy_cohort_marker,
 )
-from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
 from ergon_core.core.persistence.context.models import RunContextEvent
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphMutation, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_engine
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import (
-    ExperimentCohort,
     RunRecord,
     RunResource,
     RunTaskEvaluation,
@@ -178,23 +178,14 @@ def read_run_state(run_id: UUID, session: Session) -> HarnessRunState | None:
 
 
 def read_cohort_id(cohort_key: str, session: Session) -> UUID | None:
-    cohort = session.exec(
-        select(ExperimentCohort).where(ExperimentCohort.name == cohort_key),
-    ).first()
-    return None if cohort is None else cohort.id
+    return read_deprecated_cohort_id(cohort_key, session)
 
 
 def read_cohort_runs(cohort_key: str, session: Session) -> list[HarnessCohortRun]:
-    cohort = session.exec(
-        select(ExperimentCohort).where(ExperimentCohort.name == cohort_key),
-    ).first()
-    if cohort is None:
+    cohort_id = read_deprecated_cohort_id(cohort_key, session)
+    if cohort_id is None:
         return []
-    definition_ids = [
-        definition.id
-        for definition in session.exec(select(ExperimentDefinition)).all()
-        if cohort_id_from_metadata(definition.parsed_metadata()) == cohort.id
-    ]
+    definition_ids = deprecated_definition_ids_for_cohort(cohort_id, session)
     if not definition_ids:
         return []
     runs = list(
@@ -223,7 +214,7 @@ def seed_run(
         raise UnknownRunStatusError(status) from exc
 
     with Session(get_engine()) as session:
-        cohort = experiment_cohort_service.resolve_or_create(
+        cohort = deprecated_cohort_compatibility_service.resolve_or_create(
             name=cohort_key,
             description="test harness seeded cohort",
             created_by="test-harness",

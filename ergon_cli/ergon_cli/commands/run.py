@@ -30,6 +30,8 @@ def list_runs(args: Namespace) -> int:
         stmt = select(RunRecord).order_by(RunRecord.created_at.desc())  # type: ignore[attr-defined]
         if args.status:
             stmt = stmt.where(RunRecord.status == args.status)
+        if args.experiment:
+            stmt = stmt.where(RunRecord.experiment == args.experiment)
         filter_definition_id = args.definition_id
         if filter_definition_id:
             try:
@@ -47,6 +49,8 @@ def list_runs(args: Namespace) -> int:
             parts.append(f"with status={args.status!r}")
         if args.definition_id:
             parts.append(f"for definition_id={args.definition_id!r}")
+        if args.experiment:
+            parts.append(f"for experiment={args.experiment!r}")
         print(" ".join(parts))
         return 0
 

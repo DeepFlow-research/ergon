@@ -75,6 +75,9 @@ def test_sqlmodel_field_docs_are_schema_metadata() -> None:
     assert _description(RunGraphMutation, "mutation_type")
     assert _description(RunGraphMutation, "target_type")
     assert "Canonical runtime" in (_description(RunRecord, "definition_id") or "")
+    assert "Optional v2 experiment grouping tag" in (
+        _description(RunRecord, "experiment") or ""
+    )
     assert "Compatibility/display-only" in (_description(RunRecord, "worker_team_json") or "")
     assert "Compatibility/display-only" in (_description(RunRecord, "evaluator_slug") or "")
     assert "Compatibility/display-only" in (_description(RunRecord, "sandbox_slug") or "")

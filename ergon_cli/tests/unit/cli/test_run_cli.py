@@ -31,6 +31,15 @@ def test_run_subcommands_are_registered_in_main_parser() -> None:
     assert list_args.definition_id == str(definition_id)
 
 
+def test_run_list_accepts_experiment_tag_filter() -> None:
+    parser = build_parser()
+
+    list_args = parser.parse_args(["run", "list", "--experiment", "alpha"])
+
+    assert list_args.run_action == "list"
+    assert list_args.experiment == "alpha"
+
+
 # ---------------------------------------------------------------------------
 # SQLite session fixture (mirrors Task 1 pattern)
 # ---------------------------------------------------------------------------
@@ -69,13 +78,14 @@ def _definition(*, name: str) -> ExperimentDefinition:
     )
 
 
-def _run_record(*, definition_id: object) -> RunRecord:
+def _run_record(*, definition_id: object, experiment: str | None = None) -> RunRecord:
     return RunRecord(
         id=uuid4(),
         definition_id=definition_id,
         benchmark_type="ci-benchmark",
         instance_key="k",
         worker_team_json={},
+        experiment=experiment,
         status=RunStatus.PENDING,
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
@@ -194,7 +204,38 @@ def test_run_list_filters_by_definition(monkeypatch, session_factory, capsys):
     monkeypatch.setattr(run_cmd, "get_session", session_factory)
     monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
-    rc = run_cmd.list_runs(Namespace(definition_id=matching_definition_id, status=None, limit=20))
+    rc = run_cmd.list_runs(
+        Namespace(definition_id=matching_definition_id, experiment=None, status=None, limit=20)
+    )
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert matching_id in out
+    assert other_id not in out
+
+
+def test_run_list_filters_by_experiment_tag(monkeypatch, session_factory, capsys):
+    """The experiment filter reads the v2 ``RunRecord.experiment`` tag."""
+    definition = _definition(name="matching")
+
+    run_matching = _run_record(definition_id=definition.id, experiment="alpha")
+    run_other = _run_record(definition_id=definition.id, experiment="beta")
+
+    matching_id = str(run_matching.id)
+    other_id = str(run_other.id)
+
+    with session_factory() as session:
+        session.add(definition)
+        session.add(run_matching)
+        session.add(run_other)
+        session.commit()
+
+    monkeypatch.setattr(run_cmd, "get_session", session_factory)
+    monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
+
+    rc = run_cmd.list_runs(
+        Namespace(definition_id=None, experiment="alpha", status=None, limit=20)
+    )
 
     assert rc == 0
     out = capsys.readouterr().out

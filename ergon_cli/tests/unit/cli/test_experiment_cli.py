@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from ergon_cli.commands import experiment as experiment_cmd
 from ergon_cli.main import build_parser
-from ergon_core.core.application.read_models.experiments import (
+from ergon_core.core.views.experiments.models import (
     ExperimentDetailDto,
     ExperimentRunRowDto,
     ExperimentSummaryDto,
@@ -123,10 +123,55 @@ def test_experiment_show_logs_detail_without_printing(monkeypatch, caplog, capsy
     assert "sample-a" in caplog.text
 
 
-def test_experiment_tag_subcommands_are_not_registered() -> None:
+def test_experiment_tag_subcommands_are_registered() -> None:
     parser = build_parser()
 
-    with pytest.raises(SystemExit):
-        parser.parse_args(["experiment", "tags"])
-    with pytest.raises(SystemExit):
-        parser.parse_args(["experiment", "by-tag", "alpha"])
+    tags_args = parser.parse_args(["experiment", "tags"])
+    by_tag_args = parser.parse_args(["experiment", "by-tag", "alpha"])
+
+    assert tags_args.experiment_action == "tags"
+    assert by_tag_args.experiment_action == "by-tag"
+    assert by_tag_args.tag == "alpha"
+
+
+def test_experiment_tags_logs_run_record_experiment_tags(monkeypatch, caplog, capsys):
+    class FakeTagService:
+        def distinct_tags(self):
+            return ["alpha", "beta"]
+
+    monkeypatch.setattr(experiment_cmd, "ExperimentTagService", FakeTagService)
+    caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
+
+    rc = experiment_cmd.handle_experiment_tags(Namespace())
+
+    assert rc == 0
+    assert capsys.readouterr().out == ""
+    assert "alpha" in caplog.text
+    assert "beta" in caplog.text
+
+
+def test_experiment_by_tag_logs_definitions_for_run_record_tag(monkeypatch, caplog, capsys):
+    definition_id = uuid4()
+
+    class FakeTagService:
+        def definitions_by_tag(self, tag):
+            assert tag == "alpha"
+            return [
+                experiment_cmd.ExperimentTagDefinitionRow(
+                    definition_id=definition_id,
+                    name="alpha definition",
+                    benchmark_type="ci-benchmark",
+                    latest_run_status="completed",
+                )
+            ]
+
+    monkeypatch.setattr(experiment_cmd, "ExperimentTagService", FakeTagService)
+    caplog.set_level(logging.INFO, logger=experiment_cmd.__name__)
+
+    rc = experiment_cmd.handle_experiment_by_tag(Namespace(tag="alpha"))
+
+    assert rc == 0
+    assert capsys.readouterr().out == ""
+    assert str(definition_id) in caplog.text
+    assert "alpha definition" in caplog.text
+    assert "completed" in caplog.text

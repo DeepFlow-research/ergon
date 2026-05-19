@@ -30,6 +30,8 @@ async def launch_run(
         definition = session.get(ExperimentDefinition, definition_id)
         if definition is None:
             raise DefinitionNotFoundError(definition_id)
+        metadata = definition.parsed_metadata()
+        experiment = metadata.get("experiment")
         run = create_run(
             DefinitionHandle(
                 definition_id=definition.id,
@@ -44,6 +46,7 @@ async def launch_run(
             dependency_extras_json={},
             assignment_json=dict(assignment_metadata or {}),
             seed=None,
+            experiment=experiment if isinstance(experiment, str) else None,
         )
     await emitter(run.id, definition_id)
     return ExperimentRunResult(
