@@ -1,8 +1,7 @@
-"""Inngest child function: persist outputs from sandbox via blob publisher.
+"""Inngest child function: persist outputs from sandbox via resource service.
 
-All serialisation goes through :class:`SandboxResourcePublisher` — the
-single authoritative path from sandbox → Postgres (``run_resources`` rows)
-and local blob store. Consumers read via the publisher
+All resource row semantics go through :class:`RunResourcePublishService`.
+Consumers read via
 (``kind='report'``/``kind='artifact'`` rows whose ``file_path`` points at the
 content-addressed blob store).
 """
@@ -11,6 +10,7 @@ import logging
 from datetime import UTC, datetime
 
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.resources.publishing import RunResourcePublishService
 from ergon_core.core.infrastructure.sandbox.resource_publisher import SandboxResourcePublisher
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.application.jobs.models import PersistOutputsRequest, PersistOutputsResult
@@ -83,7 +83,13 @@ async def _publish_public_sandbox_resources(sandbox: object, payload: PersistOut
         task_execution_id=payload.execution_id,
         publish_dirs=((publish_dir, RunResourceKind.REPORT),),
     )
-    synced = await publisher.sync()
+    synced = await RunResourcePublishService().publish_sandbox_files(
+        reader=publisher,
+        blob_store=publisher,
+        run_id=payload.run_id,
+        task_execution_id=payload.execution_id,
+        publish_dirs=((publish_dir, RunResourceKind.REPORT),),
+    )
     count = len(synced)
     if synced:
         logger.info(
