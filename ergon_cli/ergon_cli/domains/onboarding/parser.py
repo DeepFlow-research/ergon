@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.onboard import handle_onboard
+from ergon_cli.domains.onboarding.commands import handle_onboard
 
 
 def register_onboard_parser(subparsers: argparse._SubParsersAction) -> None:

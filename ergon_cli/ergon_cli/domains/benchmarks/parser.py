@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.benchmark import handle_benchmark
+from ergon_cli.domains.benchmarks.commands import handle_benchmark
 
 
 def register_benchmark_parser(subparsers: argparse._SubParsersAction) -> None:

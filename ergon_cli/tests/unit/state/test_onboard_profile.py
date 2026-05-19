@@ -1,36 +1,11 @@
 """Unit tests for OnboardProfile: required_keys() and required_extras()."""
 
-import pytest
 import ergon_cli.onboarding.profile as profile_module
 from ergon_cli.onboarding.profile import (
     GPUProvider,
     LLMProvider,
     OnboardProfile,
 )
-from ergon_core.api import BenchmarkRequirements
-
-
-@pytest.fixture(autouse=True)
-def _benchmark_requirements(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        profile_module,
-        "BUILTIN_BENCHMARK_REQUIREMENTS",
-        {
-            "minif2f": BenchmarkRequirements(e2b=True),
-            "swebench-verified": BenchmarkRequirements(
-                e2b=True,
-                extras=("ergon-builtins[data]",),
-            ),
-            "gdpeval": BenchmarkRequirements(e2b=True, extras=("ergon-builtins[data]",)),
-            "researchrubrics": BenchmarkRequirements(
-                extras=("ergon-builtins[data]",),
-                optional_keys=("EXA_API_KEY",),
-            ),
-            "researchrubrics-vanilla": BenchmarkRequirements(
-                extras=("ergon-builtins[data]",),
-            ),
-        },
-    )
 
 
 class TestRequiredKeys:

@@ -3,17 +3,8 @@
 PR 05 moves this catalogue behind builtins-owned metadata.
 """
 
-_BENCHMARK_ROWS = (
-    ("gdpeval", "gdpeval", "Benchmark for GDP document-processing evaluation tasks."),
-    ("minif2f", "minif2f", "Benchmark backed by MiniF2F theorem-proving tasks."),
-    ("researchrubrics", "researchrubrics", "Benchmark backed by ScaleAI ResearchRubrics samples."),
-    (
-        "researchrubrics-vanilla",
-        "researchrubrics-vanilla",
-        "Vanilla ResearchRubrics baseline benchmark.",
-    ),
-    ("swebench-verified", "swebench-verified", "Benchmark backed by SWE-Bench Verified."),
-)
+from ergon_builtins.benchmarks.catalog import benchmark_cli_metadata
+
 _WORKER_ROWS = (
     ("react-v1", "ReActWorker"),
     ("training-stub", "TrainingStubWorker"),
@@ -27,7 +18,10 @@ _EVALUATOR_ROWS = (
 
 
 def list_benchmarks() -> list[list[str]]:
-    return [list(row) for row in sorted(_BENCHMARK_ROWS)]
+    return [
+        [metadata.slug, metadata.name, metadata.description]
+        for metadata in sorted(benchmark_cli_metadata().values(), key=lambda item: item.slug)
+    ]
 
 
 def list_workers() -> list[list[str]]:

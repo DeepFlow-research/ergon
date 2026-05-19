@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import e2b
-import ergon_cli.commands.benchmark as _bench_mod
+import ergon_cli.domains.benchmarks.service as _bench_service
 import pytest
 from ergon_cli.commands.benchmark_templates import sandbox_template_for
 from ergon_cli.commands.benchmark import setup_benchmark
@@ -53,8 +53,8 @@ def _patch_sdk(
         fake_template_cls.build.return_value = build_info or _FakeBuildInfo()
 
     monkeypatch.setattr(e2b, "Template", fake_template_cls)
-    # Also patch the already-imported name in the benchmark module.
-    monkeypatch.setattr(_bench_mod, "Template", fake_template_cls)
+    # Also patch the already-imported name in the benchmark domain service.
+    monkeypatch.setattr(_bench_service, "Template", fake_template_cls)
     return fake_template_cls
 
 
