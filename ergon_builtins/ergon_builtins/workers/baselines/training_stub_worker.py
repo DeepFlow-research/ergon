@@ -14,7 +14,7 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerOutput, WorkerStreamItem
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     TokenLogprob,

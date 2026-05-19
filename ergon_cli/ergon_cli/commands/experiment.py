@@ -4,7 +4,7 @@ from argparse import Namespace
 import logging
 from uuid import UUID
 
-from ergon_core.core.application.read_models.experiments import ExperimentReadService
+from ergon_core.core.views.experiments.service import ExperimentReadService
 
 logger = logging.getLogger(__name__)
 

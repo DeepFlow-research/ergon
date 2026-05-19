@@ -15,11 +15,6 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
 )
 from ergon_core.core.persistence.graph.models import RunGraphAnnotation, RunGraphNode
-from ergon_core.core.persistence.imports.models import (
-    RunDropsManifest,
-    RunReducer,
-    RunReducerFootprint,
-)
 from ergon_core.core.persistence.shared.enums import RunResourceKind, RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
@@ -84,7 +79,6 @@ class ExternalRunWriter:
 
         run = RunRecord(
             definition_id=definition.id,
-            workflow_definition_id=definition.id,
             benchmark_type=f"imported:{self._source.dataset}",
             instance_key=parsed.instance_key,
             sample_id=parsed.source_run_id,
@@ -140,44 +134,6 @@ class ExternalRunWriter:
 
         for resource in parsed.resources:
             self._session.add(self._resource_row(run.id, execution.id, resource))
-
-        for reducer in parsed.reducers:
-            reducer_row = RunReducer(
-                run_id=run.id,
-                task_id=node.task_id,
-                task_execution_id=execution.id,
-                name=reducer.name,
-                kind=reducer.kind,
-                implementation_ref=reducer.implementation_ref,
-                output_json=_compact_for_db(_json_safe(reducer.output)),
-                input_scope_json={"source_run_id": parsed.source_run_id},
-                status="completed",
-            )
-            self._session.add(reducer_row)
-            self._session.flush()
-            self._session.add(
-                RunReducerFootprint(
-                    reducer_id=reducer_row.id,
-                    source_kind="annotation",
-                    namespace=reducer.name,
-                    fields_read_json=_json_safe(reducer.fields_read),
-                    filters_json=_json_safe(reducer.filters),
-                    aggregation_json=_json_safe(reducer.aggregation),
-                    access_kind="mixed",
-                )
-            )
-            for drop in reducer.drops:
-                self._session.add(
-                    RunDropsManifest(
-                        reducer_id=reducer_row.id,
-                        loss_class=drop.loss_class,
-                        dropped_field_path=drop.dropped_field_path,
-                        reason=drop.reason,
-                        affected_analysis=drop.affected_analysis,
-                        declaration_kind=drop.declaration_kind,
-                        evidence_json=_json_safe(drop.evidence),
-                    )
-                )
 
         return WriteRunResult(run_id=run.id, task_id=node.task_id, task_execution_id=execution.id)
 

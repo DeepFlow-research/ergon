@@ -19,7 +19,7 @@ from uuid import UUID
 
 from ergon_core.api import Task, Worker, WorkerContext, WorkerStreamItem
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
+from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
     TaskSlug,

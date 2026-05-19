@@ -37,7 +37,7 @@ def list_runs(args: Namespace) -> int:
             except ValueError:
                 print(f"Invalid UUID: {filter_definition_id}")
                 return 1
-            stmt = stmt.where(RunRecord.workflow_definition_id == definition_id)
+            stmt = stmt.where(RunRecord.definition_id == definition_id)
         stmt = stmt.limit(args.limit)
         runs = list(session.exec(stmt).all())
 
@@ -102,7 +102,7 @@ def status_run(args: Namespace) -> int:
     print(f"run_id:                 {run.id}")
     print(f"status:                 {run.status}")
     print(f"benchmark_type:         {run.benchmark_type}")
-    print(f"workflow_definition_id: {run.workflow_definition_id}")
+    print(f"definition_id:          {run.definition_id}")
     print(f"instance_key:           {run.instance_key}")
     if run.evaluator_slug is not None:
         print(f"evaluator:              {run.evaluator_slug}")

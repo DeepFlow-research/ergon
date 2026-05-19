@@ -17,7 +17,6 @@ from ergon_core.core.persistence.graph.models import (
 from ergon_core.core.persistence.shared.enums import (
     RunStatus,
     TaskExecutionStatus,
-    TrainingStatus,
 )
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
@@ -27,7 +26,6 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
     RunTaskExecution,
-    TrainingSession,
 )
 from pydantic import ValidationError
 
@@ -42,7 +40,6 @@ from pydantic import ValidationError
         (
             lambda: RunRecord(
                 definition_id=uuid4(),
-                workflow_definition_id=uuid4(),
                 benchmark_type="ci-test",
                 instance_key="sample-1",
                 worker_team_json={"primary": "test-worker"},
@@ -77,14 +74,6 @@ from pydantic import ValidationError
             ),
             "kind",
             "output",
-        ),
-        (
-            lambda: TrainingSession(
-                experiment_definition_id=uuid4(),
-                model_name="test-model",
-            ),
-            "status",
-            TrainingStatus.RUNNING,
         ),
         (
             lambda: RunGraphMutation(
@@ -162,14 +151,12 @@ def test_experiment_record_accepts_optional_cohort_and_required_name():
     assert experiment.parsed_default_worker_team() == {"primary": "test-worker"}
 
 
-def test_run_record_uses_definition_and_workflow_definition_identity():
+def test_run_record_uses_definition_identity():
     definition_id = uuid4()
-    workflow_definition_id = uuid4()
 
     run = RunRecord.model_validate(
         {
             "definition_id": str(definition_id),
-            "workflow_definition_id": str(workflow_definition_id),
             "benchmark_type": "ci-benchmark",
             "instance_key": "sample-1",
             "worker_team_json": {"primary": "test-worker"},
@@ -178,10 +165,10 @@ def test_run_record_uses_definition_and_workflow_definition_identity():
     )
 
     assert run.definition_id == definition_id
-    assert run.workflow_definition_id == workflow_definition_id
     assert run.benchmark_type == "ci-benchmark"
     assert run.instance_key == "sample-1"
     assert run.parsed_worker_team() == {"primary": "test-worker"}
+    assert not hasattr(run, "workflow" + "_definition_id")
     assert not hasattr(run, "experiment" + "_id")
     assert not hasattr(run, "cohort_id")
 
@@ -207,7 +194,6 @@ def test_enum_value_matches_string():
             RunRecord,
             {
                 "definition_id": str(uuid4()),
-                "workflow_definition_id": str(uuid4()),
                 "benchmark_type": "ci-test",
                 "instance_key": "sample-1",
                 "worker_team_json": {"primary": "test-worker"},
@@ -239,12 +225,6 @@ def test_enum_value_matches_string():
             {"name": "test-cohort"},
             "status",
             "unknown-status",
-        ),
-        (
-            TrainingSession,
-            {"experiment_definition_id": str(uuid4()), "model_name": "gpt"},
-            "status",
-            "garbage",
         ),
         (
             RolloutBatch,

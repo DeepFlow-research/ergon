@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 from ergon_core.api.worker import WorkerOutput
-from ergon_core.core.domain.generation.context_parts import AssistantTextPart, ContextPartChunk
+from ergon_core.core.shared.context_parts import AssistantTextPart, ContextPartChunk
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.application.jobs.worker_execute import _consume_worker_stream
 

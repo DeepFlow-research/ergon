@@ -29,12 +29,6 @@ class TaskExecutionStatus(StrEnum):
     BLOCKED = "blocked"
 
 
-class TrainingStatus(StrEnum):
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
 class RunResourceKind(StrEnum):
     """Canonical kinds for ``run_resources.kind``.
 

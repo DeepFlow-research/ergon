@@ -389,37 +389,6 @@ const GraphMutationRecordDto = z
     created_at: z.string().datetime({ offset: true }),
   })
   .passthrough();
-const definition_id = z.union([z.string(), z.null()]).optional();
-const TrainingCurvePointDto = z.object({
-  runId: z.string(),
-  step: z.number().int(),
-  meanScore: z.number(),
-  benchmarkType: z.union([z.string(), z.null()]).optional(),
-  createdAt: z.union([z.string(), z.null()]).optional(),
-});
-const TrainingSessionDto = z.object({
-  id: z.string(),
-  definitionId: z.string(),
-  modelName: z.string(),
-  status: z.string(),
-  startedAt: z.union([z.string(), z.null()]).optional(),
-  completedAt: z.union([z.string(), z.null()]).optional(),
-  outputDir: z.union([z.string(), z.null()]).optional(),
-  totalSteps: z.union([z.number(), z.null()]).optional(),
-  finalLoss: z.union([z.number(), z.null()]).optional(),
-});
-const TrainingMetricDto = z.object({
-  step: z.number().int(),
-  epoch: z.union([z.number(), z.null()]).optional(),
-  loss: z.union([z.number(), z.null()]).optional(),
-  gradNorm: z.union([z.number(), z.null()]).optional(),
-  learningRate: z.union([z.number(), z.null()]).optional(),
-  rewardMean: z.union([z.number(), z.null()]).optional(),
-  rewardStd: z.union([z.number(), z.null()]).optional(),
-  entropy: z.union([z.number(), z.null()]).optional(),
-  completionMeanLength: z.union([z.number(), z.null()]).optional(),
-  stepTimeS: z.union([z.number(), z.null()]).optional(),
-});
 const CohortStatusCountsDto = z
   .object({
     pending: z.number().int().default(0),
@@ -497,7 +466,7 @@ const ExperimentSummaryDto = z
 const ExperimentRunRowDto = z
   .object({
     run_id: z.string().uuid(),
-    workflow_definition_id: z.string().uuid(),
+    definition_id: z.string().uuid(),
     benchmark_type: z.string(),
     instance_key: z.string(),
     status: z.string(),
@@ -568,7 +537,7 @@ const ExperimentRunResult = z
   .object({
     definition_id: z.string().uuid(),
     run_ids: z.array(z.string().uuid()),
-    workflow_definition_ids: z.array(z.string().uuid()).optional(),
+    definition_ids: z.array(z.string().uuid()).optional(),
   })
   .passthrough();
 const SubmitRequest = z
@@ -742,10 +711,6 @@ export const schemas = {
   AnnotationSetMutation,
   AnnotationDeletedMutation,
   GraphMutationRecordDto,
-  definition_id,
-  TrainingCurvePointDto,
-  TrainingSessionDto,
-  TrainingMetricDto,
   CohortStatusCountsDto,
   CohortSummaryDto,
   CohortExperimentRowDto,

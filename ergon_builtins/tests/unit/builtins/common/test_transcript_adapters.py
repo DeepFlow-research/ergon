@@ -4,7 +4,7 @@ from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
     PydanticAITranscriptAdapter,
     TranscriptTurnCursor,
 )
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunkLog,
     ThinkingPart as ErgonThinkingPart,
@@ -12,7 +12,7 @@ from ergon_core.core.domain.generation.context_parts import (
     ToolResultPart as ErgonToolResultPart,
     UserMessagePart as ErgonUserMessagePart,
 )
-from ergon_core.core.persistence.context.event_payloads import ContextEventType
+from ergon_core.core.shared.context_parts import ContextEventType
 from ergon_core.core.persistence.context.models import RunContextEvent
 from pydantic_ai.messages import (
     ModelRequest,

@@ -9,7 +9,7 @@ from ergon_builtins.workers.baselines.react_worker import ReActWorker, _worker_o
 from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput
 from ergon_core.test_support.task_factory import task_with_id
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ToolCallPart,

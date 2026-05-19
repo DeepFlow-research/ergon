@@ -16,7 +16,7 @@ from ergon_core.api.errors import DependencyError
 from ergon_core.api.sandbox.sandbox import Sandbox
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.domain.generation.context_parts import ContextPartChunk
+from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.core.infrastructure.dependencies import check_packages
 
 WorkerStreamItem = ContextPartChunk | WorkerOutput

@@ -79,7 +79,7 @@ async def test_run_experiment_creates_one_run_per_selected_sample(monkeypatch):
 
     assert result.definition_id == definition.id
     assert result.run_ids == [created_runs[0].id]
-    assert result.workflow_definition_ids == [definition.id]
+    assert result.definition_ids == [definition.id]
     assert [run.instance_key for run in created_runs] == ["default"]
     assert {run.definition_id for run in created_runs} == {definition.id}
     assert emitted == [(created_runs[0].id, definition.id)]
@@ -112,7 +112,6 @@ async def test_launch_run_accepts_definition_id(monkeypatch):
             status=RunStatus.PENDING,
             benchmark_type=handle.benchmark_type,
             definition_id=kwargs.get("definition_id"),
-            workflow_definition_id=kwargs.get("workflow_definition_id"),
             worker_team_json=kwargs.get("worker_team_json") or {},
             instance_key=kwargs.get("instance_key", "default"),
         )
@@ -126,13 +125,12 @@ async def test_launch_run_accepts_definition_id(monkeypatch):
     # Orchestration: create_run was reached with the definition handle.
     assert captured["handle"].definition_id == definition.id
     assert captured["handle"].benchmark_type == "mini"
-    assert captured["kwargs"]["workflow_definition_id"] == definition.id
     assert captured["kwargs"]["definition_id"] == definition.id
     assert captured["kwargs"]["instance_key"] == "default"
 
     # Result shape mirrors the spec.
     assert result.definition_id == definition.id
-    assert result.workflow_definition_ids == [definition.id]
+    assert result.definition_ids == [definition.id]
     assert result.run_ids
     assert len(result.run_ids) == 1
 

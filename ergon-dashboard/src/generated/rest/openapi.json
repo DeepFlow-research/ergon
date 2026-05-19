@@ -150,181 +150,6 @@
         }
       }
     },
-    "/runs/training/curves": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Training Curves",
-        "description": "Return score-over-step data for checkpoint evaluations.",
-        "operationId": "get_training_curves_runs_training_curves_get",
-        "parameters": [
-          {
-            "name": "definition_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Definition Id"
-            }
-          },
-          {
-            "name": "cohort_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Cohort Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TrainingCurvePointDto"
-                  },
-                  "title": "Response Get Training Curves Runs Training Curves Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/runs/training/sessions": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Training Sessions",
-        "description": "List training sessions, optionally filtered by definition.",
-        "operationId": "get_training_sessions_runs_training_sessions_get",
-        "parameters": [
-          {
-            "name": "definition_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Definition Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TrainingSessionDto"
-                  },
-                  "title": "Response Get Training Sessions Runs Training Sessions Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/runs/training/sessions/{session_id}/metrics": {
-      "get": {
-        "tags": [
-          "runs"
-        ],
-        "summary": "Get Training Metrics",
-        "description": "Get per-step training metrics for a session.",
-        "operationId": "get_training_metrics_runs_training_sessions__session_id__metrics_get",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Session Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TrainingMetricDto"
-                  },
-                  "title": "Response Get Training Metrics Runs Training Sessions  Session Id  Metrics Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/cohorts": {
       "get": {
         "tags": [
@@ -1020,7 +845,7 @@
           "danger-test-harness"
         ],
         "summary": "Submit Cohort",
-        "description": "Build + persist + dispatch N runs under one cohort.\n\nPer-slot flow persists the object-bound smoke ``Benchmark`` into the\nimmutable ``ExperimentDefinition`` tables. Cohort/display metadata is\nwritten onto the definition metadata before launch. Slots submit\nsequentially \u2014 typical N \u2264 3, so the parallel-gather savings are negligible.",
+        "description": "Build + persist + dispatch N runs under one cohort.\n\nPer-slot flow persists the object-bound smoke ``Benchmark`` into the\nimmutable ``ExperimentDefinition`` tables. Cohort/display metadata is\nwritten onto the definition metadata before launch. Slots submit\nsequentially — typical N ≤ 3, so the parallel-gather savings are negligible.",
         "operationId": "submit_cohort_api___danger___test_harness_write_cohort_post",
         "requestBody": {
           "content": {
@@ -1125,7 +950,7 @@
           "payload"
         ],
         "title": "AnnotationDeletedMutation",
-        "description": "annotation.deleted \u2014 tombstone."
+        "description": "annotation.deleted — tombstone."
       },
       "AnnotationSetMutation": {
         "properties": {
@@ -1454,7 +1279,7 @@
           "failure_rate": {
             "type": "number",
             "title": "Failure Rate",
-            "default": 0.0
+            "default": 0
           },
           "stats_updated_at": {
             "anyOf": [
@@ -1646,7 +1471,7 @@
           "status"
         ],
         "title": "EdgeAddedMutation",
-        "description": "edge.added \u2014 full edge snapshot."
+        "description": "edge.added — full edge snapshot."
       },
       "EdgeRemovedMutation": {
         "properties": {
@@ -1930,13 +1755,13 @@
             "type": "array",
             "title": "Run Ids"
           },
-          "workflow_definition_ids": {
+          "definition_ids": {
             "items": {
               "type": "string",
               "format": "uuid"
             },
             "type": "array",
-            "title": "Workflow Definition Ids"
+            "title": "Definition Ids"
           }
         },
         "type": "object",
@@ -1953,10 +1778,10 @@
             "format": "uuid",
             "title": "Run Id"
           },
-          "workflow_definition_id": {
+          "definition_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Workflow Definition Id"
+            "title": "Definition Id"
           },
           "benchmark_type": {
             "type": "string",
@@ -2096,7 +1921,7 @@
         "type": "object",
         "required": [
           "run_id",
-          "workflow_definition_id",
+          "definition_id",
           "benchmark_type",
           "instance_key",
           "status",
@@ -2555,7 +2380,7 @@
           "assigned_worker_slug"
         ],
         "title": "NodeAddedMutation",
-        "description": "node.added \u2014 full node snapshot."
+        "description": "node.added — full node snapshot."
       },
       "NodeFieldChangedMutation": {
         "properties": {
@@ -2638,7 +2463,7 @@
           "assigned_worker_slug"
         ],
         "title": "NodeRemovedMutation",
-        "description": "node.removed \u2014 node snapshot at removal time."
+        "description": "node.removed — node snapshot at removal time."
       },
       "NodeStatusChangedMutation": {
         "properties": {
@@ -2701,7 +2526,7 @@
           "status"
         ],
         "title": "PollResponse",
-        "description": "Ergon \u2192 Trainer: current batch status + trajectories if complete."
+        "description": "Ergon → Trainer: current batch status + trajectories if complete."
       },
       "ResetRequest": {
         "properties": {
@@ -3957,7 +3782,7 @@
           },
           "num_episodes": {
             "type": "integer",
-            "minimum": 1.0,
+            "minimum": 1,
             "title": "Num Episodes"
           },
           "policy_version": {
@@ -3989,7 +3814,7 @@
           "num_episodes"
         ],
         "title": "SubmitRequest",
-        "description": "Trainer \u2192 Ergon: start a batch of episodes."
+        "description": "Trainer → Ergon: start a batch of episodes."
       },
       "SubmitResponse": {
         "properties": {
@@ -4017,7 +3842,7 @@
           "run_ids"
         ],
         "title": "SubmitResponse",
-        "description": "Ergon \u2192 Trainer: batch accepted."
+        "description": "Ergon → Trainer: batch accepted."
       },
       "SystemPromptPart": {
         "properties": {
@@ -4429,249 +4254,6 @@
         ],
         "title": "ToolResultPart"
       },
-      "TrainingCurvePointDto": {
-        "properties": {
-          "runId": {
-            "type": "string",
-            "title": "Runid"
-          },
-          "step": {
-            "type": "integer",
-            "title": "Step"
-          },
-          "meanScore": {
-            "type": "number",
-            "title": "Meanscore"
-          },
-          "benchmarkType": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Benchmarktype"
-          },
-          "createdAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Createdat"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "runId",
-          "step",
-          "meanScore"
-        ],
-        "title": "TrainingCurvePointDto"
-      },
-      "TrainingMetricDto": {
-        "properties": {
-          "step": {
-            "type": "integer",
-            "title": "Step"
-          },
-          "epoch": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Epoch"
-          },
-          "loss": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Loss"
-          },
-          "gradNorm": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gradnorm"
-          },
-          "learningRate": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Learningrate"
-          },
-          "rewardMean": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rewardmean"
-          },
-          "rewardStd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rewardstd"
-          },
-          "entropy": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Entropy"
-          },
-          "completionMeanLength": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completionmeanlength"
-          },
-          "stepTimeS": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Steptimes"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "step"
-        ],
-        "title": "TrainingMetricDto"
-      },
-      "TrainingSessionDto": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "definitionId": {
-            "type": "string",
-            "title": "Definitionid"
-          },
-          "modelName": {
-            "type": "string",
-            "title": "Modelname"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "startedAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Startedat"
-          },
-          "completedAt": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completedat"
-          },
-          "outputDir": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Outputdir"
-          },
-          "totalSteps": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Totalsteps"
-          },
-          "finalLoss": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Finalloss"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "id",
-          "definitionId",
-          "modelName",
-          "status"
-        ],
-        "title": "TrainingSessionDto"
-      },
       "Trajectory": {
         "properties": {
           "run_id": {
@@ -4825,7 +4407,7 @@
           "model_name"
         ],
         "title": "WeightSyncRequest",
-        "description": "Trainer \u2192 Ergon: restart vLLM with updated checkpoint.\n\nFor full-weight RFT: Ergon kills the vLLM process and restarts it\nwith --model pointing to checkpoint_path. Blocks until healthy."
+        "description": "Trainer → Ergon: restart vLLM with updated checkpoint.\n\nFor full-weight RFT: Ergon kills the vLLM process and restarts it\nwith --model pointing to checkpoint_path. Blocks until healthy."
       },
       "WeightSyncResponse": {
         "properties": {
@@ -4844,7 +4426,7 @@
           "vllm_model_loaded"
         ],
         "title": "WeightSyncResponse",
-        "description": "Ergon \u2192 Trainer: sync result."
+        "description": "Ergon → Trainer: sync result."
       }
     }
   }
