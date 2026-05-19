@@ -122,7 +122,7 @@ def test_research_rubric_judge_model_round_trips_through_evaluator_json() -> Non
     even though the rubric body itself only serializes the authoring
     config.
     """
-    from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
+    from ergon_builtins.benchmarks.researchrubrics.criteria.judge import (
         ResearchRubricsJudgeCriterion,
     )
 

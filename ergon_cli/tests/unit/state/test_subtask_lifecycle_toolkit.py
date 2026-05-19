@@ -1,13 +1,16 @@
 """Unit tests for SubtaskLifecycleToolkit pydantic-ai tool closures."""
 
+from collections.abc import AsyncGenerator
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
-from collections.abc import AsyncGenerator
-
-from ergon_core.api import EmptyTaskPayload, Sandbox, Task, Worker, WorkerOutput, WorkerStreamItem
+from ergon_core.api import EmptyTaskPayload, Sandbox, Task, WorkerOutput
+from ergon_core.core.shared.context_parts import ContextPartChunk
 from ergon_core.api.worker import SpawnedTaskHandle
-from ergon_builtins.tools.subtask_lifecycle_toolkit import (
+from ergon_core.api.worker.context import WorkerContext
+from ergon_core.api.worker.worker import Worker
+from ergon_builtins.toolkits.subagents.toolkit import (
     SubtaskLifecycleToolkit,
     ToolFailure,
 )
@@ -25,7 +28,7 @@ def _dashboard_emitter() -> None:
 
 
 def _make_toolkit() -> SubtaskLifecycleToolkit:
-    return SubtaskLifecycleToolkit(context=_FakeWorkerContext())
+    return SubtaskLifecycleToolkit(context=cast("WorkerContext", _FakeWorkerContext()))
 
 
 class _FakeWorkerContext:
@@ -68,12 +71,13 @@ class _FakeWorkerContext:
 
 
 def test_subtask_lifecycle_toolkit_requires_worker_context() -> None:
+    kwargs: dict[str, object] = {
+        "run_id": uuid4(),
+        "parent_task_id": uuid4(),
+        "sandbox_id": "test-sandbox",
+    }
     with pytest.raises(TypeError, match="unexpected keyword argument 'run_id'"):
-        SubtaskLifecycleToolkit(
-            run_id=uuid4(),
-            parent_task_id=uuid4(),
-            sandbox_id="test-sandbox",
-        )
+        SubtaskLifecycleToolkit(**kwargs)
 
 
 async def test_add_subtask_accepts_object_bound_task() -> None:
@@ -99,12 +103,12 @@ async def test_add_subtask_accepts_object_bound_task() -> None:
 class _NoopWorker(Worker):
     type_slug = "noop"
 
-    async def execute(
+    async def execute(  # ty: ignore[invalid-method-override]
         self,
         task: Task,
         *,
-        context,
-    ) -> AsyncGenerator[WorkerStreamItem, None]:
+        context: WorkerContext,
+    ) -> AsyncGenerator[ContextPartChunk | WorkerOutput, None]:
         yield WorkerOutput(output=task.task_slug, success=True)
 
 
@@ -117,11 +121,12 @@ class _NoopSandbox(Sandbox):
 
 
 def _make_legacy_admin_toolkit() -> SubtaskLifecycleToolkit:
-    return SubtaskLifecycleToolkit(
-        run_id=uuid4(),
-        parent_task_id=uuid4(),
-        sandbox_id="test-sandbox",
-    )
+    kwargs: dict[str, Any] = {
+        "run_id": uuid4(),
+        "parent_task_id": uuid4(),
+        "sandbox_id": "test-sandbox",
+    }
+    return SubtaskLifecycleToolkit(**kwargs)
 
 
 @pytest.mark.parametrize(

@@ -12,7 +12,7 @@ object graph.
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_builtins.benchmarks.minif2f.prompts import MINIF2F_SYSTEM_PROMPT
-from ergon_builtins.workers.react_worker import ReActWorker
+from ergon_builtins.agents.react.worker import ReActWorker
 
 
 DEFAULT_WORKER_MODEL = "openai:gpt-4o-mini"

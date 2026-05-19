@@ -11,7 +11,7 @@ object graph.
 from ergon_builtins.benchmarks.swebench_verified.rubric import SWEBenchRubric
 from ergon_builtins.benchmarks.swebench_verified.toolkit import SWEBenchToolkit
 from ergon_builtins.benchmarks.swebench_verified.prompts import SWEBENCH_SYSTEM_PROMPT
-from ergon_builtins.workers.react_worker import ReActWorker
+from ergon_builtins.agents.react.worker import ReActWorker
 
 
 DEFAULT_WORKER_MODEL = "openai:gpt-4o-mini"

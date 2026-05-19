@@ -1,14 +1,10 @@
-"""GDP-specific task data shapes.
-
-Pydantic models for workflow configuration, dataset references, task
-instances, and sandbox operation response types used throughout the
-GDPEval benchmark.
-"""
+"""GDP-specific task and rubric data shapes."""
 
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from ergon_core.api.criterion import ScoreScale
+from pydantic import BaseModel, Field, model_validator
 
 
 class GDPDatasetRef(BaseModel):
@@ -51,68 +47,50 @@ class GDPTaskInstance(BaseModel):
     )
 
 
-# ---------------------------------------------------------------------------
-# Sandbox operation response models
-# ---------------------------------------------------------------------------
-# These are shared between the toolkit (caller side) and the sandbox skills
-# (VM side).  Keeping them here avoids a circular dependency.
+class GDPRubricCriterionData(BaseModel):
+    """Raw GDPEval criterion entry from the HuggingFace rubric JSONL."""
+
+    name: str | None = None
+    description: str | None = None
+    type: str | None = None
+    code_template: str | None = None
+    prompt_template: str | None = None
+    weight: float = 1.0
+    score_spec: ScoreScale = Field(default_factory=ScoreScale)
+
+    model_config = {"extra": "allow"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_hf_max_score(cls, data: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        if isinstance(data, dict) and "max_score" in data and "score_spec" not in data:
+            data = dict(data)
+            data["score_spec"] = {"max_score": data.pop("max_score")}
+        return data
 
 
-class ReadPDFResponse(BaseModel):
-    success: bool = Field(description="Whether the operation succeeded")
-    error: str | None = Field(default=None)
-    text: str | None = Field(default=None, description="Extracted text with page markers")
-    page_count: int | None = Field(default=None)
+class GDPRubricStageData(BaseModel):
+    """Raw GDPEval staged-rubric entry from the HuggingFace rubric JSONL."""
+
+    name: str
+    description: str | None = None
+    is_required: bool = True
+    max_points: float = 1.0
+    min_score_to_pass: float = 0.0
+    on_failure_action: str = "skip_remaining"
+    on_failure_score: float = 0.0
+    criteria: list[GDPRubricCriterionData] = Field(default_factory=list)
+
+    model_config = {"extra": "allow"}
 
 
-class CreateDocxResponse(BaseModel):
-    success: bool = Field(description="Whether the operation succeeded")
-    error: str | None = Field(default=None)
-    output_path: str | None = Field(default=None)
-    file_size: int | None = Field(default=None, description="Bytes")
+class GDPRubricData(BaseModel):
+    """Raw GDPEval rubric record keyed by task_id."""
 
+    task_id: str
+    category_name: str | None = None
+    max_total_score: float | None = None
+    stages: list[GDPRubricStageData] = Field(default_factory=list)
+    rationale: str | None = None
 
-class ReadExcelResponse(BaseModel):
-    success: bool = Field(description="Whether the operation succeeded")
-    error: str | None = Field(default=None)
-    sheet_name: str | None = Field(default=None)
-    available_sheets: list[str] | None = Field(default=None)
-    num_rows: int | None = Field(default=None)
-    num_cols: int | None = Field(default=None)
-    data: list[list] | None = Field(default=None, description="2-D cell values")
-
-
-class CreateExcelResponse(BaseModel):
-    success: bool = Field(description="Whether the operation succeeded")
-    error: str | None = Field(default=None)
-    output_path: str | None = Field(default=None)
-    file_size: int | None = Field(default=None, description="Bytes")
-
-
-class ReadCsvResponse(BaseModel):
-    success: bool = Field(description="Whether the operation succeeded")
-    error: str | None = Field(default=None)
-    num_rows: int | None = Field(default=None)
-    num_cols: int | None = Field(default=None)
-    data: list[list] | None = Field(default=None, description="2-D cell values")
-
-
-class CreateCsvResponse(BaseModel):
-    success: bool = Field(description="Whether the operation succeeded")
-    error: str | None = Field(default=None)
-    output_path: str | None = Field(default=None)
-    file_size: int | None = Field(default=None, description="Bytes")
-
-
-class OcrImageResponse(BaseModel):
-    success: bool = Field(description="Whether the operation succeeded")
-    error: str | None = Field(default=None)
-    text: str | None = Field(default=None, description="Extracted text from image")
-
-
-class RunPythonResponse(BaseModel):
-    success: bool = Field(description="Whether code executed without errors")
-    error: str | None = Field(default=None)
-    stdout: str | None = Field(default=None)
-    stderr: str | None = Field(default=None)
-    return_value: str | None = Field(default=None, description="String repr of return value")
+    model_config = {"extra": "allow"}

@@ -5,9 +5,11 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-import ergon_builtins.benchmarks.swebench_verified.criterion as criterion_module
 import pytest
-from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
+import ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution as criterion_module
+from ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution import (
+    SWEBenchTestCriterion,
+)
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.worker import WorkerOutput

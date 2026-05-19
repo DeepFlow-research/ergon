@@ -1,6 +1,6 @@
 """Training stub worker behavior."""
 
-from ergon_builtins.workers.training_stub_worker import _build_synthetic_chunks
+from ergon_builtins.agents.training.synthetic_worker import _build_synthetic_chunks
 
 
 def test_training_stub_chunks_are_deterministic_for_same_seed_and_task() -> None:
