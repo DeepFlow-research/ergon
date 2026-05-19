@@ -8,15 +8,19 @@ subtask mutations; read-only queries live in TaskInspectionService.
 from __future__ import annotations
 
 import logging
+import inspect
 from collections import deque
 from collections.abc import Awaitable, Callable
+from typing import Protocol
 from uuid import UUID
 
 import inngest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
-from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.application.ports.dashboard import (
+    DashboardEventPublisher,
+    get_dashboard_event_publisher,
+)
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.core.application.runtime.status import (
     BLOCKED,
@@ -64,12 +68,20 @@ from ergon_core.core.application.tasks.models import (
     SubtaskSpec,
 )
 from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.persistence.graph.models import RunGraphMutation
+from ergon_core.core.views.dashboard_events.graph_mutations import (
+    dashboard_graph_mutation_event_from_row,
+)
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
 
 _MANAGER_META = MutationMeta(actor="manager-worker", reason="manager_decision")
 TaskReadyDispatcher = Callable[[UUID, UUID, UUID], Awaitable[None]]
+
+
+class _LegacyDashboardGraphMutationEmitter(Protocol):
+    def graph_mutation(self, row: RunGraphMutation) -> Awaitable[None] | None: ...
 
 
 def _count_non_terminal_descendants(session: Session, run_id: UUID, node_id: UUID) -> int:
@@ -91,14 +103,30 @@ class TaskManagementService:
     def __init__(
         self,
         graph_repo: WorkflowGraphRepository | None = None,
-        dashboard_emitter: DashboardEmitter | None = None,
+        dashboard_publisher: DashboardEventPublisher | None = None,
+        dashboard_emitter: _LegacyDashboardGraphMutationEmitter | None = None,
         task_ready_dispatcher: TaskReadyDispatcher | None = None,
     ) -> None:
         self._graph_repo = graph_repo or WorkflowGraphRepository()
         self._task_execution_repo = TaskExecutionRepository()
-        self._dashboard_emitter = dashboard_emitter or get_dashboard_emitter()
         self._task_ready_dispatcher = task_ready_dispatcher
-        self._graph_repo.add_mutation_listener(self._dashboard_emitter.graph_mutation)
+        if dashboard_publisher is None and dashboard_emitter is not None:
+            self._dashboard_publisher = None
+            self._legacy_graph_mutation_listener = dashboard_emitter.graph_mutation
+            self._graph_repo.add_mutation_listener(self._legacy_publish_graph_mutation)
+            return
+        self._dashboard_publisher = dashboard_publisher or get_dashboard_event_publisher()
+        self._graph_repo.add_mutation_listener(self._publish_graph_mutation)
+
+    async def _publish_graph_mutation(self, row: RunGraphMutation) -> None:
+        if self._dashboard_publisher is None:
+            return
+        await self._dashboard_publisher.publish(dashboard_graph_mutation_event_from_row(row))
+
+    async def _legacy_publish_graph_mutation(self, row: RunGraphMutation) -> None:
+        result = self._legacy_graph_mutation_listener(row)
+        if inspect.isawaitable(result):
+            await result
 
     # ── add_subtask ──────────────────────────────────────────
 

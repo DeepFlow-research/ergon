@@ -90,7 +90,7 @@ def test_core_schema_source_imports_are_directional() -> None:
             "EvalCriterionStatus = Literal",
             "GraphMutationValue =",
         ),
-        "ergon_core.core.infrastructure.dashboard.event_contracts": (
+        "ergon_core.core.views.dashboard_events.contracts": (
             "GraphMutationValue =",
             "CancelCause = Literal",
         ),
@@ -105,6 +105,13 @@ def test_core_schema_source_imports_are_directional() -> None:
                 offenders.append(f"{path.relative_to(ROOT)} contains local source {snippet!r}")
 
     assert offenders == []
+
+
+def test_dashboard_event_contracts_live_under_views_not_infrastructure() -> None:
+    core_root = ROOT / "ergon_core/ergon_core/core"
+
+    assert (core_root / "views" / "dashboard_events" / "contracts.py").exists()
+    assert not (core_root / "infrastructure" / "dashboard" / "event_contracts.py").exists()
 
 
 def test_core_uses_hybrid_layout_roots_without_nominal_domain() -> None:

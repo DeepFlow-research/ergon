@@ -39,6 +39,7 @@ from ergon_core.core.views.runs.snapshot import (
     _task_timestamps,
 )
 from ergon_core.core.views.resources import require_viewable_resource_size
+from ergon_core.core.views.dashboard_events.graph_mutations import graph_mutation_record_from_row
 from pydantic import BaseModel
 from sqlmodel import select
 
@@ -189,22 +190,7 @@ class RunReadService:
                 ).all()
             )
 
-        return [
-            GraphMutationRecordDto(
-                id=m.id,
-                run_id=m.run_id,
-                sequence=m.sequence,
-                mutation_type=m.mutation_type,
-                target_type=m.target_type,
-                target_id=m.target_id,
-                actor=m.actor,
-                old_value=m.old_value,
-                new_value=m.new_value,
-                reason=m.reason,
-                created_at=m.created_at,
-            )
-            for m in mutations
-        ]
+        return [graph_mutation_record_from_row(m) for m in mutations]
 
     def get_resource_blob(self, run_id: UUID, resource_id: UUID) -> RunResourceBlob | None:
         with get_session() as session:

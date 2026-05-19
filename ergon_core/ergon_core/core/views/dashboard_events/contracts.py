@@ -16,56 +16,15 @@ from ergon_core.core.application.communication.models import (
     RunCommunicationThreadDto,
 )
 from ergon_core.core.views.runs.models import (
+    RunSnapshotDto,
     RunTaskEvaluationDto,
 )
 from ergon_core.core.shared.context_parts import ContextEventType, ContextPartChunkLog
-from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.application.events.base import InngestEventContract
+from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.application.read_models.cohorts import CohortSummaryDto
 from ergon_core.core.application.graph.models import GraphMutationRecordDto
-from pydantic import BaseModel, Field
-
-# ---------------------------------------------------------------------------
-# Nested models used inside workflow.started
-# ---------------------------------------------------------------------------
-
-
-class WorkerRef(BaseModel):
-    """Reference to an ``ExperimentDefinitionWorker`` row as seen by the
-    dashboard — matches the Zod ``WorkerRefSchema``."""
-
-    model_config = {"frozen": True}
-
-    id: str
-    name: str
-    type: str
-
-
-class TaskTreeNode(BaseModel):
-    """Recursive task tree node embedded in workflow.started.
-
-    Shape matches the dashboard Zod ``TaskTreeNodeSchema``.  Built from
-    ``RunGraphNode`` + ``RunGraphEdge`` + ``ExperimentDefinitionWorker``
-    at emit time; see ``start_workflow._build_task_tree_for_run``.
-    """
-
-    model_config = {"frozen": True}
-
-    id: str
-    name: str
-    description: str
-    status: NodeStatus
-    level: int
-    assigned_worker_slug: str | None = None
-    assigned_to: WorkerRef
-    children: list["TaskTreeNode"] = []
-    depends_on: list[str] = []
-    is_leaf: bool
-    resources: list[str] = []
-    parent_id: str | None = None
-
-
-TaskTreeNode.model_rebuild()
+from pydantic import Field
 
 # ---------------------------------------------------------------------------
 # Workflow-level events
@@ -78,7 +37,7 @@ class DashboardWorkflowStartedEvent(InngestEventContract):
     run_id: UUID
     definition_id: UUID
     workflow_name: str
-    task_tree: TaskTreeNode
+    snapshot: RunSnapshotDto
     started_at: datetime
     total_tasks: int
     total_leaf_tasks: int

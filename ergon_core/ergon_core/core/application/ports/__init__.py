@@ -1,0 +1,1 @@
+"""Application-declared adapter ports."""
