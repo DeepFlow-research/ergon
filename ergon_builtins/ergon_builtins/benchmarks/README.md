@@ -21,7 +21,7 @@ Adding a new benchmark = a new subdirectory containing:
   `__init__(*, worker_factory=..., sandbox_factory=..., evaluator_factory=...)`
 - `sandbox.py` — `<Slug>Sandbox(Sandbox)` per-benchmark
 - `toolkit.py` — `<Slug>Toolkit(BaseModel)` serialisable config
-- `_tools.py` — runtime tool builders (lazy-imported by `toolkit.py`)
+- `tools/tool_builder.py` — runtime tool builders (lazy-imported by `toolkit.py`)
 - `worker_factory.py` — `make_<slug>_worker()` factory (one per agentic
   strategy; bind `ReActWorker` / `CoTWorker` / etc. to this benchmark's
   toolkit + sandbox + system prompt)

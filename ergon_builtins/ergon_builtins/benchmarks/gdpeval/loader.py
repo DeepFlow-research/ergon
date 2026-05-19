@@ -13,6 +13,8 @@ from typing import Any
 import pandas as pd
 from huggingface_hub import hf_hub_download, snapshot_download
 
+from ergon_builtins.benchmarks.gdpeval.task_schemas import GDPRubricData
+
 HF_REPO_ID = "cm2435-new/gdpval_preference_rubrics"
 _HF_REPO_TYPE = "dataset"
 
@@ -101,7 +103,7 @@ def load_task_ids(
         repo_type=_HF_REPO_TYPE,
     )
     ids: list[str] = []
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for i, line in enumerate(f):
             if limit is not None and i >= limit:
                 break
@@ -112,18 +114,18 @@ def load_task_ids(
 def load_rubric_data(
     split: str = "train",
     repo_id: str = HF_REPO_ID,
-) -> dict[str, dict]:  # slopcop: ignore[no-typing-any]
+) -> dict[str, GDPRubricData]:
     """Load all rubrics from HF into ``{task_id: raw_dict}`` for *split*."""
     path = hf_hub_download(
         repo_id=repo_id,
         filename=_rubric_filename(split),
         repo_type=_HF_REPO_TYPE,
     )
-    rubrics: dict[str, dict] = {}  # slopcop: ignore[no-typing-any]
-    with open(path) as f:
+    rubrics: dict[str, GDPRubricData] = {}
+    with open(path, encoding="utf-8") as f:
         for line in f:
-            data = json.loads(line)
-            rubrics[data["task_id"]] = data
+            rubric = GDPRubricData.model_validate_json(line)
+            rubrics[rubric.task_id] = rubric
     return rubrics
 
 
@@ -131,7 +133,7 @@ def load_single_rubric(
     task_id: str,
     split: str = "train",
     repo_id: str = HF_REPO_ID,
-) -> dict:  # slopcop: ignore[no-typing-any]
+) -> GDPRubricData:
     """Load the rubric dict for a single *task_id* from *split*."""
     rubrics = load_rubric_data(split, repo_id)
     if task_id not in rubrics:

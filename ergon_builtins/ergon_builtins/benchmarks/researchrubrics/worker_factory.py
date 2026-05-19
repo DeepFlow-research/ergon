@@ -13,7 +13,7 @@ from ergon_builtins.benchmarks.researchrubrics.prompts import RESEARCH_SYSTEM_PR
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit
 
-from ergon_builtins.workers.react_worker import ReActWorker
+from ergon_builtins.agents.react.worker import ReActWorker
 
 __all__ = [
     "make_research_rubric",

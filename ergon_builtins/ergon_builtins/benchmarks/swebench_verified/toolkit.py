@@ -7,7 +7,11 @@ never round-trip through JSON.
 
 from typing import Any
 
-from ergon_builtins.workers.toolkit import Toolkit
+from ergon_core.api import Task
+from ergon_core.api.sandbox import Sandbox
+from pydantic_ai.tools import Tool
+
+from ergon_builtins.toolkits.common.base import Toolkit
 
 
 class SWEBenchToolkit(Toolkit):
@@ -22,10 +26,10 @@ class SWEBenchToolkit(Toolkit):
     patch_output_path: str = "/workspace/final_output/patch.diff"
     max_tool_calls: int = 32
 
-    def tools(self, sandbox: Any, task: Any) -> list:  # slopcop: ignore[no-typing-any]
+    def tools(self, sandbox: Sandbox, task: Task[Any]) -> list[Tool]:
         """Build live pydantic_ai Tool instances bound to the v2 sandbox."""
         # reason: circular import — benchmarks/swebench_verified/toolkit.py →
-        # benchmarks/swebench_verified/_tools.py → benchmarks/swebench_verified/toolkit.py
-        from ergon_builtins.benchmarks.swebench_verified._tools import build_tools
+        # benchmarks/swebench_verified/tools/tool_builder.py → benchmarks/swebench_verified/toolkit.py
+        from ergon_builtins.benchmarks.swebench_verified.tools.tool_builder import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)

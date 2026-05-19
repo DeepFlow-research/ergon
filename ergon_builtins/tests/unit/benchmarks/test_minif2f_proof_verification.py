@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from ergon_builtins.benchmarks.minif2f.rules.proof_verification import (
+from ergon_builtins.benchmarks.minif2f.criteria.proof_verification import (
     ProofVerificationCriterion,
 )
 from ergon_core.api import WorkerOutput
@@ -79,4 +79,5 @@ async def test_scores_zero_when_proof_missing() -> None:
     result = await criterion.evaluate(context)
     assert result.score == 0.0
     assert not result.passed
+    assert result.feedback is not None
     assert "final_solution.lean" in result.feedback

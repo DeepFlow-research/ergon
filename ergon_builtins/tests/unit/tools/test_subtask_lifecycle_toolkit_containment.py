@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_builtins.tools.subtask_lifecycle_toolkit import (
+from ergon_builtins.toolkits.subagents.toolkit import (
     ListSubtasksToolSuccess,
     SubtaskLifecycleToolkit,
     ToolFailure,
@@ -17,12 +17,18 @@ class _FakeContext:
 
     async def cancel_task(self, task_id):
         self.calls.append(("cancel", task_id))
+        if task_id != self.allowed_id:
+            raise RuntimeError("not contained")
 
     async def refine_task(self, task_id, *, description):
         self.calls.append(("refine", task_id, description))
+        if task_id != self.allowed_id:
+            raise RuntimeError("not contained")
 
     async def restart_task(self, task_id):
         self.calls.append(("restart", task_id))
+        if task_id != self.allowed_id:
+            raise RuntimeError("not contained")
 
     async def subtasks(self):
         self.calls.append(("subtasks",))
@@ -54,10 +60,9 @@ async def test_worker_toolkit_routes_lifecycle_calls_through_worker_context() ->
     restart_task = next(tool for tool in tools if tool.__name__ == "restart_task")
     list_subtasks = next(tool for tool in tools if tool.__name__ == "list_subtasks")
 
-    target_id = uuid4()
-    await cancel_task(str(target_id))
-    await refine_task(str(target_id), "new description")
-    await restart_task(str(target_id))
+    await cancel_task(str(context.allowed_id))
+    await refine_task(str(context.allowed_id), "new description")
+    await restart_task(str(context.allowed_id))
     listed = await list_subtasks()
 
     assert isinstance(listed, ListSubtasksToolSuccess)
@@ -68,9 +73,15 @@ async def test_worker_toolkit_routes_lifecycle_calls_through_worker_context() ->
 async def test_worker_toolkit_returns_failure_when_context_blocks_target() -> None:
     context = _FakeContext()
     toolkit = SubtaskLifecycleToolkit(context=context)
-    get_subtask = next(tool for tool in toolkit.get_tools() if tool.__name__ == "get_subtask")
+    tools = {tool.__name__: tool for tool in toolkit.get_tools()}
+    blocked_id = str(uuid4())
 
-    result = await get_subtask(str(uuid4()))
+    results = [
+        await tools["cancel_task"](blocked_id),
+        await tools["refine_task"](blocked_id, "new description"),
+        await tools["restart_task"](blocked_id),
+        await tools["get_subtask"](blocked_id),
+    ]
 
-    assert isinstance(result, ToolFailure)
-    assert "not contained" in result.error
+    assert all(isinstance(result, ToolFailure) for result in results)
+    assert all("not contained" in result.error for result in results)

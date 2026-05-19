@@ -12,7 +12,7 @@ from ergon_builtins.benchmarks.gdpeval.prompts import GDPEVAL_SYSTEM_PROMPT
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
 from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 
-from ergon_builtins.workers.react_worker import ReActWorker
+from ergon_builtins.agents.react.worker import ReActWorker
 
 __all__ = [
     "make_gdpeval_rubric",

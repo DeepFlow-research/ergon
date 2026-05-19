@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 from ergon_core.api.criterion import CriterionContext
 from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.criterion import ScoreScale
 from ergon_core.api.worker import WorkerOutput
 from ergon_core.test_support.task_factory import task_with_id
 
@@ -54,14 +55,14 @@ class TestLLMJudgeCriterionWithRuntime:
         ],
     )
     async def test_evaluate_verdict(self, monkeypatch, passed, expected_score, reasoning):
-        from ergon_builtins.evaluators.criteria.llm_judge import (
+        from ergon_builtins.benchmarks.gdpeval.criteria.llm_judge import (
             LLMJudgeCriterion,
             _JudgeVerdict,
         )
 
         judge = AsyncMock(return_value=_JudgeVerdict(reasoning=reasoning, passed=passed))
         monkeypatch.setattr(
-            "ergon_builtins.evaluators.criteria.llm_judge.call_structured_judge",
+            "ergon_builtins.benchmarks.gdpeval.criteria.llm_judge.call_structured_judge",
             judge,
         )
 
@@ -69,7 +70,7 @@ class TestLLMJudgeCriterionWithRuntime:
             slug="test-criterion",
             prompt_template="Evaluate whether the report covers the topic.",
             weight=1.0,
-            max_score=1.0,
+            score_spec=ScoreScale(max_score=1.0),
         )
 
         ctx = _make_eval_context()

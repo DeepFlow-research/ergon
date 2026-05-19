@@ -1,8 +1,8 @@
 from uuid import uuid4
 
 import pytest
-from ergon_builtins.tools.workflow_cli_tool import make_workflow_cli_tool
-from ergon_builtins.workers.tool_budget import (
+from ergon_builtins.toolkits.workflow_cli.tool import make_workflow_cli_tool
+from ergon_builtins.toolkits.common.budgets import (
     AgentToolBudgetDeps,
     AgentToolBudgetState,
 )

@@ -7,7 +7,11 @@ and never round-trip through JSON.
 
 from typing import Any
 
-from ergon_builtins.workers.toolkit import Toolkit
+from ergon_core.api import Task
+from ergon_core.api.sandbox import Sandbox
+from pydantic_ai.tools import Tool
+
+from ergon_builtins.toolkits.common.base import Toolkit
 
 
 class GDPEvalToolkit(Toolkit):
@@ -24,10 +28,10 @@ class GDPEvalToolkit(Toolkit):
     max_tool_calls: int = 64
     allow_stakeholder_questions: bool = False
 
-    def tools(self, sandbox: Any, task: Any) -> list:  # slopcop: ignore[no-typing-any]
+    def tools(self, sandbox: Sandbox, task: Task[Any]) -> list[Tool]:
         """Build live pydantic_ai Tool instances bound to the v2 sandbox."""
         # reason: circular import — benchmarks/gdpeval/toolkit.py →
-        # benchmarks/gdpeval/_tools.py → benchmarks/gdpeval/toolkit.py
-        from ergon_builtins.benchmarks.gdpeval._tools import build_tools
+        # benchmarks/gdpeval/tools/tool_builder.py → benchmarks/gdpeval/toolkit.py
+        from ergon_builtins.benchmarks.gdpeval.tools.tool_builder import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)

@@ -12,6 +12,7 @@ from ergon_core.api import Benchmark, BenchmarkRequirements, Task
 from ergon_core.api.rubric import Evaluator
 from ergon_core.api.sandbox import Sandbox
 from ergon_core.api.worker import Worker
+from ergon_core.core.shared.settings import settings
 
 from ergon_builtins.benchmarks.researchrubrics.sandbox import ResearchE2BSandbox
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
@@ -115,9 +116,6 @@ class ResearchRubricsBenchmark(Benchmark):
 
         Requires ``datasets`` and ``huggingface_hub`` to be installed.
         """
-        # reason: avoids circular import at module level
-        from ergon_core.core.shared.settings import settings
-
         token = settings.hf_api_key
         ds = load_dataset(self.dataset_name, token=token)
         train_ds = ds["train"]

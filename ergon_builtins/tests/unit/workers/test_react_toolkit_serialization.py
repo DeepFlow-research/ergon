@@ -6,7 +6,7 @@ import pytest
 
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
 from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_worker
-from ergon_builtins.workers.toolkit import Toolkit
+from ergon_builtins.toolkits.common.base import Toolkit
 
 
 def test_react_worker_serializes_concrete_toolkit_fields() -> None:
