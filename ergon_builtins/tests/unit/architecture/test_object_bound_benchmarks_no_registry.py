@@ -15,6 +15,8 @@ _MIGRATED_BENCHMARKS = (
     "gdpeval",
 )
 
+SOURCE_ROOT = ROOT / "ergon_builtins" / "ergon_builtins"
+
 
 @pytest.mark.parametrize("slug", _MIGRATED_BENCHMARKS)
 def test_object_bound_benchmark_does_not_import_component_registry(
@@ -32,9 +34,39 @@ def test_object_bound_benchmark_does_not_import_component_registry(
     )
 
 
-def test_toolkit_is_public_from_stable_builtins_baselines_path() -> None:
-    init_file = ROOT / "ergon_builtins" / "ergon_builtins" / "workers" / "baselines" / "__init__.py"
+def test_toolkit_is_public_from_canonical_workers_path() -> None:
+    init_file = ROOT / "ergon_builtins" / "ergon_builtins" / "workers" / "__init__.py"
     text = init_file.read_text()
 
-    assert "from ergon_builtins.workers.baselines.toolkit import Toolkit" in text
+    assert "from ergon_builtins.workers.toolkit import Toolkit" in text
     assert '"Toolkit"' in text
+
+
+def test_workers_baselines_compat_package_is_removed() -> None:
+    assert not (ROOT / "ergon_builtins" / "ergon_builtins" / "workers" / "baselines").exists()
+
+
+def test_shared_workers_compat_package_is_removed() -> None:
+    assert not (ROOT / "ergon_builtins" / "ergon_builtins" / "shared" / "workers").exists()
+
+
+def test_worker_imports_use_canonical_paths() -> None:
+    forbidden = (
+        "ergon_builtins.workers.baselines",
+        "ergon_builtins.shared.workers",
+    )
+    offenders: list[str] = []
+    for path in SOURCE_ROOT.rglob("*.py"):
+        text = path.read_text()
+        if any(import_path in text for import_path in forbidden):
+            offenders.append(str(path.relative_to(ROOT)))
+
+    assert offenders == []
+
+
+@pytest.mark.parametrize("slug", _MIGRATED_BENCHMARKS)
+def test_benchmark_worker_factories_use_canonical_module(slug: str) -> None:
+    benchmark_pkg = SOURCE_ROOT / "benchmarks" / slug
+
+    assert (benchmark_pkg / "worker_factory.py").exists()
+    assert not (benchmark_pkg / "workers.py").exists()

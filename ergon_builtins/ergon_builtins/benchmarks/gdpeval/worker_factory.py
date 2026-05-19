@@ -8,10 +8,11 @@ v2 callers use ``make_gdpeval_worker()`` directly from the benchmark
 object graph.
 """
 
+from ergon_builtins.benchmarks.gdpeval.prompts import GDPEVAL_SYSTEM_PROMPT
 from ergon_builtins.benchmarks.gdpeval.rubric import StagedRubric
 from ergon_builtins.benchmarks.gdpeval.toolkit import GDPEvalToolkit
 
-from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.workers.react_worker import ReActWorker
 
 __all__ = [
     "make_gdpeval_rubric",
@@ -19,24 +20,19 @@ __all__ = [
 ]
 
 
-_GDPEVAL_SYSTEM_PROMPT = """You are a GDPEval document-processing agent.
-
-Use the provided tools to inspect input documents, transform data, run Python
-when useful, and write final artifacts under /workspace/final_output. Keep a
-short final answer that names the produced files and any assumptions.
-"""
+DEFAULT_WORKER_MODEL = "openai:gpt-4o-mini"
 
 
 def make_gdpeval_worker(
     *,
-    model: str = "openai:gpt-4o-mini",
+    model: str = DEFAULT_WORKER_MODEL,
     max_iterations: int = 40,
 ) -> ReActWorker:
     """Return a serializable ReActWorker for GDPEval (v2 authoring shape)."""
     return ReActWorker(
         name="gdpeval-runner",
         model=model,
-        system_prompt=_GDPEVAL_SYSTEM_PROMPT,
+        system_prompt=GDPEVAL_SYSTEM_PROMPT,
         max_iterations=max_iterations,
         toolkit=GDPEvalToolkit(),
     )

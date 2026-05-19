@@ -3,9 +3,10 @@
 import inspect
 from uuid import UUID
 
-import ergon_builtins.workers.baselines.react_worker as react_worker_module
+import ergon_builtins.workers.react_worker as react_worker_module
 import pytest
-from ergon_builtins.workers.baselines.react_worker import ReActWorker, _worker_output_from_chunks
+from ergon_builtins.workers.react_output import worker_output_from_chunks
+from ergon_builtins.workers.react_worker import ReActWorker
 from ergon_core.api.benchmark import EmptyTaskPayload, Task
 from ergon_core.api.worker import WorkerContext, WorkerOutput
 from ergon_core.test_support.task_factory import task_with_id
@@ -77,7 +78,7 @@ def test_pydantic_ai_transcript_adapter_lives_outside_worker() -> None:
 
 
 def test_worker_output_prefers_structured_final_result_over_prior_assistant_text() -> None:
-    output = _worker_output_from_chunks(
+    output = worker_output_from_chunks(
         [
             ContextPartChunk(part=AssistantTextPart(content="intermediate answer")),
             ContextPartChunk(
@@ -90,7 +91,11 @@ def test_worker_output_prefers_structured_final_result_over_prior_assistant_text
         ]
     )
 
-    assert output == WorkerOutput(output="structured final answer", success=True)
+    assert output == WorkerOutput(
+        output="structured final answer",
+        success=True,
+        metadata={"output_source": "final_result_tool"},
+    )
 
 
 class _FakeRunState:
@@ -259,6 +264,10 @@ async def test_react_worker_passes_agent_deps_to_pydantic_ai(monkeypatch) -> Non
 
     chunks = items[:-1]
     assert [chunk.part.part_kind for chunk in chunks] == ["user_message", "assistant_text"]
-    assert items[-1] == WorkerOutput(output="partial answer", success=True)
+    assert items[-1] == WorkerOutput(
+        output="partial answer",
+        success=True,
+        metadata={"output_source": "assistant_text_fallback"},
+    )
     assert _DepsAgent.init_kwargs["deps_type"] is dict
     assert _DepsAgent.iter_kwargs["deps"] == {"execution_id": str(UUID(int=5))}

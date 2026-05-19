@@ -11,17 +11,24 @@ object graph.
 
 from ergon_builtins.benchmarks.minif2f.rubric import MiniF2FRubric
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
-from ergon_builtins.workers.baselines.react_prompts import MINIF2F_SYSTEM_PROMPT
-from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.benchmarks.minif2f.prompts import MINIF2F_SYSTEM_PROMPT
+from ergon_builtins.workers.react_worker import ReActWorker
 
 
-def make_minif2f_worker() -> ReActWorker:
+DEFAULT_WORKER_MODEL = "openai:gpt-4o-mini"
+
+
+def make_minif2f_worker(
+    *,
+    model: str = DEFAULT_WORKER_MODEL,
+    max_iterations: int = 30,
+) -> ReActWorker:
     """Return a serializable ReActWorker for MiniF2F (v2 authoring shape)."""
     return ReActWorker(
         name="solver",
-        model="openai:gpt-4o-mini",
+        model=model,
         system_prompt=MINIF2F_SYSTEM_PROMPT,
-        max_iterations=30,
+        max_iterations=max_iterations,
         toolkit=MiniF2FToolkit(),
     )
 

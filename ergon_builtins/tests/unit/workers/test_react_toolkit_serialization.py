@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 
 from ergon_builtins.benchmarks.minif2f.toolkit import MiniF2FToolkit
-from ergon_builtins.benchmarks.minif2f.workers import make_minif2f_worker
-from ergon_builtins.workers.baselines.toolkit import Toolkit
+from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_worker
+from ergon_builtins.workers.toolkit import Toolkit
 
 
 def test_react_worker_serializes_concrete_toolkit_fields() -> None:

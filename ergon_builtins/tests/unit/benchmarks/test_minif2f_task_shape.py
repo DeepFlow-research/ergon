@@ -1,6 +1,6 @@
 """MiniF2F v2 authoring shape: toolkit round-trip and task JSON assertions."""
 
-from ergon_builtins.benchmarks.minif2f.workers import (
+from ergon_builtins.benchmarks.minif2f.worker_factory import (
     make_minif2f_rubric,
     make_minif2f_worker,
 )

@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ergon_builtins.workers.baselines.toolkit import Toolkit
+from ergon_builtins.workers.toolkit import Toolkit
 
 
 # ---------------------------------------------------------------------------
