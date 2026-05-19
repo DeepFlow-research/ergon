@@ -1,10 +1,11 @@
 import json
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from ergon_cli.commands.workflow import WorkflowCommandContext, execute_workflow_command
+from ergon_core.core.application.runtime.models import GraphTaskRef
 from ergon_core.core.application.runtime.workflow_models import WorkflowResourceRef
+from pydantic import BaseModel, ConfigDict
 
 
 class _Session:
@@ -12,12 +13,14 @@ class _Session:
         pass
 
 
-@dataclass
-class _Service:
-    resource: WorkflowResourceRef
+class _Service(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    resource: WorkflowResourceRef | None
 
     def list_resources(self, session, *, run_id, task_id, scope, kind=None, max_depth=3, limit=50):
         assert isinstance(session, _Session)
+        assert self.resource is not None
         assert run_id == self.resource.run_id
         assert task_id == self.resource.task_id
         assert scope == "visible"
@@ -25,6 +28,25 @@ class _Service:
         assert max_depth == 3
         assert limit == 5
         return [self.resource]
+
+
+class _TaskTreeService(BaseModel):
+    requested_parent_task_id: object | None = None
+
+    def list_tasks(self, session, *, run_id, parent_task_id=None):
+        assert isinstance(session, _Session)
+        self.requested_parent_task_id = parent_task_id
+        return [
+            GraphTaskRef(
+                task_id=uuid4(),
+                task_slug="child",
+                status="pending",
+                level=1,
+                parent_task_id=parent_task_id,
+                assigned_worker_slug="react-v1",
+                description="Child task",
+            )
+        ]
 
 
 class _FailingService:
@@ -44,12 +66,12 @@ def _context() -> WorkflowCommandContext:
 
 def test_resource_list_json_uses_injected_context() -> None:
     run_id = uuid4()
-    node_id = uuid4()
+    task_id = uuid4()
     resource = WorkflowResourceRef(
         resource_id=uuid4(),
         run_id=run_id,
         task_execution_id=uuid4(),
-        task_id=node_id,
+        task_id=task_id,
         task_slug="research",
         kind="report",
         name="paper.txt",
@@ -64,13 +86,13 @@ def test_resource_list_json_uses_injected_context() -> None:
         "inspect resource-list --scope visible --limit 5 --format json",
         context=WorkflowCommandContext(
             run_id=run_id,
-            task_id=node_id,
+            task_id=task_id,
             execution_id=uuid4(),
             sandbox_task_key=uuid4(),
             benchmark_type="researchrubrics",
         ),
         session_factory=_Session,
-        service=_Service(resource),
+        service=_Service(resource=resource),
     )
 
     payload = json.loads(output.stdout)
@@ -164,18 +186,9 @@ def test_service_validation_error_returns_nonzero_output() -> None:
 
 
 def test_unknown_manage_command_reports_parser_error() -> None:
-    run_id = uuid4()
-    node_id = uuid4()
-
     output = execute_workflow_command(
         "manage spawn-task --format json",
-        context=WorkflowCommandContext(
-            run_id=run_id,
-            task_id=node_id,
-            execution_id=uuid4(),
-            sandbox_task_key=uuid4(),
-            benchmark_type="researchrubrics",
-        ),
+        context=_context(),
         session_factory=_Session,
         service=object(),
     )
@@ -183,3 +196,64 @@ def test_unknown_manage_command_reports_parser_error() -> None:
     assert output.exit_code == 2
     assert output.stderr is not None
     assert "invalid choice: 'spawn-task'" in output.stderr
+
+
+def test_task_tree_parent_task_id_filters_tasks_by_parent() -> None:
+    parent_task_id = uuid4()
+    service = _TaskTreeService()
+
+    output = execute_workflow_command(
+        f"inspect task-tree --parent-task-id {parent_task_id} --format json",
+        context=_context(),
+        session_factory=_Session,
+        service=service,
+    )
+
+    payload = json.loads(output.stdout)
+    assert output.exit_code == 0
+    assert service.requested_parent_task_id == parent_task_id
+    assert payload["tasks"][0]["parent_task_id"] == str(parent_task_id)
+
+
+def test_manage_mutation_non_dry_run_is_unsupported_without_service_call() -> None:
+    output = execute_workflow_command(
+        "manage add-edge",
+        context=_context(),
+        session_factory=_Session,
+        service=object(),
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr == (
+        "dynamic workflow mutation from CLI is unsupported; use WorkerContext.spawn_task(Task(...))"
+    )
+
+
+def test_manage_mutation_dry_run_validates_without_service_call() -> None:
+    output = execute_workflow_command(
+        "manage add-edge --dry-run --format json",
+        context=_context(),
+        session_factory=_Session,
+        service=object(),
+    )
+
+    payload = json.loads(output.stdout)
+    assert output.exit_code == 0
+    assert payload == {
+        "action": "add-edge",
+        "dry_run": True,
+        "message": "Graph lifecycle command validated; no changes applied.",
+    }
+
+
+def test_resource_list_rejects_removed_explain_flag() -> None:
+    output = execute_workflow_command(
+        "inspect resource-list --scope visible --explain",
+        context=_context(),
+        session_factory=_Session,
+        service=_Service(resource=None),  # type: ignore[arg-type]
+    )
+
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "unrecognized arguments: --explain" in output.stderr

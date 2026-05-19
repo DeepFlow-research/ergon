@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import e2b
 import ergon_cli.commands.benchmark as _bench_mod
 import pytest
+from ergon_cli.commands.benchmark_templates import sandbox_template_for
 from ergon_cli.commands.benchmark import setup_benchmark
 from ergon_core.core.shared.settings import settings
 
@@ -201,3 +202,15 @@ def test_build_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     rc = setup_benchmark(_make_args())
     assert rc != 0
+
+
+def test_sandbox_template_for_known_slug_returns_template_path() -> None:
+    path = sandbox_template_for("minif2f")
+
+    assert path.name == "sandbox_template"
+    assert path.parent.name == "minif2f"
+
+
+def test_sandbox_template_for_unknown_slug_raises_key_error() -> None:
+    with pytest.raises(KeyError):
+        sandbox_template_for("not-a-benchmark")

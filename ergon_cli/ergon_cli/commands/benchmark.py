@@ -8,25 +8,14 @@ import tomllib
 from argparse import Namespace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Protocol
 
 from e2b import Template
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.shared.settings import settings
 
+from ergon_cli.commands.benchmark_templates import SANDBOX_TEMPLATES, sandbox_template_for
 from ergon_cli.discovery import list_benchmarks
 from ergon_cli.rendering import render_table
-
-SANDBOX_TEMPLATES: dict[str, Path] = {
-    "minif2f": Path(__file__).parents[3]
-    / "ergon_builtins/ergon_builtins/benchmarks/minif2f/sandbox_template",
-    "swebench-verified": Path(__file__).parents[3]
-    / "ergon_builtins/ergon_builtins/benchmarks/swebench_verified/sandbox_template",
-}
-
-
-class BuildLog(Protocol):
-    def __str__(self) -> str: ...
 
 
 def _fail(message: str, exit_code: int = 1) -> int:
@@ -80,11 +69,11 @@ def setup_benchmark(args: Namespace) -> int:
         )
 
     # 2. Look up template dir
-    if slug not in SANDBOX_TEMPLATES:
+    try:
+        template_dir = sandbox_template_for(slug)
+    except KeyError:
         available = ", ".join(sorted(SANDBOX_TEMPLATES)) or "(none)"
         return _fail(f"Error: unknown benchmark slug '{slug}'.\nAvailable slugs: {available}")
-
-    template_dir = SANDBOX_TEMPLATES[slug]
 
     # 3. Load template spec from e2b.toml.template
     template_spec_path = template_dir / "e2b.toml.template"
@@ -130,7 +119,7 @@ def setup_benchmark(args: Namespace) -> int:
     print(f"Building E2B template '{template_name}' from {template_dir} ...")
     print(f"  cpu_count={cpu_count}, memory_mb={memory_mb}")
 
-    def _on_build_logs(log: BuildLog) -> None:
+    def _on_build_logs(log: object) -> None:
         # LogEntry repr is human-readable; raw print is fine for CLI stream.
         print(f"  [build] {log}", flush=True)
 

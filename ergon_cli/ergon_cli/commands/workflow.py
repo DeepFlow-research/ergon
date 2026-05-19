@@ -20,6 +20,9 @@ _RESOURCE_SCOPES = ("visible", "own", "input", "upstream", "children", "descenda
 _RESOURCE_KINDS = tuple(kind.value for kind in RunResourceKind)
 _OUTPUT_FORMATS = ("text", "json")
 _DEPENDENCY_DIRECTIONS = ("upstream", "downstream", "both")
+_UNSUPPORTED_DYNAMIC_MUTATION_MESSAGE = (
+    "dynamic workflow mutation from CLI is unsupported; use WorkerContext.spawn_task(Task(...))"
+)
 
 _FORBIDDEN_CONTEXT_FLAGS = {
     "--run-id",
@@ -61,7 +64,6 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     resource_list.add_argument("--limit", type=int, default=50)
     resource_list.add_argument("--max-depth", type=int, default=3)
     resource_list.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
-    resource_list.add_argument("--explain", action="store_true")
 
     resource_content = inspect_sub.add_parser("resource-content")
     resource_content.add_argument("--resource-id", required=True)
@@ -312,7 +314,11 @@ async def _handle_manage(
             "message": "Graph lifecycle command validated; no changes applied.",
         }
         return _format_output(payload, [str(payload["message"])], args.format)
-    raise ValueError(f"{args.action} requires --dry-run in workflow CLI v1")
+    return WorkflowCommandOutput(
+        stdout="",
+        stderr=_UNSUPPORTED_DYNAMIC_MUTATION_MESSAGE,
+        exit_code=2,
+    )
 
 
 def _format_output(

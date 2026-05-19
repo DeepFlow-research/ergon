@@ -16,11 +16,6 @@ from ergon_cli.commands.train import handle_train
 from ergon_cli.commands.worker import handle_worker
 from ergon_cli.commands.workflow import handle_workflow
 from ergon_ingestion.cli import handle_ingest
-from ergon_cli.bootstrap import register_and_publish_builtins
-
-
-def register_default_components() -> None:
-    return None
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -172,8 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # -- onboard / doctor ------------------------------------------------------
     sub.add_parser("onboard", help="Interactive environment setup wizard")
-    doctor = sub.add_parser("doctor", help="Check environment health")
-    doctor.add_argument("--verbose", action="store_true", help="Show detailed output")
+    sub.add_parser("doctor", help="Check environment health")
 
     # -- stack lifecycle (thin docker compose wrappers) ------------------------
     sub.add_parser(
@@ -245,10 +239,6 @@ def build_parser() -> argparse.ArgumentParser:
 async def _main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command not in {None, "doctor", "onboard", "start", "stop"}:
-        register_and_publish_builtins()
-    else:
-        register_default_components()
 
     async_handlers = {
         "benchmark": handle_benchmark,

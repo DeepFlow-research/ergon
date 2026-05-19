@@ -1,4 +1,7 @@
-"""Explicit builtin discovery for CLI listing commands."""
+"""Temporary explicit builtin discovery for CLI listing commands.
+
+PR 05 moves this catalogue behind builtins-owned metadata.
+"""
 
 _BENCHMARK_ROWS = (
     ("gdpeval", "gdpeval", "Benchmark for GDP document-processing evaluation tasks."),
@@ -12,8 +15,8 @@ _BENCHMARK_ROWS = (
     ("swebench-verified", "swebench-verified", "Benchmark backed by SWE-Bench Verified."),
 )
 _WORKER_ROWS = (
-    ("react-worker", "ReActWorker"),
-    ("training-stub-worker", "TrainingStubWorker"),
+    ("react-v1", "ReActWorker"),
+    ("training-stub", "TrainingStubWorker"),
 )
 _EVALUATOR_ROWS = (
     ("gdpeval-staged-rubric", "StagedRubric"),
