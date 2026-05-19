@@ -25,7 +25,6 @@ def _run(session: Session) -> UUID:
         RunRecord(
             id=run_id,
             definition_id=uuid4(),
-            workflow_definition_id=uuid4(),
             benchmark_type="ci-task-execution-repository",
             instance_key="sample-1",
             worker_team_json={"primary": "test-worker"},

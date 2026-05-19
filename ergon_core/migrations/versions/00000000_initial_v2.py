@@ -15,7 +15,6 @@ for module_name in (
     "ergon_core.core.persistence.context.models",
     "ergon_core.core.persistence.definitions.models",
     "ergon_core.core.persistence.graph.models",
-    "ergon_core.core.persistence.imports.models",
     "ergon_core.core.persistence.telemetry.models",
 ):
     import_module(module_name)

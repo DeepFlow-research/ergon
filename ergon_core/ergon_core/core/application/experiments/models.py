@@ -16,7 +16,7 @@ class ExperimentRunRequest(BaseModel):
 class ExperimentRunResult(BaseModel):
     definition_id: UUID
     run_ids: list[UUID]
-    workflow_definition_ids: list[UUID] = Field(default_factory=list)
+    definition_ids: list[UUID] = Field(default_factory=list)
 
 
 class RunAssignment(BaseModel):

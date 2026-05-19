@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import (
+from ergon_core.core.application.runtime.status import (
     CANCELLED,
     EDGE_PENDING,
     EDGE_SATISFIED,

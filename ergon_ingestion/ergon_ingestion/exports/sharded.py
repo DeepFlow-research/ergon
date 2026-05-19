@@ -11,7 +11,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from sqlmodel import Session, select
 
-from ergon_core.core.persistence.imports.models import RunDropsManifest, RunReducer
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
@@ -177,7 +176,6 @@ def _run_row(
         "batch": config.batch,
         "run_id": str(run.id),
         "definition_id": str(run.definition_id),
-        "workflow_definition_id": str(run.workflow_definition_id),
         "benchmark_type": run.benchmark_type,
         "instance_key": run.instance_key,
         "sample_id": run.sample_id,
@@ -195,58 +193,13 @@ def _run_row(
 def _load_reducer_rows(
     *, session: Session, config: ShardedExportConfig, runs: list[RunRecord]
 ) -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
-    for run in runs:
-        reducers = session.exec(select(RunReducer).where(RunReducer.run_id == run.id))
-        for reducer in reducers:
-            rows.append(
-                {
-                    "dataset": config.dataset,
-                    "batch": config.batch,
-                    "run_id": str(run.id),
-                    "reducer_id": str(reducer.id),
-                    "name": reducer.name,
-                    "kind": reducer.kind,
-                    "implementation_ref": reducer.implementation_ref,
-                    "status": reducer.status,
-                    "created_at": reducer.created_at.isoformat(),
-                    "input_scope_json": _json_string(reducer.input_scope_json),
-                    "output_json": _json_string(reducer.output_json),
-                    "config_json": _json_string(reducer.config_json),
-                }
-            )
-    return rows
+    return []
 
 
 def _load_drop_rows(
     *, session: Session, config: ShardedExportConfig, runs: list[RunRecord]
 ) -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
-    for run in runs:
-        reducers = list(session.exec(select(RunReducer).where(RunReducer.run_id == run.id)))
-        for reducer in reducers:
-            drops = session.exec(
-                select(RunDropsManifest).where(RunDropsManifest.reducer_id == reducer.id)
-            )
-            for drop in drops:
-                rows.append(
-                    {
-                        "dataset": config.dataset,
-                        "batch": config.batch,
-                        "run_id": str(run.id),
-                        "reducer_id": str(reducer.id),
-                        "drop_id": str(drop.id),
-                        "loss_class": drop.loss_class,
-                        "dropped_source_kind": drop.dropped_source_kind,
-                        "dropped_field_path": drop.dropped_field_path,
-                        "reason": drop.reason,
-                        "affected_analysis": drop.affected_analysis,
-                        "declaration_kind": drop.declaration_kind,
-                        "evidence_json": _json_string(drop.evidence_json),
-                        "created_at": drop.created_at.isoformat(),
-                    }
-                )
-    return rows
+    return []
 
 
 def _write_shards(

@@ -18,7 +18,7 @@ from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import (
+from ergon_core.core.application.runtime.status import (
     BLOCKED,
     CANCELLED,
     COMPLETED,
@@ -705,7 +705,7 @@ class TaskManagementService:
             raise CycleDetectedError(remaining)
 
     def _resolve_definition_id(self, session: Session, run_id: UUID) -> UUID:
-        """Read workflow_definition_id from RunRecord.
+        """Read definition_id from RunRecord.
 
         Every run references exactly one definition, so a missing RunRecord
         is an invariant violation — callers must always create the RunRecord
@@ -715,7 +715,7 @@ class TaskManagementService:
         run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
         if run is None:
             raise RunRecordMissingError(run_id)
-        return run.workflow_definition_id
+        return run.definition_id
 
     async def _dispatch_task_ready(
         self,

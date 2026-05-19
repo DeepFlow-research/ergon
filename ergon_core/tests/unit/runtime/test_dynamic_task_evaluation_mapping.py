@@ -2,7 +2,7 @@ from uuid import uuid4
 from types import SimpleNamespace
 
 from ergon_core.core.persistence.telemetry.models import RunTaskEvaluation
-from ergon_core.core.application.read_models.run_snapshot import _task_keyed_evaluations
+from ergon_core.core.views.runs.snapshot import _task_keyed_evaluations
 from ergon_core.core.application.jobs.evaluate_task_run import _evaluator_binding_key
 
 

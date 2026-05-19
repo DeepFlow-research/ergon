@@ -2,15 +2,12 @@
 
 from uuid import UUID
 
-from ergon_core.core.application.read_models.models import (
+from ergon_core.core.views.runs.models import (
     RunSnapshotDto,
-    TrainingCurvePointDto,
-    TrainingMetricDto,
-    TrainingSessionDto,
 )
 from ergon_core.core.application.graph.models import GraphMutationRecordDto
-from ergon_core.core.application.read_models.errors import ResourceTooLargeError
-from ergon_core.core.application.read_models.runs import RunReadService
+from ergon_core.core.views.errors import ResourceTooLargeError
+from ergon_core.core.views.runs.service import RunReadService
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
@@ -60,29 +57,3 @@ def get_resource_content(run_id: UUID, resource_id: UUID) -> FileResponse:
         filename=blob.filename,
         content_disposition_type="inline",
     )
-
-
-@router.get("/training/curves", response_model=list[TrainingCurvePointDto])
-def get_training_curves(
-    definition_id: UUID | None = None,
-    cohort_id: UUID | None = None,
-) -> list[TrainingCurvePointDto]:
-    """Return score-over-step data for checkpoint evaluations."""
-    return RunReadService().list_training_curves(
-        definition_id=definition_id,
-        cohort_id=cohort_id,
-    )
-
-
-@router.get("/training/sessions", response_model=list[TrainingSessionDto])
-def get_training_sessions(
-    definition_id: UUID | None = None,
-) -> list[TrainingSessionDto]:
-    """List training sessions, optionally filtered by definition."""
-    return RunReadService().list_training_sessions(definition_id=definition_id)
-
-
-@router.get("/training/sessions/{session_id}/metrics", response_model=list[TrainingMetricDto])
-def get_training_metrics(session_id: UUID) -> list[TrainingMetricDto]:
-    """Get per-step training metrics for a session."""
-    return RunReadService().list_training_metrics(session_id)

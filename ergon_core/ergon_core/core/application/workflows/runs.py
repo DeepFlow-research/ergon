@@ -39,7 +39,6 @@ def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirr
     definition: DefinitionHandle,
     *,
     definition_id: UUID,
-    workflow_definition_id: UUID,
     instance_key: str,
     worker_team_json: JsonObject,
     evaluator_slug: str | None = None,
@@ -52,7 +51,6 @@ def create_run(  # slopcop: ignore[max-function-params] -- service boundary mirr
     with get_session() as session:
         run = RunRecord(
             definition_id=definition_id,
-            workflow_definition_id=workflow_definition_id,
             benchmark_type=definition.benchmark_type,
             instance_key=instance_key,
             worker_team_json=worker_team_json,
@@ -109,11 +107,11 @@ def cancel_run(run_id: UUID) -> RunRecord:
 
 
 def latest_run_for_definition(definition_id: UUID) -> RunRecord | None:
-    """Most-recent ``RunRecord`` for a given workflow definition, or None."""
+    """Most-recent ``RunRecord`` for a given definition, or None."""
     with get_session() as session:
         stmt = (
             select(RunRecord)
-            .where(RunRecord.workflow_definition_id == definition_id)
+            .where(RunRecord.definition_id == definition_id)
             .order_by(RunRecord.created_at.desc())
             .limit(1)
         )

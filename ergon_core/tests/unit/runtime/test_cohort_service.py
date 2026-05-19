@@ -24,7 +24,6 @@ def _run(definition_id, status: RunStatus) -> RunRecord:
     return RunRecord(
         id=uuid4(),
         definition_id=definition_id,
-        workflow_definition_id=definition_id,
         benchmark_type="ci-benchmark",
         instance_key=str(status),
         worker_team_json={"primary": "ci-worker"},

@@ -22,7 +22,7 @@ import time
 from uuid import UUID
 
 import httpx
-from ergon_core.core.application.read_models.models import RunTaskDto
+from ergon_core.core.views.runs.models import RunTaskDto
 from ergon_core.test_support.e2e_read_helpers import (
     ResourceSnapshot,
     first_probe_resource,

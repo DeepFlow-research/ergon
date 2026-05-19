@@ -100,7 +100,6 @@ class RolloutService:
                     RunRecord(
                         id=run_id,
                         definition_id=request.definition_id,
-                        workflow_definition_id=request.definition_id,
                         benchmark_type=benchmark_type,
                         instance_key=f"episode-{index}",
                         worker_team_json={"primary": "rl-rollout"},

@@ -4,18 +4,10 @@ Used by RolloutService (server-side), the HTTP endpoints, and the
 HTTP adapters (client-side). Framework-agnostic — no TRL/veRL imports.
 """
 
-from enum import Enum
 from uuid import UUID
 
+from ergon_core.core.shared.rollout_status import RolloutStatus as BatchStatus
 from pydantic import BaseModel, Field
-
-
-class BatchStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETE = "complete"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
 
 
 class SubmitRequest(BaseModel):

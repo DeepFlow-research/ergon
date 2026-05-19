@@ -99,12 +99,11 @@ def _resource(
 
 def _run(session: Session) -> UUID:
     run_id = uuid4()
-    workflow_definition_id = uuid4()
+    definition_id = uuid4()
     session.add(
         RunRecord(
             id=run_id,
-            definition_id=uuid4(),
-            workflow_definition_id=workflow_definition_id,
+            definition_id=definition_id,
             benchmark_type="ci-workflow-service",
             instance_key="sample-1",
             worker_team_json={"primary": "test-worker"},

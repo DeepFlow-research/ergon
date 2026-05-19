@@ -13,7 +13,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from ergon_core.api.benchmark import Task
-from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.graph.models import GraphTargetType, MutationType
 from ergon_core.core.persistence.shared.types import (
@@ -52,7 +52,7 @@ class GraphNodeDto(BaseModel):
     status: str = Field(
         description=(
             "Domain-specific node lifecycle status stored as a string because the database "
-            "allows experiment-specific statuses; see status_conventions."
+            "allows experiment-specific statuses; see application/runtime/status.py."
         )
     )
     assigned_worker_slug: str | None

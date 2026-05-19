@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunk,
     ContextPartChunkLog,
@@ -59,7 +59,6 @@ def _execution_fixture(session: Session) -> tuple:
         RunRecord(
             id=run_id,
             definition_id=definition_id,
-            workflow_definition_id=definition_id,
             benchmark_type="unit",
             instance_key="instance",
             status=RunStatus.EXECUTING,

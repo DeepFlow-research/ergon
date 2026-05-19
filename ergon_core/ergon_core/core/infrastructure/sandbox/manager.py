@@ -16,7 +16,8 @@ from ergon_core.core.infrastructure.sandbox.event_sink import (
 from ergon_core.core.infrastructure.sandbox.utils import _truncate, coerce_text
 from ergon_core.core.shared.settings import settings
 from pydantic import BaseModel
-from e2b import SandboxNotFoundException, TimeoutException
+from e2b import NotFoundException as SandboxNotFoundException
+from e2b import TimeoutException
 from e2b_code_interpreter import AsyncSandbox
 
 logger = logging.getLogger(__name__)

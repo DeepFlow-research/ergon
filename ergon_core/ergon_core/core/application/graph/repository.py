@@ -28,7 +28,7 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphMutation,
     RunGraphNode,
 )
-from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
+from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
 from ergon_core.core.application.graph.errors import (
     CycleError,
     DanglingEdgeError,
