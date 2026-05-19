@@ -34,6 +34,38 @@ def test_worker_execute_does_not_read_definition_repository() -> None:
     )
 
 
+def test_worker_execute_prefers_task_worker_over_legacy_bridge() -> None:
+    """PR 5 makes ``task.worker`` the canonical source.
+
+    The body must read the worker off ``task.worker`` first. A narrow
+    legacy fallback lives in a sibling module
+    (``_legacy_worker_bridge.py``) and only fires when
+    ``task.worker is None`` — i.e. when an unmigrated TaskSpec-returning
+    benchmark reaches this path. The body must NOT import
+    ``ComponentCatalogService`` directly or define an in-body
+    ``_worker_from_payload_bridge`` function; both belong in the
+    sibling. PR 11 (after PR 10c migrates the last benchmark) deletes
+    the sibling module and the ``if worker is None:`` branch.
+    """
+
+    text = (ROOT / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
+    assert "ComponentCatalogService" not in text, (
+        "worker_execute body must not import the registry directly — "
+        "any legacy fallback lives in `_legacy_worker_bridge.py`."
+    )
+    # The PR 3 in-body bridge name is gone; the PR 5 legacy fallback is
+    # a sibling-module function and must not appear as a module-level
+    # def here.
+    assert "def _worker_from_payload_bridge" not in text, (
+        "PR 5 retired the in-body bridge. The legacy fallback lives in a "
+        "sibling module, not as a top-level def in `worker_execute.py`."
+    )
+    assert "task.worker" in text, (
+        "PR 5 binds the worker directly to the Task snapshot; "
+        "`worker_execute` must read it off `task.worker`."
+    )
+
+
 def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     """PR 4 textual guard: the `evaluate_task_run.py` body reads only
     from the run tier and only via the thin id-only payload."""
@@ -49,8 +81,8 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
 
     # No definition-tier reads.
     assert "DefinitionRepository" not in body, (
-        "evaluate_task_run must not load definition rows directly — the "
-        "PR 4 _evaluator_bridge module owns that until PR 5 lifts it."
+        "evaluate_task_run must not load definition rows directly — "
+        "definition reads belong in EvaluationService.lookup_evaluator_id."
     )
     assert "ExperimentDefinitionTask" not in body
     # No registry-based evaluator resolution inside the body.
@@ -59,6 +91,44 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     # Uses the same run-tier loader the orchestrator uses.
     assert "WorkflowGraphRepository" in body
     assert ".node(" in body
+
+
+def test_evaluate_task_run_uses_object_bound_evaluators() -> None:
+    """PR 5: the eval body dispatches on ``task.evaluators[index]``.
+
+    Retires the PR 4 ``_evaluator_bridge`` (was a sibling module
+    owning the multi-hop binding-key → ExperimentDefinitionEvaluator
+    → ComponentCatalogService lookup chain). PR 5's object-bound Task
+    snapshot carries Evaluator instances inline.
+    """
+
+    import ergon_core.core.application.jobs as jobs_pkg
+    from pathlib import Path
+
+    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
+    assert "task.evaluators[" in body, (
+        "PR 5 binds evaluators directly to the Task; the eval worker "
+        "must dispatch on task.evaluators[index]."
+    )
+    # Bridge module is gone.
+    jobs_dir = Path(jobs_pkg.__file__).parent
+    assert not (jobs_dir / "_evaluator_bridge.py").exists(), (
+        "PR 5 deletes the PR 4 evaluator-resolution bridge module."
+    )
+
+
+def test_evaluate_task_run_detaches_sandbox() -> None:
+    """PR 5: the eval body releases the local sandbox handle on the
+    way out so the gRPC stream / TCP connection doesn't leak. The
+    external sandbox stays running — the orchestrator (`execute_task`)
+    owns termination.
+    """
+
+    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
+    assert "task.sandbox.detach()" in body, (
+        "PR 5 wires Sandbox.detach() into the eval body's finally so "
+        "the local runtime handle is always released."
+    )
 
 
 def test_execute_task_fans_out_via_step_invoke() -> None:

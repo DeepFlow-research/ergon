@@ -11,10 +11,15 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
-from ergon_core.api.benchmark import Benchmark, BenchmarkRequirements, TaskSpec
+from ergon_core.api import Benchmark, BenchmarkRequirements, Task
 from huggingface_hub import hf_hub_download
 
 from ergon_builtins.benchmarks.minif2f.task_schemas import MiniF2FProblem, MiniF2FTaskPayload
+from ergon_builtins.benchmarks.minif2f.worker_factory import (
+    make_minif2f_rubric,
+    make_minif2f_worker,
+)
+from ergon_builtins.sandboxes import LeanSandbox
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +57,9 @@ class MiniF2FBenchmark(Benchmark):
 
     # ------------------------------------------------------------------
 
-    def build_instances(self) -> Mapping[str, Sequence[TaskSpec[MiniF2FTaskPayload]]]:
+    def build_instances(self) -> Mapping[str, Sequence[Task[MiniF2FTaskPayload]]]:
         problems = self._load_problems()
-        tasks: list[TaskSpec[MiniF2FTaskPayload]] = []
+        tasks: list[Task[MiniF2FTaskPayload]] = []
         for problem in problems:
             payload = MiniF2FTaskPayload(
                 name=problem.name,
@@ -69,18 +74,20 @@ class MiniF2FBenchmark(Benchmark):
                 f"{problem.formal_statement}"
             )
             tasks.append(
-                TaskSpec[MiniF2FTaskPayload](
+                Task[MiniF2FTaskPayload](
                     task_slug=problem.name,
                     instance_key="default",
                     description=description,
-                    evaluator_binding_keys=("default",),
                     task_payload=payload,
+                    worker=make_minif2f_worker(),
+                    sandbox=LeanSandbox(),
+                    evaluators=(make_minif2f_rubric(),),
                 )
             )
         return {"default": tasks}
 
     def evaluator_requirements(self) -> Sequence[str]:
-        return ("default",)
+        return ()
 
     # ------------------------------------------------------------------
 

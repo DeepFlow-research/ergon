@@ -59,25 +59,24 @@ runnable — not a catalog of registered implementations.
     providers layer.
 
 - ReAct toolkit composition.
-  - There is one concrete ReAct worker class — `ReActWorker` (slug `react-v1`,
-    not registered bare) — with a fully explicit construction contract:
-    `ReActWorker(name=..., model=..., task_id=..., sandbox_id=...,
-    tools=[...], system_prompt=..., max_iterations=...)`. Every kwarg is
-    required; no nullable-with-default fallbacks hide sizing decisions.
-    Benchmark-specific glue (the toolkit itself, the system prompt, the
-    iteration budget) is a **factory-closure** concern. Registry entries
-    such as `"minif2f-react"` and `"swebench-react"` live in
-    `registry_core.py` as small closures that build the `list[Tool]` and
-    pass every kwarg — including `task_id` and `sandbox_id` — through to
-    `ReActWorker(...)`. There is no `BenchmarkAdapter` ABC, no
-    `on_run_start`/`on_run_end` hooks, no `transform_output` seam.
+  - There is one concrete ReAct worker class — `ReActWorker` — with a
+    serializable Pydantic construction contract. **v2 (object-bound):**
+    `ReActWorker(name=..., model=..., system_prompt=..., max_iterations=...,
+    toolkit=<Toolkit instance>)`. The `toolkit` field is a serializable
+    `BaseModel` (e.g. `MiniF2FToolkit`) that carries only config; live
+    `pydantic_ai.Tool` instances are built lazily at `execute()` time via
+    `toolkit.tools(sandbox, task)`. This makes `ReActWorker` fully
+    round-trippable through task JSON without holding non-serializable state.
+    **v1 (registry-closure):** `ReActWorker(name=..., model=..., task_id=...,
+    sandbox_id=..., tools=[...], system_prompt=..., max_iterations=...)` —
+    constructed by a factory closure at run time, not stored in task JSON.
   - Per-task environment setup (clone a repo, install deps, apply a
     harness spec) lives in `BaseSandboxManager._install_dependencies`, not
     in the worker or an adapter. The sandbox manager reads the per-task
     payload via `queries.task_executions.get_task_payload(task_id)`.
-  - Freeze status: adding a benchmark that needs ReAct means a new registry
-    factory closure and (if it needs bespoke setup) a
-    `BaseSandboxManager` subclass, not a new worker subclass or adapter.
+  - Freeze status: adding a v2 benchmark that needs ReAct means a
+    `make_<slug>_worker()` factory that returns a serializable
+    `ReActWorker(toolkit=...)` instance, not a new registry closure.
 
 - Onboarding profile.
   - Today a hand-maintained `BENCHMARK_DEPS` dict in
@@ -227,5 +226,7 @@ today and will be updated when an RFC lands and changes an invariant.
 | Cross-benchmark reference workers | `ergon_builtins/workers/baselines/` |
 | Reusable Criterion primitives | `ergon_builtins/evaluators/criteria/` |
 | Reusable Rubric composites | `ergon_builtins/evaluators/rubrics/` |
+| v2 object-bound Sandbox subclasses | `ergon_builtins/sandboxes/` |
+| v2 serializable Toolkit configs | `ergon_builtins/toolkits/` |
 | Model backends | `ergon_builtins/models/` |
 | Onboarding deps dict | `ergon_cli/onboarding/profile.py` |

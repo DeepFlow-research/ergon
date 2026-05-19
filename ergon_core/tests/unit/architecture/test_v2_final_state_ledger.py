@@ -220,7 +220,8 @@ _XFAIL_BY_NAME: dict[str, str] = {
     "criterion_executor_is_removed": "PR 11 deletes Protocol pair",
     "saved_specs_package_is_removed": "PR 11 deletes write-only package",
     "run_graph_node_has_no_definition_task_id_column": "PR 11 drops the column",
-    "worker_from_buffer_is_removed": "PR 11 deletes dead constructor",
+    # PR 5 deleted Worker.from_buffer (base + the one ReActWorker
+    # override) along with the assemble_replay support method.
     "terminate_sandbox_by_id_is_removed": "PR 11 deletes legacy cleanup path",
 }
 

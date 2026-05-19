@@ -7,7 +7,6 @@ from ergon_builtins.common.llm_context.adapters.pydantic_ai import (
 from ergon_core.core.domain.generation.context_parts import (
     AssistantTextPart,
     ContextPartChunkLog,
-    SystemPromptPart as ErgonSystemPromptPart,
     ThinkingPart as ErgonThinkingPart,
     ToolCallPart as ErgonToolCallPart,
     ToolResultPart as ErgonToolResultPart,
@@ -18,17 +17,12 @@ from ergon_core.core.persistence.context.models import RunContextEvent
 from pydantic_ai.messages import (
     ModelRequest,
     ModelResponse,
-    SystemPromptPart,
     TextPart,
     ThinkingPart,
     ToolCallPart,
     ToolReturnPart,
     UserPromptPart,
 )
-from pydantic_ai.messages import TextPart as PydanticTextPart
-from pydantic_ai.messages import ThinkingPart as PydanticThinkingPart
-from pydantic_ai.messages import ToolCallPart as PydanticToolCallPart
-from pydantic_ai.messages import ToolReturnPart as PydanticToolReturnPart
 
 
 def _make_event(part, sequence: int, turn_id: str | None = None) -> RunContextEvent:
@@ -184,35 +178,7 @@ def test_incremental_extraction_tracks_emitted_chunks() -> None:
     assert second == []
 
 
-def test_assemble_replay_reconstructs_pydantic_ai_messages() -> None:
-    events = [
-        _make_event(ErgonSystemPromptPart(content="sys"), 0),
-        _make_event(ErgonUserMessagePart(content="use tool"), 1),
-        _make_event(
-            ErgonToolCallPart(
-                tool_call_id="call-1",
-                tool_name="my_tool",
-                args={"x": 1},
-            ),
-            2,
-            turn_id="t1",
-        ),
-        _make_event(
-            ErgonToolResultPart(tool_call_id="call-1", tool_name="my_tool", content="42"),
-            3,
-        ),
-        _make_event(ErgonThinkingPart(content="considering"), 4, turn_id="t2"),
-        _make_event(AssistantTextPart(content="The answer is 42."), 5, turn_id="t2"),
-    ]
-
-    messages = PydanticAITranscriptAdapter().assemble_replay(events)
-
-    assert len(messages) == 4
-    assert isinstance(messages[0], ModelRequest)
-    assert isinstance(messages[1], ModelResponse)
-    assert isinstance(messages[2], ModelRequest)
-    assert isinstance(messages[3], ModelResponse)
-    assert any(isinstance(part, PydanticToolCallPart) for part in messages[1].parts)
-    assert any(isinstance(part, PydanticToolReturnPart) for part in messages[2].parts)
-    assert any(isinstance(part, PydanticThinkingPart) for part in messages[3].parts)
-    assert any(isinstance(part, PydanticTextPart) for part in messages[3].parts)
+# PR 5 deleted `PydanticAITranscriptAdapter.assemble_replay` along with
+# `Worker.from_buffer` — the replay path is no longer part of the worker
+# contract. The previous `test_assemble_replay_reconstructs_pydantic_ai_messages`
+# test was removed with it.

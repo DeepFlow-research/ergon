@@ -1,6 +1,7 @@
 """GDPEval worker factories."""
 
 from collections.abc import AsyncGenerator
+from typing import ClassVar
 
 from ergon_core.api import Task, WorkerContext, WorkerStreamItem
 from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandboxManager
@@ -18,16 +19,9 @@ short final answer that names the produced files and any assumptions.
 class GDPEvalReactWorker(ReActWorker):
     """ReAct worker wired to the GDPEval document toolkit at execution time."""
 
-    type_slug = "gdpeval-react"
-
-    def __init__(self, *, name: str, model: str | None) -> None:
-        super().__init__(
-            name=name,
-            model=model,
-            tools=[],
-            system_prompt=GDPEVAL_SYSTEM_PROMPT,
-            max_iterations=40,
-        )
+    type_slug: ClassVar[str] = "gdpeval-react"
+    system_prompt: str | None = GDPEVAL_SYSTEM_PROMPT
+    max_iterations: int = 40
 
     async def execute(
         self,
@@ -40,6 +34,6 @@ class GDPEvalReactWorker(ReActWorker):
             run_id=context.run_id,
             sandbox_manager=GDPEvalSandboxManager(),
         )
-        self.tools = list(toolkit.get_tools())
+        self._tools = list(toolkit.get_tools())
         async for item in super().execute(task, context=context):
             yield item

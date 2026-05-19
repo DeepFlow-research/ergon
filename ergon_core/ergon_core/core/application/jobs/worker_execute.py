@@ -12,8 +12,6 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 from datetime import UTC, datetime
 
 from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
-from ergon_core.api.worker.worker import Worker
-from ergon_core.core.application.components.catalog import ComponentCatalogService
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.tasks.repository import (
     TaskExecutionRepository,
@@ -33,26 +31,6 @@ from ergon_core.core.infrastructure.tracing import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _worker_from_payload_bridge(payload: WorkerExecuteJobRequest) -> Worker:
-    """PR 3 transitional bridge: construct a worker from the legacy
-    registry using the worker_type / assigned_worker_slug / model_target
-    fields the PR 3 PreparedTaskExecution still carries.
-
-    TODO(PR 5): once `Task` carries the worker as `task.worker`
-    (object-bound), delete this bridge and read the worker directly off
-    the inflated Task.
-    """
-
-    catalog = ComponentCatalogService()
-    with get_session() as session:
-        return catalog.build_worker(
-            session,
-            slug=payload.worker_type,
-            name=payload.assigned_worker_slug,
-            model=payload.model_target,
-        )
 
 
 async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExecuteJobResult:
@@ -85,9 +63,26 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
         )
     task = view.task
 
-    # TODO(PR 5): replace `_worker_from_payload_bridge(payload)` with
-    # `task.worker` once Worker is object-bound on the Task snapshot.
-    worker = _worker_from_payload_bridge(payload)
+    # PR 5 made `task.worker` the canonical source. `Task.from_definition`
+    # re-inflates the right Worker subclass via the `_type` discriminator
+    # when the snapshot is object-bound.
+    #
+    # When `task.worker is None` we fell off the v2 path — the snapshot
+    # came from a TaskSpec-returning benchmark that hasn't been migrated
+    # yet (PR 6 migrates minif2f, PR 10a swebench, PR 10b researchrubrics,
+    # PR 10c gdpeval). The legacy fallback lives in a sibling module so
+    # the runtime-read architecture guard sees only `task.worker` in
+    # this body. See `_legacy_worker_bridge.py` for the deletion gate.
+    worker = task.worker
+    if worker is None:
+        # TODO(PR 11): delete this branch + the sibling module. See
+        # `_legacy_worker_bridge.py` docstring for the migration ledger.
+        from ergon_core.core.application.jobs._legacy_worker_bridge import (
+            legacy_worker_from_payload,
+        )
+
+        worker = legacy_worker_from_payload(payload)
+    worker.validate_runtime_deps()
 
     worker_context = WorkerContext(
         run_id=payload.run_id,

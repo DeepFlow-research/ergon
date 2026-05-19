@@ -169,11 +169,12 @@ class WorkflowGraphRepository:
                     instance_key=instance_key_by_id[task.instance_id],
                     task_slug=task.task_slug,
                     description=task.description,
-                    task_json=_definition_task_snapshot(
+                    task_json=task.task_json
+                    or _definition_task_snapshot(
                         task,
                         instance_key=instance_key_by_id[task.instance_id],
                         assigned_worker_slug=worker_by_task.get(task.id),
-                    ),
+                    ),  # TODO: make sure this gets deleted
                     is_dynamic=False,
                     status=initial_node_status,
                     assigned_worker_slug=worker_by_task.get(task.id),

@@ -18,10 +18,17 @@ All public-surface Pydantic models are `frozen=True`; mutation is done through
 owned by that module.
 
 - **`Benchmark`** — abstract base. Produces work units via `build_instances()`
-  (a mapping from `instance_key` to a sequence of `BenchmarkTask`) and declares
+  (a mapping from `instance_key` to a sequence of `TaskSpec` or `Task`) and declares
   the evaluator binding keys it expects via `evaluator_requirements()`. Carries
   a `type_slug: ClassVar[str]` that is a keyed identifier across the CLI, the
   onboarding profile, and the benchmark registry — renames are breaking.
+  Two authoring shapes are supported:
+  - **v1 (legacy):** `build_instances()` returns `TaskSpec` objects; the evaluator
+    slot is declared via `evaluator_requirements()` and bound by the `Experiment`.
+  - **v2 (object-bound):** `build_instances()` returns `Task` objects with inline
+    `worker`, `sandbox`, and `evaluators` fields. `evaluator_requirements()` returns
+    `()`. The task carries its own execution contract and round-trips through
+    persisted JSON via `_type` discriminators on every sub-component.
 - **`BenchmarkTask`** — frozen Pydantic model describing a single unit of work.
   It has two textual surfaces with very different audiences: `description` is
   the only free-text the worker ever sees; `task_payload` is a dict the
@@ -31,29 +38,27 @@ owned by that module.
   `Experiment.validate()`.
 - **`Worker`** — abstract base. `execute()` is an async generator that MUST
   yield a `GenerationTurn` per LLM call (see invariants). The runtime uses each
-  yield as both an RL observation point and a cancellation checkpoint. The
-  base class and every concrete subclass declare their construction contract
-  with **required keyword-only kwargs and no nullable-with-default fallbacks**.
-  `Worker.__init__` takes `name: str`, `model: str | None`, and the runtime
-  identity kwargs `task_id: UUID` and `sandbox_id: str` (all four required,
-  no default). `ReActWorker.__init__` adds `tools: list[Tool]`,
-  `system_prompt: str | None`, and `max_iterations: int` — also required. A
-  default value on worker `__init__` is an anti-pattern: it hides sizing
-  decisions (iteration budget, model choice, system prompt) that should live
-  visibly in the per-benchmark registry factory. The `task_id` / `sandbox_id`
-  requirement is load-bearing: it guarantees every live `Worker` has a
-  concrete, non-sentinel identity, and the runtime never constructs a
-  `Worker` with placeholder values. **Workers are never instantiated at
-  config time** — use `WorkerSpec` for the `Experiment` binding and let the
-  `worker_execute` Inngest function construct the real `Worker` with the
-  prepared task/sandbox identity. Workers MUST NOT own per-task
-  environment setup — setup belongs to the sandbox manager (see
-  `BaseSandboxManager._install_dependencies`). Workers MUST NOT return files
-  or blobs through `WorkerOutput` — the non-durable `artifacts` field was
-  removed (RFC 2026-04-22); nothing crosses the Inngest `worker_execute`
-  boundary except the persisted `WorkerOutput` (`output`, `success`,
-  `metadata`). Files → write to `/workspace/final_output/` (auto-published
-  as `RunResource` rows).
+  yield as both an RL observation point and a cancellation checkpoint. Workers
+  are serializable Pydantic `BaseModel` subclasses and carry a `_type`
+  discriminator so they round-trip through `Task` JSON snapshots in the v2
+  authoring path. `Worker.__init__` takes `name: str` and `model: str | None`;
+  concrete workers may add further fields. `ReActWorker` adds an optional
+  `toolkit` field (a serializable `BaseModel` holding tool configuration) that
+  is bound to the live sandbox at `execute()` time — the toolkit calls
+  `toolkit.tools(sandbox, task)` to produce live `pydantic_ai.Tool` instances.
+  Workers MUST NOT own per-task environment setup — setup belongs to the sandbox
+  manager (see `BaseSandboxManager._install_dependencies`). Workers MUST NOT
+  return files or blobs through `WorkerOutput` — the non-durable `artifacts`
+  field was removed (RFC 2026-04-22); nothing crosses the Inngest
+  `worker_execute` boundary except the persisted `WorkerOutput` (`output`,
+  `success`, `metadata`). Files → write to `/workspace/final_output/`
+  (auto-published as `RunResource` rows).
+- **`Sandbox`** — abstract Pydantic `BaseModel`. Carries serializable
+  configuration; live runtime state is held in a `PrivateAttr`. Two lifecycle
+  methods: `provision()` creates a new sandbox and sets `_runtime`; the runtime
+  calls `Sandbox.from_definition(json, sandbox_id=...)` on the eval side to
+  reconnect. Sandbox subclasses inject a `_type` discriminator via
+  `model_serializer` so they round-trip through persisted task JSON.
 - **`WorkerSpec`** — frozen Pydantic model, the config-time descriptor of a
   worker binding. Fields: `worker_slug: str`, `name: str`, `model: str | None`.
   An `Experiment` holds `Mapping[str, WorkerSpec]`, not live `Worker`
@@ -202,21 +207,31 @@ within the constraints the invariants below impose.
 
 ### add a new benchmark
 
+**v2 object-bound path (preferred for new benchmarks):**
+
 1. Subclass `Benchmark` under `ergon_builtins/benchmarks/<slug>/`.
 2. Set `type_slug` to the stable identifier.
-3. Implement `build_instances()`. If the task payload contains evaluator-only
-   fields, route the worker-safe subset through a helper (mirror
-   `build_worker_description` in
-   `ergon_builtins/benchmarks/swebench_verified/task_schemas.py:76`).
-4. Implement `evaluator_requirements()` listing the binding keys any task
-   emits.
-5. Register in the benchmark registry.
-6. Add an entry to `ergon_cli/onboarding/profile.py::BENCHMARK_DEPS`. Skipping
-   this is the most common onboarding regression — a benchmark is
-   half-registered until `BENCHMARK_DEPS` has it.
-7. If the benchmark needs a custom sandbox Docker template, add an `ergon
-   benchmark setup <slug>` subcommand that builds and pins the template. Do
-   not bake template builds into `build_instances()`.
+3. Implement `build_instances()` returning `Task` objects with inline `worker`,
+   `sandbox`, and `evaluators`. Use factory helpers (`make_<slug>_worker()`,
+   `make_<slug>_rubric()`) so the task JSON is fully deterministic and round-
+   trippable. Pattern: `ergon_builtins/benchmarks/minif2f/benchmark.py`.
+4. Implement `evaluator_requirements()` returning `()` — all binding is inline.
+5. Implement a `Sandbox` subclass if the benchmark needs a custom sandbox;
+   expose it from `ergon_builtins/sandboxes/`. Pattern:
+   `ergon_builtins/sandboxes/lean.py`.
+6. Register in the benchmark registry.
+7. Add an entry to `ergon_cli/onboarding/profile.py::BENCHMARK_DEPS`. Skipping
+   this is the most common onboarding regression.
+8. If the benchmark needs a custom sandbox Docker template, add an `ergon
+   benchmark setup <slug>` subcommand. Do not bake template builds into
+   `build_instances()`.
+
+**v1 legacy path (existing benchmarks; migrate to v2 over time):**
+
+1–4. Same as before except `build_instances()` returns `TaskSpec` objects and
+   `evaluator_requirements()` declares the binding key set.
+5. The worker and sandbox are referenced by slug strings and resolved by the
+   registry at run time.
 
 ### add a new worker
 

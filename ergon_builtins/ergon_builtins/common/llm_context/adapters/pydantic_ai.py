@@ -62,30 +62,6 @@ class PydanticAITranscriptAdapter(TranscriptAdapter[list[ModelMessage], list[Mod
         cursor.emitted_chunk_count = len(chunks)
         return new_chunks
 
-    def assemble_replay(self, events: list[RunContextEvent]) -> list[ModelMessage]:
-        """Reconstruct PydanticAI messages from ordered context events."""
-        messages: list[ModelMessage] = []
-        current_request_parts: list[PydanticModelRequestPart] = []
-        current_response_parts: list[PydanticModelResponsePart] = []
-
-        for event in events:
-            payload = event.parsed_payload()
-            if request_part := _to_pydantic_request_part(payload):
-                if isinstance(payload.part, ToolResultPart) and current_response_parts:
-                    messages.append(ModelResponse(parts=current_response_parts))
-                    current_response_parts = []
-                current_request_parts.append(request_part)
-            elif response_part := _to_pydantic_response_part(payload):
-                if current_request_parts and not current_response_parts:
-                    messages.append(ModelRequest(parts=current_request_parts))
-                    current_request_parts = []
-                current_response_parts.append(response_part)
-
-        if current_response_parts:
-            messages.append(ModelResponse(parts=current_response_parts))
-
-        return messages
-
 
 def _build_chunks_from_transcript(
     transcript: list[ModelMessage],

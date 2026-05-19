@@ -93,29 +93,21 @@ def _workspace_path(relative_path: str) -> str:
 
 class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
     type_slug: ClassVar[str] = "researchrubrics-workflow-cli-react"
+    system_prompt: str | None = _WORKFLOW_PROMPT
+    max_iterations: int = 60
 
-    def __init__(
-        self,
-        *,
-        name: str,
-        model: str | None,
-    ) -> None:
-        super().__init__(
-            name=name,
-            model=model,
-            tools=[],
-            system_prompt=_WORKFLOW_PROMPT,
-            max_iterations=60,
-        )
-        self._agent_deps = AgentToolBudgetDeps(
+    def build_agent_deps(self, context: WorkerContext) -> AgentToolBudgetDeps:
+        # AgentToolBudgetDeps is constructed lazily on first access — it's
+        # not Pydantic-serializable, so making it a `PrivateAttr` would
+        # tie field initialisation to the model lifecycle (and re-fire
+        # per `model_validate`). Build-on-demand keeps the worker
+        # round-trippable while preserving the per-instance budget state.
+        return AgentToolBudgetDeps(
             tool_budget=AgentToolBudgetState(
                 max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
                 max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
             ),
         )
-
-    def build_agent_deps(self, context: WorkerContext) -> AgentToolBudgetDeps:
-        return self._agent_deps
 
     async def execute(
         self,
@@ -160,13 +152,9 @@ class ResearchRubricsWorkflowCliReActWorker(ReActWorker):
             benchmark_type="researchrubrics",
             budgeted=True,
         )
-        self._agent_deps = AgentToolBudgetDeps(
-            tool_budget=AgentToolBudgetState(
-                max_workflow_tool_calls=_TOOL_BUDGET_LIMITS["max_workflow_tool_calls"],
-                max_other_tool_calls=_TOOL_BUDGET_LIMITS["max_other_tool_calls"],
-            ),
-        )
-        self.tools = [*rr_toolkit.build_tools(), *graph_toolkit.build_tools(), workflow_tool]
+        # AgentToolBudgetDeps is constructed by build_agent_deps below,
+        # not stored as instance state — the budget is per-execute().
+        self._tools = [*rr_toolkit.build_tools(), *graph_toolkit.build_tools(), workflow_tool]
 
         async for chunk in super().execute(task, context=context):
             yield chunk
