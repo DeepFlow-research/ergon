@@ -19,11 +19,9 @@ Terminal events carry ``sandbox_id`` when a sandbox was acquired.  The
 cleanup function is idempotent: a second termination for the same sandbox_id is a no-op
 (``terminate_external_sandbox`` returns ``NOT_FOUND_OR_ALREADY_CLOSED``).
 
-This restores the v1 layout (separate function for sandbox cleanup) but
-fixes the v1 bug PR 4 cited as motivation — "the sibling function could
-terminate while eval workers were still running under retry replay" —
-by gating cleanup on the terminal events emitted **after** the
-synchronous evaluator fanout returns.
+The cleanup is gated on terminal events emitted **after** synchronous
+evaluator fanout returns, so retry replay cannot terminate the sandbox
+while evaluator workers are still running.
 """
 
 import logging

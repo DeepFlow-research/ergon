@@ -9,7 +9,4 @@ Naming: singular ``sandbox/`` (this package, cross-cutting infra)
 vs. per-benchmark ``benchmarks/<slug>/sandbox.py`` (single concrete
 Sandbox subclass).  The deleted ``sandboxes/`` (plural) directory
 conflated the two and is gone.
-
-PR 10a populates this with ``_manager_backed.py`` (the shared
-BaseSandboxManager → SandboxRuntime adapter).
 """

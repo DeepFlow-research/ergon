@@ -113,8 +113,7 @@ class _ManagerBackedSandboxRuntime:
 
     async def write_file(self, path: str, content: bytes) -> None:
         # Manager.upload_file expects (task_id, local_path, sandbox_path).
-        # We have bytes — use the underlying SDK directly for parity with
-        # the v1 path.  PR 10 normalises this on the shared adapter.
+        # We have bytes here, so use the underlying SDK directly.
         await self._sandbox.files.write(path, content)
 
     async def read_file(self, path: str) -> bytes:

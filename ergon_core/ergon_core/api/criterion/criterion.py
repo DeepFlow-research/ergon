@@ -21,12 +21,12 @@ from ergon_core.core.infrastructure.dependencies import check_packages
 class Criterion(BaseModel, ABC):
     """Atomic evaluation unit that owns its own data-pulling and verification logic.
 
-    PR 10 Task 0 converts ``Criterion`` from a hand-rolled ABC to a Pydantic
-    ``BaseModel + ABC`` so concrete criterion instances can be serialized into
-    ``task_json`` snapshots alongside ``Task``, ``Worker``, ``Sandbox``, and
-    ``Evaluator``. Concrete subclasses declare per-instance configuration as
-    Pydantic fields; ``type_slug`` / ``required_packages`` / ``install_hint``
-    stay as ``ClassVar`` so Pydantic leaves them alone.
+    Criterion instances are Pydantic models so they can be serialized
+    into ``task_json`` snapshots alongside ``Task``, ``Worker``,
+    ``Sandbox``, and ``Evaluator``. Concrete subclasses declare
+    per-instance configuration as Pydantic fields; ``type_slug`` /
+    ``required_packages`` / ``install_hint`` stay as ``ClassVar`` so
+    Pydantic leaves them alone.
     """
 
     model_config = ConfigDict(

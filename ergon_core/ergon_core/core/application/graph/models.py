@@ -255,18 +255,13 @@ GraphMutationValue = Annotated[
 ]
 
 
-# ---------------------------------------------------------------------------
-# RunGraphNodeView (PR 2 — typed run-node boundary)
-# ---------------------------------------------------------------------------
-
-
 class RunGraphNodeView(BaseModel):
     """Typed view of one ``run_graph_nodes`` row + its inflated Task.
 
-    PR 2's run-tier read boundary: the job body receives this view from
-    ``WorkflowGraphRepository.node`` instead of raw JSON. The Task is
-    already inflated via ``Task.from_definition`` so callers downstream
-    of the repo never see ``dict[str, Any]``.
+    The job body receives this view from ``WorkflowGraphRepository.node``
+    instead of raw JSON. The Task is already inflated via
+    ``Task.from_definition`` so callers downstream of the repo never see
+    ``dict[str, Any]``.
 
     ``task_id`` is the runtime identity. Static definition ids are not
     part of the runtime identity.

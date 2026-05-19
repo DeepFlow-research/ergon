@@ -1,11 +1,11 @@
 """Inngest adapters for sandbox cleanup on terminal task events.
 
 See ``ergon_core/core/application/jobs/sandbox_cleanup.py`` for the
-full rationale.  Short version: PR 4's ``try/finally`` in ``execute_task``
-terminated sandboxes before workers/evaluators ran (because Inngest's
-``step.invoke`` raises ``ResponseInterrupt`` to suspend, which fires
-``finally``).  This file owns sandbox termination via sibling Inngest
-functions triggered by the terminal task events.
+full rationale. Short version: inline ``try/finally`` cleanup in the
+orchestrator terminates sandboxes before workers/evaluators run because
+Inngest's ``step.invoke`` raises ``ResponseInterrupt`` to suspend. This
+file owns sandbox termination via sibling Inngest functions triggered by
+terminal task events.
 """
 
 import inngest

@@ -37,11 +37,10 @@ class ResearchRubricsVerdict(BaseModel):
 class ResearchRubricsJudgeCriterion(Criterion):
     """ResearchRubrics-specific LLM judge for one dataset rubric item.
 
-    PR 10b: ``judge_model`` and ``rubric_text`` are first-class Pydantic
-    fields so they survive a ``task_json`` round trip alongside the
-    object-bound rubric.  ``rubric_text`` mirrors ``rubric.criterion`` for
-    snapshots that need the prompt body without re-walking the rubric
-    structure (e.g. the v2 definition JSON test).
+    ``judge_model`` and ``rubric_text`` are first-class Pydantic fields
+    so they survive a ``task_json`` round trip alongside the object-bound
+    rubric. ``rubric_text`` mirrors ``rubric.criterion`` for snapshots
+    that need the prompt body without re-walking the rubric structure.
     """
 
     type_slug: ClassVar[str] = "researchrubrics-llm-judge"

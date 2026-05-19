@@ -54,11 +54,9 @@ class CriterionCheckError(Exception):
 class ContainmentViolation(RuntimeError):
     """Raised when a worker tries to act on a task it does not own.
 
-    PR 9 adds the curated single-target API on ``WorkerContext``
-    (``cancel_task`` / ``refine_task`` / ``restart_task`` /
-    ``get_task``). Those methods enforce containment: the target
-    ``task_id`` must be the context's own ``task_id`` or one of its
-    descendants. Targeting any other task in the run raises this.
+    ``WorkerContext`` mutation/read methods enforce containment: the
+    target ``task_id`` must be the context's own ``task_id`` or one of
+    its descendants. Targeting any other task in the run raises this.
     """
 
     def __init__(self, *, parent_task_id: UUID | None, target_task_id: UUID) -> None:

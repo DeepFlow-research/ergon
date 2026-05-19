@@ -28,9 +28,8 @@ per-evaluator invocation, so ``task/completed`` is only emitted after
 evaluators are done.  The sibling cleanup function then fires once
 and terminates the sandbox.
 
-**Why a sibling function, not an inline try/finally.** The original
-PR 4 layout used ``try/finally: terminate_external_sandbox(...)`` here.
-That pattern is incompatible with Inngest's step-replay model: each
+**Why a sibling function, not an inline try/finally.** Inline sandbox
+termination is incompatible with Inngest's step-replay model: each
 ``await ctx.step.invoke(...)`` raises ``ResponseInterrupt`` (a
 ``BaseException``) to suspend the coroutine, which fires the
 ``finally`` clause — terminating the sandbox **before** the sub-
@@ -41,14 +40,10 @@ function gated on terminal events fixes it because those events are
 emitted only after the entire pipeline completes (success path) or
 after the failure handler runs (failure path) — no replay race.
 
-**Why the orchestrator is `execute_task`, not `worker_execute`** (the
-PR 4 plan code put fanout in `worker_execute`): in our codebase
+**Why the orchestrator is `execute_task`, not `worker_execute`.**
 `worker_execute` runs *between* `sandbox_setup` and `persist_outputs`
-as sibling Inngest functions, so terminating in
-`worker_execute.finally` would kill the sandbox before
-`persist_outputs` could upload artifacts. See PR 4 plan
-`05-pr-04-inline-criteria.md` § "Implementation Note —
-Bridge-Everything Approach" for the location rationale.
+as sibling Inngest functions, so terminating in `worker_execute.finally`
+would kill the sandbox before `persist_outputs` could upload artifacts.
 """
 
 import logging
@@ -175,13 +170,9 @@ async def _fan_out_evaluators(
 ) -> None:
     """Synchronously fan out per-evaluator Inngest invocations.
 
-    This is PR 4's headline invariant. The orchestrator suspends on
-    `ctx.group.parallel(...)` until every per-evaluator
-    `ctx.step.invoke(...)` returns; once it resumes, control falls
-    through to the `finally` block in ``run_execute_task_job`` and
-    the external sandbox is terminated. Same shape as
-    `Inngestevaluator runner.execute_all` (the v1 per-criterion
-    parallelism), just lifted one level up to per-evaluator.
+    The orchestrator suspends on `ctx.group.parallel(...)` until every
+    per-evaluator `ctx.step.invoke(...)` returns; once it resumes, the
+    completed event can safely trigger external sandbox cleanup.
 
     ``ctx.group.parallel`` over a tuple of ``partial(ctx.step.invoke, ...)``
     is the Inngest-native parallelism primitive. Using

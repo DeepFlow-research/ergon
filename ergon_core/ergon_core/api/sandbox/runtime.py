@@ -4,9 +4,8 @@ The Protocol is what concrete sandbox backends (e2b, local docker, the
 test stub) must satisfy so a v2 ``Sandbox`` can hold one as its private
 ``_runtime``. The Protocol intentionally splits ``close()`` (terminate
 the external sandbox AND drop the local handle) from ``close_local()``
-(drop only the local handle) — the lifecycle invariant from PR 4
-(orchestrator terminates external, eval workers only detach locally)
-needs both verbs to exist on the Protocol.
+(drop only the local handle). The orchestrator terminates external
+sandbox runtimes; evaluator workers only detach local handles.
 
 """
 

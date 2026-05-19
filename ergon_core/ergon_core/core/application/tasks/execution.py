@@ -66,12 +66,6 @@ class TaskExecutionService:
     async def prepare(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
         return await self._prepare_run_node(command)
 
-    # -- Unified run-tier path (PR 3) ---
-    #
-    # Reads the run-tier task snapshot via `graph_repo.node(...)`
-    # instead of branching on static vs dynamic. `task_id` is the
-    # canonical run graph node id.
-
     async def _prepare_run_node(
         self, command: PrepareTaskExecutionCommand
     ) -> PreparedTaskExecution:
