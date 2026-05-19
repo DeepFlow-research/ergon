@@ -1,4 +1,4 @@
-"""DTOs for WorkflowGraphRepository return types.
+"""DTOs for RuntimeGraphRepository return types.
 
 Frozen Pydantic models. Callers never receive raw SQLModel rows.
 
@@ -258,7 +258,7 @@ GraphMutationValue = Annotated[
 class RunGraphNodeView(BaseModel):
     """Typed view of one ``run_graph_nodes`` row + its inflated Task.
 
-    The job body receives this view from ``WorkflowGraphRepository.node``
+    The job body receives this view from ``RuntimeGraphRepository.node``
     instead of raw JSON. The Task is already inflated via
     ``Task.from_definition`` so callers downstream of the repo never see
     ``dict[str, Any]``.

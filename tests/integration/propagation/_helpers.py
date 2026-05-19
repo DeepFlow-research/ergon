@@ -33,28 +33,28 @@ def get_node_status(session: Session, task_id: UUID) -> str:
     return node.status
 
 
-def get_wal_entries(session: Session, node_id: UUID) -> list[RunGraphMutation]:
+def get_wal_entries(session: Session, task_id: UUID) -> list[RunGraphMutation]:
     return list(
-        session.exec(select(RunGraphMutation).where(RunGraphMutation.target_id == node_id)).all()
+        session.exec(select(RunGraphMutation).where(RunGraphMutation.target_id == task_id)).all()
     )
 
 
 def assert_wal_has_status(
     session: Session,
-    node_id: UUID,
+    task_id: UUID,
     status: str,
     *,
     cause_contains: str | None = None,
 ) -> None:
-    entries = get_wal_entries(session, node_id)
+    entries = get_wal_entries(session, task_id)
     matching = [e for e in entries if e.new_value.get("status") == status]
     assert matching, (
-        f"No WAL entry with status={status!r} for node {node_id}. "
+        f"No WAL entry with status={status!r} for node {task_id}. "
         f"Entries: {[e.new_value for e in entries]}"
     )
     if cause_contains is not None:
         assert any(e.reason and cause_contains in e.reason for e in matching), (
-            f"No WAL entry with cause containing {cause_contains!r} for node {node_id}"
+            f"No WAL entry with cause containing {cause_contains!r} for node {task_id}"
         )
 
 

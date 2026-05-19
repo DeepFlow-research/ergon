@@ -14,9 +14,9 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.lookup import GraphNodeLookup
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_lookup import GraphNodeLookup
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from sqlmodel import Session, select
 
 _PROPAGATION_META = MutationMeta(actor="system:propagation")
@@ -28,12 +28,11 @@ async def _update_task_status(
     task_id: UUID,
     new_status: str,
     *,
-    graph_repo: WorkflowGraphRepository,
+    graph_repo: RuntimeGraphRepository,
     graph_lookup: GraphNodeLookup,
     event_metadata: JsonObject | None = None,
 ) -> None:
-    node_id = graph_lookup.node_id(task_id)
-    if node_id is None:
+    if not graph_lookup.has_task(task_id):
         return
     reason = None
     if event_metadata and "error" in event_metadata:
@@ -41,7 +40,7 @@ async def _update_task_status(
     await graph_repo.update_node_status(
         session,
         run_id=run_id,
-        node_id=node_id,
+        task_id=task_id,
         new_status=new_status,
         meta=MutationMeta(actor="system:propagation", reason=reason),
     )
@@ -52,7 +51,7 @@ async def mark_task_ready(
     run_id: UUID,
     task_id: UUID,
     *,
-    graph_repo: WorkflowGraphRepository,
+    graph_repo: RuntimeGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> None:
     await _update_task_status(
@@ -71,7 +70,7 @@ async def mark_task_running(
     task_id: UUID,
     execution_id: UUID,
     *,
-    graph_repo: WorkflowGraphRepository,
+    graph_repo: RuntimeGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> None:
     await _update_task_status(
@@ -91,7 +90,7 @@ async def mark_task_failed(
     error: str,
     *,
     execution_id: UUID | None = None,
-    graph_repo: WorkflowGraphRepository,
+    graph_repo: RuntimeGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> None:
     await _update_task_status(
@@ -110,7 +109,7 @@ async def get_initial_ready_tasks(
     run_id: UUID,
     definition_id: UUID,
     *,
-    graph_repo: WorkflowGraphRepository,
+    graph_repo: RuntimeGraphRepository,
     graph_lookup: GraphNodeLookup,
 ) -> list[UUID]:
     """Return task IDs that have zero dependencies."""
@@ -142,17 +141,17 @@ async def get_initial_ready_tasks(
 async def mark_task_failed_by_node(
     session: Session,
     run_id: UUID,
-    node_id: UUID,
+    task_id: UUID,
     error: str,
     *,
     execution_id: UUID | None = None,
-    graph_repo: WorkflowGraphRepository,
+    graph_repo: RuntimeGraphRepository,
 ) -> None:
     del execution_id
     await graph_repo.update_node_status(
         session,
         run_id=run_id,
-        node_id=node_id,
+        task_id=task_id,
         new_status=graph_status.FAILED,
         meta=MutationMeta(
             actor="system:propagation",
@@ -165,14 +164,14 @@ async def mark_task_failed_by_node(
 async def _block_successors_bfs(
     session: Session,
     run_id: UUID,
-    seed_node_ids: set[UUID],
+    seed_task_ids: set[UUID],
     *,
-    failed_node_id: UUID,
+    failed_task_id: UUID,
     terminal_status: str,
-    graph_repo: WorkflowGraphRepository,
+    graph_repo: RuntimeGraphRepository,
 ) -> None:
     """Propagate BLOCKED through the reachable downstream graph."""
-    queue = list(seed_node_ids)
+    queue = list(seed_task_ids)
     while queue:
         target_id = queue.pop()
         target_node = session.get(RunGraphNode, (run_id, target_id))
@@ -186,11 +185,11 @@ async def _block_successors_bfs(
         applied = await graph_repo.update_node_status(
             session,
             run_id=run_id,
-            node_id=target_id,
+            task_id=target_id,
             new_status=graph_status.BLOCKED,
             meta=MutationMeta(
                 actor="system:propagation",
-                reason=f"dependency {failed_node_id} {terminal_status}",
+                reason=f"dependency {failed_task_id} {terminal_status}",
             ),
             only_if_not_terminal=True,
         )
@@ -215,13 +214,13 @@ async def _block_successors_bfs(
                 queue.append(edge.target_task_id)
 
 
-def _dependency_free_children(session: Session, run_id: UUID, node_id: UUID) -> set[UUID]:
+def _dependency_free_children(session: Session, run_id: UUID, task_id: UUID) -> set[UUID]:
     child_ids: set[UUID] = set()
     containment_children = list(
         session.exec(
             select(RunGraphNode).where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.parent_task_id == node_id,
+                RunGraphNode.parent_task_id == task_id,
             )
         ).all()
     )
@@ -239,19 +238,19 @@ def _dependency_free_children(session: Session, run_id: UUID, node_id: UUID) -> 
 async def on_task_completed_or_failed(
     session: Session,
     run_id: UUID,
-    node_id: UUID,
+    task_id: UUID,
     terminal_status: str,
     *,
-    graph_repo: WorkflowGraphRepository,
+    graph_repo: RuntimeGraphRepository,
 ) -> list[UUID]:
-    """Handle a node reaching COMPLETED, FAILED, or CANCELLED."""
+    """Handle a task reaching COMPLETED, FAILED, or CANCELLED."""
     is_success = terminal_status == graph_status.COMPLETED
 
     outgoing = list(
         session.exec(
             select(RunGraphEdge).where(
                 RunGraphEdge.run_id == run_id,
-                RunGraphEdge.source_task_id == node_id,
+                RunGraphEdge.source_task_id == task_id,
             )
         ).all()
     )
@@ -266,24 +265,24 @@ async def on_task_completed_or_failed(
             meta=_PROPAGATION_META,
         )
 
-    candidate_node_ids = {edge.target_task_id for edge in outgoing}
+    candidate_task_ids = {edge.target_task_id for edge in outgoing}
     if is_success:
-        candidate_node_ids.update(_dependency_free_children(session, run_id, node_id))
+        candidate_task_ids.update(_dependency_free_children(session, run_id, task_id))
     newly_ready: list[UUID] = []
 
     if not is_success:
         await _block_successors_bfs(
             session,
             run_id=run_id,
-            seed_node_ids=candidate_node_ids,
-            failed_node_id=node_id,
+            seed_task_ids=candidate_task_ids,
+            failed_task_id=task_id,
             terminal_status=terminal_status,
             graph_repo=graph_repo,
         )
         session.commit()
         return newly_ready
 
-    for candidate_id in candidate_node_ids:
+    for candidate_id in candidate_task_ids:
         candidate_node = session.get(RunGraphNode, (run_id, candidate_id))
         if candidate_node is None:
             continue
@@ -315,14 +314,14 @@ async def on_task_completed_or_failed(
         ]
         if all(node is not None and node.status == graph_status.COMPLETED for node in source_nodes):
             reason = (
-                f"all dependencies satisfied after {node_id}"
+                f"all dependencies satisfied after {task_id}"
                 if is_pending
-                else f"re-activating cancelled subtask after {node_id}"
+                else f"re-activating cancelled subtask after {task_id}"
             )
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=candidate_id,
+                task_id=candidate_id,
                 new_status=graph_status.PENDING,
                 meta=MutationMeta(
                     actor="system:propagation",

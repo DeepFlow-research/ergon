@@ -1,4 +1,4 @@
-"""WorkflowGraphRepository — single entry point for run graph mutations.
+"""RuntimeGraphRepository — single entry point for run graph mutations.
 
 Every mutation method:
 1. Validates structural invariants (acyclicity, referential integrity).
@@ -11,7 +11,7 @@ Those are the experiment layer's responsibility.
 
 import logging
 from collections import defaultdict
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -29,14 +29,14 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphNode,
 )
 from ergon_core.core.application.runtime.status import TERMINAL_STATUSES
-from ergon_core.core.application.graph.errors import (
+from ergon_core.core.application.runtime.errors import (
     CycleError,
     DanglingEdgeError,
     EdgeNotFoundError,
     NodeNotFoundError,
 )
 from ergon_core.api.benchmark import Task
-from ergon_core.core.application.graph.models import (
+from ergon_core.core.application.runtime.models import (
     AnnotationSetMutation,
     EdgeAddedMutation,
     EdgeStatusChangedMutation,
@@ -51,7 +51,6 @@ from ergon_core.core.application.graph.models import (
     WorkflowGraphDto,
 )
 from ergon_core.core.shared.utils import utcnow
-from sqlalchemy import text
 from sqlmodel import Session, col, select
 
 logger = logging.getLogger(__name__)
@@ -62,7 +61,7 @@ logger = logging.getLogger(__name__)
 _UPDATABLE_NODE_FIELDS = frozenset({"description", "assigned_worker_slug"})
 
 
-class WorkflowGraphRepository:
+class RuntimeGraphRepository:
     """Mutable DAG with append-only audit log.
 
     All methods accept a Session for caller-controlled transactions.
@@ -270,7 +269,7 @@ class WorkflowGraphRepository:
             edges=[_to_edge_dto(e) for e in edge_rows],
         )
 
-    # ── Node operations ─────────────────────────────────────
+    # ── Task operations ─────────────────────────────────────
 
     async def node(
         self,
@@ -341,7 +340,7 @@ class WorkflowGraphRepository:
         and the static-vs-dynamic discriminator.
         """
         if task_json is None:
-            raise ValueError("WorkflowGraphRepository.add_node requires task_json")
+            raise ValueError("RuntimeGraphRepository.add_task requires task_json")
         now = utcnow()
         node = RunGraphNode(
             run_id=run_id,
@@ -377,7 +376,7 @@ class WorkflowGraphRepository:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         new_status: str,
         meta: MutationMeta,
         only_if_not_terminal: bool = False,
@@ -385,13 +384,13 @@ class WorkflowGraphRepository:
         """Transition a node's status. Returns True if the write applied.
 
         When ``only_if_not_terminal`` is True, the write is skipped if the
-        node is already in a terminal status (COMPLETED, FAILED, CANCELLED).
+        task is already in a terminal status (COMPLETED, FAILED, CANCELLED).
         This is the single invariant that closes all race conditions in the
         cascade cancellation system — concurrent paths that both attempt to
         write a terminal status resolve to "first writer wins" without
         requiring distributed locks.
         """
-        node = self._get_node_row(session, run_id, node_id)
+        node = self._get_node_row(session, run_id, task_id)
 
         if only_if_not_terminal and node.status in TERMINAL_STATUSES:
             return False
@@ -407,7 +406,7 @@ class WorkflowGraphRepository:
             run_id,
             mutation_type="node.status_changed",
             target_type="node",
-            target_id=node_id,
+            target_id=task_id,
             meta=meta,
             old_value=NodeStatusChangedMutation(status=old_status),
             new_value=NodeStatusChangedMutation(status=new_status),
@@ -419,7 +418,7 @@ class WorkflowGraphRepository:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         field: Literal["description", "assigned_worker_slug"],
         value: str | None,
         meta: MutationMeta,
@@ -428,7 +427,7 @@ class WorkflowGraphRepository:
             raise ValueError(
                 f"Field {field!r} is not updatable. Allowed: {sorted(_UPDATABLE_NODE_FIELDS)}"
             )
-        node = self._get_node_row(session, run_id, node_id)
+        node = self._get_node_row(session, run_id, task_id)
         if field == "description":
             if value is None:
                 raise ValueError("description cannot be cleared")
@@ -446,7 +445,7 @@ class WorkflowGraphRepository:
             run_id,
             mutation_type="node.field_changed",
             target_type="node",
-            target_id=node_id,
+            target_id=task_id,
             meta=meta,
             old_value=NodeFieldChangedMutation(field=field, value=old_value),
             new_value=NodeFieldChangedMutation(field=field, value=value),
@@ -529,22 +528,22 @@ class WorkflowGraphRepository:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> GraphNodeDto:
-        return _to_node_dto(self._get_node_row(session, run_id, node_id))
+        return _to_node_dto(self._get_node_row(session, run_id, task_id))
 
     def get_incoming_edges(
         self,
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> list[GraphEdgeDto]:
         rows = list(
             session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_task_id == node_id,
+                    RunGraphEdge.target_task_id == task_id,
                 )
             ).all()
         )
@@ -555,64 +554,17 @@ class WorkflowGraphRepository:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> list[GraphEdgeDto]:
         rows = list(
             session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.source_task_id == node_id,
+                    RunGraphEdge.source_task_id == task_id,
                 )
             ).all()
         )
         return [_to_edge_dto(e) for e in rows]
-
-    def descendants_by_parent(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        root_task_id: UUID,
-    ) -> Sequence[RunGraphNode]:
-        """Return all RunGraphNode rows transitively reachable from
-        root_task_id via parent_task_id, NOT including the root itself.
-        """
-
-        cte_sql = text(
-            """
-            WITH RECURSIVE descendants AS (
-                SELECT task_id, parent_task_id, run_id
-                FROM run_graph_nodes
-                WHERE run_id = :run_id
-                  AND parent_task_id = :root_task_id
-
-                UNION ALL
-
-                SELECT child.task_id, child.parent_task_id, child.run_id
-                FROM run_graph_nodes AS child
-                JOIN descendants ON child.parent_task_id = descendants.task_id
-                WHERE child.run_id = :run_id
-            )
-            SELECT task_id FROM descendants
-            """
-        )
-        # Use session.execute (SQLAlchemy raw) rather than session.exec
-        # (SQLModel typed) because session.exec only accepts SelectBase, not
-        # raw TextClause. Use .hex (32-char no-dash) because SQLite stores
-        # UUID columns without dashes; PostgreSQL also accepts the no-dash
-        # form, so this works on both drivers.
-        result = session.execute(
-            cte_sql.bindparams(run_id=run_id.hex, root_task_id=root_task_id.hex)
-        ).all()
-        # The CTE returns raw hex strings from SQLite; convert back to UUID
-        # so the ORM lookup below uses the typed column binding correctly.
-        descendant_ids = [UUID(row[0]) for row in result]
-        if not descendant_ids:
-            return ()
-
-        return session.exec(
-            select(RunGraphNode).where(RunGraphNode.task_id.in_(descendant_ids))
-        ).all()
 
     # ── Internal helpers ────────────────────────────────────
 
@@ -620,16 +572,16 @@ class WorkflowGraphRepository:
         self,
         session: Session,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> RunGraphNode:
         row = session.exec(
             select(RunGraphNode).where(
-                RunGraphNode.task_id == node_id,
+                RunGraphNode.task_id == task_id,
                 RunGraphNode.run_id == run_id,
             )
         ).first()
         if row is None:
-            raise NodeNotFoundError(node_id, run_id=run_id)
+            raise NodeNotFoundError(task_id, run_id=run_id)
         return row
 
     def _get_edge_row(
@@ -652,18 +604,18 @@ class WorkflowGraphRepository:
         self,
         session: Session,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> None:
         exists = session.exec(
             select(RunGraphNode.task_id).where(
-                RunGraphNode.task_id == node_id,
+                RunGraphNode.task_id == task_id,
                 RunGraphNode.run_id == run_id,
             )
         ).first()
         if exists is None:
             raise DanglingEdgeError(
                 edge_id=uuid4(),
-                missing_node_id=node_id,
+                missing_task_id=task_id,
                 run_id=run_id,
             )
 

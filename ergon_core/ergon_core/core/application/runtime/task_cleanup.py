@@ -10,7 +10,7 @@ from uuid import UUID
 
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
-from ergon_core.core.application.tasks.models import CleanupResult
+from ergon_core.core.application.runtime.task_models import CleanupResult
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
@@ -29,14 +29,14 @@ class TaskCleanupService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         execution_id: UUID | None,
     ) -> CleanupResult:
         """Mark execution CANCELLED and release resources. Idempotent."""
         if execution_id is None:
             return CleanupResult(
                 run_id=run_id,
-                task_id=node_id,
+                task_id=task_id,
                 execution_id=None,
                 sandbox_id=None,
                 sandbox_released=False,
@@ -49,14 +49,14 @@ class TaskCleanupService:
         session.commit()
 
         logger.info(
-            "task-cleanup node_id=%s execution_id=%s sandbox_id=%s",
-            node_id,
+            "task-cleanup task_id=%s execution_id=%s sandbox_id=%s",
+            task_id,
             execution_id,
             sandbox_id,
         )
         return CleanupResult(
             run_id=run_id,
-            task_id=node_id,
+            task_id=task_id,
             execution_id=execution_id,
             sandbox_id=sandbox_id,
             sandbox_released=False,

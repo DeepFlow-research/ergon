@@ -58,7 +58,7 @@ def test_run_task_dto_does_not_label_worker_slug_as_name() -> None:
 
 
 def test_workflow_task_ref_does_not_duplicate_graph_task_ref() -> None:
-    path = ROOT / "ergon_core/ergon_core/core/application/workflows/models.py"
+    path = ROOT / "ergon_core/ergon_core/core/application/runtime/workflow_models.py"
     assert "class WorkflowTaskRef" not in path.read_text()
 
 
@@ -405,11 +405,11 @@ def test_graph_domain_modules_do_not_live_in_services_package() -> None:
 
     for module in (
         "models",
-        "lookup",
-        "repository",
-        "propagation",
+        "graph_lookup",
+        "graph_repository",
+        "lifecycle",
     ):
-        assert importlib.util.find_spec(f"ergon_core.core.application.graph.{module}") is not None
+        assert importlib.util.find_spec(f"ergon_core.core.application.runtime.{module}") is not None
 
 
 def test_runtime_services_do_not_import_api_schema_modules() -> None:
@@ -462,9 +462,9 @@ def test_runtime_errors_are_domain_local() -> None:
     assert not old_errors_dir.exists()
 
     for module_name in (
-        "ergon_core.core.application.graph.errors",
-        "ergon_core.core.application.tasks.errors",
-        "ergon_core.core.application.workflows.errors",
+        "ergon_core.core.application.runtime.errors",
+        "ergon_core.core.application.runtime.task_errors",
+        "ergon_core.core.application.runtime.workflow_errors",
         "ergon_core.core.application.evaluation.errors",
         "ergon_core.core.views.errors",
         "ergon_core.core.infrastructure.inngest.errors",
@@ -494,7 +494,9 @@ def test_runtime_domain_contract_files_use_consistent_names() -> None:
 
 def test_task_latest_execution_selection_lives_in_task_repository() -> None:
     queries_path = ROOT / "ergon_core/ergon_core/core/persistence/queries.py"
-    repository_path = ROOT / "ergon_core/ergon_core/core/application/tasks/repository.py"
+    repository_path = ROOT / (
+        "ergon_core/ergon_core/core/application/runtime/task_execution_repository.py"
+    )
 
     assert not queries_path.exists()
     assert "def latest_for_node" in repository_path.read_text()
@@ -538,7 +540,7 @@ def test_task_lifecycle_has_one_front_door_service() -> None:
             spec = None
         assert spec is None
 
-    management = ROOT / "ergon_core/ergon_core/core/application/tasks/management.py"
+    management = ROOT / "ergon_core/ergon_core/core/application/runtime/task_management.py"
     text = management.read_text()
     assert "def cancel_orphans(" in text
     assert "def block_pending_descendants(" in text
@@ -571,7 +573,7 @@ def test_workflow_lifecycle_has_one_front_door_service() -> None:
             spec = None
         assert spec is None
 
-    workflow_service = ROOT / "ergon_core/ergon_core/core/application/workflows/service.py"
+    workflow_service = ROOT / "ergon_core/ergon_core/core/application/runtime/run_lifecycle.py"
     text = workflow_service.read_text()
     for method_name in ("initialize", "propagate", "propagate_failure", "finalize"):
         assert f"def {method_name}(" in text

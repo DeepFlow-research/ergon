@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.application.workflows import runs as runs_module
-from ergon_core.core.application.workflows.runs import latest_run_for_definition
+from ergon_core.core.application.runtime import runs as runs_module
+from ergon_core.core.application.runtime.run_records import latest_run_for_definition
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.enums import RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord

@@ -11,12 +11,12 @@ def descendants(
     session: Session,
     *,
     run_id: UUID,
-    root_node_id: UUID,
+    root_task_id: UUID,
     max_depth: int | None = None,
 ) -> list[RunGraphNode]:
-    """Return containment descendants under root_node_id in breadth-first order."""
+    """Return containment descendants under root_task_id in breadth-first order."""
     result: list[RunGraphNode] = []
-    queue: deque[tuple[UUID, int]] = deque([(root_node_id, 0)])
+    queue: deque[tuple[UUID, int]] = deque([(root_task_id, 0)])
 
     while queue:
         parent_id, depth = queue.popleft()
@@ -42,16 +42,16 @@ def descendant_ids(
     session: Session,
     *,
     run_id: UUID,
-    root_node_id: UUID,
+    root_task_id: UUID,
     max_depth: int | None = None,
 ) -> set[UUID]:
-    """Return IDs for containment descendants under root_node_id."""
+    """Return IDs for containment descendants under root_task_id."""
     return {
         node.task_id
         for node in descendants(
             session,
             run_id=run_id,
-            root_node_id=root_node_id,
+            root_task_id=root_task_id,
             max_depth=max_depth,
         )
     }

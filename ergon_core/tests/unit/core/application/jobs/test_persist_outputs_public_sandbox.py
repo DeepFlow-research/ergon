@@ -48,7 +48,7 @@ async def test_persist_outputs_publishes_from_public_sandbox_output_path(monkeyp
 
     seen_sandbox_ids: list[str | None] = []
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
     monkeypatch.setattr(composition, "SandboxResourcePublisher", _FakePublisher)
     monkeypatch.setattr(composition, "RunResourcePublishService", _FakePublishService)
 

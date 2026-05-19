@@ -57,7 +57,7 @@ async def test_workflow_tool_injects_worker_context() -> None:
     assert await workflow("inspect task-tree") == "ok"
     assert seen["command"] == "inspect task-tree"
     assert seen["context"].run_id == context.run_id
-    assert seen["context"].node_id == context.task_id
+    assert seen["context"].task_id == context.task_id
     assert seen["context"].execution_id == context.execution_id
     assert seen["context"].sandbox_task_key == context.task_id
     assert seen["context"].benchmark_type == "researchrubrics"
@@ -90,7 +90,7 @@ async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None
     context = _worker_context()
 
     def execute(command, *, context, session_factory, service):
-        assert command.startswith("manage add-task")
+        assert command.startswith("inspect task-tree")
         return WorkflowCommandOutput(stdout="created")
 
     workflow = make_workflow_cli_tool(
@@ -100,9 +100,7 @@ async def test_workflow_tool_can_run_manage_commands_inside_event_loop() -> None
         execute_command=execute,
     )
 
-    assert await workflow("manage add-task --task-slug source --worker worker --description x") == (
-        "created"
-    )
+    assert await workflow("inspect task-tree") == "created"
 
 
 @pytest.mark.asyncio
@@ -121,9 +119,7 @@ async def test_workflow_tool_default_executor_handles_async_manage_bridge() -> N
         session_factory=Session,
     )
 
-    result = await workflow(
-        "manage add-task --task-slug source --worker worker --description x --dry-run"
-    )
+    result = await workflow("manage add-edge --dry-run")
 
     assert "Graph lifecycle command validated" in result
 

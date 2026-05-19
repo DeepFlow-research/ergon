@@ -8,10 +8,11 @@ import logging
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
+from ergon_core.core.application.runtime.graph_traversal import descendants
 from ergon_core.core.application.runtime.status import COMPLETED, FAILED
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.tasks.models import SubtaskInfo
-from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.task_models import SubtaskInfo
+from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 from ergon_core.core.persistence.shared.db import get_session
 from sqlmodel import Session, select
 
@@ -27,9 +28,9 @@ class TaskInspectionService:
     to decide which subtasks to cancel, refine, or wait on.
     """
 
-    def __init__(self, graph_repo: WorkflowGraphRepository | None = None) -> None:
+    def __init__(self, graph_repo: RuntimeGraphRepository | None = None) -> None:
         self._task_execution_repo = TaskExecutionRepository()
-        self._graph_repo = graph_repo or WorkflowGraphRepository()
+        self._graph_repo = graph_repo or RuntimeGraphRepository()
 
     def list_subtasks(
         self,
@@ -41,7 +42,7 @@ class TaskInspectionService:
         """Direct children of parent_task_id, ordered by task_slug.
 
         Deterministic ordering lets the LLM refer to subtasks by
-        position across turns without node_id confusion.
+        position across turns without task_id confusion.
         """
         nodes = session.exec(
             select(RunGraphNode)
@@ -58,13 +59,13 @@ class TaskInspectionService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> SubtaskInfo:
-        """Single subtask snapshot by node_id."""
+        """Single subtask snapshot by task_id."""
         node = session.exec(
             select(RunGraphNode).where(
                 RunGraphNode.run_id == run_id,
-                RunGraphNode.task_id == node_id,
+                RunGraphNode.task_id == task_id,
             )
         ).one()
         return self._hydrate(session, node)
@@ -78,11 +79,7 @@ class TaskInspectionService:
         """Return all task_ids reachable as children/grandchildren of root_task_id."""
 
         with get_session() as session:
-            rows = self._graph_repo.descendants_by_parent(
-                session,
-                run_id=run_id,
-                root_task_id=root_task_id,
-            )
+            rows = descendants(session, run_id=run_id, root_task_id=root_task_id)
             # Collect IDs inside the session scope to avoid DetachedInstanceError.
             return frozenset(row.task_id for row in rows)
 
@@ -113,17 +110,17 @@ class TaskInspectionService:
             error=error,
         )
 
-    def _latest_output(self, session: Session, node_id: UUID) -> str | None:
+    def _latest_output(self, session: Session, task_id: UUID) -> str | None:
         """Truncated final_assistant_message from the most recent execution."""
-        exe = self._task_execution_repo.latest_for_node(session, node_id)
+        exe = self._task_execution_repo.latest_for_node(session, task_id)
         if exe is None or exe.final_assistant_message is None:
             return None
         text = exe.final_assistant_message
         return text if len(text) <= _OUTPUT_MAX_CHARS else text[:_OUTPUT_MAX_CHARS] + "\u2026"
 
-    def _latest_error(self, session: Session, node_id: UUID) -> str | None:
+    def _latest_error(self, session: Session, task_id: UUID) -> str | None:
         """Error message from the most recent execution."""
-        exe = self._task_execution_repo.latest_for_node(session, node_id)
+        exe = self._task_execution_repo.latest_for_node(session, task_id)
         if exe is None or exe.error_json is None:
             return None
         return str(exe.error_json.get("message", exe.error_json))

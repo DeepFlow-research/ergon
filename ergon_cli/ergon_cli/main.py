@@ -134,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     workflow = sub.add_parser("workflow", help="Workflow topology and resource operations")
     workflow.add_argument("--run-id", default=None, help="Current run UUID")
-    workflow.add_argument("--node-id", default=None, help="Current graph node UUID")
+    workflow.add_argument("--task-id", default=None, help="Current task UUID")
     workflow.add_argument("--execution-id", default=None, help="Current task execution UUID")
     workflow.add_argument("--sandbox-task-key", default=None, help="Sandbox task key UUID")
     workflow.add_argument(

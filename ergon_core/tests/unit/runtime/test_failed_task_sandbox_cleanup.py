@@ -5,7 +5,7 @@ import pytest
 
 from ergon_core.core.jobs.task.propagate.contract import TaskFailedEvent
 from ergon_core.core.jobs.task.propagate.job import run_propagate_task_failure_job
-from ergon_core.core.application.workflows.orchestration import (
+from ergon_core.core.application.runtime.orchestration import (
     PropagateTaskCompletionCommand,
     PropagationResult,
     WorkflowTerminalState,

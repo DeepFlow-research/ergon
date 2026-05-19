@@ -21,12 +21,12 @@ import pytest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.tasks import inspection as inspection_module
-from ergon_core.core.application.tasks import management as management_module
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime import inspection as inspection_module
+from ergon_core.core.application.runtime import management as management_module
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -126,7 +126,7 @@ def test_task_id_is_preserved_from_definition_to_run_tier() -> None:
     session = _session()
     definition_id, run_id, defn_task_ids = _seed_definition(session)
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
         run_id=run_id,
@@ -159,7 +159,7 @@ async def test_task_id_propagates_into_runtime_task_instance() -> None:
     session = _session()
     definition_id, run_id, defn_task_ids = _seed_definition(session)
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
         run_id=run_id,
@@ -198,7 +198,7 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
 
     from pathlib import Path
 
-    from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+    from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
     from ergon_core.core.persistence.telemetry.models import RunTaskExecution
 
     # Carrier: the execution row owns the sandbox_id.
@@ -243,7 +243,7 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     from pathlib import Path
 
     from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
-    from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+    from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 
     # (a) execution_id is on the payload.
     assert "execution_id" in TaskEvaluateRequest.model_fields
@@ -343,9 +343,12 @@ async def test_dynamic_task_id_has_no_definition_row(
     parent = _seed_identity_parent(session, run_id=run_id)
 
     _patch_get_session_identity(monkeypatch, session)
+    monkeypatch.setattr(management_module, "definition_id_for_run", lambda _session, _run_id: uuid4())
 
-    task_mgmt = TaskManagementService(dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()))
-    monkeypatch.setattr(task_mgmt, "_dispatch_task_ready", AsyncMock())
+    task_mgmt = TaskManagementService(
+        dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
+        task_ready_dispatcher=AsyncMock(),
+    )
     task_inspect = TaskInspectionService()
     context = WorkerContext._for_job(
         run_id=run_id,

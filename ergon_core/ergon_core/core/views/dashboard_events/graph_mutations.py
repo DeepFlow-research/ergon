@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from ergon_core.core.application.graph.models import (
+from ergon_core.core.application.runtime.models import (
     GraphMutationRecordDto,
     GraphMutationValue,
 )

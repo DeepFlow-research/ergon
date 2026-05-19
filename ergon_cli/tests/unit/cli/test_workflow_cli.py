@@ -4,9 +4,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from ergon_cli.commands.workflow import WorkflowCommandContext, execute_workflow_command
-from ergon_core.core.application.graph.models import GraphTaskRef
-from ergon_core.core.application.workflows.models import WorkflowMutationRef
-from ergon_core.core.application.workflows.models import WorkflowResourceRef
+from ergon_core.core.application.runtime.workflow_models import WorkflowResourceRef
 
 
 class _Session:
@@ -18,56 +16,15 @@ class _Session:
 class _Service:
     resource: WorkflowResourceRef
 
-    def list_resources(self, session, *, run_id, node_id, scope, kind=None, max_depth=3, limit=50):
+    def list_resources(self, session, *, run_id, task_id, scope, kind=None, max_depth=3, limit=50):
         assert isinstance(session, _Session)
         assert run_id == self.resource.run_id
-        assert node_id == self.resource.node_id
+        assert task_id == self.resource.task_id
         assert scope == "visible"
         assert kind is None
         assert max_depth == 3
         assert limit == 5
         return [self.resource]
-
-
-class _ManagingService:
-    def __init__(self) -> None:
-        self.added = None
-
-    async def add_task(
-        self,
-        session,
-        *,
-        run_id,
-        parent_task_id,
-        task_slug,
-        description,
-        assigned_worker_slug,
-        dry_run,
-    ):
-        assert isinstance(session, _Session)
-        self.added = {
-            "run_id": run_id,
-            "parent_task_id": parent_task_id,
-            "task_slug": task_slug,
-            "description": description,
-            "assigned_worker_slug": assigned_worker_slug,
-            "dry_run": dry_run,
-        }
-
-        return WorkflowMutationRef(
-            action="add-task",
-            dry_run=dry_run,
-            node=GraphTaskRef(
-                task_id=uuid4(),
-                task_slug="source-scout",
-                status="pending",
-                level=1,
-                parent_task_id=parent_task_id,
-                assigned_worker_slug=assigned_worker_slug,
-                description=description,
-            ),
-            message="Added task source-scout",
-        )
 
 
 class _FailingService:
@@ -78,7 +35,7 @@ class _FailingService:
 def _context() -> WorkflowCommandContext:
     return WorkflowCommandContext(
         run_id=uuid4(),
-        node_id=uuid4(),
+        task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_task_key=uuid4(),
         benchmark_type="researchrubrics",
@@ -92,7 +49,7 @@ def test_resource_list_json_uses_injected_context() -> None:
         resource_id=uuid4(),
         run_id=run_id,
         task_execution_id=uuid4(),
-        node_id=node_id,
+        task_id=node_id,
         task_slug="research",
         kind="report",
         name="paper.txt",
@@ -107,7 +64,7 @@ def test_resource_list_json_uses_injected_context() -> None:
         "inspect resource-list --scope visible --limit 5 --format json",
         context=WorkflowCommandContext(
             run_id=run_id,
-            node_id=node_id,
+            task_id=node_id,
             execution_id=uuid4(),
             sandbox_task_key=uuid4(),
             benchmark_type="researchrubrics",
@@ -206,35 +163,23 @@ def test_service_validation_error_returns_nonzero_output() -> None:
     assert output.stderr == "unsupported resource scope: all"
 
 
-def test_manage_add_task_creates_subtask_with_injected_parent_context() -> None:
+def test_unknown_manage_command_reports_parser_error() -> None:
     run_id = uuid4()
     node_id = uuid4()
-    service = _ManagingService()
 
     output = execute_workflow_command(
-        "manage add-task --task-slug source-scout "
-        "--worker researchrubrics-researcher "
-        "--description 'Find authoritative sources' "
-        "--format json",
+        "manage spawn-task --format json",
         context=WorkflowCommandContext(
             run_id=run_id,
-            node_id=node_id,
+            task_id=node_id,
             execution_id=uuid4(),
             sandbox_task_key=uuid4(),
             benchmark_type="researchrubrics",
         ),
         session_factory=_Session,
-        service=service,
+        service=object(),
     )
 
-    payload = json.loads(output.stdout)
-    assert output.exit_code == 0
-    assert payload["task"]["node"]["task_slug"] == "source-scout"
-    assert service.added == {
-        "run_id": run_id,
-        "parent_task_id": node_id,
-        "task_slug": "source-scout",
-        "description": "Find authoritative sources",
-        "assigned_worker_slug": "researchrubrics-researcher",
-        "dry_run": False,
-    }
+    assert output.exit_code == 2
+    assert output.stderr is not None
+    assert "invalid choice: 'spawn-task'" in output.stderr

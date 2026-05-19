@@ -1,16 +1,17 @@
-"""TaskManagementService — subtask lifecycle operations.
+"""TaskManagementService owns object-bound task lifecycle mutations.
 
-Implements add_subtask, cancel_task, plan_subtasks, and refine_task as
-graph-native operations. The service owns the write path for agent-initiated
-subtask mutations; read-only queries live in TaskInspectionService.
+Dynamic task creation is intentionally object-bound: callers pass a public
+``Task`` snapshot to ``spawn_dynamic_task(Task)`` and the runtime persists that
+snapshot directly on the run graph. Slug-only dynamic task APIs are retired so
+new runtime nodes cannot be created without the worker, criteria, and payload
+invariants carried by the public task object.
 """
 
 from __future__ import annotations
 
 import logging
 import inspect
-from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from typing import Protocol
 from uuid import UUID
 
@@ -32,59 +33,51 @@ from ergon_core.core.application.runtime.status import (
     TERMINAL_STATUSES,
 )
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.shared.types import NodeId, TaskSlug
-from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.application.tasks.errors import (
-    CycleDetectedError,
-    DuplicateTaskSlugError,
-    RunRecordMissingError,
+from ergon_core.core.application.runtime.events import (
+    RuntimeEventDispatcher,
+    TaskReadyDispatcher,
+)
+from ergon_core.core.application.runtime.run_identity import definition_id_for_run
+from ergon_core.core.application.runtime.task_errors import (
     TaskAlreadyTerminalError,
     TaskNotTerminalError,
     TaskRunningError,
-    UnknownTaskSlugError,
 )
 from ergon_core.core.jobs.task.cleanup_cancelled.contract import (
     CancelCause,
     PropagationCancelCause,
     TaskCancelledEvent,
 )
-from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
-from ergon_core.core.application.graph.traversal import descendants
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.tasks.models import (
-    AddSubtaskCommand,
-    AddSubtaskResult,
+from ergon_core.core.application.runtime.graph_traversal import descendants
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.task_models import (
     CancelTaskCommand,
     CancelOrphansResult,
     CancelTaskResult,
-    PlanSubtasksCommand,
-    PlanSubtasksResult,
     RefineTaskCommand,
     RefineTaskResult,
     RestartTaskCommand,
     RestartTaskResult,
-    SubtaskSpec,
 )
-from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 from ergon_core.core.persistence.graph.models import RunGraphMutation
 from ergon_core.core.views.dashboard_events.graph_mutations import (
     dashboard_graph_mutation_event_from_row,
 )
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 logger = logging.getLogger(__name__)
 
 _MANAGER_META = MutationMeta(actor="manager-worker", reason="manager_decision")
-TaskReadyDispatcher = Callable[[UUID, UUID, UUID], Awaitable[None]]
 
 
 class _LegacyDashboardGraphMutationEmitter(Protocol):
     def graph_mutation(self, row: RunGraphMutation) -> Awaitable[None] | None: ...
 
 
-def _count_non_terminal_descendants(session: Session, run_id: UUID, node_id: UUID) -> int:
+def _count_non_terminal_descendants(session: Session, run_id: UUID, task_id: UUID) -> int:
     """Count non-terminal descendants via iterative BFS on parent_task_id.
 
     Uses Python-level BFS rather than a recursive CTE so the logic is
@@ -92,7 +85,7 @@ def _count_non_terminal_descendants(session: Session, run_id: UUID, node_id: UUI
     """
     return sum(
         1
-        for descendant in descendants(session, run_id=run_id, root_node_id=node_id)
+        for descendant in descendants(session, run_id=run_id, root_task_id=task_id)
         if descendant.status not in TERMINAL_STATUSES
     )
 
@@ -102,14 +95,14 @@ class TaskManagementService:
 
     def __init__(
         self,
-        graph_repo: WorkflowGraphRepository | None = None,
+        graph_repo: RuntimeGraphRepository | None = None,
         dashboard_publisher: DashboardEventPublisher | None = None,
         dashboard_emitter: _LegacyDashboardGraphMutationEmitter | None = None,
         task_ready_dispatcher: TaskReadyDispatcher | None = None,
     ) -> None:
-        self._graph_repo = graph_repo or WorkflowGraphRepository()
+        self._graph_repo = graph_repo or RuntimeGraphRepository()
         self._task_execution_repo = TaskExecutionRepository()
-        self._task_ready_dispatcher = task_ready_dispatcher
+        self._runtime_events = RuntimeEventDispatcher(task_ready_dispatcher)
         if dashboard_publisher is None and dashboard_emitter is not None:
             self._dashboard_publisher = None
             self._legacy_graph_mutation_listener = dashboard_emitter.graph_mutation
@@ -127,24 +120,6 @@ class TaskManagementService:
         result = self._legacy_graph_mutation_listener(row)
         if inspect.isawaitable(result):
             await result
-
-    # ── add_subtask ──────────────────────────────────────────
-
-    async def add_subtask(
-        self,
-        session: Session,
-        command: AddSubtaskCommand,
-    ) -> AddSubtaskResult:
-        """Reject the retired slug-based subtask creation path.
-
-        Worker-authored dynamic subtasks must call
-        ``WorkerContext.spawn_task(Task(...))`` so the run graph receives a full
-        object-bound task snapshot with ``_type`` discriminators.
-        """
-        del session, command
-        raise ValueError(
-            "Slug-based add_subtask was removed; use WorkerContext.spawn_task(Task(...))."
-        )
 
     # ── spawn_dynamic_task ───────────────────────────────────
 
@@ -165,7 +140,7 @@ class TaskManagementService:
         """
         dispatch: tuple[UUID, UUID, UUID] | None = None
         with get_session() as session:
-            parent = self._graph_repo.get_node(session, run_id=run_id, node_id=parent_task_id)
+            parent = self._graph_repo.get_node(session, run_id=run_id, task_id=parent_task_id)
             node = await self._graph_repo.add_node(
                 session,
                 run_id,
@@ -191,12 +166,12 @@ class TaskManagementService:
                 )
             task_id = node.task_id
             if not depends_on:
-                definition_id = self._resolve_definition_id(session, run_id)
+                definition_id = definition_id_for_run(session, run_id)
                 dispatch = (run_id, definition_id, task_id)
             session.commit()
 
         if dispatch is not None:
-            await self._dispatch_task_ready(
+            await self._runtime_events.dispatch_task_ready(
                 run_id=dispatch[0],
                 definition_id=dispatch[1],
                 task_id=dispatch[2],
@@ -216,7 +191,7 @@ class TaskManagementService:
         Uses only_if_not_terminal to avoid races. Counts non-terminal
         descendants so the caller knows the cascade scope.
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.task_id)
+        node = self._graph_repo.get_node(session, run_id=command.run_id, task_id=command.task_id)
         old_status = node.status
 
         if old_status in TERMINAL_STATUSES:
@@ -230,7 +205,7 @@ class TaskManagementService:
         applied = await self._graph_repo.update_node_status(
             session,
             run_id=command.run_id,
-            node_id=command.task_id,
+            task_id=command.task_id,
             new_status=CANCELLED,
             meta=_MANAGER_META,
             only_if_not_terminal=True,
@@ -243,7 +218,7 @@ class TaskManagementService:
         session.commit()
 
         if applied:
-            definition_id = self._resolve_definition_id(session, command.run_id)
+            definition_id = definition_id_for_run(session, command.run_id)
             event = self._task_cancelled_event(
                 session,
                 run_id=command.run_id,
@@ -284,13 +259,13 @@ class TaskManagementService:
         meta = MutationMeta(actor="system:cascade", reason=cause)
         transitioned: list[UUID] = []
 
-        for child in descendants(session, run_id=run_id, root_node_id=parent_task_id):
+        for child in descendants(session, run_id=run_id, root_task_id=parent_task_id):
             if child.status in TERMINAL_STATUSES:
                 continue
             applied = await self._graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=child.task_id,
+                task_id=child.task_id,
                 new_status=CANCELLED,
                 meta=meta,
                 only_if_not_terminal=True,
@@ -326,13 +301,13 @@ class TaskManagementService:
         meta = MutationMeta(actor="system:cascade", reason=cause)
         blocked: list[UUID] = []
 
-        for child in descendants(session, run_id=run_id, root_node_id=parent_task_id):
+        for child in descendants(session, run_id=run_id, root_task_id=parent_task_id):
             if child.status == RUNNING or child.status in TERMINAL_STATUSES:
                 continue
             applied = await self._graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=child.task_id,
+                task_id=child.task_id,
                 new_status=BLOCKED,
                 meta=meta,
                 only_if_not_terminal=True,
@@ -341,23 +316,6 @@ class TaskManagementService:
                 blocked.append(child.task_id)
 
         return blocked
-
-    # ── plan_subtasks ────────────────────────────────────────
-
-    async def plan_subtasks(
-        self,
-        session: Session,
-        command: PlanSubtasksCommand,
-    ) -> PlanSubtasksResult:
-        """Reject the retired slug-based batch subtask creation path.
-
-        Worker-authored dynamic subtasks are object-bound and created one at a
-        time through ``WorkerContext.spawn_task(Task(...))``.
-        """
-        del session, command
-        raise ValueError(
-            "Slug-based plan_subtasks was removed; use WorkerContext.spawn_task(Task(...))."
-        )
 
     # ── refine_task ──────────────────────────────────────────
 
@@ -377,7 +335,7 @@ class TaskManagementService:
         The graph node's description is the single source of truth --
         no definition row to keep in sync.
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.task_id)
+        node = self._graph_repo.get_node(session, run_id=command.run_id, task_id=command.task_id)
         old_description = node.description
 
         if node.status == RUNNING:
@@ -386,7 +344,7 @@ class TaskManagementService:
         await self._graph_repo.update_node_field(
             session,
             run_id=command.run_id,
-            node_id=command.task_id,
+            task_id=command.task_id,
             field="description",
             value=command.new_description,
             meta=_MANAGER_META,
@@ -422,7 +380,7 @@ class TaskManagementService:
         cancels non-terminal downstream targets (stale input) and
         recurses into COMPLETED downstream targets (stale output).
         """
-        node = self._graph_repo.get_node(session, run_id=command.run_id, node_id=command.task_id)
+        node = self._graph_repo.get_node(session, run_id=command.run_id, task_id=command.task_id)
         old_status = node.status
 
         if old_status not in TERMINAL_STATUSES:
@@ -431,12 +389,12 @@ class TaskManagementService:
         invalidated_task_ids = await self._invalidate_downstream(
             session,
             run_id=command.run_id,
-            node_id=command.task_id,
+            task_id=command.task_id,
         )
 
         # Reset this node's outgoing edges so they re-satisfy on re-run.
         outgoing = self._graph_repo.get_outgoing_edges(
-            session, run_id=command.run_id, node_id=command.task_id
+            session, run_id=command.run_id, task_id=command.task_id
         )
         for edge in outgoing:
             if edge.status != EDGE_PENDING:
@@ -454,7 +412,7 @@ class TaskManagementService:
         await self._graph_repo.update_node_status(
             session,
             run_id=command.run_id,
-            node_id=command.task_id,
+            task_id=command.task_id,
             new_status=PENDING,
             meta=_MANAGER_META,
             only_if_not_terminal=False,
@@ -462,8 +420,8 @@ class TaskManagementService:
 
         session.commit()
 
-        definition_id = self._resolve_definition_id(session, command.run_id)
-        await self._dispatch_task_ready(
+        definition_id = definition_id_for_run(session, command.run_id)
+        await self._runtime_events.dispatch_task_ready(
             run_id=command.run_id,
             definition_id=definition_id,
             task_id=command.task_id,
@@ -489,7 +447,7 @@ class TaskManagementService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> list[UUID]:
         """Cascade invalidate downstream targets whose input is becoming stale.
 
@@ -508,17 +466,17 @@ class TaskManagementService:
           flush. Leave them alone; the edge will still be reset so a
           later restart/re-activation can satisfy it.
 
-        Termination: the graph is a DAG (enforced by Kahn's algorithm in
-        plan_subtasks and by _check_no_cycle in add_edge), so recursion
-        on outgoing edges is finite.
+        Termination: the graph is a DAG (enforced by dynamic task spawning
+        and by _check_no_cycle in add_edge), so recursion on outgoing edges
+        is finite.
 
-        Returns the flat list of node_ids that were cancelled during the
+        Returns the flat list of task_ids that were cancelled during the
         cascade, in visitation order.
         """
         invalidated: list[UUID] = []
         # Stack-based DFS — we need to recurse into COMPLETED targets to
         # reach their deeper COMPLETED descendants.
-        stack: list[UUID] = [node_id]
+        stack: list[UUID] = [task_id]
         # Guard against multi-parent re-visits (diamond): if B and C both
         # feed F and B and C are both restarted as a pair, we'd visit F
         # twice. Not a correctness bug (idempotent cancels) but wasteful.
@@ -526,23 +484,23 @@ class TaskManagementService:
 
         while stack:
             current = stack.pop()
-            outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, node_id=current)
+            outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, task_id=current)
             for edge in outgoing:
                 target_id = edge.target_task_id
                 if target_id in seen:
                     continue
                 seen.add(target_id)
 
-                target = self._graph_repo.get_node(session, run_id=run_id, node_id=target_id)
+                target = self._graph_repo.get_node(session, run_id=run_id, task_id=target_id)
 
                 if target.status == COMPLETED:
                     # Stale output — cancel, reset incoming edges (so
                     # other fan-in parents re-satisfy them on their next
                     # completion), reset outgoing edges, then recurse.
-                    await self._cancel_for_invalidation(session, run_id=run_id, node_id=target_id)
+                    await self._cancel_for_invalidation(session, run_id=run_id, task_id=target_id)
                     invalidated.append(target_id)
-                    await self._reset_incoming_edges(session, run_id=run_id, node_id=target_id)
-                    await self._reset_outgoing_edges(session, run_id=run_id, node_id=target_id)
+                    await self._reset_incoming_edges(session, run_id=run_id, task_id=target_id)
+                    await self._reset_outgoing_edges(session, run_id=run_id, task_id=target_id)
                     stack.append(target_id)
                 elif target.status in TERMINAL_STATUSES:
                     # FAILED or CANCELLED — no stale output, no recursion.
@@ -556,9 +514,9 @@ class TaskManagementService:
                     # siblings must re-satisfy them before the target
                     # re-activates. Do NOT recurse into outgoing: the
                     # target never completed, so no stale downstream.
-                    await self._cancel_for_invalidation(session, run_id=run_id, node_id=target_id)
+                    await self._cancel_for_invalidation(session, run_id=run_id, task_id=target_id)
                     invalidated.append(target_id)
-                    await self._reset_incoming_edges(session, run_id=run_id, node_id=target_id)
+                    await self._reset_incoming_edges(session, run_id=run_id, task_id=target_id)
 
         return invalidated
 
@@ -567,7 +525,7 @@ class TaskManagementService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> None:
         """Cancel a node as part of downstream invalidation and emit task/cancelled.
 
@@ -580,7 +538,7 @@ class TaskManagementService:
         await self._graph_repo.update_node_status(
             session,
             run_id=run_id,
-            node_id=node_id,
+            task_id=task_id,
             new_status=CANCELLED,
             meta=MutationMeta(
                 actor="manager-worker",
@@ -589,12 +547,12 @@ class TaskManagementService:
             only_if_not_terminal=False,
         )
 
-        definition_id = self._resolve_definition_id(session, run_id)
+        definition_id = definition_id_for_run(session, run_id)
         event = self._task_cancelled_event(
             session,
             run_id=run_id,
             definition_id=definition_id,
-            task_id=node_id,
+            task_id=task_id,
             cause="downstream_invalidation",
         )
         await inngest_client.send(
@@ -609,7 +567,7 @@ class TaskManagementService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> None:
         """Reset a node's outgoing edges to EDGE_PENDING.
 
@@ -617,7 +575,7 @@ class TaskManagementService:
         downstream edges are ready to re-satisfy when this node is
         eventually re-run (via its own restart or via re-activation).
         """
-        outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, node_id=node_id)
+        outgoing = self._graph_repo.get_outgoing_edges(session, run_id=run_id, task_id=task_id)
         for edge in outgoing:
             if edge.status != EDGE_PENDING:
                 await self._graph_repo.update_edge_status(
@@ -636,7 +594,7 @@ class TaskManagementService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> None:
         """Reset a node's incoming edges to EDGE_PENDING.
 
@@ -650,7 +608,7 @@ class TaskManagementService:
         edge status), so this does not affect whether the target
         re-activates — it only keeps the edge WAL honest.
         """
-        incoming = self._graph_repo.get_incoming_edges(session, run_id=run_id, node_id=node_id)
+        incoming = self._graph_repo.get_incoming_edges(session, run_id=run_id, task_id=task_id)
         for edge in incoming:
             if edge.status != EDGE_PENDING:
                 await self._graph_repo.update_edge_status(
@@ -680,98 +638,4 @@ class TaskManagementService:
             task_id=task_id,
             execution_id=None if execution is None else execution.id,
             cause=cause,
-        )
-
-    def _validate_plan(self, subtasks: list[SubtaskSpec]) -> None:
-        """Check for duplicate slugs, unknown references, and cycles."""
-        slugs = self._check_no_duplicate_slugs(subtasks)
-        self._check_no_unknown_deps(subtasks, slugs)
-        self._check_no_cycles(subtasks)
-
-    @staticmethod
-    def _check_no_duplicate_slugs(subtasks: list[SubtaskSpec]) -> set[TaskSlug]:
-        """Return the set of task_slugs, raising on duplicates."""
-        slugs: set[TaskSlug] = set()
-        for spec in subtasks:
-            if spec.task_slug in slugs:
-                raise DuplicateTaskSlugError(spec.task_slug)
-            slugs.add(spec.task_slug)
-        return slugs
-
-    @staticmethod
-    def _check_no_unknown_deps(subtasks: list[SubtaskSpec], slugs: set[TaskSlug]) -> None:
-        """Raise if any depends_on references a task_slug not in the plan."""
-        all_deps: set[TaskSlug] = set()
-        for spec in subtasks:
-            all_deps.update(spec.depends_on)
-        unknown = sorted(all_deps - slugs)
-        if unknown:
-            raise UnknownTaskSlugError(unknown)
-
-    @staticmethod
-    def _check_no_cycles(subtasks: list[SubtaskSpec]) -> None:
-        """Kahn's algorithm for cycle detection on the task_slug graph."""
-        in_degree: dict[TaskSlug, int] = {spec.task_slug: 0 for spec in subtasks}
-        adj: dict[TaskSlug, list[TaskSlug]] = {spec.task_slug: [] for spec in subtasks}
-        for spec in subtasks:
-            for dep in spec.depends_on:
-                adj[dep].append(spec.task_slug)
-                in_degree[spec.task_slug] += 1
-
-        queue = deque(slug for slug, d in in_degree.items() if d == 0)
-        visited = 0
-        while queue:
-            node = queue.popleft()
-            visited += 1
-            for neighbor in adj[node]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-
-        if visited < len(subtasks):
-            remaining = [slug for slug, d in in_degree.items() if d > 0]
-            raise CycleDetectedError(remaining)
-
-    def _resolve_definition_id(self, session: Session, run_id: UUID) -> UUID:
-        """Read definition_id from RunRecord.
-
-        Every run references exactly one definition, so a missing RunRecord
-        is an invariant violation — callers must always create the RunRecord
-        before invoking a service that mutates the run's graph. Tests must
-        seed a RunRecord via the integration-tier factories/fixtures.
-        """
-        run = session.exec(select(RunRecord).where(RunRecord.id == run_id)).first()
-        if run is None:
-            raise RunRecordMissingError(run_id)
-        return run.definition_id
-
-    async def _dispatch_task_ready(
-        self,
-        *,
-        run_id: UUID,
-        definition_id: UUID,
-        task_id: UUID,
-    ) -> None:
-        """Fire task/ready Inngest event (after commit)."""
-        event = TaskReadyEvent(
-            run_id=run_id,
-            definition_id=definition_id,
-            task_id=task_id,
-        )
-        if self._task_ready_dispatcher is not None:
-            await self._task_ready_dispatcher(run_id, definition_id, task_id)
-            logger.info(
-                "dispatch_task_ready: fired custom task/ready dispatcher for task %s",
-                task_id,
-            )
-            return
-        inngest_client.send_sync(
-            inngest.Event(
-                name=TaskReadyEvent.name,
-                data=event.model_dump(mode="json"),
-            )
-        )
-        logger.info(
-            "dispatch_task_ready: fired task/ready for task %s",
-            task_id,
         )

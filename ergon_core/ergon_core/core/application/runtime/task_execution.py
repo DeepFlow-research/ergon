@@ -14,18 +14,18 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunTaskExecution
 from ergon_core.core.infrastructure.inngest.errors import ConfigurationError
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.workflows.orchestration import (
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.orchestration import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
     PreparedTaskExecution,
     PrepareTaskExecutionCommand,
 )
-from ergon_core.core.application.graph.propagation import (
+from ergon_core.core.application.runtime.lifecycle import (
     mark_task_failed_by_node,
 )
-from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 from ergon_core.core.shared.utils import require_not_none, utcnow
 from ergon_core.core.views.dashboard_events.contracts import DashboardTaskStatusChangedEvent
 from sqlmodel import Session, select
@@ -64,7 +64,7 @@ async def _emit_task_status(
 
 class TaskExecutionService:
     def __init__(self) -> None:
-        self._graph_repo = WorkflowGraphRepository()
+        self._graph_repo = RuntimeGraphRepository()
         self._task_execution_repo = TaskExecutionRepository()
 
     async def prepare(self, command: PrepareTaskExecutionCommand) -> PreparedTaskExecution:
@@ -119,7 +119,7 @@ class TaskExecutionService:
             await self._graph_repo.update_node_status(
                 session,
                 run_id=command.run_id,
-                node_id=view.task_id,
+                task_id=view.task_id,
                 new_status=graph_status.RUNNING,
                 meta=MutationMeta(
                     actor="task-execution-service",
@@ -217,7 +217,7 @@ class TaskExecutionService:
             execution.error_json = command.error_json or {"message": command.error_message}
             session.add(execution)
 
-            graph_repo = WorkflowGraphRepository()
+            graph_repo = RuntimeGraphRepository()
             if execution.task_id is not None:
                 await mark_task_failed_by_node(
                     session,

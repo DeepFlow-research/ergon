@@ -20,10 +20,10 @@ class WorkerOutputNotFound(LookupError):
 class TaskExecutionRepository:
     """Domain queries over task execution rows."""
 
-    def latest_for_node(self, session: Session, node_id: UUID) -> RunTaskExecution | None:
+    def latest_for_node(self, session: Session, task_id: UUID) -> RunTaskExecution | None:
         stmt = (
             select(RunTaskExecution)
-            .where(RunTaskExecution.task_id == node_id)
+            .where(RunTaskExecution.task_id == task_id)
             .order_by(
                 col(RunTaskExecution.attempt_number).desc(),
                 col(RunTaskExecution.started_at).desc(),
@@ -48,11 +48,11 @@ class TaskExecutionRepository:
         )
         return list(session.exec(stmt).all())
 
-    def next_attempt_for_node(self, session: Session, run_id: UUID, node_id: UUID) -> int:
+    def next_attempt_for_node(self, session: Session, run_id: UUID, task_id: UUID) -> int:
         count = session.exec(
             select(func.count(RunTaskExecution.id)).where(
                 RunTaskExecution.run_id == run_id,
-                RunTaskExecution.task_id == node_id,
+                RunTaskExecution.task_id == task_id,
             )
         ).one()
         return count + 1

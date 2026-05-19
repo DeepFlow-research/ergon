@@ -49,7 +49,7 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
         return None
 
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(_FakeSession()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
     monkeypatch.setattr(module.WorkerOutputRepository, "persist", _persist)
     monkeypatch.setattr(module.TaskExecutionRepository, "set_sandbox_id", _persist)
     monkeypatch.setattr(module.ContextEventService, "persist_chunk", _persist)
@@ -67,7 +67,6 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
             run_id=uuid4(),
             definition_id=uuid4(),
             task_id=uuid4(),
-            node_id=uuid4(),
             execution_id=uuid4(),
             sandbox_id="sbx-live",
             task_slug="root",
@@ -100,7 +99,7 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
             )
 
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _NonLiveRepo())
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _NonLiveRepo())
     monkeypatch.setattr(module, "TaskManagementService", lambda: object())
     monkeypatch.setattr(module, "TaskInspectionService", lambda: object())
     monkeypatch.setattr(module, "RunResourceRepository", lambda: object())
@@ -111,7 +110,6 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
                 run_id=uuid4(),
                 definition_id=uuid4(),
                 task_id=uuid4(),
-                node_id=uuid4(),
                 execution_id=uuid4(),
                 sandbox_id="sbx-live",
                 task_slug="root",
@@ -127,7 +125,7 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
 @pytest.mark.asyncio
 async def test_step_aware_task_management_sends_collected_ready_events(monkeypatch) -> None:
     from ergon_core.core.jobs.task.worker_execute import job as module
-    from ergon_core.core.application.tasks import management
+    from ergon_core.core.application.runtime import management
 
     sent: list[tuple[str, object]] = []
 

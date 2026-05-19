@@ -83,7 +83,7 @@ def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
     assert "ComponentCatalogService" not in body
 
     # Uses the same run-tier loader the orchestrator uses.
-    assert "WorkflowGraphRepository" in body
+    assert "RuntimeGraphRepository" in body
     assert ".node(" in body
 
 

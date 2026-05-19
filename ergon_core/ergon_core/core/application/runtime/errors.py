@@ -36,8 +36,8 @@ class CycleError(GraphError):
 class NodeNotFoundError(GraphError):
     """Referenced node does not exist in this run's graph."""
 
-    def __init__(self, node_id: UUID, **context: object) -> None:
-        super().__init__(f"Node {node_id} not found", **context)
+    def __init__(self, task_id: UUID, **context: object) -> None:
+        super().__init__(f"Node {task_id} not found", **context)
 
 
 class EdgeNotFoundError(GraphError):
@@ -50,8 +50,8 @@ class EdgeNotFoundError(GraphError):
 class DanglingEdgeError(GraphError):
     """Edge references a node that does not exist."""
 
-    def __init__(self, edge_id: UUID, missing_node_id: UUID, **context: object) -> None:
+    def __init__(self, edge_id: UUID, missing_task_id: UUID, **context: object) -> None:
         super().__init__(
-            f"Edge {edge_id} references missing node {missing_node_id}",
+            f"Edge {edge_id} references missing node {missing_task_id}",
             **context,
         )

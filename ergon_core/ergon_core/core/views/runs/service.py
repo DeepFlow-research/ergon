@@ -27,7 +27,7 @@ from ergon_core.core.persistence.telemetry.models import (
     Thread,
     ThreadMessage,
 )
-from ergon_core.core.application.graph.models import GraphMutationRecordDto
+from ergon_core.core.application.runtime.models import GraphMutationRecordDto
 from ergon_core.core.application.evaluation.scoring import (
     EvaluationScoreSummary,
     aggregate_evaluation_scores,

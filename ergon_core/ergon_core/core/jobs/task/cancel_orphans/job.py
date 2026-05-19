@@ -14,7 +14,7 @@ Each function uses two durable steps:
 import logging
 from typing import Any
 from uuid import UUID
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.jobs._events import send_job_events
 from ergon_core.core.persistence.shared.db import get_session
 from .contract import PropagationCancelCause, TaskCancelledEvent, TaskFailedEvent

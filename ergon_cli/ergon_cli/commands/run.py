@@ -5,7 +5,7 @@ from uuid import UUID
 
 from ergon_core.core.persistence.shared.db import ensure_db, get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.application.workflows.runs import cancel_run as do_cancel
+from ergon_core.core.application.runtime.run_records import cancel_run as do_cancel
 from sqlmodel import select
 
 from ergon_cli.rendering import render_table
@@ -50,7 +50,7 @@ def handle_run(args: Namespace) -> int:
         return 1
 
 
-def list_runs(args: Namespace) -> int:
+def list_runs(args: Namespace) -> int:  # noqa: C901 - CLI filters are intentionally linear.
     ensure_db()
     try:
         definition_id = _definition_id_filter(args.definition_id)

@@ -53,9 +53,9 @@ def test_job_contracts_do_not_import_runtime_or_infrastructure_layers() -> None:
     forbidden = (
         "ergon_core.core.infrastructure",
         "ergon_core.core.persistence",
-        "ergon_core.core.application.tasks",
-        "ergon_core.core.application.workflows",
-        "ergon_core.core.application.graph",
+        "ergon_core.core.application.runtime",
+        "ergon_core.core.application.runtime",
+        "ergon_core.core.application.runtime",
         "ergon_core.core.application.ports",
         "ergon_core.core.application.resources",
         "ergon_core.core.views",

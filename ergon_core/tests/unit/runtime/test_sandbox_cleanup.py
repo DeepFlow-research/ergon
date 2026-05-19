@@ -41,7 +41,6 @@ async def test_cleanup_on_completed_terminates_sandbox(monkeypatch: pytest.Monke
         task_id=uuid4(),
         execution_id=uuid4(),
         sandbox_id="sbx-completed",
-        node_id=uuid4(),
     )
 
     captured: dict[str, str | None] = {"sandbox_id": None}
@@ -72,7 +71,6 @@ async def test_cleanup_on_failed_terminates_sandbox(monkeypatch: pytest.MonkeyPa
         execution_id=uuid4(),
         error="boom",
         sandbox_id="sbx-failed",
-        node_id=uuid4(),
     )
 
     captured: dict[str, str | None] = {"sandbox_id": None}
@@ -105,7 +103,6 @@ async def test_cleanup_on_failed_skips_when_sandbox_id_missing(
         execution_id=uuid4(),
         error="prepare-failed",
         sandbox_id=None,
-        node_id=uuid4(),
     )
 
     called = False

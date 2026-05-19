@@ -1,5 +1,4 @@
 from uuid import UUID, uuid4
-from unittest.mock import MagicMock
 
 import pytest
 from ergon_core.core.persistence.definitions.models import (
@@ -15,17 +14,15 @@ from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunTaskExecution,
 )
-from ergon_core.core.application.tasks import execution as task_execution_module
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.workflows.orchestration import (
+from ergon_core.core.application.runtime import execution as task_execution_module
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.orchestration import (
     InitializeWorkflowCommand,
     PrepareTaskExecutionCommand,
 )
-from ergon_core.core.application.tasks.models import AddSubtaskCommand
-from ergon_core.core.application.tasks.management import TaskManagementService
-from ergon_core.core.application.tasks.execution import TaskExecutionService
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from ergon_core.test_support.task_factory import task_with_id
 from pydantic import BaseModel
 from sqlalchemy.pool import StaticPool
@@ -122,7 +119,7 @@ def test_graph_initialization_writes_concrete_worker_slug_from_definition_bindin
     definition_id = _definition_with_worker(session, worker_type="minif2f-react")
     run_id = _run(session, definition_id=definition_id)
 
-    WorkflowGraphRepository().initialize_from_definition(
+    RuntimeGraphRepository().initialize_from_definition(
         session,
         run_id,
         definition_id,
@@ -149,7 +146,7 @@ async def test_workflow_initialization_returns_node_ids_for_initial_ready_static
     run_id = _run(session, definition_id=definition_id)
 
     monkeypatch.setattr(
-        "ergon_core.core.application.workflows.service.get_session",
+        "ergon_core.core.application.runtime.run_lifecycle.get_session",
         lambda: _session_context(session),
     )
 
@@ -221,46 +218,6 @@ async def test_dynamic_prepare_uses_node_worker_slug_and_run_model_without_defin
     assert prepared.model_target == "stub:constant"
     assert execution.definition_worker_id is None
     assert dynamic_worker is None
-
-
-@pytest.mark.asyncio
-async def test_add_subtask_rejects_unknown_worker_slug_before_creating_node() -> None:
-    session = _session()
-    definition_id = _definition_with_worker(session, worker_type="minif2f-react")
-    run_id = _run(session, definition_id=definition_id)
-    parent = RunGraphNode(
-        run_id=run_id,
-        instance_key="sample-1",
-        task_slug="parent",
-        description="Parent task",
-        status=TaskExecutionStatus.RUNNING,
-        assigned_worker_slug="minif2f-react",
-        level=0,
-    )
-    session.add(parent)
-    session.commit()
-
-    dashboard_emitter = MagicMock()
-
-    with pytest.raises(ValueError, match="Slug-based add_subtask was removed"):
-        await TaskManagementService(dashboard_emitter=dashboard_emitter).add_subtask(
-            session,
-            AddSubtaskCommand(
-                run_id=run_id,
-                parent_task_id=parent.task_id,
-                task_slug="bad-worker",
-                description="Should not be inserted",
-                assigned_worker_slug="not-a-real-worker",
-            ),
-        )
-
-    inserted = session.exec(
-        select(RunGraphNode).where(
-            RunGraphNode.run_id == run_id,
-            RunGraphNode.task_slug == "bad-worker",
-        )
-    ).first()
-    assert inserted is None
 
 
 class _session_context:

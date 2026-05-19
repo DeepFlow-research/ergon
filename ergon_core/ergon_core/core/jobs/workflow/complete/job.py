@@ -8,8 +8,8 @@ from ergon_core.core.persistence.telemetry.models import RunRecord
 from ergon_core.core.jobs.run.cleanup.contract import RunCleanupEvent
 from .contract import WorkflowCompletedEvent, WorkflowCompleteResult
 from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
-from ergon_core.core.application.workflows.orchestration import FinalizeWorkflowCommand
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.orchestration import FinalizeWorkflowCommand
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from ergon_core.core.jobs._events import send_job_event
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,

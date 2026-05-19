@@ -47,7 +47,7 @@ def _assert_no_definition_repository_in_worker_execute() -> None:
 
 
 def _assert_no_prepare_definition_method() -> None:
-    text = _read("ergon_core/ergon_core/core/application/tasks/execution.py")
+    text = _read("ergon_core/ergon_core/core/application/runtime/task_execution.py")
     assert "_prepare_definition" not in text
     assert "_prepare_legacy_definition" not in text
 

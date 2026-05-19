@@ -17,12 +17,12 @@ from uuid import UUID, uuid4
 import pytest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.context import WorkerContext
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.tasks import inspection as inspection_module
-from ergon_core.core.application.tasks import management as management_module
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime import inspection as inspection_module
+from ergon_core.core.application.runtime import management as management_module
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
@@ -117,7 +117,7 @@ def test_prepare_run_populates_task_json_for_every_node() -> None:
     session = _session()
     run_id, definition_id = _seed_run(session)
 
-    repo = WorkflowGraphRepository()
+    repo = RuntimeGraphRepository()
     repo.initialize_from_definition(
         session,
         run_id=run_id,
@@ -412,9 +412,12 @@ async def test_dynamic_spawn_writes_only_to_run_graph_nodes(
 
     # 3. Patch get_session so service writes stay in the test session.
     _patch_get_session_smoke(monkeypatch, session)
+    monkeypatch.setattr(management_module, "definition_id_for_run", lambda _session, _run_id: uuid4())
 
-    task_mgmt = TaskManagementService(dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()))
-    monkeypatch.setattr(task_mgmt, "_dispatch_task_ready", AsyncMock())
+    task_mgmt = TaskManagementService(
+        dashboard_emitter=SimpleNamespace(graph_mutation=AsyncMock()),
+        task_ready_dispatcher=AsyncMock(),
+    )
     task_inspect = TaskInspectionService()
     context = WorkerContext._for_job(
         run_id=run_id,

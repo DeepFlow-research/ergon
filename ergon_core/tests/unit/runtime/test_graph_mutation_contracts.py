@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from ergon_core.core.application.graph.models import (
+from ergon_core.core.application.runtime.models import (
     EdgeAddedMutation,
     GraphMutationRecordDto,
     GraphMutationValue,

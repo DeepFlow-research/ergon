@@ -43,8 +43,8 @@ class SweBenchSmokeWorker(RecursiveSmokeWorkerMixin, SmokeWorkerBase):
 class SweBenchSubworker:
     """Writes a trivial .py file + compiles + executes as the probe."""
 
-    async def work(self, node_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
-        patch_path = f"/workspace/final_output/patch_{node_id}.py"
+    async def work(self, task_id: str, sandbox: AsyncSandbox) -> SubworkerResult:
+        patch_path = f"/workspace/final_output/patch_{task_id}.py"
         await sandbox.files.write(patch_path, PY_SOURCE)
 
         probe = await sandbox.commands.run(
@@ -52,7 +52,7 @@ class SweBenchSubworker:
             timeout=20,
         )
         probe_stdout = ("" if probe.stdout is None else probe.stdout).strip()[:4096]
-        probe_path = f"/workspace/final_output/probe_{node_id}.json"
+        probe_path = f"/workspace/final_output/probe_{task_id}.json"
         await sandbox.files.write(
             probe_path,
             json.dumps({"exit_code": probe.exit_code, "stdout": probe_stdout}),

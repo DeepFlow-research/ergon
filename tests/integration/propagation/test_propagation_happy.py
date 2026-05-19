@@ -12,10 +12,10 @@ from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutat
 from ergon_core.core.persistence.shared.db import get_engine, get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlmodel import select
@@ -101,12 +101,12 @@ async def test_1_single_task_happy_path() -> None:
 
     try:
         # Stamp RUNNING into the WAL so the WAL invariant check passes.
-        graph_repo = WorkflowGraphRepository()
+        graph_repo = RuntimeGraphRepository()
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_a_id,
+                task_id=node_a_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(actor="test:setup", reason="test setup: running"),
             )
@@ -120,7 +120,7 @@ async def test_1_single_task_happy_path() -> None:
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-                node_id=node_a_id,
+
             )
         )
 

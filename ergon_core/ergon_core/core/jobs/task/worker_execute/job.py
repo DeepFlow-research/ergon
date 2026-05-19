@@ -18,13 +18,12 @@ from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.jobs._events import send_job_step_event
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
 from ergon_core.core.application.resources import RunResourceRepository
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
-from ergon_core.core.application.tasks.management import TaskManagementService
-from ergon_core.core.application.tasks.models import PlanSubtasksCommand, PlanSubtasksResult
-from ergon_core.core.application.tasks.repository import (
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+from ergon_core.core.application.runtime.task_management import TaskManagementService
+from ergon_core.core.application.runtime.task_execution_repository import (
     TaskExecutionRepository,
     WorkerOutputRepository,
 )
@@ -66,7 +65,7 @@ async def run_worker_execute_job(
     # catalog, no raw graph row read in this job — all of that lives
     # inside `graph_repo.node`.
     with get_session() as session:
-        view = await WorkflowGraphRepository().node(
+        view = await RuntimeGraphRepository().node(
             session,
             run_id=payload.run_id,
             task_id=payload.task_id,
@@ -223,13 +222,6 @@ class _SpawnTaskStepResult(BaseModel):
     ready: list[_ReadyDispatch]
 
 
-class _PlanSubtasksStepResult(BaseModel):
-    model_config = {"frozen": True}
-
-    result: PlanSubtasksResult
-    ready: list[_ReadyDispatch]
-
-
 class _StepAwareTaskManagementService(TaskManagementService):
     """Task management facade for workers running inside an Inngest function.
 
@@ -240,7 +232,6 @@ class _StepAwareTaskManagementService(TaskManagementService):
 
     def __init__(self, ctx: Any) -> None:
         self._ctx = ctx
-        self._plan_subtasks_call_index = 0
         self._spawn_task_call_index = 0
         self._active_ready_dispatches: list[_ReadyDispatch] | None = None
         super().__init__(task_ready_dispatcher=self._collect_ready_dispatch)
@@ -281,51 +272,20 @@ class _StepAwareTaskManagementService(TaskManagementService):
         await self._dispatch_collected_ready_events(step_id, spawned.ready)
         return spawned.handle
 
-    async def plan_subtasks(
-        self,
-        session: Session,
-        command: PlanSubtasksCommand,
-    ) -> PlanSubtasksResult:
-        call_index = self._plan_subtasks_call_index
-        self._plan_subtasks_call_index += 1
-        step_id = f"plan-subtasks-{command.parent_task_id}-{call_index}"
-
-        async def _run_plan() -> _PlanSubtasksStepResult:
-            previous = self._active_ready_dispatches
-            ready: list[_ReadyDispatch] = []
-            self._active_ready_dispatches = ready
-            try:
-                result = await TaskManagementService.plan_subtasks(
-                    self,
-                    session,
-                    command,
-                )
-            finally:
-                self._active_ready_dispatches = previous
-            return _PlanSubtasksStepResult(result=result, ready=ready)
-
-        planned = await self._ctx.step.run(
-            step_id,
-            _run_plan,
-            output_type=_PlanSubtasksStepResult,
-        )
-        await self._dispatch_collected_ready_events(step_id, planned.ready)
-        return planned.result
-
     async def _collect_ready_dispatch(
         self,
         run_id: UUID,
         definition_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> None:
         if self._active_ready_dispatches is None:
             raise ContractViolationError(
                 "Worker task-ready dispatch attempted outside a memoized graph mutation",
                 run_id=run_id,
-                task_id=node_id,
+                task_id=task_id,
             )
         self._active_ready_dispatches.append(
-            _ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=node_id)
+            _ReadyDispatch(run_id=run_id, definition_id=definition_id, task_id=task_id)
         )
 
     async def _dispatch_collected_ready_events(

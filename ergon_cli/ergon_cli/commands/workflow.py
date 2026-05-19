@@ -12,7 +12,7 @@ from uuid import UUID
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.enums import RunResourceKind
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -23,7 +23,7 @@ _DEPENDENCY_DIRECTIONS = ("upstream", "downstream", "both")
 
 _FORBIDDEN_CONTEXT_FLAGS = {
     "--run-id",
-    "--node-id",
+    "--task-id",
     "--execution-id",
     "--sandbox-id",
     "--sandbox-task-key",
@@ -35,7 +35,7 @@ class WorkflowCommandContext(BaseModel):
     model_config = {"frozen": True}
 
     run_id: UUID
-    node_id: UUID
+    task_id: UUID
     execution_id: UUID
     sandbox_task_key: UUID
     benchmark_type: str
@@ -70,7 +70,7 @@ def build_workflow_parser() -> argparse.ArgumentParser:
 
     task_tree = inspect_sub.add_parser("task-tree")
     task_tree.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
-    task_tree.add_argument("--parent-node-id", default=None)
+    task_tree.add_argument("--parent-task-id", default=None)
     task_tree.add_argument("--wait-seconds", type=float, default=0)
 
     dependencies = inspect_sub.add_parser("task-dependencies")
@@ -89,16 +89,11 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--dry-run", action="store_true")
     materialize.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
-    for action in ("add-task", "add-edge", "restart-task", "abandon-task"):
+    for action in ("add-edge", "restart-task", "abandon-task"):
         parser_for_action = manage_sub.add_parser(action)
         parser_for_action.add_argument("--dry-run", action="store_true")
         parser_for_action.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
         parser_for_action.add_argument("--reason", default=None)
-        if action == "add-task":
-            parser_for_action.add_argument("--task-slug", required=True)
-            parser_for_action.add_argument("--description", required=True)
-            parser_for_action.add_argument("--worker", required=True)
-            parser_for_action.add_argument("--depends-on-task-slug", action="append", default=[])
 
     return parser
 
@@ -169,7 +164,7 @@ async def handle_workflow(args: argparse.Namespace) -> int:
         name
         for name, value in {
             "--run-id": args.run_id,
-            "--node-id": args.node_id,
+            "--task-id": args.task_id,
             "--execution-id": args.execution_id,
             "--sandbox-task-key": args.sandbox_task_key,
         }.items()
@@ -179,7 +174,7 @@ async def handle_workflow(args: argparse.Namespace) -> int:
         raise SystemExit(f"{', '.join(missing)} are required for local CLI workflow commands")
     context = WorkflowCommandContext(
         run_id=UUID(args.run_id),
-        node_id=UUID(args.node_id),
+        task_id=UUID(args.task_id),
         execution_id=UUID(args.execution_id),
         sandbox_task_key=UUID(args.sandbox_task_key),
         benchmark_type=args.benchmark_type,
@@ -205,7 +200,7 @@ def _handle_inspect(
         resources = service.list_resources(
             session,
             run_id=context.run_id,
-            node_id=context.node_id,
+            task_id=context.task_id,
             scope=args.scope,
             kind=args.kind,
             max_depth=args.max_depth,
@@ -236,7 +231,7 @@ def _handle_inspect(
         deadline = time.monotonic() + max(args.wait_seconds, 0)
         tasks = service.list_tasks(session, run_id=context.run_id, parent_task_id=parent)
         while args.wait_seconds > 0 and time.monotonic() < deadline:
-            children = [task for task in tasks if task.parent_task_id == context.node_id]
+            children = [task for task in tasks if task.parent_task_id == context.task_id]
             if children and all(
                 task.status in {"completed", "failed", "cancelled"} for task in children
             ):
@@ -246,7 +241,7 @@ def _handle_inspect(
         return _format_output(
             {"tasks": [_dump(task) for task in tasks]},
             text_lines=[
-                f"{'  ' * task.level}{task.task_slug} {task.status} {task.node_id}"
+                f"{'  ' * task.level}{task.task_slug} {task.status} {task.task_id}"
                 for task in tasks
             ],
             output_format=args.format,
@@ -255,7 +250,7 @@ def _handle_inspect(
         deps = service.list_dependencies(
             session,
             run_id=context.run_id,
-            node_id=context.node_id,
+            task_id=context.task_id,
             direction=args.direction,
         )
         return _format_output(
@@ -270,7 +265,7 @@ def _handle_inspect(
         actions = service.get_next_actions(
             session,
             run_id=context.run_id,
-            node_id=context.node_id,
+            task_id=context.task_id,
             manager_capable=args.manager_capable,
         )
         return _format_output(
@@ -293,7 +288,7 @@ async def _handle_manage(
         result = await service.materialize_resource(
             session,
             run_id=context.run_id,
-            current_node_id=context.node_id,
+            current_task_id=context.task_id,
             current_execution_id=context.execution_id,
             sandbox_task_key=context.sandbox_task_key,
             benchmark_type=context.benchmark_type,
@@ -304,35 +299,6 @@ async def _handle_manage(
         return _format_output(
             {"materialized_resource": _dump(result)},
             text_lines=[f"{result.source_resource_id} -> {result.sandbox_path}"],
-            output_format=args.format,
-        )
-    if args.action == "add-task":
-        if args.dry_run:
-            payload: JsonObject = {
-                "action": args.action,
-                "dry_run": True,
-                "task_slug": args.task_slug,
-                "assigned_worker_slug": args.worker,
-                "depends_on_task_slugs": args.depends_on_task_slug,
-                "message": "Graph lifecycle command validated; no changes applied.",
-            }
-            return _format_output(payload, [str(payload["message"])], args.format)
-        result = await service.add_task(
-            session,
-            run_id=context.run_id,
-            parent_task_id=context.node_id,
-            task_slug=args.task_slug,
-            description=args.description,
-            assigned_worker_slug=args.worker,
-            dry_run=False,
-        )
-        return _format_output(
-            {"task": _dump(result)},
-            text_lines=[
-                result.message
-                if result.node is None
-                else f"{result.node.task_slug} {result.node.status} {result.node.task_id}"
-            ],
             output_format=args.format,
         )
     try:

@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from ergon_core.core.application.tasks.models import SubtaskInfo
+from ergon_core.core.application.runtime.task_models import SubtaskInfo
 from ergon_core.core.persistence.shared.types import NodeId, TaskSlug
 from pydantic import BaseModel
 

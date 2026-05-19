@@ -14,7 +14,7 @@ from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import AwaitCompletionNotSupportedError, SpawnedTaskHandle
 from ergon_core.core.application.resources.models import RunResourceView
 from ergon_core.core.application.resources.repository import RunResourceRepository
-from ergon_core.core.application.tasks.models import (
+from ergon_core.core.application.runtime.task_models import (
     CancelTaskCommand,
     RefineTaskCommand,
     RestartTaskCommand,
@@ -94,10 +94,10 @@ class _FakeInspection:
             )
         ]
 
-    def get_subtask(self, session, *, run_id, node_id):
-        self.calls.append(("get_subtask", session, run_id, node_id))
+    def get_subtask(self, session, *, run_id, task_id):
+        self.calls.append(("get_subtask", session, run_id, task_id))
         return SubtaskInfo(
-            task_id=node_id,
+            task_id=task_id,
             task_slug="target",
             description="target",
             status="pending",

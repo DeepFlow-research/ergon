@@ -24,9 +24,9 @@ class GraphNodeLookup:
             (src, tgt): eid for eid, src, tgt in edge_rows
         }
 
-    def node_id(self, task_id: UUID) -> UUID | None:
-        """Compatibility shim for callers still named around node lookup."""
-        return task_id if task_id in self._tasks else None
+    def has_task(self, task_id: UUID) -> bool:
+        """Return whether the run graph contains the runtime task id."""
+        return task_id in self._tasks
 
     def edge_id_by_nodes(self, source_task_id: UUID, target_task_id: UUID) -> UUID | None:
         """Get edge ID by source and target task IDs."""
@@ -34,8 +34,6 @@ class GraphNodeLookup:
 
     def edge_id(self, source_task_id: UUID, target_task_id: UUID) -> UUID | None:
         """Get edge ID by source and target task IDs."""
-        src = self.node_id(source_task_id)
-        tgt = self.node_id(target_task_id)
-        if src is None or tgt is None:
+        if not self.has_task(source_task_id) or not self.has_task(target_task_id):
             return None
-        return self.edge_id_by_nodes(src, tgt)
+        return self.edge_id_by_nodes(source_task_id, target_task_id)

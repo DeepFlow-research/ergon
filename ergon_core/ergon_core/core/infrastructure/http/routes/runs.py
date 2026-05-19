@@ -5,7 +5,7 @@ from uuid import UUID
 from ergon_core.core.views.runs.models import (
     RunSnapshotDto,
 )
-from ergon_core.core.application.graph.models import GraphMutationRecordDto
+from ergon_core.core.application.runtime.models import GraphMutationRecordDto
 from ergon_core.core.views.errors import ResourceTooLargeError
 from ergon_core.core.views.runs.service import RunReadService
 from fastapi import APIRouter, HTTPException

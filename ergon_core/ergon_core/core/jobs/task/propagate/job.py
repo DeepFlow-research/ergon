@@ -7,11 +7,11 @@ import logging
 from datetime import UTC, datetime
 
 from .contract import TaskCompletedEvent, TaskFailedEvent, TaskPropagateResult
-from ergon_core.core.application.workflows.orchestration import (
+from ergon_core.core.application.runtime.orchestration import (
     PropagateTaskCompletionCommand,
     WorkflowTerminalState,
 )
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from ergon_core.core.jobs._events import JobEvent, send_job_events
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.jobs.workflow.complete.contract import WorkflowCompletedEvent

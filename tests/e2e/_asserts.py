@@ -307,7 +307,7 @@ def _assert_temporal_ordering(run_id: UUID) -> None:
     """Schedule honours DAG deps: children start no earlier than parents finish.
 
     Uses ``RunTaskExecution.started_at`` / ``completed_at`` via
-    ``node_id`` join.  Only checks edges whose both endpoints reached
+    ``task_id`` join.  Only checks edges whose both endpoints reached
     at least ``started`` state. Blocked descendants are skipped because
     they should never have execution timestamps.
     """

@@ -1,9 +1,22 @@
 """Object-bound dynamic task helpers for smoke fixtures."""
 
+from pydantic import BaseModel, Field
+
 from ergon_core.api import Task
 from ergon_core.api.worker import Worker
-from ergon_core.core.application.tasks.models import SubtaskSpec
+from ergon_core.core.persistence.shared.types import AssignedWorkerSlug, TaskSlug
 from tests.fixtures.smoke_components.sandbox import SmokePublicSandbox
+
+
+class SmokeChildTaskSpec(BaseModel):
+    """Fixture-only shape for building object-bound smoke child tasks."""
+
+    task_slug: TaskSlug = Field(min_length=1)
+    description: str = Field(min_length=1)
+    assigned_worker_slug: AssignedWorkerSlug
+    depends_on: list[TaskSlug] = Field(default_factory=list)
+
+    model_config = {"frozen": True}
 
 
 def smoke_worker_for_slug(worker_slug: str, *, model: str | None) -> Worker:
@@ -16,7 +29,7 @@ def smoke_worker_for_slug(worker_slug: str, *, model: str | None) -> Worker:
 def smoke_task_from_spec(
     *,
     parent_task: Task,
-    spec: SubtaskSpec,
+    spec: SmokeChildTaskSpec,
     model: str | None,
 ) -> Task:
     worker_slug = str(spec.assigned_worker_slug)

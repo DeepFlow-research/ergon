@@ -6,7 +6,7 @@ PR 9 Tasks 2-3:
 - ``spawn_task`` round-trips through ``TaskManagementService.spawn_dynamic_task``
   and writes only to ``run_graph_nodes`` (never ``experiment_definition_tasks``).
 - The spawned dynamic node inflates correctly through
-  ``WorkflowGraphRepository.node`` (is_dynamic=True + correct task_slug).
+  ``RuntimeGraphRepository.node`` (is_dynamic=True + correct task_slug).
 - ``cancel_task`` enforces containment via ``_assert_descendant``,
   raising ``ContainmentViolation`` for non-descendants and routing
   to ``task_mgmt`` only for legitimate descendants.
@@ -26,12 +26,12 @@ from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
 from ergon_core.api.errors import ContainmentViolation
 from ergon_core.api.worker.context import WorkerContext
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.application.graph.models import RunGraphNodeView
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.tasks import inspection as inspection_module
-from ergon_core.core.application.tasks import management as management_module
-from ergon_core.core.application.tasks.inspection import TaskInspectionService
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.models import RunGraphNodeView
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime import inspection as inspection_module
+from ergon_core.core.application.runtime import management as management_module
+from ergon_core.core.application.runtime.task_inspection import TaskInspectionService
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask
 from ergon_core.core.persistence.graph.models import RunGraphNode
 from ergon_core.tests.unit.runtime._test_workers import EchoSandbox, EchoWorker
@@ -160,9 +160,11 @@ async def test_spawn_task_via_worker_context_does_not_write_definition_row(
     parent = _seed_node(session, run_id=run_id, slug="parent")
     _patch_get_session(monkeypatch, session)
 
-    task_mgmt = TaskManagementService(dashboard_emitter=MagicMock())
-    task_mgmt._resolve_definition_id = MagicMock(return_value=uuid4())
-    task_mgmt._dispatch_task_ready = AsyncMock()
+    monkeypatch.setattr(management_module, "definition_id_for_run", lambda _session, _run_id: uuid4())
+    task_mgmt = TaskManagementService(
+        dashboard_emitter=MagicMock(),
+        task_ready_dispatcher=AsyncMock(),
+    )
     task_inspect = TaskInspectionService()
     context = _build_context(
         run_id=run_id,
@@ -209,9 +211,11 @@ async def test_spawned_task_inflates_through_graph_repo_node(
     parent = _seed_node(session, run_id=run_id, slug="parent")
     _patch_get_session(monkeypatch, session)
 
-    task_mgmt = TaskManagementService(dashboard_emitter=MagicMock())
-    task_mgmt._resolve_definition_id = MagicMock(return_value=uuid4())
-    task_mgmt._dispatch_task_ready = AsyncMock()
+    monkeypatch.setattr(management_module, "definition_id_for_run", lambda _session, _run_id: uuid4())
+    task_mgmt = TaskManagementService(
+        dashboard_emitter=MagicMock(),
+        task_ready_dispatcher=AsyncMock(),
+    )
     task_inspect = TaskInspectionService()
     context = _build_context(
         run_id=run_id,
@@ -222,7 +226,7 @@ async def test_spawned_task_inflates_through_graph_repo_node(
 
     handle = await context.spawn_task(_make_task())
 
-    graph_repo = WorkflowGraphRepository()
+    graph_repo = RuntimeGraphRepository()
     view = await graph_repo.node(session, run_id=run_id, task_id=handle.task_id)
 
     assert isinstance(view, RunGraphNodeView)

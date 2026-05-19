@@ -7,7 +7,7 @@ The payload only carries identity (``run_id`` + ``task_id`` +
 reconstructed locally from the run-tier read boundary:
 
 - execution row + stamped ``sandbox_id`` ← ``session.get(RunTaskExecution)``
-- typed Task view ← ``WorkflowGraphRepository.node(..., sandbox_id=...)``
+- typed Task view ← ``RuntimeGraphRepository.node(..., sandbox_id=...)``
 - persisted ``WorkerOutput`` ← ``WorkerOutputRepository.load``
 - evaluator instance ← ``task.evaluators[payload.evaluator_index]``
 
@@ -30,10 +30,10 @@ from uuid import UUID
 
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.core.application.evaluation.service import EvaluationService
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from .contract import EvaluateTaskRunResult, TaskEvaluateRequest
 from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
-from ergon_core.core.application.tasks.repository import WorkerOutputRepository
+from ergon_core.core.application.runtime.task_execution_repository import WorkerOutputRepository
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
@@ -46,7 +46,7 @@ from ergon_core.core.views.dashboard_events.contracts import DashboardTaskEvalua
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric import Evaluator
-    from ergon_core.core.application.graph.models import RunGraphNodeView
+    from ergon_core.core.application.runtime.models import RunGraphNodeView
 
 logger = logging.getLogger(__name__)
 _evaluation_persistence = EvaluationService()
@@ -79,7 +79,7 @@ async def run_evaluate_task_run_job(
                 task_id=task_id,
                 execution_id=execution_id,
             )
-        view = await WorkflowGraphRepository().node(
+        view = await RuntimeGraphRepository().node(
             session,
             run_id=run_id,
             task_id=task_id,

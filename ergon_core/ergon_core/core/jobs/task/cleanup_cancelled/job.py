@@ -11,8 +11,8 @@ from ergon_core.core.application.ports.dashboard import get_dashboard_event_publ
 from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from .contract import TaskCancelledEvent
-from ergon_core.core.application.tasks.models import CleanupResult
-from ergon_core.core.application.tasks.cleanup import TaskCleanupService
+from ergon_core.core.application.runtime.task_models import CleanupResult
+from ergon_core.core.application.runtime.task_cleanup import TaskCleanupService
 from ergon_core.core.jobs.sandbox._lifecycle import terminate_external_sandbox
 from ergon_core.core.persistence.shared.types import NodeId, RunId
 from ergon_core.core.shared.utils import utcnow
@@ -48,7 +48,7 @@ async def run_cleanup_cancelled_task_job(ctx: Any, payload: TaskCancelledEvent) 
             result = svc.cleanup(
                 session,
                 run_id=payload.run_id,
-                node_id=payload.task_id,
+                task_id=payload.task_id,
                 execution_id=payload.execution_id,
             )
         return result.model_dump(mode="json")

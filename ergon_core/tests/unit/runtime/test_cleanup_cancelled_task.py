@@ -4,7 +4,7 @@ import pytest
 
 from ergon_core.core.jobs.task.cleanup_cancelled.contract import TaskCancelledEvent
 from ergon_core.core.jobs.task.cleanup_cancelled import job as cleanup_module
-from ergon_core.core.application.tasks.models import CleanupResult
+from ergon_core.core.application.runtime.task_models import CleanupResult
 
 
 class _FakeStepCtx:

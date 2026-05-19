@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from ergon_core.core.application.graph.errors import GraphError
+from ergon_core.core.application.runtime.errors import GraphError
 
 
 class DelegationError(GraphError):
@@ -19,12 +19,12 @@ class TaskRunningError(DelegationError):
     for the task to terminate, then refine + restart.
     """
 
-    def __init__(self, node_id: UUID, current_status: str) -> None:
+    def __init__(self, task_id: UUID, current_status: str) -> None:
         super().__init__(
-            f"Cannot refine node {node_id}: status is '{current_status}' "
+            f"Cannot refine node {task_id}: status is '{current_status}' "
             "(refine is blocked while a worker is running)"
         )
-        self.node_id = node_id
+        self.task_id = task_id
         self.current_status = current_status
 
 
@@ -36,46 +36,22 @@ class TaskNotTerminalError(DelegationError):
     first if it wants to restart.
     """
 
-    def __init__(self, node_id: UUID, current_status: str) -> None:
+    def __init__(self, task_id: UUID, current_status: str) -> None:
         super().__init__(
-            f"Cannot restart node {node_id}: status is '{current_status}', "
+            f"Cannot restart node {task_id}: status is '{current_status}', "
             "expected one of 'completed', 'failed', 'cancelled'"
         )
-        self.node_id = node_id
+        self.task_id = task_id
         self.current_status = current_status
 
 
 class TaskAlreadyTerminalError(DelegationError):
     """cancel_task called on an already-terminal node."""
 
-    def __init__(self, node_id: UUID, current_status: str) -> None:
-        super().__init__(f"Cannot cancel node {node_id}: already terminal ('{current_status}')")
-        self.node_id = node_id
+    def __init__(self, task_id: UUID, current_status: str) -> None:
+        super().__init__(f"Cannot cancel node {task_id}: already terminal ('{current_status}')")
+        self.task_id = task_id
         self.current_status = current_status
-
-
-class CycleDetectedError(DelegationError):
-    """Raised when plan_subtasks dependency graph contains a cycle."""
-
-    def __init__(self, remaining_slugs: list[str]) -> None:
-        super().__init__(f"Cycle detected among task_slugs: {remaining_slugs}")
-        self.remaining_slugs = remaining_slugs
-
-
-class DuplicateTaskSlugError(DelegationError):
-    """Raised when plan_subtasks has duplicate task_slug values."""
-
-    def __init__(self, task_slug: str) -> None:
-        super().__init__(f"Duplicate task_slug: {task_slug!r}")
-        self.task_slug = task_slug
-
-
-class UnknownTaskSlugError(DelegationError):
-    """Raised when depends_on references a task_slug not in the plan."""
-
-    def __init__(self, slugs: list[str]) -> None:
-        super().__init__(f"Unknown depends_on task_slugs: {slugs}")
-        self.slugs = slugs
 
 
 class RunRecordMissingError(DelegationError):

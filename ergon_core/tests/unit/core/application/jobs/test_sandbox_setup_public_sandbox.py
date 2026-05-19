@@ -49,7 +49,7 @@ async def test_sandbox_setup_provisions_public_sandbox(monkeypatch) -> None:
 
     sandbox = _PublicSandbox()
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(sandbox))
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(sandbox))
 
     result = await run_sandbox_setup_job(
         _FakeCtx(),

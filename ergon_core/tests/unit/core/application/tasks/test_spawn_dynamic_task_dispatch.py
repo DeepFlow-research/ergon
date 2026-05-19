@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 from ergon_core.api.benchmark.task import EmptyTaskPayload, Task
-from ergon_core.core.application.tasks.management import TaskManagementService
+from ergon_core.core.application.runtime.task_management import TaskManagementService
 from ergon_core.test_support.task_factory import TestSandbox, TestWorker
 
 
@@ -32,8 +32,8 @@ class _FakeGraphRepo:
     def add_mutation_listener(self, listener) -> None:
         del listener
 
-    def get_node(self, session, *, run_id, node_id):
-        del session, run_id, node_id
+    def get_node(self, session, *, run_id, task_id):
+        del session, run_id, task_id
         return self.parent
 
     async def add_node(self, session, run_id, **kwargs):
@@ -49,23 +49,25 @@ class _FakeGraphRepo:
 
 @pytest.mark.asyncio
 async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(monkeypatch) -> None:
-    from ergon_core.core.application.tasks import management as module
+    from ergon_core.core.application.runtime import management as module
 
     session = _Session()
     graph_repo = _FakeGraphRepo()
+    dispatched: list[dict] = []
+
+    async def dispatch_task_ready(run_id, definition_id, task_id):
+        dispatched.append(
+            {"run_id": run_id, "definition_id": definition_id, "task_id": task_id}
+        )
+
     service = TaskManagementService(
         graph_repo=graph_repo,
         dashboard_emitter=SimpleNamespace(graph_mutation=lambda mutation: None),
+        task_ready_dispatcher=dispatch_task_ready,
     )
-    dispatched: list[dict] = []
 
     monkeypatch.setattr(module, "get_session", lambda: _session_factory(session))
-    service._resolve_definition_id = lambda _session, _run_id: uuid4()
-
-    async def _dispatch_task_ready(**kwargs):
-        dispatched.append(kwargs)
-
-    service._dispatch_task_ready = _dispatch_task_ready
+    monkeypatch.setattr(module, "definition_id_for_run", lambda _session, _run_id: uuid4())
 
     handle = await service.spawn_dynamic_task(
         run_id=uuid4(),
@@ -94,22 +96,24 @@ async def test_spawn_dynamic_task_dispatches_ready_event_when_dependency_free(mo
 
 @pytest.mark.asyncio
 async def test_spawn_dynamic_task_with_dependencies_waits_for_propagation(monkeypatch) -> None:
-    from ergon_core.core.application.tasks import management as module
+    from ergon_core.core.application.runtime import management as module
 
     session = _Session()
     graph_repo = _FakeGraphRepo()
+    dispatched: list[dict] = []
+
+    async def dispatch_task_ready(run_id, definition_id, task_id):
+        dispatched.append(
+            {"run_id": run_id, "definition_id": definition_id, "task_id": task_id}
+        )
+
     service = TaskManagementService(
         graph_repo=graph_repo,
         dashboard_emitter=SimpleNamespace(graph_mutation=lambda mutation: None),
+        task_ready_dispatcher=dispatch_task_ready,
     )
-    dispatched: list[dict] = []
 
     monkeypatch.setattr(module, "get_session", lambda: _session_factory(session))
-
-    async def _dispatch_task_ready(**kwargs):
-        dispatched.append(kwargs)
-
-    service._dispatch_task_ready = _dispatch_task_ready
     dependency_id = uuid4()
 
     await service.spawn_dynamic_task(

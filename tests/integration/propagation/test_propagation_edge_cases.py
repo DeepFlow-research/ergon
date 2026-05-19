@@ -11,10 +11,10 @@ from ergon_core.core.application.runtime.status import BLOCKED, CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
-from ergon_core.core.application.graph.models import MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.models import MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.orchestration import PropagateTaskCompletionCommand
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from sqlmodel import select
 
 from tests.integration.propagation._helpers import (
@@ -102,19 +102,19 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
         session.commit()
 
     try:
-        graph_repo = WorkflowGraphRepository()
+        graph_repo = RuntimeGraphRepository()
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_a_id,
+                task_id=node_a_id,
                 new_status=TaskExecutionStatus.FAILED,
                 meta=MutationMeta(actor="test:setup", reason="test: A failed"),
             )
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_b_id,
+                task_id=node_b_id,
                 new_status=TaskExecutionStatus.COMPLETED,
                 meta=MutationMeta(actor="test:setup", reason="test: B completed"),
             )
@@ -129,7 +129,7 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
                 definition_id=defn_id,
                 task_id=node_a_id,
                 execution_id=node_a_id,
-                node_id=node_a_id,
+
             )
         )
 
@@ -140,7 +140,7 @@ async def test_ec1_fan_in_one_dep_fails_target_blocked() -> None:
                 definition_id=defn_id,
                 task_id=node_b_id,
                 execution_id=node_b_id,
-                node_id=node_b_id,
+
             )
         )
 
@@ -194,12 +194,12 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
         session.commit()
 
     try:
-        graph_repo = WorkflowGraphRepository()
+        graph_repo = RuntimeGraphRepository()
         with get_session() as session:
             await graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_a_id,
+                task_id=node_a_id,
                 new_status=TaskExecutionStatus.RUNNING,
                 meta=MutationMeta(actor="test:setup", reason="test setup"),
             )
@@ -212,7 +212,7 @@ async def test_ec2_duplicate_propagate_is_idempotent() -> None:
             definition_id=defn_id,
             task_id=node_a_id,
             execution_id=node_a_id,
-            node_id=node_a_id,
+
         )
 
         # First propagation

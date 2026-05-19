@@ -97,7 +97,7 @@ class BaseSmokeLeafWorker(Worker):
             context.task_id or context.execution_id,
             settings.otel_stdout_stderr_max_length,
         )
-        result = await self.subworker_cls().work(node_id=task_hex, sandbox=sandbox)
+        result = await self.subworker_cls().work(task_id=task_hex, sandbox=sandbox)
         self._last_result = result
 
         # Post a one-line completion message to the shared

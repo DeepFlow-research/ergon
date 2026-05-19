@@ -3,74 +3,9 @@
 from uuid import UUID
 
 from ergon_core.core.application.runtime.status import NodeStatus
-from ergon_core.core.persistence.shared.types import (
-    AssignedWorkerSlug,
-    NodeId,
-    RunId,
-    TaskSlug,
-)
+from ergon_core.core.persistence.shared.types import NodeId, RunId
 from ergon_core.core.jobs.task.cleanup_cancelled.contract import TaskCancelledEvent
 from pydantic import BaseModel, Field
-
-
-class AddSubtaskCommand(BaseModel):
-    """Create one subtask under a parent node.
-
-    definition_id is NOT here — the service resolves it from run_id
-    at dispatch time.
-    """
-
-    run_id: RunId
-    parent_task_id: NodeId
-    task_slug: TaskSlug = Field(min_length=1)
-    description: str = Field(min_length=1)
-    assigned_worker_slug: AssignedWorkerSlug
-    depends_on: list[NodeId] = Field(default_factory=list)
-
-    model_config = {"frozen": True}
-
-
-class AddSubtaskResult(BaseModel):
-    """Result snapshot after creating a subtask task."""
-
-    task_id: NodeId
-    task_slug: TaskSlug
-    status: str
-
-    model_config = {"frozen": True}
-
-
-# ── plan_subtasks ──────────────────────────────────────────────────────────
-
-
-class SubtaskSpec(BaseModel):
-    """One entry in a plan_subtasks call."""
-
-    task_slug: TaskSlug = Field(min_length=1)
-    description: str = Field(min_length=1)
-    assigned_worker_slug: AssignedWorkerSlug
-    depends_on: list[TaskSlug] = Field(default_factory=list)
-
-    model_config = {"frozen": True}
-
-
-class PlanSubtasksCommand(BaseModel):
-    """Batch-create subtasks with local dependency references."""
-
-    run_id: RunId
-    parent_task_id: NodeId
-    subtasks: list[SubtaskSpec]
-
-    model_config = {"frozen": True}
-
-
-class PlanSubtasksResult(BaseModel):
-    """Maps task_slug to created task_id plus identifies root tasks."""
-
-    nodes: dict[TaskSlug, NodeId]
-    roots: list[TaskSlug]
-
-    model_config = {"frozen": True}
 
 
 # ── cancel_task ───────────────────────────────────────────────────────────
@@ -138,7 +73,7 @@ class RestartTaskCommand(BaseModel):
 class RestartTaskResult(BaseModel):
     """Result of restarting a subtask node.
 
-    ``invalidated_node_ids`` lists any downstream targets that were
+    ``invalidated_task_ids`` lists any downstream targets that were
     cancelled because their input became stale (e.g. a COMPLETED
     downstream node whose upstream source is being re-run).
     """

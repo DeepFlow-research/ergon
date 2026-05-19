@@ -10,7 +10,7 @@ from ergon_cli.commands.workflow import (
 )
 from ergon_core.api import WorkerContext
 from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from pydantic_ai import RunContext
 from sqlmodel import Session
 
@@ -57,7 +57,7 @@ def make_workflow_cli_tool(
             command,
             context=WorkflowCommandContext(
                 run_id=worker_context.run_id,
-                node_id=worker_context.task_id,
+                task_id=worker_context.task_id,
                 execution_id=worker_context.execution_id,
                 sandbox_task_key=sandbox_task_key,
                 benchmark_type=benchmark_type,

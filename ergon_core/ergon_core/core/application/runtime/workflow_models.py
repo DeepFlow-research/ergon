@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from ergon_core.core.application.graph.models import GraphTaskRef as WorkflowTaskRef
+from ergon_core.core.application.runtime.models import GraphTaskRef as WorkflowTaskRef
 from pydantic import BaseModel, Field
 
 
@@ -20,7 +20,7 @@ class WorkflowResourceRef(BaseModel):
     resource_id: UUID
     run_id: UUID
     task_execution_id: UUID | None
-    node_id: UUID | None
+    task_id: UUID | None
     task_slug: str | None
     kind: str
     name: str

@@ -1,7 +1,7 @@
 from uuid import UUID, uuid4
 
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.application.graph.traversal import descendant_ids, descendants
+from ergon_core.core.application.runtime.graph_traversal import descendant_ids, descendants
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -49,7 +49,7 @@ def test_descendants_walks_full_containment_subtree_past_terminal_nodes() -> Non
     other_run_child = _node(session, run_id=uuid4(), slug="other", parent_task_id=root.task_id)
     session.commit()
 
-    walked = descendants(session, run_id=run_id, root_node_id=root.task_id)
+    walked = descendants(session, run_id=run_id, root_task_id=root.task_id)
 
     assert [node.task_id for node in walked] == [child.task_id, sibling.task_id, grandchild.task_id]
     assert other_run_child.task_id not in {node.task_id for node in walked}
@@ -63,10 +63,10 @@ def test_descendant_ids_respects_max_depth() -> None:
     grandchild = _node(session, run_id=run_id, slug="grandchild", parent_task_id=child.task_id)
     session.commit()
 
-    assert descendant_ids(session, run_id=run_id, root_node_id=root.task_id, max_depth=1) == {
+    assert descendant_ids(session, run_id=run_id, root_task_id=root.task_id, max_depth=1) == {
         child.task_id
     }
-    assert descendant_ids(session, run_id=run_id, root_node_id=root.task_id, max_depth=2) == {
+    assert descendant_ids(session, run_id=run_id, root_task_id=root.task_id, max_depth=2) == {
         child.task_id,
         grandchild.task_id,
     }

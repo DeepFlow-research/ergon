@@ -7,7 +7,7 @@ import pytest
 
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.jobs.task.execute.job import _fan_out_evaluators
-from ergon_core.core.application.workflows.orchestration import PreparedTaskExecution
+from ergon_core.core.application.runtime.orchestration import PreparedTaskExecution
 
 
 class _FakeStep:
@@ -66,7 +66,7 @@ async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
     )
 
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(task))
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(task))
 
     await _fan_out_evaluators(
         ctx,
@@ -74,7 +74,6 @@ async def test_fanout_uses_object_bound_evaluator_count(monkeypatch) -> None:
             run_id=run_id,
             definition_id=definition_id,
             task_id=task_id,
-            node_id=task_id,
         ),
         _prepared(run_id, definition_id, task_id, execution_id),
         evaluate_task_run_function=object(),
@@ -97,7 +96,7 @@ async def test_fanout_emits_no_jobs_without_inline_evaluators(monkeypatch) -> No
     )
 
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))
-    monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(task))
+    monkeypatch.setattr(module, "RuntimeGraphRepository", lambda: _FakeGraphRepo(task))
 
     await _fan_out_evaluators(
         ctx,
@@ -105,7 +104,6 @@ async def test_fanout_emits_no_jobs_without_inline_evaluators(monkeypatch) -> No
             run_id=run_id,
             definition_id=definition_id,
             task_id=task_id,
-            node_id=task_id,
         ),
         _prepared(run_id, definition_id, task_id, execution_id),
         evaluate_task_run_function=object(),

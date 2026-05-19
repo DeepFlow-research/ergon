@@ -1,9 +1,8 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from pathlib import PurePosixPath
 from typing import Literal
 from uuid import UUID, uuid4
 
-import inngest
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
@@ -19,20 +18,23 @@ from ergon_core.core.persistence.telemetry.models import (
     RunTaskExecution,
 )
 from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
+from ergon_core.core.application.runtime.events import (
+    RuntimeEventDispatcher,
+    TaskReadyDispatcher,
+)
+from ergon_core.core.application.runtime.run_identity import definition_id_for_run
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
-from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
-from ergon_core.core.application.graph.lookup import GraphNodeLookup
-from ergon_core.core.application.graph.propagation import (
+from ergon_core.core.application.runtime.graph_lookup import GraphNodeLookup
+from ergon_core.core.application.runtime.lifecycle import (
     get_initial_ready_tasks,
     is_workflow_complete_v2,
     is_workflow_failed_v2,
     on_task_completed_or_failed,
 )
-from ergon_core.core.application.graph.traversal import descendant_ids
-from ergon_core.core.infrastructure.inngest.client import inngest_client
-from ergon_core.core.application.graph.models import GraphEdgeDto, GraphNodeDto, MutationMeta
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
-from ergon_core.core.application.workflows.orchestration import (
+from ergon_core.core.application.runtime.graph_traversal import descendant_ids
+from ergon_core.core.application.runtime.models import GraphEdgeDto, GraphNodeDto, MutationMeta
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
+from ergon_core.core.application.runtime.orchestration import (
     FinalizedWorkflowResult,
     FinalizeWorkflowCommand,
     InitializedWorkflow,
@@ -43,7 +45,7 @@ from ergon_core.core.application.workflows.orchestration import (
     TaskDescriptor,
     WorkflowTerminalState,
 )
-from ergon_core.core.application.workflows.models import (
+from ergon_core.core.application.runtime.workflow_models import (
     WorkflowBlockerRef,
     WorkflowDependencyRef,
     WorkflowExecutionRef,
@@ -55,7 +57,7 @@ from ergon_core.core.application.workflows.models import (
     WorkflowTaskRef,
     WorkflowTaskWorkspaceRef,
 )
-from ergon_core.core.application.tasks.repository import TaskExecutionRepository
+from ergon_core.core.application.runtime.task_execution_repository import TaskExecutionRepository
 from ergon_core.core.shared.utils import require_not_none, utcnow
 from sqlmodel import Session, col, select
 
@@ -75,13 +77,13 @@ class WorkflowService:
         self,
         *,
         sandbox_manager_factory: Callable[[str], BaseSandboxManager] | None = None,
-        graph_repository: WorkflowGraphRepository | None = None,
-        task_ready_dispatcher: Callable[[UUID, UUID, UUID], Awaitable[None]] | None = None,
+        graph_repository: RuntimeGraphRepository | None = None,
+        task_ready_dispatcher: TaskReadyDispatcher | None = None,
     ) -> None:
         self._sandbox_manager_factory = sandbox_manager_factory or self._sandbox_manager_for
-        self._graph_repo = graph_repository or WorkflowGraphRepository()
+        self._graph_repo = graph_repository or RuntimeGraphRepository()
         self._task_execution_repo = TaskExecutionRepository()
-        self._task_ready_dispatcher = task_ready_dispatcher or self._dispatch_task_ready
+        self._runtime_events = RuntimeEventDispatcher(task_ready_dispatcher)
 
     async def initialize(self, command: InitializeWorkflowCommand) -> InitializedWorkflow:
         """Load a definition, seed graph state, and return initially ready tasks."""
@@ -186,12 +188,12 @@ class WorkflowService:
     async def propagate(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
         """Handle successful task completion and schedule newly ready tasks."""
         with get_session() as session:
-            node_id = command.task_id
+            task_id = command.task_id
 
             await self._graph_repo.update_node_status(
                 session,
                 run_id=command.run_id,
-                node_id=node_id,
+                task_id=task_id,
                 new_status=graph_status.COMPLETED,
                 meta=MutationMeta(
                     actor="system:propagation",
@@ -199,14 +201,14 @@ class WorkflowService:
                 ),
                 only_if_not_terminal=True,
             )
-            newly_ready_node_ids = await on_task_completed_or_failed(
+            newly_ready_task_ids = await on_task_completed_or_failed(
                 session,
                 command.run_id,
-                node_id,
+                task_id,
                 graph_status.COMPLETED,
                 graph_repo=self._graph_repo,
             )
-            ready_descriptors = self._task_descriptors_for_nodes(session, newly_ready_node_ids)
+            ready_descriptors = self._task_descriptors_for_nodes(session, newly_ready_task_ids)
             terminal = WorkflowTerminalState.NONE
             if is_workflow_complete_v2(session, command.run_id):
                 terminal = WorkflowTerminalState.COMPLETED
@@ -224,11 +226,11 @@ class WorkflowService:
     async def propagate_failure(self, command: PropagateTaskCompletionCommand) -> PropagationResult:
         """Handle task failure, block successors, and detect workflow terminal state."""
         with get_session() as session:
-            node_id = command.task_id
+            task_id = command.task_id
             await self._graph_repo.update_node_status(
                 session,
                 run_id=command.run_id,
-                node_id=node_id,
+                task_id=task_id,
                 new_status=graph_status.FAILED,
                 meta=MutationMeta(
                     actor="system:propagation",
@@ -239,7 +241,7 @@ class WorkflowService:
             await on_task_completed_or_failed(
                 session,
                 command.run_id,
-                node_id,
+                task_id,
                 graph_status.FAILED,
                 graph_repo=self._graph_repo,
             )
@@ -255,23 +257,23 @@ class WorkflowService:
                 workflow_terminal_state=terminal,
             )
 
-    async def operator_unblock(self, *, run_id: UUID, node_id: UUID, reason: str) -> None:
+    async def operator_unblock(self, *, run_id: UUID, task_id: UUID, reason: str) -> None:
         with get_session() as session:
             await self._graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_id,
+                task_id=task_id,
                 new_status=graph_status.PENDING,
                 meta=MutationMeta(actor="operator:unblock", reason=reason),
             )
             session.commit()
 
-    async def restart_node(self, *, run_id: UUID, node_id: UUID, reason: str) -> None:
+    async def restart_node(self, *, run_id: UUID, task_id: UUID, reason: str) -> None:
         with get_session() as session:
             await self._graph_repo.update_node_status(
                 session,
                 run_id=run_id,
-                node_id=node_id,
+                task_id=task_id,
                 new_status=graph_status.PENDING,
                 meta=MutationMeta(actor="operator:restart", reason=reason),
             )
@@ -280,11 +282,11 @@ class WorkflowService:
     @staticmethod
     def _task_descriptors_for_nodes(
         session: Session,
-        node_ids: list[UUID],
+        task_ids: list[UUID],
     ) -> list[TaskDescriptor]:
         descriptors: list[TaskDescriptor] = []
-        for node_id in node_ids:
-            node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == node_id)).first()
+        for task_id in task_ids:
+            node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == task_id)).first()
             if node is not None:
                 descriptors.append(
                     TaskDescriptor(
@@ -313,33 +315,33 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID | None = None,
+        task_id: UUID | None = None,
         task_slug: str | None = None,
     ) -> WorkflowTaskRef:
-        node = self._resolve_node(session, run_id=run_id, node_id=node_id, task_slug=task_slug)
+        node = self._resolve_node(session, run_id=run_id, task_id=task_id, task_slug=task_slug)
         return self._task_ref(node)
 
     def get_latest_execution(
         self,
         session: Session,
         *,
-        node_id: UUID,
+        task_id: UUID,
     ) -> RunTaskExecution | None:
-        return self._task_execution_repo.latest_for_node(session, node_id)
+        return self._task_execution_repo.latest_for_node(session, task_id)
 
     def list_dependencies(
         self,
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         direction: Literal["upstream", "downstream", "both"],
     ) -> list[WorkflowDependencyRef]:
         clauses = []
         if direction in {"upstream", "both"}:
-            clauses.append(RunGraphEdge.target_task_id == node_id)
+            clauses.append(RunGraphEdge.target_task_id == task_id)
         if direction in {"downstream", "both"}:
-            clauses.append(RunGraphEdge.source_task_id == node_id)
+            clauses.append(RunGraphEdge.source_task_id == task_id)
         if not clauses:
             raise ValueError(f"unsupported dependency direction: {direction}")
 
@@ -365,7 +367,7 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         scope: ResourceScope,
         kind: str | None = None,
         max_depth: int = 3,
@@ -374,7 +376,7 @@ class WorkflowService:
         execution_ids = self._execution_ids_for_scope(
             session,
             run_id=run_id,
-            node_id=node_id,
+            task_id=task_id,
             scope=scope,
             max_depth=max_depth,
         )
@@ -428,10 +430,10 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> WorkflowTaskWorkspaceRef:
-        node = self._resolve_node(session, run_id=run_id, node_id=node_id, task_slug=None)
-        latest = self.get_latest_execution(session, node_id=node_id)
+        node = self._resolve_node(session, run_id=run_id, task_id=task_id, task_slug=None)
+        latest = self.get_latest_execution(session, task_id=task_id)
         own_resources: list[WorkflowResourceRef] = []
         if latest is not None:
             own_rows = list(
@@ -450,7 +452,7 @@ class WorkflowService:
             input_resources=self.list_resources(
                 session,
                 run_id=run_id,
-                node_id=node_id,
+                task_id=task_id,
                 scope="input",
             ),
         )
@@ -460,10 +462,10 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
     ) -> list[WorkflowBlockerRef]:
-        task = self.get_task(session, run_id=run_id, node_id=node_id)
-        deps = self.list_dependencies(session, run_id=run_id, node_id=node_id, direction="upstream")
+        task = self.get_task(session, run_id=run_id, task_id=task_id)
+        deps = self.list_dependencies(session, run_id=run_id, task_id=task_id, direction="upstream")
         blockers: list[WorkflowBlockerRef] = []
         pending = [dep.source.task_slug for dep in deps if dep.edge_status != "satisfied"]
         if pending:
@@ -482,17 +484,17 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         manager_capable: bool,
     ) -> list[WorkflowNextActionRef]:
-        task = self.get_task(session, run_id=run_id, node_id=node_id)
+        task = self.get_task(session, run_id=run_id, task_id=task_id)
         commands = [
             "inspect task-workspace",
             "inspect resource-list --scope input",
             "inspect resource-list --scope visible --limit 20",
         ]
         if manager_capable:
-            commands.append(f"manage restart-task --task-slug {task.task_slug} --dry-run")
+            commands.append("manage restart-task --dry-run")
         return [
             WorkflowNextActionRef(
                 priority="normal",
@@ -501,45 +503,6 @@ class WorkflowService:
                 suggested_commands=commands,
             )
         ]
-
-    async def add_task(
-        self,
-        session: Session,
-        *,
-        run_id: UUID,
-        parent_task_id: UUID,
-        task_slug: str,
-        description: str,
-        assigned_worker_slug: str,
-        dry_run: bool,
-    ) -> WorkflowMutationRef:
-        parent = self._resolve_node(
-            session,
-            run_id=run_id,
-            node_id=parent_task_id,
-            task_slug=None,
-        )
-        node_ref = WorkflowTaskRef(
-            task_id=uuid4(),
-            task_slug=task_slug,
-            status=TaskExecutionStatus.PENDING.value,
-            level=parent.level + 1,
-            parent_task_id=parent.task_id,
-            assigned_worker_slug=assigned_worker_slug,
-            description=description,
-        )
-        if dry_run:
-            return WorkflowMutationRef(
-                action="add-task",
-                dry_run=True,
-                node=node_ref,
-                message=f"Would add task {task_slug}",
-            )
-
-        raise ValueError(
-            "add-task requires an object-bound Task in the final v2 schema; "
-            "use WorkerContext.spawn_task(Task(...)) for dynamic tasks."
-        )
 
     async def add_edge(
         self,
@@ -553,13 +516,13 @@ class WorkflowService:
         source = self._resolve_node(
             session,
             run_id=run_id,
-            node_id=None,
+            task_id=None,
             task_slug=source_task_slug,
         )
         target = self._resolve_node(
             session,
             run_id=run_id,
-            node_id=None,
+            task_id=None,
             task_slug=target_task_slug,
         )
         edge_ref = WorkflowDependencyRef(
@@ -601,7 +564,7 @@ class WorkflowService:
         description: str,
         dry_run: bool,
     ) -> WorkflowMutationRef:
-        node = self._resolve_node(session, run_id=run_id, node_id=None, task_slug=task_slug)
+        node = self._resolve_node(session, run_id=run_id, task_id=None, task_slug=task_slug)
         if dry_run:
             return WorkflowMutationRef(
                 action="update-task-description",
@@ -613,7 +576,7 @@ class WorkflowService:
         updated = await self._graph_repo.update_node_field(
             session,
             run_id=run_id,
-            node_id=node.task_id,
+            task_id=node.task_id,
             field="description",
             value=description,
             meta=self._meta("update-task-description"),
@@ -631,7 +594,7 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        current_node_id: UUID,
+        current_task_id: UUID,
         current_execution_id: UUID,
         sandbox_task_key: UUID,
         benchmark_type: str,
@@ -734,32 +697,13 @@ class WorkflowService:
     def _meta(action: str) -> MutationMeta:
         return MutationMeta(actor="workflow-cli", reason=action)
 
-    def _resolve_definition_id(self, session: Session, run_id: UUID) -> UUID:
-        run = session.get(RunRecord, run_id)
-        if run is None:
-            raise ValueError(f"run {run_id} not found")
-        return run.definition_id
-
-    async def _dispatch_task_ready(self, run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
-        event = TaskReadyEvent(
-            run_id=run_id,
-            definition_id=definition_id,
-            task_id=node_id,
-        )
-        await inngest_client.send(
-            inngest.Event(
-                name=TaskReadyEvent.name,
-                data=event.model_dump(mode="json"),
-            )
-        )
-
     def _resource_ref(self, session: Session, resource: RunResource) -> WorkflowResourceRef:
         producer = self._producer_node_for_resource(session, resource)
         return WorkflowResourceRef(
             resource_id=resource.id,
             run_id=resource.run_id,
             task_execution_id=resource.task_execution_id,
-            node_id=producer.task_id if producer is not None else None,
+            task_id=producer.task_id if producer is not None else None,
             task_slug=producer.task_slug if producer is not None else None,
             kind=resource.kind,
             name=resource.name,
@@ -792,14 +736,14 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID | None,
+        task_id: UUID | None,
         task_slug: str | None,
     ) -> RunGraphNode:
-        if node_id is None and task_slug is None:
-            raise ValueError("node_id or task_slug is required")
+        if task_id is None and task_slug is None:
+            raise ValueError("task_id or task_slug is required")
         stmt = select(RunGraphNode).where(RunGraphNode.run_id == run_id)
-        if node_id is not None:
-            stmt = stmt.where(RunGraphNode.task_id == node_id)
+        if task_id is not None:
+            stmt = stmt.where(RunGraphNode.task_id == task_id)
         if task_slug is not None:
             stmt = stmt.where(RunGraphNode.task_slug == task_slug)
         rows = list(session.exec(stmt).all())
@@ -817,42 +761,42 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         scope: ResourceScope,
         max_depth: int,
     ) -> set[UUID] | None:
         if scope == "visible":
             return None
-        node_ids = self._node_ids_for_scope(
+        task_ids = self._task_ids_for_scope(
             session,
             run_id=run_id,
-            node_id=node_id,
+            task_id=task_id,
             scope=scope,
             max_depth=max_depth,
         )
         executions = []
-        for current_node_id in node_ids:
-            execution = self.get_latest_execution(session, node_id=current_node_id)
+        for current_task_id in task_ids:
+            execution = self.get_latest_execution(session, task_id=current_task_id)
             if execution is not None and execution.status == TaskExecutionStatus.COMPLETED:
                 executions.append(execution.id)
         return set(executions)
 
-    def _node_ids_for_scope(
+    def _task_ids_for_scope(
         self,
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         scope: ResourceScope,
         max_depth: int,
     ) -> set[UUID]:
         if scope == "own":
-            return {node_id}
+            return {task_id}
         if scope in {"input", "upstream"}:
             edges = session.exec(
                 select(RunGraphEdge).where(
                     RunGraphEdge.run_id == run_id,
-                    RunGraphEdge.target_task_id == node_id,
+                    RunGraphEdge.target_task_id == task_id,
                 )
             ).all()
             return {edge.source_task_id for edge in edges}
@@ -860,13 +804,13 @@ class WorkflowService:
             children = session.exec(
                 select(RunGraphNode).where(
                     RunGraphNode.run_id == run_id,
-                    RunGraphNode.parent_task_id == node_id,
+                    RunGraphNode.parent_task_id == task_id,
                 )
             ).all()
             return {child.task_id for child in children}
         if scope == "descendants":
             return self._descendant_ids(
-                session, run_id=run_id, node_id=node_id, max_depth=max_depth
+                session, run_id=run_id, task_id=task_id, max_depth=max_depth
             )
         raise ValueError(f"unsupported resource scope: {scope}")
 
@@ -875,10 +819,10 @@ class WorkflowService:
         session: Session,
         *,
         run_id: UUID,
-        node_id: UUID,
+        task_id: UUID,
         max_depth: int,
     ) -> set[UUID]:
-        return descendant_ids(session, run_id=run_id, root_node_id=node_id, max_depth=max_depth)
+        return descendant_ids(session, run_id=run_id, root_task_id=task_id, max_depth=max_depth)
 
     @staticmethod
     def _producer_node_for_resource(

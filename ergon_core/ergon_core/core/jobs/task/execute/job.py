@@ -53,7 +53,7 @@ from functools import partial
 from typing import Any
 from uuid import UUID
 
-from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.runtime.graph_repository import RuntimeGraphRepository
 from .contract import TaskExecuteResult, TaskReadyEvent
 from ergon_core.core.jobs.resources.persist_outputs.contract import (
     PersistOutputsRequest,
@@ -66,8 +66,8 @@ from ergon_core.core.jobs.task.worker_execute.contract import (
     WorkerExecuteJobRequest,
     WorkerExecuteJobResult,
 )
-from ergon_core.core.application.tasks.execution import TaskExecutionService
-from ergon_core.core.application.workflows.orchestration import (
+from ergon_core.core.application.runtime.task_execution import TaskExecutionService
+from ergon_core.core.application.runtime.orchestration import (
     FailTaskExecutionCommand,
     FinalizeTaskExecutionCommand,
     PreparedTaskExecution,
@@ -186,7 +186,7 @@ async def _fan_out_evaluators(
     """
 
     with get_session() as session:
-        view = await WorkflowGraphRepository().node(
+        view = await RuntimeGraphRepository().node(
             session,
             run_id=payload.run_id,
             task_id=payload.task_id,

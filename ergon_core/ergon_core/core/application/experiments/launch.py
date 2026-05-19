@@ -7,7 +7,7 @@ import inngest
 from ergon_core.core.jobs.workflow.start.contract import WorkflowStartedEvent
 from ergon_core.core.application.experiments.errors import DefinitionNotFoundError
 from ergon_core.core.application.experiments.models import ExperimentRunResult
-from ergon_core.core.application.workflows.runs import create_run
+from ergon_core.core.application.runtime.run_records import create_run
 from ergon_core.core.application.experiments.handles import DefinitionHandle
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition

@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from .contract import WorkflowStartedEvent, WorkflowStartResult
 from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
-from ergon_core.core.application.workflows.orchestration import InitializeWorkflowCommand
-from ergon_core.core.application.workflows.service import WorkflowService
+from ergon_core.core.application.runtime.orchestration import InitializeWorkflowCommand
+from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
 from ergon_core.core.jobs._events import send_job_events
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,

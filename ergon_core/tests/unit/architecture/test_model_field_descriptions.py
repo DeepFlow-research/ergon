@@ -16,7 +16,7 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphNode,
 )
 from ergon_core.core.persistence.telemetry.models import RunRecord, RunResource
-from ergon_core.core.application.graph.models import (
+from ergon_core.core.application.runtime.models import (
     GraphAnnotationDto,
     GraphEdgeDto,
     GraphMutationRecordDto,
