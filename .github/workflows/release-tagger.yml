@@ -1,0 +1,63 @@
+name: Release Tagger
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag-release:
+    name: Tag release from pyproject version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+
+      - name: Read release version
+        id: version
+        run: |
+          version="$(python -c 'import re, sys, tomllib; from pathlib import Path; version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]; pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?"; sys.exit(f"pyproject.toml project.version is not SemVer-like: {version!r}") if re.fullmatch(pattern, version) is None else print(version)')"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag if needed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git fetch --force --tags origin
+
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            tagged_sha="$(git rev-list -n 1 "${TAG}")"
+            if [ "${tagged_sha}" != "${GITHUB_SHA}" ]; then
+              echo "::error::${TAG} already exists at ${tagged_sha}, not ${GITHUB_SHA}."
+              exit 1
+            fi
+            echo "${TAG} already points at ${GITHUB_SHA}; nothing to tag."
+            exit 0
+          fi
+
+          git tag -a "${TAG}" -m "Release ${TAG}" "${GITHUB_SHA}"
+          git push origin "${TAG}"
+
+      - name: Create GitHub release if needed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists."
+            exit 0
+          fi
+
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --generate-notes

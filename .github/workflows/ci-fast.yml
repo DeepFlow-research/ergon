@@ -3,7 +3,7 @@ name: CI Fast
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   lint-and-type-check:
