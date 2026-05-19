@@ -136,54 +136,24 @@ test("dashboard harness only serves explicitly seeded runs", () => {
   assert.equal(deserializeRunState(seededRun).id, FIXTURE_IDS.runId);
 });
 
-test("workflow started event parser validates recursive task trees", () => {
+test("workflow started event parser validates run snapshots", () => {
+  const seed = createDashboardSeed();
+  const run = seed.runs?.[0];
+  assert.ok(run);
+
   const payload = {
     run_id: FIXTURE_IDS.runId,
     definition_id: FIXTURE_IDS.definitionId,
     workflow_name: "parallel",
     started_at: "2026-03-18T12:00:00.000Z",
-    total_tasks: 2,
-    total_leaf_tasks: 1,
-    task_tree: {
-      id: "123e4567-e89b-42d3-a456-426614174000",
-      name: "Root",
-      description: "Root task",
-      status: "pending",
-      level: 0,
-      assigned_to: {
-        id: FIXTURE_IDS.workerId,
-        name: "planner",
-        type: "MockWorker",
-      },
-      children: [
-        {
-          id: "123e4567-e89b-42d3-a456-426614174001",
-          name: "Leaf",
-          description: "Leaf task",
-          status: "pending",
-          level: 1,
-          assigned_to: {
-            id: FIXTURE_IDS.workerId,
-            name: "planner",
-            type: "MockWorker",
-          },
-          children: [],
-          depends_on: [],
-          parent_id: "123e4567-e89b-42d3-a456-426614174000",
-          is_leaf: true,
-          resources: [],
-        },
-      ],
-      depends_on: [],
-      parent_id: null,
-      is_leaf: false,
-      resources: [],
-    },
+    total_tasks: run.totalTasks,
+    total_leaf_tasks: run.totalLeafTasks,
+    snapshot: run,
   };
 
   const parsed = parseDashboardWorkflowStartedData(payload);
 
-  assert.equal(parsed.task_tree.children[0]?.name, "Leaf");
+  assert.equal(parsed.snapshot.tasks[FIXTURE_IDS.solveTaskId]?.name, "Write proof");
 });
 
 test("generated dashboard event schemas cover graph and context live events", () => {

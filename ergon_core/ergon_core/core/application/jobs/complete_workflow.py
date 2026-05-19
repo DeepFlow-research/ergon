@@ -3,8 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
-from ergon_core.core.infrastructure.dashboard import emit_cohort_updated_for_run
-from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
+from ergon_core.core.application.compat.cohorts import emit_deprecated_cohort_updated_for_run
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunRecord
@@ -12,6 +11,7 @@ from ergon_core.core.application.events.infrastructure_events import RunCleanupE
 from ergon_core.core.application.events.task_events import WorkflowCompletedEvent
 from ergon_core.core.infrastructure.inngest.client import InngestEvent, inngest_client
 from ergon_core.core.application.jobs.models import WorkflowCompleteResult
+from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
 from ergon_core.core.application.workflows.orchestration import FinalizeWorkflowCommand
 from ergon_core.core.application.workflows.service import WorkflowService
 from ergon_core.core.infrastructure.tracing import (
@@ -20,6 +20,8 @@ from ergon_core.core.infrastructure.tracing import (
     workflow_complete_context,
     workflow_root_context,
 )
+from ergon_core.core.shared.utils import utcnow
+from ergon_core.core.views.dashboard_events.contracts import DashboardWorkflowCompletedEvent
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
         )
     )
 
-    await emit_cohort_updated_for_run(payload.run_id)
+    await emit_deprecated_cohort_updated_for_run(payload.run_id)
 
     with get_session() as _session:
         _run = _session.get(RunRecord, payload.run_id)
@@ -45,11 +47,14 @@ async def run_complete_workflow_job(payload: WorkflowCompletedEvent) -> Workflow
             if _run and _run.started_at and _run.completed_at
             else 0.0
         )
-    await get_dashboard_emitter().workflow_completed(
-        run_id=payload.run_id,
-        status="completed",
-        duration_seconds=_duration,
-        final_score=finalized.final_score,
+    await get_dashboard_event_publisher().publish(
+        DashboardWorkflowCompletedEvent(
+            run_id=payload.run_id,
+            status="completed",
+            completed_at=utcnow(),
+            duration_seconds=_duration,
+            final_score=finalized.final_score,
+        )
     )
 
     await inngest_client.send(

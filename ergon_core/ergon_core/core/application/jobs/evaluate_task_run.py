@@ -37,8 +37,8 @@ from ergon_core.core.application.jobs.models import (
     EvaluateTaskRunResult,
     TaskEvaluateRequest,
 )
+from ergon_core.core.application.ports.dashboard import get_dashboard_event_publisher
 from ergon_core.core.application.tasks.repository import WorkerOutputRepository
-from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
 from ergon_core.core.infrastructure.tracing import (
     CompletedSpan,
@@ -47,6 +47,7 @@ from ergon_core.core.infrastructure.tracing import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunTaskExecution
+from ergon_core.core.views.dashboard_events.contracts import DashboardTaskEvaluationUpdatedEvent
 
 if TYPE_CHECKING:
     from ergon_core.api.rubric import Evaluator
@@ -184,10 +185,12 @@ async def _run_evaluation(
         binding_key=binding_key,
         service_result=service_result,
     )
-    await get_dashboard_emitter().task_evaluation_updated(
-        run_id=run_id,
-        task_id=view.task_id,
-        evaluation=persisted.dashboard_dto,
+    await get_dashboard_event_publisher().publish(
+        DashboardTaskEvaluationUpdatedEvent(
+            run_id=run_id,
+            task_id=view.task_id,
+            evaluation=persisted.dashboard_dto,
+        )
     )
 
     # Trace span needs the evaluator_id for stable key derivation;

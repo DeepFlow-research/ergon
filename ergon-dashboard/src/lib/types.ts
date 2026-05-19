@@ -33,7 +33,6 @@ import type {
   DashboardWorkflowStartedData as GeneratedDashboardWorkflowStartedData,
   RunListEntry,
   TaskStatusSocketData,
-  TaskTreeNode,
 } from "@/lib/contracts/events";
 
 // =============================================================================
@@ -61,7 +60,6 @@ export enum TaskTrigger {
 export type BenchmarkName = RestBenchmarkName;
 export type RunLifecycleStatus = RestRunLifecycleStatus;
 export type ExperimentCohortStatus = ExperimentCohortStatusValue;
-export type { TaskTreeNode };
 
 // =============================================================================
 // Event Names
@@ -174,7 +172,7 @@ export interface TaskTransitionRecord {
 }
 
 /**
- * Task state in the store (flattened from TaskTreeNode).
+ * Task state in the store (flattened from the run snapshot task map).
  * Represents the current state of a task during execution.
  */
 export interface TaskState {

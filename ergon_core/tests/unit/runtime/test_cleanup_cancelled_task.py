@@ -47,7 +47,7 @@ async def test_cleanup_cancelled_task_marks_execution_without_releasing_sandbox(
             return cleanup
 
     class Emitter:
-        async def task_cancelled(self, _payload):
+        async def publish(self, _event):
             return None
 
     class SessionContext:
@@ -59,7 +59,7 @@ async def test_cleanup_cancelled_task_marks_execution_without_releasing_sandbox(
 
     monkeypatch.setattr(cleanup_module, "TaskCleanupService", lambda: Service())
     monkeypatch.setattr(cleanup_module, "get_session", lambda: SessionContext())
-    monkeypatch.setattr(cleanup_module, "get_dashboard_emitter", lambda: Emitter())
+    monkeypatch.setattr(cleanup_module, "get_dashboard_event_publisher", lambda: Emitter())
 
     result = await cleanup_module.run_cleanup_cancelled_task_job(_FakeStepCtx(), payload)
 

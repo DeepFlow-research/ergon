@@ -55,7 +55,7 @@ const onWorkflowStarted = inngest.createFunction(
       run_id,
       definition_id,
       workflow_name,
-      task_tree,
+      snapshot,
       started_at,
       total_tasks,
       total_leaf_tasks,
@@ -72,7 +72,7 @@ const onWorkflowStarted = inngest.createFunction(
       run_id,
       definition_id,
       workflow_name,
-      task_tree,
+      snapshot,
       started_at,
       total_tasks,
       total_leaf_tasks

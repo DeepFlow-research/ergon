@@ -45,6 +45,9 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     async def _persist(*args, **kwargs):
         pass
 
+    async def _publish(_event):
+        return None
+
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(_FakeSession()))
     monkeypatch.setattr(module, "WorkflowGraphRepository", lambda: _FakeGraphRepo(seen_sandbox_ids))
     monkeypatch.setattr(module.WorkerOutputRepository, "persist", _persist)
@@ -55,11 +58,8 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
     monkeypatch.setattr(module, "RunResourceRepository", lambda: object())
     monkeypatch.setattr(
         module,
-        "get_dashboard_emitter",
-        lambda: SimpleNamespace(
-            on_context_event=lambda event: None,
-            register_execution=lambda **kwargs: None,
-        ),
+        "get_dashboard_event_publisher",
+        lambda: SimpleNamespace(publish=_publish),
     )
 
     result = await run_worker_execute_job(
@@ -139,10 +139,13 @@ async def test_step_aware_task_management_sends_collected_ready_events(monkeypat
     run_id = uuid4()
     definition_id = uuid4()
 
+    async def _publish(_event):
+        return None
+
     monkeypatch.setattr(
         management,
-        "get_dashboard_emitter",
-        lambda: SimpleNamespace(graph_mutation=lambda mutation: None),
+        "get_dashboard_event_publisher",
+        lambda: SimpleNamespace(publish=_publish),
     )
     service = module._StepAwareTaskManagementService(SimpleNamespace(step=_Step()))
     await service._dispatch_collected_ready_events(

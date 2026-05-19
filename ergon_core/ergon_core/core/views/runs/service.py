@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-from typing import cast
 from uuid import UUID
 
 from ergon_core.core.views.runs.models import (
@@ -14,15 +13,12 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionWorker,
 )
 from ergon_core.core.persistence.graph.models import (
-    GraphTargetType,
-    MutationType,
     RunGraphEdge,
     RunGraphMutation,
     RunGraphNode,
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.shared.types import RunId
 from ergon_core.core.persistence.telemetry.models import (
     RunRecord,
     RunResource,
@@ -31,7 +27,7 @@ from ergon_core.core.persistence.telemetry.models import (
     Thread,
     ThreadMessage,
 )
-from ergon_core.core.application.graph.models import GraphMutationRecordDto, GraphMutationValue
+from ergon_core.core.application.graph.models import GraphMutationRecordDto
 from ergon_core.core.application.evaluation.scoring import (
     EvaluationScoreSummary,
     aggregate_evaluation_scores,
@@ -47,6 +43,7 @@ from ergon_core.core.views.runs.snapshot import (
     _task_timestamps,
 )
 from ergon_core.core.views.resources import require_viewable_resource_size
+from ergon_core.core.views.dashboard_events.graph_mutations import graph_mutation_record_from_row
 from pydantic import BaseModel
 from sqlmodel import col, select
 
@@ -200,22 +197,7 @@ class RunReadService:
                 ).all()
             )
 
-        return [
-            GraphMutationRecordDto(
-                id=m.id,
-                run_id=cast(RunId, m.run_id),
-                sequence=m.sequence,
-                mutation_type=cast(MutationType, m.mutation_type),
-                target_type=cast(GraphTargetType, m.target_type),
-                target_id=m.target_id,
-                actor=m.actor,
-                old_value=cast("GraphMutationValue | None", m.old_value),
-                new_value=cast(GraphMutationValue, m.new_value),
-                reason=m.reason,
-                created_at=m.created_at,
-            )
-            for m in mutations
-        ]
+        return [graph_mutation_record_from_row(m) for m in mutations]
 
     def get_resource_blob(self, run_id: UUID, resource_id: UUID) -> RunResourceBlob | None:
         with get_session() as session:
