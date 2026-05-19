@@ -1,1 +1,1 @@
-"""Built-in model backends: vLLM, transformers, cloud passthrough."""
+"""Built-in model backends: vLLM, transformers, and hosted model resolution."""
