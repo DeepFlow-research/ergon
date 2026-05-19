@@ -768,38 +768,119 @@ def downgrade() -> None:
 The bridge serializer must be named `_task_to_definition_json` so PR 11
 can grep-and-delete it as a single symbol when only `Task` remains.
 
-## Task 4c: Lift `_DetachableSandboxBridge` Into `Sandbox.detach()`
+## Task 4c: Lift PR 4 Bridges Into Object-Bound API
 
-PR 4 introduced `_DetachableSandboxBridge` as a stub so the reshaped
-`evaluate_task_run` could compile before `Sandbox.detach()` existed.
-Now that `Sandbox` is a real ABC, lift the bridge logic into the
-base-class method (already defined in Task 1 Step 2 above) and delete
-the bridge.
+PR 4 landed the synchronous-fanout invariant against the *current*
+codebase, which still lacks `task.evaluators`, `task.sandbox`, and the
+`lifecycle_hub` acquire/release primitive. To avoid half-building
+PR 5 inside PR 4, every cross-PR dependency was introduced as a named,
+greppable bridge. PR 5 lifts each one (see PR 4 plan
+`05-pr-04-inline-criteria.md` § "Implementation Note — Bridge-Everything
+Approach" for the full catalogue):
+
+| Bridge introduced by PR 4 | Where it lived | PR 5 replacement |
+| --- | --- | --- |
+| `_evaluator_bridge.resolve_evaluator` | `core/application/jobs/_evaluator_bridge.py` | `task.evaluators[index]` (lifted in step 3 below) |
+| `EvaluationService.evaluate(*, context, evaluator)` (the v2 entry point; legacy executor-based entry was renamed to `evaluate_legacy` in PR 4) | `core/application/evaluation/service.py` | unchanged at PR 5 — PR 11 deletes `evaluate_legacy`, the `CriterionExecutor` Protocol, and `InngestCriterionExecutor` together |
+| `terminate_sandbox_by_id` called from `worker_execute`'s `finally` | `core/infrastructure/sandbox/lifecycle.py` (existing helper) | optional at PR 5 — when `lifecycle_hub` lands, swap the call site to `lifecycle_hub.release(sandbox)`; if PR 5 doesn't add the hub, leave it for the PR that does |
+
+**`_DetachableSandboxBridge` is *not* in PR 4.** The PR 4 plan
+originally specified it, but the bridge could not have a real caller
+without `task.sandbox` and a sandbox `_runtime` — both PR 5 fields.
+PR 5 adds `Sandbox`, `task.sandbox`, the `_runtime` attach, and
+`Sandbox.detach()` in one coherent change; the steps below introduce
+`Sandbox.detach()` from scratch instead of "lifting" a bridge.
+
+### Step 1: Wire `Sandbox.detach()` into `evaluate_task_run`
+
+PR 4 deliberately omitted the eval-side `detach()` call because no
+`task.sandbox` existed to call it on. Now that `Sandbox` is a real
+ABC and `task.sandbox` is bound (Task 1 + Task 2 above), wire the
+detach call into the eval body so the local `_runtime` handle is
+released as soon as criteria finish — the external sandbox stays
+alive (the orchestrator's `try/finally` owns termination).
 
 **Files:**
 
 - Modify: `ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py`
 - Delete: `ergon_core/ergon_core/core/infrastructure/sandbox/runtime.py:_DetachableSandboxBridge`
 
-- [ ] **Step 1: Replace bridge calls with the base method**
+- [ ] **Step 1: Add the detach call to the eval body**
 
 ```python
-# Before (PR 4):
-await _DetachableSandboxBridge.detach(task.sandbox)
-
 # After (PR 5):
 await task.sandbox.detach()
 ```
 
-- [ ] **Step 2: Delete the bridge class**
+Place it on both the success and failure paths in
+`evaluate_task_run.py` so the local `_runtime` is always released —
+the orchestrator's `terminate_sandbox_by_id` keeps owning the external
+sandbox.
 
-`git rm` the bridge or delete the symbol. Run:
+- [ ] **Step 2: Verify no stale bridge references**
 
 ```bash
 rg "_DetachableSandboxBridge" ergon_core ergon_builtins
 ```
 
+Expected: empty (the bridge was never introduced — confirm nothing
+attempted to import it).
+
+### Step 3: Retire `_evaluator_bridge.py`
+
+PR 4 routed evaluator lookup through a sibling bridge module so
+`evaluate_task_run.py`'s body stayed free of `ComponentCatalogService`
+and `DefinitionRepository` (the architecture guard checks the body of
+the job file only, not its imports). Now that `Task` carries
+`evaluators: tuple[Evaluator, ...]` directly (Task 2 above), the
+bridge is dead weight.
+
+**Files:**
+
+- Modify: `ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py`
+- Delete: `ergon_core/ergon_core/core/application/jobs/_evaluator_bridge.py`
+
+- [ ] **Step 3a: Replace bridge call with the object-bound field**
+
+```python
+# Before (PR 4):
+from ergon_core.core.application.jobs._evaluator_bridge import resolve_evaluator
+evaluator = await resolve_evaluator(session, task, payload.evaluator_index)
+
+# After (PR 5):
+evaluator = task.evaluators[payload.evaluator_index]
+```
+
+- [ ] **Step 3b: Delete the bridge module**
+
+`git rm ergon_core/ergon_core/core/application/jobs/_evaluator_bridge.py`
+then run:
+
+```bash
+rg "_evaluator_bridge|resolve_evaluator" ergon_core ergon_builtins
+```
+
 Expected: empty.
+
+- [ ] **Step 3c: Add a runtime-read-boundary guard**
+
+Append to `tests/unit/architecture/test_runtime_read_boundaries.py`:
+
+```python
+def test_evaluate_task_run_uses_object_bound_evaluators() -> None:
+    text = (
+        ROOT
+        / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py"
+    ).read_text()
+    assert "_evaluator_bridge" not in text, (
+        "PR 5 retires the PR 4 evaluator resolution bridge — pick "
+        "evaluators off task.evaluators[index] directly."
+    )
+    assert "task.evaluators[" in text, (
+        "PR 5 binds evaluators directly to the Task; the eval worker "
+        "must dispatch on task.evaluators[index]."
+    )
+```
 
 ## Task 4b: Retire `_worker_from_payload_bridge` And Tighten Runtime Read Guard
 

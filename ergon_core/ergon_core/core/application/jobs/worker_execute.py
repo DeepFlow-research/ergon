@@ -15,6 +15,10 @@ from ergon_core.api.worker import WorkerContext, WorkerOutput, WorkerStreamItem
 from ergon_core.api.worker.worker import Worker
 from ergon_core.core.application.components.catalog import ComponentCatalogService
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
+from ergon_core.core.application.tasks.repository import (
+    TaskExecutionRepository,
+    WorkerOutputRepository,
+)
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.domain.generation.context_parts import ContextPartChunk
 from ergon_core.core.persistence.shared.db import get_session
@@ -132,6 +136,31 @@ async def run_worker_execute_job(payload: WorkerExecuteJobRequest) -> WorkerExec
                 "context": {},
             },
         )
+
+    # Persist worker output + stamp sandbox_id BEFORE returning to the
+    # orchestrator. The orchestrator's next step is the per-evaluator
+    # fanout (`execute_task._fan_out_evaluators`); each eval worker
+    # receives only a thin `TaskEvaluateRequest` and reloads everything
+    # else from the run-tier read boundary:
+    #
+    #   WorkerOutput      ← WorkerOutputRepository.load(execution_id)
+    #   live sandbox_id   ← session.get(RunTaskExecution, ...).sandbox_id
+    #                       (then fed to graph_repo.node(..., sandbox_id=))
+    #
+    # Both reads happen *after* the orchestrator's gather starts, so
+    # both writes have to commit before this function returns.
+    with get_session() as session:
+        await WorkerOutputRepository().persist(
+            session,
+            execution_id=payload.execution_id,
+            output=output,
+        )
+        await TaskExecutionRepository().set_sandbox_id(
+            session,
+            execution_id=payload.execution_id,
+            sandbox_id=payload.sandbox_id,
+        )
+        session.commit()
 
     sink = get_trace_sink()
     sink.emit_span(

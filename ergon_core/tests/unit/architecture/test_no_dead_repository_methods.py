@@ -73,6 +73,13 @@ _KNOWN_UNUSED_FOR_NOW: dict[str, str] = {
     # the ledger update at the same time.
     "TaskExecutionRepository.latest_for_definition_task": "PR 11 structural audit: callerless today; likely deleted with "
     "definition_task_id collapse",
+    "DefinitionRepository.task_with_instance": (
+        "PR 4 dropped the last production caller (the legacy "
+        "evaluate_task_run body). The PR 4 _evaluator_bridge does its "
+        "own focused query against ExperimentDefinitionEvaluator; PR 5's "
+        "object-bound Task removes the need for definition-tier reads "
+        "from runtime code entirely, at which point this method goes."
+    ),
     "WorkflowGraphRepository.delete_annotation": "PR 11 structural audit: annotation API; consumer side TBD",
     "WorkflowGraphRepository.get_annotation": "PR 11 structural audit: annotation API; consumer side TBD",
     "WorkflowGraphRepository.get_annotation_at": "PR 11 structural audit: annotation API; consumer side TBD",

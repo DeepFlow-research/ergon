@@ -210,6 +210,15 @@ class RunTaskExecution(SQLModel, table=True):
     final_assistant_message: str | None = None
     output_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     error_json: dict | None = Field(default=None, sa_column=Column(JSON))
+    sandbox_id: str | None = None
+    # TODO(post-stack): relocate this column behind a lazy
+    # `await context.worker_output()` accessor on `CriterionContext`.
+    # Today the runtime pre-loads worker output in `evaluate_task_run` and
+    # stuffs it onto `worker_result`, but every other context capability
+    # (`run_command`, `read_resource`, ...) is fetched lazily by the
+    # criterion. When that redesign lands, this column may live in a
+    # dedicated output store rather than on `RunTaskExecution`.
+    worker_output_json: dict | None = Field(default=None, sa_column=Column(JSON))
 
     # -- JSON accessor: output_json --
 

@@ -4,6 +4,7 @@ from uuid import UUID
 
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion import CriterionOutcome
+from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionEvaluator,
@@ -128,15 +129,33 @@ class EvaluationService:
         finally:
             session.close()
 
-    async def evaluate(
+    # TODO(PR 11): delete this method together with `CriterionExecutor`
+    # and `InngestCriterionExecutor` (Δ.7 deletion list).
+    async def evaluate_legacy(
         self,
         task_context: TaskEvaluationContext,
         evaluator: Evaluator,
         task: Task,
         benchmark_name: str,
     ) -> EvaluationServiceResult:
+        """v1 entry point — held only for tests still exercising the
+        executor-based signature.
+
+        **Status.** Zero production callers as of PR 4. The only
+        remaining caller is
+        ``tests/unit/runtime/test_rubric_evaluation_service.py``,
+        which specifically tests that an injected ``CriterionExecutor``
+        receives the expected ``CriterionSpec``s. Production code uses
+        the v2 ``evaluate`` (below).
+
+        **Deletion gate.** PR 11 (Δ.7) deletes this method together
+        with the ``CriterionExecutor`` Protocol and
+        ``InngestCriterionExecutor`` — at which point the executor-spec
+        test goes too. Don't add new callers.
+        """
+
         if self.criterion_executor is None:
-            raise RuntimeError("EvaluationService.evaluate requires a criterion executor")
+            raise RuntimeError("EvaluationService.evaluate_legacy requires a criterion executor")
         criteria = list(evaluator.criteria_for(task))
         specs = [
             CriterionSpec(
@@ -155,6 +174,48 @@ class EvaluationService:
             benchmark_name=benchmark_name,
             criteria=specs,
         )
+        return EvaluationServiceResult(
+            result=evaluator.aggregate_task(task, criterion_results),
+            specs=specs,
+        )
+
+    async def evaluate(
+        self,
+        *,
+        context: CriterionContext,
+        evaluator: Evaluator,
+    ) -> EvaluationServiceResult:
+        """Run an evaluator against a single ``CriterionContext``.
+
+        The v2 evaluation entry point. Iterates
+        ``evaluator.criteria_for(context.task)`` and awaits
+        ``criterion.evaluate(context)`` on each — there's no
+        ``CriterionExecutor`` indirection because the Inngest retry
+        boundary already lives one level up: the orchestrator
+        (``execute_task._fan_out_evaluators``) gives each evaluator
+        its own ``ctx.step.invoke``, so retries replay whole evaluators,
+        not individual criteria.
+
+        Sibling method ``evaluate_legacy`` keeps the v1 executor-based
+        signature alive for tests that exercise it; PR 11 deletes it.
+        """
+
+        task = context.task
+        criteria = list(evaluator.criteria_for(task))
+        specs = [
+            CriterionSpec(
+                criterion=c,
+                criterion_idx=i,
+                max_score=c.score_spec.max_score,
+                stage_idx=0,
+                stage_name="default",
+                aggregation_weight=c.weight,
+            )
+            for i, c in enumerate(criteria)
+        ]
+        criterion_results: list[CriterionOutcome] = []
+        for c in criteria:
+            criterion_results.append(await c.evaluate(context))
         return EvaluationServiceResult(
             result=evaluator.aggregate_task(task, criterion_results),
             specs=specs,

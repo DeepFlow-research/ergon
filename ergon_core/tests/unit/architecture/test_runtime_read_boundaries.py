@@ -32,3 +32,57 @@ def test_worker_execute_does_not_read_definition_repository() -> None:
         "worker_execute imports ExperimentDefinitionTask; the run-tier "
         "read boundary forbids definition-tier reads."
     )
+
+
+def test_evaluate_task_run_uses_thin_payload_and_run_tier_read() -> None:
+    """PR 4 textual guard: the `evaluate_task_run.py` body reads only
+    from the run tier and only via the thin id-only payload."""
+
+    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py").read_text()
+
+    # Thin payload only.
+    assert "TaskEvaluateRequest" in body
+    assert "EvaluateTaskRunRequest" not in body, (
+        "PR 4 retires the legacy multi-field payload from the eval body; "
+        "the import shim still exists in models.py for back-compat."
+    )
+
+    # No definition-tier reads.
+    assert "DefinitionRepository" not in body, (
+        "evaluate_task_run must not load definition rows directly — the "
+        "PR 4 _evaluator_bridge module owns that until PR 5 lifts it."
+    )
+    assert "ExperimentDefinitionTask" not in body
+    # No registry-based evaluator resolution inside the body.
+    assert "ComponentCatalogService" not in body
+
+    # Uses the same run-tier loader the orchestrator uses.
+    assert "WorkflowGraphRepository" in body
+    assert ".node(" in body
+
+
+def test_execute_task_fans_out_via_step_invoke() -> None:
+    """PR 4 textual guard: the orchestrator fans out evaluators
+    synchronously via ``ctx.step.invoke`` + ``asyncio.gather`` and
+    bounds sandbox lifetime via ``try/finally``.
+
+    Note: the plan code originally placed this logic in
+    `worker_execute.py`; in our codebase `execute_task.py` is the
+    orchestrator (it invokes sandbox_setup, worker_execute, and
+    persist_outputs as siblings). See PR 4 plan § "Implementation
+    Note — Bridge-Everything Approach" for the location rationale.
+    """
+
+    body = (ROOT / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
+    assert "ctx.step.invoke" in body
+    assert "evaluate_task_run_function" in body
+    assert "ctx.group.parallel" in body, (
+        "Use Inngest-native `ctx.group.parallel` for the fan-out, not "
+        "`asyncio.gather` over `step.invoke` coroutines."
+    )
+    assert "finally:" in body
+    assert "terminate_sandbox_by_id" in body, (
+        "sandbox termination must live inside the orchestrator now; PR 11 "
+        "removes the helper entirely once a `lifecycle_hub.release` "
+        "replacement lands."
+    )

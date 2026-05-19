@@ -24,6 +24,74 @@ evaluation service, pytest lifecycle tests.
 
 ---
 
+## Implementation Note — Bridge-Everything Approach (PR 4 → PR 5)
+
+This plan was originally written against the v2 final-state shape:
+`task.evaluators[i]`, `task.sandbox.detach()`, and a `lifecycle_hub`
+that owns sandbox `acquire` / `release`. None of those exist in
+the codebase at the head of PR 3 — they all land in PR 5
+(object-bound API) or later.
+
+PR 4 still has to land the **synchronous-fanout invariant** (the bug
+fix that motivates the entire reshape: sandbox lifetime bounded by the
+orchestrator's `try/finally`, not a sibling job). To do that without
+half-building PR 5, every cross-PR dependency is introduced as a named,
+greppable bridge that PR 5 deletes:
+
+| Bridge | Location | Replaced by (PR 5) |
+| --- | --- | --- |
+| `_evaluator_bridge.resolve_evaluator(session, *, run_id, task, evaluator_index)` | `core/application/jobs/_evaluator_bridge.py` | `task.evaluators[index]` after PR 5 Task 2 lands object-bound evaluators |
+| `EvaluationService.evaluate(*, context, evaluator)` — the v2 entry point; the v1 executor-based entry point gets renamed to `evaluate_legacy` to make the dying code carry the awkward name instead of the living code | `core/application/evaluation/service.py` (sibling of `evaluate_legacy`) | PR 11 deletes `evaluate_legacy`, the `CriterionExecutor` Protocol, and `InngestCriterionExecutor` together; `evaluate` keeps the name |
+| `terminate_sandbox_by_id(sandbox_id)` called directly inside `worker_execute`'s `finally` (instead of `lifecycle_hub.release(sandbox)`) | existing `core/infrastructure/sandbox/lifecycle.py` helper | when `lifecycle_hub` lands, swap the call site (no API rename needed) |
+| Sandbox **acquisition** stays in the existing `sandbox_setup` Inngest function — `worker_execute` does **not** absorb sandbox creation. The orchestrator `execute_task_fn` still invokes `sandbox_setup_fn` first, then `worker_execute_fn` with a stamped `sandbox_id`. `worker_execute`'s `try/finally` only owns the *release* side. | `core/application/jobs/execute_task.py` unchanged | PR 5/6 can either lift release into `lifecycle_hub` or fully merge `sandbox_setup` into `worker_execute` |
+
+**`_DetachableSandboxBridge` (Task 4) is intentionally *not* introduced
+at PR 4.** The plan code expected `sandbox._runtime` on a `Sandbox`
+ABC that doesn't exist yet — and would not exist in PR 4 either,
+since `task.sandbox` is a PR 5 field. Adding the bridge in PR 4 would
+just be a class no caller can invoke. PR 5 introduces `Sandbox`,
+`task.sandbox`, the `_runtime` attach, and `Sandbox.detach()` in one
+coherent change. PR 4 simply omits the eval-side `detach()` call —
+the orchestrator's `try/finally` already bounds external-sandbox
+lifetime via `terminate_sandbox_by_id`, so the eval worker has
+nothing to release locally.
+
+**Orchestrator location — `execute_task`, not `worker_execute`.** The
+plan code shows `worker_execute` owning `acquire`/`release` and the
+fanout. In our codebase `worker_execute` runs *between*
+`sandbox_setup` and `persist_outputs` — both are sibling Inngest
+functions invoked by `execute_task`. Putting the release in
+`worker_execute`'s `finally` would terminate the sandbox before
+`persist_outputs` runs (file uploads need the sandbox alive).
+
+PR 4 therefore lifts the synchronous fanout + release into
+`execute_task.py`'s `try/finally` instead. `worker_execute` only:
+(a) persists the terminal `WorkerOutput` via `WorkerOutputRepository`
+and (b) stamps `sandbox_id` on the execution row via
+`TaskExecutionRepository.set_sandbox_id`. The orchestrator's `finally`
+calls `terminate_sandbox_by_id(sandbox_id)` after the gather, and
+the `check_evaluators` Inngest function is unregistered. The
+Task 6 architecture guards target `execute_task.py` accordingly
+(the file where the fanout actually lives) — same invariant, more
+accurate location.
+
+**Why bridges instead of waiting for PR 5:** the v1 release-in-sibling-
+job bug is a correctness problem (eval workers can run against a
+terminated sandbox under retry). Landing the orchestrator-owned
+`finally` *now* fixes the bug; the cosmetic shape (`task.evaluators`,
+`sandbox.detach()`) follows in PR 5 without changing observable
+behavior. Each bridge has a `TODO(PR 5): <delete-when>` comment so
+PR 5 can grep them out one-by-one.
+
+**Test impact:** the Task 6 architecture guards still pass — they
+check the *body* of `evaluate_task_run.py` for forbidden strings
+(`DefinitionRepository`, `ComponentCatalogService`,
+`ExperimentDefinitionTask`). Those strings move into the sibling
+`_evaluator_bridge.py`, keeping the eval job body clean and the
+final-state shape recognisable.
+
+---
+
 ## Files
 
 **Modify:**

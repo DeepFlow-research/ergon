@@ -168,36 +168,113 @@ def test_worker_execute_reads_task_from_run_tier_only() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="PR 4: synchronous fanout via ctx.step.invoke",
-    strict=True,
-)
 def test_worker_execute_emits_one_evaluate_invocation_per_evaluator() -> None:
-    """PR 4 invariant: synchronous fanout via ctx.step.invoke."""
+    """PR 4 invariant: synchronous fanout via ctx.step.invoke.
 
-    pytest.fail("requires PR 4's fanout shape")
+    PR 4 moved the fanout from the sibling ``check_evaluators`` Inngest
+    function into the orchestrator (``execute_task``), so the
+    ``ctx.step.invoke`` / ``ctx.group.parallel`` shape lives in
+    ``execute_task.py`` (see PR 4 plan § "Implementation Note —
+    Bridge-Everything Approach" for the orchestrator-location
+    rationale). The behavioural test (one invoke per evaluator, no
+    invokes when there are zero evaluator bindings) lives in
+    ``test_execute_task_evaluator_fanout.py``; this textual guard
+    catches regressions of the fanout shape itself.
+    """
+
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    text = (root / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
+    assert "ctx.step.invoke" in text
+    assert "ctx.group.parallel" in text, (
+        "Use the Inngest-native parallel-step primitive, not `asyncio.gather`."
+    )
+    assert 'f"eval-' in text, "fanout step IDs must include the evaluator index"
+    assert "evaluate_task_run_function" in text, (
+        "execute_task must invoke evaluate_task_run as a child function"
+    )
 
 
-@pytest.mark.xfail(
-    reason="PR 4: TaskEvaluateRequest is the thin id-only payload",
-    strict=True,
-)
 def test_evaluate_task_run_payload_is_id_only() -> None:
     """PR 4 invariant: TaskEvaluateRequest has exactly four fields:
     run_id, task_id, execution_id, evaluator_index."""
 
-    pytest.fail("requires PR 4's TaskEvaluateRequest")
+    from ergon_core.core.application.jobs.models import TaskEvaluateRequest
+
+    assert set(TaskEvaluateRequest.model_fields) == {
+        "run_id",
+        "task_id",
+        "execution_id",
+        "evaluator_index",
+    }
 
 
-@pytest.mark.xfail(
-    reason="PR 4: orchestrator try/finally bounds sandbox lifetime through gather",
-    strict=True,
-)
 def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
-    """Δ.5: orchestrator's try/finally bounds sandbox lifetime through
-    gather."""
+    """Δ.5: sandbox release is bounded by the parallel evaluator fanout.
 
-    pytest.fail("requires PR 4's lifecycle ownership")
+    PR 4's first attempt put ``terminate_sandbox_by_id`` directly in
+    the orchestrator's ``try/finally``.  That broke smoke tests because
+    Inngest's ``step.invoke`` raises ``ResponseInterrupt`` (a
+    ``BaseException``) to suspend the coroutine — which fires ``finally``
+    and terminates the sandbox *before* the suspended sub-function
+    actually runs.
+
+    The fix (post-PR-4): cleanup lives in a sibling Inngest function
+    (``sandbox_cleanup_on_completed_fn`` / ``sandbox_cleanup_on_failed_fn``)
+    triggered by the terminal task events.  ``execute_task`` emits
+    ``task/completed`` only AFTER ``_fan_out_evaluators`` returns, so
+    cleanup is still bounded by the parallel fanout — but via event
+    chaining instead of an inline ``finally``, which is what Inngest's
+    step-replay model actually supports.
+
+    This guard enforces the new shape:
+    - ``ctx.group.parallel`` (the evaluator fanout) exists in execute_task
+    - ``_emit_task_completed`` is called AFTER the fanout
+    - sandbox_cleanup module exists and is wired to ``task/completed`` +
+      ``task/failed``
+    - ``terminate_sandbox_by_id`` is no longer called from execute_task
+    """
+
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[4]
+    execute_task_text = (
+        root / "ergon_core/ergon_core/core/application/jobs/execute_task.py"
+    ).read_text()
+    parallel_idx = execute_task_text.find("ctx.group.parallel")
+    emit_completed_idx = execute_task_text.find("_emit_task_completed(payload")
+    assert parallel_idx != -1, "orchestrator must use ctx.group.parallel for the evaluator fanout"
+    assert emit_completed_idx != -1, (
+        "orchestrator must call _emit_task_completed on the success path"
+    )
+    assert parallel_idx < emit_completed_idx, (
+        "ctx.group.parallel must run BEFORE emit:task/completed so the "
+        "sibling cleanup function only fires after evaluators finish"
+    )
+    assert "terminate_sandbox_by_id(task_sandbox_id)" not in execute_task_text, (
+        "orchestrator must NOT call terminate_sandbox_by_id inline — "
+        "the sibling sandbox_cleanup function does it on terminal events"
+    )
+
+    cleanup_path = root / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
+    assert cleanup_path.exists(), "sandbox_cleanup job module must exist"
+    cleanup_text = cleanup_path.read_text()
+    assert "terminate_sandbox_by_id" in cleanup_text, (
+        "sandbox_cleanup must call terminate_sandbox_by_id"
+    )
+
+    handler_path = (
+        root / "ergon_core/ergon_core/core/infrastructure/inngest/handlers/sandbox_cleanup.py"
+    )
+    assert handler_path.exists(), "sandbox_cleanup Inngest handler module must exist"
+    handler_text = handler_path.read_text()
+    assert 'event="task/completed"' in handler_text, (
+        "sandbox_cleanup_on_completed_fn must trigger on task/completed"
+    )
+    assert 'event="task/failed"' in handler_text, (
+        "sandbox_cleanup_on_failed_fn must trigger on task/failed"
+    )
 
 
 @pytest.mark.xfail(
