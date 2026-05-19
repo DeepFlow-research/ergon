@@ -22,7 +22,7 @@ Adding a new benchmark = a new subdirectory containing:
 - `sandbox.py` — `<Slug>Sandbox(Sandbox)` per-benchmark
 - `toolkit.py` — `<Slug>Toolkit(BaseModel)` serialisable config
 - `_tools.py` — runtime tool builders (lazy-imported by `toolkit.py`)
-- `workers.py` — `make_<slug>_worker()` factory (one per agentic
+- `worker_factory.py` — `make_<slug>_worker()` factory (one per agentic
   strategy; bind `ReActWorker` / `CoTWorker` / etc. to this benchmark's
   toolkit + sandbox + system prompt)
 - `rubric.py` + optional `criteria/` — evaluator + criteria
@@ -34,7 +34,7 @@ runtime dispatch dict; no per-benchmark `experiment.py` file.
 ```python
 import asyncio
 from ergon_builtins.benchmarks.minif2f import MiniF2FBenchmark
-from ergon_builtins.benchmarks.minif2f.workers import make_minif2f_worker
+from ergon_builtins.benchmarks.minif2f.worker_factory import make_minif2f_worker
 from ergon_core.api import persist_benchmark
 # launch_run lives in core.application.experiments.launch
 

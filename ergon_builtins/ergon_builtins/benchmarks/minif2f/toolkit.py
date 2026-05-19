@@ -7,7 +7,7 @@ never round-trip through JSON.
 
 from typing import Any
 
-from ergon_builtins.workers.baselines.toolkit import Toolkit
+from ergon_builtins.workers.toolkit import Toolkit
 
 
 class MiniF2FToolkit(Toolkit):
@@ -26,7 +26,7 @@ class MiniF2FToolkit(Toolkit):
         """Build live pydantic_ai Tool instances bound to the v2 sandbox."""
         # reason: circular import — benchmarks/minif2f/toolkit.py → benchmarks/minif2f/_tools.py →
         # benchmarks/minif2f/constants.py → benchmarks/minif2f/__init__.py →
-        # benchmark.py → workers.py → benchmarks/minif2f/toolkit.py
+        # benchmark.py → worker_factory.py → benchmarks/minif2f/toolkit.py
         from ergon_builtins.benchmarks.minif2f._tools import build_tools
 
         return build_tools(self, sandbox=sandbox, task=task)

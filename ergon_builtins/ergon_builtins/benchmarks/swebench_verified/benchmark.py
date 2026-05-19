@@ -20,7 +20,7 @@ from ergon_builtins.benchmarks.swebench_verified.task_schemas import (
     SWEBenchInstance,
     SWEBenchTaskPayload,
 )
-from ergon_builtins.benchmarks.swebench_verified.workers import (
+from ergon_builtins.benchmarks.swebench_verified.worker_factory import (
     make_swebench_rubric,
     make_swebench_worker,
 )

@@ -19,7 +19,7 @@ from ergon_builtins.benchmarks.researchrubrics.task_schemas import (
     ResearchRubricsTaskPayload,
     RubricCriterion,
 )
-from ergon_builtins.benchmarks.researchrubrics.workers import (
+from ergon_builtins.benchmarks.researchrubrics.worker_factory import (
     make_research_rubric,
     make_research_worker,
 )

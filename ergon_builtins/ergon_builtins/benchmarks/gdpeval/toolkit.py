@@ -7,7 +7,7 @@ and never round-trip through JSON.
 
 from typing import Any
 
-from ergon_builtins.workers.baselines.toolkit import Toolkit
+from ergon_builtins.workers.toolkit import Toolkit
 
 
 class GDPEvalToolkit(Toolkit):

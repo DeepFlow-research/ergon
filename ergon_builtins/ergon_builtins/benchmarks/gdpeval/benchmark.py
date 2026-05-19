@@ -21,7 +21,7 @@ from ergon_builtins.benchmarks.gdpeval.loader import (
 )
 from ergon_builtins.benchmarks.gdpeval.sandbox import GDPEvalSandbox
 from ergon_builtins.benchmarks.gdpeval.task_schemas import GDPTaskConfig
-from ergon_builtins.benchmarks.gdpeval.workers import (
+from ergon_builtins.benchmarks.gdpeval.worker_factory import (
     make_gdpeval_rubric,
     make_gdpeval_worker,
 )

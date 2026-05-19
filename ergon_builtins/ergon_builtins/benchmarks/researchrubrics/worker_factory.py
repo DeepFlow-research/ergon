@@ -9,10 +9,11 @@ v2 callers use ``make_research_worker()`` directly from the benchmark
 object graph.
 """
 
+from ergon_builtins.benchmarks.researchrubrics.prompts import RESEARCH_SYSTEM_PROMPT
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
 from ergon_builtins.benchmarks.researchrubrics.toolkit import ResearchRubricsToolkit
 
-from ergon_builtins.workers.baselines.react_worker import ReActWorker
+from ergon_builtins.workers.react_worker import ReActWorker
 
 __all__ = [
     "make_research_rubric",
@@ -20,30 +21,19 @@ __all__ = [
 ]
 
 
-_RESEARCH_SYSTEM_PROMPT = (
-    "Role: You are a focused ResearchRubrics research agent.\n\n"
-    "Goal: Produce `/workspace/final_output/report.md` with a concise, "
-    "well-sourced answer to your scoped task. Include a # Findings section "
-    "and a ## Sources section with citations.\n\n"
-    "Tools:\n"
-    "- `bash`: run shell commands inside the research workspace.\n"
-    "- `write_report` / `read_report`: create and inspect markdown report "
-    "files under `/workspace/`.\n\n"
-    "Stop rules: Use the minimum evidence sufficient to answer correctly, "
-    "then write the report and stop."
-)
+DEFAULT_WORKER_MODEL = "openai:gpt-4o-mini"
 
 
 def make_research_worker(
     *,
-    model: str = "openai:gpt-4o-mini",
+    model: str = DEFAULT_WORKER_MODEL,
     max_iterations: int = 16,
 ) -> ReActWorker:
     """Return a serializable ReActWorker for ResearchRubrics (v2 authoring shape)."""
     return ReActWorker(
         name="research-runner",
         model=model,
-        system_prompt=_RESEARCH_SYSTEM_PROMPT,
+        system_prompt=RESEARCH_SYSTEM_PROMPT,
         max_iterations=max_iterations,
         toolkit=ResearchRubricsToolkit(),
     )
