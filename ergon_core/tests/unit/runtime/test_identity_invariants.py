@@ -209,10 +209,10 @@ def test_sandbox_identity_is_preserved_across_worker_to_evaluate_boundary() -> N
 
     root = Path(__file__).resolve().parents[4]
     worker_text = (
-        root / "ergon_core/ergon_core/core/application/jobs/worker_execute.py"
+        root / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py"
     ).read_text()
     eval_text = (
-        root / "ergon_core/ergon_core/core/application/jobs/evaluate_task_run.py"
+        root / "ergon_core/ergon_core/core/jobs/task/evaluate/job.py"
     ).read_text()
 
     # Producer side: worker_execute stamps sandbox_id on the row.
@@ -242,7 +242,7 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     import inspect
     from pathlib import Path
 
-    from ergon_core.core.application.jobs.models import TaskEvaluateRequest
+    from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
     from ergon_core.core.application.tasks.repository import TaskExecutionRepository
 
     # (a) execution_id is on the payload.
@@ -251,7 +251,7 @@ def test_execution_id_is_unique_per_attempt_and_shared_across_evaluators() -> No
     # (b) the fanout reuses the same execution_id across evaluator_indices.
     root = Path(__file__).resolve().parents[4]
     orchestrator = (
-        root / "ergon_core/ergon_core/core/application/jobs/execute_task.py"
+        root / "ergon_core/ergon_core/core/jobs/task/execute/job.py"
     ).read_text()
     fanout_start = orchestrator.find("def _fan_out_evaluators")
     assert fanout_start != -1, "fanout helper must exist on the orchestrator"

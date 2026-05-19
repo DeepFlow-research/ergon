@@ -10,10 +10,7 @@ from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
 from sqlmodel import select
-from ergon_core.core.application.events.infrastructure_events import (
-    RunCancelledEvent,
-    RunCleanupEvent,
-)
+from ergon_core.core.jobs.run.cleanup.contract import RunCancelledEvent, RunCleanupEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.shared.settings import settings
 from ergon_core.core.shared.utils import utcnow

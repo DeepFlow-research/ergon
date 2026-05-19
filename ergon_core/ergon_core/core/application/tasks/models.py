@@ -9,7 +9,7 @@ from ergon_core.core.persistence.shared.types import (
     RunId,
     TaskSlug,
 )
-from ergon_core.core.application.events.task_events import TaskCancelledEvent
+from ergon_core.core.jobs.task.cleanup_cancelled.contract import TaskCancelledEvent
 from pydantic import BaseModel, Field
 
 

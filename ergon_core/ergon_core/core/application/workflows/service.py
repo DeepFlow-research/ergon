@@ -20,7 +20,7 @@ from ergon_core.core.persistence.telemetry.models import (
 )
 from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
 from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager, DefaultSandboxManager
-from ergon_core.core.application.events.task_events import TaskReadyEvent
+from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.application.graph.lookup import GraphNodeLookup
 from ergon_core.core.application.graph.propagation import (
     get_initial_ready_tasks,

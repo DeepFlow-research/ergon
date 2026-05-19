@@ -2,8 +2,8 @@ from uuid import uuid4
 from types import SimpleNamespace
 
 import pytest
-from ergon_core.core.application.jobs import persist_outputs
-from ergon_core.core.infrastructure.inngest.contracts import PersistOutputsRequest
+from ergon_core.core.jobs.resources.persist_outputs import job as persist_outputs
+from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsRequest
 
 
 class _Manager:

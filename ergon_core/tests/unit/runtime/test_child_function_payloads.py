@@ -3,12 +3,10 @@
 from uuid import uuid4
 
 import pytest
-from ergon_core.core.infrastructure.inngest.contracts import (
-    PersistOutputsRequest,
-    SandboxSetupRequest,
-    TaskEvaluateRequest,
-    WorkerExecuteRequest,
-)
+from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsRequest
+from ergon_core.core.jobs.sandbox.setup.contract import SandboxSetupRequest
+from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
+from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteRequest
 from pydantic import ValidationError
 
 

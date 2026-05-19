@@ -2,7 +2,7 @@
 
 import inspect
 
-from ergon_core.core.application.jobs import execute_task
+from ergon_core.core.jobs.task.execute import job as execute_task
 
 
 def test_execute_task_module_exposes_named_phase_helpers() -> None:

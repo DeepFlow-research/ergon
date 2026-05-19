@@ -4,8 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.jobs.models import PersistOutputsRequest
-from ergon_core.core.application.jobs.persist_outputs import run_persist_outputs_job
+from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsRequest
+from ergon_core.core.jobs.resources.persist_outputs.job import run_persist_outputs_job
 
 
 class _FakeGraphRepo:
@@ -45,7 +45,7 @@ class _FakePublishService:
 async def test_persist_outputs_publishes_public_sandbox_through_resource_service(
     monkeypatch,
 ) -> None:
-    from ergon_core.core.application.jobs import persist_outputs as module
+    from ergon_core.core.jobs.resources.persist_outputs import job as module
 
     seen_sandbox_ids: list[str | None] = []
     monkeypatch.setattr(module, "get_session", lambda: nullcontext(object()))

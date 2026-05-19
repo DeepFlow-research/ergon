@@ -3,8 +3,8 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.events.task_events import TaskFailedEvent
-from ergon_core.core.application.jobs.propagate_execution import run_propagate_task_failure_job
+from ergon_core.core.jobs.task.propagate.contract import TaskFailedEvent
+from ergon_core.core.jobs.task.propagate.job import run_propagate_task_failure_job
 from ergon_core.core.application.workflows.orchestration import (
     PropagateTaskCompletionCommand,
     PropagationResult,
@@ -36,10 +36,10 @@ async def test_failed_task_propagation_does_not_terminate_sandbox_directly() -> 
 
     with (
         patch(
-            "ergon_core.core.application.jobs.propagate_execution.WorkflowService"
+            "ergon_core.core.jobs.task.propagate.job.WorkflowService"
         ) as workflow_service,
         patch(
-            "ergon_core.core.application.jobs.propagate_execution.inngest_client.send",
+            "ergon_core.core.jobs.task.propagate.job.inngest_client.send",
             new=AsyncMock(),
         ) as send,
     ):

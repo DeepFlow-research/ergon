@@ -2,8 +2,8 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.events.task_events import TaskCancelledEvent
-from ergon_core.core.application.jobs import cleanup_cancelled_task as cleanup_module
+from ergon_core.core.jobs.task.cleanup_cancelled.contract import TaskCancelledEvent
+from ergon_core.core.jobs.task.cleanup_cancelled import job as cleanup_module
 from ergon_core.core.application.tasks.models import CleanupResult
 
 

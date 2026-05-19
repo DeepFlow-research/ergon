@@ -20,13 +20,11 @@ from uuid import uuid4
 import inngest
 import pytest
 
-from ergon_core.core.application.events.task_events import TaskReadyEvent
-from ergon_core.core.application.jobs import execute_task as execute_task_module
-from ergon_core.core.application.jobs.models import (
-    PersistOutputsResult,
-    SandboxReadyResult,
-    WorkerExecuteJobResult,
-)
+from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
+from ergon_core.core.jobs.task.execute import job as execute_task_module
+from ergon_core.core.jobs.resources.persist_outputs.contract import PersistOutputsResult
+from ergon_core.core.jobs.sandbox.setup.contract import SandboxReadyResult
+from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteJobResult
 from ergon_core.core.application.tasks.execution import TaskExecutionService
 from ergon_core.core.application.workflows.orchestration import PreparedTaskExecution
 

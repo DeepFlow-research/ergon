@@ -43,12 +43,12 @@ from ergon_core.core.application.tasks.errors import (
     TaskRunningError,
     UnknownTaskSlugError,
 )
-from ergon_core.core.application.events.task_events import (
+from ergon_core.core.jobs.task.cleanup_cancelled.contract import (
     CancelCause,
     PropagationCancelCause,
     TaskCancelledEvent,
-    TaskReadyEvent,
 )
+from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.application.graph.traversal import descendants
 from ergon_core.core.application.graph.models import MutationMeta

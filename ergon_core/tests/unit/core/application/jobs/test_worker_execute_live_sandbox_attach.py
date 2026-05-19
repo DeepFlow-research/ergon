@@ -4,10 +4,10 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.events.task_events import TaskReadyEvent
+from ergon_core.core.jobs.task.execute.contract import TaskReadyEvent
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.application.jobs.models import WorkerExecuteJobRequest
-from ergon_core.core.application.jobs.worker_execute import run_worker_execute_job
+from ergon_core.core.jobs.task.worker_execute.contract import WorkerExecuteJobRequest
+from ergon_core.core.jobs.task.worker_execute.job import run_worker_execute_job
 
 
 class _FakeWorker:
@@ -38,7 +38,7 @@ class _FakeSession:
 
 @pytest.mark.asyncio
 async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> None:
-    from ergon_core.core.application.jobs import worker_execute as module
+    from ergon_core.core.jobs.task.worker_execute import job as module
 
     seen_sandbox_ids: list[str | None] = []
 
@@ -87,7 +87,7 @@ async def test_worker_execute_reloads_task_with_live_sandbox_id(monkeypatch) -> 
 async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
     monkeypatch,
 ) -> None:
-    from ergon_core.core.application.jobs import worker_execute as module
+    from ergon_core.core.jobs.task.worker_execute import job as module
 
     class _NonLiveRepo:
         async def node(self, _session, *, run_id, task_id, sandbox_id=None):
@@ -126,7 +126,7 @@ async def test_worker_execute_rejects_object_bound_worker_without_live_sandbox(
 
 @pytest.mark.asyncio
 async def test_step_aware_task_management_sends_collected_ready_events(monkeypatch) -> None:
-    from ergon_core.core.application.jobs import worker_execute as module
+    from ergon_core.core.jobs.task.worker_execute import job as module
     from ergon_core.core.application.tasks import management
 
     sent: list[tuple[str, object]] = []

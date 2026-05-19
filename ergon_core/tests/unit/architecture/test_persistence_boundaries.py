@@ -19,22 +19,25 @@ ALLOWLIST = {
     # Context events are streamed from the application job as each model turn
     # lands; this older path is intentionally deferred until the context
     # event repository owns its transaction boundary.
-    Path("ergon_core/ergon_core/core/application/jobs/worker_execute.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/worker_execute/job.py"),
     # Workflow lifecycle jobs still own small transactional updates.
     # New jobs should use repositories/services instead.
-    Path("ergon_core/ergon_core/core/application/jobs/start_workflow.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/run_cleanup.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/cleanup_cancelled_task.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/cancel_orphan_subtasks.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/complete_workflow.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/sandbox_setup.py"),
-    Path("ergon_core/ergon_core/core/application/jobs/fail_workflow.py"),
+    Path("ergon_core/ergon_core/core/jobs/workflow/start/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/run/cleanup/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/cleanup_cancelled/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/cancel_orphans/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/workflow/complete/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/sandbox/setup/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/workflow/fail/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/resources/persist_outputs/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/evaluate/job.py"),
+    Path("ergon_core/ergon_core/core/jobs/task/execute/job.py"),
 }
 
 CHECKED_ROOTS = (
     Path("ergon_core/ergon_core/core/infrastructure/http/routes"),
     Path("ergon_core/ergon_core/core/infrastructure/dashboard"),
-    Path("ergon_core/ergon_core/core/infrastructure/inngest/handlers"),
+    Path("ergon_core/ergon_core/core/jobs"),
 )
 
 

@@ -223,7 +223,7 @@ def test_worker_execute_reads_task_from_run_tier_only() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[4]
-    text = (root / "ergon_core/ergon_core/core/application/jobs/worker_execute.py").read_text()
+    text = (root / "ergon_core/ergon_core/core/jobs/task/worker_execute/job.py").read_text()
     forbidden = ("DefinitionRepository", "task_with_instance", "ExperimentDefinitionTask")
     offenders = [s for s in forbidden if s in text]
     assert offenders == [], (
@@ -249,7 +249,7 @@ def test_worker_execute_emits_one_evaluate_invocation_per_evaluator() -> None:
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[4]
-    text = (root / "ergon_core/ergon_core/core/application/jobs/execute_task.py").read_text()
+    text = (root / "ergon_core/ergon_core/core/jobs/task/execute/job.py").read_text()
     assert "ctx.step.invoke" in text
     assert "ctx.group.parallel" in text, (
         "Use the Inngest-native parallel-step primitive, not `asyncio.gather`."
@@ -264,7 +264,7 @@ def test_evaluate_task_run_payload_is_id_only() -> None:
     """PR 4 invariant: TaskEvaluateRequest has exactly four fields:
     run_id, task_id, execution_id, evaluator_index."""
 
-    from ergon_core.core.application.jobs.models import TaskEvaluateRequest
+    from ergon_core.core.jobs.task.evaluate.contract import TaskEvaluateRequest
 
     assert set(TaskEvaluateRequest.model_fields) == {
         "run_id",
@@ -303,7 +303,7 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
 
     root = Path(__file__).resolve().parents[4]
     execute_task_text = (
-        root / "ergon_core/ergon_core/core/application/jobs/execute_task.py"
+        root / "ergon_core/ergon_core/core/jobs/task/execute/job.py"
     ).read_text()
     parallel_idx = execute_task_text.find("ctx.group.parallel")
     emit_completed_idx = execute_task_text.find("_emit_task_completed(payload")
@@ -320,7 +320,7 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
         "the sibling sandbox_cleanup function does it on terminal events"
     )
 
-    cleanup_path = root / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
+    cleanup_path = root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/job.py"
     assert cleanup_path.exists(), "sandbox_cleanup job module must exist"
     cleanup_text = cleanup_path.read_text()
     assert "terminate_external_sandbox" in cleanup_text, (
@@ -328,7 +328,7 @@ def test_sandbox_release_happens_after_all_evaluators_complete() -> None:
     )
 
     handler_path = (
-        root / "ergon_core/ergon_core/core/infrastructure/inngest/handlers/sandbox_cleanup.py"
+        root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/inngest.py"
     )
     assert handler_path.exists(), "sandbox_cleanup Inngest handler module must exist"
     handler_text = handler_path.read_text()
@@ -468,10 +468,10 @@ def test_run_completion_releases_every_acquired_sandbox() -> None:
 
     root = Path(__file__).resolve().parents[4]
     sandbox_cleanup_text = (
-        root / "ergon_core/ergon_core/core/application/jobs/sandbox_cleanup.py"
+        root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/job.py"
     ).read_text()
     handler_text = (
-        root / "ergon_core/ergon_core/core/infrastructure/inngest/handlers/sandbox_cleanup.py"
+        root / "ergon_core/ergon_core/core/jobs/sandbox/cleanup/inngest.py"
     ).read_text()
 
     assert "terminate_external_sandbox" in sandbox_cleanup_text

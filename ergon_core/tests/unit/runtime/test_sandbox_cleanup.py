@@ -9,11 +9,8 @@ from uuid import uuid4
 
 import pytest
 
-from ergon_core.core.application.events.task_events import (
-    TaskCompletedEvent,
-    TaskFailedEvent,
-)
-from ergon_core.core.application.jobs import sandbox_cleanup as sandbox_cleanup_module
+from ergon_core.core.jobs.task.propagate.contract import TaskCompletedEvent, TaskFailedEvent
+from ergon_core.core.jobs.sandbox.cleanup import job as sandbox_cleanup_module
 from ergon_core.core.infrastructure.sandbox.lifecycle import (
     SandboxTerminationReason,
     SandboxTerminationResult,

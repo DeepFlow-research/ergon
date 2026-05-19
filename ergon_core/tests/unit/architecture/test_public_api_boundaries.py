@@ -437,31 +437,7 @@ def test_views_services_may_read_persistence_rows() -> None:
 
 
 def _inngest_job_boundary_offenders(core_root: Path) -> list[str]:
-    """The split between `application/jobs` (business logic) and
-    `infrastructure/inngest/handlers` (framework wiring) used to forbid
-    `import inngest` in jobs entirely. That was a fig leaf: jobs reach
-    into Inngest's API via `ctx.step.invoke` / `ctx.group.parallel` /
-    etc., so they're already coupled in spirit. PR 4 admits the
-    coupling and allows `import inngest` in jobs *for typing only* —
-    `inngest.Context` and `inngest.Function` as parameter types.
-
-    Still forbidden in jobs (these are the real coupling concerns the
-    split was meant to prevent — handler-layer ownership of decorators,
-    contracts, and runtime symbols):
-
-    - `@inngest_client.create_function(...)` decorators
-    - imports from `infrastructure.inngest.handlers` (would create a
-      circular dependency once handlers import jobs)
-    - imports from `infrastructure.inngest.contracts` (jobs own their
-      models in `application/jobs/models.py`)
-    - any `inngest.<runtime-symbol>` usage other than as a type
-      annotation
-    """
-
-    allowed_job_infrastructure_imports = (
-        "from ergon_core.core.infrastructure.inngest.client import",
-        "from ergon_core.core.infrastructure.inngest.errors import",
-    )
+    """PR 10 keeps decorators in job-local adapters, not in job bodies."""
 
     # Runtime symbols on the `inngest` package whose use inside a job
     # would re-introduce the coupling we're trying to keep in handlers.
@@ -477,7 +453,7 @@ def _inngest_job_boundary_offenders(core_root: Path) -> list[str]:
     )
 
     offenders: list[str] = []
-    for path in (core_root / "application" / "jobs").glob("*.py"):
+    for path in (core_root / "jobs").rglob("job.py"):
         text = path.read_text()
         lines = text.splitlines()
         if any(line.startswith("from inngest ") for line in lines):
@@ -493,42 +469,39 @@ def _inngest_job_boundary_offenders(core_root: Path) -> list[str]:
                 )
         if "@inngest_client.create_function" in text:
             offenders.append(f"{path.relative_to(ROOT)} owns an Inngest decorator")
-        if "ergon_core.core.infrastructure.inngest.handlers" in text:
-            offenders.append(f"{path.relative_to(ROOT)} imports infrastructure handlers")
-        if "ergon_core.core.infrastructure.inngest.contracts" in text:
-            offenders.append(f"{path.relative_to(ROOT)} imports infrastructure contracts")
         offenders.extend(
             f"{path.relative_to(ROOT)} has unsupported Inngest infrastructure import: {line}"
             for line in lines
             if "ergon_core.core.infrastructure.inngest." in line
-            and not line.startswith(allowed_job_infrastructure_imports)
+            and "client import" not in line
+            and "errors import" not in line
         )
 
     return offenders
 
 
-def test_inngest_jobs_and_handlers_stay_split() -> None:
+def test_inngest_jobs_use_job_local_adapters() -> None:
     core_root = ROOT / "ergon_core" / "ergon_core" / "core"
 
     assert not (core_root / "runtime" / "inngest").exists()
 
     for new_path in (
-        core_root / "application" / "jobs" / "__init__.py",
-        core_root / "application" / "jobs" / "models.py",
         core_root / "infrastructure" / "inngest" / "__init__.py",
         core_root / "infrastructure" / "inngest" / "client.py",
         core_root / "infrastructure" / "inngest" / "registry.py",
-        core_root / "infrastructure" / "inngest" / "contracts.py",
         core_root / "infrastructure" / "inngest" / "errors.py",
-        core_root / "infrastructure" / "inngest" / "handlers" / "__init__.py",
+        core_root / "jobs" / "__init__.py",
     ):
         assert new_path.exists()
+
+    assert not (core_root / "application" / "jobs").exists()
+    assert not (core_root / "infrastructure" / "inngest" / "handlers").exists()
+    assert not (core_root / "infrastructure" / "inngest" / "contracts.py").exists()
 
     offenders = _inngest_job_boundary_offenders(core_root)
 
     registry_text = (core_root / "infrastructure" / "inngest" / "registry.py").read_text()
-    assert "ergon_core.core.infrastructure.inngest.handlers" in registry_text
-    assert "ergon_core.core.application.jobs" not in registry_text
+    assert "ergon_core.core.jobs" in registry_text
 
     checked_paths = [
         path

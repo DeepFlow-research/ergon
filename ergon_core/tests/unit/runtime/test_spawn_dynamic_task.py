@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 import pytest
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import SpawnedTaskHandle
-from ergon_core.core.application.jobs.worker_execute import _StepAwareTaskManagementService
+from ergon_core.core.jobs.task.worker_execute.job import _StepAwareTaskManagementService
 from ergon_core.core.application.tasks import management as management_module
 from ergon_core.core.application.tasks.management import TaskManagementService
 from ergon_core.core.persistence.definitions.models import ExperimentDefinitionTask

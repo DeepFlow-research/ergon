@@ -39,7 +39,7 @@ from ergon_core.core.rl.rollout_types import (
     SubmitResponse,
     Trajectory,
 )
-from ergon_core.core.application.events.task_events import WorkflowStartedEvent
+from ergon_core.core.jobs.workflow.start.contract import WorkflowStartedEvent
 from sqlmodel import Session, select
 
 logger = logging.getLogger(__name__)
