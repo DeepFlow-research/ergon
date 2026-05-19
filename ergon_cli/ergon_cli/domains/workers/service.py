@@ -1,8 +1,16 @@
 from collections.abc import Callable, Sequence
 
-from ergon_cli.discovery import list_workers
 from ergon_cli.domains.workers.models import WorkerCommand, WorkerListResult, WorkerRef
 from ergon_cli.shared.errors import CliUsageError
+
+_WORKER_ROWS = (
+    ("react-v1", "ReActWorker"),
+    ("training-stub", "TrainingStubWorker"),
+)
+
+
+def list_workers() -> list[list[str]]:
+    return [list(row) for row in sorted(_WORKER_ROWS)]
 
 
 def list_worker_refs(

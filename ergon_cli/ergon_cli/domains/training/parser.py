@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.train import handle_train
+from ergon_cli.domains.training.commands import handle_train
 
 
 def register_train_parser(subparsers: argparse._SubParsersAction) -> None:

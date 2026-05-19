@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from ergon_cli.commands import run as run_cmd
+import ergon_cli.domains.runs.commands as run_cmd
 from ergon_cli.main import build_parser
 import ergon_core.core.views.runs.service as core_run_views
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
@@ -124,9 +124,8 @@ def test_run_status_prints_status_fields(monkeypatch, capsys):
             return fake_run
 
     monkeypatch.setattr(core_run_views, "get_session", lambda: FakeSession())
-    monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
-    rc = run_cmd.status_run(Namespace(run_id=str(run_id)))
+    rc = run_cmd.status_run_command(Namespace(run_id=str(run_id)))
 
     assert rc == 0
     out = capsys.readouterr().out
@@ -144,8 +143,7 @@ def test_run_status_prints_status_fields(monkeypatch, capsys):
 
 
 def test_run_status_reports_invalid_uuid(monkeypatch, capsys):
-    monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
-    rc = run_cmd.status_run(Namespace(run_id="not-a-valid-uuid"))
+    rc = run_cmd.status_run_command(Namespace(run_id="not-a-valid-uuid"))
 
     assert rc == 2
     out = capsys.readouterr().out
@@ -171,9 +169,8 @@ def test_run_status_reports_missing_run(monkeypatch, capsys):
             return None
 
     monkeypatch.setattr(core_run_views, "get_session", lambda: FakeSession())
-    monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
-    rc = run_cmd.status_run(Namespace(run_id=str(run_id)))
+    rc = run_cmd.status_run_command(Namespace(run_id=str(run_id)))
 
     assert rc == 3
     out = capsys.readouterr().out
@@ -206,9 +203,8 @@ def test_run_list_filters_by_definition(monkeypatch, session_factory, capsys):
         session.commit()
 
     monkeypatch.setattr(core_run_views, "get_session", session_factory)
-    monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
-    rc = run_cmd.list_runs(
+    rc = run_cmd.list_runs_command(
         Namespace(definition_id=matching_definition_id, experiment=None, status=None, limit=20)
     )
 
@@ -235,9 +231,10 @@ def test_run_list_filters_by_experiment_tag(monkeypatch, session_factory, capsys
         session.commit()
 
     monkeypatch.setattr(core_run_views, "get_session", session_factory)
-    monkeypatch.setattr(run_cmd, "ensure_db", lambda: None)
 
-    rc = run_cmd.list_runs(Namespace(definition_id=None, experiment="alpha", status=None, limit=20))
+    rc = run_cmd.list_runs_command(
+        Namespace(definition_id=None, experiment="alpha", status=None, limit=20)
+    )
 
     assert rc == 0
     out = capsys.readouterr().out

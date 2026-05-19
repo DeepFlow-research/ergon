@@ -2,8 +2,9 @@ from argparse import Namespace
 from uuid import uuid4
 
 import pytest
-from ergon_cli.commands import experiment as experiment_cmd
+import ergon_cli.domains.experiments.commands as experiment_cmd
 import ergon_cli.domains.experiments.service as experiment_domain_service
+from ergon_cli.domains.experiments.models import ExperimentTagDefinitionView
 from ergon_cli.main import build_parser
 from ergon_core.core.views.experiments.models import (
     ExperimentDetailDto,
@@ -153,7 +154,7 @@ def test_experiment_by_tag_prints_definitions_for_run_record_tag(monkeypatch, ca
         def definitions_by_tag(self, tag):
             assert tag == "alpha"
             return [
-                experiment_cmd.ExperimentTagDefinitionRow(
+                ExperimentTagDefinitionView(
                     definition_id=definition_id,
                     name="alpha definition",
                     benchmark_type="ci-benchmark",

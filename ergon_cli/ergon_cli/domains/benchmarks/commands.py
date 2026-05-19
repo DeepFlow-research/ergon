@@ -3,7 +3,7 @@ from argparse import Namespace
 from ergon_cli.domains.benchmarks.models import BenchmarkCommand
 from ergon_cli.domains.benchmarks.service import list_benchmark_rows
 from ergon_cli.domains.benchmarks.service import setup_benchmark as setup_benchmark_service
-from ergon_cli.rendering import render_table
+from ergon_cli.shared.output import render_table
 
 
 async def handle_benchmark(args: Namespace) -> int:
@@ -17,6 +17,6 @@ async def handle_benchmark(args: Namespace) -> int:
         force=values.get("force", False),
     )
     if command.action == "list":
-        render_table(["Slug", "Name", "Description"], list_benchmark_rows())
+        print(render_table(["Slug", "Name", "Description"], list_benchmark_rows()))
         return 0
     return setup_benchmark_service(command)

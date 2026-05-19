@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.workflow import handle_workflow
+from ergon_cli.domains.workflow.commands import handle_workflow
 
 
 def register_workflow_parser(subparsers: argparse._SubParsersAction) -> None:

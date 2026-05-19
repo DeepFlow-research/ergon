@@ -2,7 +2,8 @@ import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from ergon_cli.commands.workflow import WorkflowCommandContext, execute_workflow_command
+from ergon_cli.domains.workflow.executor import execute_workflow_command
+from ergon_cli.domains.workflow.models import WorkflowCommandContext
 from ergon_core.core.application.runtime.models import GraphTaskRef
 from ergon_core.core.application.runtime.workflow_models import WorkflowResourceRef
 from pydantic import BaseModel, ConfigDict

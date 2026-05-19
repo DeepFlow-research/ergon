@@ -11,7 +11,8 @@ from unittest.mock import MagicMock
 
 import ergon_cli.domains.stack.service as _stack_service
 import pytest
-from ergon_cli.commands.stack import _find_compose_file, handle_start, handle_stop
+from ergon_cli.domains.stack.commands import handle_start, handle_stop
+from ergon_cli.domains.stack.service import find_compose_file
 
 
 def _seed_repo(tmp_path: Path) -> Path:
@@ -21,20 +22,20 @@ def _seed_repo(tmp_path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# _find_compose_file
+# find_compose_file
 # ---------------------------------------------------------------------------
 
 
 class TestFindComposeFile:
     def test_returns_directory_when_compose_present(self, tmp_path: Path) -> None:
         repo = _seed_repo(tmp_path)
-        assert _find_compose_file(repo) == repo
+        assert find_compose_file(repo) == repo
 
     def test_walks_up_from_subdirectory(self, tmp_path: Path) -> None:
         repo = _seed_repo(tmp_path)
         sub = repo / "deep" / "nested" / "place"
         sub.mkdir(parents=True)
-        assert _find_compose_file(sub) == repo
+        assert find_compose_file(sub) == repo
 
     def test_returns_none_when_no_compose_in_ancestors(self, tmp_path: Path) -> None:
         sub = tmp_path / "child"
@@ -43,7 +44,7 @@ class TestFindComposeFile:
         # (extremely unlikely on CI runners but possible in local dev trees).
         if any((p / "docker-compose.yml").is_file() for p in (sub, *sub.parents)):
             pytest.skip("ancestor directory contains docker-compose.yml")
-        assert _find_compose_file(sub) is None
+        assert find_compose_file(sub) is None
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +202,7 @@ class TestHandleStart:
 
         assert rc == 0
         # The recorded compose call should run with cwd=repo (verified via the
-        # fact that we never moved up explicitly — `_find_compose_file` did).
+        # fact that we never moved up explicitly — `find_compose_file` did).
         assert ["docker", "compose", "up", "-d", "--wait"] in mock_docker_ok.calls
 
 

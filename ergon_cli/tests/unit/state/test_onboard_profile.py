@@ -1,7 +1,7 @@
 """Unit tests for OnboardProfile: required_keys() and required_extras()."""
 
-import ergon_cli.onboarding.profile as profile_module
-from ergon_cli.onboarding.profile import (
+import ergon_cli.domains.onboarding.profile as profile_module
+from ergon_cli.domains.onboarding.profile import (
     GPUProvider,
     LLMProvider,
     OnboardProfile,

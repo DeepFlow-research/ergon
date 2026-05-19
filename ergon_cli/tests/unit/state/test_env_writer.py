@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from ergon_cli.onboarding.env_writer import write_env
-from ergon_cli.onboarding.env_writer import _known_env_keys
-from ergon_cli.onboarding.profile import ENV_KEY_OWNERS, LLMProvider, OnboardProfile
+from ergon_cli.domains.onboarding.env_writer import write_env
+from ergon_cli.domains.onboarding.env_writer import _known_env_keys
+from ergon_cli.domains.onboarding.profile import ENV_KEY_OWNERS, LLMProvider, OnboardProfile
 
 
 class TestWriteEnv:

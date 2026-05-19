@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.eval import handle_eval
+from ergon_cli.domains.eval.commands import handle_eval
 
 
 def register_eval_parser(subparsers: argparse._SubParsersAction) -> None:

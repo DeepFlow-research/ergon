@@ -1,12 +1,22 @@
 from collections.abc import Callable, Sequence
 
-from ergon_cli.discovery import list_evaluators
 from ergon_cli.domains.evaluators.models import (
     EvaluatorCommand,
     EvaluatorListResult,
     EvaluatorRef,
 )
 from ergon_cli.shared.errors import CliUsageError
+
+_EVALUATOR_ROWS = (
+    ("gdpeval-staged-rubric", "StagedRubric"),
+    ("minif2f-rubric", "MiniF2FRubric"),
+    ("researchrubrics-rubric", "ResearchRubricsRubric"),
+    ("swebench-rubric", "SWEBenchRubric"),
+)
+
+
+def list_evaluators() -> list[list[str]]:
+    return [list(row) for row in sorted(_EVALUATOR_ROWS)]
 
 
 def list_evaluator_refs(

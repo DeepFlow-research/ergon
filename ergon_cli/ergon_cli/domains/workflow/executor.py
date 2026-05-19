@@ -8,15 +8,14 @@ from collections.abc import Callable
 from typing import cast
 from uuid import UUID
 
-from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.core.persistence.shared.enums import RunResourceKind
-from ergon_core.core.persistence.shared.db import get_session
+from ergon_cli.domains.workflow.models import WorkflowCommandContext, WorkflowCommandOutput
 from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
+from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel
 from sqlmodel import Session
 
 _RESOURCE_SCOPES = ("visible", "own", "input", "upstream", "children", "descendants")
-_RESOURCE_KINDS = tuple(kind.value for kind in RunResourceKind)
+_RESOURCE_KINDS = ("artifact", "import", "note", "output", "report", "search_cache")
 _OUTPUT_FORMATS = ("text", "json")
 _DEPENDENCY_DIRECTIONS = ("upstream", "downstream", "both")
 
@@ -29,24 +28,6 @@ _FORBIDDEN_CONTEXT_FLAGS = {
     "--sandbox-task-key",
     "--benchmark-type",
 }
-
-
-class WorkflowCommandContext(BaseModel):
-    model_config = {"frozen": True}
-
-    run_id: UUID
-    task_id: UUID
-    execution_id: UUID
-    sandbox_task_key: UUID
-    benchmark_type: str
-
-
-class WorkflowCommandOutput(BaseModel):
-    model_config = {"frozen": True}
-
-    stdout: str
-    stderr: str | None = None
-    exit_code: int = 0
 
 
 def build_workflow_parser() -> argparse.ArgumentParser:
@@ -81,18 +62,6 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     next_action.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
     return parser
-
-
-def _dispatch_workflow_command(
-    args: argparse.Namespace,
-    *,
-    context: WorkflowCommandContext,
-    session: Session,
-    service: WorkflowService,
-) -> WorkflowCommandOutput:
-    if args.group == "inspect":
-        return _handle_inspect(args, context=context, session=session, service=service)
-    raise ValueError(f"unsupported workflow command group: {args.group}")
 
 
 def execute_workflow_command(
@@ -135,39 +104,16 @@ def execute_workflow_command(
         _close_session(session)
 
 
-async def handle_workflow(args: argparse.Namespace) -> int:
-    command_parts = args.workflow_args if args.workflow_args is not None else []
-    command = " ".join(command_parts)
-    if not command:
-        build_workflow_parser().print_help()
-        return 0
-    missing = [
-        name
-        for name, value in {
-            "--run-id": args.run_id,
-            "--task-id": args.task_id,
-            "--execution-id": args.execution_id,
-            "--sandbox-task-key": args.sandbox_task_key,
-        }.items()
-        if value is None
-    ]
-    if missing:
-        raise SystemExit(f"{', '.join(missing)} are required for local CLI workflow commands")
-    context = WorkflowCommandContext(
-        run_id=UUID(args.run_id),
-        task_id=UUID(args.task_id),
-        execution_id=UUID(args.execution_id),
-        sandbox_task_key=UUID(args.sandbox_task_key),
-        benchmark_type=args.benchmark_type,
-    )
-    output = execute_workflow_command(
-        command, context=context, session_factory=get_session, service=WorkflowService()
-    )
-    if output.stdout:
-        print(output.stdout)
-    if output.stderr:
-        print(output.stderr)
-    return output.exit_code
+def _dispatch_workflow_command(
+    args: argparse.Namespace,
+    *,
+    context: WorkflowCommandContext,
+    session: Session,
+    service: WorkflowService,
+) -> WorkflowCommandOutput:
+    if args.group == "inspect":
+        return _handle_inspect(args, context=context, session=session, service=service)
+    raise ValueError(f"unsupported workflow command group: {args.group}")
 
 
 def _handle_inspect(
