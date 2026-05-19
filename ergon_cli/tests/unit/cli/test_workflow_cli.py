@@ -117,7 +117,7 @@ def test_agent_command_rejects_user_supplied_context_flags() -> None:
 
 def test_parse_error_returns_nonzero_output_instead_of_system_exit() -> None:
     output = execute_workflow_command(
-        "manage materialize-resource",
+        "inspect resource-content",
         context=_context(),
         session_factory=_Session,
         service=_Service(resource=None),  # type: ignore[arg-type]
@@ -185,9 +185,9 @@ def test_service_validation_error_returns_nonzero_output() -> None:
     assert output.stderr == "unsupported resource scope: all"
 
 
-def test_unknown_manage_command_reports_parser_error() -> None:
+def test_manage_command_is_not_registered() -> None:
     output = execute_workflow_command(
-        "manage spawn-task --format json",
+        "manage add-subtask --task-slug child --description child",
         context=_context(),
         session_factory=_Session,
         service=object(),
@@ -195,7 +195,8 @@ def test_unknown_manage_command_reports_parser_error() -> None:
 
     assert output.exit_code == 2
     assert output.stderr is not None
-    assert "invalid choice: 'spawn-task'" in output.stderr
+    assert "invalid choice: 'manage'" in output.stderr
+    assert "workflow manage --help" not in output.stderr
 
 
 def test_task_tree_parent_task_id_filters_tasks_by_parent() -> None:
@@ -215,7 +216,7 @@ def test_task_tree_parent_task_id_filters_tasks_by_parent() -> None:
     assert payload["tasks"][0]["parent_task_id"] == str(parent_task_id)
 
 
-def test_manage_mutation_non_dry_run_is_unsupported_without_service_call() -> None:
+def test_human_cli_rejects_workflow_manage_surface() -> None:
     output = execute_workflow_command(
         "manage add-edge",
         context=_context(),
@@ -224,26 +225,8 @@ def test_manage_mutation_non_dry_run_is_unsupported_without_service_call() -> No
     )
 
     assert output.exit_code == 2
-    assert output.stderr == (
-        "dynamic workflow mutation from CLI is unsupported; use WorkerContext.spawn_task(Task(...))"
-    )
-
-
-def test_manage_mutation_dry_run_validates_without_service_call() -> None:
-    output = execute_workflow_command(
-        "manage add-edge --dry-run --format json",
-        context=_context(),
-        session_factory=_Session,
-        service=object(),
-    )
-
-    payload = json.loads(output.stdout)
-    assert output.exit_code == 0
-    assert payload == {
-        "action": "add-edge",
-        "dry_run": True,
-        "message": "Graph lifecycle command validated; no changes applied.",
-    }
+    assert output.stderr is not None
+    assert "invalid choice: 'manage'" in output.stderr
 
 
 def test_resource_list_rejects_removed_explain_flag() -> None:

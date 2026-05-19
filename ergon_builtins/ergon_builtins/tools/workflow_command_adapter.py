@@ -4,22 +4,30 @@ import io
 import json
 import shlex
 import time
-from collections.abc import Callable
-from typing import cast
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager
+from typing import Any, cast
 from uuid import UUID
 
-from ergon_core.core.shared.json_types import JsonObject
-from ergon_core.core.persistence.shared.enums import RunResourceKind
-from ergon_core.core.persistence.shared.db import get_session
+from pydantic import BaseModel, ConfigDict
+from sqlmodel import Session, select
+
+from ergon_builtins.tools.dynamic_task_factory import (
+    CopyParentDynamicTaskFactory,
+    DynamicTaskFactory,
+)
+from ergon_core.api import Task, WorkerContext
+from ergon_core.core.application.runtime.errors import GraphError
 from ergon_core.core.application.runtime.run_lifecycle import WorkflowService
-from pydantic import BaseModel
-from sqlmodel import Session
+from ergon_core.core.persistence.graph.models import RunGraphNode
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.enums import RunResourceKind
+from ergon_core.core.shared.json_types import JsonObject
 
 _RESOURCE_SCOPES = ("visible", "own", "input", "upstream", "children", "descendants")
 _RESOURCE_KINDS = tuple(kind.value for kind in RunResourceKind)
 _OUTPUT_FORMATS = ("text", "json")
 _DEPENDENCY_DIRECTIONS = ("upstream", "downstream", "both")
-
 _FORBIDDEN_CONTEXT_FLAGS = {
     "--run-id",
     "--task-id",
@@ -32,7 +40,7 @@ _FORBIDDEN_CONTEXT_FLAGS = {
 
 
 class WorkflowCommandContext(BaseModel):
-    model_config = {"frozen": True}
+    model_config = ConfigDict(frozen=True)
 
     run_id: UUID
     task_id: UUID
@@ -42,7 +50,7 @@ class WorkflowCommandContext(BaseModel):
 
 
 class WorkflowCommandOutput(BaseModel):
-    model_config = {"frozen": True}
+    model_config = ConfigDict(frozen=True)
 
     stdout: str
     stderr: str | None = None
@@ -80,27 +88,25 @@ def build_workflow_parser() -> argparse.ArgumentParser:
     next_action.add_argument("--manager-capable", action="store_true")
     next_action.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
 
+    manage = sub.add_parser("manage")
+    manage_sub = manage.add_subparsers(dest="action", required=True)
+    add_subtask = manage_sub.add_parser("add-subtask")
+    add_subtask.add_argument("--task-slug", required=True)
+    add_subtask.add_argument("--description", required=True)
+    add_subtask.add_argument("--depends-on", action="append", default=[])
+    add_subtask.add_argument("--format", choices=_OUTPUT_FORMATS, default="text")
+
     return parser
 
 
-def _dispatch_workflow_command(
-    args: argparse.Namespace,
-    *,
-    context: WorkflowCommandContext,
-    session: Session,
-    service: WorkflowService,
-) -> WorkflowCommandOutput:
-    if args.group == "inspect":
-        return _handle_inspect(args, context=context, session=session, service=service)
-    raise ValueError(f"unsupported workflow command group: {args.group}")
-
-
-def execute_workflow_command(
+async def execute_workflow_command(
     command: str,
     *,
     context: WorkflowCommandContext,
-    session_factory: Callable[[], Session],
-    service: WorkflowService,
+    worker_context: WorkerContext,
+    session_factory: Callable[[], Any] = get_session,
+    service: WorkflowService | None = None,
+    task_factory: DynamicTaskFactory | None = None,
 ) -> WorkflowCommandOutput:
     try:
         argv = shlex.split(command)
@@ -121,53 +127,47 @@ def execute_workflow_command(
             stderr=_parse_error_with_help_hint(stderr.getvalue() or str(exc), argv),
             exit_code=exit_code,
         )
-    session = session_factory()
+
+    service = service or WorkflowService()
+    task_factory = task_factory or CopyParentDynamicTaskFactory()
     try:
-        return _dispatch_workflow_command(
+        with _session_scope(session_factory) as session:
+            return await _dispatch_workflow_command(
+                args,
+                context=context,
+                worker_context=worker_context,
+                session=session,
+                service=service,
+                task_factory=task_factory,
+            )
+    except (GraphError, ValueError) as exc:
+        return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
+
+
+async def _dispatch_workflow_command(
+    args: argparse.Namespace,
+    *,
+    context: WorkflowCommandContext,
+    worker_context: WorkerContext,
+    session: Session,
+    service: WorkflowService,
+    task_factory: DynamicTaskFactory,
+) -> WorkflowCommandOutput:
+    if args.group == "inspect":
+        return _handle_inspect(args, context=context, session=session, service=service)
+    if args.group == "manage":
+        return await _handle_manage(
             args,
             context=context,
+            worker_context=worker_context,
             session=session,
-            service=service,
+            task_factory=task_factory,
         )
-    except ValueError as exc:
-        return WorkflowCommandOutput(stdout="", stderr=str(exc), exit_code=2)
-    finally:
-        _close_session(session)
-
-
-async def handle_workflow(args: argparse.Namespace) -> int:
-    command_parts = args.workflow_args if args.workflow_args is not None else []
-    command = " ".join(command_parts)
-    if not command:
-        build_workflow_parser().print_help()
-        return 0
-    missing = [
-        name
-        for name, value in {
-            "--run-id": args.run_id,
-            "--task-id": args.task_id,
-            "--execution-id": args.execution_id,
-            "--sandbox-task-key": args.sandbox_task_key,
-        }.items()
-        if value is None
-    ]
-    if missing:
-        raise SystemExit(f"{', '.join(missing)} are required for local CLI workflow commands")
-    context = WorkflowCommandContext(
-        run_id=UUID(args.run_id),
-        task_id=UUID(args.task_id),
-        execution_id=UUID(args.execution_id),
-        sandbox_task_key=UUID(args.sandbox_task_key),
-        benchmark_type=args.benchmark_type,
+    return WorkflowCommandOutput(
+        stdout="",
+        stderr=f"unsupported workflow command group: {args.group}",
+        exit_code=2,
     )
-    output = execute_workflow_command(
-        command, context=context, session_factory=get_session, service=WorkflowService()
-    )
-    if output.stdout:
-        print(output.stdout)
-    if output.stderr:
-        print(output.stderr)
-    return output.exit_code
 
 
 def _handle_inspect(
@@ -257,6 +257,59 @@ def _handle_inspect(
     raise ValueError(f"unsupported inspect action: {args.action}")
 
 
+async def _handle_manage(
+    args: argparse.Namespace,
+    *,
+    context: WorkflowCommandContext,
+    worker_context: WorkerContext,
+    session: Session,
+    task_factory: DynamicTaskFactory,
+) -> WorkflowCommandOutput:
+    if args.action != "add-subtask":
+        raise ValueError(f"unsupported manage action: {args.action}")
+    parent = await _load_parent_task(session, context=context, sandbox_id=worker_context.sandbox_id)
+    task = task_factory.child_task(
+        parent=parent,
+        task_slug=args.task_slug,
+        description=args.description,
+    )
+    depends_on = tuple(UUID(value) for value in args.depends_on)
+    handle = await worker_context.spawn_task(task, depends_on=depends_on)
+    return _format_output(
+        {
+            "spawned_task": {
+                "task_id": str(handle.task_id),
+                "task_slug": task.task_slug,
+                "parent_task_id": str(context.task_id),
+                "depends_on": [str(dep) for dep in depends_on],
+            }
+        },
+        text_lines=[f"{task.task_slug} {handle.task_id}"],
+        output_format=args.format,
+    )
+
+
+async def _load_parent_task(
+    session: Session,
+    *,
+    context: WorkflowCommandContext,
+    sandbox_id: str,
+) -> Task:
+    row = session.exec(
+        select(RunGraphNode).where(
+            RunGraphNode.run_id == context.run_id,
+            RunGraphNode.task_id == context.task_id,
+        )
+    ).one()
+    if not row.task_json:
+        raise ValueError(f"current task {context.task_id} has no object-bound task_json")
+    return await Task.from_definition(
+        cast(dict[str, Any], row.task_json),
+        task_id=context.task_id,
+        sandbox_id=sandbox_id,
+    )
+
+
 def _format_output(
     payload: JsonObject,
     text_lines: list[str],
@@ -275,8 +328,18 @@ def _dump(value: BaseModel | JsonObject) -> JsonObject:
     raise TypeError(f"cannot serialize {type(value).__name__}")
 
 
-def _close_session(session: Session) -> None:
-    session.close()
+@contextlib.contextmanager
+def _session_scope(session_factory: Callable[[], Any]) -> Iterator[Session]:
+    session_or_context = session_factory()
+    if isinstance(session_or_context, AbstractContextManager):
+        with session_or_context as session:
+            yield cast(Session, session)
+        return
+
+    try:
+        yield cast(Session, session_or_context)
+    finally:
+        cast(Session, session_or_context).close()
 
 
 def _reject_context_flags(argv: list[str]) -> None:
