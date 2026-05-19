@@ -47,3 +47,15 @@ def test_db_access_stays_out_of_api_dashboard_and_inngest_layers() -> None:
                 offenders.append(f"{path}: {', '.join(matches)}")
 
     assert offenders == []
+
+
+def test_telemetry_models_do_not_import_application_evaluation_summary() -> None:
+    text = Path("ergon_core/ergon_core/core/persistence/telemetry/models.py").read_text()
+
+    assert "core.application.evaluation.summary" not in text
+
+
+def test_telemetry_models_do_not_define_application_command_dtos() -> None:
+    text = Path("ergon_core/ergon_core/core/persistence/telemetry/models.py").read_text()
+
+    assert "class CreateTaskEvaluation" not in text

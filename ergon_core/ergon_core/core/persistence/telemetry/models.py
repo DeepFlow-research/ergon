@@ -6,7 +6,6 @@ of truth for the definition itself.
 
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -17,14 +16,9 @@ from ergon_core.core.persistence.shared.enums import (
     TrainingStatus,
 )
 from ergon_core.core.shared.utils import utcnow as _utcnow
-from pydantic import BaseModel, model_validator
+from pydantic import model_validator
 from sqlalchemy import JSON, Column, DateTime
 from sqlmodel import Field, SQLModel
-
-if TYPE_CHECKING:
-    from ergon_core.core.persistence.telemetry.evaluation_summary import (
-        EvaluationSummary,
-    )
 
 TZDateTime = DateTime(timezone=True)
 
@@ -339,21 +333,6 @@ class RunResource(SQLModel, table=True):
 # ---------------------------------------------------------------------------
 
 
-class CreateTaskEvaluation(BaseModel):
-    """Command object for persisting a task evaluation row."""
-
-    model_config = {"frozen": True}
-
-    run_id: UUID
-    task_execution_id: UUID
-    task_id: UUID
-    definition_evaluator_id: UUID
-    score: float | None = None
-    passed: bool | None = None
-    feedback: str | None = None
-    summary_json: JsonObject | None = None
-
-
 class RunTaskEvaluation(SQLModel, table=True):
     __tablename__ = "run_task_evaluations"
 
@@ -373,16 +352,6 @@ class RunTaskEvaluation(SQLModel, table=True):
     feedback: str | None = None
     summary_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_utcnow, sa_type=TZDateTime)
-
-    # -- JSON accessor: summary_json --
-
-    def parsed_summary(self) -> "EvaluationSummary":
-        # reason: breaks import cycle — evaluation_summary imports RunTaskEvaluation for type hints
-        from ergon_core.core.persistence.telemetry.evaluation_summary import (
-            EvaluationSummary,
-        )
-
-        return EvaluationSummary.model_validate(self.summary_json)
 
     @model_validator(mode="after")
     def _validate_summary_json(self) -> "RunTaskEvaluation":

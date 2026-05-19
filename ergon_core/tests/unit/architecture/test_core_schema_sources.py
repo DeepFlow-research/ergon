@@ -10,7 +10,7 @@ CONFIG_REFERENCE_FILES = (
 )
 
 
-def test_graph_status_literals_are_defined_only_in_status_conventions() -> None:
+def test_graph_status_literals_are_defined_only_in_runtime_status() -> None:
     offenders: list[str] = []
     duplicate_snippets = (
         'Literal["pending", "ready", "running", "completed", "failed", "cancelled", "blocked"]',
@@ -18,7 +18,7 @@ def test_graph_status_literals_are_defined_only_in_status_conventions() -> None:
         'Literal["pending", "satisfied", "invalidated"]',
     )
     allowed = {
-        ROOT / "ergon_core/ergon_core/core/persistence/graph/status_conventions.py",
+        ROOT / "ergon_core/ergon_core/core/application/runtime/status.py",
     }
 
     for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
@@ -37,7 +37,7 @@ def test_eval_criterion_status_literal_is_defined_only_in_evaluation_summary() -
     offenders: list[str] = []
     snippet = 'EvalCriterionStatus=Literal["passed","failed","errored","skipped"]'
     allowed = {
-        ROOT / "ergon_core/ergon_core/core/persistence/telemetry/evaluation_summary.py",
+        ROOT / "ergon_core/ergon_core/core/application/evaluation/summary.py",
     }
 
     for path in (ROOT / "ergon_core/ergon_core/core").rglob("*.py"):
@@ -511,12 +511,10 @@ def test_persistence_layer_does_not_expose_domain_query_bag_or_runtime_context_s
     assert offenders == []
 
 
-def test_telemetry_repository_is_row_storage_not_evaluation_summary_service() -> None:
+def test_single_consumer_telemetry_repository_is_deleted() -> None:
     repository_path = ROOT / "ergon_core/ergon_core/core/persistence/telemetry/repository.py"
-    text = repository_path.read_text()
 
-    assert "refresh_run_evaluation_summary" not in text
-    assert "aggregate_evaluation_scores" not in text
+    assert not repository_path.exists()
 
 
 def test_experiment_lifecycle_uses_module_level_functions() -> None:

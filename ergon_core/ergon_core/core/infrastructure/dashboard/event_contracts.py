@@ -22,7 +22,7 @@ from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
     ContextEventType,
 )
-from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.application.events.base import InngestEventContract
 from ergon_core.core.application.read_models.models import CohortSummaryDto
 from ergon_core.core.application.graph.models import GraphMutationRecordDto

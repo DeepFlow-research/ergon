@@ -23,7 +23,7 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphMutation,
 )
 from ergon_core.core.persistence.shared.types import RunId
-from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.application.events.task_events import TaskCancelledEvent
 from ergon_core.core.infrastructure.inngest.client import inngest_client
 from ergon_core.core.application.read_models.models import CohortSummaryDto

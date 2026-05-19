@@ -12,7 +12,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinitionTask,
     ExperimentDefinitionTaskDependency,
 )
-from ergon_core.core.persistence.graph import status_conventions as graph_status
+from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.application.graph.models import MutationMeta
 from ergon_core.core.application.graph.lookup import GraphNodeLookup

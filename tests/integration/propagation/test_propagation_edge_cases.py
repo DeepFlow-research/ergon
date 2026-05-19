@@ -7,7 +7,7 @@ EC-2: duplicate task/ready idempotency. Expected to pass with current code.
 import pytest
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutation, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import BLOCKED, CANCELLED
+from ergon_core.core.application.runtime.status import BLOCKED, CANCELLED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus, TaskExecutionStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord

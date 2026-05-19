@@ -10,7 +10,7 @@ from ergon_core.core.persistence.definitions.models import (
 )
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.evaluation_summary import EvaluationSummary
+from ergon_core.core.application.evaluation.summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStats,

@@ -8,7 +8,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
 )
-from ergon_core.core.persistence.graph import status_conventions as graph_status
+from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunResourceKind, RunStatus, TaskExecutionStatus

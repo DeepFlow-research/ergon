@@ -18,7 +18,7 @@ from ergon_core.api.worker.results import SpawnedTaskHandle
 from ergon_core.core.infrastructure.dashboard.emitter import DashboardEmitter
 from ergon_core.core.infrastructure.dashboard.provider import get_dashboard_emitter
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import (
+from ergon_core.core.application.runtime.status import (
     BLOCKED,
     CANCELLED,
     COMPLETED,

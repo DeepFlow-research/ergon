@@ -1,32 +1,29 @@
 """Single front-door service for task evaluation workflow."""
 
-from datetime import datetime
 from uuid import UUID
 
 from ergon_core.api.benchmark import Task
 from ergon_core.api.criterion.context import CriterionContext
 from ergon_core.api.criterion.outcome import CriterionOutcome
 from ergon_core.api.rubric import Evaluator, TaskEvaluationResult
-from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
-from ergon_core.core.persistence.shared.ids import new_id
-from ergon_core.core.persistence.shared.db import get_session
-from ergon_core.core.persistence.telemetry.evaluation_summary import (
+from ergon_core.core.application.evaluation.dto_mapping import (
+    build_dashboard_evaluation_dto,
+    evaluation_row_to_dto,
+)
+from ergon_core.core.application.evaluation.models import CriterionSpec
+from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
+from ergon_core.core.application.evaluation.summary import (
     CriterionOutcomeEntry,
     EvaluationSummary,
 )
-from ergon_core.core.persistence.telemetry.models import (
-    CreateTaskEvaluation,
-    RunRecord,
-)
-from ergon_core.core.persistence.telemetry.repository import (
-    TelemetryRepository,
-)
-from ergon_core.core.application.evaluation.scoring import aggregate_evaluation_scores
-from ergon_core.core.application.evaluation.models import CriterionSpec
+from ergon_core.core.application.read_models.models import RunTaskEvaluationDto
 from ergon_core.core.infrastructure.inngest.errors import ContractViolationError
-from ergon_core.core.application.read_models.models import (
-    RunEvaluationCriterionDto,
-    RunTaskEvaluationDto,
+from ergon_core.core.persistence.definitions.models import ExperimentDefinitionEvaluator
+from ergon_core.core.persistence.shared.db import get_session
+from ergon_core.core.persistence.shared.ids import new_id
+from ergon_core.core.persistence.telemetry.models import (
+    RunRecord,
+    RunTaskEvaluation,
 )
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -50,12 +47,6 @@ class PersistedEvaluation(BaseModel):
 
 class EvaluationService:
     """Execute and persist task evaluations."""
-
-    def __init__(
-        self,
-        telemetry_repo: TelemetryRepository | None = None,
-    ) -> None:
-        self.telemetry_repo = telemetry_repo or TelemetryRepository()
 
     async def evaluate(
         self,
@@ -113,32 +104,23 @@ class EvaluationService:
         session = get_session()
         try:
             evaluator_id = self.lookup_evaluator_id(session, run_id, binding_key)
-            evaluation = await self.telemetry_repo.create_task_evaluation(
+            evaluation = await _create_task_evaluation(
                 session,
-                CreateTaskEvaluation(
-                    run_id=run_id,
-                    task_execution_id=task_execution_id,
-                    task_id=task_id,
-                    definition_evaluator_id=evaluator_id,
-                    score=result.score,
-                    passed=result.passed,
-                    feedback=result.feedback,
-                    summary_json=summary.model_dump(mode="json"),
-                ),
+                run_id=run_id,
+                task_execution_id=task_execution_id,
+                task_id=task_id,
+                definition_evaluator_id=evaluator_id,
+                score=result.score,
+                passed=result.passed,
+                feedback=result.feedback,
+                summary_json=summary.model_dump(mode="json"),
             )
             self._refresh_run_evaluation_summary(session, run_id)
             session.commit()
             session.refresh(evaluation)
             return PersistedEvaluation(
                 summary=summary,
-                dashboard_dto=build_dashboard_evaluation_dto(
-                    evaluation_id=evaluation.id,
-                    run_id=run_id,
-                    task_id=task_id,
-                    total_score=result.score,
-                    created_at=evaluation.created_at,
-                    summary=summary,
-                ),
+                dashboard_dto=evaluation_row_to_dto(evaluation),
             )
         finally:
             session.close()
@@ -164,18 +146,16 @@ class EvaluationService:
         session = get_session()
         try:
             evaluator_id = self.lookup_evaluator_id(session, run_id, binding_key)
-            await self.telemetry_repo.create_task_evaluation(
+            await _create_task_evaluation(
                 session,
-                CreateTaskEvaluation(
-                    run_id=run_id,
-                    task_execution_id=task_execution_id,
-                    task_id=task_id,
-                    definition_evaluator_id=evaluator_id,
-                    score=0.0,
-                    passed=False,
-                    feedback=f"{error_type}: {exc}",
-                    summary_json=summary.model_dump(mode="json"),
-                ),
+                run_id=run_id,
+                task_execution_id=task_execution_id,
+                task_id=task_id,
+                definition_evaluator_id=evaluator_id,
+                score=0.0,
+                passed=False,
+                feedback=f"{error_type}: {exc}",
+                summary_json=summary.model_dump(mode="json"),
             )
             self._refresh_run_evaluation_summary(session, run_id)
             session.commit()
@@ -232,7 +212,7 @@ class EvaluationService:
         run = session.get(RunRecord, run_id)
         if run is None:
             return
-        evaluations = self.telemetry_repo.get_task_evaluations(session, run_id)
+        evaluations = _list_task_evaluations(session, run_id)
         score_summary = aggregate_evaluation_scores(evaluations)
         existing_summary = dict({} if run.summary_json is None else run.summary_json)
         existing_summary.update(
@@ -245,6 +225,39 @@ class EvaluationService:
         run.summary_json = existing_summary
         session.add(run)
         session.flush()
+
+
+def _list_task_evaluations(session: Session, run_id: UUID) -> list[RunTaskEvaluation]:
+    stmt = select(RunTaskEvaluation).where(RunTaskEvaluation.run_id == run_id)
+    return list(session.exec(stmt).all())
+
+
+async def _create_task_evaluation(
+    session: Session,
+    *,
+    run_id: UUID,
+    task_execution_id: UUID,
+    task_id: UUID,
+    definition_evaluator_id: UUID,
+    score: float | None = None,
+    passed: bool | None = None,
+    feedback: str | None = None,
+    summary_json: dict | None = None,
+) -> RunTaskEvaluation:
+    evaluation = RunTaskEvaluation(
+        id=new_id(),
+        run_id=run_id,
+        task_execution_id=task_execution_id,
+        task_id=task_id,
+        definition_evaluator_id=definition_evaluator_id,
+        score=score,
+        passed=passed,
+        feedback=feedback,
+        summary_json={} if summary_json is None else summary_json,
+    )
+    session.add(evaluation)
+    session.flush()
+    return evaluation
 
 
 def _criterion_status(*, passed: bool, error: dict | None, skipped_reason: str | None) -> str:
@@ -327,57 +340,4 @@ def build_evaluation_summary(
         stages_passed=stages_passed,
         metadata=result.metadata,
         criterion_results=entries,
-    )
-
-
-def build_dashboard_evaluation_dto(
-    *,
-    evaluation_id: UUID,
-    run_id: UUID,
-    task_id: UUID,
-    total_score: float,
-    created_at: datetime,
-    summary: EvaluationSummary,
-) -> RunTaskEvaluationDto:
-    criterion_results = [
-        RunEvaluationCriterionDto(
-            id=f"{evaluation_id}-{i}",
-            stage_num=cr.stage_num,
-            stage_name=cr.stage_name,
-            criterion_num=cr.criterion_num,
-            criterion_slug=cr.criterion_slug,
-            criterion_type=cr.criterion_type,
-            criterion_description=cr.criterion_description,
-            criterion_name=cr.criterion_name,
-            status=cr.status,
-            passed=cr.passed,
-            weight=cr.weight,
-            contribution=cr.contribution,
-            evaluation_input=cr.evaluation_input,
-            score=cr.score,
-            max_score=cr.max_score,
-            feedback=cr.feedback,
-            model_reasoning=cr.model_reasoning,
-            skipped_reason=cr.skipped_reason,
-            evaluated_action_ids=cr.evaluated_action_ids,
-            evaluated_resource_ids=cr.evaluated_resource_ids,
-            observation=cr.observation.model_dump(mode="json") if cr.observation else None,
-            error=cr.error,
-        )
-        for i, cr in enumerate(summary.criterion_results)
-    ]
-    return RunTaskEvaluationDto(
-        id=str(evaluation_id),
-        run_id=str(run_id),
-        task_id=str(task_id),
-        evaluator_name=summary.evaluator_name,
-        aggregation_rule="weighted_sum",
-        total_score=total_score,
-        max_score=summary.max_score,
-        normalized_score=summary.normalized_score,
-        stages_evaluated=summary.stages_evaluated,
-        stages_passed=summary.stages_passed,
-        failed_gate=summary.failed_gate,
-        created_at=created_at,
-        criterion_results=criterion_results,
     )

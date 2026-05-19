@@ -15,7 +15,7 @@ from ergon_core.core.persistence.context.event_payloads import (
     ContextEventPayload,
     ContextEventType,
 )
-from ergon_core.core.persistence.telemetry.evaluation_summary import EvalCriterionStatus
+from ergon_core.core.application.evaluation.summary import EvalCriterionStatus
 from ergon_core.core.persistence.telemetry.models import ExperimentCohortStatus
 from ergon_core.core.shared.json_types import JsonObject
 from pydantic import BaseModel, ConfigDict, Field
@@ -40,7 +40,7 @@ class RunTaskDto(CamelModel):
     """REST projection of RunGraphNode for run detail pages.
 
     This is not the canonical graph schema; graph semantics live in
-    application/graph/models.py and persistence/graph/status_conventions.py.
+    application/graph/models.py and application/runtime/status.py.
     """
 
     id: str

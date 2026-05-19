@@ -8,9 +8,9 @@ from ergon_core.core.application.communication.models import (
     RunCommunicationMessageDto,
     RunCommunicationThreadDto,
 )
+from ergon_core.core.application.evaluation.dto_mapping import evaluation_row_to_dto
 from ergon_core.core.application.read_models.models import (
     RunContextEventDto,
-    RunEvaluationCriterionDto,
     RunExecutionAttemptDto,
     RunResourceDto,
     RunSandboxCommandDto,
@@ -181,51 +181,7 @@ def _task_keyed_evaluations(
     result: dict[str, RunTaskEvaluationDto] = {}
     for ev in evaluations:
         tid = str(ev.task_id)
-        summary = ev.parsed_summary()
-
-        criterion_results = [
-            RunEvaluationCriterionDto(
-                id=f"{ev.id}-{i}",
-                stage_num=cr.stage_num,
-                stage_name=cr.stage_name,
-                criterion_num=cr.criterion_num,
-                criterion_slug=cr.criterion_slug,
-                criterion_type=cr.criterion_type,
-                criterion_description=cr.criterion_description,
-                criterion_name=cr.criterion_name,
-                status=cr.status,
-                passed=cr.passed,
-                weight=cr.weight,
-                contribution=cr.contribution,
-                evaluation_input=cr.evaluation_input,
-                score=cr.score,
-                max_score=cr.max_score,
-                feedback=cr.feedback,
-                model_reasoning=cr.model_reasoning,
-                skipped_reason=cr.skipped_reason,
-                evaluated_action_ids=cr.evaluated_action_ids,
-                evaluated_resource_ids=cr.evaluated_resource_ids,
-                observation=cr.observation.model_dump(mode="json") if cr.observation else None,
-                error=cr.error,
-            )
-            for i, cr in enumerate(summary.criterion_results)
-        ]
-
-        result[tid] = RunTaskEvaluationDto(
-            id=str(ev.id),
-            run_id=run_id,
-            task_id=tid,
-            evaluator_name=summary.evaluator_name,
-            aggregation_rule="weighted_sum",
-            total_score=0.0 if ev.score is None else ev.score,
-            max_score=summary.max_score,
-            normalized_score=summary.normalized_score,
-            stages_evaluated=summary.stages_evaluated,
-            stages_passed=summary.stages_passed,
-            failed_gate=summary.failed_gate,
-            created_at=ev.created_at,
-            criterion_results=criterion_results,
-        )
+        result[tid] = evaluation_row_to_dto(ev)
     return result
 
 

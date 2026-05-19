@@ -1,6 +1,6 @@
 """Cohort row rubric status summaries."""
 
-from ergon_core.core.persistence.telemetry.evaluation_summary import (
+from ergon_core.core.application.evaluation.summary import (
     CriterionOutcomeEntry,
     EvaluationSummary,
 )

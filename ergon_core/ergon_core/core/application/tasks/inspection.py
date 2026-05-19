@@ -8,7 +8,7 @@ import logging
 from uuid import UUID
 
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import COMPLETED, FAILED
+from ergon_core.core.application.runtime.status import COMPLETED, FAILED
 from ergon_core.core.application.graph.repository import WorkflowGraphRepository
 from ergon_core.core.application.tasks.models import SubtaskInfo
 from ergon_core.core.application.tasks.repository import TaskExecutionRepository

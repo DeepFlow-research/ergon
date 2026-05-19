@@ -1,4 +1,4 @@
-from ergon_core.core.persistence.graph import status_conventions as graph_status
+from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.application.tasks import execution as task_execution_service
