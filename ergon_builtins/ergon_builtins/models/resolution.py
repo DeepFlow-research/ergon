@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import pydantic_ai.models
 from ergon_core.core.shared.json_types import JsonObject
@@ -17,6 +18,7 @@ _OPENAI_COMPAT_LOGPROB_SETTINGS: JsonObject = {
     "openai_logprobs": True,
     "openai_top_logprobs": 1,
 }
+_DEFAULT_MODEL_TARGET = "openai:gpt-4o"
 
 
 class ResolvedModel(BaseModel):
@@ -30,10 +32,28 @@ class ResolvedModel(BaseModel):
     capture_model_settings: JsonObject | None = None
 
 
-_BACKEND_REGISTRY: dict[str, Callable[..., ResolvedModel]] = {}
+@dataclass(frozen=True)
+class _ModelTarget:
+    raw: str
+    prefix: str
+    name: str
+
+    @classmethod
+    def parse(cls, model_target: str | None) -> "_ModelTarget":
+        raw = model_target or _DEFAULT_MODEL_TARGET
+        prefix, separator, name = raw.partition(":")
+        if not separator:
+            return cls(raw=raw, prefix="", name=raw)
+        return cls(raw=raw, prefix=prefix, name=name)
 
 
-def register_model_backend(prefix: str, resolver: Callable[..., ResolvedModel]) -> None:
+_BackendResolver = Callable[..., ResolvedModel]
+_CaptureSettingsResolver = Callable[["_ModelTarget", bool], JsonObject | None]
+
+_BACKEND_REGISTRY: dict[str, _BackendResolver] = {}
+
+
+def register_model_backend(prefix: str, resolver: _BackendResolver) -> None:
     """Register a model backend resolver for a given target prefix."""
     _BACKEND_REGISTRY[prefix] = resolver
 
@@ -43,62 +63,80 @@ def registered_model_backend_prefixes() -> set[str]:
     return set(_BACKEND_REGISTRY)
 
 
-def _target_prefix(model_target: str | None) -> str:
-    target = model_target or ""
-    return target.split(":", 1)[0] if ":" in target else ""
-
-
 def capture_model_settings_for(
     model_target: str | None,
     *,
     supports_logprobs: bool = False,
 ) -> JsonObject | None:
     """Return PydanticAI model settings for richer transcript capture."""
-    prefix = _target_prefix(model_target)
+    target = _ModelTarget.parse(model_target)
+    resolver = _CAPTURE_SETTINGS_BY_PREFIX.get(target.prefix)
+    if resolver is None:
+        return None
+    return resolver(target, supports_logprobs)
 
-    if prefix == "vllm" and supports_logprobs:
+
+def _vllm_capture_settings(
+    _target: _ModelTarget,
+    supports_logprobs: bool,
+) -> JsonObject | None:
+    if supports_logprobs:
         return dict(_OPENAI_COMPAT_LOGPROB_SETTINGS)
-
-    if prefix == "anthropic":
-        anthropic_model_name = (model_target or "").split(":", 1)[-1].lower()
-        if anthropic_model_name.startswith("claude-opus-4.7"):
-            return {
-                "anthropic_thinking": {
-                    "type": "adaptive",
-                    "display": "summarized",
-                },
-                "anthropic_effort": "medium",
-            }
-        return {
-            "anthropic_thinking": {
-                "type": "enabled",
-                "budget_tokens": _ANTHROPIC_THINKING_BUDGET_TOKENS,
-            }
-        }
-
-    if prefix == "openrouter":
-        return {
-            "openrouter_reasoning": dict(_openrouter_reasoning_settings_for(model_target)),
-        }
-
-    if prefix == "openai-responses":
-        return {
-            "openai_reasoning_effort": "medium",
-            "openai_reasoning_summary": "detailed",
-        }
-
-    if prefix == "google":
-        return {
-            "gemini_thinking_config": {
-                "include_thoughts": True,
-            }
-        }
-
     return None
 
 
-def _openrouter_reasoning_settings_for(model_target: str | None) -> OpenRouterReasoning:
-    model_name = (model_target or "").split(":", 1)[-1].lower()
+def _anthropic_capture_settings(
+    target: _ModelTarget,
+    _supports_logprobs: bool,
+) -> JsonObject:
+    if target.name.lower().startswith("claude-opus-4.7"):
+        return {
+            "anthropic_thinking": {
+                "type": "adaptive",
+                "display": "summarized",
+            },
+            "anthropic_effort": "medium",
+        }
+    return {
+        "anthropic_thinking": {
+            "type": "enabled",
+            "budget_tokens": _ANTHROPIC_THINKING_BUDGET_TOKENS,
+        }
+    }
+
+
+def _openrouter_capture_settings(
+    target: _ModelTarget,
+    _supports_logprobs: bool,
+) -> JsonObject:
+    return {
+        "openrouter_reasoning": dict(_openrouter_reasoning_settings_for(target.name)),
+    }
+
+
+def _openai_responses_capture_settings(
+    _target: _ModelTarget,
+    _supports_logprobs: bool,
+) -> JsonObject:
+    return {
+        "openai_reasoning_effort": "medium",
+        "openai_reasoning_summary": "detailed",
+    }
+
+
+def _google_capture_settings(
+    _target: _ModelTarget,
+    _supports_logprobs: bool,
+) -> JsonObject:
+    return {
+        "gemini_thinking_config": {
+            "include_thoughts": True,
+        }
+    }
+
+
+def _openrouter_reasoning_settings_for(model_name: str) -> OpenRouterReasoning:
+    model_name = model_name.lower()
     if model_name.startswith("anthropic/claude-opus-4"):
         return OpenRouterReasoning(
             max_tokens=_OPENROUTER_ANTHROPIC_OPUS_BUDGET_TOKENS,
@@ -116,8 +154,20 @@ def _openrouter_reasoning_settings_for(model_target: str | None) -> OpenRouterRe
     return OpenRouterReasoning(enabled=True, exclude=False)
 
 
-def _with_capture_settings(target: str, resolved: ResolvedModel) -> ResolvedModel:
-    settings = capture_model_settings_for(target, supports_logprobs=resolved.supports_logprobs)
+_CAPTURE_SETTINGS_BY_PREFIX: dict[str, _CaptureSettingsResolver] = {
+    "vllm": _vllm_capture_settings,
+    "anthropic": _anthropic_capture_settings,
+    "openrouter": _openrouter_capture_settings,
+    "openai-responses": _openai_responses_capture_settings,
+    "google": _google_capture_settings,
+}
+
+
+def _with_capture_settings(target: _ModelTarget, resolved: ResolvedModel) -> ResolvedModel:
+    settings = capture_model_settings_for(
+        target.raw,
+        supports_logprobs=resolved.supports_logprobs,
+    )
     if resolved.capture_model_settings == settings:
         return resolved
     return resolved.model_copy(update={"capture_model_settings": settings})
@@ -131,19 +181,18 @@ def resolve_model_target(
     api_key: str | None = None,
 ) -> ResolvedModel:
     """Resolve a model target string to a PydanticAI-compatible model."""
-    target = model_target or "openai:gpt-4o"
-    prefix = _target_prefix(target)
+    target = _ModelTarget.parse(model_target)
 
-    resolver = _BACKEND_REGISTRY.get(prefix)
+    resolver = _BACKEND_REGISTRY.get(target.prefix)
     if resolver is not None:
         return _with_capture_settings(
             target,
             resolver(
-                target,
+                target.raw,
                 model_name=model_name,
                 policy_version=policy_version,
                 api_key=api_key,
             ),
         )
 
-    return _with_capture_settings(target, ResolvedModel(model=target, supports_logprobs=False))
+    return _with_capture_settings(target, ResolvedModel(model=target.raw, supports_logprobs=False))

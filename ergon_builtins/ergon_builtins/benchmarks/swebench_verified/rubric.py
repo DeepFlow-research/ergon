@@ -7,7 +7,7 @@ from pydantic import Field
 from ergon_core.api.criterion import Criterion
 from ergon_core.api.rubric import Rubric
 
-from ergon_builtins.benchmarks.swebench_verified.criterion import (
+from ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution import (
     SWEBenchTestCriterion,
 )
 

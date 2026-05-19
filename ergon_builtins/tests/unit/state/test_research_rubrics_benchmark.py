@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 from ergon_builtins.benchmarks.researchrubrics.benchmark import ResearchRubricsBenchmark
-from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
+from ergon_builtins.benchmarks.researchrubrics.criteria.judge import (
     ResearchRubricsJudgeCriterion,
 )
 from ergon_builtins.benchmarks.researchrubrics.rubric import ResearchRubricsRubric
@@ -223,28 +223,6 @@ class TestResearchRubricsJudgeCriterion:
         scratch_path.write_bytes(scratch_blob)
         final_resource = final_resource.model_copy(update={"file_path": str(final_path)})
         scratch_resource = scratch_resource.model_copy(update={"file_path": str(scratch_path)})
-        listed: list[tuple[object, object]] = []
-
-        class FakeRepo:
-            def list_for_run(self, session, *, run_id, task_execution_id):
-                listed.append((run_id, task_execution_id))
-                return [scratch_resource, final_resource]
-
-        class FakeSession:
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                return None
-
-        monkeypatch.setattr(
-            "ergon_builtins.benchmarks.researchrubrics.judge_criterion.RunResourceRepository",
-            lambda: FakeRepo(),
-        )
-        monkeypatch.setattr(
-            "ergon_builtins.benchmarks.researchrubrics.judge_criterion.get_session",
-            lambda: FakeSession(),
-        )
         captured_user_prompts: list[str] = []
 
         context = CriterionContext(
@@ -258,12 +236,13 @@ class TestResearchRubricsJudgeCriterion:
                 description="Write a report.",
             ),
             worker_result=WorkerOutput(output="assistant summary only"),
+            metadata={"resources": [scratch_resource, final_resource]},
         )
 
         class Criterion(ResearchRubricsJudgeCriterion):
             async def _call_judge(self, *, system_prompt: str, user_prompt: str):
                 captured_user_prompts.append(user_prompt)
-                from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
+                from ergon_builtins.benchmarks.researchrubrics.criteria.judge import (
                     ResearchRubricsVerdict,
                 )
 
@@ -283,7 +262,6 @@ class TestResearchRubricsJudgeCriterion:
 
         result = await criterion.evaluate(context)
 
-        assert listed == [(context.run_id, context.execution_id)]
         assert result.evaluated_resource_ids == [
             str(final_resource.id),
             str(scratch_resource.id),

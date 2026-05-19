@@ -10,7 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from ergon_builtins.benchmarks.swebench_verified.criterion import SWEBenchTestCriterion
+from ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution import (
+    SWEBenchTestCriterion,
+)
 from ergon_builtins.benchmarks.swebench_verified.task_schemas import SWEBenchTaskPayload
 from ergon_core.api import WorkerOutput
 from ergon_core.api.criterion import CriterionContext
@@ -79,11 +81,11 @@ async def test_criterion_computes_patch_via_run_command(
     # Skip the heavy harness-grading path with a monkeypatch so the test
     # doesn't try to import swebench or run the real eval script.
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.criterion.get_eval_report",
+        "ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution.get_eval_report",
         lambda **kwargs: {payload.instance_id: {"resolved": True, "tests_status": {}}},
     )
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
+        "ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution.make_test_spec",
         lambda row: MagicMock(install_repo_script=":", eval_script=":"),
     )
 
@@ -147,11 +149,11 @@ async def test_criterion_short_circuits_on_empty_patch(
     # Even if the criterion regresses and tries the old make_test_spec path,
     # monkeypatch so the test doesn't depend on the real swebench harness.
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.criterion.get_eval_report",
+        "ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution.get_eval_report",
         lambda **kwargs: {payload.instance_id: {"resolved": False, "tests_status": {}}},
     )
     monkeypatch.setattr(
-        "ergon_builtins.benchmarks.swebench_verified.criterion.make_test_spec",
+        "ergon_builtins.benchmarks.swebench_verified.criteria.test_resolution.make_test_spec",
         lambda row: MagicMock(install_repo_script=":", eval_script=":"),
     )
 

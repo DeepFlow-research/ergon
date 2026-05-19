@@ -54,14 +54,14 @@ class TestLLMJudgeCriterionWithRuntime:
         ],
     )
     async def test_evaluate_verdict(self, monkeypatch, passed, expected_score, reasoning):
-        from ergon_builtins.evaluators.criteria.llm_judge import (
+        from ergon_builtins.benchmarks.gdpeval.criteria.llm_judge import (
             LLMJudgeCriterion,
             _JudgeVerdict,
         )
 
         judge = AsyncMock(return_value=_JudgeVerdict(reasoning=reasoning, passed=passed))
         monkeypatch.setattr(
-            "ergon_builtins.evaluators.criteria.llm_judge.call_structured_judge",
+            "ergon_builtins.benchmarks.gdpeval.criteria.llm_judge.call_structured_judge",
             judge,
         )
 

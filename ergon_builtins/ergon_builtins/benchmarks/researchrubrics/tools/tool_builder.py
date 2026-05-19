@@ -6,7 +6,7 @@ remains serializable: the Pydantic BaseModel carries only config;
 to the sandbox.
 
 Import note: ``ResearchRubricsToolkit`` is only imported under
-``TYPE_CHECKING`` to break the runtime cycle ``toolkit.py → _tools.py →
+``TYPE_CHECKING`` to break the runtime cycle ``toolkit.py → tools/tool_builder.py →
 toolkit.py``.
 # reason: circular import — toolkit.py imports build_tools from this module;
 #         importing ResearchRubricsToolkit at runtime would re-enter

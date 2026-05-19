@@ -5,7 +5,7 @@ Each ``RubricCriterion`` from the dataset is converted into a lightweight
 and weight.
 """
 
-from ergon_builtins.benchmarks.researchrubrics.judge_criterion import (
+from ergon_builtins.benchmarks.researchrubrics.criteria.judge import (
     ResearchRubricsJudgeCriterion,
 )
 from ergon_builtins.benchmarks.researchrubrics.task_schemas import RubricCriterion
