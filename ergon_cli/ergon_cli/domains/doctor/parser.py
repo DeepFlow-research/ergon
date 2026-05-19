@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.doctor import handle_doctor
+from ergon_cli.domains.doctor.commands import handle_doctor
 
 
 def register_doctor_parser(subparsers: argparse._SubParsersAction) -> None:

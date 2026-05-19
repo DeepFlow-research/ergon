@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.stack import handle_start, handle_stop
+from ergon_cli.domains.stack.commands import handle_start, handle_stop
 
 
 def register_stack_parser(subparsers: argparse._SubParsersAction) -> None:

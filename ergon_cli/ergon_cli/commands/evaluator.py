@@ -1,15 +1,7 @@
-"""Evaluator subcommand: list available evaluators."""
-
 from argparse import Namespace
 
-from ergon_cli.discovery import list_evaluators
-from ergon_cli.rendering import render_table
+from ergon_cli.domains.evaluators.commands import handle_evaluator as handle_evaluator_command
 
 
 def handle_evaluator(args: Namespace) -> int:
-    if args.evaluator_action == "list":
-        evaluators = list_evaluators()
-        render_table(["Slug", "Name"], evaluators)
-        return 0
-    print("Usage: ergon evaluator list")
-    return 1
+    return handle_evaluator_command(args)

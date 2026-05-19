@@ -1,6 +1,6 @@
 import argparse
 
-from ergon_cli.commands.worker import handle_worker
+from ergon_cli.domains.workers.commands import handle_worker
 
 
 def register_worker_parser(subparsers: argparse._SubParsersAction) -> None:

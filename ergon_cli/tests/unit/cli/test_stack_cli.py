@@ -9,7 +9,7 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import ergon_cli.commands.stack as _stack_mod
+import ergon_cli.domains.stack.service as _stack_service
 import pytest
 from ergon_cli.commands.stack import _find_compose_file, handle_start, handle_stop
 
@@ -81,9 +81,9 @@ class _FakeRunner:
 def mock_docker_ok(monkeypatch: pytest.MonkeyPatch) -> _FakeRunner:
     """Patch ``shutil.which('docker')`` to a fake path and ``subprocess.run``
     to a recording fake that returns 0 for every call by default."""
-    monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+    monkeypatch.setattr(_stack_service.shutil, "which", lambda name: f"/usr/local/bin/{name}")
     runner = _FakeRunner()
-    monkeypatch.setattr(_stack_mod.subprocess, "run", runner)
+    monkeypatch.setattr(_stack_service.subprocess, "run", runner)
     return runner
 
 
@@ -137,10 +137,10 @@ class TestHandleStart:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: f"/usr/local/bin/{name}")
         # `docker info` returns rc=1 → daemon not reachable.
         runner = _FakeRunner({("docker", "info"): 1})
-        monkeypatch.setattr(_stack_mod.subprocess, "run", runner)
+        monkeypatch.setattr(_stack_service.subprocess, "run", runner)
 
         rc = handle_start(Namespace())
 
@@ -156,7 +156,7 @@ class TestHandleStart:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: None)
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: None)
 
         rc = handle_start(Namespace())
 
@@ -171,14 +171,14 @@ class TestHandleStart:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: f"/usr/local/bin/{name}")
         runner = _FakeRunner(
             {
                 ("docker", "info"): 0,
                 ("docker", "compose", "up", "-d", "--wait"): 2,
             }
         )
-        monkeypatch.setattr(_stack_mod.subprocess, "run", runner)
+        monkeypatch.setattr(_stack_service.subprocess, "run", runner)
 
         rc = handle_start(Namespace())
 
@@ -250,7 +250,7 @@ class TestHandleStop:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: None)
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: None)
 
         rc = handle_stop(Namespace())
 
@@ -264,9 +264,9 @@ class TestHandleStop:
     ) -> None:
         repo = _seed_repo(tmp_path)
         monkeypatch.chdir(repo)
-        monkeypatch.setattr(_stack_mod.shutil, "which", lambda name: f"/usr/local/bin/{name}")
+        monkeypatch.setattr(_stack_service.shutil, "which", lambda name: f"/usr/local/bin/{name}")
         runner = _FakeRunner({("docker", "compose", "down"): 5})
-        monkeypatch.setattr(_stack_mod.subprocess, "run", runner)
+        monkeypatch.setattr(_stack_service.subprocess, "run", runner)
 
         rc = handle_stop(Namespace())
 
