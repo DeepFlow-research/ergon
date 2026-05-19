@@ -5,7 +5,12 @@ from uuid import UUID
 
 from ergon_core.api.benchmark.task import Task
 from ergon_core.api.worker.results import WorkerOutput
-from ergon_core.core.application.evaluation.protocols import CriterionRuntime
+from ergon_core.core.application.evaluation.protocols import (
+    CommandResult,
+    CriterionRuntime,
+    SandboxResult,
+)
+from ergon_core.core.application.resources.models import RunResourceView
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SkipValidation
 
 
@@ -68,10 +73,10 @@ class CriterionContext(BaseModel):
     async def write_file(self, path: str, content: bytes) -> None:
         await self._require_runtime().write_file(path, content)
 
-    async def run_command(self, command: str, timeout: int = 30):
+    async def run_command(self, command: str, timeout: int = 30) -> CommandResult:
         return await self._require_runtime().run_command(command, timeout)
 
-    async def execute_code(self, code: str):
+    async def execute_code(self, code: str) -> SandboxResult:
         """Execute code through the internal criterion runtime."""
         return await self._require_runtime().execute_code(code)
 
@@ -84,13 +89,13 @@ class CriterionContext(BaseModel):
     async def read_resource_by_id(self, resource_id: UUID) -> bytes:
         return await self._require_runtime().read_resource_by_id(resource_id)
 
-    async def list_resources(self, task_execution_id: UUID | None = None):
+    async def list_resources(self, task_execution_id: UUID | None = None) -> list[RunResourceView]:
         return await self._require_runtime().list_resources(task_execution_id)
 
     async def get_all_files_for_task(self) -> dict[str, bytes]:
         return await self._require_runtime().get_all_files_for_task()
 
-    async def list_files(self, path: str = "."):
+    async def list_files(self, path: str = ".") -> CommandResult:
         """List files through the internal criterion runtime."""
         return await self.run_command(f"find {path} -maxdepth 1 -type f", timeout=30)
 

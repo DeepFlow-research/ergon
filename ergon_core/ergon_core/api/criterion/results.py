@@ -61,7 +61,10 @@ class CriterionOutcome(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _populate_slug_name(cls, data):
+    def _populate_slug_name(cls, data: Any) -> Any:  # slopcop: ignore[no-typing-any]
+        # `mode="before"` validators receive whatever shape Pydantic was
+        # handed (dict, raw object, model instance). `Any` is the
+        # documented Pydantic signature for `before` validators.
         if isinstance(data, dict):
             if "slug" not in data and "name" in data:
                 data["slug"] = data["name"]

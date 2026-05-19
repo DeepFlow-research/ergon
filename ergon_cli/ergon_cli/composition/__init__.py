@@ -1,6 +1,8 @@
 """Build Experiment from CLI args using registry lookups."""
 
+from ergon_core.api.benchmark import Benchmark
 from ergon_core.api.registry import registry
+from ergon_core.api.rubric import Evaluator
 from ergon_core.core.domain.experiments import Experiment, WorkerSpec
 from ergon_builtins.registry import register_builtins
 
@@ -70,11 +72,11 @@ def _is_smoke_worker(worker_slug: str) -> bool:
 
 def _build_smoke_experiment(
     *,
-    benchmark,
-    evaluator,
+    benchmark: Benchmark,
+    evaluator: Evaluator,
     worker_slug: str,
     model: str,
-):
+) -> Experiment:
     """Smoke composition: register parent + leaf(s) as experiment workers.
 
     The parent worker is assigned to all benchmark tasks (single static
@@ -140,10 +142,10 @@ def _build_smoke_experiment(
 
 def _build_researchrubrics_workflow_experiment(
     *,
-    benchmark,
-    evaluator,
+    benchmark: Benchmark,
+    evaluator: Evaluator,
     model: str,
-):
+) -> Experiment:
     """Register CLI-manager plus child worker bindings for dynamic subtasks."""
     manager_name = "manager"
     workers = {
@@ -182,21 +184,28 @@ def _build_researchrubrics_workflow_experiment(
     )
 
 
-def _construct_benchmark(cls, workflow: str, limit: int | None):
-    """Try constructing with all kwargs, progressively dropping unsupported ones."""
+def _construct_benchmark(cls: type[Benchmark], workflow: str, limit: int | None) -> Benchmark:
+    """Try constructing with all kwargs, progressively dropping unsupported ones.
+
+    Benchmark subclasses define their own ``__init__`` signatures; we
+    duck-type the constructor at runtime and catch ``TypeError`` to
+    handle subclasses that don't accept these kwargs. The type checker
+    can't see beyond ``Benchmark.__init__``, so the calls below carry
+    ``# ty: ignore`` — the try/except is the real safety net.
+    """
     kwargs: dict[str, str | int] = {}
     if limit is not None:
         kwargs["limit"] = limit
 
     # Try with workflow + limit
     try:
-        return cls(workflow=workflow, **kwargs)
+        return cls(workflow=workflow, **kwargs)  # ty: ignore[unknown-argument]
     except TypeError:
         pass  # slopcop: ignore[no-pass-except]
 
     # Try with just limit (no workflow)
     try:
-        return cls(**kwargs)
+        return cls(**kwargs)  # ty: ignore[unknown-argument]
     except TypeError:
         pass  # slopcop: ignore[no-pass-except]
 

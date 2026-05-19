@@ -2,7 +2,22 @@
 
 from argparse import Namespace
 import logging
+from typing import TYPE_CHECKING
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from ergon_core.api.benchmark import Benchmark
+    from ergon_core.api.rubric import Evaluator
+    from ergon_core.api.worker import Worker
+    from ergon_core.core.infrastructure.sandbox.manager import BaseSandboxManager
+
+    _LoadedRegistry = tuple[
+        dict[str, type[Benchmark]],
+        dict[str, type[Worker]],
+        dict[str, type[Evaluator]],
+        dict[str, type[BaseSandboxManager]],
+        set[str],
+    ]
 
 from ergon_core.core.persistence.shared.db import ensure_db
 from ergon_core.core.application.read_models.cohorts import experiment_cohort_service
@@ -183,7 +198,7 @@ def validate_explicit_runtime_choices(args: Namespace) -> tuple[str, ...]:
     return extras
 
 
-def _load_registry():
+def _load_registry() -> "_LoadedRegistry":
     from ergon_builtins.models.resolution import registered_model_backend_prefixes
     from ergon_builtins.registry import register_builtins
     from ergon_core.api.registry import registry
