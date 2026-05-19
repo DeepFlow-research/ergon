@@ -7,7 +7,6 @@ import { backendUnavailable, type ServerDataResult } from "./responses";
 
 export interface ExperimentSummary {
   definition_id: string;
-  cohort_id: string | null;
   name: string;
   benchmark_type: string;
   sample_count: number;
@@ -24,7 +23,6 @@ function parseExperimentList(input: unknown): ExperimentSummary[] {
     const record = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : {};
     return {
       definition_id: String(record.definition_id ?? ""),
-      cohort_id: (record.cohort_id as string | null | undefined) ?? null,
       name: String(record.name ?? ""),
       benchmark_type: String(record.benchmark_type ?? ""),
       sample_count: Number(record.sample_count ?? 0),

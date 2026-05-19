@@ -1,13 +1,13 @@
-"""ResearchRubrics canonical happy/sad smoke cohort against real E2B.
+"""ResearchRubrics canonical happy/sad smoke experiment group against real E2B.
 
 Per-run assertion dispatch on slot ``kind``:
 
 - ``happy`` uses the old fully-completing smoke worker.
 - ``sad`` routes ``l_2`` to a failing leaf; ``l_3`` remains blocked.
 
-Cohort-level: ``_assert_cohort_membership`` checks all submitted runs
-are visible on ``/cohort/{key}``.  Playwright subprocess runs at the
-end with a JSON-encoded cohort array so the shared factory can dispatch
+Experiment group-level: ``_assert_experiment_membership`` checks all submitted runs
+are visible through the experiment-group harness endpoint. Playwright subprocess runs at the
+end with a JSON-encoded experiment-run array so the shared factory can dispatch
 per-kind assertions in the UI.
 """
 
@@ -24,7 +24,7 @@ import pytest
 
 from tests.e2e._asserts import (
     _assert_blob_roundtrip,
-    _assert_cohort_membership,
+    _assert_experiment_membership,
     _assert_run_evaluation,
     _assert_run_graph,
     _assert_run_resources,
@@ -40,7 +40,7 @@ from tests.e2e._asserts import (
     _assert_thread_messages_ordered,
     wait_for_terminal_status,
 )
-from tests.e2e._submit import submit_cohort
+from tests.e2e._submit import submit_experiment_runs
 
 ENV = "researchrubrics"
 HAPPY_WORKER = f"{ENV}-smoke-worker"
@@ -49,14 +49,14 @@ CRITERION = f"{ENV}-smoke-criterion"
 PER_RUN_TIMEOUT = 270  # seconds; < pytest's 300s --timeout
 
 
-COHORT_SIZE = int(os.environ.get("SMOKE_COHORT_SIZE", "1"))
+EXPERIMENT_GROUP_SIZE = int(os.environ.get("SMOKE_EXPERIMENT_GROUP_SIZE", "1"))
 SmokeSlot = tuple[str, str, str]
 
 
-def _smoke_slots(cohort_size: int) -> list[SmokeSlot]:
+def _smoke_slots(group_size: int) -> list[SmokeSlot]:
     return [
         slot
-        for _ in range(cohort_size)
+        for _ in range(group_size)
         for slot in (
             ("happy", HAPPY_WORKER, CRITERION),
             ("sad", SAD_WORKER, CRITERION),
@@ -66,14 +66,14 @@ def _smoke_slots(cohort_size: int) -> list[SmokeSlot]:
 
 @pytest.mark.e2e
 @pytest.mark.asyncio
-async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
-    cohort_key = f"ci-smoke-{ENV}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
-    smoke_slots = _smoke_slots(COHORT_SIZE)
+async def test_smoke_experiment_group(tmp_path: pathlib.Path) -> None:
+    experiment = f"ci-smoke-{ENV}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+    smoke_slots = _smoke_slots(EXPERIMENT_GROUP_SIZE)
 
-    run_ids = await submit_cohort(
+    run_ids = await submit_experiment_runs(
         benchmark_slug=ENV,
         slots=[(worker, criterion) for _, worker, criterion in smoke_slots],
-        cohort_key=cohort_key,
+        experiment=experiment,
         sandbox_slug=ENV,
         dependency_extras=("none",),
         timeout=PER_RUN_TIMEOUT,
@@ -97,7 +97,7 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
         else:
             _assert_sad_run(rid)
 
-    _assert_cohort_membership(cohort_key, run_ids)
+    _assert_experiment_membership(experiment, run_ids)
 
     screenshot_dir_env = os.environ.get("SCREENSHOT_DIR")
     screenshot_dir = (
@@ -106,8 +106,8 @@ async def test_smoke_cohort(tmp_path: pathlib.Path) -> None:
         else tmp_path / "playwright"
     )
     _invoke_playwright(
-        cohort_key=cohort_key,
-        cohort=[
+        experiment=experiment,
+        experiment_runs=[
             {"run_id": str(rid), "kind": kind}
             for (kind, _, _), rid in zip(smoke_slots, run_ids, strict=True)
         ],
@@ -140,13 +140,13 @@ def _assert_sad_run(rid) -> None:
 
 def _invoke_playwright(
     *,
-    cohort_key: str,
-    cohort: list[dict[str, str]],
+    experiment: str,
+    experiment_runs: list[dict[str, str]],
     screenshot_dir: pathlib.Path,
 ) -> None:
     """Launch the researchrubrics smoke Playwright spec as a subprocess.
 
-    Passes cohort state via env vars: JSON-encoded cohort list so the
+    Passes experiment-run state via env vars: JSON-encoded experiment-run list so the
     shared factory can dispatch per-kind assertions.  Always runs (even
     when phase-3 assertions failed) so the dashboard state at time of
     failure is captured.
@@ -165,9 +165,9 @@ def _invoke_playwright(
         ],
         env={
             **os.environ,
-            "COHORT_KEY": cohort_key,
+            "EXPERIMENT_KEY": experiment,
             "SMOKE_ENV": ENV,
-            "SMOKE_COHORT_JSON": json.dumps(cohort),
+            "SMOKE_EXPERIMENT_JSON": json.dumps(experiment_runs),
             "SCREENSHOT_DIR": str(screenshot_dir),
             "PLAYWRIGHT_LIVE": "1",
             "PLAYWRIGHT_BASE_URL": os.environ.get(

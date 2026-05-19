@@ -32,11 +32,8 @@ COPY ergon_ingestion/pyproject.toml ergon_ingestion/
 COPY ergon_ingestion/ergon_ingestion/ ergon_ingestion/ergon_ingestion/
 RUN cd ergon_ingestion && uv pip install --system -e ".[data]"
 
-# Install ergon_cli so the test-harness ``POST /api/test/write/cohort``
-# endpoint can call ``ergon_cli.composition.build_experiment`` —
-# exactly the same composition path the CLI takes.  Lightweight: the
-# package is a thin shell over ergon_core / ergon_builtins which are
-# already installed above.
+# Install ergon_cli for API-container smoke parity. The package is a thin
+# shell over ergon_core / ergon_builtins which are already installed above.
 COPY ergon_cli/pyproject.toml ergon_cli/
 COPY ergon_cli/ergon_cli/ ergon_cli/ergon_cli/
 RUN cd ergon_cli && uv pip install --system -e "."

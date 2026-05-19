@@ -4,11 +4,10 @@
  * Each per-env spec (researchrubrics / minif2f / swebench-verified)
  * invokes ``defineSmokeSpec`` and the factory handles:
  *
- * - Parsing ``SMOKE_COHORT_JSON`` (array of ``{run_id, kind}``) so a
- *   heterogeneous cohort (happy + sad slots) dispatches per-kind.
+ * - Parsing ``SMOKE_EXPERIMENT_JSON`` (array of ``{run_id, kind}``) so a
+ *   heterogeneous experiment group (happy + sad slots) dispatches per-kind.
  * - Per-run assertions against the backend harness DTO + dashboard UI.
  * - Screenshot capture points keyed on run_id + kind.
- * - Cohort index assertion (N runs listed, env label).
  *
  * Contract with the dashboard: all assertions use ``data-testid``
  * attributes.  See ``docs/superpowers/plans/test-refactor/03-dashboard-and-playwright.md §6``.
@@ -28,19 +27,19 @@ export interface SmokeSpecConfig {
   extraRunAssertions?: (page: Page, runId: string) => Promise<void>;
 }
 
-interface CohortMember {
+interface ExperimentGroupMember {
   run_id: string;
   kind: "happy" | "sad";
 }
 
-function readCohortFromEnv(): CohortMember[] {
-  const raw = process.env.SMOKE_COHORT_JSON;
+function readExperimentGroupFromEnv(): ExperimentGroupMember[] {
+  const raw = process.env.SMOKE_EXPERIMENT_JSON;
   if (!raw) {
     throw new Error(
-      "SMOKE_COHORT_JSON is not set — smoke spec cannot dispatch per-kind",
+      "SMOKE_EXPERIMENT_JSON is not set — smoke spec cannot dispatch per-kind",
     );
   }
-  return JSON.parse(raw) as CohortMember[];
+  return JSON.parse(raw) as ExperimentGroupMember[];
 }
 
 function requireEnv(name: string): string {
@@ -50,7 +49,7 @@ function requireEnv(name: string): string {
 }
 
 function missingSmokeEnv(): string[] {
-  return ["COHORT_KEY", "SCREENSHOT_DIR", "ERGON_API_BASE_URL", "SMOKE_COHORT_JSON"].filter(
+  return ["EXPERIMENT_KEY", "SCREENSHOT_DIR", "ERGON_API_BASE_URL", "SMOKE_EXPERIMENT_JSON"].filter(
     (name) => !process.env[name],
   );
 }
@@ -202,15 +201,15 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
     return;
   }
 
-  const cohortKey = requireEnv("COHORT_KEY");
+  const experimentKey = requireEnv("EXPERIMENT_KEY");
   const screenshotDir = requireEnv("SCREENSHOT_DIR");
   const apiBase = requireEnv("ERGON_API_BASE_URL");
 
   const client = new BackendHarnessClient(apiBase);
-  const cohort = readCohortFromEnv();
+  const experimentRuns = readExperimentGroupFromEnv();
 
   test.describe(`${cfg.env} canonical smoke`, () => {
-    for (const { run_id, kind } of cohort) {
+    for (const { run_id, kind } of experimentRuns) {
       test(`run ${run_id} (${kind})`, async ({ page }) => {
         const state = await client.getRunState(run_id);
 
@@ -251,8 +250,7 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
           const successfulEval = state.evaluations.some((e) => e.score === 1.0);
           expect(successfulEval).toBe(true);
 
-          const cohortId = await client.getCohortId(cohortKey);
-          await page.goto(`/cohorts/${cohortId}/runs/${run_id}`);
+          await page.goto(`/run/${run_id}`);
           await assertRunWorkspace(page, state, run_id);
 
           await screenshot(
@@ -290,8 +288,7 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
         expect(statusBySlug.get("l_2")).toBe("failed");
         expect(statusBySlug.get("l_3")).toBe("blocked");
 
-        const cohortId = await client.getCohortId(cohortKey);
-        await page.goto(`/cohorts/${cohortId}/runs/${run_id}`);
+        await page.goto(`/run/${run_id}`);
         await assertRunWorkspace(page, state, run_id);
         await screenshot(
           page,
@@ -308,26 +305,9 @@ export function defineSmokeSpec(cfg: SmokeSpecConfig): void {
       });
     }
 
-    test(`cohort ${cohortKey} index lists all experiments`, async ({ page }) => {
-      const cohortRuns = await client.getCohortRuns(cohortKey);
-      expect(cohortRuns.length).toBeGreaterThanOrEqual(cohort.length);
-
-      const cohortId = await client.getCohortId(cohortKey);
-      await page.goto(`/cohorts/${cohortId}`);
-      // Dashboard keys cohort experiment rows as ``cohort-experiment-row-<definition_id>``;
-      // prefix match via locator rather
-      // than exact getByTestId.
-      const rows = page.locator('[data-testid^="cohort-experiment-row-"]');
-      await expect(async () => {
-        await expect(rows).toHaveCount(cohortRuns.length);
-      }).toPass();
-      // ``cohort-header`` exists but no dedicated env label testid yet —
-      // follow-up for dashboard.  Screenshot captures the page state.
-      await expect(page.getByTestId("cohort-header")).toBeVisible();
-      await screenshot(
-        page,
-        path.join(screenshotDir, cfg.env, `cohort-${cohortKey}.png`),
-      );
+    test(`experiment ${experimentKey} grouping lists all runs`, async () => {
+      const groupedRuns = await client.getExperimentRuns(experimentKey);
+      expect(groupedRuns.length).toBeGreaterThanOrEqual(experimentRuns.length);
     });
   });
 }

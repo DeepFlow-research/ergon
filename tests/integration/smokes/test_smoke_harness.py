@@ -23,8 +23,8 @@ from sqlalchemy.exc import OperationalError
 pytestmark = pytest.mark.integration
 
 API = os.environ.get("ERGON_API_BASE_URL", "http://127.0.0.1:9000")
-_COHORT_PREFIX = "ci-smoke-"
-_COHORT = "ci-smoke-harness-test"
+_EXPERIMENT_PREFIX = "ci-smoke-"
+_EXPERIMENT = "ci-smoke-harness-test"
 
 # ---------------------------------------------------------------------------
 # Connectivity helpers (extracted to avoid nested try blocks)
@@ -35,21 +35,22 @@ def _probe_harness_mounted() -> None:
     """Skip the session if the API is unreachable or the test-harness is not mounted.
 
     Probes POST /api/__danger__/test-harness/write/reset:
-      - harness mounted     → 200
+      - harness mounted     → 204
       - harness not mounted → 404 (route missing)
       - API unreachable     → ConnectError (caught and skipped)
     """
     try:
         with httpx.Client(timeout=5.0) as client:
             resp = client.post(
-                f"{API}/api/__danger__/test-harness/write/reset", json={"cohort_prefix": "probe"}
+                f"{API}/api/__danger__/test-harness/write/reset",
+                json={"experiment_prefix": "probe"},
             )
     except (httpx.ConnectError, httpx.ReadTimeout):
         pytest.skip("API unreachable — skipping harness integration tests")
 
-    if resp.status_code != 200:
+    if resp.status_code != 204:
         pytest.skip(
-            f"Test harness not mounted (expected 200, got {resp.status_code}) "
+            f"Test harness not mounted (expected 204, got {resp.status_code}) "
             "— skipping harness integration tests"
         )
 
@@ -83,7 +84,7 @@ def _reset_before_each() -> None:
         with httpx.Client(timeout=10.0) as client:
             client.post(
                 f"{API}/api/__danger__/test-harness/write/reset",
-                json={"cohort_prefix": _COHORT_PREFIX},
+                json={"experiment_prefix": _EXPERIMENT_PREFIX},
             )
     except (httpx.ConnectError, httpx.ReadTimeout):
         pass  # session fixture already skipped if truly unreachable
@@ -111,9 +112,8 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
             seed_resp = client.post(
                 f"{API}/api/__danger__/test-harness/write/run/seed",
                 json={
-                    "workflow_definition_id": str(defn_id),
-                    "experiment_definition_id": str(defn_id),
-                    "cohort": _COHORT,
+                    "definition_id": str(defn_id),
+                    "experiment": _EXPERIMENT,
                     "status": "completed",
                 },
             )
@@ -137,7 +137,7 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
         with httpx.Client(timeout=10.0) as client:
             reset_resp = client.post(
                 f"{API}/api/__danger__/test-harness/write/reset",
-                json={"cohort_prefix": _COHORT_PREFIX},
+                json={"experiment_prefix": _EXPERIMENT_PREFIX},
             )
 
         assert reset_resp.status_code == 204, reset_resp.text
@@ -157,13 +157,13 @@ def test_seed_then_read_then_reset_roundtrip() -> None:
                 session.commit()
 
 
-def test_write_cohort_accepts_explicit_runtime_choices() -> None:
-    """Submit cohort endpoint accepts the same explicit runtime choices as the CLI."""
-    cohort_key = f"{_COHORT_PREFIX}explicit-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+def test_write_experiment_runs_accepts_explicit_runtime_choices() -> None:
+    """Submit grouped experiment-run endpoint accepts explicit runtime choices."""
+    experiment = f"{_EXPERIMENT_PREFIX}explicit-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
 
     with httpx.Client(timeout=10.0) as client:
         response = client.post(
-            f"{API}/api/__danger__/test-harness/write/cohort",
+            f"{API}/api/__danger__/test-harness/write/experiment-runs",
             json={
                 "benchmark_slug": "minif2f",
                 "slots": [
@@ -172,7 +172,7 @@ def test_write_cohort_accepts_explicit_runtime_choices() -> None:
                         "evaluator_slug": "minif2f-smoke-criterion",
                     }
                 ],
-                "cohort_key": cohort_key,
+                "experiment": experiment,
                 "sandbox_slug": "minif2f",
                 "dependency_extras": ["none"],
                 "model": "openai:gpt-4o",
@@ -184,4 +184,3 @@ def test_write_cohort_accepts_explicit_runtime_choices() -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["run_ids"], body
-    assert body["cohort_id"], body

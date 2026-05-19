@@ -389,66 +389,9 @@ const GraphMutationRecordDto = z
     created_at: z.string().datetime({ offset: true }),
   })
   .passthrough();
-const definition_id = z.union([z.string(), z.null()]).optional();
-const CohortStatusCountsDto = z
-  .object({
-    pending: z.number().int().default(0),
-    executing: z.number().int().default(0),
-    evaluating: z.number().int().default(0),
-    completed: z.number().int().default(0),
-    failed: z.number().int().default(0),
-  })
-  .partial()
-  .passthrough();
-const CohortSummaryDto = z
-  .object({
-    cohort_id: z.string().uuid(),
-    name: z.string(),
-    description: z.union([z.string(), z.null()]).optional(),
-    created_by: z.union([z.string(), z.null()]).optional(),
-    created_at: z.string().datetime({ offset: true }),
-    status: z.string(),
-    total_runs: z.number().int().optional().default(0),
-    status_counts: CohortStatusCountsDto.optional(),
-    average_score: z.union([z.number(), z.null()]).optional(),
-    best_score: z.union([z.number(), z.null()]).optional(),
-    worst_score: z.union([z.number(), z.null()]).optional(),
-    average_duration_ms: z.union([z.number(), z.null()]).optional(),
-    failure_rate: z.number().optional().default(0),
-    stats_updated_at: z.union([z.string(), z.null()]).optional(),
-  })
-  .passthrough();
-const CohortExperimentRowDto = z
-  .object({
-    definition_id: z.string().uuid(),
-    name: z.string(),
-    benchmark_type: z.string(),
-    sample_count: z.number().int(),
-    total_runs: z.number().int().optional().default(0),
-    status_counts: CohortStatusCountsDto.optional(),
-    status: z.string(),
-    created_at: z.string().datetime({ offset: true }),
-    default_model_target: z.union([z.string(), z.null()]).optional(),
-    default_evaluator_slug: z.union([z.string(), z.null()]).optional(),
-    final_score: z.union([z.number(), z.null()]).optional(),
-    total_cost_usd: z.union([z.number(), z.null()]).optional(),
-    error_message: z.union([z.string(), z.null()]).optional(),
-  })
-  .passthrough();
-const CohortDetailDto = z
-  .object({
-    summary: CohortSummaryDto,
-    experiments: z.array(CohortExperimentRowDto).optional(),
-  })
-  .passthrough();
-const ExperimentCohortStatus = z.enum(["active", "archived"]);
-const UpdateCohortRequest = z
-  .object({ status: ExperimentCohortStatus })
-  .passthrough();
 const ExperimentSummaryDto = z
   .object({
     definition_id: z.string().uuid(),
-    cohort_id: z.union([z.string(), z.null()]).optional(),
     name: z.string(),
     description: z.union([z.string(), z.null()]).optional(),
     benchmark_type: z.string(),
@@ -549,7 +492,7 @@ const SubmitRequest = z
     model_target_override: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
-const BatchStatus = z.enum([
+const RolloutStatus = z.enum([
   "pending",
   "running",
   "complete",
@@ -560,7 +503,7 @@ const SubmitResponse = z
   .object({
     batch_id: z.string().uuid(),
     run_ids: z.array(z.string().uuid()),
-    status: BatchStatus.optional(),
+    status: RolloutStatus.optional(),
   })
   .passthrough();
 const Trajectory = z
@@ -581,7 +524,7 @@ const EpisodeFailure = z
 const PollResponse = z
   .object({
     batch_id: z.string().uuid(),
-    status: BatchStatus,
+    status: RolloutStatus,
     completed: z.number().int().optional().default(0),
     total: z.number().int().optional().default(0),
     trajectories: z.array(Trajectory).optional(),
@@ -641,10 +584,7 @@ const TestRunStateDto = z
     context_event_count: z.number().int(),
   })
   .passthrough();
-const TestCohortIdDto = z
-  .object({ cohort_id: z.string().uuid() })
-  .passthrough();
-const TestCohortRunDto = z
+const TestExperimentRunDto = z
   .object({ run_id: z.string().uuid(), status: z.string() })
   .passthrough();
 const SeedRunRequest = z
@@ -653,28 +593,28 @@ const SeedRunRequest = z
     benchmark_type: z.string().optional().default("test-harness"),
     instance_key: z.string().optional().default("seeded"),
     worker_team: z.object({}).partial().passthrough().optional(),
-    cohort: z.string().optional().default("_test_"),
+    experiment: z.string().optional().default("_test_"),
     status: z.string().optional().default("completed"),
     task_slugs: z.array(z.string()).optional().default([]),
   })
   .passthrough();
-const ResetRequest = z.object({ cohort_prefix: z.string() }).passthrough();
-const CohortSlotRequest = z
+const ResetRequest = z.object({ experiment_prefix: z.string() }).passthrough();
+const ExperimentRunSlotRequest = z
   .object({ worker_slug: z.string(), evaluator_slug: z.string() })
   .passthrough();
-const SubmitCohortRequest = z
+const SubmitExperimentRunsRequest = z
   .object({
     benchmark_slug: z.string(),
-    slots: z.array(CohortSlotRequest),
-    cohort_key: z.string(),
+    slots: z.array(ExperimentRunSlotRequest),
+    experiment: z.string(),
     sandbox_slug: z.union([z.string(), z.null()]).optional(),
     dependency_extras: z.array(z.string()).optional().default(["none"]),
     model: z.string().optional().default("openai:gpt-4o"),
     limit: z.number().int().optional().default(1),
   })
   .passthrough();
-const SubmitCohortResponse = z
-  .object({ run_ids: z.array(z.string().uuid()), cohort_id: z.string().uuid() })
+const SubmitExperimentRunsResponse = z
+  .object({ run_ids: z.array(z.string().uuid()) })
   .passthrough();
 
 export const schemas = {
@@ -712,13 +652,6 @@ export const schemas = {
   AnnotationSetMutation,
   AnnotationDeletedMutation,
   GraphMutationRecordDto,
-  definition_id,
-  CohortStatusCountsDto,
-  CohortSummaryDto,
-  CohortExperimentRowDto,
-  CohortDetailDto,
-  ExperimentCohortStatus,
-  UpdateCohortRequest,
   ExperimentSummaryDto,
   ExperimentRunRowDto,
   ExperimentStatusCountsDto,
@@ -728,7 +661,7 @@ export const schemas = {
   run_experiment_experiments__definition_id__run_post_Body,
   ExperimentRunResult,
   SubmitRequest,
-  BatchStatus,
+  RolloutStatus,
   SubmitResponse,
   Trajectory,
   EpisodeFailure,
@@ -740,11 +673,10 @@ export const schemas = {
   TestEvaluationDto,
   TestExecutionDto,
   TestRunStateDto,
-  TestCohortIdDto,
-  TestCohortRunDto,
+  TestExperimentRunDto,
   SeedRunRequest,
   ResetRequest,
-  CohortSlotRequest,
-  SubmitCohortRequest,
-  SubmitCohortResponse,
+  ExperimentRunSlotRequest,
+  SubmitExperimentRunsRequest,
+  SubmitExperimentRunsResponse,
 };

@@ -15,7 +15,6 @@ from ergon_core.core.views.experiments.models import (
 def _summary(**overrides) -> ExperimentSummaryDto:
     data = {
         "definition_id": uuid4(),
-        "cohort_id": None,
         "name": "ci experiment",
         "benchmark_type": "ci-benchmark",
         "sample_count": 2,

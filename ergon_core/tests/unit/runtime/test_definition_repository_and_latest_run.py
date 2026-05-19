@@ -8,14 +8,13 @@ from ergon_core.core.application.workflows import runs as runs_module
 from ergon_core.core.application.workflows.runs import latest_run_for_definition
 from ergon_core.core.persistence.definitions.models import ExperimentDefinition
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
 
 @pytest.fixture()
 def session_factory():
-    _ = BenchmarkDefinitionRecord
     _ = ExperimentDefinition
     engine = create_engine(
         "sqlite://",
@@ -62,14 +61,6 @@ def test_latest_run_for_definition_returns_most_recent(monkeypatch, session_fact
 
     with session_factory() as session:
         session.add(
-            BenchmarkDefinitionRecord(
-                id=definition_id,
-                name="ci",
-                benchmark_type="ci-benchmark",
-                sample_count=1,
-            )
-        )
-        session.add(
             ExperimentDefinition(
                 id=definition_id,
                 benchmark_type="ci-benchmark",
@@ -92,8 +83,6 @@ def test_latest_run_for_definition_returns_most_recent(monkeypatch, session_fact
 def test_latest_run_for_definition_ignores_other_definitions(monkeypatch, session_factory) -> None:
     def_a = uuid4()
     def_b = uuid4()
-    definition_id = uuid4()
-
     now = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
     run_a = _run(definition_id=def_a, created_at=now)
     run_b = _run(
@@ -103,14 +92,6 @@ def test_latest_run_for_definition_ignores_other_definitions(monkeypatch, sessio
     run_a_id = run_a.id
 
     with session_factory() as session:
-        session.add(
-            BenchmarkDefinitionRecord(
-                id=definition_id,
-                name="ci",
-                benchmark_type="ci-benchmark",
-                sample_count=1,
-            )
-        )
         session.add(
             ExperimentDefinition(
                 id=def_a,

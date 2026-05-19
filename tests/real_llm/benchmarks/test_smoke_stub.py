@@ -6,7 +6,7 @@ Validates:
   - `ergon benchmark run` CLI path works
   - /api/__danger__/test-harness/read/run/{id}/state returns a terminal state
   - Postgres row exists with the right relationships
-  - Playwright can find the cohort in the dashboard
+  - Playwright can find the run grouping in the dashboard
 """
 
 import os
