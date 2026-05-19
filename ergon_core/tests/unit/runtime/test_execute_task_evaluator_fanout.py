@@ -181,7 +181,7 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
         ordering.append("emit:task/completed")
 
     # Two evaluators bound on the task so the parallel fanout sees real work.
-    view_task = SimpleNamespace(evaluator_binding_keys=("a", "b"))
+    view_task = SimpleNamespace(evaluators=(object(), object()))
     view = SimpleNamespace(task=view_task)
     repo = SimpleNamespace(node=AsyncMock(return_value=view))
 
@@ -194,7 +194,7 @@ async def test_execute_task_emits_completed_strictly_after_eval_gather(
         del payload, prepared
         # Use the real call shape but bypass the session machinery so we
         # don't need a populated database — just count the invokes.
-        for i in range(len(view_task.evaluator_binding_keys)):
+        for i in range(len(view_task.evaluators)):
             await ctx.step.invoke(
                 f"eval-{i}",
                 function=eval_fn,

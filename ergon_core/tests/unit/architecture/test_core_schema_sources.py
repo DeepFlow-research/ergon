@@ -459,7 +459,7 @@ def test_evaluation_workflow_has_one_front_door_service() -> None:
 
     service = ROOT / "ergon_core/ergon_core/core/application/evaluation/service.py"
     text = service.read_text()
-    for method_name in ("prepare_dispatch", "evaluate", "persist_success", "persist_failure"):
+    for method_name in ("evaluate", "persist_success", "persist_failure"):
         assert f"def {method_name}(" in text
 
 

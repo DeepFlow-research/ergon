@@ -39,3 +39,27 @@ def test_runs_api_does_not_own_run_snapshot_read_model_helpers() -> None:
     assert not hasattr(runs_api, "_build_communication_threads")
     assert not hasattr(runs_api, "_task_timestamps")
     assert not hasattr(runs_api, "_context_events_by_task")
+
+
+def test_runtime_jobs_do_not_import_v1_evaluation_dispatch_dtos() -> None:
+    import inspect
+
+    import ergon_core.core.application.evaluation.models as evaluation_models
+    import ergon_core.core.application.jobs.evaluate_task_run as evaluate_task_run
+    import ergon_core.core.application.jobs.execute_task as execute_task
+    from ergon_core.core.application.evaluation.service import EvaluationService
+
+    removed_dispatch_symbols = {
+        "CriterionContext",
+        "DispatchEvaluatorsCommand",
+        "PreparedEvaluatorDispatch",
+        "PreparedSingleEvaluator",
+        "TaskEvaluationContext",
+    }
+
+    assert not hasattr(EvaluationService, "prepare_dispatch")
+    assert all(not hasattr(evaluation_models, name) for name in removed_dispatch_symbols)
+    runtime_source = inspect.getsource(execute_task) + inspect.getsource(evaluate_task_run)
+    runtime_dispatch_symbols = removed_dispatch_symbols - {"CriterionContext"}
+    assert all(name not in runtime_source for name in runtime_dispatch_symbols)
+    assert "prepare_dispatch" not in runtime_source

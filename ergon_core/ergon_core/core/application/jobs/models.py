@@ -62,11 +62,10 @@ class TaskEvaluateRequest(InngestEventContract):
         execution_id    identifies the specific worker execution being
                         evaluated; also the join key to the persisted
                         WorkerOutput and stamped sandbox_id
-        evaluator_index 0-based index into `task.evaluators`; legacy
-                        binding-key fallback remains only until PR 11
+        evaluator_index 0-based index into `task.evaluators`
 
     Sent by `execute_task._fan_out_evaluators` (one event per
-    evaluator, via `asyncio.gather` over `ctx.step.invoke`). Received
+    evaluator, via Inngest `ctx.group.parallel`). Received
     by `run_evaluate_task_run_job`, which reloads everything else
     through the run-tier read boundary.
     """

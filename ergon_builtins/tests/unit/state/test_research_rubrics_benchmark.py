@@ -130,7 +130,6 @@ class TestResearchRubricsRubric:
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
-            evaluator_binding_keys=("default",),
             task_payload=ResearchRubricsTaskPayload.model_validate(
                 {
                     "sample_id": "sample",
@@ -166,7 +165,6 @@ class TestResearchRubricsRubric:
             task_slug="sample",
             instance_key="default",
             description="Write a report.",
-            evaluator_binding_keys=("default",),
         )
 
         result = rubric.aggregate_task(
@@ -244,7 +242,6 @@ class TestResearchRubricsJudgeCriterion:
                 task_slug="sample",
                 instance_key="default",
                 description="Write a report.",
-                evaluator_binding_keys=("default",),
             ),
             worker_result=WorkerOutput(output="assistant summary only"),
         )

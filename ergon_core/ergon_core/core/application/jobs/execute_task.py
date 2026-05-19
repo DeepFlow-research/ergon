@@ -190,8 +190,6 @@ async def _fan_out_evaluators(
     proper parallelism.
 
     Evaluator count comes from the object-bound ``task.evaluators`` tuple.
-    A narrow legacy binding-key fallback remains until PR 11 deletes
-    object-bound Task snapshots and the definition-row evaluator bridge.
     """
 
     with get_session() as session:
@@ -200,12 +198,7 @@ async def _fan_out_evaluators(
             run_id=payload.run_id,
             task_id=payload.task_id,
         )
-    evaluator_count = len(view.task.evaluators)
-    if evaluator_count == 0 and view.task.evaluator_binding_keys:
-        # TODO(PR 11): delete legacy fallback once object-bound Task snapshots and
-        # evaluator binding keys are gone from the runtime path.
-        evaluator_count = len(view.task.evaluator_binding_keys)
-    if evaluator_count == 0:
+    if not view.task.evaluators:
         return
 
     await ctx.group.parallel(
@@ -221,7 +214,7 @@ async def _fan_out_evaluators(
                     evaluator_index=i,
                 ).model_dump(mode="json"),
             )
-            for i in range(evaluator_count)
+            for i in range(len(view.task.evaluators))
         )
     )
 

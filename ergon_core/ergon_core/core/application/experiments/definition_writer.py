@@ -206,12 +206,6 @@ def persist_benchmark(benchmark: Benchmark) -> DefinitionHandle:  # noqa: C901
                         created_at=now,
                     )
                 )
-            if task.evaluator_binding_keys:
-                raise ValueError(
-                    f"Task {task.task_slug!r} uses evaluator_binding_keys; "
-                    "PR 11 requires inline object-bound evaluators."
-                )
-
     DefinitionRow = (
         ExperimentDefinition
         | ExperimentDefinitionEvaluator

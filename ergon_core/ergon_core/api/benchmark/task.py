@@ -43,19 +43,17 @@ class Task(BaseModel, Generic[PayloadT]):
     raises if read before materialization — surfaces the bug at the
     boundary instead of producing a Task with an unset identity.
 
-    PR 11 makes the object-bound fields the only public shape: every
-    persisted task snapshot carries its worker, sandbox, and evaluators
-    directly.
+    Object-bound fields are the only public shape: every persisted task
+    snapshot carries its worker, sandbox, and evaluators directly.
     """
 
-    model_config = ConfigDict(frozen=False, arbitrary_types_allowed=True)
+    model_config = ConfigDict(frozen=False, arbitrary_types_allowed=True, extra="forbid")
 
     task_slug: str
     instance_key: str
     description: str
     parent_task_slug: str | None = None
     dependency_task_slugs: tuple[str, ...] = ()
-    evaluator_binding_keys: tuple[str, ...] = ()
     task_payload: PayloadT = Field(default_factory=EmptyTaskPayload)  # ty: ignore[invalid-assignment]
 
     worker: "Worker"
@@ -149,6 +147,11 @@ class Task(BaseModel, Generic[PayloadT]):
 
         import_component(task_type)
         TaskCls = import_component_subclass(task_type, Task, kind="Task")
+        if "evaluator_binding_keys" in task_json:
+            raise ValueError(
+                f"Task snapshot for {task_id} uses legacy evaluator_binding_keys; "
+                "runtime evaluator dispatch requires inline object-bound evaluators."
+            )
         scalar_fields: dict[str, Any] = {
             k: v
             for k, v in task_json.items()
