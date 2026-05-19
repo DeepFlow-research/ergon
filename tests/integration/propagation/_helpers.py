@@ -8,7 +8,7 @@ from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphMutat
 from ergon_core.core.persistence.graph.status_conventions import TERMINAL_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+from ergon_core.core.persistence.telemetry.models import RunRecord
 from sqlmodel import Session, select
 
 
@@ -22,13 +22,13 @@ def poll_until(condition, *, timeout: float = 30, interval: float = 0.5) -> None
 
 
 def get_node(session: Session, node_id: UUID) -> RunGraphNode:
-    node = session.get(RunGraphNode, node_id)
+    node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == node_id)).one()
     session.refresh(node)
     return node
 
 
 def get_node_status(session: Session, node_id: UUID) -> str:
-    node = session.get(RunGraphNode, node_id)
+    node = session.exec(select(RunGraphNode).where(RunGraphNode.task_id == node_id)).one()
     session.refresh(node)
     return node.status
 
@@ -63,8 +63,8 @@ def assert_cross_cutting_invariants(session: Session, run_id: UUID) -> None:
     nodes = list(session.exec(select(RunGraphNode).where(RunGraphNode.run_id == run_id)).all())
     for node in nodes:
         session.refresh(node)
-        entries = get_wal_entries(session, node.id)
-        assert entries, f"Node {node.id} ({node.task_slug}) has no WAL entries"
+        entries = get_wal_entries(session, node.task_id)
+        assert entries, f"Node {node.task_id} ({node.task_slug}) has no WAL entries"
 
 
 # ---------------------------------------------------------------------------
@@ -83,15 +83,8 @@ def make_experiment_definition(session: Session) -> ExperimentDefinition:
 
 def make_run(session: Session, definition_id: UUID) -> RunRecord:
     """Create a minimal RunRecord row for test scaffolding."""
-    experiment = BenchmarkDefinitionRecord(
-        name="ci propagation test",
-        benchmark_type="ci-propagation-test",
-        sample_count=1,
-    )
-    session.add(experiment)
-    session.flush()
     run = RunRecord(
-        definition_id=experiment.id,
+        definition_id=definition_id,
         workflow_definition_id=definition_id,
         benchmark_type="ci-propagation-test",
         instance_key="test",
@@ -169,7 +162,12 @@ def seed_linear_chain(
         nodes.append(node)
 
     for i in range(len(nodes) - 1):
-        make_edge(session, run_id, source_task_id=nodes[i].id, target_task_id=nodes[i + 1].id)
+        make_edge(
+            session,
+            run_id,
+            source_task_id=nodes[i].task_id,
+            target_task_id=nodes[i + 1].task_id,
+        )
 
     session.commit()
     return nodes

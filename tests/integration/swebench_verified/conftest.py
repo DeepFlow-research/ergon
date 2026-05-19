@@ -83,7 +83,7 @@ def swebench_execution() -> tuple[UUID, UUID]:
         session.refresh(experiment)
 
         run = RunRecord(
-            definition_id=experiment.id,
+            definition_id=defn.id,
             workflow_definition_id=defn.id,
             benchmark_type="swebench-verified",
             instance_key="django__django-1",
