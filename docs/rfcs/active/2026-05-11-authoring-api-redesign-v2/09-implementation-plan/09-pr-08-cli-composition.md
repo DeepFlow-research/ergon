@@ -4,13 +4,13 @@
 > `superpowers:subagent-driven-development` or
 > `superpowers:executing-plans` to implement this plan task-by-task.
 
-**Goal:** Add the lifecycle / observation commands the CLI keeps after PR 6.5 killed the authoring route.  No new abstractions.  No factory dispatch.  No per-benchmark CLI registration burden.
+**Goal:** Round out the lifecycle / observation commands the CLI keeps after PR 6.5 killed the authoring route.  No new abstractions.  No factory dispatch.  No per-benchmark CLI registration burden.
 
-**Context:** PR 6.5 made the call (and recorded the rationale in `docs/superpowers/brainstorms/2026-05-15-kill-experiment-class.md`) that the CLI has **exactly one role**: lifecycle and observation of persisted state.  Authoring is Python-only.  PR 6.5 deleted the existing `ergon experiment define` / `ergon experiment run` commands.  PR 8 adds the replacement commands users need to *observe* and *manage* what's already running.
+**Context:** PR 6.5 made the call (and recorded the rationale in `docs/superpowers/brainstorms/2026-05-15-kill-experiment-class.md`) that the CLI has **exactly one role**: lifecycle and observation of persisted state.  Authoring is Python-only.  PR 6.5 deleted the `ergon experiment define` / `ergon experiment run` *authoring* commands — but kept the *observation* commands (`experiment show <UUID>`, `experiment list`, `run list`, `run cancel`) that operate on persisted state.  PR 8 fills in the remaining gaps: a single-run status command, an experiment-tag-based filter on `run list`, and tag-grouping commands that surface `BenchmarkDefinitionRecord.experiment` (which is otherwise unobservable from the CLI today).
 
-**Scope (much smaller than the original plan):** five new commands.  Each is a thin wrapper around an existing repository read.  No DTOs, no factory registries, no new abstractions.
+**Scope (much smaller than the original plan):** three new commands and one new flag.  Each is a thin wrapper around an existing repository read.  No DTOs, no factory registries, no new abstractions.
 
-**Tech Stack:** argparse CLI handlers, existing repositories (`RunRepository`, `DefinitionRepository`), pytest CLI tests.
+**Tech Stack:** argparse CLI handlers, existing repositories (`DefinitionRepository`, direct `RunRecord` reads, `ExperimentReadService`), pytest CLI tests.
 
 ---
 
@@ -19,363 +19,376 @@
 **Create:**
 
 ```text
-ergon_cli/ergon_cli/commands/run.py             # run status / cancel / list
 ergon_cli/tests/unit/cli/test_run_cli.py        # tests for the new commands
 ```
 
 **Modify:**
 
 ```text
-ergon_cli/ergon_cli/commands/experiment.py      # add show + list, after PR 6.5 deleted define/run
-ergon_cli/ergon_cli/__main__.py                 # register new subparsers
-ergon_cli/tests/unit/cli/test_experiment_cli.py # tests for show + list
-ergon_core/ergon_core/core/persistence/telemetry/repository.py  # add small repo methods if needed (list_by_experiment, distinct_experiments)
+ergon_cli/ergon_cli/commands/run.py             # add `status`, --experiment filter
+ergon_cli/ergon_cli/commands/experiment.py      # add `tags`, `by-tag`
+ergon_cli/ergon_cli/main.py                     # register new subparsers
+ergon_cli/tests/unit/cli/test_experiment_cli.py # tests for new commands
+ergon_core/ergon_core/core/application/experiments/repository.py  # add tag helpers
+ergon_core/ergon_core/core/application/workflows/runs.py          # add list helpers if missing
 ```
 
-## Current State (after PR 6.5)
+## Current State (after PR 6.5 + PR 7)
 
-After PR 6.5 lands:
+After PR 7 lands (one layer up from this PR):
 
 - The public `Experiment` wrapper class is gone (PR 6.5).
 - `persist_benchmark(benchmark) -> DefinitionHandle` is the authoring API
   (module-level function in `ergon_core.api`). Identity fields (``name``,
-  ``description``, ``metadata``) are read off the ``Benchmark`` instance
-  directly — no kwargs.
-- `BenchmarkDefinitionRecord` is the persisted row, with an `experiment: str | None` column.
-- The CLI has no `experiment define` / `experiment run` / `run <benchmark>` commands — those were deleted.
-- **Note on the `experiment` tag:** the `BenchmarkDefinitionRecord.experiment`
-  column exists for grouping definitions under a named experiment, but
-  there is **no `experiment` kwarg on `persist_benchmark`** today. Tagging
-  is currently a write-side-only column populated by the test harness;
-  if PR 8 needs CLI-driven tagging, this PR must add a wiring path (most
-  naturally a `Benchmark(experiment=...)` constructor kwarg matching the
-  `name`/`description`/`metadata` shape).
-- The CLI has `experiment` and `run` top-level subcommand groups registered but mostly empty after PR 6.5.
+  ``description``, ``metadata``, ``created_by``) are read off the
+  ``Benchmark`` instance directly — no kwargs to `persist_benchmark`.
+- `BenchmarkDefinitionRecord` is the persisted legacy row (table
+  ``experiments``), with an `experiment: str | None` column. Multiple
+  records sharing the same `experiment` tag belong to the same logical
+  experiment.  No `Benchmark(experiment=...)` constructor kwarg exists
+  today; tagging is currently a write-side-only column populated by the
+  cohort / test harness.
+- `ExperimentDefinition` is the canonical v2 row (table
+  ``experiment_definitions``) with `name`/`description`/`created_by`
+  columns added in PR 7.
+- The CLI **already has** these observation commands (kept by PR 6.5):
+  - `ergon experiment show <UUID>` — full detail via `ExperimentReadService.get_experiment`
+  - `ergon experiment list --limit N` — list summaries via `ExperimentReadService.list_experiments`
+  - `ergon run list --limit N --status S` — direct `RunRecord` query
+  - `ergon run cancel <UUID>` — wraps `workflows.runs.cancel_run` (sync)
+- The CLI **does not yet have**:
+  - A way to inspect a single run by id (status snapshot).
+  - A way to filter `run list` by the experiment-tag column.
+  - A way to discover or browse the experiment-tag namespace from the CLI.
 
-Users currently kick off runs from Python.  They have no CLI way to check status or cancel.  This PR fills that gap.
+PR 8 fills exactly those three gaps and nothing else.
 
 ## Target State For This PR
 
 ```bash
-# Run lifecycle
-ergon run status <run-id>            # print status of one run
-ergon run cancel <run-id>            # cancel a running run
-ergon run list [--experiment=<tag>]  # list runs, optionally filtered by experiment tag
+# Run lifecycle (additions only — existing commands unchanged)
+ergon run status <run-id>                   # NEW — show single run status
+ergon run list [--status=S] [--experiment=<tag>] [--limit=N]  # EXTENDED — adds --experiment
 
-# Experiment (string tag) queries
-ergon experiment show <name>         # list definitions tagged with this experiment
-ergon experiment list                # list distinct experiment tags in the database
+# Experiment-tag observation (additive — existing UUID-based commands unchanged)
+ergon experiment tags                       # NEW — list distinct experiment-tag strings
+ergon experiment by-tag <tag>               # NEW — list definitions in a tag, with latest run
 ```
 
-That's the full new CLI surface.  All read-only against persisted state, except `cancel` which sends a cancel event to the existing cancellation machinery.
+That's the full new CLI surface.  All read-only against persisted state.  Existing commands — `experiment show <UUID>`, `experiment list`, `run list` (without --experiment), `run cancel` — keep working exactly as they do today.
 
-## Task 1: Add Repository Helpers (If Missing)
+## Task 1: Add Repository Helpers
 
 **Files:**
 
-- Modify: `ergon_core/ergon_core/core/persistence/telemetry/repositories.py`
+- Modify: `ergon_core/ergon_core/core/application/experiments/repository.py`
+- Modify: `ergon_core/ergon_core/core/application/workflows/runs.py`
 
-The CLI handlers need a few repository methods that may not exist yet.  Add them as thin wrappers around existing SQLModel queries.
+The new CLI handlers need a few thin reads.  Add them next to the existing repository code, not as standalone abstractions.
 
-- [ ] **Step 1: `DefinitionRepository.list_by_experiment`**
+- [ ] **Step 1: `DefinitionRepository.list_by_experiment_tag`**
+
+  In `core/application/experiments/repository.py`, add a method that takes a session and an experiment tag string, and returns the matching `BenchmarkDefinitionRecord` rows.
 
   ```python
-  def list_by_experiment(self, experiment: str) -> list[BenchmarkDefinitionRecord]:
-      """List all definitions tagged with the given experiment string."""
-      with self._session() as session:
-          stmt = select(BenchmarkDefinitionRecord).where(
-              BenchmarkDefinitionRecord.experiment == experiment
-          )
-          return list(session.exec(stmt).all())
+  def list_by_experiment_tag(
+      self,
+      session: Session,
+      tag: str,
+  ) -> list[BenchmarkDefinitionRecord]:
+      """List ``BenchmarkDefinitionRecord`` rows tagged with ``tag``.
+
+      The ``experiment`` column groups records into a named logical
+      experiment; this helper is the read side of that grouping.
+      """
+      stmt = select(BenchmarkDefinitionRecord).where(
+          BenchmarkDefinitionRecord.experiment == tag,
+      )
+      return list(session.exec(stmt).all())
   ```
 
-- [ ] **Step 2: `DefinitionRepository.distinct_experiments`**
+- [ ] **Step 2: `DefinitionRepository.distinct_experiment_tags`**
 
   ```python
-  def distinct_experiments(self) -> list[str]:
-      """List distinct non-null experiment tags."""
-      with self._session() as session:
-          stmt = select(BenchmarkDefinitionRecord.experiment).distinct().where(
-              BenchmarkDefinitionRecord.experiment.is_not(None)
-          )
-          return [row for row in session.exec(stmt).all() if row is not None]
+  def distinct_experiment_tags(self, session: Session) -> list[str]:
+      """Distinct non-null ``experiment`` tag values across all records."""
+      stmt = (
+          select(BenchmarkDefinitionRecord.experiment)
+          .where(BenchmarkDefinitionRecord.experiment.is_not(None))
+          .distinct()
+      )
+      return [row for row in session.exec(stmt).all() if row is not None]
   ```
 
-- [ ] **Step 3: `RunRepository.list` filter**
+- [ ] **Step 3: `latest_run_for_definition` helper**
 
-  Confirm `RunRepository.list()` accepts an optional `experiment: str | None` filter (joining through the definition table).  If not, add it:
-
-  ```python
-  def list(self, *, experiment: str | None = None) -> list[RunRecord]:
-      """List runs, optionally filtered by experiment tag (joins via definition)."""
-      with self._session() as session:
-          stmt = select(RunRecord)
-          if experiment is not None:
-              stmt = stmt.join(BenchmarkDefinitionRecord).where(
-                  BenchmarkDefinitionRecord.experiment == experiment
-              )
-          return list(session.exec(stmt).all())
-  ```
-
-- [ ] **Step 4: `RunRepository.latest_for_definition`**
+  In `core/application/workflows/runs.py`, add a module-level helper (matches the style of the existing `cancel_run` / `create_run` functions in that file):
 
   ```python
-  def latest_for_definition(self, definition_id: UUID) -> RunRecord | None:
-      """Return the most-recent run for this definition, if any."""
-      with self._session() as session:
+  def latest_run_for_definition(definition_id: UUID) -> RunRecord | None:
+      """Most-recent ``RunRecord`` for a given workflow definition, or None."""
+      with get_session() as session:
           stmt = (
               select(RunRecord)
-              .where(RunRecord.definition_id == definition_id)
+              .where(RunRecord.workflow_definition_id == definition_id)
               .order_by(RunRecord.created_at.desc())
               .limit(1)
           )
           return session.exec(stmt).first()
   ```
 
-- [ ] **Step 5: Cancel helper**
+  Note: this uses ``workflow_definition_id`` (the ``ExperimentDefinition`` FK), not ``experiment_id``.  The ``experiment_id`` column on ``RunRecord`` still exists but is being narrowed in PR 11.
 
-  Confirm `cancel_run(run_id: UUID, *, reason: str) -> None` exists in the application layer.  If not, locate where cancellation logic lives today (likely `core/application/runs/...`) and surface a thin function for the CLI to call.
-
-## Task 2: Add `ergon run` Subcommands
+## Task 2: Add `ergon run status` Command
 
 **Files:**
 
-- Create: `ergon_cli/ergon_cli/commands/run.py`
+- Modify: `ergon_cli/ergon_cli/commands/run.py`
 
-- [ ] **Step 1: `handle_run_status`**
+The existing `run.py` already has `list_runs` and `cancel_run` handlers and a `handle_run` dispatcher.  Add a third action.
+
+- [ ] **Step 1: `status_run` handler**
 
   ```python
-  from argparse import Namespace
-  from uuid import UUID
-
-  from ergon_core.core.application.runs.cancel import cancel_run
-  from ergon_core.core.persistence.telemetry.repositories import (
-      DefinitionRepository,
-      RunRepository,
-  )
-
-
-  def handle_run_status(args: Namespace) -> int:
-      _ensure_cli_logging()
+  def status_run(args: Namespace) -> int:
       ensure_db()
-      run = RunRepository().get(UUID(args.run_id))
-      if run is None:
-          print(f"No run found with id {args.run_id}")
+      try:
+          run_id = UUID(args.run_id)
+      except ValueError:
+          print(f"Invalid UUID: {args.run_id}")
           return 1
-      print(f"run_id:    {run.run_id}")
-      print(f"status:    {run.status}")
-      print(f"created:   {run.created_at}")
-      print(f"definition: {run.definition_id}")
+
+      with get_session() as session:
+          run = session.get(RunRecord, run_id)
+          if run is None:
+              print(f"No run found with id {args.run_id}")
+              return 1
+
+      print(f"run_id:                 {run.id}")
+      print(f"status:                 {run.status}")
+      print(f"benchmark_type:         {run.benchmark_type}")
+      print(f"workflow_definition_id: {run.workflow_definition_id}")
+      print(f"instance_key:           {run.instance_key}")
+      if run.evaluator_slug is not None:
+          print(f"evaluator:              {run.evaluator_slug}")
+      if run.model_target is not None:
+          print(f"model:                  {run.model_target}")
+      created = run.created_at.strftime("%Y-%m-%d %H:%M:%S") if run.created_at else "-"
+      print(f"created_at:             {created}")
+      if run.started_at:
+          print(f"started_at:             {run.started_at.strftime('%Y-%m-%d %H:%M:%S')}")
+      if run.completed_at:
+          print(f"completed_at:           {run.completed_at.strftime('%Y-%m-%d %H:%M:%S')}")
+      if run.error_message:
+          print(f"error:                  {run.error_message}")
       return 0
   ```
 
-  (Counts like `tasks_completed/total` are nice-to-have; keep the first cut minimal.  Expand once the basic command works.)
+- [ ] **Step 2: Dispatch in `handle_run`**
 
-- [ ] **Step 2: `handle_run_cancel`**
+  Update the existing `handle_run` dispatcher to route `status`:
 
   ```python
-  async def handle_run_cancel(args: Namespace) -> int:
-      _ensure_cli_logging()
-      ensure_db()
-      await cancel_run(UUID(args.run_id), reason=args.reason or "cli-cancel")
-      print(f"cancelled run {args.run_id}")
-      return 0
+  def handle_run(args: Namespace) -> int:
+      if args.run_action == "list":
+          return list_runs(args)
+      elif args.run_action == "cancel":
+          return cancel_run(args)
+      elif args.run_action == "status":
+          return status_run(args)
+      else:
+          print("Usage: ergon run {list|status|cancel}")
+          return 1
   ```
 
-- [ ] **Step 3: `handle_run_list`**
+## Task 3: Add `--experiment` Filter to `ergon run list`
+
+**Files:**
+
+- Modify: `ergon_cli/ergon_cli/commands/run.py`
+
+The existing `list_runs` filters by `--status` and `--limit`.  Add an optional `--experiment=<tag>` filter that joins through `BenchmarkDefinitionRecord.experiment`.
+
+- [ ] **Step 1: Extend `list_runs`**
+
+  In `list_runs`, after the status filter, add the experiment-tag join:
 
   ```python
-  def handle_run_list(args: Namespace) -> int:
-      _ensure_cli_logging()
-      ensure_db()
-      runs = RunRepository().list(experiment=args.experiment)
-      if not runs:
-          msg = "No runs found"
-          if args.experiment:
-              msg += f" for experiment={args.experiment!r}"
-          print(msg)
-          return 0
-      for r in runs:
-          print(f"{r.run_id}  {r.status:12s}  {r.definition_id}")
+  if args.experiment:
+      stmt = stmt.join(
+          BenchmarkDefinitionRecord,
+          RunRecord.experiment_id == BenchmarkDefinitionRecord.id,
+      ).where(BenchmarkDefinitionRecord.experiment == args.experiment)
+  ```
+
+  The join is via `RunRecord.experiment_id` → `BenchmarkDefinitionRecord.id`.  This is the legacy FK from PR 6.5; PR 11 will narrow it.  Once narrowed, this filter will need to route through `ExperimentDefinition` / a tagging story — flag this in the PR 11 plan.
+
+  Add the import at the top of the file:
+  ```python
+  from ergon_core.core.persistence.telemetry.models import BenchmarkDefinitionRecord, RunRecord
+  ```
+
+- [ ] **Step 2: Update empty-result message**
+
+  When no rows match, mention the filters that were in play:
+
+  ```python
+  if not runs:
+      parts = ["No runs found"]
+      if args.status:
+          parts.append(f"with status={args.status!r}")
+      if args.experiment:
+          parts.append(f"for experiment={args.experiment!r}")
+      print(" ".join(parts))
       return 0
   ```
 
-## Task 3: Add `ergon experiment` Subcommands
+## Task 4: Add `ergon experiment tags` + `experiment by-tag` Commands
 
 **Files:**
 
 - Modify: `ergon_cli/ergon_cli/commands/experiment.py`
 
-After PR 6.5 deleted `handle_experiment_define` / `handle_experiment_run`, this file is mostly empty (or gone — if PR 6.5 deleted the file entirely, recreate it here).
+The existing `experiment.py` already has `handle_experiment_show` and `handle_experiment_list` (both UUID-based, both kept).  Add two new tag-namespace handlers.
 
-- [ ] **Step 1: `handle_experiment_show`**
-
-  ```python
-  def handle_experiment_show(args: Namespace) -> int:
-      _ensure_cli_logging()
-      ensure_db()
-      defs = DefinitionRepository().list_by_experiment(args.experiment_name)
-      if not defs:
-          print(f"No definitions found for experiment={args.experiment_name!r}")
-          return 0
-      run_repo = RunRepository()
-      for d in defs:
-          latest = run_repo.latest_for_definition(d.definition_id)
-          status = latest.status if latest else "no runs"
-          print(f"{d.name:30s}  {d.definition_id}  {status}")
-      return 0
-  ```
-
-- [ ] **Step 2: `handle_experiment_list`**
+- [ ] **Step 1: `handle_experiment_tags`**
 
   ```python
-  def handle_experiment_list(args: Namespace) -> int:
+  def handle_experiment_tags(args: Namespace) -> int:
       _ensure_cli_logging()
-      ensure_db()
-      names = DefinitionRepository().distinct_experiments()
-      if not names:
-          print(
-              "No experiments yet.  Tag definitions by setting "
-              "`experiment` on the Benchmark (or via the cohort harness)."
+      with get_session() as session:
+          tags = DefinitionRepository().distinct_experiment_tags(session)
+      if not tags:
+          logger.info(
+              "No experiment tags yet.  Tag definitions by setting "
+              "`experiment` on the underlying record (cohort harness)."
           )
           return 0
-      for n in names:
-          print(n)
+      for tag in tags:
+          logger.info("%s", tag)
       return 0
   ```
 
-## Task 4: Register Subparsers
+- [ ] **Step 2: `handle_experiment_by_tag`**
+
+  ```python
+  def handle_experiment_by_tag(args: Namespace) -> int:
+      _ensure_cli_logging()
+      with get_session() as session:
+          records = DefinitionRepository().list_by_experiment_tag(
+              session, args.tag,
+          )
+      if not records:
+          logger.info("No definitions tagged with experiment=%r", args.tag)
+          return 0
+      logger.info("DEFINITION_ID\tNAME\tBENCHMARK\tSTATUS\tLATEST_RUN_STATUS")
+      for record in records:
+          latest = latest_run_for_definition(record.id)
+          latest_status = latest.status if latest else "no runs"
+          logger.info(
+              "%s\t%s\t%s\t%s\t%s",
+              record.id,
+              record.name,
+              record.benchmark_type,
+              record.status,
+              latest_status,
+          )
+      return 0
+  ```
+
+  Imports at the top of the file:
+
+  ```python
+  from ergon_core.core.application.experiments.repository import DefinitionRepository
+  from ergon_core.core.application.workflows.runs import latest_run_for_definition
+  from ergon_core.core.persistence.shared.db import get_session
+  ```
+
+- [ ] **Step 3: Dispatch in `handle_experiment`**
+
+  Update the existing `handle_experiment` dispatcher:
+
+  ```python
+  async def handle_experiment(args: Namespace) -> int:
+      _ensure_cli_logging()
+      if args.experiment_action == "show":
+          return handle_experiment_show(args)
+      if args.experiment_action == "list":
+          return handle_experiment_list(args)
+      if args.experiment_action == "tags":
+          return handle_experiment_tags(args)
+      if args.experiment_action == "by-tag":
+          return handle_experiment_by_tag(args)
+      logger.error("Usage: ergon experiment {show|list|tags|by-tag}")
+      return 1
+  ```
+
+## Task 5: Register Subparsers + Tests
 
 **Files:**
 
-- Modify: `ergon_cli/ergon_cli/__main__.py` (or wherever the argparse tree is built)
-
-- [ ] **Step 1: `ergon run` group**
-
-  Confirm `ergon run` exists as a top-level subcommand group.  If PR 6.5 deleted it along with `experiment run`, recreate it.
-
-  ```python
-  run_parser = subparsers.add_parser("run", help="run lifecycle commands")
-  run_subparsers = run_parser.add_subparsers(dest="run_cmd", required=True)
-
-  status_p = run_subparsers.add_parser("status", help="show run status")
-  status_p.add_argument("run_id")
-  status_p.set_defaults(func=handle_run_status)
-
-  cancel_p = run_subparsers.add_parser("cancel", help="cancel a running run")
-  cancel_p.add_argument("run_id")
-  cancel_p.add_argument("--reason", default=None)
-  cancel_p.set_defaults(func=handle_run_cancel)
-
-  list_p = run_subparsers.add_parser("list", help="list runs")
-  list_p.add_argument("--experiment", default=None, help="filter by experiment tag")
-  list_p.set_defaults(func=handle_run_list)
-  ```
-
-- [ ] **Step 2: `ergon experiment` group**
-
-  ```python
-  experiment_parser = subparsers.add_parser("experiment", help="experiment-tag queries")
-  experiment_subparsers = experiment_parser.add_subparsers(dest="experiment_cmd", required=True)
-
-  show_p = experiment_subparsers.add_parser("show", help="show definitions in an experiment")
-  show_p.add_argument("experiment_name")
-  show_p.set_defaults(func=handle_experiment_show)
-
-  list_p2 = experiment_subparsers.add_parser("list", help="list known experiment tags")
-  list_p2.set_defaults(func=handle_experiment_list)
-  ```
-
-## Task 5: Tests
-
-**Files:**
-
+- Modify: `ergon_cli/ergon_cli/main.py`
 - Create: `ergon_cli/tests/unit/cli/test_run_cli.py`
-- Modify: `ergon_cli/tests/unit/cli/test_experiment_cli.py` (add the new commands; PR 6.5 deleted the old test cases for `define`/`run`)
+- Modify: `ergon_cli/tests/unit/cli/test_experiment_cli.py`
 
-- [ ] **Step 1: `test_run_status_prints_status` (monkeypatch the repo)**
+- [ ] **Step 1: Register new `run` subcommand parsers in `main.py`**
 
-  ```python
-  def test_run_status_prints_status(monkeypatch, capsys):
-      fake = RunRecord(run_id=uuid4(), status="running", definition_id=uuid4(), created_at=datetime.utcnow())
-      monkeypatch.setattr(
-          "ergon_cli.commands.run.RunRepository",
-          lambda: SimpleNamespace(get=lambda _: fake),
-      )
-      result = handle_run_status(Namespace(run_id=str(fake.run_id)))
-      out = capsys.readouterr().out
-      assert result == 0
-      assert "status:    running" in out
-  ```
-
-- [ ] **Step 2: `test_run_cancel_calls_cancel_run`**
+  Find the existing `run` subparser block and add `status` and the `--experiment` flag on `list`:
 
   ```python
-  @pytest.mark.asyncio
-  async def test_run_cancel_calls_cancel_run(monkeypatch):
-      called = {}
-      async def fake_cancel(run_id, *, reason):
-          called["run_id"] = run_id
-          called["reason"] = reason
-      monkeypatch.setattr("ergon_cli.commands.run.cancel_run", fake_cancel)
-      result = await handle_run_cancel(Namespace(run_id=str(uuid4()), reason=None))
-      assert result == 0
-      assert called["reason"] == "cli-cancel"
+  run_status_parser = run_sub.add_parser("status", help="Show status of one run")
+  run_status_parser.add_argument("run_id", help="Run ID (UUID)")
+
+  # Extend the existing run_list_parser
+  run_list_parser.add_argument(
+      "--experiment",
+      default=None,
+      help="Filter by experiment tag (BenchmarkDefinitionRecord.experiment)",
+  )
   ```
 
-- [ ] **Step 3: `test_run_list_filters_by_experiment`**
+- [ ] **Step 2: Register new `experiment` subcommand parsers in `main.py`**
+
+  Find the existing `experiment` subparser block and add `tags` and `by-tag`:
 
   ```python
-  def test_run_list_filters_by_experiment(monkeypatch, capsys):
-      calls = {}
-      def fake_list(*, experiment):
-          calls["experiment"] = experiment
-          return []
-      monkeypatch.setattr(
-          "ergon_cli.commands.run.RunRepository",
-          lambda: SimpleNamespace(list=fake_list),
-      )
-      handle_run_list(Namespace(experiment="ablation-x"))
-      assert calls["experiment"] == "ablation-x"
+  experiment_sub.add_parser("tags", help="List distinct experiment tags")
+  experiment_by_tag_parser = experiment_sub.add_parser(
+      "by-tag", help="List definitions for an experiment tag"
+  )
+  experiment_by_tag_parser.add_argument("tag", help="Experiment tag")
   ```
 
-- [ ] **Step 4: `test_experiment_show_lists_definitions`**
+- [ ] **Step 3: Create `tests/unit/cli/test_run_cli.py`**
+
+  Cover four cases.  Use the same pattern as `test_experiment_cli.py` (monkeypatched fakes, `Namespace` direct calls, `capsys`):
+
+  - `test_run_status_prints_status_fields` — fake a `RunRecord` returned by `session.get`, assert key fields land in stdout.
+  - `test_run_status_reports_invalid_uuid` — pass a non-UUID, assert exit code 1 and helpful message.
+  - `test_run_status_reports_missing_run` — fake `session.get` returning `None`, assert exit code 1 and helpful message.
+  - `test_run_list_filters_by_experiment` — wire a fake session whose `select(...).where(...).join(...).where(...).limit(...)` chain captures the call shape; assert the filter is applied.  (Alternatively: integration test against an in-memory SQLite session if the project already has a helper for that.)
+
+- [ ] **Step 4: Extend `test_experiment_cli.py`**
+
+  Add three cases:
+
+  - `test_experiment_tags_lists_distinct_tags` — monkeypatch `DefinitionRepository` with `distinct_experiment_tags` returning a list; assert tags appear in `caplog.text`.
+  - `test_experiment_tags_handles_empty` — monkeypatch returns `[]`; assert helpful empty-state message.
+  - `test_experiment_by_tag_lists_definitions_with_latest_run_status` — monkeypatch `DefinitionRepository.list_by_experiment_tag` and `latest_run_for_definition` to return fakes; assert each definition and its latest run status appear.
+
+  Also extend the existing parser test:
 
   ```python
-  def test_experiment_show_lists_definitions(monkeypatch, capsys):
-      fake_defs = [
-          BenchmarkDefinitionRecord(definition_id=uuid4(), name="def-a", experiment="x"),
-          BenchmarkDefinitionRecord(definition_id=uuid4(), name="def-b", experiment="x"),
-      ]
-      monkeypatch.setattr(
-          "ergon_cli.commands.experiment.DefinitionRepository",
-          lambda: SimpleNamespace(list_by_experiment=lambda name: fake_defs),
-      )
-      monkeypatch.setattr(
-          "ergon_cli.commands.experiment.RunRepository",
-          lambda: SimpleNamespace(latest_for_definition=lambda _: None),
-      )
-      result = handle_experiment_show(Namespace(experiment_name="x"))
-      out = capsys.readouterr().out
-      assert result == 0
-      assert "def-a" in out and "def-b" in out
+  def test_experiment_subcommands_are_registered_in_main_parser() -> None:
+      parser = build_parser()
+      tags_args = parser.parse_args(["experiment", "tags"])
+      by_tag_args = parser.parse_args(["experiment", "by-tag", "alpha"])
+      assert tags_args.experiment_action == "tags"
+      assert by_tag_args.experiment_action == "by-tag"
+      assert by_tag_args.tag == "alpha"
   ```
 
-- [ ] **Step 5: `test_experiment_list_lists_distinct_tags`**
-
-  ```python
-  def test_experiment_list_lists_distinct_tags(monkeypatch, capsys):
-      monkeypatch.setattr(
-          "ergon_cli.commands.experiment.DefinitionRepository",
-          lambda: SimpleNamespace(distinct_experiments=lambda: ["ablation-1", "ablation-2"]),
-      )
-      result = handle_experiment_list(Namespace())
-      out = capsys.readouterr().out
-      assert result == 0
-      assert "ablation-1" in out and "ablation-2" in out
-  ```
-
-- [ ] **Step 6: Run focused tests**
+- [ ] **Step 5: Run focused tests**
 
   ```bash
   uv run pytest ergon_cli/tests/unit/cli -q
@@ -388,27 +401,30 @@ After PR 6.5 deleted `handle_experiment_define` / `handle_experiment_run`, this 
 **Files:**
 
 - Modify: `docs/architecture/06_builtins.md` (the "Discovery" section added in PR 6.5)
-- Modify: `ergon_builtins/ergon_builtins/benchmarks/README.md` (cross-link to the new CLI commands)
+- Modify: `ergon_builtins/ergon_builtins/benchmarks/README.md` (if present — cross-link to the new CLI commands)
 - Modify: top-level `README.md` (if it documents CLI commands)
 
 - [ ] **Step 1: Update the discovery section**
 
-  In `06_builtins.md`, expand the "Discovery" section to mention that observation also happens via `ergon experiment list` and `ergon experiment show <name>`.
-
-- [ ] **Step 2: Update the catalogue README**
-
-  In `ergon_builtins/benchmarks/README.md`, add a "Once running" sub-section:
+  In `06_builtins.md`, expand the observation section to mention:
 
   > After kicking off a run from Python, observe it via the CLI:
   > - `ergon run status <run-id>` — current state of one run
-  > - `ergon experiment show <name>` — definitions in an experiment, with run status
-  > - `ergon experiment list` — known experiment tags
+  > - `ergon run list [--status=S] [--experiment=<tag>]` — list runs, optionally filtered
+  > - `ergon experiment show <UUID>` — full experiment detail (UUID-based)
+  > - `ergon experiment list` — list recent experiments
+  > - `ergon experiment tags` — list distinct experiment-tag strings
+  > - `ergon experiment by-tag <tag>` — list definitions sharing a tag, with latest run status
+
+- [ ] **Step 2: Update the catalogue README** (if it exists)
+
+  Mirror the same six-bullet block.  If the file doesn't exist, skip — don't create one.
 
 - [ ] **Step 3: Update top-level README**
 
-  If the repo's `README.md` documents CLI commands, add the new ones; remove any references to the deleted `experiment define` / `experiment run` / `run <benchmark>` commands (PR 6.5 should have removed them; double-check).
+  If the repo's `README.md` documents CLI commands, add the new ones; remove any references to deleted commands (PR 6.5 should have already cleaned those up).
 
-## Task 7: Full Check Suite
+## Task 7: Full Check Suite + Commit
 
 - [ ] **Step 1: Backend checks**
 
@@ -422,79 +438,50 @@ After PR 6.5 deleted `handle_experiment_define` / `handle_experiment_run`, this 
   pnpm run test:be:fast
   ```
 
-- [ ] **Step 3: Manual smoke**
+- [ ] **Step 3: Commit**
 
   ```bash
-  # Kick off a run from Python (one-liner; assumes a benchmark exists)
-  uv run python -c "
-  import asyncio
-  from ergon_builtins.benchmarks.minif2f import MiniF2FBenchmark, make_minif2f_worker
-  from ergon_core.api import persist_benchmark, launch_run
+  git add -A
+  git commit -m "PR 8: lifecycle CLI commands (run status, --experiment filter, experiment tags/by-tag)
 
-  async def main():
-      b = MiniF2FBenchmark(
-          name='smoke',
-          metadata={'experiment': 'smoke-test'},
-          worker_factory=make_minif2f_worker,
-          limit=1,
-      )
-      h = persist_benchmark(b)
-      print(f'DEFINITION_ID={h.definition_id}')
-      await launch_run(h.definition_id)
+  - Add ergon run status <run-id>
+  - Add --experiment filter to ergon run list
+  - Add ergon experiment tags + experiment by-tag <tag>
+  - Add repository helpers (distinct_experiment_tags, list_by_experiment_tag,
+    latest_run_for_definition)
+  - Documentation updates pointing users at the new observation commands
 
-  asyncio.run(main())
-  "
-
-  # Then observe via CLI
-  ergon experiment list                  # should show 'smoke-test'
-  ergon experiment show smoke-test       # should show the smoke definition
-  ergon run list --experiment=smoke-test # should show the run
-  ergon run status <run-id>              # status of the run
+  No authoring path on the CLI; Python remains the only way to start a run."
   ```
-
-  Confirm each CLI command produces sensible output.
-
-## Task 8: Commit
-
-```bash
-git add -A
-git commit -m "PR 8: lifecycle CLI commands (run + experiment subcommands)
-
-- Add ergon run status/cancel/list
-- Add ergon experiment show/list
-- Add repository helpers (list_by_experiment, distinct_experiments, latest_for_definition)
-- Documentation updates to point users at the new observation commands
-
-No authoring path on the CLI; Python remains the only way to start a run."
-```
 
 ## Verification
 
 - All `pnpm run check:be` steps green.
 - All `pnpm run test:be:fast` tests pass (including new CLI tests).
-- Manual smoke (Task 7 Step 3) succeeds end-to-end.
-- `ergon experiment list` returns expected tags after definitions are persisted (the experiment tag is currently sourced via `Benchmark(metadata={"experiment": ...})` and read from `BenchmarkDefinitionRecord.experiment`; PR 8 may add a first-class `Benchmark(experiment=...)` kwarg).
 - `ergon run status <run-id>` returns expected status for a known run.
+- `ergon experiment tags` returns the set of distinct tag strings.
+- `ergon experiment by-tag <tag>` returns definitions tagged with that string and their latest-run status.
 
 ## What This PR Is NOT
 
 - **Not an authoring path.**  No `ergon experiment define`, no `ergon run <benchmark>`, no benchmark / worker registry dicts.  Authoring is Python-only (PR 6.5 made this decision).
 - **Not a new abstraction layer.**  These commands are thin wrappers around existing repositories — no DTOs, no service classes, no factory registries.
+- **Not a replacement of `experiment show <UUID>` / `experiment list`.**  Those PR-6.5 commands stay.  The new `tags` / `by-tag` commands are *additive* — they surface the experiment-tag namespace (`BenchmarkDefinitionRecord.experiment`) which the UUID-based commands don't expose.
 - **Not a dashboard replacement.**  CLI commands are for quick terminal-driven observation.  Rich UI lives in the dashboard.
-- **Not a change to `persist_benchmark` or `launch_run`.**  Those are stable after PR 6.5.
+- **Not a change to `persist_benchmark` or `launch_run`.**  Those are stable after PR 6.5 / 7.
+- **Not a `Benchmark(experiment=...)` constructor kwarg.**  Tagging is still write-side-only today; PR 8 only adds *read* commands.  A constructor kwarg can be added later if needed.
 
 ## Risks
 
-- **Repository method signatures may need adjustment.**  If existing repos don't expose `get(uuid)` or `list_by_experiment`, Task 1 adds them.  Risk: stepping on a naming collision with a different method that already exists.  *Mitigation:* `rg "def list_by_experiment\|def distinct_experiments"` before adding.
-- **Async cancel ergonomics.**  `cancel_run` is async, so `handle_run_cancel` is async too.  argparse dispatch needs to handle async handlers — confirm the existing argparse runner does this (it should, since `launch_run` was already async).  *Mitigation:* if not, wrap in `asyncio.run(...)` at the dispatch boundary.
-- **`experiment` filter on `RunRepository.list` is a join.**  If the existing repo doesn't already join through definitions for filters, adding the join is more invasive than this plan suggests.  *Mitigation:* if the join is awkward, do the filter in two queries (list distinct definitions by experiment, then list runs for each).
-- **Dashboard parity.**  The dashboard already has its own experiment-list / run-status views.  Risk: CLI output drifts from dashboard semantics.  *Mitigation:* both read from the same repo methods; if outputs diverge, the repo is the source of truth.
+- **`RunRecord.experiment_id` is being narrowed in PR 11.**  Today the `run list --experiment=<tag>` filter joins via `RunRecord.experiment_id → BenchmarkDefinitionRecord.id`.  PR 11 will narrow that FK; the filter logic will need to follow.  *Mitigation:* call this out in the PR 11 plan as a CLI follow-up.
+- **Tag concept is half-wired.**  The `experiment` column is populated by the cohort / test harness today but not by the public authoring API.  Until a `Benchmark(experiment=...)` kwarg lands, users coming through `persist_benchmark` won't have anything to query.  *Mitigation:* empty-state messages on the new commands point at the cohort harness as the only path to a tag today.
+- **`cancel_run` is sync, but `handle_experiment` is async.**  The CLI's argparse dispatch already handles a mix of sync and async handlers (see `main.py`).  No change needed.
 
 ## PR Ledger
 
 - **Invariant landed:** the CLI is observation-only; authoring is Python-only.
 - **Bridge code introduced:** none.
-- **Old paths still alive:** none — PR 6.5 removed the authoring CLI commands; PR 8 only adds observation commands.
-- **Deletion gate:** none — these commands stay.
-- **Tests added or updated:** `test_run_cli.py` (new), `test_experiment_cli.py` (rewritten for show/list).
-- **Modules owned by this PR:** `ergon_cli/commands/run.py` (new), `ergon_cli/commands/experiment.py` (rewritten).
+- **Old paths still alive:** `RunRecord.experiment_id` (gated for PR 11); `BenchmarkDefinitionRecord` table (gated for PR 11).
+- **Deletion gate:** none new from this PR.
+- **Tests added or updated:** `test_run_cli.py` (new), `test_experiment_cli.py` (extended).
+- **Modules owned by this PR:** `ergon_cli/commands/run.py` (extended), `ergon_cli/commands/experiment.py` (extended), repository helpers in `ergon_core/core/application/experiments/repository.py` and `ergon_core/core/application/workflows/runs.py`.

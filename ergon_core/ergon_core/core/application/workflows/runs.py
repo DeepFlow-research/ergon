@@ -9,6 +9,7 @@ from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TERMINAL_RUN_STATUSES, RunStatus
 from ergon_core.core.persistence.telemetry.models import RunRecord
+from sqlmodel import select
 from ergon_core.core.application.events.infrastructure_events import (
     RunCancelledEvent,
     RunCleanupEvent,
@@ -105,3 +106,15 @@ def cancel_run(run_id: UUID) -> RunRecord:
 
     logger.info("Cancelled run %s and dispatched cleanup", run_id)
     return run
+
+
+def latest_run_for_definition(definition_id: UUID) -> RunRecord | None:
+    """Most-recent ``RunRecord`` for a given workflow definition, or None."""
+    with get_session() as session:
+        stmt = (
+            select(RunRecord)
+            .where(RunRecord.workflow_definition_id == definition_id)
+            .order_by(RunRecord.created_at.desc())
+            .limit(1)
+        )
+        return session.exec(stmt).first()

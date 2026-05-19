@@ -57,6 +57,38 @@ architecture tests.
 
 ---
 
+## Post-PR-8 audit reconciliation
+
+The post-PR-8 drift audit (`_post-pr8-drift-audit.md`) assigned these items to
+this PR. Most are deletions-from-the-deletion-list (items the plan still
+claims to delete but that are already gone) plus xfail name sync.
+
+1. **Drop `Worker.from_buffer` from the deletion list.** Already deleted in
+   an earlier PR. Any task referencing it must be removed.
+2. **Drop the `Worker.validate` → `validate_runtime_deps` rename task.**
+   Already done in PR 5. If the plan still calls for renaming it, remove
+   that task.
+3. **Sync xfail symbol names in `test_dead_path_audit.py`.** Plan's xfail
+   flip checklist references `_worker_from_payload_bridge`,
+   `_legacy_worker_bridge`, `_legacy_evaluator_bridge` (etc.) — actual
+   xfails in the test file use different names (e.g.,
+   `legacy_worker_from_payload`, `_prepare_legacy_graph_native`,
+   `_prepare_legacy_definition`, `execute_task`, `sandbox_setup`,
+   `persist_outputs`). Before flipping any xfail to a hard assertion, the
+   plan must be updated to match the actual symbol names in the test file
+   AT THE TIME PR 11 IS PICKED UP (the test xfail set may evolve as PRs 9
+   and 10a/b/c land).
+4. **Cross-check `saved_specs` deletion target.** Plan still lists it; audit
+   confirmed it still exists in `ergon_core/core/persistence/saved_specs/`.
+   Verify after PRs 9 and 10a/b/c whether anyone still references it; if
+   not, this deletion is still valid.
+5. **Natural sequencing reminder.** PR 11 is the deletion gate. It is only
+   safe to run when every benchmark (production + smoke fixture) emits
+   object-bound `Task[...]` — i.e., after PRs 10a, 10b, and 10c land. Don't
+   start PR 11 implementation before confirming all three are merged.
+
+---
+
 ## Files To Delete
 
 ```text

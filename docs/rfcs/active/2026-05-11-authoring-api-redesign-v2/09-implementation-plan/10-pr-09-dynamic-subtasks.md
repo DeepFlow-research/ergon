@@ -15,6 +15,42 @@ pytest containment tests.
 
 ---
 
+## Post-PR-8 audit reconciliation
+
+The post-PR-8 drift audit (`_post-pr8-drift-audit.md`) assigned these items to
+this PR. They are NOT new tasks layered on top — they are corrections that
+must be applied to the task descriptions below before implementation starts.
+
+1. **Unfreeze `WorkerContext`.** Current code has
+   `model_config = {"frozen": True}` on `WorkerContext(BaseModel)`. The RFC
+   (`03-runtime.md` lines 299–313, 457–501) specifies a NON-frozen `BaseModel`
+   with `PrivateAttr` fields `_task_mgmt`, `_task_inspect`, `_resource_repo`,
+   plus a `_for_job` classmethod that injects services via
+   `object.__setattr__`. Task 2's `WorkerContext` facade must first remove the
+   `frozen` config and add the `PrivateAttr` declarations before the facade
+   methods (`spawn_task`, `_assert_descendant`) can be added.
+2. **Drop the `Task.created_by` assumption.** PR 7 added `created_by` to
+   `Benchmark`, NOT to `Task`. If dynamic spawns need spawner identity,
+   record it on the graph node or audit metadata. Audit any plan section
+   that refers to `Task.created_by` and reroute.
+3. **Add the missing graph + inspection methods.**
+   `WorkflowGraphRepository.descendants_by_parent(...)` and
+   `TaskInspectionService.descendant_ids(...)` do NOT exist yet — they need
+   to be added as part of this PR (the SQL CTE in Task 2b is correct;
+   just needs to be implemented rather than assumed-existing).
+4. **Reconcile `add_subtask` signature drift.** Current
+   `TaskManagementService.add_subtask(session, command: AddSubtaskCommand)`
+   uses a command-object pattern. Task 3 must either extend the command to
+   carry a full `Task` instance OR add a thin wrapper on `WorkerContext`
+   that builds the command from `(task, depends_on)` and calls the service.
+   Pick one and update Task 3 accordingly.
+5. **Create `SpawnedTaskHandle` and `ContainmentViolation` as part of this PR.**
+   Task 1 already covers `SpawnedTaskHandle`; ensure `ContainmentViolation`
+   is added to `ergon_core/api/errors.py` (Task 2 Step 3's containment check
+   raises it).
+
+---
+
 ## Files
 
 **Modify:**

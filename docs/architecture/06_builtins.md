@@ -210,7 +210,27 @@ Benchmark loader → Task instances → Worker
   in `benchmarks/<slug>/workers.py` that binds the strategy to the local
   sandbox + toolkit + prompt.  Cost is N + M, not N × M.
 
-## 7. Follow-ups
+## 7. CLI observation commands
+
+After kicking off a run from Python, observe it via the CLI:
+
+- `ergon run status <run-id>` — current state of one run
+- `ergon run list [--status=S] [--experiment=<tag>]` — list runs, optionally filtered
+- `ergon experiment show <UUID>` — full experiment detail (UUID-based)
+- `ergon experiment list` — list recent experiments
+- `ergon experiment tags` — list distinct experiment-tag strings
+- `ergon experiment by-tag <tag>` — list definitions sharing a tag, with latest run status
+
+The `--experiment=<tag>` filter and the `tags` / `by-tag` commands operate on the
+`BenchmarkDefinitionRecord.experiment` column.  That column is populated today only
+by the cohort / test harness — there is no public `Benchmark(experiment=...)` constructor
+kwarg yet.  If no tags are set, `ergon experiment tags` returns an empty list with a
+message pointing at the cohort harness.
+
+All CLI commands are read-only against persisted state.  Authoring (defining a benchmark,
+persisting it, launching a run) is Python-only; see `ergon_core.api`.
+
+## 8. Follow-ups
 
 Known limits and open questions touching this layer:
 
