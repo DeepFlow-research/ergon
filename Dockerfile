@@ -43,4 +43,4 @@ RUN cd ergon_cli && uv pip install --system -e "."
 
 EXPOSE 9000
 
-CMD ["uvicorn", "ergon_core.core.rest_api.app:app", "--host", "0.0.0.0", "--port", "9000"]
+CMD ["uvicorn", "ergon_core.core.infrastructure.http.app:app", "--host", "0.0.0.0", "--port", "9000"]

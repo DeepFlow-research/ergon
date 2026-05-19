@@ -1,4 +1,4 @@
-from ergon_core.core.rest_api.app import app
+from ergon_core.core.infrastructure.http.app import app
 
 
 def test_app_mounts_danger_test_harness_routes() -> None:

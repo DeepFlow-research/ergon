@@ -70,7 +70,7 @@ def test_worker_execute_does_not_expose_result_adapter_helpers() -> None:
 
 
 def test_runs_api_does_not_own_run_snapshot_read_model_helpers() -> None:
-    import ergon_core.core.rest_api.runs as runs_api
+    import ergon_core.core.infrastructure.http.routes.runs as runs_api
 
     assert not hasattr(runs_api, "_build_task_map")
     assert not hasattr(runs_api, "_task_keyed_executions")

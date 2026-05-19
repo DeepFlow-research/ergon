@@ -1,4 +1,9 @@
-"""FastAPI application with Inngest webhook registration."""
+"""REST bootstrap/composition root for FastAPI and Inngest wiring.
+
+This module is the HTTP adapter bootstrap exception: it may import concrete
+persistence and infrastructure providers to compose process-local services.
+Route modules remain thin inbound adapters over application services and views.
+"""
 
 import logging
 import os
@@ -21,11 +26,11 @@ logging.basicConfig(
 )
 
 import inngest.fast_api
-from ergon_core.core.rest_api.cohorts import router as cohorts_router
-from ergon_core.core.rest_api.experiments import router as experiments_router
-from ergon_core.core.rest_api.rollouts import router as rollouts_router
-from ergon_core.core.rest_api.runs import router as runs_router
-from ergon_core.core.rest_api.test_harness import router as _test_harness_router
+from ergon_core.core.infrastructure.http.routes.cohorts import router as cohorts_router
+from ergon_core.core.infrastructure.http.routes.experiments import router as experiments_router
+from ergon_core.core.infrastructure.http.routes.rollouts import router as rollouts_router
+from ergon_core.core.infrastructure.http.routes.runs import router as runs_router
+from ergon_core.core.infrastructure.http.routes.test_harness import router as _test_harness_router
 from ergon_core.core.infrastructure.dashboard.provider import (
     init_dashboard_emitter,
     reset_dashboard_emitter,

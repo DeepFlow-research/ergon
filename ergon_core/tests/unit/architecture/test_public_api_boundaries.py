@@ -146,11 +146,12 @@ def test_deleted_public_api_facade_modules_stay_deleted() -> None:
     assert restored == []
 
 
-def test_internal_http_api_is_named_rest_api_not_core_api() -> None:
+def test_internal_http_api_lives_under_infrastructure_http_not_core_api() -> None:
     core_root = ROOT / "ergon_core" / "ergon_core" / "core"
 
     assert not (core_root / "api").exists()
-    assert (core_root / "rest_api").exists()
+    assert not (core_root / "rest_api").exists()
+    assert (core_root / "infrastructure" / "http").exists()
 
 
 def test_code_and_config_do_not_reference_old_internal_core_api() -> None:
@@ -635,6 +636,6 @@ def test_local_api_composition_mounts_test_owned_smoke_components() -> None:
     api_app = ROOT / "ergon_cli" / "ergon_cli" / "api_app.py"
     compose = ROOT / "docker-compose.yml"
 
-    assert "ergon_core.core.rest_api.app" in api_app.read_text()
+    assert "ergon_core.core.infrastructure.http.app" in api_app.read_text()
     assert "tests.fixtures.smoke_components" not in api_app.read_text()
     assert "./tests:/app/tests" in compose.read_text()

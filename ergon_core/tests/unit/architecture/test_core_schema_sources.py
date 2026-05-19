@@ -121,9 +121,9 @@ def test_core_uses_hybrid_layout_roots_without_nominal_domain() -> None:
         "application",
         "infrastructure",
         "persistence",
-        "rest_api",
         "rl",
         "shared",
+        "views",
     }
     removed_dirs = {
         "runtime",
@@ -148,10 +148,10 @@ def test_core_hybrid_layout_import_directions() -> None:
         "persistence": (
             "ergon_core.core.application",
             "ergon_core.core.infrastructure",
-            "ergon_core.core.rest_api",
+            "ergon_core.core.infrastructure.http",
         ),
         "application": (
-            "ergon_core.core.rest_api",
+            "ergon_core.core.infrastructure.http",
             "ergon_core.core.infrastructure.inngest.handlers",
         ),
     }
@@ -175,7 +175,7 @@ def test_application_event_contracts_do_not_import_outer_layers() -> None:
     forbidden_imports = (
         "ergon_core.core.infrastructure",
         "ergon_core.core.persistence",
-        "ergon_core.core.rest_api",
+        "ergon_core.core.infrastructure.http",
     )
 
     offenders: list[str] = []
@@ -320,7 +320,10 @@ def test_runtime_services_do_not_import_api_schema_modules() -> None:
     offenders: list[str] = []
     for path in (ROOT / "ergon_core/ergon_core/core/runtime").rglob("*.py"):
         text = path.read_text()
-        if "ergon_core.core.rest_api.schemas" in text or "ergon_core.core.rest_api.runs" in text:
+        if (
+            "ergon_core.core.infrastructure.http.routes.schemas" in text
+            or "ergon_core.core.infrastructure.http.routes.runs" in text
+        ):
             offenders.append(str(path.relative_to(ROOT)))
 
     assert offenders == []
@@ -420,7 +423,7 @@ def test_runtime_and_builtins_do_not_use_task_execution_query_bag_for_domain_rea
 
 
 def test_resource_viewer_limits_live_with_read_model_resources() -> None:
-    api_path = ROOT / "ergon_core/ergon_core/core/rest_api/runs.py"
+    api_path = ROOT / "ergon_core/ergon_core/core/infrastructure/http/routes/runs.py"
     resource_path = ROOT / "ergon_core/ergon_core/core/views/resources.py"
 
     assert "_RESOURCE_CONTENT_MAX_BYTES" not in api_path.read_text()

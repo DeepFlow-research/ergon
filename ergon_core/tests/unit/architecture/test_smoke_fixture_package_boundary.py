@@ -5,7 +5,7 @@ from pathlib import Path
 
 def test_runtime_entrypoints_do_not_import_tests_smoke_fixtures() -> None:
     entrypoints = (
-        Path("ergon_core/ergon_core/core/rest_api/app.py"),
+        Path("ergon_core/ergon_core/core/infrastructure/http/app.py"),
         Path("ergon_cli/ergon_cli/composition/__init__.py"),
     )
 
@@ -17,7 +17,7 @@ def test_runtime_entrypoints_do_not_import_tests_smoke_fixtures() -> None:
         assert "ergon_core.dev.smoke_fixtures" not in text
     assert (
         "tests.fixtures.smoke_components"
-        not in Path("ergon_core/ergon_core/core/rest_api/app.py").read_text()
+        not in Path("ergon_core/ergon_core/core/infrastructure/http/app.py").read_text()
     )
 
 

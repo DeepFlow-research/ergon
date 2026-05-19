@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from ergon_core.core.rest_api.rollouts import router
+from ergon_core.core.infrastructure.http.routes.rollouts import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
