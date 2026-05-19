@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from ergon_core.core.persistence.graph.status_conventions import NodeStatus
+from ergon_core.core.application.runtime.status import NodeStatus
 from ergon_core.core.persistence.shared.types import (
     AssignedWorkerSlug,
     NodeId,

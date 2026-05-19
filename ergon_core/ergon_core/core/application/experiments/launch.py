@@ -36,7 +36,6 @@ async def launch_run(
                 benchmark_type=definition.benchmark_type,
             ),
             definition_id=definition.id,
-            workflow_definition_id=definition.id,
             instance_key="default",
             worker_team_json={},
             evaluator_slug=None,
@@ -50,7 +49,7 @@ async def launch_run(
     return ExperimentRunResult(
         definition_id=definition_id,
         run_ids=[run.id],
-        workflow_definition_ids=[definition_id],
+        definition_ids=[definition_id],
     )
 
 

@@ -13,7 +13,7 @@ from ergon_core.api.criterion import (
     EvidenceMessage,
 )
 from ergon_core.api.rubric import TaskEvaluationResult
-from ergon_core.core.persistence.telemetry.evaluation_summary import CriterionOutcomeEntry
+from ergon_core.core.application.evaluation.summary import CriterionOutcomeEntry
 from ergon_core.core.application.evaluation.models import CriterionSpec
 from ergon_core.core.application.evaluation.service import (
     build_dashboard_evaluation_dto,

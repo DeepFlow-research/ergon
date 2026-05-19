@@ -11,7 +11,7 @@ perspective on the same feature.
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from ergon_core.core.persistence.graph.status_conventions import BLOCKED
+from ergon_core.core.application.runtime.status import BLOCKED
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.application.tasks.errors import TaskNotTerminalError

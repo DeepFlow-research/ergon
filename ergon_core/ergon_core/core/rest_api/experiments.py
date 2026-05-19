@@ -5,11 +5,11 @@ from uuid import UUID
 from ergon_core.core.application.experiments.service import (
     run_experiment as _run_experiment,
 )
-from ergon_core.core.application.read_models.experiments import (
+from ergon_core.core.views.experiments.models import (
     ExperimentDetailDto,
-    ExperimentReadService,
     ExperimentSummaryDto,
 )
+from ergon_core.core.views.experiments.service import ExperimentReadService
 from ergon_core.core.application.experiments.models import (
     ExperimentRunRequest,
     ExperimentRunResult,

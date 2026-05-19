@@ -1,7 +1,7 @@
 """Guards for model field docs that must survive schema export."""
 
 from ergon_core.core.infrastructure.dashboard.event_contracts import DashboardContextEventEvent
-from ergon_core.core.domain.generation.context_parts import (
+from ergon_core.core.shared.context_parts import (
     AssistantTextPart,
     ContextPartChunkLog,
     ThinkingPart,
@@ -15,7 +15,7 @@ from ergon_core.core.persistence.graph.models import (
     RunGraphMutation,
     RunGraphNode,
 )
-from ergon_core.core.persistence.telemetry.models import RunResource
+from ergon_core.core.persistence.telemetry.models import RunRecord, RunResource
 from ergon_core.core.application.graph.models import (
     GraphAnnotationDto,
     GraphEdgeDto,
@@ -74,6 +74,11 @@ def test_sqlmodel_field_docs_are_schema_metadata() -> None:
     assert _description(RunGraphAnnotation, "target_type")
     assert _description(RunGraphMutation, "mutation_type")
     assert _description(RunGraphMutation, "target_type")
+    assert "Canonical runtime" in (_description(RunRecord, "definition_id") or "")
+    assert "Compatibility/display-only" in (_description(RunRecord, "worker_team_json") or "")
+    assert "Compatibility/display-only" in (_description(RunRecord, "evaluator_slug") or "")
+    assert "Compatibility/display-only" in (_description(RunRecord, "sandbox_slug") or "")
+    assert "Compatibility/display-only" in (_description(RunRecord, "dependency_extras_json") or "")
     assert _description(RunResource, "kind")
 
 

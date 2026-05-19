@@ -21,7 +21,7 @@ across the full service stack.
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from ergon_core.core.persistence.graph.status_conventions import CANCELLED, EDGE_PENDING
+from ergon_core.core.application.runtime.status import CANCELLED, EDGE_PENDING
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import TaskExecutionStatus
 from ergon_core.core.application.workflows.orchestration import PropagateTaskCompletionCommand

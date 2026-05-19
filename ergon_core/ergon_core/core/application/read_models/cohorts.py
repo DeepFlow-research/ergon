@@ -2,32 +2,99 @@
 
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
 from uuid import UUID
 
+from ergon_core.core.application.compat.cohorts import (
+    cohort_id_from_metadata,
+    optional_str_metadata,
+)
 from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionInstance,
 )
+from ergon_core.core.shared.json_types import JsonObject
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunStatus
-from ergon_core.core.persistence.telemetry.evaluation_summary import EvaluationSummary
+from ergon_core.core.application.evaluation.summary import EvaluationSummary
 from ergon_core.core.persistence.telemetry.models import (
     ExperimentCohort,
     ExperimentCohortStats,
     ExperimentCohortStatus,
     RunRecord,
 )
-from ergon_core.core.application.read_models.models import (
-    CohortDetailDto,
-    CohortExperimentRowDto,
-    CohortStatusCountsDto,
-    CohortSummaryDto,
-    UpdateCohortRequest,
-)
 from ergon_core.core.shared.utils import utcnow
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-COHORT_METADATA_KEY = "cohort_id"
+
+class CohortStatusCountsDto(BaseModel):
+    """Aggregate run counts by lifecycle status."""
+
+    pending: int = 0
+    executing: int = 0
+    evaluating: int = 0
+    completed: int = 0
+    failed: int = 0
+
+
+class CohortSummaryDto(BaseModel):
+    """Summary row for cohort list and live updates."""
+
+    cohort_id: UUID
+    name: str
+    description: str | None = None
+    created_by: str | None = None
+    created_at: datetime
+    status: str
+    total_runs: int = 0
+    status_counts: CohortStatusCountsDto = Field(default_factory=CohortStatusCountsDto)
+    average_score: float | None = None
+    best_score: float | None = None
+    worst_score: float | None = None
+    average_duration_ms: int | None = None
+    failure_rate: float = 0.0
+    stats_updated_at: datetime | None = None
+
+
+class CohortExperimentRowDto(BaseModel):
+    """One experiment inside a cohort detail view."""
+
+    definition_id: UUID
+    name: str
+    benchmark_type: str
+    sample_count: int
+    total_runs: int = 0
+    status_counts: CohortStatusCountsDto = Field(default_factory=CohortStatusCountsDto)
+    status: str
+    created_at: datetime
+    default_model_target: str | None = None
+    default_evaluator_slug: str | None = None
+    final_score: float | None = None
+    total_cost_usd: float | None = None
+    error_message: str | None = None
+
+
+class CohortDetailDto(BaseModel):
+    """Full payload for a single cohort detail page."""
+
+    summary: CohortSummaryDto
+    experiments: list[CohortExperimentRowDto] = Field(default_factory=list)
+
+
+class UpdateCohortRequest(BaseModel):
+    """Mutable cohort fields exposed through the operator API."""
+
+    status: ExperimentCohortStatus
+
+
+class ResolveCohortRequest(BaseModel):
+    """Request to resolve or create a cohort by name."""
+
+    name: str
+    description: str | None = None
+    created_by: str | None = None
+    metadata: JsonObject = Field(default_factory=dict)
 
 
 # TODO: this should not be a dataclass, it should be a Pydantic model
@@ -107,9 +174,7 @@ class ExperimentCohortService:
                     _instance_count(session, definition.id),
                     list(
                         session.exec(
-                            select(RunRecord).where(
-                                RunRecord.workflow_definition_id == definition.id
-                            )
+                            select(RunRecord).where(RunRecord.definition_id == definition.id)
                         ).all()
                     ),
                 )
@@ -134,10 +199,10 @@ class ExperimentCohortService:
             run = session.get(RunRecord, run_id)
             if run is None:
                 return None
-            definition = session.get(ExperimentDefinition, run.workflow_definition_id)
+            definition = session.get(ExperimentDefinition, run.definition_id)
             if definition is None:
                 return None
-            return _cohort_id_from_metadata(definition.parsed_metadata())
+            return cohort_id_from_metadata(definition.parsed_metadata())
 
     def update_cohort(
         self, cohort_id: UUID, request: UpdateCohortRequest
@@ -169,7 +234,7 @@ class ExperimentCohortService:
                 list(
                     session.exec(
                         select(RunRecord).where(
-                            RunRecord.workflow_definition_id.in_(definition_ids)  # type: ignore[attr-defined]
+                            RunRecord.definition_id.in_(definition_ids)  # type: ignore[attr-defined]
                         )
                     ).all()
                 )
@@ -272,8 +337,8 @@ class ExperimentCohortService:
                 len(runs),
             ),
             created_at=definition.created_at,
-            default_model_target=_optional_str_metadata(metadata, "default_model_target"),
-            default_evaluator_slug=_optional_str_metadata(metadata, "default_evaluator_slug"),
+            default_model_target=optional_str_metadata(metadata, "default_model_target"),
+            default_evaluator_slug=optional_str_metadata(metadata, "default_evaluator_slug"),
             final_score=score,
             total_cost_usd=total_cost_usd,
             error_message=None,
@@ -312,19 +377,8 @@ def _definitions_for_cohort(session: Session, cohort_id: UUID) -> list[Experimen
     return [
         definition
         for definition in session.exec(select(ExperimentDefinition)).all()
-        if _cohort_id_from_metadata(definition.parsed_metadata()) == cohort_id
+        if cohort_id_from_metadata(definition.parsed_metadata()) == cohort_id
     ]
-
-
-def _cohort_id_from_metadata(metadata: dict) -> UUID | None:
-    raw = metadata.get(COHORT_METADATA_KEY)
-    if raw is None:
-        return None
-    if isinstance(raw, UUID):
-        return raw
-    if isinstance(raw, str):
-        return UUID(raw)
-    return None
 
 
 def _instance_count(session: Session, definition_id: UUID) -> int:
@@ -337,11 +391,6 @@ def _instance_count(session: Session, definition_id: UUID) -> int:
             )
         )
     )
-
-
-def _optional_str_metadata(metadata: dict, key: str) -> str | None:
-    value = metadata.get(key)
-    return value if isinstance(value, str) else None
 
 
 def _rubric_status_summary(summaries: list[EvaluationSummary]) -> RubricStatusSummary:

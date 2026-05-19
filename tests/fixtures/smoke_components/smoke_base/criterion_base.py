@@ -32,7 +32,7 @@ from ergon_core.api.criterion import CriterionContext, CriterionOutcome
 from ergon_core.api.errors import CriterionCheckError
 from ergon_core.api.sandbox.runtime import CommandResult
 from ergon_core.core.persistence.graph.models import RunGraphNode
-from ergon_core.core.persistence.graph.status_conventions import COMPLETED, NON_AUTONOMOUS_STATUSES
+from ergon_core.core.application.runtime.status import COMPLETED, NON_AUTONOMOUS_STATUSES
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.telemetry.models import RunResource, RunTaskExecution
 from tests.fixtures.smoke_components.smoke_base.constants import EXPECTED_SUBTASK_SLUGS

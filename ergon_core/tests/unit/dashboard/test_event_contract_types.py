@@ -18,7 +18,7 @@ from ergon_core.core.infrastructure.dashboard.event_contracts import (
     CohortUpdatedEvent,
     DashboardThreadMessageCreatedEvent,
 )
-from ergon_core.core.application.read_models.models import CohortSummaryDto
+from ergon_core.core.application.read_models.cohorts import CohortSummaryDto
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]

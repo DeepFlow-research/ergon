@@ -105,7 +105,6 @@ def _seed_run(session: Session) -> tuple[UUID, UUID]:
             RunRecord(
                 id=run_id,
                 definition_id=definition_id,
-                workflow_definition_id=definition_id,
                 benchmark_type="test",
                 instance_key="sample-1",
                 worker_team_json={},
@@ -389,7 +388,6 @@ def _seed_parent_node(session: Session, *, run_id: UUID) -> RunGraphNode:
         RunRecord(
             id=run_id,
             definition_id=uuid4(),
-            workflow_definition_id=uuid4(),
             benchmark_type="test",
             instance_key="sample-1",
             worker_team_json={},

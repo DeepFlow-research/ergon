@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from ergon_cli.commands import experiment as experiment_cmd
 from ergon_cli.main import build_parser
-from ergon_core.core.application.read_models.experiments import (
+from ergon_core.core.views.experiments.models import (
     ExperimentDetailDto,
     ExperimentRunRowDto,
     ExperimentSummaryDto,
@@ -100,7 +100,7 @@ def test_experiment_show_logs_detail_without_printing(monkeypatch, caplog, capsy
                 runs=[
                     ExperimentRunRowDto(
                         run_id=run_id,
-                        workflow_definition_id=uuid4(),
+                        definition_id=uuid4(),
                         benchmark_type="ci-benchmark",
                         instance_key="sample-a",
                         status="completed",

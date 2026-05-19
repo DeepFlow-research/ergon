@@ -315,7 +315,6 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
             RunRecord(
                 id=run_id,
                 definition_id=definition_id,
-                workflow_definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-1",
                 worker_team_json={},
@@ -324,7 +323,6 @@ async def test_resources_use_repository_run_scope_with_real_rows(tmp_path: Path)
             RunRecord(
                 id=other_run_id,
                 definition_id=definition_id,
-                workflow_definition_id=definition_id,
                 benchmark_type="bench",
                 instance_key="sample-2",
                 worker_team_json={},

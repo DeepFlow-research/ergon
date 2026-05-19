@@ -8,7 +8,7 @@ from ergon_core.core.persistence.definitions.models import (
     ExperimentDefinition,
     ExperimentDefinitionTask,
 )
-from ergon_core.core.persistence.graph import status_conventions as graph_status
+from ergon_core.core.application.runtime import status as graph_status
 from ergon_core.core.persistence.graph.models import RunGraphEdge, RunGraphNode
 from ergon_core.core.persistence.shared.db import get_session
 from ergon_core.core.persistence.shared.enums import RunResourceKind, RunStatus, TaskExecutionStatus
@@ -738,7 +738,7 @@ class WorkflowService:
         run = session.get(RunRecord, run_id)
         if run is None:
             raise ValueError(f"run {run_id} not found")
-        return run.workflow_definition_id
+        return run.definition_id
 
     async def _dispatch_task_ready(self, run_id: UUID, definition_id: UUID, node_id: UUID) -> None:
         event = TaskReadyEvent(

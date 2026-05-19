@@ -2,10 +2,11 @@
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_serializer
+from typing_extensions import TypeVar
 
 from ergon_core.api._serialization import (
     TaskDefinitionJson,

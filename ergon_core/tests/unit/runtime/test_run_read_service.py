@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from ergon_core.core.application.read_models.runs import _display_run_score
+from ergon_core.core.views.runs.service import _display_run_score
 from ergon_core.core.persistence.shared.enums import RunStatus
 
 
